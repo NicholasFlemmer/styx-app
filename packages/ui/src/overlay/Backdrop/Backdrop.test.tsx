@@ -1,7 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Backdrop } from './Backdrop';
+
+afterEach(cleanup);
 
 describe('Backdrop', () => {
   it('closes on a click on the dim but not on the panel', async () => {

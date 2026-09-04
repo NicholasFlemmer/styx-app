@@ -1,9 +1,19 @@
-import { render } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useEscape } from './useEscape';
 
-function Listener({ active = true, enabled = true, onEscape }: { active?: boolean; enabled?: boolean; onEscape: () => void }) {
+afterEach(cleanup);
+
+function Listener({
+  active = true,
+  enabled = true,
+  onEscape,
+}: {
+  active?: boolean;
+  enabled?: boolean;
+  onEscape: () => void;
+}) {
   useEscape(active, onEscape, enabled);
   return null;
 }

@@ -9,7 +9,16 @@ const meta = {
   component: Transcript,
   decorators: [
     (Story) => (
-      <div style={{ width: 360, height: 360, display: 'flex', flexDirection: 'column', background: 'var(--s1)', border: '1px solid var(--ln)' }}>
+      <div
+        style={{
+          width: 360,
+          height: 360,
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'var(--s1)',
+          border: '1px solid var(--ln)',
+        }}
+      >
         <Story />
       </div>
     ),
@@ -21,9 +30,22 @@ type Story = StoryObj<typeof meta>;
 const thread = (
   <>
     <Message kind="user" text="Add input validation to checkout and cover it with tests." />
-    <Message kind="agent">Read checkout.ts and pay.ts. Plan: new validate.ts, call it before summing, add 4 tests.</Message>
-    <Message kind="fileList" files={[{ path: 'validate.ts', added: 31 }, { path: 'checkout.ts', added: 2, removed: 0 }, { path: 'checkout.test.ts', added: 44 }]} />
-    <Message kind="decision" options={[{ label: 'Yes' }, { label: 'No' }, { label: 'Edit plan' }]} onChoose={() => {}}>
+    <Message kind="agent">
+      Read checkout.ts and pay.ts. Plan: new validate.ts, call it before summing, add 4 tests.
+    </Message>
+    <Message
+      kind="fileList"
+      files={[
+        { path: 'validate.ts', added: 31 },
+        { path: 'checkout.ts', added: 2, removed: 0 },
+        { path: 'checkout.test.ts', added: 44 },
+      ]}
+    />
+    <Message
+      kind="decision"
+      options={[{ label: 'Yes' }, { label: 'No' }, { label: 'Edit plan' }]}
+      onChoose={() => {}}
+    >
       Ran vitest, 42 passed. Open a PR against main?
     </Message>
   </>

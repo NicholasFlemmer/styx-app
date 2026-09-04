@@ -19,7 +19,16 @@ export interface ComposerProps {
 
 /** Chat composer: bordered `--bg` textarea (min 56px), ⏎ sends, ⇧⏎ inserts a newline, hint row of t-label items. */
 export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function Composer(
-  { placeholder = 'Message…', onSend, hints = ['@file', '/command'], modelLabel = 'Model', onModel, compact, disabled, ariaLabel = 'Message' },
+  {
+    placeholder = 'Message…',
+    onSend,
+    hints = ['@file', '/command'],
+    modelLabel = 'Model',
+    onModel,
+    compact,
+    disabled,
+    ariaLabel = 'Message',
+  },
   ref,
 ) {
   const [text, setText] = useState('');
@@ -68,7 +77,12 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
             </button>
           )}
           <span className={s['spacer']} />
-          <button type="button" className={s['hint']} onClick={send} disabled={disabled || text.trim() === ''}>
+          <button
+            type="button"
+            className={s['hint']}
+            onClick={send}
+            disabled={disabled || text.trim() === ''}
+          >
             ⏎ send
           </button>
         </div>

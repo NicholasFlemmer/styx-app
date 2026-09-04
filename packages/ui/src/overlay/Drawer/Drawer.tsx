@@ -22,14 +22,24 @@ export interface DrawerProps {
 
 /** Right-anchored detail drawer (audit entry), 380px; header row with ✕, DrawerRow label/value rows. */
 export const Drawer = forwardRef<HTMLDivElement, DrawerProps>(function Drawer(
-  { heading, title, meta, footer, labelledBy, onClose, escapeEnabled = true, initialFocus = 'first', children },
+  {
+    heading,
+    title,
+    meta,
+    footer,
+    labelledBy,
+    onClose,
+    escapeEnabled = true,
+    initialFocus = 'first',
+    children,
+  },
   ref,
 ) {
   const inner = useRef<HTMLDivElement | null>(null);
   const headingId = useId();
+  useReturnFocus(true);
   useFocusTrap(inner, { active: true, initialFocus });
   useEscape(true, onClose, escapeEnabled);
-  useReturnFocus(true);
   const setRef = (node: HTMLDivElement | null) => {
     inner.current = node;
     if (typeof ref === 'function') ref(node);
@@ -37,7 +47,14 @@ export const Drawer = forwardRef<HTMLDivElement, DrawerProps>(function Drawer(
   };
 
   return (
-    <div ref={setRef} role="dialog" aria-modal="true" aria-labelledby={labelledBy ?? headingId} tabIndex={-1} className={s['drawer']}>
+    <div
+      ref={setRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={labelledBy ?? headingId}
+      tabIndex={-1}
+      className={s['drawer']}
+    >
       <div className={s['header']}>
         <span id={headingId} className={s['heading']}>
           {heading}

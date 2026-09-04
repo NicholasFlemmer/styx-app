@@ -1,7 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Composer } from './Composer';
+
+afterEach(cleanup);
 
 describe('Composer', () => {
   it('⏎ sends trimmed text and clears; ⇧⏎ inserts a newline', async () => {

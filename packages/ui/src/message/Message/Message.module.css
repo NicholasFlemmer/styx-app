@@ -36,8 +36,12 @@
     padding: 6px 10px;
     border-bottom: 1px solid var(--ln);
   }
-  .file:last-child { border-bottom: 0; }
-  .add { color: var(--act); }
+  .file:last-child {
+    border-bottom: 0;
+  }
+  .add {
+    color: var(--act);
+  }
   .options {
     display: flex;
     gap: 6px;

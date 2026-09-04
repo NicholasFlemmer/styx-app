@@ -18,7 +18,9 @@
     font-family: var(--font-mono);
     font-size: 14px;
   }
-  .caret { color: var(--act); }
+  .caret {
+    color: var(--act);
+  }
   .input {
     flex: 1;
     padding: 14px 0;
@@ -29,7 +31,9 @@
     font-family: var(--font-mono);
     font-size: 14px;
   }
-  .input::placeholder { color: var(--mu); }
+  .input::placeholder {
+    color: var(--mu);
+  }
   .list {
     overflow: auto;
     max-height: 60vh;
@@ -51,14 +55,18 @@
     font-size: 13px;
     min-height: 28px;
   }
-  .row:hover { background: var(--s2); }
+  .row:hover {
+    background: var(--s2);
+  }
   .glyph {
     width: 14px;
     flex: none;
     font-family: var(--font-mono);
     color: var(--mu);
   }
-  .label { flex: 1; }
+  .label {
+    flex: 1;
+  }
   .meta {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -75,5 +83,7 @@
     text-transform: uppercase;
     color: var(--mu);
   }
-  .hintLast { margin-left: auto; }
+  .hintLast {
+    margin-left: auto;
+  }
 }

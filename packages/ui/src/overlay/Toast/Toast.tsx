@@ -26,7 +26,17 @@ export interface ToastProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'
 
 /** Top-right needs-you toast: 340px, `--tx` border, accent header, two footer actions; `role=status` announces politely. */
 export const Toast = forwardRef<HTMLDivElement, ToastProps>(function Toast(
-  { heading = 'Needs you', meta = 'Styx · now', title, detail, actions = [], ttl = 8000, onDismiss, className, ...rest },
+  {
+    heading = 'Needs you',
+    meta = 'Styx · now',
+    title,
+    detail,
+    actions = [],
+    ttl = 8000,
+    onDismiss,
+    className,
+    ...rest
+  },
   ref,
 ) {
   const [hovered, setHovered] = useState(false);

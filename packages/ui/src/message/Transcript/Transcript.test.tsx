@@ -1,6 +1,8 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
 import { Transcript } from './Transcript';
+
+afterEach(cleanup);
 
 function fakeScrollMetrics(el: HTMLElement, scrollHeight: number, clientHeight: number) {
   Object.defineProperty(el, 'scrollHeight', { configurable: true, get: () => scrollHeight });

@@ -36,7 +36,14 @@ export const Matrix: Story = {
         <Toast {...args} />
       </div>
       <div style={{ position: 'relative', height: 200, border: '1px solid var(--ln)' }}>
-        <Toast {...args} heading="Done" meta="Claude · 2m" title="Claude finished fix/checkout" detail="42 passed" actions={[{ label: 'Open diff', onClick: () => {}, primary: true }]} />
+        <Toast
+          {...args}
+          heading="Done"
+          meta="Claude · 2m"
+          title="Claude finished fix/checkout"
+          detail="42 passed"
+          actions={[{ label: 'Open diff', onClick: () => {}, primary: true }]}
+        />
       </div>
     </div>
   ),

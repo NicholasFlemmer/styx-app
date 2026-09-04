@@ -1,6 +1,8 @@
-import { render } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTimeout } from './useTimeout';
+
+afterEach(cleanup);
 
 function Timer({ delay, cb }: { delay: number | null; cb: () => void }) {
   useTimeout(cb, delay);

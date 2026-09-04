@@ -20,7 +20,10 @@ export function tabbablesWithin(root: HTMLElement): HTMLElement[] {
  * Keeps Tab / Shift+Tab inside `ref` while `active` (spec §9: focus trapped inside modals and sheet).
  * The root should carry `tabIndex={-1}` so it can take focus when it has no tabbable children.
  */
-export function useFocusTrap(ref: RefObject<HTMLElement | null>, { active, initialFocus = 'first' }: FocusTrapOptions): void {
+export function useFocusTrap(
+  ref: RefObject<HTMLElement | null>,
+  { active, initialFocus = 'first' }: FocusTrapOptions,
+): void {
   useEffect(() => {
     if (!active) return;
     const root = ref.current;

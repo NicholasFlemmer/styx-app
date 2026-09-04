@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Button } from '../../primitives';
 import { Sheet, SheetAccentHeader, SheetFooter } from './Sheet';
+
+afterEach(cleanup);
 
 function Host({ onClose = () => {} }: { onClose?: () => void }) {
   const [open, setOpen] = useState(false);
@@ -73,11 +75,17 @@ describe('Sheet', () => {
     const user = userEvent.setup();
     const outer = vi.fn();
     const inner = vi.fn();
-    render(
-      <Sheet title="outer" onClose={outer}>
-        <Sheet title="inner" onClose={inner} />
-      </Sheet>,
-    );
+    function Nested() {
+      const [open, setOpen] = useState(false);
+      return (
+        <Sheet title="outer" onClose={outer}>
+          <button onClick={() => setOpen(true)}>open inner</button>
+          {open && <Sheet title="inner" onClose={inner} />}
+        </Sheet>
+      );
+    }
+    render(<Nested />);
+    await user.click(screen.getByText('open inner'));
     await user.keyboard('{Escape}');
     expect(inner).toHaveBeenCalledTimes(1);
     expect(outer).not.toHaveBeenCalled();

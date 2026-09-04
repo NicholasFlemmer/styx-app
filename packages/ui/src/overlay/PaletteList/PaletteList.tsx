@@ -23,7 +23,7 @@ export interface PaletteListProps {
   onQuery: (q: string) => void;
   groups: PaletteGroup[];
   /** Highlighted (inverted) row; DOM focus stays on the input. */
-  activeId?: string;
+  activeId?: string | undefined;
   onActive: (id: string) => void;
   onRun: (id: string) => void;
   placeholder?: string;
@@ -73,7 +73,12 @@ export const PaletteList = forwardRef<HTMLDivElement, PaletteListProps>(function
 
   const move = (delta: 1 | -1) => {
     if (flat.length === 0) return;
-    const next = activeIndex < 0 ? (delta === 1 ? 0 : flat.length - 1) : (activeIndex + delta + flat.length) % flat.length;
+    const next =
+      activeIndex < 0
+        ? delta === 1
+          ? 0
+          : flat.length - 1
+        : (activeIndex + delta + flat.length) % flat.length;
     const id = flat[next];
     if (id !== undefined) onActive(id);
   };

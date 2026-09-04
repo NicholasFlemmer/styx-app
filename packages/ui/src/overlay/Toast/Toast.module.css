@@ -57,7 +57,13 @@
     text-transform: uppercase;
     cursor: pointer;
   }
-  .action:last-child { border-right: 0; }
-  .action:hover { background: var(--s2); }
-  .primary { color: var(--tx); }
+  .action:last-child {
+    border-right: 0;
+  }
+  .action:hover {
+    background: var(--s2);
+  }
+  .primary {
+    color: var(--tx);
+  }
 }

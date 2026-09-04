@@ -8,8 +8,12 @@
     border-radius: 0;
     animation: styx-modal-in var(--motion-modal) ease-out;
   }
-  .w560 { width: var(--w-modal-connect); }
-  .w600 { width: var(--w-modal-spawn); }
+  .w560 {
+    width: var(--w-modal-connect);
+  }
+  .w600 {
+    width: var(--w-modal-spawn);
+  }
 
   .header {
     display: flex;
@@ -40,7 +44,9 @@
     cursor: pointer;
     font-size: 14px;
   }
-  .close:hover { color: var(--tx); }
+  .close:hover {
+    color: var(--tx);
+  }
 
   .body {
     padding: 16px;
@@ -48,13 +54,17 @@
     flex-direction: column;
     gap: 14px;
   }
-  .bodyLoose { padding: 20px 16px; }
+  .bodyLoose {
+    padding: 20px 16px;
+  }
 
   .footer {
     display: flex;
     border-top: 1px solid var(--ln);
   }
-  .spacer { flex: 1; }
+  .spacer {
+    flex: 1;
+  }
   /* Prototype footer buttons are content-sized: 14px 20px, CTA 14px 24px, hairline between. */
   .footer > button {
     flex: none;

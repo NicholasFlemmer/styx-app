@@ -24,14 +24,24 @@ export interface ModalProps {
 
 /** Top-anchored dialog at 90px with backdrop; Esc and backdrop click close (spec §8). */
 export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal(
-  { width = 560, title, onClose, footer, labelledBy, bodyPad = '16px', escapeEnabled = true, initialFocus = 'first', children },
+  {
+    width = 560,
+    title,
+    onClose,
+    footer,
+    labelledBy,
+    bodyPad = '16px',
+    escapeEnabled = true,
+    initialFocus = 'first',
+    children,
+  },
   ref,
 ) {
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  useReturnFocus(true);
   useFocusTrap(panel, { active: true, initialFocus });
   useEscape(true, onClose, escapeEnabled);
-  useReturnFocus(true);
 
   return (
     <Backdrop ref={ref} paddingTop={90} onClose={onClose}>
@@ -51,7 +61,9 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal(
             <Icon name="close" size={14} />
           </button>
         </div>
-        <div className={[s['body'], bodyPad === '20px 16px' ? s['bodyLoose'] : ''].filter(Boolean).join(' ')}>{children}</div>
+        <div className={[s['body'], bodyPad === '20px 16px' ? s['bodyLoose'] : ''].filter(Boolean).join(' ')}>
+          {children}
+        </div>
         {footer !== undefined && footer !== null && (
           <div className={s['footer']}>
             <span className={s['spacer']} />

@@ -1,13 +1,21 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Button } from '../../primitives';
 import { Drawer, DrawerRow } from './Drawer';
+
+afterEach(cleanup);
 
 describe('Drawer', () => {
   it('is a dialog labelled by the heading with rows and footer', () => {
     render(
-      <Drawer heading="Audit entry" title="Granted Codex write" meta="14:02" onClose={() => {}} footer={<Button size="footer">Copy JSON</Button>}>
+      <Drawer
+        heading="Audit entry"
+        title="Granted Codex write"
+        meta="14:02"
+        onClose={() => {}}
+        footer={<Button size="footer">Copy JSON</Button>}
+      >
         <DrawerRow label="Actor">codex</DrawerRow>
         <DrawerRow label="Target">supabase-prod</DrawerRow>
       </Drawer>,

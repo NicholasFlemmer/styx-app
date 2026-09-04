@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { useReturnFocus } from './useReturnFocus';
+
+afterEach(cleanup);
 
 function Overlay() {
   useReturnFocus(true);

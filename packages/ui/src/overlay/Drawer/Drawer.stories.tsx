@@ -9,7 +9,9 @@ const meta = {
   args: { onClose: () => {} },
   decorators: [
     (Story) => (
-      <div style={{ position: 'relative', width: 900, height: 620, background: 'var(--s1)', overflow: 'hidden' }}>
+      <div
+        style={{ position: 'relative', width: 900, height: 620, background: 'var(--s1)', overflow: 'hidden' }}
+      >
         <Story />
       </div>
     ),
@@ -44,9 +46,12 @@ export const Audit: Story = {
   },
 };
 
-export const NoFooter: Story = { args: { heading: 'Audit entry', title: 'Denied Gemini deploy on Vercel prod', children: rows } };
+export const NoFooter: Story = {
+  args: { heading: 'Audit entry', title: 'Denied Gemini deploy on Vercel prod', children: rows },
+};
 
 export const Matrix: Story = {
+  args: { heading: 'Matrix' },
   render: () => (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: 12 }}>
       <div style={{ position: 'relative', height: 420, border: '1px solid var(--ln)', overflow: 'hidden' }}>

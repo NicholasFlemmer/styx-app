@@ -19,7 +19,14 @@ export type MessageKind =
   | { kind: 'agent'; children: ReactNode }
   | { kind: 'fileList'; files: MessageFile[] }
   | { kind: 'decision'; children: ReactNode; options: DecisionOption[]; onChoose: (label: string) => void }
-  | { kind: 'accessRequest'; target: string; env?: string; scopes: string[]; onReview: () => void; onDeny: () => void }
+  | {
+      kind: 'accessRequest';
+      target: string;
+      env?: string;
+      scopes: string[];
+      onReview: () => void;
+      onDeny: () => void;
+    }
   | { kind: 'system'; text: string };
 
 export type MessageProps = MessageKind & {
@@ -76,7 +83,12 @@ export const Message = forwardRef<HTMLDivElement, MessageProps>(function Message
           {props.children}
           <div className={s['options']}>
             {props.options.map((o, i) => (
-              <Button key={o.label} size="compact" variant={(o.primary ?? i === 0) ? 'primary' : 'secondary'} onClick={() => props.onChoose(o.label)}>
+              <Button
+                key={o.label}
+                size="compact"
+                variant={(o.primary ?? i === 0) ? 'primary' : 'secondary'}
+                onClick={() => props.onChoose(o.label)}
+              >
                 {o.label}
               </Button>
             ))}
@@ -90,7 +102,9 @@ export const Message = forwardRef<HTMLDivElement, MessageProps>(function Message
             Access request · {props.target}
             {props.env !== undefined && ` ${props.env}`}
           </div>
-          <div className={s['requestBody']}>Scope: {props.scopes.join(', ')}. No grant on file for this target.</div>
+          <div className={s['requestBody']}>
+            Scope: {props.scopes.join(', ')}. No grant on file for this target.
+          </div>
           <div className={s['requestActions']}>
             <Button size="compact" variant="primary" onClick={props.onReview}>
               Review request

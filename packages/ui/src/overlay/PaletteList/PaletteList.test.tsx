@@ -1,11 +1,17 @@
 import { useState } from 'react';
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PaletteList, type PaletteGroup } from './PaletteList';
 
+afterEach(cleanup);
+
 const groups: PaletteGroup[] = [
-  { id: 'actions', label: 'Actions', items: [{ id: 'spawn', glyph: '▲', label: 'Spawn agent…', meta: '⌘N' }] },
+  {
+    id: 'actions',
+    label: 'Actions',
+    items: [{ id: 'spawn', glyph: '▲', label: 'Spawn agent…', meta: '⌘N' }],
+  },
   {
     id: 'agents',
     label: 'Agents',
@@ -16,7 +22,11 @@ const groups: PaletteGroup[] = [
   },
 ];
 
-function Live(props: { onRun?: (id: string) => void; onScopeCycle?: (d: 1 | -1) => void; onClose?: () => void }) {
+function Live(props: {
+  onRun?: (id: string) => void;
+  onScopeCycle?: (d: 1 | -1) => void;
+  onClose?: () => void;
+}) {
   const [q, setQ] = useState('');
   const [active, setActive] = useState<string | undefined>('spawn');
   return (

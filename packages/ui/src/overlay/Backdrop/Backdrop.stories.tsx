@@ -17,7 +17,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const panel = (
-  <div style={{ width: 320, border: '1px solid var(--tx)', background: 'var(--s1)', padding: 16 }}>Panel (clicks inside do not close)</div>
+  <div style={{ width: 320, border: '1px solid var(--tx)', background: 'var(--s1)', padding: 16 }}>
+    Panel (clicks inside do not close)
+  </div>
 );
 
 export const Modal: Story = { args: { paddingTop: 90, children: panel } };

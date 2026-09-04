@@ -24,9 +24,9 @@ export const Sheet = forwardRef<HTMLDivElement, SheetProps>(function Sheet(
 ) {
   const inner = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
+  useReturnFocus(true);
   useFocusTrap(inner, { active: true, initialFocus });
   useEscape(true, onClose, escapeEnabled);
-  useReturnFocus(true);
   const setRef = (node: HTMLDivElement | null) => {
     inner.current = node;
     if (typeof ref === 'function') ref(node);
@@ -35,7 +35,14 @@ export const Sheet = forwardRef<HTMLDivElement, SheetProps>(function Sheet(
   const label = labelledBy ?? (title !== undefined ? titleId : undefined);
 
   return (
-    <div ref={setRef} role="dialog" aria-modal="true" aria-labelledby={label} tabIndex={-1} className={s['sheet']}>
+    <div
+      ref={setRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={label}
+      tabIndex={-1}
+      className={s['sheet']}
+    >
       {header}
       {title !== undefined && (
         <div id={titleId} className={s['title']}>

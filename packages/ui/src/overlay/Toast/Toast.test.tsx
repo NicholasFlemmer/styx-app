@@ -1,7 +1,9 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Toast } from './Toast';
+
+afterEach(cleanup);
 
 const actions = (review = vi.fn(), later = vi.fn()) => [
   { label: 'Review', onClick: review, primary: true },
@@ -12,7 +14,14 @@ describe('Toast', () => {
   it('renders as a status with heading, meta, title, detail and actions', async () => {
     const user = userEvent.setup();
     const review = vi.fn();
-    render(<Toast title="Codex wants Supabase prod · write" detail='acme-shop · "migration 0042"' actions={actions(review)} ttl={null} />);
+    render(
+      <Toast
+        title="Codex wants Supabase prod · write"
+        detail='acme-shop · "migration 0042"'
+        actions={actions(review)}
+        ttl={null}
+      />,
+    );
     const status = screen.getByRole('status');
     expect(status).toHaveTextContent('Needs you');
     expect(status).toHaveTextContent('Styx · now');

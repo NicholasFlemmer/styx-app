@@ -33,7 +33,17 @@ const groups: PaletteGroup[] = [
 function Live(props: Partial<React.ComponentProps<typeof PaletteList>>) {
   const [q, setQ] = useState('');
   const [active, setActive] = useState<string | undefined>('spawn');
-  return <PaletteList query={q} onQuery={setQ} groups={groups} activeId={active} onActive={setActive} onRun={() => {}} {...props} />;
+  return (
+    <PaletteList
+      query={q}
+      onQuery={setQ}
+      groups={groups}
+      activeId={active}
+      onActive={setActive}
+      onRun={() => {}}
+      {...props}
+    />
+  );
 }
 
 const meta = {
@@ -42,14 +52,22 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <div style={{ position: 'relative', width: 1100, height: 620, background: 'var(--bg)', overflow: 'hidden' }}>
+      <div
+        style={{
+          position: 'relative',
+          width: 1100,
+          height: 620,
+          background: 'var(--bg)',
+          overflow: 'hidden',
+        }}
+      >
         <Story />
       </div>
     ),
   ],
 } satisfies Meta<typeof PaletteList>;
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof PaletteList>;
 
 export const Grouped: Story = {
   render: () => (

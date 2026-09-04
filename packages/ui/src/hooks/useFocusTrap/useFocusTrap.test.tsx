@@ -1,8 +1,10 @@
 import { useRef } from 'react';
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { useFocusTrap } from './useFocusTrap';
+
+afterEach(cleanup);
 
 function Trap({ active = true, initial }: { active?: boolean; initial?: 'first' | 'second' }) {
   const ref = useRef<HTMLDivElement>(null);

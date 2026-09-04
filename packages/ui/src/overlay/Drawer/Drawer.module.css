@@ -42,7 +42,9 @@
     cursor: pointer;
     font-size: 14px;
   }
-  .close:hover { color: var(--tx); }
+  .close:hover {
+    color: var(--tx);
+  }
   .title {
     flex: none;
     padding: 18px 16px 8px;
