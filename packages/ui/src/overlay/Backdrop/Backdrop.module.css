@@ -1,0 +1,10 @@
+@layer components {
+  .backdrop {
+    position: absolute;
+    inset: 0;
+    background: var(--dim);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+}

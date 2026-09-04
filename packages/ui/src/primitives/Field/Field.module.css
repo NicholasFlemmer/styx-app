@@ -1,0 +1,13 @@
+@layer components {
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .hint {
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--mu);
+  }
+}

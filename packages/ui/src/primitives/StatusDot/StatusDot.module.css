@@ -1,0 +1,36 @@
+@layer components {
+  .dot {
+    display: inline-block;
+    flex: none;
+    border-radius: 0;
+    border: 1px solid transparent;
+  }
+  .s8 {
+    width: 8px;
+    height: 8px;
+  }
+  .s7 {
+    width: 7px;
+    height: 7px;
+  }
+  .accent {
+    background: var(--ac);
+    border-color: var(--ac);
+  }
+  .text {
+    background: var(--tx);
+    border-color: var(--tx);
+  }
+  .line {
+    background: var(--ln);
+    border-color: var(--ln);
+  }
+  .hollow {
+    background: transparent;
+    border-color: var(--ln);
+  }
+  .hollowStrong {
+    background: transparent;
+    border-color: var(--tx);
+  }
+}

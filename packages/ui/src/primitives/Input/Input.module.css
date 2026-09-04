@@ -1,0 +1,46 @@
+@layer components {
+  .field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+    padding: 8px 10px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--tx);
+    border-radius: 0;
+  }
+  .field:focus-within {
+    border-color: var(--tx);
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+  }
+  .disabled {
+    opacity: 0.5;
+  }
+  .input {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    outline: 0;
+  }
+  .input::placeholder {
+    color: var(--mu);
+    opacity: 1;
+  }
+  .trailing {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    color: var(--mu);
+  }
+}

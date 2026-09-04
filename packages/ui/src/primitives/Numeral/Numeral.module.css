@@ -1,0 +1,17 @@
+@layer components {
+  .numeral {
+    display: inline-block;
+    font-family: var(--font-ui);
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .m {
+    font-size: 28px;
+    letter-spacing: -0.02em;
+  }
+  .l {
+    font-size: 56px;
+    letter-spacing: -0.03em;
+  }
+}

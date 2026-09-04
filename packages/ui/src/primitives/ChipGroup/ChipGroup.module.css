@@ -1,0 +1,52 @@
+@layer components {
+  .group {
+    min-width: 0;
+  }
+  .grid {
+    display: grid;
+  }
+  .inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .chip {
+    position: relative;
+    border: 1px solid var(--ln);
+    margin-right: -1px;
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-weight: 600;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    border-radius: 0;
+    user-select: none;
+  }
+  /* spec §9: hit targets ≥ 28px for the 25px env chips */
+  .chip::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+  }
+  .chip[data-on='true'],
+  .chip:focus-visible {
+    z-index: 1;
+  }
+  .chip:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .duration {
+    padding: 8px 0;
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+  }
+  .env {
+    padding: 5px 10px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+}

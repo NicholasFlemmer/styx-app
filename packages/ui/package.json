@@ -15,7 +15,8 @@
     "build": "echo 'source package, consumed directly'",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",
-    "storybook:test": "echo 'storybook test-runner configured in phase 4'"
+    "storybook:test": "node scripts/storybook-test.mjs",
+    "storybook:test:only": "test-storybook --url http://127.0.0.1:6006"
   },
   "dependencies": {
     "@styx/tokens": "workspace:*",
@@ -23,6 +24,10 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@storybook/addon-a11y": "10.6.0",
+    "@storybook/addon-docs": "10.6.0",
+    "@storybook/react-vite": "10.6.0",
+    "@storybook/test-runner": "0.24.5",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.3.3",
@@ -30,6 +35,8 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "axe-playwright": "2.2.2",
+    "storybook": "10.6.0",
     "vite": "^7.0.0"
   }
 }

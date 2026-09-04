@@ -1,0 +1,25 @@
+@layer components {
+  .strip {
+    display: grid;
+    border-bottom: 1px solid var(--ln);
+    flex: none;
+  }
+  .tile {
+    padding: 22px 20px 18px;
+    border-right: 1px solid var(--ln);
+    min-width: 0;
+  }
+  .numeral {
+    display: block;
+  }
+  .label {
+    margin-top: 10px;
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    line-height: 1;
+    color: var(--mu);
+  }
+}

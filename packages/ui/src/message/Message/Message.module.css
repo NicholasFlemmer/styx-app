@@ -1,0 +1,77 @@
+@layer components {
+  .msg {
+    max-width: 92%;
+    font-size: 13px;
+    line-height: 1.5;
+    border-radius: 0;
+  }
+  .user {
+    align-self: flex-end;
+    max-width: 88%;
+    padding: 8px 10px;
+    background: var(--tx);
+    color: var(--bg);
+    line-height: 1.45;
+    white-space: pre-wrap;
+  }
+  .agent {
+    padding: 8px 10px;
+    border: 1px solid var(--ln);
+  }
+  .system {
+    padding: 8px 10px;
+    border: 1px solid var(--ln);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--mu);
+  }
+  .files {
+    border: 1px solid var(--ln);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .file {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--ln);
+  }
+  .file:last-child { border-bottom: 0; }
+  .add { color: var(--act); }
+  .options {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .request {
+    border: 1px solid var(--ac);
+  }
+  .requestHeader {
+    padding: 6px 10px;
+    background: var(--ac);
+    color: var(--acx);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .requestBody {
+    padding: 10px;
+    font-size: 12px;
+  }
+  .requestActions {
+    display: flex;
+    gap: 6px;
+    padding: 0 10px 10px;
+  }
+
+  .compact.user,
+  .compact.agent,
+  .compact.system {
+    padding: 7px 10px;
+  }
+  .compact.user,
+  .compact.agent {
+    font-size: 12.5px;
+  }
+}

@@ -1,0 +1,60 @@
+@layer components {
+  .row {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    font-size: 12.5px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .labelStart {
+    flex-direction: row-reverse;
+    justify-content: space-between;
+    width: 100%;
+  }
+  .disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .box {
+    flex: none;
+    display: inline-block;
+    border: 1px solid var(--ln);
+    background: transparent;
+    border-radius: 0;
+  }
+  .s14 {
+    width: 14px;
+    height: 14px;
+  }
+  .s16 {
+    width: 16px;
+    height: 16px;
+  }
+  .filled {
+    background: var(--tx);
+    border-color: var(--tx);
+  }
+  .input:focus-visible + .box {
+    outline: 1px solid var(--ac);
+    outline-offset: 1px;
+  }
+  .label {
+    flex: 1;
+    min-width: 0;
+  }
+}

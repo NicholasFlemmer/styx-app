@@ -1,0 +1,552 @@
+import type { Platform } from './model/common';
+
+/**
+ * Every UI string from spec §10 and the handoff README, verbatim. Placeholders use `{name}` and are
+ * filled with `fill()`; platform-dependent words come from `platformCopy()`.
+ */
+export const copy = {
+  app: { name: 'Styx', wordmark: 'STYX' },
+
+  palette: {
+    placeholder: 'switch, spawn, deploy, grant, diff…',
+    titlebarField: 'Switch, spawn, deploy, grant…',
+    groups: { actions: 'Actions', agents: 'Agents', projects: 'Projects' },
+    footer: { run: '⏎ run', newWindow: '{mod}⏎ new window', scope: '⇥ scope', close: 'esc' },
+    actions: {
+      deploy: 'Deploy {project} → {target}',
+      grant: 'Grant {agent} → {target}',
+      spawn: 'Spawn agent in {project}',
+      spawnMeta: '{agent} ▾',
+      newProject: 'New project…',
+      newProjectMeta: 'empty · template · agent',
+      switchProject: 'Switch to {project}',
+    },
+    meta: {
+      needsYou: 'needs you',
+      open: 'open · {t}',
+      always: 'always',
+      locked: 'locked',
+      expired: 'expired',
+      unconnected: 'unconnected',
+    },
+  },
+
+  counters: {
+    needsYou: 'Needs you',
+    agentsWorking: 'Agents working',
+    grantsActive: 'Grants active',
+    projects: 'Projects',
+    titlebarNeedsYou: '{n} needs you',
+    titlebarLocked: '{n} locked',
+    statusGrantsActive: '{n} grants active',
+  },
+
+  nav: {
+    home: 'All projects',
+    workspace: 'Workspace',
+    agents: 'Agents',
+    repo: 'Repo',
+    approvals: 'Approvals',
+    settings: 'Settings',
+    worktreesMeta: '{n} wt',
+  },
+
+  board: {
+    columns: { needsYou: 'Needs you', working: 'Working', done: 'Done' },
+    empty: {
+      needsYou: 'Nothing waiting on you.',
+      working: 'No agents running. Spawn one below, or ask in the palette.',
+      done: 'Finished sessions land here for 7 days.',
+    },
+    actions: {
+      open: 'Open',
+      reviewGrant: 'Review grant',
+      reviewPlan: 'Review plan',
+      archive: 'Archive',
+      deny: 'Deny',
+      spawn: '+ Spawn agent',
+    },
+    queued: '+{n} queued',
+    states: { idle: 'Idle', paused: 'paused', working: 'working', needsYou: 'needs you', done: 'done' },
+  },
+
+  chat: {
+    waitingOnYou: 'waiting on you',
+    composerPlaceholder: 'Message {agent}…',
+    composer: { file: '@file', command: '/command', model: 'Model ▾', send: '⏎ send' },
+    poppedOut: 'Popped out',
+    dock: 'Dock',
+  },
+
+  accessRequest: {
+    title: 'Access request',
+    header: 'Access request · {target}',
+    scopeLine: 'Scope: {scopes}. No grant on file for this target.',
+    review: 'Review request',
+    deny: 'Deny',
+  },
+
+  grantSheet: {
+    title: 'Access request',
+    who: '{agent} · {branch}',
+    target: '{target} / {env}',
+    scopeLabel: 'Scope',
+    scopes: { read: 'Read schema', write: 'Write', delete: 'Delete / drop', deploy: 'Deploy' },
+    durationLabel: 'Duration',
+    durations: { once: 'once', '1h': '1h', session: 'session', always: 'always' },
+    prodNote:
+      'Prod write requires {mfa}. Token is scoped to this session and revoked on expiry or when the session ends. Logged to audit.',
+    deny: 'Deny',
+    grant: 'Grant {duration}',
+    grantMfa: 'Grant {duration} · {mfa}',
+  },
+
+  grantResult: {
+    /** Chat system line. */
+    line: 'grant: {target} · {scopes} · expires in {t}',
+    linePersistent: 'grant: {target} · {scopes} · persistent',
+    /** Screen-reader announcement. */
+    announce: 'Granted {agent} {scopes} on {target} for {duration}',
+    denied: '',
+  },
+
+  policies: {
+    autoApproveStagingRead: 'Auto-approve read on any staging or preview target',
+    askMfaProdWrite: 'Always ask, require {mfa} for prod write',
+    idleExpiry: 'Expire grants after 1h idle',
+    intro:
+      'Policies are evaluated top to bottom. Project overrides in Settings win. Export as JSON to share with a team.',
+    heading: 'Policies',
+    addRule: '+ Rule',
+    exportJson: 'Export JSON',
+    matchesToday: 'matches {n} today',
+    revokedThisWeek: 'revoked {n} this week',
+    autoLabel: 'auto: policy #{n}',
+  },
+
+  approvals: {
+    tabs: { inbox: 'Inbox', inboxCount: 'Inbox · {n}', policies: 'Policies', auditLog: 'Audit log' },
+    review: 'Review',
+    deny: 'Deny',
+    footer: 'auto-approved today: {n} ({detail})',
+    footerDetail: 'preview deploys, github reads',
+  },
+
+  audit: {
+    drawerTitle: 'Audit entry',
+    rows: {
+      actor: 'Actor',
+      target: 'Target',
+      scope: 'Scope',
+      duration: 'Duration',
+      session: 'Session',
+      worktree: 'Worktree',
+      triggeredBy: 'Triggered by',
+      policy: 'Policy',
+    },
+    copyJson: 'Copy JSON',
+    revokeNow: 'Revoke now',
+    none: '—',
+    actions: {
+      used: 'used {scope} token',
+      usedAuto: 'used {scope} token (auto: policy #{n})',
+      granted: 'granted {scopes} to {agent} · {duration}',
+      denied: 'denied {scopes} to {agent}',
+      revoked: 'revoked {agent} grant · {reason}',
+      expired: 'expired {agent} grant · {reason}',
+      requested: 'requested {scopes}',
+      openedPr: 'opened PR #{n}',
+      mergedPr: 'merged PR #{n}',
+      connected: 'connected',
+      disconnected: 'disconnected',
+      tested: 'tested connection',
+      policyChanged: 'changed policies',
+      exported: 'exported audit log',
+    },
+    reasons: {
+      user: 'revoked by you',
+      expired: 'expired',
+      idle: 'idle 1h',
+      'session-end': 'session ended',
+      'once-used': 'single use',
+      'target-removed': 'target removed',
+      policy: 'policy',
+    },
+    durationDetail: { policySingleUse: 'policy · single use', expires: '{duration} · expires {t}' },
+    triggeredBy: {
+      grantSheet: 'grant sheet',
+      idleTimer: 'idle timer',
+      expiryTimer: 'expiry timer',
+      lockGlyph: 'lock glyph',
+    },
+  },
+
+  targets: {
+    columns: { target: 'Target', env: 'Env', policy: 'Policy', state: 'State' },
+    policy: { 'ask-mfa': 'Ask · MFA', ask: 'Ask each time', always: 'Always allow' },
+    state: {
+      locked: 'locked',
+      persistent: 'persistent',
+      expired: 'expired',
+      unconnected: 'unconnected',
+      open: 'open · {t} left',
+    },
+    actions: { revoke: 'Revoke', edit: 'Edit', connect: 'Connect' },
+    statusBar: {
+      open: '{target} · open {t}',
+      locked: '{target} · locked',
+      persistent: '{target} · persistent',
+    },
+    connectRow: '+ Connect target · OAuth / key / SSH',
+  },
+
+  empty: {
+    projects: {
+      headline: 'No projects yet.',
+      body: 'Add a folder or clone a repo. Agents and targets attach to projects, so Styx asks about those when they're first needed.',
+      /** Prototype body (visuals win, ADR-0012). */
+      bodyPrototype:
+        'Start something new, add a folder, or clone a repo. Agents and targets attach to projects, so Styx asks about those when they're first needed.',
+      scan: 'Scan this machine',
+      newProject: 'New project',
+      openFolder: 'Open folder',
+      cloneUrl: 'Clone URL',
+    },
+    needsYou: 'Nothing waiting on you.',
+    working: 'No agents running. Spawn one below, or ask in the palette.',
+    done: 'Finished sessions land here for 7 days.',
+    targets:
+      'No targets connected. Agents can still work locally; the first time one asks for a deploy or server, Styx opens this connect flow inline.',
+    noProject: 'No project',
+  },
+
+  errors: {
+    authExpired: {
+      text: '{target}: credentials expired {t} ago. Agents requesting it are paused.',
+      cta: 'Reconnect',
+    },
+    cliMissing: {
+      text: '{cli} not found on PATH. {n} session(s) cannot start.',
+      textOne: '{cli} not found on PATH. 1 session cannot start.',
+      cta: 'Install guide',
+    },
+    conflict: {
+      text: '{branch} conflicts with main in {file}. {agent} is paused until resolved.',
+      cta: 'Resolve',
+    },
+    spawnCliMissing: '{cli} CLI not found on PATH.',
+    locateBinary: 'Locate binary',
+  },
+
+  onboarding: {
+    steps: { editor: 'Editor', projects: 'Projects', agents: 'Agents', targets: 'Targets' },
+    editor: {
+      headline: 'Connect your editor.',
+      body: 'Styx embeds its own editor for reviewing and editing agent work. Connecting your IDE imports recents, keybindings and theme, and sets where "Open in…" goes. Nothing in your IDE changes.',
+      importKeybindings: 'Import keybindings',
+      importTheme: 'Import theme & font',
+      importRecents: 'Import recent folders (feeds next step)',
+      installOpenIn: 'Install "Open in Styx" command',
+      roleFallback: 'Fallback · Open in',
+      roleDetected: 'Detected',
+    },
+    projects: {
+      headline: 'Found {n} repos on this machine.',
+      body: 'Pick the ones Styx should manage. {ide} recents and workspaces are included. Nothing is modified.',
+      addRow: '+ new project · add folder · clone URL',
+    },
+    agents: {
+      headline: 'Detected agent CLIs.',
+      body: 'Styx runs the CLIs you already have. Sign-in happens in the CLI's own flow; Styx only stores where it lives.',
+      signedIn: 'signed in',
+      signIn: 'Sign in →',
+      install: 'Install →',
+      notFound: 'not found on PATH',
+    },
+    targets: {
+      headline: 'Connect deploy and server targets.',
+      body: 'Optional now. Secrets go to the {keychainName}, never into a repo. Every agent use is a scoped, expiring grant.',
+      tile: '{method} · connect →',
+    },
+    footer: { back: 'Back', skip: 'Skip', continue: 'Continue', finish: 'Finish' },
+  },
+
+  connect: {
+    title: 'Connect target · {step}',
+    stepPick: 'choose provider',
+    methods: { oauth: 'OAuth', key: 'IAM / key', ssh: 'SSH' },
+    environment: 'Environment',
+    oauth: {
+      body: 'Styx opens your browser to authorize. The token lands in the {keychainName}; agents receive short-lived scoped tokens derived from it.',
+      waiting: 'Waiting for browser…',
+      open: 'Open browser',
+    },
+    key: {
+      body: 'Paste credentials for a role scoped to this project. Styx recommends a dedicated IAM role with no delete permissions; the key is stored in the {keychainName} and never shown again.',
+      name: 'Name',
+      accessKey: 'Access key / service account',
+      secret: 'Secret',
+      test: 'Test connection',
+      save: 'Save to {keychainShort}',
+    },
+    ssh: {
+      host: 'Host',
+      user: 'User',
+      key: 'Key',
+      browse: 'Browse',
+      body: 'Agents get a forwarded agent socket for the grant's duration, never the key file.',
+      test: 'Test connection',
+      save: 'Save',
+    },
+    back: 'Back',
+  },
+
+  newProject: {
+    title: 'New project',
+    name: 'Name',
+    location: 'Location',
+    browse: 'Browse',
+    startFrom: 'Start from',
+    starts: {
+      empty: { label: 'Empty folder', desc: 'Just git init and a README.' },
+      template: { label: 'Template', desc: 'Built-in stacks or repos tagged in your org.' },
+      agent: {
+        label: 'Agent scaffolds it',
+        desc: 'Describe it; the agent builds the skeleton and pauses for review.',
+      },
+    },
+    templateLabel: 'Template',
+    templateNote:
+      'Templates are git repos tagged styx-template in your GitHub org, plus built-ins (Node, Python, Go, Rust, static).',
+    briefLabel: 'Brief for {agent}',
+    agentNote:
+      'The agent scaffolds in an empty worktree on main, then pauses for your review before the first commit.',
+    gitInit: 'git init',
+    createGithubRepo: 'Create GitHub repo · private',
+    connectGithub: 'Connect GitHub to create the remote',
+    copyTargets: 'Copy targets from {project}',
+    openInIde: 'Open in {ide} too',
+    githubNote: '{target} · persistent grant · repo will be {repo}',
+    cancel: 'Cancel',
+    create: 'Create · {mod}⏎',
+    createSpawn: 'Create · spawn {agent} · {mod}⏎',
+  },
+
+  spawn: {
+    title: 'Spawn agent · {project}',
+    worktree: 'Worktree',
+    worktreeDefault: 'New from main',
+    branch: 'Branch',
+    firstMessage: 'First message',
+    firstMessagePlaceholder: 'What should {agent} do? Reference files with @.',
+    toggles: {
+      autoApproveEdits: 'Auto-approve edits',
+      mayRequestTargets: 'May request targets',
+      notifyWhenNeedsMe: 'Notify when it needs me',
+    },
+    cancel: 'Cancel',
+    spawn: 'Spawn · {mod}⏎',
+  },
+
+  toast: {
+    header: 'Needs you',
+    source: 'Styx · now',
+    title: '{agent} wants {target} · {scope}',
+    meta: '{project} · {branch} · "{reason}"',
+    review: 'Review',
+    later: 'Later',
+    osTitle: '{agent} needs you',
+  },
+
+  repo: {
+    title: 'Worktrees',
+    remoteLine: '{remote} · {branch} ↑{ahead} ↓{behind}',
+    fetch: 'Fetch',
+    addWorktree: '+ Worktree',
+    columns: { branch: 'Branch', owner: 'Owner', changes: 'Changes', pr: 'PR' },
+    you: 'you',
+    changes: {
+      clean: 'clean · ↑{ahead} ↓{behind}',
+      summary: '+{added} −{removed} · {files} {filesWord}',
+      waitingOnGrant: 'waiting on grant',
+      merged: 'merged {when}',
+      conflict: 'CONFLICT · {file} vs {against}',
+    },
+    pr: { none: '—', draft: '#{n} draft', open: '#{n} open', merged: '#{n} ✓', closed: '#{n} closed' },
+    actions: { open: 'Open', diff: 'Diff', archive: 'Archive', resolve: 'Resolve' },
+  },
+
+  diff: {
+    title: 'Review',
+    meta: '{agent} · {branch} · {summary}',
+    summary: '{accepted} accepted · {rejected} rejected · {pending} pending',
+    acceptAll: 'Accept all',
+    rejectAll: 'Reject all',
+    done: 'Done',
+    accept: 'Accept',
+    reject: 'Reject',
+    review: 'Review',
+    files: 'Files · {n}',
+    keys: {
+      title: 'Keys',
+      acceptReject: 'a accept · r reject',
+      nextPrev: 'j / k next · prev',
+      done: '{mod}⏎ done',
+    },
+    hunkBar: '{n} hunks from {agent} · {note}',
+    hunkLabel: '{agent} · {age}',
+    changesHeader: 'Changes · {n}',
+  },
+
+  workspace: {
+    files: 'Files',
+    openIn: 'Open in {ide}',
+    terminal: 'TERMINAL · {branch}',
+    editorStatus: 'Monaco · {eol} · {lang}',
+  },
+
+  settings: {
+    groups: { app: 'App', project: 'Project · {project}' },
+    app: {
+      general: 'General',
+      editor: 'Editor',
+      agents: 'Agents & CLIs',
+      keychain: 'Keychain & secrets',
+      policies: 'Policies',
+      shortcuts: 'Shortcuts',
+    },
+    project: { targets: 'Targets', agentDefaults: 'Agent defaults', env: 'Env & secrets' },
+    footer: { file: '.styx/project.json', note: 'committed · secrets excluded' },
+    scope: { app: 'app', project: 'project · {project}' },
+    rows: {
+      theme: 'Theme',
+      notify: 'Notify when an agent needs me',
+      launchAtLogin: 'Launch at login',
+      engine: 'Engine',
+      openFilesIn: 'Open files in',
+      fallbackEditor: 'Fallback editor',
+      lineEndings: 'Line endings',
+      defaultAgent: 'Default agent',
+      autoWorktree: 'Auto-create worktree per agent',
+      shellWindows: 'Shell (Windows)',
+      detectedClis: 'Detected CLIs',
+      store: 'Store',
+      mfaProdWrite: 'MFA for prod write',
+      injectAs: 'Inject as',
+      autoApproveStagingReads: 'Auto-approve staging reads',
+      grantIdleExpiry: 'Grant idle expiry',
+      export: 'Export',
+      palette: 'Palette',
+      switchProject: 'Switch project',
+      focusAgent: 'Focus agent 1–4',
+      approveDeny: 'Approve / deny',
+      model: 'Model',
+      autoApproveEdits: 'Auto-approve edits',
+      envSource: '.env source',
+      shareWithAgents: 'Share with agents',
+      committedFile: 'Committed file',
+    },
+    values: {
+      theme: { system: 'System', dark: 'Dark', light: 'Light' },
+      notify: { 'badge-sound': 'Badge + sound', badge: 'Badge', off: 'Off' },
+      on: 'On',
+      off: 'Off',
+      engine: 'Monaco (embedded)',
+      openFilesIn: { styx: 'Styx', fallback: 'Fallback editor' },
+      lineEndings: { auto: 'Per repo', lf: 'LF', crlf: 'CRLF' },
+      shellWindows: { powershell: 'PowerShell', wsl: 'WSL' },
+      injectAs: { 'scoped-else-env': 'Scoped token, else env', env: 'Env' },
+      idleExpiry: '1 hour',
+      exportJson: 'JSON',
+      modelDefault: 'Default',
+      envSource: 'Keychain',
+      shareWithAgents: { 'per-grant': 'Per grant', always: 'Always', never: 'Never' },
+      committedFile: '.styx/project.json',
+    },
+    reset: 'Reset',
+  },
+
+  agents: { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', cursor: 'Cursor', shell: 'shell' },
+  agentProducts: {
+    claude: 'Claude Code',
+    codex: 'Codex',
+    gemini: 'Gemini CLI',
+    cursor: 'Cursor agent',
+    shell: 'Shell',
+  },
+  providers: {
+    vercel: 'Vercel',
+    aws: 'AWS',
+    gcp: 'GCP',
+    supabase: 'Supabase',
+    github: 'GitHub',
+    ssh: 'SSH host',
+  },
+
+  home: {
+    columns: {
+      project: 'Project',
+      path: 'Path',
+      branch: 'Branch',
+      agents: 'Agents',
+      targets: 'Targets',
+      last: 'Last activity',
+    },
+    addRow: { newProject: '+ New project', openFolder: '+ Open folder', cloneUrl: '+ Clone URL' },
+    activity: 'Activity',
+  },
+
+  window: { popout: '⤢', dock: 'Dock', minimize: '─', maximize: '☐', close: '✕' },
+
+  general: {
+    cancel: 'Cancel',
+    close: '✕',
+    none: '—',
+    yes: 'Yes',
+    no: 'No',
+    editPlan: 'Edit plan',
+    later: 'Later',
+  },
+} as const;
+
+export type Copy = typeof copy;
+
+export interface PlatformCopy {
+  mfa: 'Touch ID' | 'Windows Hello';
+  mfaFallback: 'password' | 'PIN';
+  mod: '⌘' | 'Ctrl';
+  keychainName: 'macOS Keychain' | 'Windows Credential Manager';
+  keychainShort: 'Keychain' | 'Credential Manager';
+  defaultProjectDir: '~/code' | 'C:\\dev';
+  shell: 'zsh' | 'PowerShell';
+}
+
+/** Platform words (spec §7). */
+export const platformCopy = (platform: Platform): PlatformCopy =>
+  platform === 'win32'
+    ? {
+        mfa: 'Windows Hello',
+        mfaFallback: 'PIN',
+        mod: 'Ctrl',
+        keychainName: 'Windows Credential Manager',
+        keychainShort: 'Credential Manager',
+        defaultProjectDir: 'C:\\dev',
+        shell: 'PowerShell',
+      }
+    : {
+        mfa: 'Touch ID',
+        mfaFallback: 'password',
+        mod: '⌘',
+        keychainName: 'macOS Keychain',
+        keychainShort: 'Keychain',
+        defaultProjectDir: '~/code',
+        shell: 'zsh',
+      };
+
+/** Fill `{name}` placeholders. Unknown placeholders are left as-is so missing values are visible. */
+export const fill = (template: string, vars: Record<string, string | number>): string =>
+  template.replaceAll(/\{(\w+)\}/g, (m, key: string) => (key in vars ? String(vars[key]) : m));
+
+/** Default project location for a new project name (spec §4.12). */
+export const defaultProjectLocation = (name: string, platform: Platform): string =>
+  platform === 'win32' ? `C:\\dev\\${name}` : `~/code/${name}`;

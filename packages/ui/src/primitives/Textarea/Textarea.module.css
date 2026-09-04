@@ -1,0 +1,30 @@
+@layer components {
+  .textarea {
+    display: block;
+    width: 100%;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+    padding: 8px 10px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--tx);
+    resize: none;
+    border-radius: 0;
+  }
+  .textarea:focus {
+    border-color: var(--tx);
+    outline: 0;
+  }
+  .textarea::placeholder {
+    color: var(--mu);
+    opacity: 1;
+  }
+  .textarea:disabled {
+    opacity: 0.5;
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+  }
+}

@@ -1,0 +1,21 @@
+@layer components {
+  .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--ln);
+    font-size: 13px;
+    min-width: 0;
+  }
+  .label {
+    min-width: 0;
+  }
+  .value {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+  }
+}

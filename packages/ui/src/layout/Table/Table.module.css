@@ -1,0 +1,62 @@
+@layer components {
+  .table {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .header {
+    display: grid;
+    align-items: center;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--ln);
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mu);
+  }
+  .headerCell {
+    min-width: 0;
+  }
+  .row {
+    display: grid;
+    align-items: center;
+    border-bottom: 1px solid var(--ln);
+    font-size: 12.5px;
+    min-width: 0;
+  }
+  .interactive {
+    cursor: pointer;
+  }
+  .interactive:hover {
+    background: var(--s2);
+  }
+  .cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .muted {
+    color: var(--mu);
+  }
+  .strong {
+    font-weight: 600;
+  }
+  .label {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .end {
+    justify-content: flex-end;
+    text-align: right;
+  }
+}

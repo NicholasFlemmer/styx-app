@@ -1,0 +1,25 @@
+@layer components {
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 56px 20px;
+    border-bottom: 1px solid var(--ln);
+  }
+  .headline {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .body {
+    color: var(--mu);
+    max-width: 460px;
+    line-height: 1.5;
+  }
+  .actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+}

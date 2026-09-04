@@ -1,0 +1,18 @@
+@layer components {
+  .transcript {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    overflow: auto;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .compact {
+    gap: 10px;
+    padding: 12px;
+    font-size: 12.5px;
+  }
+}

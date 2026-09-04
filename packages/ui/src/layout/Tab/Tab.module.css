@@ -1,0 +1,90 @@
+@layer components {
+  .row {
+    display: flex;
+    align-items: stretch;
+    flex: none;
+    border-bottom: 1px solid var(--ln);
+    min-width: 0;
+  }
+  .rowFixed {
+    height: var(--h-tabrow);
+  }
+  .rowAuto {
+    height: auto;
+  }
+  .rowMono {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .tab {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    border-right: 1px solid var(--ln);
+    background: transparent;
+    color: var(--tx);
+    cursor: pointer;
+    white-space: nowrap;
+    border-radius: 0;
+    user-select: none;
+  }
+  .session {
+    height: var(--h-tabrow);
+    padding: 0 12px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .session:hover {
+    background: var(--s2);
+  }
+  .file {
+    height: var(--h-tabrow);
+    padding: 0 14px;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--mu);
+  }
+  .approvals {
+    padding: 12px 18px;
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .approvals:hover {
+    background: var(--s2);
+  }
+  .mono {
+    font-family: var(--font-mono);
+  }
+  .label {
+    min-width: 0;
+  }
+  .badge {
+    background: var(--ac);
+    color: var(--acx);
+    font-family: var(--font-ui);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 0 4px;
+  }
+  .meta {
+    display: inline-flex;
+    align-items: center;
+  }
+  .chevron {
+    color: var(--mu);
+  }
+  .tab[data-inv='true'] .chevron {
+    color: inherit;
+  }
+  .tab:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}

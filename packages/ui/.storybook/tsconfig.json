@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "noEmit": true, "types": ["node", "vite/client", "@testing-library/jest-dom"] },
+  "include": ["./*.ts", "../src/storybook/*.tsx", "../src/**/*.stories.tsx"]
+}

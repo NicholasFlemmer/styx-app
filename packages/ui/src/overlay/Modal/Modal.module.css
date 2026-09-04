@@ -1,0 +1,70 @@
+@layer components {
+  .panel {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--tx);
+    background: var(--s1);
+    color: var(--tx);
+    border-radius: 0;
+    animation: styx-modal-in var(--motion-modal) ease-out;
+  }
+  .w560 { width: var(--w-modal-connect); }
+  .w600 { width: var(--w-modal-spawn); }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--ln);
+  }
+  .title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mu);
+    line-height: 1;
+  }
+  /* 14px glyph, 28px hit target (spec §9) without changing the 12px row padding. */
+  .close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin: -7px;
+    border: 0;
+    background: transparent;
+    color: var(--mu);
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .close:hover { color: var(--tx); }
+
+  .body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .bodyLoose { padding: 20px 16px; }
+
+  .footer {
+    display: flex;
+    border-top: 1px solid var(--ln);
+  }
+  .spacer { flex: 1; }
+  /* Prototype footer buttons are content-sized: 14px 20px, CTA 14px 24px, hairline between. */
+  .footer > button {
+    flex: none;
+    padding-left: 20px;
+    padding-right: 20px;
+    border-left: 1px solid var(--ln);
+  }
+  .footer > button:last-child {
+    padding-left: 24px;
+    padding-right: 24px;
+    border-left: 0;
+  }
+}

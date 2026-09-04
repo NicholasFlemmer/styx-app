@@ -16,3 +16,7 @@ export type HunkId = Brand<string, 'HunkId'>;
 export type MessageId = Brand<string, 'MessageId'>;
 
 export const newId = <T extends string>(): Brand<string, T> => ulid() as Brand<string, T>;
+
+/** Brand a known-good raw id (fixtures, builtin rows, rows out of SQLite after zod). The only cast site. */
+export const idFrom = <T extends string>(raw: string): Brand<string, T> => raw as Brand<string, T>;
+export type AnyId = Brand<string, string>;

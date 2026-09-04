@@ -1,0 +1,63 @@
+@layer components {
+  .composer {
+    flex: none;
+    border-top: 1px solid var(--ln);
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .input {
+    width: 100%;
+    min-height: 56px;
+    padding: 8px 10px;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    line-height: 1.5;
+    resize: none;
+    border-radius: 0;
+  }
+  .input::placeholder { color: var(--mu); }
+  .input:focus { border-color: var(--tx); }
+  .input:disabled { opacity: 0.5; }
+  .hints {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mu);
+    line-height: 1;
+  }
+  .hint {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+  }
+  .hint::after { content: ''; position: absolute; inset: -9px -4px; }
+  .hint:hover { color: var(--tx); }
+  .hint:disabled { cursor: default; color: var(--mu); }
+  .spacer { flex: 1; }
+
+  .compact {
+    padding: 10px 12px;
+  }
+  .compact .input {
+    min-height: 44px;
+    font-size: 12.5px;
+  }
+}

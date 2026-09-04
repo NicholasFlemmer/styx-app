@@ -1,0 +1,46 @@
+@layer components {
+  .wrap {
+    position: relative;
+    display: inline-flex;
+    min-width: 140px;
+    vertical-align: middle;
+  }
+  .select {
+    appearance: none;
+    width: 100%;
+    border: 1px solid var(--ln);
+    background: transparent;
+    color: var(--tx);
+    padding: 4px 24px 4px 8px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    line-height: 1.5;
+    cursor: pointer;
+    border-radius: 0;
+  }
+  .select:hover {
+    background: var(--s2);
+  }
+  .select option {
+    background: var(--bg);
+    color: var(--tx);
+  }
+  .disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .chevron {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    margin-top: -6px;
+    color: var(--mu);
+    pointer-events: none;
+  }
+  .wrap[data-inv='true'] .select,
+  .wrap[data-inv='true'] .chevron,
+  .wrap[data-on='true'] .select,
+  .wrap[data-on='true'] .chevron {
+    color: inherit;
+  }
+}
