@@ -1,0 +1,84 @@
+import { DEFAULT_PROJECT_SETTINGS, type ProjectSettings, type SessionId } from '@styx/core';
+import type { Container } from '../../container';
+import { projectSettingsFor } from '../../store/projection';
+import { type CommandBus, fail } from '../bus';
+
+/** project.* */
+export function registerProjectCommands(bus: CommandBus, app: Container): void {
+  const { projects, repos } = app;
+
+  bus.register('project.scan', async ({ includeIdeRecents }) => ({
+    repos: await projects.scan(includeIdeRecents),
+  }));
+
+  bus.register('project.add', async ({ path, name }) => ({ projectId: (await projects.add(path, name)).id }));
+
+  bus.register('project.clone', async ({ url, into }) => ({
+    projectId: (await projects.clone(url, into)).id,
+  }));
+
+  bus.register('project.create', async (input) => {
+    const project = await projects.create({
+      name: input.name,
+      location: input.location,
+      gitInit: input.gitInit,
+      template: input.startFrom.kind === 'template' ? input.startFrom.template : null,
+      copyTargetsFrom: input.copyTargetsFrom,
+    });
+    if (input.createGithubRepo) {
+      // TODO(github-create): create the private repo through the project's GitHub target (needs a connected `github` target).
+    }
+    let sessionId: SessionId | null = null;
+    if (input.startFrom.kind === 'agent') {
+      const main = repos.worktrees.mainOf(project.id) ?? fail('internal', 'main worktree missing');
+      const settings = projectSettingsFor(repos, project.id);
+      const { session } = await app.sessions.spawn({
+        projectId: project.id,
+        agent: input.startFrom.agent,
+        worktree: { kind: 'existing', worktreeId: main.id },
+        firstMessage: `${input.startFrom.brief}\n\nScaffold the project skeleton in this empty worktree, then call ask_user(kind: "plan") before the first commit.`,
+        toggles: {
+          autoApproveEdits: settings.autoApproveEdits.value,
+          mayRequestTargets: settings.mayRequestTargets.value,
+          notifyWhenNeedsMe: settings.notifyWhenNeedsMe.value,
+        },
+        model: settings.model.value,
+      });
+      sessionId = session.id;
+    }
+    if (input.openInIde) {
+      const ide =
+        repos.discovery.ides().find((i) => i.isFallback) ??
+        repos.discovery.ides().find((i) => i.kind === repos.settings.app().fallbackIde);
+      if (ide?.launcher) void app.openInIde(ide.launcher, project.path).catch(() => undefined);
+    }
+    return { projectId: project.id, sessionId };
+  });
+
+  bus.register('project.remove', async ({ projectId, deleteFiles }) => {
+    const { sessionIds } = await projects.remove(projectId, deleteFiles);
+    for (const id of sessionIds) app.pty.kill(id);
+    return {};
+  });
+
+  bus.register('project.reorder', ({ projectIds }) => {
+    projects.reorder(projectIds);
+    return {};
+  });
+
+  bus.register('project.select', ({ projectId }) => {
+    projects.select(projectId);
+    return {};
+  });
+
+  bus.register('project.settings.set', async ({ projectId, patch }) => {
+    await projects.setSettings(projectId, patch as Partial<ProjectSettings>);
+    return {};
+  });
+
+  bus.register('project.settings.reset', async ({ projectId, key }) => {
+    if (!(key in DEFAULT_PROJECT_SETTINGS)) fail('invalid-input', `unknown setting ${key}`);
+    await projects.resetSetting(projectId, key);
+    return {};
+  });
+}

@@ -2,7 +2,7 @@ import type { AskId, ProjectId, SessionId } from '../ids';
 import { copy } from '../copy';
 import type { AskKind, Session, SessionState } from '../model/session';
 import type { ReadModel } from '../read-model';
-import { agentLabel, branchOf, byRecentActivity, headAskOf, liveSessions, projectNameOf } from './common';
+import { agentLabel, branchOf, headAskOf, liveSessions, projectNameOf } from './common';
 import { formatAge, padCount } from './format';
 
 export type BoardColumnKey = 'needs-you' | 'working' | 'done';
@@ -71,9 +71,12 @@ const COLUMN_STATES: Record<BoardColumnKey, readonly SessionState[]> = {
   done: ['done'],
 };
 
-/** Needs you | Working (includes idle and paused) | Done; counts zero-padded; empty copy from spec §10. */
+/**
+ * Needs you | Working (includes idle and paused) | Done; counts zero-padded; empty copy from spec §10.
+ * Cards keep read-model (spawn) order, as the prototype does — no recency sort (visual baseline, ADR-0012).
+ */
 export const boardColumns = (model: ReadModel, now: number): BoardColumn[] => {
-  const sessions = liveSessions(model).sort(byRecentActivity);
+  const sessions = liveSessions(model);
   const column = (
     key: BoardColumnKey,
     label: string,

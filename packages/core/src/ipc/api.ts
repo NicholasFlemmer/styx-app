@@ -1,4 +1,11 @@
-import type { CommandInput, CommandName, CommandResult, EventName, EventPayload, ReadModelSnapshot } from './contract';
+import type {
+  CommandInput,
+  CommandName,
+  CommandResult,
+  EventName,
+  EventPayload,
+  ReadModelSnapshot,
+} from './contract';
 import type { DeltaBatch } from '../deltas';
 
 /** Dev/e2e switches passed from main to the renderer (never secrets). */
@@ -19,7 +26,11 @@ export interface StyxApi {
   platform: 'darwin' | 'win32' | 'linux';
   env: StyxEnv;
   /** Which window this renderer runs in. */
-  window: { kind: 'main' | 'popout'; popoutSessionId: string | null; control(action: 'minimize' | 'maximize' | 'close'): void };
+  window: {
+    kind: 'main' | 'popout';
+    popoutSessionId: string | null;
+    control(action: 'minimize' | 'maximize' | 'close'): void;
+  };
   command<N extends CommandName>(name: N, input: CommandInput<N>): Promise<CommandResult<N>>;
   snapshot(): Promise<ReadModelSnapshot>;
   onDelta(cb: (batch: DeltaBatch) => void): () => void;

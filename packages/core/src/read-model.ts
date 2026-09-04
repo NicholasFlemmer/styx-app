@@ -1,4 +1,5 @@
 import type { ProjectId, SessionId } from './ids';
+import type { ActivityRow } from './model/activity';
 import type { AuditEntry } from './model/audit';
 import type { CliInstall, IdeInstall } from './model/discovery';
 import type { Grant } from './model/grant';
@@ -102,6 +103,8 @@ export interface ReadModel extends ReadModelTables {
   discovery: Discovery;
   settings: ReadModelSettings;
   popouts: readonly SessionId[];
+  /** Home activity feed rows (main appends; capped there). */
+  activity: readonly ActivityRow[];
 }
 
 export const TABLE_NAMES: readonly TableName[] = [
@@ -134,6 +137,7 @@ export const emptyReadModel = (app: AppSettings): ReadModel => ({
   discovery: { ides: [], clis: [] },
   settings: { app, project: {} },
   popouts: [],
+  activity: [],
 });
 
 export const projectSettingsOf = (model: ReadModel, projectId: ProjectId): EffectiveProjectSettings | null =>

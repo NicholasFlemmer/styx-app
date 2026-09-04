@@ -45,7 +45,8 @@ export class WindowsHelloProvider implements MfaProvider {
   private async loadNative(): Promise<typeof this.native> {
     if (this.native) return this.native;
     try {
-      this.native = (await import('@styx/native-winhello' as string)) as typeof this.native;
+      const mod = '@styx/native-winhello'; // optional napi addon; resolved at runtime only, hidden from the bundler
+      this.native = (await import(/* @vite-ignore */ mod)) as typeof this.native;
     } catch {
       this.native = null;
     }

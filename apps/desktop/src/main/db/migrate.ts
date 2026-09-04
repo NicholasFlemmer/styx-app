@@ -1,7 +1,25 @@
 import type BetterSqlite3 from 'better-sqlite3';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-/** Migrations are bundled as raw strings so they work inside the asar. Keep names sortable (NNNN_name.sql). */
-const files = import.meta.glob('./migrations/*.sql', { query: '?raw', eager: true, import: 'default' }) as Record<string, string>;
+/**
+ * Migrations are bundled as raw strings (vite `import.meta.glob`) so they work inside the asar. Outside vite
+ * (scripts run with tsx) `import.meta.glob` is undefined and the files are read from disk instead.
+ */
+function bundled(): Record<string, string> | null {
+  try {
+    return import.meta.glob('./migrations/*.sql', { query: '?raw', eager: true, import: 'default' }) as Record<string, string>;
+  } catch {
+    return null; // not running under vite (tsx scripts): import.meta.glob is undefined
+  }
+}
+
+function fromDisk(): Record<string, string> {
+  const dir = join(__dirname, 'migrations');
+  const out: Record<string, string> = {};
+  for (const f of readdirSync(dir)) if (f.endsWith('.sql')) out[`./migrations/${f}`] = readFileSync(join(dir, f), 'utf8');
+  return out;
+}
 
 export interface MigrationResult {
   applied: string[];
@@ -9,6 +27,7 @@ export interface MigrationResult {
 }
 
 export function listMigrations(): { name: string; sql: string }[] {
+  const files = bundled() ?? fromDisk();
   return Object.entries(files)
     .map(([path, sql]) => ({ name: path.replace(/^.*\//, '').replace(/\.sql$/, ''), sql }))
     .sort((a, b) => a.name.localeCompare(b.name));

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { deltaSchema } from '../deltas';
+import { activityRowSchema } from '../model/activity';
 import { auditEntrySchema } from '../model/audit';
 import {
   agentSchema,
@@ -74,6 +75,7 @@ const readModelSnapshotSchema = z.object({
   discovery: z.object({ ides: z.array(ideInstallSchema), clis: z.array(cliInstallSchema) }),
   settings: z.object({ app: appSettingsSchema, project: z.record(z.string(), z.unknown()) }),
   popouts: z.array(sessionIdSchema),
+  activity: z.array(activityRowSchema),
 });
 export type ReadModelSnapshot = z.infer<typeof readModelSnapshotSchema>;
 

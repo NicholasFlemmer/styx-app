@@ -5,6 +5,8 @@ import { demoFixture, demoReadModel, ids } from './fixtures/demo';
 import { DEFAULT_APP_SETTINGS } from './model/settings';
 import { emptyReadModel, removeRows, rows, tableFrom, upsertRows } from './read-model';
 
+const NOW_PLUS = 1_900_000_000_000;
+
 describe('applyDelta', () => {
   const model = demoReadModel();
   const f = demoFixture();
@@ -36,6 +38,16 @@ describe('applyDelta', () => {
       { op: 'discovery.set', ides: [], clis: f.clis },
       { op: 'settings.set', app: { ...DEFAULT_APP_SETTINGS, theme: 'dark' } },
       { op: 'popouts.set', sessionIds: [ids.session.codex] },
+      {
+        op: 'activity.append',
+        rows: [
+          {
+            ...(f.activity[0] as NonNullable<(typeof f.activity)[number]>),
+            id: 'activity-new',
+            at: NOW_PLUS,
+          },
+        ],
+      },
     ];
     for (const delta of deltas) {
       expect(deltaSchema.safeParse(delta).success).toBe(true);
@@ -101,6 +113,15 @@ describe('applyDelta', () => {
     });
     expect(patched.transcripts[ids.session.codex]?.[1]?.body).toBe('streamed');
     expect(patched.transcripts[ids.session.codex]?.[0]).toBe(existing[0]);
+  });
+
+  it('activity.append prepends only unseen rows', () => {
+    const first = f.activity[0];
+    if (first === undefined) throw new Error('fixture');
+    expect(applyDelta(model, { op: 'activity.append', rows: [first] })).toBe(model);
+    const next = applyDelta(model, { op: 'activity.append', rows: [{ ...first, id: 'activity-x' }] });
+    expect(next.activity[0]?.id).toBe('activity-x');
+    expect(next.activity).toHaveLength(model.activity.length + 1);
   });
 
   it('settings.set merges project settings and keeps app when omitted', () => {

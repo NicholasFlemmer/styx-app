@@ -132,7 +132,7 @@ CREATE TABLE grants (
   decided_by TEXT CHECK (decided_by IN ('user','policy','target-policy','persistent-grant')),
   cred_nonce TEXT,
   CHECK ((state IN ('active','revoked','expired')) = (issued_at IS NOT NULL)),
-  CHECK ((state = 'revoked') = (revoked_at IS NOT NULL))
+  CHECK ((state IN ('denied','revoked','expired')) = (revoked_at IS NOT NULL))
 );
 CREATE INDEX grants_target_active ON grants(target_id) WHERE state = 'active';
 CREATE INDEX grants_session_requested ON grants(session_id, requested_at) WHERE state = 'requested';

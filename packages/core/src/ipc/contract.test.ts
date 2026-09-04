@@ -89,6 +89,7 @@ describe('ipc contract', () => {
       discovery: m.discovery,
       settings: m.settings,
       popouts: m.popouts,
+      activity: m.activity,
     };
     const r = commands['store.snapshot'].output.safeParse(snapshot);
     expect(r.success).toBe(true);

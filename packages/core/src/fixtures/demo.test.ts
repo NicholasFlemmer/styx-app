@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { activityRowSchema } from '../model/activity';
 import { auditEntrySchema } from '../model/audit';
 import { cliInstallSchema, ideInstallSchema } from '../model/discovery';
 import { grantSchema } from '../model/grant';
@@ -47,6 +48,7 @@ describe('demo fixture', () => {
     check(notificationSchema, f.notifications);
     check(ideInstallSchema, f.ides);
     check(cliInstallSchema, f.clis);
+    check(activityRowSchema, f.activity);
   });
 
   it('matches the prototype dataset shape', () => {

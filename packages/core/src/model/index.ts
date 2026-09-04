@@ -5,6 +5,7 @@ export * from './target';
 export * from './grant';
 export * from './policy';
 export * from './audit';
+export * from './activity';
 export * from './hunk';
 export * from './discovery';
 export * from './notification';

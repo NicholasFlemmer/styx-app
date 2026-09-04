@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { activityRowSchema } from './model/activity';
 import { auditEntrySchema } from './model/audit';
 import { sessionIdSchema } from './model/common';
 import { cliInstallSchema, ideInstallSchema } from './model/discovery';
@@ -88,6 +89,8 @@ export const deltaSchema = z.discriminatedUnion('op', [
     project: z.record(z.string(), effectiveProjectSettingsSchema).optional(),
   }),
   z.object({ op: z.literal('popouts.set'), sessionIds: z.array(sessionIdSchema) }),
+  /** Prepends rows not already present (by id); main keeps the feed capped. */
+  z.object({ op: z.literal('activity.append'), rows: z.array(activityRowSchema) }),
 ]);
 export type Delta = z.infer<typeof deltaSchema>;
 
@@ -149,6 +152,11 @@ export const applyDelta = (model: ReadModel, delta: Delta): ReadModel => {
       };
     case 'popouts.set':
       return { ...model, popouts: delta.sessionIds };
+    case 'activity.append': {
+      const seen = new Set(model.activity.map((r) => r.id));
+      const fresh = delta.rows.filter((r) => !seen.has(r.id));
+      return fresh.length === 0 ? model : { ...model, activity: [...fresh, ...model.activity] };
+    }
   }
 };
 

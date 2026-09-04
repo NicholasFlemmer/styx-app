@@ -190,9 +190,9 @@ describe('boardColumns', () => {
     ]);
     expect(cols[1]?.items.map((c) => [c.agent, c.age, c.cta])).toEqual([
       ['Claude', '14m', 'Open'],
+      ['Gemini', '—', 'Open'],
       ['Gemini', '31m', 'Open'],
       ['shell', '1h', 'Open'],
-      ['Gemini', '—', 'Open'],
     ]);
     expect(cols[2]?.items.map((c) => [c.agent, c.age, c.note, c.cta])).toEqual([
       ['Cursor', '1d', 'PR #212 opened, merged yesterday', 'Archive'],

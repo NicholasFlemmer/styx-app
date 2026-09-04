@@ -10,6 +10,11 @@ export interface WindowServiceDeps {
   rendererFile: string; // built index.html
   platform: NodeJS.Platform;
   onAllClosed?: () => void;
+  /** Extra `process.argv` entries for the preload (`--styx-env=…`). */
+  additionalArguments?: () => string[];
+  /** Window registry hooks (Publisher / CommandBus sender allowlist). */
+  onWindowCreated?: (win: BrowserWindow, kind: 'main' | 'popout', sessionId: string | null) => void;
+  onWindowClosed?: (webContentsId: number) => void;
 }
 
 const MAIN_DEFAULT: WindowBounds = { width: 1280, height: 800 };
@@ -39,7 +44,14 @@ export class WindowService {
       ...(isMac
         ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 12, y: 13 } }
         : { titleBarStyle: 'hidden' as const, titleBarOverlay: { height: 38, color: colors[t].s1, symbolColor: colors[t].mu } }),
-      webPreferences: { preload: this.deps.preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true },
+      webPreferences: {
+        preload: this.deps.preloadPath,
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        webSecurity: true,
+        additionalArguments: this.deps.additionalArguments?.() ?? [],
+      },
     };
   }
 
@@ -74,10 +86,13 @@ export class WindowService {
     const saved = this.deps.windowState.get('main') ?? MAIN_DEFAULT;
     const win = new BrowserWindow(this.baseOptions(saved, { w: 1100, h: 680 }));
     this.harden(win);
+    const wcId = win.webContents.id;
+    this.deps.onWindowCreated?.(win, 'main', null);
     if (saved.maximized) win.maximize();
     win.once('ready-to-show', () => win.show());
     this.persist('main', win);
     win.on('closed', () => {
+      this.deps.onWindowClosed?.(wcId);
       this.main = null;
       for (const p of this.popouts.values()) if (!p.isDestroyed()) p.close(); // closing main closes pop-outs
       this.popouts.clear();
@@ -104,9 +119,14 @@ export class WindowService {
     if (this.deps.platform !== 'darwin') opts.titleBarOverlay = { height: 32, color: colors[this.theme()].s1, symbolColor: colors[this.theme()].mu };
     const win = new BrowserWindow(opts);
     this.harden(win);
+    const wcId = win.webContents.id;
+    this.deps.onWindowCreated?.(win, 'popout', sessionId);
     win.once('ready-to-show', () => win.show());
     this.persist(key, win);
-    win.on('closed', () => this.popouts.delete(sessionId));
+    win.on('closed', () => {
+      this.deps.onWindowClosed?.(wcId);
+      this.popouts.delete(sessionId);
+    });
     this.load(win, { popout: sessionId });
     this.popouts.set(sessionId, win);
     return win;
@@ -131,12 +151,21 @@ export class WindowService {
     for (const w of this.allWindows()) {
       w.setBackgroundColor(colors[t].bg);
       if (this.deps.platform !== 'darwin') w.setTitleBarOverlay?.({ color: colors[t].s1, symbolColor: colors[t].mu });
-      w.webContents.send('styx:theme', t);
     }
   }
 
-  control(win: BrowserWindow, action: 'minimize' | 'maximize' | 'close'): void {
+  resolvedTheme(): 'dark' | 'light' {
+    return this.theme();
+  }
+
+  popoutWindow(sessionId: string): BrowserWindow | null {
+    const w = this.popouts.get(sessionId);
+    return w && !w.isDestroyed() ? w : null;
+  }
+
+  control(win: BrowserWindow, action: 'minimize' | 'maximize' | 'restore' | 'close'): void {
     if (action === 'minimize') win.minimize();
+    else if (action === 'restore') win.unmaximize();
     else if (action === 'maximize') {
       if (win.isMaximized()) win.unmaximize();
       else win.maximize();

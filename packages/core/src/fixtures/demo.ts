@@ -12,6 +12,7 @@ import type {
   WorktreeId,
 } from '../ids';
 import { mergeSettings } from '../project-file';
+import type { ActivityRow } from '../model/activity';
 import type { AuditEntry } from '../model/audit';
 import type { Agent, Env, Provider, Scope, TargetPolicy } from '../model/common';
 import type { CliInstall, IdeInstall } from '../model/discovery';
@@ -1100,20 +1101,58 @@ export const demoClis = (): CliInstall[] => [
   },
 ];
 
-export interface ActivityRow {
-  at: number;
-  who: string;
-  what: string;
-}
+const activity = (
+  n: number,
+  at: number,
+  who: string,
+  what: string,
+  projectId: ProjectId | null,
+  sessionId: SessionId | null,
+): ActivityRow => ({
+  id: `activity-${n}`,
+  at,
+  who,
+  what,
+  projectId,
+  sessionId,
+});
 
 /** Home → Activity feed (newest first). */
 export const demoActivity = (): ActivityRow[] => [
-  { at: ago(2 * MIN), who: 'Claude', what: 'acme-shop · edited checkout.ts, pay.ts · 42 tests pass' },
-  { at: ago(3 * MIN), who: 'Codex', what: 'acme-shop · requested Supabase prod write' },
-  { at: ago(9 * MIN), who: 'Claude', what: 'blog-v2 · plan ready, 4 files' },
-  { at: ago(31 * MIN), who: 'Gemini', what: 'infra-tools · rewriting README' },
-  { at: ago(1 * HOUR), who: 'system', what: 'revoked Gemini → AWS acme-prod (idle 1h)' },
-  { at: ago(1 * DAY), who: 'Cursor', what: 'acme-shop · PR #212 merged' },
+  activity(
+    1,
+    ago(2 * MIN),
+    'Claude',
+    'acme-shop · edited checkout.ts, pay.ts · 42 tests pass',
+    ids.project.acmeShop,
+    ids.session.claude,
+  ),
+  activity(
+    2,
+    ago(3 * MIN),
+    'Codex',
+    'acme-shop · requested Supabase prod write',
+    ids.project.acmeShop,
+    ids.session.codex,
+  ),
+  activity(3, ago(9 * MIN), 'Claude', 'blog-v2 · plan ready, 4 files', ids.project.blogV2, ids.session.blog),
+  activity(
+    4,
+    ago(31 * MIN),
+    'Gemini',
+    'infra-tools · rewriting README',
+    ids.project.infraTools,
+    ids.session.infra,
+  ),
+  activity(
+    5,
+    ago(1 * HOUR),
+    'system',
+    'revoked Gemini → AWS acme-prod (idle 1h)',
+    ids.project.acmeShop,
+    ids.session.gemini,
+  ),
+  activity(6, ago(1 * DAY), 'Cursor', 'acme-shop · PR #212 merged', ids.project.acmeShop, ids.session.cursor),
 ];
 
 // --- Fixture -----------------------------------------------------------------
@@ -1270,6 +1309,7 @@ export const fixtureReadModel = (f: DemoFixture): ReadModel => ({
   discovery: { ides: f.ides, clis: f.clis },
   settings: { app: f.appSettings, project: f.projectSettings },
   popouts: [],
+  activity: f.activity,
 });
 
 export const demoReadModel = (): ReadModel => fixtureReadModel(demoFixture());

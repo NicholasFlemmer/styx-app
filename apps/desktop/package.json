@@ -19,8 +19,8 @@
     "package:mac": "electron-vite build && electron-builder --mac",
     "package:win": "electron-vite build && electron-builder --win",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node --experimental-strip-types scripts/migrate.ts",
-    "db:seed": "node --experimental-strip-types scripts/seed.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:seed": "tsx scripts/seed.ts",
     "visual:report": "node --experimental-strip-types e2e/visual/report.ts"
   },
   "dependencies": {

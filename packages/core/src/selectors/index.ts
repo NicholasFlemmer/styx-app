@@ -9,3 +9,4 @@ export * from './chat';
 export * from './audit';
 export * from './inbox';
 export * from './palette';
+export * from './home';

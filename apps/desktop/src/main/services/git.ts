@@ -237,6 +237,47 @@ export class GitService {
     await this.git.run(args, path, { input: patch });
   }
 
+  async clone(url: string, into: string): Promise<void> {
+    const { dirname } = await import('node:path');
+    await this.git.run(['clone', '--quiet', url, into], dirname(into));
+  }
+
+  async currentBranch(path: string): Promise<string | null> {
+    const r = await this.git.run(['branch', '--show-current'], path, { reject: false });
+    return r.exitCode === 0 && r.stdout.trim() ? r.stdout.trim() : null;
+  }
+
+  async untrackedFiles(path: string): Promise<string[]> {
+    const r = await this.git.run(['ls-files', '--others', '--exclude-standard'], path, { reject: false });
+    return r.stdout.split('\n').filter(Boolean);
+  }
+
+  /** `git diff -U3 <base>` plus a `/dev/null` diff for every untracked file, so new files produce hunks too. */
+  async diffWithUntracked(path: string, base: string): Promise<string> {
+    let out = await this.diff(path, base);
+    for (const f of await this.untrackedFiles(path)) {
+      const r = await this.git.run(['diff', '--no-color', '-U3', '--no-index', '--', '/dev/null', f], path, { reject: false });
+      if (r.stdout) out += (out.endsWith('\n') || out === '' ? '' : '\n') + r.stdout;
+    }
+    return out;
+  }
+
+  /** Porcelain status letters per path for the file tree (`M` modified, `A` added/staged, `D` deleted, `?` untracked). */
+  async statusMap(path: string): Promise<Map<string, 'M' | 'A' | 'D' | '?'>> {
+    const st = await this.status(path);
+    const m = new Map<string, 'M' | 'A' | 'D' | '?'>();
+    for (const c of st.changed) m.set(c.path, c.kind === 'untracked' ? '?' : c.kind === 'added' ? 'A' : c.kind === 'deleted' ? 'D' : 'M');
+    return m;
+  }
+
+  async add(path: string, files: string[]): Promise<void> {
+    await this.git.run(['add', '--', ...files], path);
+  }
+
+  async commit(path: string, message: string): Promise<void> {
+    await this.git.run(['-c', 'user.name=Styx', '-c', 'user.email=styx@localhost', 'commit', '-q', '-m', message], path);
+  }
+
   async configureRepo(path: string, opts: { longPaths?: boolean; lineEndings?: 'auto' | 'lf' | 'crlf' }): Promise<void> {
     if (opts.longPaths) await this.git.run(['config', 'core.longpaths', 'true'], path);
     if (opts.lineEndings && opts.lineEndings !== 'auto') {
