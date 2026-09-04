@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "context7": { "command": "npx", "args": ["-y", "@upstash/context7-mcp"] },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest", "--headless", "--viewport-size", "1280,800"]
+    },
+    "sqlite": { "command": "npx", "args": ["-y", "mcp-sqlite", "${CLAUDE_PROJECT_DIR}/.dev/styx.db"] }
+  }
+}

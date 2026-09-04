@@ -1,0 +1,9 @@
+@layer screens {
+  #root {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--tx);
+  }
+}

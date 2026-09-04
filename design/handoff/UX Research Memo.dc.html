@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"><style>body{margin:0;background:#f5f4f0;color:#1c1b19;font-family:'Source Serif 4',Georgia,serif}a{color:#2a5db0}a:hover{color:#1a3f80}</style></helmet>
+<div style="max-width:720px;margin:0 auto;padding:64px 32px 96px;font-size:17px;line-height:1.55">
+ <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#77736b;display:flex;gap:16px"><span>UX research memo</span><span>·</span><span>Sept 2026</span><span>·</span><a href="Wireframes.dc.html" style="text-decoration:none">→ Wireframes</a><span>·</span><a href="Styx.dc.html" style="text-decoration:none">→ Styx hi-fi</a></div>
+ <h1 style="font-size:36px;line-height:1.15;font-weight:600;margin:16px 0 8px;text-wrap:pretty">Project · Agent · Repo switcher</h1>
+ <p style="margin:0 0 40px;color:#55524c;font-size:19px">A local desktop app (macOS + Windows) that embeds an editor, switches between projects in one window, supervises coding-agent sessions, and gates agent access to deploy and server targets.</p>
+
+ <h2 style="font-size:22px;font-weight:600;margin:40px 0 12px">1. Problem framing</h2>
+ <p style="margin:0 0 12px">Developers running several agents across several repos today juggle: one IDE window per repo, one terminal tab per agent, and credentials scattered across shell env, <span style="font-family:'IBM Plex Mono',monospace;font-size:15px">.env</span> files and CLI logins. Three failure modes recur:</p>
+ <ul style="margin:0 0 12px;padding-left:22px"><li><b>Lost attention.</b> An agent in another window is blocked on a question for twenty minutes and nobody notices.</li><li><b>Collisions.</b> Two agents edit the same working tree; one clobbers the other's changes.</li><li><b>Credential sprawl.</b> Agents get prod keys by copy-paste, with no scope, expiry or record.</li></ul>
+ <p style="margin:0">The app's job is to make <i>where am I, who's working, what can they touch</i> answerable at a glance, from one window.</p>
+
+ <h2 style="font-size:22px;font-weight:600;margin:40px 0 12px">2. Personas (from your brief)</h2>
+ <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;font-size:15.5px">
+  <div style="border:1px solid #d9d6ce;border-radius:6px;padding:14px;background:#fff"><b>Solo dev, many side projects</b><br>Wants fast switching and zero setup. Cares about the switcher (<a href="Wireframes.dc.html#1a">1a</a>/<a href="Wireframes.dc.html#1b">1b</a>) and palette. Tolerates fewer guardrails.</div>
+  <div style="border:1px solid #d9d6ce;border-radius:6px;padding:14px;background:#fff"><b>Team lead, client repos</b><br>Needs isolation between clients (separate targets, separate keys) and per-project settings that travel with the repo (<a href="Wireframes.dc.html#1m">1m</a>).</div>
+  <div style="border:1px solid #d9d6ce;border-radius:6px;padding:14px;background:#fff"><b>Platform / infra engineer</b><br>Owns the targets. Wants policies, MFA on prod write, audit log, exportable config (<a href="Wireframes.dc.html#1f">1f</a>).</div>
+  <div style="border:1px solid #d9d6ce;border-radius:6px;padding:14px;background:#fff"><b>Non-technical founder</b><br>Supervises rather than codes. Needs the attention-ordered board (<a href="Wireframes.dc.html#1c">1c</a>) with plain-language approve/deny; rarely opens the editor.</div>
+ </div>
+ <p style="margin:12px 0 0;font-size:15.5px;color:#55524c">Tension: persona 1 wants fewer prompts; persona 3 wants more control. Policies (auto-approve tiers) are how one product serves both.</p>
+
+ <h2 style="font-size:22px;font-weight:600;margin:40px 0 12px">3. Analogues and what to borrow</h2>
+ <ul style="margin:0;padding-left:22px">
+  <li><b>Notion</b> — persistent sidebar with a workspace switcher at the top; everything hangs off one tree. Borrow: the rail + tree in <a href="Wireframes.dc.html#1a">1a</a>, and "recent" lists. Avoid: nesting depth.</li>
+  <li><b>VS Code</b> — User vs Workspace settings, Quick Open, multi-root workspaces, integrated terminal. Borrow: the settings split (<a href="Wireframes.dc.html#1m">1m</a>), palette conventions, and status bar as a place for lock state (<a href="Wireframes.dc.html#1h">1h</a>). Its weakness is one-window-per-repo; that is the gap this app fills.</li>
+  <li><b>Composio-style auth brokers</b> — a catalogue of connections with OAuth, scoped tokens issued to agents rather than raw keys. Borrow: connect flow, scope model, per-agent tokens (<a href="Wireframes.dc.html#1e">1e</a>).</li>
+  <li><b>tmux / Warp / Zellij</b> — tiled live sessions, focus-zoom, keyboard pane switching (<a href="Wireframes.dc.html#1d">1d</a>).</li>
+  <li><b>Linear / Raycast</b> — verb-first palette with grouped results and inline metadata (<a href="Wireframes.dc.html#1k">1k</a>); flat searchable settings (<a href="Wireframes.dc.html#1n">1n</a>).</li>
+  <li><b>macOS TCC / 1Password prompts</b> — an approval prompt that states who is asking, for what, and offers "once / for 1 hour / always". Users already trust this vocabulary.</li>
+ </ul>
+
+ <h2 style="font-size:22px;font-weight:600;margin:40px 0 12px">4. Object model</h2>
+ <p style="margin:0 0 10px">Every screen composes six objects. Naming them consistently in UI copy matters more than any layout choice.</p>
+ <div style="font-family:'IBM Plex Mono',monospace;font-size:13.5px;line-height:1.7;background:#fff;border:1px solid #d9d6ce;border-radius:6px;padding:14px 18px">
+Project      — folder + metadata; has 1 Repo, N Worktrees, N Targets<br>
+Repo         — remote(s), default branch<br>
+Worktree     — checkout of one branch; owned by you or one Agent<br>
+Agent session — CLI process (claude, codex, gemini, cursor, shell) bound to a Worktree; state: idle | working | needs-you | done<br>
+Target       — Vercel / AWS / GCP / Supabase / GitHub connection, tagged env: prod | staging | preview<br>
+Grant        — (Agent session, Target, scope, expiry) — the unit the auth gate issues, shows, and revokes
+ </div>
+ <p style="margin:10px 0 0;font-size:15.5px;color:#55524c">Rule that falls out of this: one agent = one worktree by default. It removes the collision problem without asking users to understand git internals.</p>
+
+ <h2 style="font-size:22px;font-weight:600;margin:40px 0 12px">5. Design principles</h2>
+ <ol style="margin:0;padding-left:22px">
+  <li><b>Attention is the scarce resource.</b> Sort by "needs you" first everywhere: rail badges, board columns, palette results, dock/tray icon.</li>
+  <li><b>State travels with the object.</b> A project tile, an agent card and a palette row all show the same three glyphs: agent dot, branch, lock. Users learn one vocabulary.</li>
+  <li><b>Grants decay.</b> Default duration is time-boxed; "always" is opt-in and visibly different. Expiry is shown as a countdown, not a timestamp.</li>
+  <li><b>Ask in context, manage centrally.</b> The prompt appears where the agent asked (<a href="Wireframes.dc.html#1e">1e</a>, <a href="Wireframes.dc.html#1d">1d</a>); the record and the policies live in one inbox (<a href="Wireframes.dc.html#1f">1f</a>).</li>
+  <li><b>Keyboard parity.</b> Every switch, focus and approve action has a shortcut, and the palette can do all of it.</li>
+  <li><b>Never write secrets to disk in the repo.</b> OS keychain only; project config files reference targets by name.</li>
+ </ol>
+
+ <h2 style="font-size:22px;font-weight:600;margin:40px 0 12px">6. Screen-by-screen notes</h2>
+ <p style="margin:0 0 8px"><b>Switcher / home.</b> <a href="Wireframes.dc.html#1a">1a</a> suits founders and team leads (awareness without action). <a href="Wireframes.dc.html#1b">1b</a> suits solo devs who live in the editor. Recommendation: ship the rail from <a href="Wireframes.dc.html#1a">1a</a> as collapsible; the overlay from <a href="Wireframes.dc.html#1b">1b</a> is the palette's Projects scope, so both exist at little extra cost.</p>
+ <p style="margin:0 0 8px"><b>Agent board.</b> <a href="Wireframes.dc.html#1c">1c</a> and <a href="Wireframes.dc.html#1d">1d</a> are two views of the same sessions. Board for triage, tiles for work; a toggle in the header. Cards and pane headers must render the same status text. Sessions past ~6 need a stacked/list mode.</p>
+ <p style="margin:0 0 8px"><b>Auth gate.</b> The request sheet in <a href="Wireframes.dc.html#1e">1e</a> is the core interaction. It must show: agent, target, environment tag, the agent's stated reason (verbatim), scope checkboxes, and duration chips. Deny needs no reason. Prompt fatigue is the known failure: <a href="Wireframes.dc.html#1f">1f</a>'s policies (auto-approve reads on staging; always ask + MFA on prod write) are the mitigation and should ship in v1, even if minimal.</p>
+ <p style="margin:0 0 8px"><b>Repo view.</b> <a href="Wireframes.dc.html#1g">1g</a> makes the worktree model visible; <a href="Wireframes.dc.html#1h">1h</a> hides it behind familiar tabs. Suggest <a href="Wireframes.dc.html#1h">1h</a> as the default editor surface and <a href="Wireframes.dc.html#1g">1g</a> as the "Repo" page for review and cleanup.</p>
+ <p style="margin:0 0 8px"><b>Onboarding.</b> <a href="Wireframes.dc.html#1i">1i</a> gets the home screen populated on first launch (scan for repos, import VS Code recents); <a href="Wireframes.dc.html#1j">1j</a> defers agents and targets to first use. Recommendation: step 1 of the wizard only, then just-in-time for the rest.</p>
+ <p style="margin:0 0 8px"><b>Palette.</b> <a href="Wireframes.dc.html#1k">1k</a> is the better end state; <a href="Wireframes.dc.html#1l">1l</a> is cheaper and is a valid v1. Either way, lock state must appear on every row that could be blocked by a grant.</p>
+ <p style="margin:0"><b>Settings.</b> <a href="Wireframes.dc.html#1m">1m</a> matches the VS Code mental model and supports a committed project config file; <a href="Wireframes.dc.html#1n">1n</a> is faster to scan. Recommend <a href="Wireframes.dc.html#1m">1m</a> with search from <a href="Wireframes.dc.html#1n">1n</a>.</p>
+
+ <h2 style="font-size:22px;font-weight:600;margin:40px 0 12px">6b. Main workspace and the embedded editor</h2>
+ <p style="margin:0 0 12px">Turn 2 of the wireframes adds the screen you spend the day in. <a href="Wireframes.dc.html#2a">2a</a> mirrors the VS Code + Claude Code extension layout: files left, editor centre with the agent's pending hunks inline, terminal below, and an agent chat panel on the right (message bubbles, plan, diff links, inline yes/no, a prompt box with @file and /commands; tabs per session). <a href="Wireframes.dc.html#2b">2b</a> inverts it: conversations centre, all sessions listed left like a messaging app, code as a diff drawer. Recommendation: <a href="Wireframes.dc.html#2a">2a</a> default, <a href="Wireframes.dc.html#2b">2b</a> as a mode for supervisors.</p>
+ <p style="margin:0 0 10px"><b>How to get the editor.</b> Three routes, easiest first:</p>
+ <ol style="margin:0 0 12px;padding-left:22px">
+  <li><b>Launch the user's IDE.</b> The app is switcher, agent board and gate; "Open editor" launches VS Code or Cursor on the right worktree. Days of work, full extension support, but two windows and no inline diffs. Fallback, not the brief.</li>
+  <li><b>Embed an editor component.</b> Monaco (VS Code's editor widget, MIT) or CodeMirror inside an Electron/Tauri shell. Syntax highlighting, diffs, multi-file tabs in weeks. No VS Code extension ecosystem, debugger or language servers unless LSP is wired by hand. Enough for reviewing agent diffs and light edits; not a full daily IDE.</li>
+  <li><b>Ship a VS Code-based IDE.</b> Build on the open-source Code-OSS core (as Cursor and Windsurf do) or run OpenVSCode/code-server in a webview. Full editor with extensions, but you own a large codebase, upstream merges, and marketplace constraints (Microsoft's marketplace is closed to forks; Open VSX is the alternative). Months and a dedicated team.</li>
+ </ol>
+ <p style="margin:0">Building an editor from scratch is not realistic. Recommendation: route 2 for v1, with route 1 as an "open in VS Code" escape hatch on every file and worktree. <a href="Wireframes.dc.html#2a">2a</a> holds either way: the editor pane is Monaco, the chat panel and gate are yours, and route 3 becomes a later upgrade without a redesign.</p>
+
+ <h2 style="font-size:22px;font-weight:600;margin:40px 0 12px">7. macOS + Windows considerations</h2>
+ <ul style="margin:0;padding-left:22px">
+  <li><b>Title bar.</b> Traffic lights left on macOS; caption buttons right on Windows. Keep the project switcher control in the title bar centre so it works on both.</li>
+  <li><b>Shortcuts.</b> ⌘ ↔ Ctrl mapping throughout; show the platform's glyphs. Avoid Ctrl+Alt combos that collide with Windows AltGr layouts.</li>
+  <li><b>Secrets.</b> macOS Keychain and Windows Credential Manager; MFA via system prompt (Touch ID / Windows Hello) for prod-write grants.</li>
+  <li><b>Background presence.</b> Dock badge on macOS, tray icon + toast on Windows for "agent needs you". Both need a do-not-disturb toggle.</li>
+  <li><b>Shells.</b> Agent CLIs run in the user's default shell; on Windows offer PowerShell / WSL selection per project, since some agents behave differently under each.</li>
+  <li><b>Paths and line endings.</b> Worktree creation must handle long paths and CRLF settings per repo; surface these once in project settings, not in every flow.</li>
+ </ul>
+
+ <h2 style="font-size:22px;font-weight:600;margin:40px 0 12px">8. Security notes for the gate</h2>
+ <ul style="margin:0;padding-left:22px">
+  <li>Issue per-session, scoped tokens to agents where the provider supports it (Vercel, GitHub, Supabase, GCP short-lived creds, AWS STS). Fall back to injecting env vars into the agent process only for the grant's lifetime.</li>
+  <li>Every grant, use, and revocation is logged with agent, worktree, and the command that triggered it. The audit log is a first-class screen, not a settings sub-page.</li>
+  <li>Revocation is one click from any surface that shows a lock glyph.</li>
+  <li>Environment tags (prod / staging / preview) are set at connect time and drive policy; make the prod tag visually loud everywhere.</li>
+ </ul>
+
+ <h2 style="font-size:22px;font-weight:600;margin:40px 0 12px">9. Open questions</h2>
+ <ol style="margin:0;padding-left:22px">
+  <li>Editor route (see 6b): confirm Monaco for v1, and whether LSP for the top 3 languages is in scope.</li>
+  <li>Are agent sessions per-project only, or can one agent span repos (e.g. a monorepo plus an infra repo)?</li>
+  <li>Should team policies sync via the repo, a cloud account, or stay per-machine in v1?</li>
+  <li>How do agents request access: a local broker the CLIs call, or the app intercepting failed auth in the agent's output?</li>
+  <li>Windows: is WSL a hard requirement for target audiences, or a nice-to-have?</li>
+ </ol>
+
+ <h2 style="font-size:22px;font-weight:600;margin:40px 0 12px">10. Suggested next step</h2>
+ <p style="margin:0">Pick one composite: rail from <a href="Wireframes.dc.html#1a">1a</a> + editor surface <a href="Wireframes.dc.html#1h">1h</a> + board/tiles toggle (<a href="Wireframes.dc.html#1c">1c</a>/<a href="Wireframes.dc.html#1d">1d</a>) + grant sheet <a href="Wireframes.dc.html#1e">1e</a> backed by policies from <a href="Wireframes.dc.html#1f">1f</a>. Then wireframe the single most important flow end to end: an agent asks for prod → you grant for 1h → it deploys → the grant expires.</p>
+</div>
+</x-dc>
+</body>
+</html>

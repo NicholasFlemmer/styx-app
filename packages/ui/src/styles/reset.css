@@ -1,0 +1,67 @@
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+  }
+  html {
+    color-scheme: dark;
+  }
+  html[data-theme='light'] {
+    color-scheme: light;
+  }
+  body {
+    background: var(--bg);
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: var(--body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    user-select: none;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+    border-radius: 0;
+    margin: 0;
+  }
+  button {
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    text-align: inherit;
+  }
+  input,
+  textarea {
+    user-select: text;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  ::selection {
+    background: var(--ac);
+    color: var(--acx);
+  }
+  :focus-visible {
+    outline: 1px solid var(--ac);
+    outline-offset: 1px;
+  }
+  :focus:not(:focus-visible) {
+    outline: 0;
+  }
+  [hidden] {
+    display: none !important;
+  }
+}

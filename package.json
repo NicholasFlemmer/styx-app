@@ -1,0 +1,42 @@
+{
+  "name": "styx-monorepo",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm -F @styx/desktop dev",
+    "build": "pnpm -r --filter './packages/*' build && pnpm -F @styx/desktop build",
+    "package:mac": "pnpm -F @styx/desktop package:mac",
+    "package:win": "pnpm -F @styx/desktop package:win",
+    "rebuild:native": "pnpm -F @styx/desktop rebuild:native",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "pnpm -F @styx/desktop e2e",
+    "visual": "pnpm -F @styx/desktop visual",
+    "visual:baseline": "pnpm -F @styx/desktop visual:baseline",
+    "storybook": "pnpm -F @styx/ui storybook",
+    "storybook:test": "pnpm -F @styx/ui storybook:test",
+    "db:generate": "pnpm -F @styx/desktop db:generate",
+    "db:migrate": "pnpm -F @styx/desktop db:migrate",
+    "db:seed": "pnpm -F @styx/desktop db:seed",
+    "tokens:build": "pnpm -F @styx/tokens build"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^5.0.0",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.0.0",
+    "globals": "^16.0.0",
+    "jsdom": "^30.0.1",
+    "prettier": "^3.9.6",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "^5.0.0"
+  }
+}

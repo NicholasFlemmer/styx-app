@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+onlyBuiltDependencies:
+  - electron
+  - better-sqlite3
+  - node-pty
+  - esbuild
+  - '@napi-rs/keyring'

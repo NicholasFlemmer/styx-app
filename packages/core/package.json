@@ -1,0 +1,21 @@
+{
+  "name": "@styx/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "build": "echo 'source package, consumed directly'"
+  },
+  "dependencies": {
+    "ulid": "^3.0.2",
+    "zod": "^4.5.4"
+  }
+}

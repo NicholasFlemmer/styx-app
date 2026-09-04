@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><style>
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--tx);font-family:'Archivo',system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased}
+body,body[data-theme=dark]{--page:#181916;--bg:#0d0e0c;--s1:#121411;--s2:#1c1e1a;--ln:#2d302a;--tx:#e9ebe3;--mu:#858a81;--ac:#d6ff3d;--acx:#0d0e0c;--act:#d6ff3d;--add:rgba(214,255,61,.13);--term:#080908;--termtx:#c9cdc2;--dim:rgba(0,0,0,.6)}
+body[data-theme=light]{--page:#d7d8d1;--bg:#eeefe9;--s1:#f7f8f3;--s2:#e1e3db;--ln:#b3b7ab;--tx:#14160f;--mu:#5d6259;--ac:#c6f20f;--acx:#14160f;--act:#6e8f00;--add:rgba(150,200,0,.2);--term:#14160f;--termtx:#d5d8cc;--dim:rgba(20,22,15,.45)}
+a{color:var(--tx)}a:hover{color:var(--ac)}
+button{font:inherit;border-radius:0}
+input{font:inherit;border-radius:0}
+[data-on="true"]{background:var(--ac)!important;color:var(--acx)!important;border-color:var(--ac)!important}
+[data-inv="true"]{background:var(--tx)!important;color:var(--bg)!important}
+::selection{background:var(--ac);color:var(--acx)}
+@keyframes blink{50%{opacity:0}}
+</style></helmet>
+<div style="min-height:100vh;min-width:1328px;display:flex;flex-direction:column;align-items:center;padding:24px;gap:12px">
+<div style="width:1280px;display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">
+ <span style="margin-right:10px">Styx · prototype</span>
+ <sc-for list="{{ protoNav }}" as="n" hint-placeholder-count="6"><button onClick="{{ n.go }}" data-on="{{ n.active }}" style="padding:5px 8px;border:1px solid var(--ln);background:transparent;color:var(--mu);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">{{ n.label }}</button></sc-for>
+ <span style="flex:1"></span>
+ <button onClick="{{ toggleTheme }}" style="padding:5px 8px;border:1px solid var(--ln);background:transparent;color:var(--mu);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Theme: {{ themeName }}</button>
+ <button onClick="{{ toggleChrome }}" style="padding:5px 8px;border:1px solid var(--ln);background:transparent;color:var(--mu);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Chrome: {{ chromeName }}</button>
+ <span style="margin-left:10px">⌘K palette · Esc close</span>
+</div>
+<div style="width:1280px;display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">
+ <span style="margin-right:10px">Flows &amp; states</span>
+ <sc-for list="{{ stateNav }}" as="n" hint-placeholder-count="9"><button onClick="{{ n.go }}" data-on="{{ n.active }}" style="padding:5px 8px;border:1px solid var(--ln);background:transparent;color:var(--mu);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">{{ n.label }}</button></sc-for>
+</div>
+
+<div style="width:1280px;height:800px;position:relative;overflow:hidden;border:1px solid var(--ln);background:var(--bg);display:flex;flex-direction:column">
+
+ <div style="height:38px;flex:none;border-bottom:1px solid var(--ln);background:var(--s1);display:flex;align-items:center;padding:0 12px;gap:10px">
+  <sc-if value="{{ isMac }}" hint-placeholder-val="{{ true }}"><div style="display:flex;gap:8px;margin-right:6px"><span style="width:12px;height:12px;border-radius:50%;border:1px solid var(--ln);background:var(--s2)"></span><span style="width:12px;height:12px;border-radius:50%;border:1px solid var(--ln);background:var(--s2)"></span><span style="width:12px;height:12px;border-radius:50%;border:1px solid var(--ln);background:var(--s2)"></span></div></sc-if>
+  <span style="font-weight:700;letter-spacing:.12em;font-size:13px">STYX</span>
+  <span style="width:1px;height:16px;background:var(--ln)"></span>
+  <button onClick="{{ openPalette }}" style="display:flex;align-items:center;gap:8px;padding:4px 10px;border:1px solid var(--ln);background:var(--bg);color:var(--tx);cursor:pointer;font-weight:600">{{ projectName }} <span style="color:var(--mu)">▾</span></button>
+  <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mu)">{{ branchName }}</span>
+  <span style="flex:1"></span>
+  <button onClick="{{ openPalette }}" style="display:flex;align-items:center;gap:14px;padding:4px 10px;border:1px solid var(--ln);background:transparent;color:var(--mu);cursor:pointer;font-size:12px;width:280px;text-align:left" style-hover="background:var(--s2)"><span style="flex:1">Switch, spawn, deploy, grant…</span><span style="font-size:10px;font-weight:600;letter-spacing:.1em">⌘K</span></button>
+  <span style="display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)"><span style="width:8px;height:8px;background:var(--ac)"></span>{{ needsCount }} needs you</span>
+  <span style="display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)"><span style="width:8px;height:8px;border:1px solid var(--tx)"></span>{{ lockedCount }} locked</span>
+  <sc-if value="{{ isWin }}" hint-placeholder-val="{{ false }}"><div style="display:flex;margin-left:8px;margin-right:-12px;height:38px"><span style="width:44px;display:flex;align-items:center;justify-content:center;color:var(--mu)">─</span><span style="width:44px;display:flex;align-items:center;justify-content:center;color:var(--mu)">☐</span><span style="width:44px;display:flex;align-items:center;justify-content:center;color:var(--mu)">✕</span></div></sc-if>
+ </div>
+
+ <sc-for list="{{ banners }}" as="b" hint-placeholder-count="0"><div style="flex:none;display:flex;align-items:center;gap:12px;padding:7px 12px;border-bottom:1px solid var(--ln);background:var(--s1);font-size:12px"><span style="width:8px;height:8px;background:var(--ac);flex:none"></span><span style="flex:1">{{ b.text }}</span><button onClick="{{ b.go }}" style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">{{ b.cta }}</button><span style="color:var(--mu);cursor:pointer;padding:0 4px">✕</span></div></sc-for>
+ <div style="flex:1;display:flex;min-height:0;position:relative">
+  <div style="width:56px;flex:none;border-right:1px solid var(--ln);background:var(--s1);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:8px">
+   <sc-for list="{{ projects }}" as="p" hint-placeholder-count="5"><button onClick="{{ p.pick }}" data-on="{{ p.active }}" title="{{ p.name }}" style="position:relative;width:36px;height:36px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:11px;font-weight:700;letter-spacing:.05em;cursor:pointer" style-hover="background:var(--s2)">{{ p.initials }}<sc-if value="{{ p.needs }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;right:-1px;top:-1px;width:8px;height:8px;background:var(--ac)"></span></sc-if></button></sc-for>
+   <button onClick="{{ openNew }}" title="New project" style="width:36px;height:36px;border:1px dashed var(--ln);background:transparent;color:var(--mu);font-size:16px;cursor:pointer" style-hover="background:var(--s2)">+</button>
+  </div>
+
+  <div style="width:168px;flex:none;border-right:1px solid var(--ln);display:flex;flex-direction:column">
+   <div style="padding:14px 14px 6px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">{{ projectName }}</div>
+   <sc-for list="{{ nav }}" as="n" hint-placeholder-count="6"><button onClick="{{ n.go }}" data-inv="{{ n.active }}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border:0;border-bottom:1px solid var(--ln);background:transparent;color:var(--tx);cursor:pointer;text-align:left;font-weight:500" style-hover="background:var(--s2)"><span>{{ n.label }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;opacity:.7">{{ n.meta }}</span></button></sc-for>
+   <span style="flex:1"></span>
+   <div style="padding:12px 14px;border-top:1px solid var(--ln);font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mu);line-height:1.6">~/code/{{ projectName }}<br>{{ activeGrants }} grants active</div>
+  </div>
+
+  <sc-if value="{{ isWorkspace }}" hint-placeholder-val="{{ true }}">
+  <div data-screen-label="Workspace" style="flex:1;display:flex;min-width:0;position:relative">
+   <div style="width:200px;flex:none;border-right:1px solid var(--ln);display:flex;flex-direction:column;font-family:'JetBrains Mono',monospace;font-size:12px">
+    <div style="padding:12px 12px 6px;font-family:Archivo;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Files</div>
+    <sc-for list="{{ files }}" as="f" hint-placeholder-count="6"><div data-inv="{{ f.active }}" style="padding:4px 12px;display:flex;justify-content:space-between;cursor:pointer" style-hover="background:var(--s2)"><span style="padding-left:{{ f.pad }}">{{ f.name }}</span><span style="color:var(--act)">{{ f.mark }}</span></div></sc-for>
+    <div style="padding:16px 12px 6px;font-family:Archivo;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);border-top:1px solid var(--ln);margin-top:10px">Changes · 3</div>
+    <div style="padding:4px 12px;display:flex;gap:10px"><span style="color:var(--mu)">M</span>checkout.ts</div>
+    <div style="padding:4px 12px;display:flex;gap:10px"><span style="color:var(--mu)">M</span>pay.ts</div>
+    <div style="padding:4px 12px;display:flex;gap:10px"><span style="color:var(--act)">A</span>validate.ts</div>
+    <span style="flex:1"></span>
+    <button onClick="{{ go.repo }}" style="margin:12px;padding:6px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">Open in {{ obIdeName }}</button>
+   </div>
+
+   <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <div style="height:34px;flex:none;border-bottom:1px solid var(--ln);display:flex;font-size:12px;font-family:'JetBrains Mono',monospace">
+     <div data-inv="{{ true }}" style="padding:0 14px;display:flex;align-items:center;border-right:1px solid var(--ln)">checkout.ts</div>
+     <div style="padding:0 14px;display:flex;align-items:center;border-right:1px solid var(--ln);color:var(--mu)">pay.ts</div>
+     <div style="padding:0 14px;display:flex;align-items:center;gap:8px;border-right:1px solid var(--ln);color:var(--mu)">validate.ts <span style="font-family:Archivo;font-size:9px;font-weight:600;letter-spacing:.1em;padding:1px 4px;border:1px solid var(--ln)">CLAUDE</span></div>
+    </div>
+    <div style="flex:1;overflow:hidden;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.75;padding:10px 0">
+     <div style="display:flex"><span style="width:44px;text-align:right;padding-right:14px;color:var(--mu)">1</span><span>import { sum } from './cart'</span></div>
+     <div style="display:flex;background:var(--add)"><span style="width:44px;text-align:right;padding-right:14px;color:var(--mu)">2</span><span style="flex:1">import { validate } from './validate'</span><span style="padding:0 12px;font-family:Archivo;font-size:9px;font-weight:600;letter-spacing:.1em;color:var(--mu)">CLAUDE · 2M</span></div>
+     <div style="display:flex"><span style="width:44px;text-align:right;padding-right:14px;color:var(--mu)">3</span><span></span></div>
+     <div style="display:flex"><span style="width:44px;text-align:right;padding-right:14px;color:var(--mu)">4</span><span>export async function checkout(cart) {</span></div>
+     <div style="display:flex;background:var(--add)"><span style="width:44px;text-align:right;padding-right:14px;color:var(--mu)">5</span><span style="flex:1">&nbsp;&nbsp;validate(cart)</span></div>
+     <div style="display:flex"><span style="width:44px;text-align:right;padding-right:14px;color:var(--mu)">6</span><span>&nbsp;&nbsp;const total = sum(cart.items)</span></div>
+     <div style="display:flex"><span style="width:44px;text-align:right;padding-right:14px;color:var(--mu)">7</span><span>&nbsp;&nbsp;const receipt = await pay(total)</span></div>
+     <div style="display:flex;background:var(--add)"><span style="width:44px;text-align:right;padding-right:14px;color:var(--mu)">8</span><span style="flex:1">&nbsp;&nbsp;audit(receipt)</span></div>
+     <div style="display:flex"><span style="width:44px;text-align:right;padding-right:14px;color:var(--mu)">9</span><span>&nbsp;&nbsp;return receipt</span></div>
+     <div style="display:flex"><span style="width:44px;text-align:right;padding-right:14px;color:var(--mu)">10</span><span>}</span></div>
+    </div>
+    <div style="height:40px;flex:none;border-top:1px solid var(--ln);display:flex;align-items:center;gap:8px;padding:0 12px">
+     <span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);flex:1">3 hunks from Claude · 42 tests pass</span>
+     <button style="padding:5px 10px;border:1px solid var(--tx);background:var(--tx);color:var(--bg);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Accept all</button>
+     <button onClick="{{ go.diff }}" style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">Review</button>
+     <button style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">Reject</button>
+    </div>
+    <div style="height:130px;flex:none;border-top:1px solid var(--ln);background:var(--term);color:var(--termtx);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;padding:8px 12px">
+     <div style="font-family:Archivo;font-size:9px;font-weight:600;letter-spacing:.1em;color:var(--mu);margin-bottom:4px">TERMINAL · FIX/CHECKOUT</div>
+     <div>$ npx vitest</div><div>✓ 42 passed <span style="color:var(--mu)">(1.2s)</span></div><div>$ <span style="display:inline-block;width:7px;height:13px;background:var(--termtx);vertical-align:-2px;animation:blink 1s steps(1) infinite"></span></div>
+    </div>
+    <div style="height:26px;flex:none;border-top:1px solid var(--ln);background:var(--s1);display:flex;align-items:center;gap:16px;padding:0 12px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">
+     <span>fix/checkout</span><span>Vercel prod · open 58m</span><span>Supabase · locked</span><span style="flex:1"></span><span>Monaco · LF · TS</span>
+    </div>
+   </div>
+
+   <div style="width:360px;flex:none;border-left:1px solid var(--ln);display:flex;flex-direction:column;background:var(--s1)">
+    <div style="height:34px;flex:none;border-bottom:1px solid var(--ln);display:flex">
+     <sc-for list="{{ sessionTabs }}" as="t" hint-placeholder-count="3"><button onClick="{{ t.pick }}" data-inv="{{ t.active }}" style="padding:0 12px;display:flex;align-items:center;gap:6px;border:0;border-right:1px solid var(--ln);background:transparent;color:var(--tx);cursor:pointer;font-weight:600;font-size:12px" style-hover="background:var(--s2)"><span style="width:7px;height:7px;background:{{ t.dot }}"></span>{{ t.agent }}<sc-if value="{{ t.needs }}" hint-placeholder-val="{{ false }}"><span style="background:var(--ac);color:var(--acx);font-size:9px;padding:0 4px;font-weight:700">!</span></sc-if></button></sc-for>
+     <button style="padding:0 12px;border:0;background:transparent;color:var(--mu);cursor:pointer;font-size:16px">+</button>
+     <span style="flex:1"></span>
+     <button onClick="{{ togglePopout }}" title="Pop out chat" style="padding:0 12px;border:0;border-left:1px solid var(--ln);background:transparent;color:var(--mu);cursor:pointer">⤢</button>
+    </div>
+    <div style="padding:8px 14px;border-bottom:1px solid var(--ln);font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mu)">{{ chatMeta }}</div>
+
+    <sc-if value="{{ chatIsClaude }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:1;overflow:hidden;padding:14px;display:flex;flex-direction:column;gap:12px;font-size:13px;line-height:1.5">
+     <div style="align-self:flex-end;max-width:88%;padding:8px 10px;background:var(--tx);color:var(--bg)">Add input validation to checkout and cover it with tests.</div>
+     <div style="max-width:92%;padding:8px 10px;border:1px solid var(--ln)">Read <span style="font-family:'JetBrains Mono',monospace;font-size:12px">checkout.ts</span> and <span style="font-family:'JetBrains Mono',monospace;font-size:12px">pay.ts</span>. Plan: new <span style="font-family:'JetBrains Mono',monospace;font-size:12px">validate.ts</span>, call it before summing, add 4 tests.</div>
+     <div style="max-width:92%;border:1px solid var(--ln);font-family:'JetBrains Mono',monospace;font-size:11px">
+      <div style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--ln)"><span>validate.ts</span><span style="color:var(--act)">+31</span></div>
+      <div style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--ln)"><span>checkout.ts</span><span><span style="color:var(--act)">+2</span> −0</span></div>
+      <div style="display:flex;justify-content:space-between;padding:6px 10px"><span>checkout.test.ts</span><span style="color:var(--act)">+44</span></div>
+     </div>
+     <div style="max-width:92%;padding:8px 10px;border:1px solid var(--ln)">Ran vitest, 42 passed. Open a PR against main?
+      <div style="display:flex;gap:6px;margin-top:8px"><button style="padding:5px 10px;border:1px solid var(--tx);background:var(--tx);color:var(--bg);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Yes</button><button style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">No</button><button style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Edit plan</button></div>
+     </div>
+    </div>
+    </sc-if>
+    <sc-if value="{{ chatIsCodex }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1;overflow:hidden;padding:14px;display:flex;flex-direction:column;gap:12px;font-size:13px;line-height:1.5">
+     <div style="align-self:flex-end;max-width:88%;padding:8px 10px;background:var(--tx);color:var(--bg)">Fix the flaky order test and make sure the schema matches prod.</div>
+     <div style="max-width:92%;padding:8px 10px;border:1px solid var(--ln)">The test fails because migration 0042 was never applied to prod. I need to read the prod schema and apply it.</div>
+     <sc-if value="{{ codexPending }}" hint-placeholder-val="{{ true }}">
+     <div style="border:1px solid var(--ac)">
+      <div style="padding:6px 10px;background:var(--ac);color:var(--acx);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">Access request · Supabase prod</div>
+      <div style="padding:10px;font-size:12px">Scope: read schema, write. No grant on file for this target.</div>
+      <div style="display:flex;gap:6px;padding:0 10px 10px"><button onClick="{{ openGrant }}" style="padding:5px 10px;border:1px solid var(--tx);background:var(--tx);color:var(--bg);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Review request</button><button onClick="{{ deny }}" style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Deny</button></div>
+     </div>
+     </sc-if>
+     <sc-if value="{{ codexGranted }}" hint-placeholder-val="{{ false }}">
+     <div style="max-width:92%;padding:8px 10px;border:1px solid var(--ln);font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mu)">grant: supabase-prod · read+write · expires in 59m</div>
+     <div style="max-width:92%;padding:8px 10px;border:1px solid var(--ln)">Applying migration 0042 to prod. Re-running tests.</div>
+     </sc-if>
+     <sc-if value="{{ codexDenied }}" hint-placeholder-val="{{ false }}">
+     <div style="max-width:92%;padding:8px 10px;border:1px solid var(--ln)">Understood. I'll patch the test against the local schema instead and leave a note about the missing migration.</div>
+     </sc-if>
+    </div>
+    </sc-if>
+
+    <div style="flex:none;border-top:1px solid var(--ln);padding:10px 14px;display:flex;flex-direction:column;gap:8px">
+     <div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;min-height:56px;font-size:13px;color:var(--mu)">Message {{ chatAgent }}…</div>
+     <div style="display:flex;gap:12px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)"><span>@file</span><span>/command</span><span>Model ▾</span><span style="flex:1"></span><span>⏎ send</span></div>
+    </div>
+   </div>
+
+   <sc-if value="{{ grantOpen }}" hint-placeholder-val="{{ false }}">
+   <div style="position:absolute;right:0;top:0;bottom:0;width:360px;background:var(--bg);border-left:1px solid var(--tx);display:flex;flex-direction:column">
+    <div style="padding:10px 14px;background:var(--ac);color:var(--acx);display:flex;justify-content:space-between;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase"><span>Access request</span><span>Codex · test/flaky</span></div>
+    <div style="padding:18px 14px 6px;font-size:22px;font-weight:600;letter-spacing:-.01em;line-height:1.15">Supabase <span style="color:var(--mu)">/</span> prod db</div>
+    <div style="padding:0 14px 14px;display:flex;gap:6px"><span style="padding:2px 6px;border:1px solid var(--tx);font-size:10px;font-weight:700;letter-spacing:.1em">PROD</span><span style="padding:2px 6px;border:1px solid var(--ln);font-size:10px;font-weight:600;letter-spacing:.1em;color:var(--mu)">POSTGRES</span></div>
+    <div style="margin:0 14px;padding:10px;border:1px solid var(--ln);font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.5;color:var(--mu)">"to run migration 0042 — read schema, then apply. Test suite depends on the new orders.status column."</div>
+    <div style="padding:16px 14px 6px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Scope</div>
+    <div style="margin:0 14px;border:1px solid var(--ln)">
+     <div style="display:flex;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--ln)"><span>Read schema</span><span style="width:14px;height:14px;background:var(--tx)"></span></div>
+     <div style="display:flex;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--ln)"><span>Write</span><span style="width:14px;height:14px;background:var(--tx)"></span></div>
+     <div style="display:flex;justify-content:space-between;padding:8px 10px;color:var(--mu)"><span>Delete / drop</span><span style="width:14px;height:14px;border:1px solid var(--ln)"></span></div>
+    </div>
+    <div style="padding:16px 14px 6px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Duration</div>
+    <div style="margin:0 14px;display:grid;grid-template-columns:repeat(4,1fr)">
+     <sc-for list="{{ durations }}" as="d" hint-placeholder-count="4"><button onClick="{{ d.pick }}" data-on="{{ d.active }}" style="padding:8px 0;border:1px solid var(--ln);margin-right:-1px;background:transparent;color:var(--tx);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer">{{ d.label }}</button></sc-for>
+    </div>
+    <div style="padding:14px;font-size:11.5px;line-height:1.5;color:var(--mu)">Prod write requires {{ mfa }}. Token is scoped to this session and revoked on expiry or when the session ends. Logged to audit.</div>
+    <span style="flex:1"></span>
+    <div style="display:flex;border-top:1px solid var(--ln)">
+     <button onClick="{{ deny }}" style="flex:1;padding:14px;border:0;border-right:1px solid var(--ln);background:transparent;color:var(--tx);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">Deny</button>
+     <button onClick="{{ grant }}" style="flex:1.4;padding:14px;border:0;background:var(--ac);color:var(--acx);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Grant {{ durationLabel }} · {{ mfa }}</button>
+    </div>
+   </div>
+   </sc-if>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Home" style="flex:1;display:flex;flex-direction:column;min-width:0">
+   <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--ln)">
+    <sc-for list="{{ counters }}" as="c" hint-placeholder-count="4"><div style="padding:22px 20px 18px;border-right:1px solid var(--ln)"><div style="font-size:56px;font-weight:600;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums">{{ c.n }}</div><div style="margin-top:10px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">{{ c.label }}</div></div></sc-for>
+   </div>
+   <div style="display:grid;grid-template-columns:1.2fr 1.6fr .9fr 1.4fr 1.4fr .8fr;padding:10px 20px;border-bottom:1px solid var(--ln);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)"><span>Project</span><span>Path</span><span>Branch</span><span>Agents</span><span>Targets</span><span>Last activity</span></div>
+   <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:56px 20px;border-bottom:1px solid var(--ln);display:flex;flex-direction:column;gap:14px;align-items:flex-start"><div style="font-size:28px;font-weight:600;letter-spacing:-.02em">No projects yet.</div><div style="color:var(--mu);max-width:460px;line-height:1.5">Start something new, add a folder, or clone a repo. Agents and targets attach to projects, so Styx asks about those when they're first needed.</div><div style="display:flex;gap:6px"><button onClick="{{ stateNav.0.go }}" style="padding:5px 10px;border:1px solid var(--tx);background:var(--tx);color:var(--bg);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Scan this machine</button><button onClick="{{ openNew }}" style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">New project</button><button style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Open folder</button><button style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Clone URL</button></div></div></sc-if>
+   <sc-for list="{{ projects }}" as="p" hint-placeholder-count="5"><div onClick="{{ p.open }}" style="display:grid;grid-template-columns:1.2fr 1.6fr .9fr 1.4fr 1.4fr .8fr;padding:14px 20px;border-bottom:1px solid var(--ln);align-items:center;cursor:pointer" style-hover="background:var(--s2)">
+    <span style="display:flex;align-items:center;gap:10px;font-weight:600"><span data-on="{{ p.needs }}" style="width:8px;height:8px;border:1px solid var(--ln)"></span>{{ p.name }}</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mu)">{{ p.path }}</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ p.branch }}</span>
+    <span style="font-size:12px">{{ p.agents }}</span>
+    <span style="font-size:12px;color:var(--mu)">{{ p.targets }}</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mu)">{{ p.last }}</span>
+   </div></sc-for>
+   <div style="padding:14px 20px;border-bottom:1px solid var(--ln);display:flex;gap:10px"><button onClick="{{ openNew }}" style="padding:6px 12px;border:1px dashed var(--ln);background:transparent;color:var(--mu);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">+ New project</button><button style="padding:6px 12px;border:1px dashed var(--ln);background:transparent;color:var(--mu);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">+ Open folder</button><button style="padding:6px 12px;border:1px dashed var(--ln);background:transparent;color:var(--mu);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">+ Clone URL</button></div>
+   <div style="padding:12px 20px 6px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Activity</div>
+   <div style="flex:1;overflow:hidden;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.9;padding:0 20px;color:var(--mu)">
+    <sc-for list="{{ activity }}" as="a" hint-placeholder-count="5"><div style="display:flex;gap:16px"><span style="width:44px">{{ a.t }}</span><span style="width:110px;color:var(--tx)">{{ a.who }}</span><span>{{ a.what }}</span></div></sc-for>
+   </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isAgents }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Agents" style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;min-width:0">
+   <sc-for list="{{ columns }}" as="col" hint-placeholder-count="3"><div style="border-right:1px solid var(--ln);display:flex;flex-direction:column;min-width:0">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;padding:16px 16px 12px;border-bottom:1px solid var(--ln)"><span data-on="{{ col.hot }}" style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;border:1px solid transparent">{{ col.label }}</span><span style="font-size:28px;font-weight:600;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums">{{ col.count }}</span></div>
+    <sc-for list="{{ col.items }}" as="s" hint-placeholder-count="2"><div style="border-bottom:1px solid var(--ln);padding:14px 16px;display:flex;flex-direction:column;gap:6px">
+     <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600">{{ s.agent }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mu)">{{ s.age }}</span></div>
+     <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--mu)">{{ s.project }} · {{ s.branch }}</div>
+     <div style="font-size:13px;line-height:1.4">{{ s.note }}</div>
+     <div style="display:flex;gap:6px;margin-top:4px"><button onClick="{{ s.open }}" style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">{{ s.cta }}</button><sc-if value="{{ s.needs }}" hint-placeholder-val="{{ false }}"><button onClick="{{ s.dismiss }}" style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--mu);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Deny</button></sc-if></div>
+    </div></sc-for>
+    <sc-if value="{{ col.empty }}" hint-placeholder-val="{{ false }}"><div style="padding:24px 16px;color:var(--mu);font-size:12.5px;line-height:1.5">{{ col.emptyText }}</div></sc-if>
+    <sc-if value="{{ col.spawn }}" hint-placeholder-val="{{ false }}"><button onClick="{{ openSpawn }}" style="margin:14px 16px;padding:10px;border:1px dashed var(--ln);background:transparent;color:var(--mu);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">+ Spawn agent</button></sc-if>
+   </div></sc-for>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isRepo }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Repo" style="flex:1;display:flex;flex-direction:column;min-width:0">
+   <div style="display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--ln)"><span style="font-size:18px;font-weight:600">Worktrees</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mu)">github.com/acme/shop · main ↑0 ↓2</span><span style="flex:1"></span><button style="padding:6px 12px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">Fetch</button><button style="padding:6px 12px;border:1px solid var(--tx);background:var(--tx);color:var(--bg);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">+ Worktree</button></div>
+   <div style="display:grid;grid-template-columns:1.2fr 1fr 1.6fr 1fr .7fr;padding:10px 20px;border-bottom:1px solid var(--ln);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)"><span>Branch</span><span>Owner</span><span>Changes</span><span>PR</span><span></span></div>
+   <sc-for list="{{ lanes }}" as="l" hint-placeholder-count="4"><div data-inv="{{ l.active }}" style="display:grid;grid-template-columns:1.2fr 1fr 1.6fr 1fr .7fr;padding:14px 20px;border-bottom:1px solid var(--ln);align-items:center;font-size:12.5px" style-hover="background:var(--s2)">
+    <span style="font-family:'JetBrains Mono',monospace;font-weight:500">{{ l.branch }}</span>
+    <span style="display:flex;align-items:center;gap:8px"><span style="width:7px;height:7px;background:{{ l.dot }}"></span>{{ l.owner }}</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ l.changes }}</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ l.pr }}</span>
+    <span style="text-align:right;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase">{{ l.action }}</span>
+   </div></sc-for>
+   <div style="padding:14px 20px 6px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">fix/checkout · checkout.ts · +2 −0</div>
+   <div style="flex:1;margin:0 20px 20px;border:1px solid var(--ln);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.75;padding:10px 14px;overflow:hidden">
+    <div style="color:var(--mu)">@@ -1,8 +1,10 @@</div><div>&nbsp;import { sum } from './cart'</div><div style="background:var(--add)">+import { validate } from './validate'</div><div>&nbsp;</div><div>&nbsp;export async function checkout(cart) {</div><div style="background:var(--add)">+  validate(cart)</div><div>&nbsp;  const total = sum(cart.items)</div><div>&nbsp;  const receipt = await pay(total)</div><div style="background:var(--add)">+  audit(receipt)</div><div>&nbsp;  return receipt</div>
+   </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isApprovals }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Approvals" style="flex:1;display:flex;min-width:0;position:relative">
+   <div style="flex:1;display:flex;flex-direction:column;border-right:1px solid var(--ln)">
+    <div style="display:flex;border-bottom:1px solid var(--ln)">
+     <sc-for list="{{ approvalTabs }}" as="t" hint-placeholder-count="3"><button onClick="{{ t.pick }}" data-inv="{{ t.active }}" style="padding:12px 18px;border:0;border-right:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">{{ t.label }}</button></sc-for>
+    </div>
+    <sc-if value="{{ approvalsInbox }}" hint-placeholder-val="{{ true }}">
+    <sc-for list="{{ requests }}" as="r" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:1fr auto;gap:14px;padding:16px 20px;border-bottom:1px solid var(--ln)">
+     <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;align-items:center;gap:8px;font-weight:600"><span>{{ r.agent }}</span><span style="color:var(--mu);font-weight:400">{{ r.project }}</span><span style="color:var(--mu)">→</span><span>{{ r.target }}</span><span data-on="{{ r.prod }}" style="padding:1px 5px;border:1px solid var(--ln);font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">{{ r.env }}</span><span style="padding:1px 5px;border:1px solid var(--ln);font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">{{ r.scope }}</span></div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--mu)">"{{ r.reason }}" · {{ r.age }}</div>
+     </div>
+     <div style="display:flex;gap:6px;align-items:flex-start"><button onClick="{{ r.review }}" style="padding:6px 12px;border:1px solid var(--tx);background:var(--tx);color:var(--bg);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Review</button><button style="padding:6px 12px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">Deny</button></div>
+    </div></sc-for>
+    <div style="padding:14px 20px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--mu)">auto-approved today: 12 (preview deploys, github reads)</div>
+    </sc-if>
+    <sc-if value="{{ approvalsAudit }}" hint-placeholder-val="{{ false }}">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:2;padding:12px 20px;color:var(--mu)">
+     <sc-for list="{{ audit }}" as="a" hint-placeholder-count="6"><div onClick="{{ a.open }}" data-inv="{{ a.sel }}" style="display:flex;gap:16px;cursor:pointer;margin:0 -20px;padding:0 20px" style-hover="background:var(--s2)"><span style="width:52px">{{ a.t }}</span><span style="width:80px;color:var(--tx)">{{ a.who }}</span><span style="width:140px">{{ a.target }}</span><span>{{ a.what }}</span></div></sc-for>
+    </div>
+    </sc-if>
+    <sc-if value="{{ approvalsPolicies }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:14px 20px;font-size:12.5px;color:var(--mu);line-height:1.5">Policies are evaluated top to bottom. Project overrides in Settings win. Export as JSON to share with a team.</div>
+    </sc-if>
+   </div>
+   <div style="width:380px;flex:none;display:flex;flex-direction:column">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--ln);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Policies</div>
+    <sc-for list="{{ policies }}" as="p" hint-placeholder-count="3"><div onClick="{{ p.toggle }}" style="display:flex;gap:14px;padding:14px 18px;border-bottom:1px solid var(--ln);cursor:pointer;align-items:flex-start" style-hover="background:var(--s2)"><span data-on="{{ p.on }}" style="flex:none;width:16px;height:16px;border:1px solid var(--ln);margin-top:2px"></span><div style="flex:1;display:flex;flex-direction:column;gap:4px"><span style="font-size:13px;line-height:1.4">{{ p.rule }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mu)">{{ p.meta }}</span></div></div></sc-for>
+    <span style="flex:1"></span>
+    <div style="padding:14px 18px;border-top:1px solid var(--ln);display:flex;gap:6px"><button style="padding:6px 12px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">+ Rule</button><button style="padding:6px 12px;border:1px solid var(--ln);background:transparent;color:var(--mu);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Export JSON</button></div>
+   </div>
+   <sc-if value="{{ auditOpen }}" hint-placeholder-val="{{ false }}">
+   <div style="position:absolute;right:0;top:0;bottom:0;width:380px;background:var(--bg);border-left:1px solid var(--tx);display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--ln)"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Audit entry</span><button onClick="{{ closeAudit }}" style="border:0;background:transparent;color:var(--mu);cursor:pointer;font-size:14px">✕</button></div>
+    <div style="padding:18px 16px 8px;font-size:20px;font-weight:600;line-height:1.2">{{ ad.what }}</div>
+    <div style="padding:0 16px 14px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mu)">{{ ad.t }} · {{ ad.who }} → {{ ad.target }}</div>
+    <sc-for list="{{ adRows }}" as="r" hint-placeholder-count="6"><div style="display:grid;grid-template-columns:110px 1fr;gap:12px;padding:9px 16px;border-top:1px solid var(--ln);font-size:12.5px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">{{ r.k }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ r.v }}</span></div></sc-for>
+    <span style="flex:1"></span>
+    <div style="display:flex;border-top:1px solid var(--ln)"><button style="flex:1;padding:14px;border:0;border-right:1px solid var(--ln);background:transparent;color:var(--tx);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">Copy JSON</button><button style="flex:1;padding:14px;border:0;background:transparent;color:var(--tx);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">Revoke now</button></div>
+   </div>
+   </sc-if>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isDiff }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Diff review" style="flex:1;display:flex;flex-direction:column;min-width:0">
+   <div style="display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--ln)"><span style="font-size:18px;font-weight:600">Review</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mu)">Claude · fix/checkout · {{ hunkSummary }}</span><span style="flex:1"></span><button onClick="{{ acceptAll }}" style="padding:6px 12px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">Accept all</button><button onClick="{{ rejectAll }}" style="padding:6px 12px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">Reject all</button><button onClick="{{ go.workspace }}" style="padding:6px 12px;border:1px solid var(--tx);background:var(--tx);color:var(--bg);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Done</button></div>
+   <div style="flex:1;display:flex;min-height:0">
+    <div style="width:220px;flex:none;border-right:1px solid var(--ln);font-family:'JetBrains Mono',monospace;font-size:12px">
+     <div style="padding:12px 14px 6px;font-family:Archivo;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Files · 3</div>
+     <div style="display:flex;justify-content:space-between;padding:5px 14px"><span>checkout.ts</span><span style="color:var(--act)">+2</span></div>
+     <div style="display:flex;justify-content:space-between;padding:5px 14px"><span>validate.ts</span><span style="color:var(--act)">+31</span></div>
+     <div style="display:flex;justify-content:space-between;padding:5px 14px"><span>checkout.test.ts</span><span style="color:var(--act)">+44</span></div>
+     <div style="padding:18px 14px 6px;font-family:Archivo;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);border-top:1px solid var(--ln);margin-top:10px">Keys</div>
+     <div style="padding:4px 14px;color:var(--mu);font-size:11px;line-height:1.8">a accept · r reject<br>j / k next · prev<br>{{ mod }}⏎ done</div>
+    </div>
+    <div style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+     <sc-for list="{{ hunks }}" as="hk" hint-placeholder-count="3"><div style="border-bottom:1px solid var(--ln)">
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--s1);font-family:'JetBrains Mono',monospace;font-size:11.5px"><span>{{ hk.file }}</span><span style="color:var(--mu)">{{ hk.range }}</span><span style="flex:1"></span><span data-on="{{ hk.accepted }}" style="font-family:Archivo;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);padding:1px 6px;border:1px solid transparent">{{ hk.status }}</span><button onClick="{{ hk.accept }}" data-inv="{{ hk.accepted }}" style="padding:4px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">Accept</button><button onClick="{{ hk.reject }}" data-inv="{{ hk.rejected }}" style="padding:4px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">Reject</button></div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.75;padding:6px 0"><div style="padding:0 16px;white-space:pre">{{ hk.a }}</div><div style="padding:0 16px;white-space:pre;background:var(--add)">{{ hk.b }}</div><div style="padding:0 16px;white-space:pre">{{ hk.c }}</div></div>
+     </div></sc-for>
+    </div>
+   </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Settings" style="flex:1;display:flex;min-width:0">
+   <div style="width:220px;flex:none;border-right:1px solid var(--ln);display:flex;flex-direction:column">
+    <div style="padding:14px 16px 6px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">App</div>
+    <sc-for list="{{ settingsApp }}" as="s" hint-placeholder-count="6"><button onClick="{{ s.pick }}" data-inv="{{ s.active }}" style="padding:7px 16px;border:0;background:transparent;color:var(--tx);cursor:pointer;text-align:left" style-hover="background:var(--s2)">{{ s.label }}</button></sc-for>
+    <div style="padding:18px 16px 6px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);border-top:1px solid var(--ln);margin-top:10px">Project · {{ projectName }}</div>
+    <sc-for list="{{ settingsProject }}" as="s" hint-placeholder-count="3"><button onClick="{{ s.pick }}" data-inv="{{ s.active }}" style="padding:7px 16px;border:0;background:transparent;color:var(--tx);cursor:pointer;text-align:left" style-hover="background:var(--s2)">{{ s.label }}</button></sc-for>
+    <span style="flex:1"></span>
+    <div style="padding:12px 16px;border-top:1px solid var(--ln);font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mu);line-height:1.6">.styx/project.json<br>committed · secrets excluded</div>
+   </div>
+   <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <div style="display:flex;align-items:baseline;gap:12px;padding:16px 20px;border-bottom:1px solid var(--ln)"><span style="font-size:18px;font-weight:600">{{ settingsSection }}</span><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">{{ settingsScope }}</span></div>
+    <sc-if value="{{ settingsIsTargets }}" hint-placeholder-val="{{ true }}">
+    <div style="display:grid;grid-template-columns:1.4fr .7fr 1.4fr 1fr .6fr;padding:10px 20px;border-bottom:1px solid var(--ln);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)"><span>Target</span><span>Env</span><span>Policy</span><span>State</span><span></span></div>
+    <sc-for list="{{ targets }}" as="t" hint-placeholder-count="5"><div style="display:grid;grid-template-columns:1.4fr .7fr 1.4fr 1fr .6fr;padding:12px 20px;border-bottom:1px solid var(--ln);align-items:center;font-size:12.5px">
+     <span style="font-weight:600">{{ t.name }}</span>
+     <span><span data-on="{{ t.prod }}" style="padding:1px 5px;border:1px solid var(--ln);font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">{{ t.env }}</span></span>
+     <span style="display:inline-flex;justify-content:space-between;border:1px solid var(--ln);padding:4px 8px;font-size:12px;width:170px">{{ t.policy }}<span style="color:var(--mu)">▾</span></span>
+     <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--mu)">{{ t.state }}</span>
+     <span style="text-align:right;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">{{ t.action }}</span>
+    </div></sc-for>
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:32px 20px 8px;color:var(--mu);font-size:12.5px;line-height:1.5;max-width:460px">No targets connected. Agents can still work locally; the first time one asks for a deploy or server, Styx opens this connect flow inline.</div></sc-if>
+    <div style="padding:14px 20px"><button onClick="{{ openConnect }}" style="padding:6px 12px;border:1px dashed var(--ln);background:transparent;color:var(--mu);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">+ Connect target · OAuth / key / SSH</button></div>
+    </sc-if>
+    <sc-if value="{{ settingsIsOther }}" hint-placeholder-val="{{ false }}">
+    <sc-for list="{{ settingsRows }}" as="r" hint-placeholder-count="4"><div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--ln);font-size:13px"><span>{{ r.label }}</span><span style="display:inline-flex;justify-content:space-between;gap:16px;border:1px solid var(--ln);padding:4px 8px;font-size:12px;min-width:140px">{{ r.value }}<span style="color:var(--mu)">▾</span></span></div></sc-for>
+    </sc-if>
+   </div>
+  </div>
+  </sc-if>
+ </div>
+
+ <sc-if value="{{ isOnboarding }}" hint-placeholder-val="{{ false }}">
+ <div data-screen-label="Onboarding" style="position:absolute;left:0;right:0;top:38px;bottom:0;background:var(--bg);display:flex;flex-direction:column">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--ln)">
+   <sc-for list="{{ obSteps }}" as="s" hint-placeholder-count="3"><div data-inv="{{ s.active }}" style="display:flex;align-items:baseline;gap:12px;padding:16px 20px;border-right:1px solid var(--ln)"><span style="font-size:28px;font-weight:600;letter-spacing:-.02em;line-height:1">0{{ s.n }}</span><span style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">{{ s.label }}</span></div></sc-for>
+  </div>
+  <sc-if value="{{ obIs1 }}" hint-placeholder-val="{{ true }}">
+  <div style="flex:1;padding:32px 40px;display:flex;flex-direction:column;gap:18px;max-width:900px">
+   <div style="font-size:28px;font-weight:600;letter-spacing:-.02em">Connect your editor.</div>
+   <div style="color:var(--mu);line-height:1.5">Styx embeds its own editor for reviewing and editing agent work. Connecting your IDE imports recents, keybindings and theme, and sets where "Open in…" goes. Nothing in your IDE changes.</div>
+   <div style="border:1px solid var(--ln)"><sc-for list="{{ obIdes }}" as="e" hint-placeholder-count="4"><div onClick="{{ e.pick }}" style="display:grid;grid-template-columns:20px 1.1fr 1.2fr 1fr auto;gap:14px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--ln);font-size:12.5px;cursor:pointer" style-hover="background:var(--s2)"><span data-on="{{ e.on }}" style="width:14px;height:14px;border:1px solid var(--ln)"></span><span style="font-weight:600">{{ e.name }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mu)">{{ e.ver }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mu)">{{ e.imports }}</span><span data-inv="{{ e.fallback }}" style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);padding:2px 6px;border:1px solid var(--ln)">{{ e.role }}</span></div></sc-for></div>
+   <div style="display:flex;gap:18px;font-size:12.5px"><span style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;background:var(--tx)"></span>Import keybindings</span><span style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;background:var(--tx)"></span>Import theme &amp; font</span><span style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;background:var(--tx)"></span>Import recent folders (feeds next step)</span><span style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border:1px solid var(--ln)"></span>Install "Open in Styx" command</span></div>
+  </div>
+  </sc-if>
+  <sc-if value="{{ obIs2 }}" hint-placeholder-val="{{ false }}">
+  <div style="flex:1;padding:32px 40px;display:flex;flex-direction:column;gap:18px;max-width:900px">
+   <div style="font-size:28px;font-weight:600;letter-spacing:-.02em">Found 6 repos on this machine.</div>
+   <div style="color:var(--mu);line-height:1.5">Pick the ones Styx should manage. {{ obIdeName }} recents and workspaces are included. Nothing is modified.</div>
+   <div style="border:1px solid var(--ln)"><sc-for list="{{ obRepos }}" as="r" hint-placeholder-count="6"><div style="display:grid;grid-template-columns:20px 1fr 1fr;gap:14px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--ln);font-family:'JetBrains Mono',monospace;font-size:12.5px"><span data-on="{{ r.on }}" style="width:14px;height:14px;border:1px solid var(--ln)"></span><span>{{ r.path }}</span><span style="color:var(--mu)">{{ r.meta }}</span></div></sc-for><div onClick="{{ openNew }}" style="padding:10px 14px;color:var(--mu);font-size:12px;cursor:pointer" style-hover="background:var(--s2)">+ new project · add folder · clone URL</div></div>
+  </div>
+  </sc-if>
+  <sc-if value="{{ obIs3 }}" hint-placeholder-val="{{ false }}">
+  <div style="flex:1;padding:32px 40px;display:flex;flex-direction:column;gap:18px;max-width:900px">
+   <div style="font-size:28px;font-weight:600;letter-spacing:-.02em">Detected agent CLIs.</div>
+   <div style="color:var(--mu);line-height:1.5">Styx runs the CLIs you already have. Sign-in happens in the CLI's own flow; Styx only stores where it lives.</div>
+   <div style="border:1px solid var(--ln)"><sc-for list="{{ obClis }}" as="c" hint-placeholder-count="5"><div style="display:grid;grid-template-columns:1.2fr 1.2fr 1fr auto;gap:14px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--ln);font-size:12.5px"><span style="font-weight:600">{{ c.name }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mu)">{{ c.ver }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ c.auth }}</span><span data-on="{{ c.bad }}" style="width:8px;height:8px;border:1px solid var(--ln)"></span></div></sc-for></div>
+  </div>
+  </sc-if>
+  <sc-if value="{{ obIs4 }}" hint-placeholder-val="{{ false }}">
+  <div style="flex:1;padding:32px 40px;display:flex;flex-direction:column;gap:18px;max-width:900px">
+   <div style="font-size:28px;font-weight:600;letter-spacing:-.02em">Connect deploy and server targets.</div>
+   <div style="color:var(--mu);line-height:1.5">Optional now. Secrets go to the {{ keychainName }}, never into a repo. Every agent use is a scoped, expiring grant.</div>
+   <div style="display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--ln);border-left:1px solid var(--ln)"><sc-for list="{{ providers }}" as="p" hint-placeholder-count="6"><button onClick="{{ p.connect }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:16px;border:0;border-right:1px solid var(--ln);border-bottom:1px solid var(--ln);background:transparent;color:var(--tx);cursor:pointer;text-align:left" style-hover="background:var(--s2)"><span style="font-weight:600;font-size:14px">{{ p.name }}</span><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">{{ p.method }} · connect →</span></button></sc-for></div>
+  </div>
+  </sc-if>
+  <div style="display:flex;border-top:1px solid var(--ln)"><button onClick="{{ obBack }}" style="padding:14px 24px;border:0;border-right:1px solid var(--ln);background:transparent;color:var(--mu);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Back</button><span style="flex:1"></span><button onClick="{{ obSkip }}" style="padding:14px 24px;border:0;border-left:1px solid var(--ln);background:transparent;color:var(--mu);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Skip</button><button onClick="{{ obNext }}" style="padding:14px 28px;border:0;background:var(--tx);color:var(--bg);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">{{ obNextLabel }}</button></div>
+ </div>
+ </sc-if>
+
+ <sc-if value="{{ connectOpen }}" hint-placeholder-val="{{ false }}">
+ <div onClick="{{ closeConnect }}" style="position:absolute;inset:0;background:var(--dim);display:flex;justify-content:center;align-items:flex-start;padding-top:90px">
+  <div onClick="{{ stop }}" style="width:560px;border:1px solid var(--tx);background:var(--s1);display:flex;flex-direction:column">
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--ln)"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Connect target · {{ connectStepLabel }}</span><button onClick="{{ closeConnect }}" style="border:0;background:transparent;color:var(--mu);cursor:pointer;font-size:14px">✕</button></div>
+   <sc-if value="{{ connectIsPick }}" hint-placeholder-val="{{ true }}">
+   <div style="display:grid;grid-template-columns:repeat(3,1fr)"><sc-for list="{{ providers }}" as="p" hint-placeholder-count="6"><button onClick="{{ p.pick }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:18px 16px;border:0;border-right:1px solid var(--ln);border-bottom:1px solid var(--ln);background:transparent;color:var(--tx);cursor:pointer;text-align:left" style-hover="background:var(--s2)"><span style="font-weight:600;font-size:14px">{{ p.name }}</span><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">{{ p.method }}</span></button></sc-for></div>
+   </sc-if>
+   <sc-if value="{{ connectIsOauth }}" hint-placeholder-val="{{ false }}">
+   <div style="padding:20px 16px;display:flex;flex-direction:column;gap:14px">
+    <div style="font-size:20px;font-weight:600">{{ providerName }}</div>
+    <div style="color:var(--mu);line-height:1.5;font-size:12.5px">Styx opens your browser to authorize. The token lands in the {{ keychainName }}; agents receive short-lived scoped tokens derived from it.</div>
+    <div style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Environment</span><sc-for list="{{ envs }}" as="e" hint-placeholder-count="3"><button onClick="{{ e.pick }}" data-on="{{ e.active }}" style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">{{ e.label }}</button></sc-for></div>
+    <div style="border:1px solid var(--ln);padding:12px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mu);display:flex;justify-content:space-between"><span>Waiting for browser…</span><span style="display:inline-block;width:8px;height:12px;background:var(--mu);animation:blink 1s steps(1) infinite"></span></div>
+   </div>
+   <div style="display:flex;border-top:1px solid var(--ln)"><button onClick="{{ connectBack }}" style="padding:14px 20px;border:0;border-right:1px solid var(--ln);background:transparent;color:var(--mu);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Back</button><span style="flex:1"></span><button onClick="{{ closeConnect }}" style="padding:14px 24px;border:0;background:var(--tx);color:var(--bg);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Open browser</button></div>
+   </sc-if>
+   <sc-if value="{{ connectIsKey }}" hint-placeholder-val="{{ false }}">
+   <div style="padding:20px 16px;display:flex;flex-direction:column;gap:14px">
+    <div style="font-size:20px;font-weight:600">{{ providerName }}</div>
+    <div style="color:var(--mu);line-height:1.5;font-size:12.5px">Paste credentials for a role scoped to this project. Styx recommends a dedicated IAM role with no delete permissions; the key is stored in the {{ keychainName }} and never shown again.</div>
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Name</span><div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;font-family:'JetBrains Mono',monospace;font-size:12.5px">acme-prod</div></div>
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Access key / service account</span><div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--mu)">AKIA••••••••••••</div></div>
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Secret</span><div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--mu)">••••••••••••••••••••••••</div></div>
+    <div style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Environment</span><sc-for list="{{ envs }}" as="e" hint-placeholder-count="3"><button onClick="{{ e.pick }}" data-on="{{ e.active }}" style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">{{ e.label }}</button></sc-for></div>
+   </div>
+   <div style="display:flex;border-top:1px solid var(--ln)"><button onClick="{{ connectBack }}" style="padding:14px 20px;border:0;border-right:1px solid var(--ln);background:transparent;color:var(--mu);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Back</button><span style="flex:1"></span><button style="padding:14px 20px;border:0;border-left:1px solid var(--ln);background:transparent;color:var(--tx);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Test connection</button><button onClick="{{ closeConnect }}" style="padding:14px 24px;border:0;background:var(--tx);color:var(--bg);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Save to {{ keychainShort }}</button></div>
+   </sc-if>
+   <sc-if value="{{ connectIsSsh }}" hint-placeholder-val="{{ false }}">
+   <div style="padding:20px 16px;display:flex;flex-direction:column;gap:14px">
+    <div style="font-size:20px;font-weight:600">SSH host</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Host</span><div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;font-family:'JetBrains Mono',monospace;font-size:12.5px">prod-1.acme.internal</div></div><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">User</span><div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;font-family:'JetBrains Mono',monospace;font-size:12.5px">deploy</div></div></div>
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Key</span><div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;font-family:'JetBrains Mono',monospace;font-size:12.5px;display:flex;justify-content:space-between"><span>~/.ssh/id_ed25519</span><span style="color:var(--mu)">Browse</span></div></div>
+    <div style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Environment</span><sc-for list="{{ envs }}" as="e" hint-placeholder-count="3"><button onClick="{{ e.pick }}" data-on="{{ e.active }}" style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">{{ e.label }}</button></sc-for></div>
+    <div style="color:var(--mu);line-height:1.5;font-size:12.5px">Agents get a forwarded agent socket for the grant's duration, never the key file.</div>
+   </div>
+   <div style="display:flex;border-top:1px solid var(--ln)"><button onClick="{{ connectBack }}" style="padding:14px 20px;border:0;border-right:1px solid var(--ln);background:transparent;color:var(--mu);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Back</button><span style="flex:1"></span><button style="padding:14px 20px;border:0;border-left:1px solid var(--ln);background:transparent;color:var(--tx);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Test connection</button><button onClick="{{ closeConnect }}" style="padding:14px 24px;border:0;background:var(--tx);color:var(--bg);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Save</button></div>
+   </sc-if>
+  </div>
+ </div>
+ </sc-if>
+
+ <sc-if value="{{ newOpen }}" hint-placeholder-val="{{ false }}">
+ <div onClick="{{ closeNew }}" style="position:absolute;inset:0;background:var(--dim);display:flex;justify-content:center;align-items:flex-start;padding-top:70px">
+  <div onClick="{{ stop }}" style="width:600px;border:1px solid var(--tx);background:var(--s1);display:flex;flex-direction:column">
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--ln)"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">New project</span><button onClick="{{ closeNew }}" style="border:0;background:transparent;color:var(--mu);cursor:pointer;font-size:14px">✕</button></div>
+   <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:12px">
+     <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Name</span><div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;font-family:'JetBrains Mono',monospace;font-size:12.5px">orders-service</div></div>
+     <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Location</span><div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;font-family:'JetBrains Mono',monospace;font-size:12.5px;display:flex;justify-content:space-between"><span>{{ newPath }}</span><span style="color:var(--mu)">Browse</span></div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Start from</span>
+     <div style="display:grid;grid-template-columns:repeat(3,1fr)"><sc-for list="{{ newStarts }}" as="s" hint-placeholder-count="3"><button onClick="{{ s.pick }}" data-inv="{{ s.active }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:12px;border:1px solid var(--ln);margin-right:-1px;background:transparent;color:var(--tx);cursor:pointer;text-align:left" style-hover="background:var(--s2)"><span style="font-weight:600;font-size:13px">{{ s.label }}</span><span style="font-size:11.5px;line-height:1.4;opacity:.75">{{ s.desc }}</span></button></sc-for></div>
+    </div>
+    <sc-if value="{{ newIsTemplate }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Template</span><div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;font-size:12.5px;display:flex;justify-content:space-between"><span>Next.js + Supabase (team template)</span><span style="color:var(--mu)">▾</span></div><div style="font-size:11.5px;color:var(--mu);line-height:1.5">Templates are git repos tagged <span style="font-family:'JetBrains Mono',monospace">styx-template</span> in your GitHub org, plus built-ins (Node, Python, Go, Rust, static).</div></div></sc-if>
+    <sc-if value="{{ newIsAgent }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Brief for {{ spawnName }}</span><div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;font-size:13px;min-height:64px;line-height:1.5">A TypeScript service that receives Shopify order webhooks, validates them, and writes to Supabase. Include tests and a Dockerfile.</div><div style="font-size:11.5px;color:var(--mu);line-height:1.5">The agent scaffolds in an empty worktree on <span style="font-family:'JetBrains Mono',monospace">main</span>, then pauses for your review before the first commit.</div></div></sc-if>
+    <div style="display:flex;gap:18px;font-size:12.5px;flex-wrap:wrap"><span style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;background:var(--tx)"></span>git init</span><span style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;background:var(--tx)"></span>Create GitHub repo · private</span><span style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border:1px solid var(--ln)"></span>Copy targets from acme-shop</span><span style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border:1px solid var(--ln)"></span>Open in {{ obIdeName }} too</span></div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--mu);border:1px solid var(--ln);padding:8px 10px">GitHub acme · persistent grant · repo will be acme/orders-service</div>
+   </div>
+   <div style="display:flex;border-top:1px solid var(--ln)"><span style="flex:1"></span><button onClick="{{ closeNew }}" style="padding:14px 20px;border:0;border-left:1px solid var(--ln);background:transparent;color:var(--mu);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Cancel</button><button onClick="{{ doNew }}" style="padding:14px 24px;border:0;background:var(--tx);color:var(--bg);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">{{ newCta }}</button></div>
+  </div>
+ </div>
+ </sc-if>
+
+ <sc-if value="{{ spawnOpen }}" hint-placeholder-val="{{ false }}">
+ <div onClick="{{ closeSpawn }}" style="position:absolute;inset:0;background:var(--dim);display:flex;justify-content:center;align-items:flex-start;padding-top:90px">
+  <div onClick="{{ stop }}" style="width:600px;border:1px solid var(--tx);background:var(--s1);display:flex;flex-direction:column">
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--ln)"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Spawn agent · {{ projectName }}</span><button onClick="{{ closeSpawn }}" style="border:0;background:transparent;color:var(--mu);cursor:pointer;font-size:14px">✕</button></div>
+   <div style="display:grid;grid-template-columns:repeat(5,1fr)"><sc-for list="{{ spawnAgents }}" as="a" hint-placeholder-count="5"><button onClick="{{ a.pick }}" data-inv="{{ a.active }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:14px 12px;border:0;border-right:1px solid var(--ln);border-bottom:1px solid var(--ln);background:transparent;color:var(--tx);cursor:pointer;text-align:left" style-hover="background:var(--s2)"><span style="font-weight:600;font-size:13px">{{ a.name }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;opacity:.7">{{ a.ver }}</span></button></sc-for></div>
+   <sc-if value="{{ spawnBlocked }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--ln);font-size:12.5px"><span style="width:8px;height:8px;background:var(--ac)"></span><span style="flex:1">{{ spawnName }} CLI not found on PATH.</span><button style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Install guide</button><button style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Locate binary</button></div></sc-if>
+   <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+     <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Worktree</span><div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;font-size:12.5px;display:flex;justify-content:space-between"><span>New from main</span><span style="color:var(--mu)">▾</span></div></div>
+     <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">Branch</span><div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;font-family:'JetBrains Mono',monospace;font-size:12.5px">{{ spawnBranch }}</div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)">First message</span><div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;font-size:13px;min-height:64px;color:var(--mu)">What should {{ spawnName }} do? Reference files with @.</div></div>
+    <div style="display:flex;gap:18px;font-size:12.5px"><span style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border:1px solid var(--ln)"></span>Auto-approve edits</span><span style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;background:var(--tx)"></span>May request targets</span><span style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;background:var(--tx)"></span>Notify when it needs me</span></div>
+   </div>
+   <div style="display:flex;border-top:1px solid var(--ln)"><span style="flex:1"></span><button onClick="{{ closeSpawn }}" style="padding:14px 20px;border:0;border-left:1px solid var(--ln);background:transparent;color:var(--mu);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Cancel</button><button onClick="{{ doSpawn }}" style="padding:14px 24px;border:0;background:var(--tx);color:var(--bg);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Spawn · {{ mod }}⏎</button></div>
+  </div>
+ </div>
+ </sc-if>
+
+ <sc-if value="{{ toastOn }}" hint-placeholder-val="{{ false }}">
+ <div style="position:absolute;right:16px;top:52px;width:340px;border:1px solid var(--tx);background:var(--s1);display:flex;flex-direction:column">
+  <div style="display:flex;justify-content:space-between;padding:6px 12px;background:var(--ac);color:var(--acx);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase"><span>Needs you</span><span>Styx · now</span></div>
+  <div style="padding:12px;display:flex;flex-direction:column;gap:4px"><span style="font-weight:600">Codex wants Supabase prod · write</span><span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--mu)">acme-shop · test/flaky · "migration 0042"</span></div>
+  <div style="display:flex;border-top:1px solid var(--ln)"><button onClick="{{ toastReview }}" style="flex:1;padding:10px;border:0;border-right:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">Review</button><button onClick="{{ closeToast }}" style="flex:1;padding:10px;border:0;background:transparent;color:var(--mu);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" style-hover="background:var(--s2)">Later</button></div>
+ </div>
+ </sc-if>
+
+ <sc-if value="{{ popoutOn }}" hint-placeholder-val="{{ false }}">
+ <div style="position:absolute;right:48px;bottom:40px;width:400px;height:500px;border:1px solid var(--tx);background:var(--s1);display:flex;flex-direction:column">
+  <div style="height:32px;flex:none;border-bottom:1px solid var(--ln);display:flex;align-items:center;gap:8px;padding:0 10px;font-size:12px">
+   <sc-if value="{{ isMac }}" hint-placeholder-val="{{ true }}"><div style="display:flex;gap:6px;margin-right:4px"><span style="width:10px;height:10px;border-radius:50%;border:1px solid var(--ln);background:var(--s2)"></span><span style="width:10px;height:10px;border-radius:50%;border:1px solid var(--ln);background:var(--s2)"></span><span style="width:10px;height:10px;border-radius:50%;border:1px solid var(--ln);background:var(--s2)"></span></div></sc-if>
+   <span style="font-weight:600">Claude</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mu)">acme-shop · fix/checkout</span><span style="flex:1"></span><button onClick="{{ togglePopout }}" style="padding:3px 8px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Dock</button>
+   <sc-if value="{{ isWin }}" hint-placeholder-val="{{ false }}"><div style="display:flex;margin-right:-10px;height:32px"><span style="width:36px;display:flex;align-items:center;justify-content:center;color:var(--mu)">─</span><span style="width:36px;display:flex;align-items:center;justify-content:center;color:var(--mu)">✕</span></div></sc-if>
+  </div>
+  <div style="flex:1;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:12.5px;line-height:1.5;overflow:hidden">
+   <div style="align-self:flex-end;max-width:88%;padding:7px 10px;background:var(--tx);color:var(--bg)">Add input validation to checkout and cover it with tests.</div>
+   <div style="max-width:92%;padding:7px 10px;border:1px solid var(--ln)">Plan: new validate.ts, call before summing, 4 tests. Proceeding.</div>
+   <div style="max-width:92%;padding:7px 10px;border:1px solid var(--ln)">Ran vitest, 42 passed. Open a PR against main?<div style="display:flex;gap:6px;margin-top:8px"><button style="padding:5px 10px;border:1px solid var(--tx);background:var(--tx);color:var(--bg);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">Yes</button><button style="padding:5px 10px;border:1px solid var(--ln);background:transparent;color:var(--tx);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer">No</button></div></div>
+  </div>
+  <div style="border-top:1px solid var(--ln);padding:10px 12px"><div style="border:1px solid var(--ln);background:var(--bg);padding:8px 10px;min-height:44px;font-size:12.5px;color:var(--mu)">Message Claude…</div></div>
+ </div>
+ </sc-if>
+
+ <sc-if value="{{ paletteOpen }}" hint-placeholder-val="{{ false }}">
+ <div onClick="{{ closePalette }}" style="position:absolute;inset:0;background:var(--dim);display:flex;justify-content:center;align-items:flex-start;padding-top:110px">
+  <div onClick="{{ stop }}" style="width:640px;border:1px solid var(--tx);background:var(--s1);display:flex;flex-direction:column">
+   <div style="display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--ln);font-family:'JetBrains Mono',monospace;font-size:14px"><span style="color:var(--act)">&gt;</span><input value="{{ q }}" onChange="{{ setQ }}" autoFocus="{{ true }}" placeholder="switch, spawn, deploy, grant, diff…" style="flex:1;padding:14px 0;border:0;outline:0;background:transparent;color:var(--tx);font-family:'JetBrains Mono',monospace;font-size:14px"></div>
+   <sc-for list="{{ paletteGroups }}" as="g" hint-placeholder-count="3"><div>
+    <div style="padding:10px 14px 4px;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--mu)">{{ g.label }}</div>
+    <sc-for list="{{ g.items }}" as="i" hint-placeholder-count="2"><div onClick="{{ i.run }}" data-inv="{{ i.first }}" style="display:flex;align-items:center;gap:12px;padding:8px 14px;cursor:pointer;font-size:13px" style-hover="background:var(--s2)"><span style="width:14px;font-family:'JetBrains Mono',monospace;color:var(--mu)">{{ i.glyph }}</span><span style="flex:1">{{ i.label }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;opacity:.7">{{ i.meta }}</span></div></sc-for>
+   </div></sc-for>
+   <div style="display:flex;gap:16px;padding:10px 14px;border-top:1px solid var(--ln);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)"><span>⏎ run</span><span>{{ mod }}⏎ new window</span><span>⇥ scope</span><span style="flex:1"></span><span>esc</span></div>
+  </div>
+ </div>
+ </sc-if>
+</div>
+<sc-if value="{{ toastOn }}" hint-placeholder-val="{{ false }}">
+<div style="width:1280px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+ <div style="border:1px solid var(--ln);background:var(--bg);padding:16px;display:flex;align-items:center;gap:20px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);width:140px">macOS dock</span><span style="position:relative;width:48px;height:48px;border:1px solid var(--tx);display:flex;align-items:center;justify-content:center;font-weight:700;letter-spacing:.1em;font-size:12px">SX<span style="position:absolute;right:-8px;top:-8px;min-width:18px;height:18px;padding:0 5px;background:var(--ac);color:var(--acx);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">1</span></span><span style="color:var(--mu);font-size:12.5px;line-height:1.5">Badge = sessions needing you. Bounce once on first request; never repeatedly. Menu: recent requests, Do Not Disturb.</span></div>
+ <div style="border:1px solid var(--ln);background:var(--bg);padding:16px;display:flex;align-items:center;gap:20px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);width:140px">Windows tray</span><span style="display:flex;align-items:center;gap:10px;border:1px solid var(--ln);padding:6px 10px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mu)"><span style="position:relative;width:16px;height:16px;border:1px solid var(--tx);display:inline-block"><span style="position:absolute;right:-4px;top:-4px;width:8px;height:8px;background:var(--ac)"></span></span>14:02</span><span style="color:var(--mu);font-size:12.5px;line-height:1.5">Tray icon with accent dot; Action Center toast "Codex needs you" with Review / Later. Left-click opens the Agents board.</span></div>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark'|'light'&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;chrome&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;mac&quot;,&quot;win&quot;],&quot;default&quot;:&quot;mac&quot;,&quot;tsType&quot;:&quot;'mac'|'win'&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;options&quot;:[&quot;#d6ff3d&quot;,&quot;#ff4d00&quot;,&quot;#00e0c6&quot;,&quot;#ffffff&quot;],&quot;default&quot;:&quot;#d6ff3d&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Appearance&quot;}}">
+class Component extends DCLogic {
+  state = { screen: 'workspace', project: 'acme-shop', session: 'claude', grantOpen: false, paletteOpen: false, q: '', codex: 'pending', duration: '1h', themeOverride: null, chromeOverride: null, approvalsTab: 'Inbox', settingsNav: 'Targets', policies: [false, true, true], obStep: 1, connectOpen: false, connectStep: 'pick', provider: 'Vercel', env: 'prod', spawnOpen: false, spawnAgent: 'Claude Code', emptyMode: false, errorMode: false, toastOn: false, popoutOn: false, auditSel: null, hunks: ['pending', 'pending', 'pending'], ide: 'VS Code', newOpen: false, newStart: 'agent' };
+  setHunk(i, v) { this.setState(s => { const n = s.hunks.slice(); n[i] = v; return { hunks: n }; }); }
+  projectsData = [
+    { name: 'acme-shop', initials: 'AS', path: '~/code/acme-shop', branch: 'fix/checkout', agents: 'Claude, Codex, Gemini', targets: 'Vercel, Supabase, AWS, GitHub', last: '2m' },
+    { name: 'blog-v2', initials: 'BL', path: '~/code/blog-v2', branch: 'feat/mdx', agents: 'Claude', targets: 'Vercel, GitHub', last: '9m' },
+    { name: 'infra-tools', initials: 'IN', path: '~/code/infra-tools', branch: 'main', agents: 'Gemini', targets: 'AWS, GCP', last: '31m' },
+    { name: 'client-x', initials: 'CX', path: '~/work/client-x', branch: 'main', agents: 'shell', targets: 'GCP, GitHub', last: '1h' },
+    { name: 'side-api', initials: 'SA', path: '~/code/side-api', branch: 'main', agents: '—', targets: 'Supabase', last: '2d' }
+  ];
+  sessionsData() {
+    const cx = this.state.codex;
+    return [
+      { id: 'claude', agent: 'Claude', project: 'acme-shop', branch: 'fix/checkout', state: 'working', note: 'Added validation, 42 tests pass. Asking to open a PR.', age: '14m', cta: 'Open' },
+      { id: 'codex', agent: 'Codex', project: 'acme-shop', branch: 'test/flaky', state: cx === 'pending' ? 'needs' : 'working', note: cx === 'pending' ? 'Requesting Supabase prod · read + write' : cx === 'granted' ? 'Applying migration 0042 to prod' : 'Patching test against local schema', age: '3m', cta: cx === 'pending' ? 'Review grant' : 'Open' },
+      { id: 'blog', agent: 'Claude', project: 'blog-v2', branch: 'feat/mdx', state: 'needs', note: 'Plan ready · 4 files. Waiting for approval.', age: '9m', cta: 'Review plan' },
+      { id: 'gemini', agent: 'Gemini', project: 'acme-shop', branch: 'docs', state: 'idle', note: 'Idle', age: '—', cta: 'Open' },
+      { id: 'infra', agent: 'Gemini', project: 'infra-tools', branch: 'main', state: 'working', note: 'Rewriting README for the CLI', age: '31m', cta: 'Open' },
+      { id: 'shell', agent: 'shell', project: 'client-x', branch: 'main', state: 'working', note: 'npm run build', age: '1h', cta: 'Open' },
+      { id: 'cursor', agent: 'Cursor', project: 'acme-shop', branch: 'feat/promo', state: 'done', note: 'PR #212 opened, merged yesterday', age: '1d', cta: 'Archive' },
+      { id: 'side', agent: 'Claude', project: 'side-api', branch: 'main', state: 'done', note: '2 commits pushed', age: '2d', cta: 'Archive' }
+    ];
+  }
+  componentDidMount() { this.applyTheme(); window.addEventListener('keydown', this.onKey); }
+  componentDidUpdate() { this.applyTheme(); }
+  componentWillUnmount() { window.removeEventListener('keydown', this.onKey); }
+  onKey = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.setState(s => ({ paletteOpen: !s.paletteOpen, q: '' })); }
+    if (e.key === 'Escape') this.setState({ paletteOpen: false, grantOpen: false, connectOpen: false, spawnOpen: false, newOpen: false, auditSel: null, toastOn: false });
+  };
+  theme() { return this.state.themeOverride ?? this.props.theme ?? 'dark'; }
+  chrome() { return this.state.chromeOverride ?? this.props.chrome ?? 'mac'; }
+  applyTheme() {
+    document.body.dataset.theme = this.theme();
+    if (this.props.accent) document.body.style.setProperty('--ac', this.props.accent); else document.body.style.removeProperty('--ac');
+  }
+  renderVals() {
+    const st = this.state, go = {};
+    ['home', 'workspace', 'agents', 'repo', 'approvals', 'settings', 'diff', 'onboarding'].forEach(k => go[k] = () => this.setState({ screen: k, paletteOpen: false }));
+    const sessions = st.emptyMode ? [] : this.sessionsData();
+    const needs = sessions.filter(s => s.state === 'needs');
+    const openSession = (s) => () => this.setState({ screen: 'workspace', project: s.project, session: s.id, paletteOpen: false, grantOpen: s.id === 'codex' && st.codex === 'pending' });
+    const projectsSrc = st.emptyMode ? [] : this.projectsData;
+    const projects = projectsSrc.map(p => ({ ...p, active: p.name === st.project, needs: needs.some(s => s.project === p.name), pick: () => this.setState({ project: p.name }), open: () => this.setState({ project: p.name, screen: 'workspace' }) }));
+    const inProject = sessions.filter(s => s.project === st.project);
+    const cur = this.projectsData.find(p => p.name === st.project);
+    const labels = { home: 'All projects', workspace: 'Workspace', agents: 'Agents', repo: 'Repo', approvals: 'Approvals', settings: 'Settings' };
+    const metas = { home: this.projectsData.length, workspace: '', agents: inProject.filter(s => s.state !== 'done').length, repo: '4 wt', approvals: 3, settings: '' };
+    const nav = Object.keys(labels).map(k => ({ label: labels[k], meta: String(metas[k]), active: st.screen === k, go: go[k] }));
+    const dot = (s) => s.state === 'needs' ? 'var(--ac)' : s.state === 'working' ? 'var(--tx)' : 'var(--ln)';
+    const tabsSrc = inProject.filter(s => s.state !== 'done').slice(0, 3);
+    const activeSession = tabsSrc.find(s => s.id === st.session) || tabsSrc[0] || sessions[0];
+    const sessionTabs = tabsSrc.map(s => ({ agent: s.agent, active: s.id === activeSession.id, needs: s.state === 'needs', dot: dot(s), pick: () => this.setState({ session: s.id }) }));
+    const col = (label, state, hot, spawn) => { const items = sessions.filter(s => s.state === state || (state === 'working' && s.state === 'idle')).map(s => ({ ...s, needs: s.state === 'needs', open: openSession(s), dismiss: () => this.setState({ codex: 'denied' }) })); return { label, hot, spawn, count: String(items.length).padStart(2, '0'), items, empty: items.length === 0, emptyText: state === 'needs' ? 'Nothing waiting on you.' : state === 'working' ? 'No agents running. Spawn one below, or ask in the palette.' : 'Finished sessions land here for 7 days.' }; };
+    const columns = [col('Needs you', 'needs', true, false), col('Working', 'working', false, true), col('Done', 'done', false, false)];
+    const counters = [
+      { n: String(needs.length).padStart(2, '0'), label: 'Needs you' },
+      { n: String(sessions.filter(s => s.state === 'working').length).padStart(2, '0'), label: 'Agents working' },
+      { n: st.codex === 'granted' ? '03' : '02', label: 'Grants active' },
+      { n: String(projectsSrc.length).padStart(2, '0'), label: 'Projects' }
+    ];
+    const durations = ['once', '1h', 'session', 'always'].map(d => ({ label: d, active: st.duration === d, pick: () => this.setState({ duration: d }) }));
+    const lanes = [
+      { branch: 'main', owner: 'you', dot: 'var(--tx)', changes: 'clean · ↑0 ↓2', pr: '—', action: 'Open', active: false },
+      { branch: 'fix/checkout', owner: 'Claude', dot: 'var(--tx)', changes: st.errorMode ? 'CONFLICT · checkout.ts vs main' : '+142 −38 · 3 files', pr: '#214 draft', action: st.errorMode ? 'Resolve' : 'Diff', active: true },
+      { branch: 'test/flaky', owner: 'Codex', dot: st.codex === 'pending' ? 'var(--ac)' : 'var(--tx)', changes: st.codex === 'pending' ? 'waiting on grant' : '+12 −4 · 1 file', pr: '—', action: 'Diff', active: false },
+      { branch: 'feat/promo', owner: 'Cursor', dot: 'var(--ln)', changes: 'merged yesterday', pr: '#212 ✓', action: 'Archive', active: false }
+    ];
+    const requests = [
+      { agent: 'Codex', project: 'acme-shop', target: 'Supabase prod', env: 'prod', prod: true, scope: 'write', reason: 'migration 0042', age: '3m', review: openSession(sessions[1]) },
+      { agent: 'Claude', project: 'infra-tools', target: 'AWS acme-prod', env: 'prod', prod: true, scope: 'read', reason: 'list ECS services', age: '9m', review: () => {} },
+      { agent: 'Cursor', project: 'blog-v2', target: 'Vercel', env: 'preview', prod: false, scope: 'deploy', reason: 'preview deploy for #88', age: '14m', review: () => {} }
+    ].filter(r => !(r.agent === 'Codex' && st.codex !== 'pending'));
+    const policyRules = [
+      { rule: 'Auto-approve read on any staging or preview target', meta: 'matches 12 today' },
+      { rule: 'Always ask, require Touch ID / Windows Hello for prod write', meta: 'matches 2 today' },
+      { rule: 'Expire grants after 1h idle', meta: 'revoked 5 this week' }
+    ];
+    const policies = policyRules.map((p, i) => ({ ...p, on: st.policies[i], toggle: () => this.setState(s => { const n = s.policies.slice(); n[i] = !n[i]; return { policies: n }; }) }));
+    const approvalTabs = ['Inbox', 'Policies', 'Audit log'].map(t => ({ label: t === 'Inbox' ? 'Inbox · ' + requests.length : t, active: st.approvalsTab === t, pick: () => this.setState({ approvalsTab: t }) }));
+    const audit = [
+      st.codex === 'granted' ? { t: 'now', who: 'you', target: 'supabase-prod', what: 'granted read+write to Codex · ' + st.duration } : null,
+      { t: '09:41', who: 'Claude', target: 'vercel-prod', what: 'used deploy token (auto: policy #1)' },
+      { t: '09:12', who: 'you', target: 'vercel-prod', what: 'granted deploy to Claude · 1h' },
+      { t: '08:58', who: 'system', target: 'aws-acme-prod', what: 'revoked Gemini grant · idle 1h' },
+      { t: '08:30', who: 'Cursor', target: 'github', what: 'opened PR #212' }
+    ].filter(Boolean).map((a, i) => ({ ...a, sel: st.auditSel === i, open: () => this.setState({ auditSel: i }) }));
+    const targets = [
+      { name: 'Vercel', env: 'prod', prod: true, policy: 'Ask · MFA', state: 'open · 58m left', action: 'Revoke' },
+      { name: 'Vercel', env: 'preview', prod: false, policy: 'Always allow', state: 'persistent', action: 'Edit' },
+      { name: 'Supabase', env: 'prod', prod: true, policy: 'Ask each time', state: st.codex === 'granted' ? 'open · 59m left' : 'locked', action: st.codex === 'granted' ? 'Revoke' : 'Edit' },
+      { name: 'AWS acme-prod', env: 'prod', prod: true, policy: 'Ask · MFA', state: 'locked', action: 'Edit' },
+      { name: 'GitHub acme/shop', env: 'scm', prod: false, policy: 'Always allow', state: 'persistent', action: 'Edit' }
+    ];
+    const settingsApp = ['General', 'Editor', 'Agents & CLIs', 'Keychain & secrets', 'Policies', 'Shortcuts'];
+    const settingsProject = ['Targets', 'Agent defaults', 'Env & secrets'];
+    const mk = (l) => ({ label: l, active: st.settingsNav === l, pick: () => this.setState({ settingsNav: l }) });
+    const settingsRowsMap = {
+      'General': [['Theme', 'System'], ['Notify when an agent needs me', 'Badge + sound'], ['Launch at login', 'On']],
+      'Editor': [['Engine', 'Monaco (embedded)'], ['Open files in', 'Styx'], ['Fallback editor', 'VS Code'], ['Line endings', 'Per repo']],
+      'Agents & CLIs': [['Default agent', 'Claude Code'], ['Auto-create worktree per agent', 'On'], ['Shell (Windows)', 'PowerShell'], ['Detected CLIs', 'claude, codex, gemini, cursor']],
+      'Keychain & secrets': [['Store', 'macOS Keychain'], ['MFA for prod write', 'Touch ID'], ['Inject as', 'Scoped token, else env']],
+      'Policies': [['Auto-approve staging reads', 'On'], ['Grant idle expiry', '1 hour'], ['Export', 'JSON']],
+      'Shortcuts': [['Palette', '⌘K'], ['Switch project', '⌘P'], ['Focus agent 1–4', '⌘1–4'], ['Approve / deny', '⌘⏎ / ⌘⌫']],
+      'Agent defaults': [['Default agent', 'Claude Code'], ['Model', 'Default'], ['Auto-approve edits', 'Off']],
+      'Env & secrets': [['.env source', 'Keychain'], ['Share with agents', 'Per grant'], ['Committed file', '.styx/project.json']]
+    };
+    const settingsRows = (settingsRowsMap[st.settingsNav] || []).map(r => ({ label: r[0], value: r[1] }));
+    const q = st.q.toLowerCase();
+    const f = (arr) => arr.filter(i => !q || i.label.toLowerCase().includes(q) || i.meta.toLowerCase().includes(q));
+    const groupsRaw = [
+      { label: 'Actions', items: f([
+        { glyph: '▲', label: 'Deploy acme-shop → Vercel prod', meta: 'open · 58m', run: go.workspace },
+        { glyph: '▲', label: 'Deploy acme-shop → Vercel preview', meta: 'always', run: go.workspace },
+        st.codex === 'pending' ? { glyph: '◆', label: 'Grant Codex → Supabase prod', meta: 'needs you', run: openSession(sessions[1]) } : null,
+        { glyph: '+', label: 'Spawn agent in acme-shop', meta: 'claude ▾', run: go.agents },
+        { glyph: '■', label: 'New project…', meta: 'empty · template · agent', run: () => this.setState({ newOpen: true, paletteOpen: false }) }
+      ].filter(Boolean)) },
+      { label: 'Agents', items: f(sessions.filter(s => s.state !== 'done').map(s => ({ glyph: '●', label: s.agent + ' · ' + s.project, meta: s.state === 'needs' ? 'needs you' : s.state, run: openSession(s) }))) },
+      { label: 'Projects', items: f(this.projectsData.map(p => ({ glyph: '■', label: 'Switch to ' + p.name, meta: p.branch, run: () => this.setState({ project: p.name, screen: 'workspace', paletteOpen: false }) }))) }
+    ].filter(g => g.items.length);
+    let first = true;
+    const paletteGroups = groupsRaw.map(g => ({ ...g, items: g.items.map(i => { const o = { ...i, first }; first = false; return o; }) }));
+    const files = [['src/', '', false, 0], ['app.ts', '', false, 12], ['checkout.ts', '●', true, 12], ['cart.ts', '', false, 12], ['pay.ts', '●', false, 12], ['validate.ts', 'A', false, 12], ['tests/', '', false, 0], ['checkout.test.ts', '●', false, 12]].map(x => ({ name: x[0], mark: x[1], active: x[2], pad: x[3] + 'px' }));
+    const activity = [
+      { t: '2m', who: 'Claude', what: 'acme-shop · edited checkout.ts, pay.ts · 42 tests pass' },
+      { t: '3m', who: 'Codex', what: 'acme-shop · requested Supabase prod write' },
+      { t: '9m', who: 'Claude', what: 'blog-v2 · plan ready, 4 files' },
+      { t: '31m', who: 'Gemini', what: 'infra-tools · rewriting README' },
+      { t: '1h', who: 'system', what: 'revoked Gemini → AWS acme-prod (idle 1h)' },
+      { t: '1d', who: 'Cursor', what: 'acme-shop · PR #212 merged' }
+    ];
+    const protoScreens = ['home', 'workspace', 'agents', 'repo', 'approvals', 'settings'];
+    const win = this.chrome() === 'win';
+    const mfa = win ? 'Windows Hello' : 'Touch ID', mod = win ? 'Ctrl' : '⌘', keychainName = win ? 'Windows Credential Manager' : 'macOS Keychain', keychainShort = win ? 'Credential Manager' : 'Keychain';
+    const tog = (k) => () => this.setState(s => ({ [k]: !s[k] }));
+    const stateNav = [
+      { label: 'Onboarding', active: st.screen === 'onboarding', go: () => this.setState({ screen: 'onboarding', obStep: 1 }) },
+      { label: 'Diff review', active: st.screen === 'diff', go: go.diff },
+      { label: 'Connect target', active: st.connectOpen, go: () => this.setState({ connectOpen: true, connectStep: 'pick' }) },
+      { label: 'Spawn agent', active: st.spawnOpen, go: () => this.setState({ spawnOpen: true }) },
+      { label: 'New project', active: st.newOpen, go: () => this.setState({ newOpen: true }) },
+      { label: 'Empty states', active: st.emptyMode, go: tog('emptyMode') },
+      { label: 'Error states', active: st.errorMode, go: tog('errorMode') },
+      { label: 'Notification', active: st.toastOn, go: tog('toastOn') },
+      { label: 'Pop-out chat', active: st.popoutOn, go: tog('popoutOn') },
+      { label: 'Audit detail', active: st.auditSel !== null, go: () => this.setState({ screen: 'approvals', approvalsTab: 'Audit log', auditSel: 1 }) }
+    ];
+    const obSteps = ['Editor', 'Projects', 'Agents', 'Targets'].map((l, i) => ({ label: l, n: i + 1, active: st.obStep === i + 1 }));
+    const ideDefs = [
+      { name: 'VS Code', ver: win ? '1.98 · %LOCALAPPDATA%' : '1.98 · /Applications', imports: '14 recents · keybindings · theme' },
+      { name: 'Cursor', ver: '1.4', imports: '6 recents · keybindings' },
+      { name: 'JetBrains (WebStorm)', ver: '2026.2', imports: '3 recents' },
+      { name: 'Neovim', ver: win ? 'not found' : '0.11 · /opt/homebrew', imports: win ? '—' : 'recents via shada' }
+    ];
+    const obIdes = ideDefs.map(e => ({ ...e, on: st.ide === e.name, fallback: st.ide === e.name, role: st.ide === e.name ? 'Fallback · Open in' : 'Detected', pick: () => this.setState({ ide: e.name }) }));
+    const obRepos = [['~/code/acme-shop', 'github · main', true], ['~/code/blog-v2', 'github · feat/mdx', true], ['~/code/infra-tools', 'github · main', true], ['~/work/client-x', 'gitlab · main', true], ['~/code/side-api', 'no remote', true], ['~/Downloads/tmp-fork', 'no remote · 2y old', false]].map(r => ({ path: r[0], meta: r[1], on: r[2] }));
+    const obClis = [
+      { name: 'Claude Code', ver: 'claude 2.4.1', auth: 'signed in', bad: false },
+      { name: 'Codex', ver: st.errorMode ? 'not found on PATH' : 'codex 0.9.3', auth: st.errorMode ? 'Install →' : 'signed in', bad: st.errorMode },
+      { name: 'Gemini CLI', ver: 'gemini 1.2.0', auth: 'Sign in →', bad: false },
+      { name: 'Cursor agent', ver: 'cursor-agent 0.5.2', auth: 'signed in', bad: false },
+      { name: 'Shell', ver: win ? 'pwsh 7.4 · WSL available' : 'zsh 5.9', auth: '—', bad: false }
+    ];
+    const methodOf = (p) => p === 'AWS' || p === 'GCP' ? 'IAM / key' : p === 'SSH host' ? 'SSH' : 'OAuth';
+    const stepOf = (p) => p === 'AWS' || p === 'GCP' ? 'key' : p === 'SSH host' ? 'ssh' : 'oauth';
+    const providers = ['Vercel', 'AWS', 'GCP', 'Supabase', 'GitHub', 'SSH host'].map(p => ({ name: p, method: methodOf(p), active: st.provider === p, pick: () => this.setState({ provider: p, connectStep: stepOf(p) }), connect: () => this.setState({ connectOpen: true, provider: p, connectStep: stepOf(p) }) }));
+    const envs = ['prod', 'staging', 'preview'].map(e => ({ label: e, active: st.env === e, pick: () => this.setState({ env: e }) }));
+    const spawnAgents = obClis.map(c => ({ ...c, active: st.spawnAgent === c.name, pick: () => this.setState({ spawnAgent: c.name }) }));
+    const spawnSel = obClis.find(c => c.name === st.spawnAgent) || obClis[0];
+    const hunkSrc = [
+      { file: 'checkout.ts', range: '@@ -1,2 +1,3 @@', a: '  import { sum } from "./cart"', b: '+ import { validate } from "./validate"', c: '  ' },
+      { file: 'checkout.ts', range: '@@ -4,3 +5,5 @@', a: '  export async function checkout(cart) {', b: '+   validate(cart)', c: '    const total = sum(cart.items)' },
+      { file: 'validate.ts', range: '@@ -0,0 +1,31 @@', a: '  ', b: '+ export function validate(cart) {', c: '+   if (!cart.items.length) throw new CartError("empty")' }
+    ];
+    const hunks = hunkSrc.map((hk, i) => ({ ...hk, status: st.hunks[i], accepted: st.hunks[i] === 'accepted', rejected: st.hunks[i] === 'rejected', accept: () => this.setHunk(i, 'accepted'), reject: () => this.setHunk(i, 'rejected') }));
+    const cnt = (v) => st.hunks.filter(x => x === v).length;
+    const banners = st.errorMode ? [
+      { text: 'AWS acme-prod: credentials expired 2h ago. Agents requesting it are paused.', cta: 'Reconnect', go: () => this.setState({ connectOpen: true, provider: 'AWS', connectStep: 'key' }) },
+      { text: 'codex not found on PATH. 1 session cannot start.', cta: 'Install guide', go: () => this.setState({ screen: 'onboarding', obStep: 3 }) },
+      { text: 'fix/checkout conflicts with main in checkout.ts. Claude is paused until resolved.', cta: 'Resolve', go: go.repo }
+    ] : [];
+    const ad = st.auditSel !== null && audit[st.auditSel] ? audit[st.auditSel] : null;
+    const adRows = ad ? [['Actor', ad.who], ['Target', ad.target], ['Scope', ad.what.includes('deploy') ? 'deploy' : ad.what.includes('write') ? 'read, write' : 'read'], ['Duration', ad.what.includes('1h') ? '1h · expires 10:12' : ad.what.includes('auto') ? 'policy · single use' : '—'], ['Session', ad.who === 'system' ? '—' : ad.who.toLowerCase() + ' · acme-shop'], ['Worktree', ad.who === 'Claude' ? 'fix/checkout' : ad.who === 'Codex' ? 'test/flaky' : '—'], ['Triggered by', ad.who === 'system' ? 'idle timer' : ad.who === 'you' ? 'grant sheet' : '$ ' + (ad.what.includes('deploy') ? 'vercel deploy --prod' : 'gh pr create')], ['Policy', ad.what.includes('auto') ? '#1 auto-approve staging reads' : ad.what.includes('revoked') ? '#3 idle expiry' : '#2 ask + MFA']].map(r => ({ k: r[0], v: r[1] })) : [];
+    const newStarts = [
+      { id: 'empty', label: 'Empty folder', desc: 'Just git init and a README.' },
+      { id: 'template', label: 'Template', desc: 'Built-in stacks or repos tagged in your org.' },
+      { id: 'agent', label: 'Agent scaffolds it', desc: 'Describe it; the agent builds the skeleton and pauses for review.' }
+    ].map(s => ({ ...s, active: st.newStart === s.id, pick: () => this.setState({ newStart: s.id }) }));
+    return {
+      newOpen: st.newOpen, newStarts, newIsTemplate: st.newStart === 'template', newIsAgent: st.newStart === 'agent', newPath: win ? 'C:\\dev\\orders-service' : '~/code/orders-service',
+      newCta: st.newStart === 'agent' ? 'Create · spawn ' + spawnSel.name + ' · ' + mod + '⏎' : 'Create · ' + mod + '⏎',
+      openNew: () => this.setState({ newOpen: true }), closeNew: () => this.setState({ newOpen: false }), doNew: () => this.setState({ newOpen: false, screen: st.newStart === 'agent' ? 'workspace' : 'home' }),
+      mfa, mod, keychainName, keychainShort, stateNav, obSteps, obRepos, obClis, providers, envs, spawnAgents, hunks, banners, adRows,
+      isOnboarding: st.screen === 'onboarding', isDiff: st.screen === 'diff', obIs1: st.obStep === 1, obIs2: st.obStep === 2, obIs3: st.obStep === 3, obIs4: st.obStep === 4, obIdes, obIdeName: st.ide,
+      obNext: () => st.obStep < 4 ? this.setState({ obStep: st.obStep + 1 }) : this.setState({ screen: 'home' }), obBack: () => st.obStep > 1 ? this.setState({ obStep: st.obStep - 1 }) : null, obSkip: () => this.setState({ screen: 'home' }), obNextLabel: st.obStep < 4 ? 'Continue' : 'Finish',
+      connectOpen: st.connectOpen, connectIsPick: st.connectStep === 'pick', connectIsOauth: st.connectStep === 'oauth', connectIsKey: st.connectStep === 'key', connectIsSsh: st.connectStep === 'ssh', connectStepLabel: st.connectStep === 'pick' ? 'choose provider' : methodOf(st.provider), providerName: st.provider,
+      openConnect: () => this.setState({ connectOpen: true, connectStep: 'pick' }), closeConnect: () => this.setState({ connectOpen: false }), connectBack: () => this.setState({ connectStep: 'pick' }),
+      spawnOpen: st.spawnOpen, spawnName: spawnSel.name, spawnBlocked: spawnSel.bad, spawnBranch: 'agent/' + spawnSel.name.toLowerCase().split(' ')[0] + '-' + Math.abs(spawnSel.name.length * 37 % 900 + 100),
+      openSpawn: () => this.setState({ spawnOpen: true }), closeSpawn: () => this.setState({ spawnOpen: false }), doSpawn: () => this.setState({ spawnOpen: false, screen: 'workspace' }),
+      isEmpty: st.emptyMode, toastOn: st.toastOn, closeToast: () => this.setState({ toastOn: false }), toastReview: () => this.setState({ toastOn: false, screen: 'workspace', project: 'acme-shop', session: 'codex', grantOpen: st.codex === 'pending' }),
+      popoutOn: st.popoutOn, togglePopout: tog('popoutOn'),
+      hunkSummary: cnt('accepted') + ' accepted · ' + cnt('rejected') + ' rejected · ' + cnt('pending') + ' pending', acceptAll: () => this.setState({ hunks: ['accepted', 'accepted', 'accepted'] }), rejectAll: () => this.setState({ hunks: ['rejected', 'rejected', 'rejected'] }),
+      auditOpen: !!ad, ad: ad || {}, closeAudit: () => this.setState({ auditSel: null }),
+      go, nav, projects, counters, columns, sessionTabs, durations, lanes, requests: st.emptyMode ? [] : requests, policies, approvalTabs, audit, targets: st.emptyMode ? [] : targets, files, activity: st.emptyMode ? [] : activity, paletteGroups,
+      protoNav: protoScreens.map(k => ({ label: labels[k], active: st.screen === k, go: go[k] })),
+      isMac: this.chrome() === 'mac', isWin: this.chrome() === 'win',
+      themeName: this.theme(), chromeName: this.chrome(),
+      toggleTheme: () => this.setState({ themeOverride: this.theme() === 'dark' ? 'light' : 'dark' }),
+      toggleChrome: () => this.setState({ chromeOverride: this.chrome() === 'mac' ? 'win' : 'mac' }),
+      isHome: st.screen === 'home', isWorkspace: st.screen === 'workspace', isAgents: st.screen === 'agents', isRepo: st.screen === 'repo', isApprovals: st.screen === 'approvals', isSettings: st.screen === 'settings',
+      projectName: st.emptyMode ? 'No project' : st.project, branchName: cur && !st.emptyMode ? cur.branch : '', needsCount: String(needs.length).padStart(2, '0'), lockedCount: st.codex === 'granted' ? '01' : '02', activeGrants: st.codex === 'granted' ? 3 : 2,
+      chatIsClaude: activeSession.id !== 'codex', chatIsCodex: activeSession.id === 'codex', chatAgent: activeSession.agent,
+      chatMeta: activeSession.agent.toLowerCase() + ' · ' + activeSession.branch + ' · ' + activeSession.age + (activeSession.state === 'needs' ? ' · waiting on you' : ''),
+      codexPending: st.codex === 'pending', codexGranted: st.codex === 'granted', codexDenied: st.codex === 'denied',
+      grantOpen: st.grantOpen, openGrant: () => this.setState({ grantOpen: true }),
+      grant: () => this.setState({ grantOpen: false, codex: 'granted' }), deny: () => this.setState({ grantOpen: false, codex: 'denied' }),
+      durationLabel: st.duration,
+      approvalsInbox: st.approvalsTab === 'Inbox', approvalsPolicies: st.approvalsTab === 'Policies', approvalsAudit: st.approvalsTab === 'Audit log',
+      settingsApp: settingsApp.map(mk), settingsProject: settingsProject.map(mk), settingsSection: st.settingsNav,
+      settingsScope: settingsProject.includes(st.settingsNav) ? 'project · ' + st.project : 'app', settingsIsTargets: st.settingsNav === 'Targets', settingsIsOther: st.settingsNav !== 'Targets', settingsRows,
+      paletteOpen: st.paletteOpen, openPalette: () => this.setState({ paletteOpen: true, q: '' }), closePalette: () => this.setState({ paletteOpen: false }), stop: (e) => e.stopPropagation(),
+      q: st.q, setQ: (e) => this.setState({ q: e.target.value })
+    };
+  }
+}
+</script>
+</body>
+</html>

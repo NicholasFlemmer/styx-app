@@ -1,0 +1,19 @@
+{
+  "name": "@styx/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/styx.js --target=node22"
+  },
+  "dependencies": {
+    "@styx/broker": "workspace:*",
+    "@styx/core": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

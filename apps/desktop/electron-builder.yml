@@ -1,0 +1,27 @@
+appId: dev.styx.app
+productName: Styx
+directories:
+  buildResources: build
+  output: release
+files:
+  - out/**
+  - resources/**
+  - package.json
+asarUnpack:
+  - "**/*.node"
+  - "node_modules/node-pty/**"
+  - "resources/cli/**"
+mac:
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  target: [dmg, zip]
+win:
+  target: [nsis]
+nsis:
+  oneClick: false
+  perMachine: false
+protocols:
+  - name: Styx
+    schemes: [styx]

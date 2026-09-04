@@ -1,0 +1,17 @@
+/* The two selection vocabularies (spec §2): data-inv = current/inverted, data-on = accent/armed. */
+@layer state {
+  [data-inv='true'] {
+    background: var(--tx);
+    color: var(--bg);
+  }
+  [data-on='true'] {
+    background: var(--ac);
+    color: var(--acx);
+    border-color: var(--ac);
+  }
+  [data-inv='true'] [data-muted],
+  [data-on='true'] [data-muted] {
+    color: inherit;
+    opacity: 0.7;
+  }
+}

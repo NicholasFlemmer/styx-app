@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Caveat:wght@600&display=swap" rel="stylesheet"><style>body{margin:0;background:#f0eee9;font-family:'Patrick Hand',system-ui,sans-serif;color:#1a1a1a}a{color:#2a78d6}a:hover{color:#1a5cb0}.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font:600 13px/1.2 system-ui,sans-serif;color:#1a1a1a}.dv-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start;margin-bottom:36px}.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px;width:560px}.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 12px/1.3 system-ui,sans-serif;color:rgba(0,0,0,.6)}.dv-card{max-width:100%;background:#fff;border:1.5px solid #222;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden}.dv-opt:target .dv-oid{background:#2a78d6;color:#fff}.dv-next{margin:22px 0 0;font:12px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.5)}.dv-row{font:600 12px/1 system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:rgba(0,0,0,.45);margin:0 0 14px}.dv-note{font:15px/1.35 'Patrick Hand',sans-serif;color:#333;margin:0}</style></helmet>
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Main workspace — embedded editor + agent chat window in one view</span></div>
+<div class="dv-opts">
+<div class="dv-opt" id="2a" style="width:760px"><div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Editor centre, agent chat panel right (VS Code + Claude extension layout)</div>
+<div class="dv-card" style="width:760px;height:480px;display:flex;flex-direction:column">
+ <div style="height:28px;border-bottom:1.5px solid #222;display:flex;align-items:center;gap:6px;padding:0 8px;font-size:12px"><span style="width:8px;height:8px;border-radius:50%;border:1.5px solid #222"></span><span style="width:8px;height:8px;border-radius:50%;border:1.5px solid #222"></span><span style="width:8px;height:8px;border-radius:50%;border:1.5px solid #222"></span><span style="margin-left:10px;border:1.5px solid #222;border-radius:3px;padding:0 8px;background:#fff3a3">acme-shop ▾</span><span style="color:#777">fix/checkout</span><span style="margin-left:auto;border:1.5px solid #222;border-radius:3px;padding:0 8px;color:#777">⌘K</span><span>🔒 2</span></div>
+ <div style="flex:1;display:flex;min-height:0">
+  <div style="width:44px;border-right:1.5px solid #222;display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px 0"><span style="width:26px;height:26px;border:1.5px solid #222;border-radius:6px;background:#fff3a3"></span><span style="width:26px;height:26px;border:1.5px solid #222;border-radius:6px;position:relative"><span style="position:absolute;right:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:#222"></span></span><span style="width:26px;height:26px;border:1.5px solid #222;border-radius:6px"></span><span style="width:26px;height:26px;border:1.5px dashed #222;border-radius:6px"></span></div>
+  <div style="width:130px;border-right:1.5px solid #222;padding:8px;font-size:12px;line-height:1.6"><div style="font-size:10px;color:#777;letter-spacing:.08em">FILES</div>src/<br>&nbsp;app.ts<br>&nbsp;<span style="background:#fff3a3">checkout.ts ●</span><br>&nbsp;cart.ts<br>&nbsp;pay.ts<br>tests/<br><div style="font-size:10px;color:#777;letter-spacing:.08em;margin-top:10px">CHANGES · 3</div>M checkout.ts<br>M pay.ts<br>A validate.ts</div>
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+   <div style="height:24px;border-bottom:1.5px solid #222;display:flex;font-size:11px"><span style="padding:0 10px;display:flex;align-items:center;border-right:1.5px solid #222;background:#fff3a3">checkout.ts</span><span style="padding:0 10px;display:flex;align-items:center;border-right:1.5px solid #222">pay.ts</span><span style="padding:0 10px;display:flex;align-items:center;border-right:1.5px solid #222;color:#777">validate.ts · Claude</span></div>
+   <div style="flex:1;padding:10px;font-family:monospace;font-size:11px;line-height:1.75;overflow:hidden">import { validate } from './validate'<br><br>export async function checkout(cart) {<br><span style="background:#e4f0ff;display:block">+ &nbsp;validate(cart) &nbsp;<span style="color:#777">// ● Claude · 2m</span></span>&nbsp;&nbsp;const total = sum(cart.items)<br>&nbsp;&nbsp;const receipt = await pay(total)<br><span style="background:#e4f0ff;display:block">+ &nbsp;audit(receipt)</span>&nbsp;&nbsp;return receipt<br>}<br><br><span style="border:1.5px dashed #222;padding:2px 6px;font-family:'Patrick Hand';font-size:12px">Accept all · Review 3 hunks · Reject</span></div>
+   <div style="height:90px;border-top:1.5px solid #222;background:#111;color:#bbb;font-family:monospace;font-size:10px;padding:6px 8px;line-height:1.5"><span style="color:#777">TERMINAL · fix/checkout</span><br>$ npx vitest<br>✓ 42 passed (1.2s)<br>$ ▮</div>
+   <div style="height:22px;border-top:1.5px solid #222;font-size:11px;padding:0 8px;display:flex;align-items:center;gap:12px;color:#777">fix/checkout · Vercel 🔓 58m · Supabase 🔒 · ✓ 42 tests</div>
+  </div>
+  <div style="width:270px;border-left:1.5px solid #222;display:flex;flex-direction:column">
+   <div style="height:24px;border-bottom:1.5px solid #222;display:flex;align-items:center;font-size:11px"><span style="padding:0 8px;height:100%;display:flex;align-items:center;border-right:1.5px solid #222;background:#fff3a3">● Claude</span><span style="padding:0 8px;height:100%;display:flex;align-items:center;border-right:1.5px solid #222">● Codex <b>!</b></span><span style="padding:0 8px;height:100%;display:flex;align-items:center;border-right:1.5px solid #222;color:#777">○ Gemini</span><span style="padding:0 6px">+</span><span style="margin-left:auto;padding:0 6px;color:#777">⤢</span></div>
+   <div style="flex:1;padding:8px;font-size:11.5px;line-height:1.45;display:flex;flex-direction:column;gap:8px;overflow:hidden">
+    <div style="align-self:flex-end;max-width:85%;border:1.5px solid #222;border-radius:8px 8px 2px 8px;padding:5px 8px;background:#fff3a3">Add input validation to checkout and cover it with tests.</div>
+    <div style="max-width:92%;border:1.5px solid #222;border-radius:8px 8px 8px 2px;padding:5px 8px">I read <span style="font-family:monospace">checkout.ts</span> and <span style="font-family:monospace">pay.ts</span>. Plan: new <span style="font-family:monospace">validate.ts</span>, call it before summing, add 4 tests.<br><span style="font-size:10px;color:#777">▸ 3 files changed · view diff</span></div>
+    <div style="max-width:92%;border:1.5px solid #222;border-radius:8px 8px 8px 2px;padding:5px 8px">Ran <span style="font-family:monospace">vitest</span> — 42 passed ✓<br>Want me to open a PR against main?<br><div style="display:flex;gap:4px;margin-top:4px"><span style="border:1.5px solid #222;border-radius:3px;padding:0 6px;background:#222;color:#fff">Yes</span><span style="border:1.5px solid #222;border-radius:3px;padding:0 6px">No</span><span style="border:1.5px solid #222;border-radius:3px;padding:0 6px">Edit plan</span></div></div>
+    <div style="align-self:flex-end;max-width:85%;border:1.5px dashed #222;border-radius:8px 8px 2px 8px;padding:5px 8px;color:#999">typing…</div>
+   </div>
+   <div style="border-top:1.5px solid #222;padding:6px 8px;font-size:11px;display:flex;flex-direction:column;gap:4px"><div style="border:1.5px solid #222;border-radius:4px;padding:4px 6px;color:#999;min-height:28px">Message Claude… &nbsp;<span style="font-size:10px">@file &nbsp;/command</span></div><div style="display:flex;gap:6px;color:#777;font-size:10px"><span>Model ▾</span><span>Auto-approve edits ☐</span><span style="margin-left:auto">↵ send</span></div></div>
+  </div>
+ </div>
+</div>
+<p class="dv-note">The default working screen. Chat panel on the right is the back-and-forth with the agent: your messages, its plan, inline yes/no decisions, diff links, and a prompt box with @file and /commands. Tabs at the top switch between agent sessions in this project (Codex shows “!” = needs you). Terminal stays a bottom panel in the editor. ⤢ pops the chat out to its own window or the tiled board (<a class="dv-oid" href="#1d">1d</a>).</p></div>
+
+<div class="dv-opt" id="2b" style="width:760px"><div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>Chat-first: agent conversations centre, editor opens as a drawer from the chat</div>
+<div class="dv-card" style="width:760px;height:480px;display:flex;flex-direction:column">
+ <div style="height:28px;border-bottom:1.5px solid #222;display:flex;align-items:center;gap:6px;padding:0 8px;font-size:12px"><span style="width:8px;height:8px;border-radius:50%;border:1.5px solid #222"></span><span style="width:8px;height:8px;border-radius:50%;border:1.5px solid #222"></span><span style="width:8px;height:8px;border-radius:50%;border:1.5px solid #222"></span><span style="margin-left:10px;border:1.5px solid #222;border-radius:3px;padding:0 8px">All projects ▾</span><span style="color:#777">5 sessions · 1 needs you</span><span style="margin-left:auto;border:1.5px solid #222;border-radius:3px;padding:0 8px;color:#777">⌘K</span></div>
+ <div style="flex:1;display:flex;min-height:0">
+  <div style="width:170px;border-right:1.5px solid #222;padding:8px;font-size:12px;display:flex;flex-direction:column;gap:4px">
+   <div style="font-size:10px;color:#777;letter-spacing:.08em">ACME-SHOP</div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:4px 6px;background:#fff3a3">● Claude · fix/checkout<br><span style="color:#555">asking: open PR?</span></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:4px 6px">● Codex · test/flaky<br><span style="color:#555"><b>needs grant</b> · Supabase</span></div>
+   <div style="font-size:10px;color:#777;letter-spacing:.08em;margin-top:6px">BLOG-V2</div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:4px 6px">● Claude · feat/mdx<br><span style="color:#555">working · 3m</span></div>
+   <div style="font-size:10px;color:#777;letter-spacing:.08em;margin-top:6px">INFRA-TOOLS</div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:4px 6px;color:#777">○ Gemini · idle</div>
+   <div style="border:1.5px dashed #222;border-radius:4px;padding:4px 6px;color:#777;margin-top:auto">+ new session ▾</div>
+  </div>
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+   <div style="height:26px;border-bottom:1.5px solid #222;display:flex;align-items:center;gap:8px;padding:0 10px;font-size:12px"><b>Claude</b><span style="color:#777">acme-shop · fix/checkout · 14m</span><span style="margin-left:auto;border:1.5px solid #222;border-radius:3px;padding:0 6px">Open editor ▸</span></div>
+   <div style="flex:1;padding:12px 16px;font-size:12px;line-height:1.5;display:flex;flex-direction:column;gap:10px;overflow:hidden">
+    <div style="align-self:flex-end;max-width:70%;border:1.5px solid #222;border-radius:8px 8px 2px 8px;padding:6px 10px;background:#fff3a3">Add input validation to checkout and cover it with tests.</div>
+    <div style="max-width:78%;border:1.5px solid #222;border-radius:8px 8px 8px 2px;padding:6px 10px">Plan: new <span style="font-family:monospace">validate.ts</span>, call before summing, 4 tests. Proceeding.</div>
+    <div style="max-width:78%;border:1.5px solid #222;border-radius:4px;padding:6px 10px;font-family:monospace;font-size:10.5px;background:#f6f6f6">▸ validate.ts &nbsp;+31 &nbsp;&nbsp; ▸ checkout.ts &nbsp;+2 −0 &nbsp;&nbsp; ▸ checkout.test.ts &nbsp;+44 &nbsp;&nbsp;<span style="font-family:'Patrick Hand';font-size:12px;border:1.5px solid #222;border-radius:3px;padding:0 5px">Review in editor</span></div>
+    <div style="max-width:78%;border:1.5px solid #222;border-radius:8px 8px 8px 2px;padding:6px 10px">Ran vitest — 42 passed ✓. Want me to open a PR against main?<div style="display:flex;gap:4px;margin-top:5px"><span style="border:1.5px solid #222;border-radius:3px;padding:0 8px;background:#222;color:#fff">Yes</span><span style="border:1.5px solid #222;border-radius:3px;padding:0 8px">No</span><span style="border:1.5px solid #222;border-radius:3px;padding:0 8px">Edit plan</span></div></div>
+   </div>
+   <div style="border-top:1.5px solid #222;padding:8px 12px;font-size:12px"><div style="border:1.5px solid #222;border-radius:4px;padding:6px 8px;color:#999;min-height:34px">Message Claude… <span style="font-size:10px">@file &nbsp;/command &nbsp;⌘↵ send</span></div></div>
+  </div>
+  <div style="width:230px;border-left:1.5px solid #222;display:flex;flex-direction:column;background:#fafafa">
+   <div style="height:26px;border-bottom:1.5px solid #222;display:flex;align-items:center;padding:0 8px;font-size:11px;gap:6px">checkout.ts <span style="color:#777">· diff</span><span style="margin-left:auto">✕</span></div>
+   <div style="flex:1;padding:8px;font-family:monospace;font-size:10px;line-height:1.7;overflow:hidden">export async function checkout(cart) {<br><span style="background:#e4f0ff;display:block">+ validate(cart)</span>&nbsp; const total = sum(…)<br>&nbsp; const receipt = await pay(total)<br><span style="background:#e4f0ff;display:block">+ audit(receipt)</span>&nbsp; return receipt<br>}</div>
+   <div style="border-top:1.5px solid #222;padding:6px 8px;font-size:11px;display:flex;gap:4px"><span style="border:1.5px solid #222;border-radius:3px;padding:0 6px">Accept</span><span style="border:1.5px solid #222;border-radius:3px;padding:0 6px">Reject</span><span style="margin-left:auto;border:1.5px solid #222;border-radius:3px;padding:0 6px">Full editor ⤢</span></div>
+  </div>
+ </div>
+</div>
+<p class="dv-note">Inverts <a class="dv-oid" href="#2a">2a</a>: the conversation is the main surface, sessions across all projects are listed left (like a messaging app), and code appears as a diff drawer on the right when the agent touches files. “Full editor” expands the drawer into the <a class="dv-oid" href="#2a">2a</a> layout. Fits founders and supervisors; devs who type code all day will want <a class="dv-oid" href="#2a">2a</a> as default with this as a mode.</p></div>
+</div>
+<p class="dv-next">Try next: "make <a class="dv-oid" href="#2a">2a</a> the default and <a class="dv-oid" href="#2b">2b</a> a toggle" · "show the grant sheet from <a class="dv-oid" href="#1e">1e</a> appearing inside <a class="dv-oid" href="#2a">2a</a>'s chat" · "Windows title bar variant"</p>
+</section>
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Project · Agent · Repo switcher — 7 screens, 2 directions each. Research memo: <a href="UX Research Memo.dc.html">UX Research Memo</a></span></div>
+
+<p class="dv-row">Project switcher / home</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1a"><div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Persistent rail + project hub (Notion-style sidebar)</div>
+<div class="dv-card" style="width:560px;height:360px;display:flex;flex-direction:column">
+ <div style="height:26px;border-bottom:1.5px solid #222;display:flex;align-items:center;gap:6px;padding:0 8px"><span style="width:8px;height:8px;border-radius:50%;border:1.5px solid #222"></span><span style="width:8px;height:8px;border-radius:50%;border:1.5px solid #222"></span><span style="width:8px;height:8px;border-radius:50%;border:1.5px solid #222"></span><span style="margin-left:auto;font-size:13px;border:1.5px solid #222;border-radius:3px;padding:0 6px">⌘K search projects, agents, targets…</span></div>
+ <div style="flex:1;display:flex">
+  <div style="width:48px;border-right:1.5px solid #222;display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 0">
+   <span style="width:28px;height:28px;border:1.5px solid #222;border-radius:6px;background:#fff3a3"></span><span style="width:28px;height:28px;border:1.5px solid #222;border-radius:6px;position:relative"><span style="position:absolute;right:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:#222"></span></span><span style="width:28px;height:28px;border:1.5px solid #222;border-radius:6px"></span><span style="width:28px;height:28px;border:1.5px solid #222;border-radius:6px"></span><span style="width:28px;height:28px;border:1.5px dashed #222;border-radius:6px;font-size:16px;display:flex;align-items:center;justify-content:center">+</span>
+   <span style="margin-top:auto;width:28px;height:28px;border:1.5px solid #222;border-radius:50%"></span>
+  </div>
+  <div style="width:150px;border-right:1.5px solid #222;padding:10px;font-size:14px;line-height:1.7">
+   <div style="font-family:Caveat;font-size:20px;font-weight:600">acme-shop</div>
+   <div style="background:#fff3a3">▸ Overview</div><div>▸ Agents <span style="float:right">3●</span></div><div>▸ Repo · main</div><div>▸ Targets <span style="float:right">2🔒</span></div><div>▸ Settings</div>
+   <div style="margin-top:14px;font-size:12px;color:#777">RECENT</div><div>blog-v2</div><div>infra-tools</div>
+  </div>
+  <div style="flex:1;padding:12px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;gap:10px;font-size:13px">
+   <div style="grid-column:1/3;display:flex;gap:8px;align-items:center"><span style="font-family:Caveat;font-size:22px;font-weight:600">acme-shop</span><span style="border:1.5px solid #222;border-radius:10px;padding:0 8px">main · 2 worktrees</span><span style="margin-left:auto;border:1.5px solid #222;border-radius:3px;padding:0 8px">Open editor →</span></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:8px"><b>Agents</b><div>● Claude — fixing checkout</div><div>● Codex — tests <i>(needs you)</i></div><div>○ Gemini — idle</div></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:8px"><b>Targets</b><div>🔒 Vercel prod — granted 2h</div><div>🔒 Supabase — locked</div><div>🔓 GitHub — persistent</div></div>
+   <div style="grid-column:1/3;border:1.5px solid #222;border-radius:4px;padding:8px;background:repeating-linear-gradient(45deg,#eee 0 4px,#fff 4px 8px);font-family:monospace;font-size:11px">activity feed / recent commits / agent log</div>
+  </div>
+ </div>
+</div>
+<p class="dv-note">Always-visible rail = zero-cost awareness of which project has agents waiting (dot badge). Hub summarises the three primitives (agents, repo, targets) before you open the editor. Cost: 200px of permanent chrome.</p></div>
+
+<div class="dv-opt" id="1b"><div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Overlay switcher (⌘P) over the editor — editor stays primary</div>
+<div class="dv-card" style="width:560px;height:360px;display:flex;flex-direction:column;position:relative">
+ <div style="height:26px;border-bottom:1.5px solid #222;display:flex;align-items:center;gap:6px;padding:0 8px"><span style="width:8px;height:8px;border-radius:50%;border:1.5px solid #222"></span><span style="width:8px;height:8px;border-radius:50%;border:1.5px solid #222"></span><span style="width:8px;height:8px;border-radius:50%;border:1.5px solid #222"></span><span style="font-size:13px;margin-left:8px;border-bottom:2px solid #222">acme-shop ▾</span><span style="font-size:13px;margin-left:12px;color:#777">main</span></div>
+ <div style="flex:1;display:flex;opacity:.35">
+  <div style="width:130px;border-right:1.5px solid #222;padding:8px;font-size:12px;line-height:1.6">src/<br>&nbsp;&nbsp;app.ts<br>&nbsp;&nbsp;checkout.ts<br>&nbsp;&nbsp;cart.ts<br>tests/</div>
+  <div style="flex:1;padding:8px;font-family:monospace;font-size:11px;line-height:1.7">export async function checkout(cart) {<br>&nbsp;&nbsp;const total = sum(cart.items)<br>&nbsp;&nbsp;…</div>
+  <div style="width:140px;border-left:1.5px solid #222;background:#111;color:#ddd;font-family:monospace;font-size:10px;padding:6px">$ claude<br>&gt; fixing checkout…</div>
+ </div>
+ <div style="position:absolute;left:70px;top:50px;width:420px;border:1.5px solid #222;border-radius:8px;background:#fff;box-shadow:4px 4px 0 #222;font-size:13px">
+  <div style="border-bottom:1.5px solid #222;padding:8px 10px">🔍 switch to… <span style="color:#999">acme</span></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:10px">
+   <div style="border:1.5px solid #222;border-radius:5px;padding:6px;background:#fff3a3"><b>acme-shop</b><br>main · 3 agents ●<br>Vercel 🔒 2h</div>
+   <div style="border:1.5px solid #222;border-radius:5px;padding:6px"><b>blog-v2</b><br>feat/mdx · 1 agent <i>waiting</i><br>—</div>
+   <div style="border:1.5px solid #222;border-radius:5px;padding:6px"><b>infra-tools</b><br>main · idle<br>AWS 🔒</div>
+   <div style="border:1.5px solid #222;border-radius:5px;padding:6px"><b>client-x</b><br>2 worktrees<br>GCP locked</div>
+   <div style="border:1.5px solid #222;border-radius:5px;padding:6px"><b>side-api</b><br>idle<br>—</div>
+   <div style="border:1.5px dashed #222;border-radius:5px;padding:6px;color:#777">+ open folder / clone</div>
+  </div>
+  <div style="border-top:1.5px solid #222;padding:6px 10px;font-size:11px;color:#777">↵ switch · ⌘↵ new window · ⇥ agents</div>
+ </div>
+</div>
+<p class="dv-note">Maximises editor real estate; switching is a keyboard gesture, not a place. Tiles carry live agent + target state so you can triage without switching. Risk: waiting agents in other projects are invisible until you open the overlay (needs a small dock/tray badge).</p></div>
+</div>
+
+<p class="dv-row">Agent session board</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1c"><div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Kanban by attention state — cross-project</div>
+<div class="dv-card" style="width:560px;height:360px;display:flex;flex-direction:column">
+ <div style="height:26px;border-bottom:1.5px solid #222;display:flex;align-items:center;gap:10px;padding:0 10px;font-size:13px"><b>Agents</b><span style="color:#777">all projects ▾</span><span style="margin-left:auto;border:1.5px solid #222;border-radius:3px;padding:0 6px">+ New session</span></div>
+ <div style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:10px;font-size:12px">
+  <div style="display:flex;flex-direction:column;gap:6px"><div style="font-weight:700;background:#fff3a3;padding:2px 4px">NEEDS YOU · 2</div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px"><b>Codex</b> · acme-shop<br>“Run tests on prod DB?”<br><span style="border:1.5px solid #222;border-radius:3px;padding:0 4px">Approve</span> <span style="border:1.5px solid #222;border-radius:3px;padding:0 4px">Deny</span></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px"><b>Claude</b> · blog-v2<br>Plan ready — 4 files<br><span style="border:1.5px solid #222;border-radius:3px;padding:0 4px">Review</span></div></div>
+  <div style="display:flex;flex-direction:column;gap:6px"><div style="font-weight:700;padding:2px 4px">WORKING · 3</div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px"><b>Claude</b> · acme-shop<br>fix/checkout · 12m<br><span style="display:block;height:4px;background:repeating-linear-gradient(90deg,#222 0 6px,#fff 6px 9px)"></span></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px"><b>Gemini</b> · infra-tools<br>docs · 3m</div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px"><b>shell</b> · client-x<br>npm run build</div></div>
+  <div style="display:flex;flex-direction:column;gap:6px"><div style="font-weight:700;padding:2px 4px;color:#777">DONE · 5</div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px;color:#777"><b>Cursor</b> · acme-shop<br>PR #212 opened ✓</div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px;color:#777"><b>Claude</b> · side-api<br>2 commits</div>
+   <div style="border:1.5px dashed #222;border-radius:4px;padding:6px;color:#999">…</div></div>
+ </div>
+</div>
+<p class="dv-note">Organises by what the human must do, not by tool. “Needs you” is the inbox; approve/deny is one click and feeds the auth gate. Good for founders supervising many agents; loses terminal fidelity.</p></div>
+
+<div class="dv-opt" id="1d"><div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>Tiled live terminals (tmux-like) with agent headers</div>
+<div class="dv-card" style="width:560px;height:360px;display:flex;flex-direction:column">
+ <div style="height:26px;border-bottom:1.5px solid #222;display:flex;align-items:center;gap:10px;padding:0 10px;font-size:13px"><b>Agents</b><span style="border:1.5px solid #222;border-radius:3px;padding:0 6px;background:#fff3a3">acme-shop</span><span style="border:1.5px solid #222;border-radius:3px;padding:0 6px">all</span><span style="margin-left:auto;color:#777">layout: 2×2 ▾</span></div>
+ <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:6px;padding:6px">
+  <div style="border:1.5px solid #222;border-radius:4px;display:flex;flex-direction:column;overflow:hidden"><div style="font-size:11px;padding:2px 6px;border-bottom:1.5px solid #222;display:flex;gap:6px">● Claude · fix/checkout <span style="margin-left:auto">⤢</span></div><div style="flex:1;background:#111;color:#ccc;font-family:monospace;font-size:9px;padding:4px;line-height:1.5">&gt; reading checkout.ts<br>&gt; editing 3 files…<br>&gt; running vitest ✓</div></div>
+  <div style="border:2.5px solid #222;border-radius:4px;display:flex;flex-direction:column;overflow:hidden"><div style="font-size:11px;padding:2px 6px;border-bottom:1.5px solid #222;background:#fff3a3;display:flex;gap:6px">● Codex · tests · <b>waiting</b></div><div style="flex:1;background:#111;color:#ccc;font-family:monospace;font-size:9px;padding:4px;line-height:1.5">? needs SUPABASE_URL (prod)<br><span style="background:#fff3a3;color:#111;padding:0 3px">[grant 1h] [grant once] [deny]</span></div></div>
+  <div style="border:1.5px solid #222;border-radius:4px;display:flex;flex-direction:column;overflow:hidden"><div style="font-size:11px;padding:2px 6px;border-bottom:1.5px solid #222">○ Gemini · idle</div><div style="flex:1;background:#111;color:#666;font-family:monospace;font-size:9px;padding:4px">$ _</div></div>
+  <div style="border:1.5px dashed #222;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#777">+ spawn agent ▾<br></div>
+ </div>
+ <div style="height:22px;border-top:1.5px solid #222;font-size:11px;padding:0 8px;display:flex;align-items:center;gap:12px;color:#777">⌘1–4 focus · ⌘⇧F zoom pane · drag to reorder</div>
+</div>
+<p class="dv-note">Power users keep the raw stream; the gate prompt is inline in the pane where the agent asked. Attention is signalled by the pane header (highlighted). Scales poorly past ~6 sessions — needs a “stack” mode.</p></div>
+</div>
+
+<p class="dv-row">Auth gate &amp; approvals</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1e"><div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>Per-project vault + in-context grant sheet</div>
+<div class="dv-card" style="width:560px;height:360px;display:flex;flex-direction:column;position:relative">
+ <div style="height:26px;border-bottom:1.5px solid #222;display:flex;align-items:center;padding:0 10px;font-size:13px"><b>acme-shop · Targets</b></div>
+ <div style="flex:1;display:flex">
+  <div style="flex:1;padding:10px;font-size:13px;display:flex;flex-direction:column;gap:6px">
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px;display:flex;gap:8px"><span>▲</span><b>Vercel</b> prod <span style="margin-left:auto;background:#fff3a3">🔓 granted · 1h 42m left</span></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px;display:flex;gap:8px"><span>▲</span><b>Vercel</b> preview <span style="margin-left:auto">🔓 always (read/deploy)</span></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px;display:flex;gap:8px"><span>◆</span><b>Supabase</b> prod db <span style="margin-left:auto">🔒 locked · ask each time</span></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px;display:flex;gap:8px"><span>☁</span><b>AWS</b> acme-prod <span style="margin-left:auto">🔒 locked · needs MFA</span></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px;display:flex;gap:8px"><span>◉</span><b>GitHub</b> acme/shop <span style="margin-left:auto">🔓 persistent</span></div>
+   <div style="border:1.5px dashed #222;border-radius:4px;padding:6px;color:#777">+ connect target (OAuth / key / SSH)</div>
+   <div style="margin-top:auto;font-size:11px;color:#777">Secrets stored in OS keychain · never written to repo · audit log →</div>
+  </div>
+ </div>
+ <div style="position:absolute;right:0;top:26px;bottom:0;width:230px;border-left:1.5px solid #222;background:#fff;box-shadow:-4px 0 0 #222;padding:10px;font-size:12px;display:flex;flex-direction:column;gap:6px">
+  <div style="font-family:Caveat;font-size:19px;font-weight:600">Codex wants access</div>
+  <div>◆ Supabase <b>prod db</b></div>
+  <div style="font-family:monospace;font-size:10px;border:1.5px solid #222;padding:4px">“to run migration 0042 — read schema + apply”</div>
+  <div style="margin-top:4px">Scope</div>
+  <div>☑ read schema &nbsp; ☑ write &nbsp; ☐ delete</div>
+  <div>Duration</div>
+  <div><span style="border:1.5px solid #222;border-radius:10px;padding:0 6px">once</span> <span style="border:1.5px solid #222;border-radius:10px;padding:0 6px;background:#fff3a3">1h</span> <span style="border:1.5px solid #222;border-radius:10px;padding:0 6px">session</span> <span style="border:1.5px solid #222;border-radius:10px;padding:0 6px">always</span></div>
+  <div style="margin-top:auto;display:flex;gap:6px"><span style="flex:1;border:1.5px solid #222;border-radius:3px;text-align:center;background:#222;color:#fff">Grant</span><span style="flex:1;border:1.5px solid #222;border-radius:3px;text-align:center">Deny</span></div>
+ </div>
+</div>
+<p class="dv-note">Targets live with the project; a request slides in where you are, with the agent's stated reason, scope checkboxes and a time-box. Grants decay by default. Composio-style connection catalogue behind “+ connect”.</p></div>
+
+<div class="dv-opt" id="1f"><div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a>Global approval inbox + policy rules</div>
+<div class="dv-card" style="width:560px;height:360px;display:flex;flex-direction:column">
+ <div style="height:26px;border-bottom:1.5px solid #222;display:flex;align-items:center;gap:14px;padding:0 10px;font-size:13px"><b>Approvals</b><span style="border-bottom:2px solid #222">Inbox 3</span><span style="color:#777">Policies</span><span style="color:#777">Audit log</span></div>
+ <div style="flex:1;display:flex">
+  <div style="flex:1;padding:10px;font-size:12px;display:flex;flex-direction:column;gap:6px;border-right:1.5px solid #222">
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px;background:#fff3a3"><b>Codex</b> · acme-shop → Supabase prod <i>write</i><br><span style="color:#555">migration 0042 · 2m ago</span></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px"><b>Claude</b> · infra-tools → AWS acme-prod <i>read</i><br><span style="color:#555">list ECS services · 9m</span></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px"><b>Cursor</b> · blog-v2 → Vercel <i>deploy</i><br><span style="color:#555">preview deploy · 14m</span></div>
+   <div style="margin-top:auto;border-top:1.5px dashed #222;padding-top:6px;color:#777">Auto-approved today: 12 (preview deploys, GitHub reads)</div>
+  </div>
+  <div style="width:240px;padding:10px;font-size:12px;display:flex;flex-direction:column;gap:6px">
+   <div style="font-weight:700">Policy suggestions</div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px">Auto-approve <b>read</b> on any <b>staging</b> target<br><span style="border:1.5px solid #222;border-radius:3px;padding:0 4px">Enable</span></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px">Always ask + MFA for <b>prod write</b><br><span style="border:1.5px solid #222;border-radius:3px;padding:0 4px;background:#222;color:#fff">On</span></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px">Grants expire after <b>1h</b> idle<br><span style="border:1.5px solid #222;border-radius:3px;padding:0 4px;background:#222;color:#fff">On</span></div>
+   <div style="font-size:11px;color:#777;margin-top:auto">Policies are per-machine, exportable as JSON for teams.</div>
+  </div>
+ </div>
+</div>
+<p class="dv-note">Centralises the human-in-the-loop across projects; policies reduce prompt fatigue (the #1 failure mode of approval UIs — people start clicking “allow” reflexively). Fits infra engineers; less contextual than <a class="dv-oid" href="#1e">1e</a>.</p></div>
+</div>
+
+<p class="dv-row">Repo / branch view</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1g"><div class="dv-olabel"><a class="dv-oid" href="#1g">1g</a>Worktree lanes — one lane per branch, agent ownership shown</div>
+<div class="dv-card" style="width:560px;height:360px;display:flex;flex-direction:column">
+ <div style="height:26px;border-bottom:1.5px solid #222;display:flex;align-items:center;gap:10px;padding:0 10px;font-size:13px"><b>acme-shop · Repo</b><span style="color:#777">github.com/acme/shop</span><span style="margin-left:auto;border:1.5px solid #222;border-radius:3px;padding:0 6px">+ worktree</span></div>
+ <div style="flex:1;padding:10px;display:flex;flex-direction:column;gap:8px;font-size:12px">
+  <div style="border:1.5px solid #222;border-radius:4px;padding:6px;display:grid;grid-template-columns:120px 1fr 90px 90px;gap:8px;align-items:center"><b>main</b><span style="color:#555">you · clean · ↑0 ↓2</span><span>—</span><span style="border:1.5px solid #222;border-radius:3px;text-align:center">Open</span></div>
+  <div style="border:1.5px solid #222;border-radius:4px;padding:6px;display:grid;grid-template-columns:120px 1fr 90px 90px;gap:8px;align-items:center;background:#fff3a3"><b>fix/checkout</b><span>● Claude · +142 −38 · 3 files</span><span>PR #214 draft</span><span style="border:1.5px solid #222;border-radius:3px;text-align:center">Diff</span></div>
+  <div style="border:1.5px solid #222;border-radius:4px;padding:6px;display:grid;grid-template-columns:120px 1fr 90px 90px;gap:8px;align-items:center"><b>test/flaky</b><span>● Codex · waiting on grant</span><span>—</span><span style="border:1.5px solid #222;border-radius:3px;text-align:center">Diff</span></div>
+  <div style="border:1.5px solid #222;border-radius:4px;padding:6px;display:grid;grid-template-columns:120px 1fr 90px 90px;gap:8px;align-items:center;color:#777"><b>feat/promo</b><span>Cursor · merged ✓ yesterday</span><span>PR #212</span><span style="border:1.5px solid #222;border-radius:3px;text-align:center">Archive</span></div>
+  <div style="margin-top:auto;border:1.5px solid #222;border-radius:4px;padding:6px;background:repeating-linear-gradient(45deg,#eee 0 4px,#fff 4px 8px);font-family:monospace;font-size:10px;height:70px">diff preview of selected lane</div>
+ </div>
+</div>
+<p class="dv-note">Treats each agent as owning an isolated worktree — the pattern that prevents agents clobbering each other. Lane = branch + owner + PR state. Merge conflicts surface as a lane warning.</p></div>
+
+<div class="dv-opt" id="1h"><div class="dv-olabel"><a class="dv-oid" href="#1h">1h</a>Embedded editor with branch tabs + agent presence</div>
+<div class="dv-card" style="width:560px;height:360px;display:flex;flex-direction:column">
+ <div style="height:26px;border-bottom:1.5px solid #222;display:flex;align-items:center;gap:0;font-size:12px">
+  <span style="padding:0 10px;height:100%;display:flex;align-items:center;border-right:1.5px solid #222;background:#fff3a3">main · you</span><span style="padding:0 10px;height:100%;display:flex;align-items:center;border-right:1.5px solid #222">fix/checkout · ● Claude</span><span style="padding:0 10px;height:100%;display:flex;align-items:center;border-right:1.5px solid #222">test/flaky · ● Codex</span><span style="padding:0 8px">+</span>
+ </div>
+ <div style="flex:1;display:flex">
+  <div style="width:120px;border-right:1.5px solid #222;padding:8px;font-size:12px;line-height:1.6">src/<br>&nbsp;app.ts<br>&nbsp;<span style="background:#fff3a3">checkout.ts ●</span><br>&nbsp;cart.ts<br>tests/<br>&nbsp;checkout.test.ts</div>
+  <div style="flex:1;display:flex;flex-direction:column">
+   <div style="flex:1;padding:8px;font-family:monospace;font-size:11px;line-height:1.7">export async function checkout(cart) {<br><span style="background:#e4f0ff">+ &nbsp;validate(cart) // Claude, 2m ago</span><br>&nbsp;&nbsp;const total = sum(cart.items)<br>&nbsp;&nbsp;return pay(total)<br>}</div>
+   <div style="height:90px;border-top:1.5px solid #222;background:#111;color:#ccc;font-family:monospace;font-size:10px;padding:6px;line-height:1.5">● Claude (fix/checkout) — “Added validation; running tests”<br>&gt; vitest ✓ 42 passed<br>&gt; want me to open a PR? <span style="background:#fff3a3;color:#111">[yes] [no]</span></div>
+  </div>
+ </div>
+ <div style="height:20px;border-top:1.5px solid #222;font-size:11px;padding:0 8px;display:flex;align-items:center;gap:12px;color:#777">acme-shop · Vercel 🔓 1h · Supabase 🔒 · ⌘P switch</div>
+</div>
+<p class="dv-note">Closest to VS Code muscle memory: branch tabs replace file-only tabs, so switching worktree is switching tab. Agent presence in the gutter (“Claude, 2m ago”) works like multiplayer cursors. Status bar carries target lock state.</p></div>
+</div>
+
+<p class="dv-row">Onboarding</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1i"><div class="dv-olabel"><a class="dv-oid" href="#1i">1i</a>Three-step wizard: projects → agents → targets</div>
+<div class="dv-card" style="width:560px;height:360px;display:flex;flex-direction:column">
+ <div style="height:26px;border-bottom:1.5px solid #222"></div>
+ <div style="display:flex;justify-content:center;gap:18px;padding:14px;font-size:12px"><span><b style="border:1.5px solid #222;border-radius:50%;padding:0 6px;background:#222;color:#fff">1</b> Projects</span><span style="color:#777"><b style="border:1.5px solid #222;border-radius:50%;padding:0 6px">2</b> Agents</span><span style="color:#777"><b style="border:1.5px solid #222;border-radius:50%;padding:0 6px">3</b> Targets</span></div>
+ <div style="flex:1;padding:0 40px;font-size:13px">
+  <div style="font-family:Caveat;font-size:24px;font-weight:600">We found 6 repos on this machine</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
+   <div style="border:1.5px solid #222;border-radius:4px;padding:5px">☑ ~/code/acme-shop <span style="color:#777">· github</span></div><div style="border:1.5px solid #222;border-radius:4px;padding:5px">☑ ~/code/blog-v2</div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:5px">☑ ~/code/infra-tools</div><div style="border:1.5px solid #222;border-radius:4px;padding:5px">☐ ~/Downloads/tmp-fork</div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:5px">☑ ~/work/client-x</div><div style="border:1.5px dashed #222;border-radius:4px;padding:5px;color:#777">+ add folder / clone URL</div>
+  </div>
+  <div style="font-size:11px;color:#777;margin-top:8px">Also import VS Code workspaces &amp; recent folders ☑</div>
+ </div>
+ <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 40px;font-size:13px"><span style="color:#777">Skip</span><span style="border:1.5px solid #222;border-radius:3px;padding:0 12px;background:#222;color:#fff">Continue →</span></div>
+</div>
+<p class="dv-note">Front-loads setup so the home screen is populated on first launch. Step 2 detects installed CLIs (claude, codex, gemini, cursor) and their auth; step 3 offers OAuth to Vercel/GitHub/Supabase and IAM guidance for AWS/GCP.</p></div>
+
+<div class="dv-opt" id="1j"><div class="dv-olabel"><a class="dv-oid" href="#1j">1j</a>Land in the app; empty states teach progressively</div>
+<div class="dv-card" style="width:560px;height:360px;display:flex;flex-direction:column">
+ <div style="height:26px;border-bottom:1.5px solid #222"></div>
+ <div style="flex:1;display:flex">
+  <div style="width:48px;border-right:1.5px solid #222;display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:8px"><span style="width:28px;height:28px;border:1.5px dashed #222;border-radius:6px;display:flex;align-items:center;justify-content:center">+</span><span style="font-size:10px;color:#777;text-align:center;line-height:1.2">add<br>project</span></div>
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-size:13px;text-align:center">
+   <div style="font-family:Caveat;font-size:26px;font-weight:600">Nothing here yet</div>
+   <div style="color:#555;max-width:300px">Add a project to start. Agents and deploy targets attach to projects, so we'll ask about those when they're needed.</div>
+   <div style="display:flex;gap:8px"><span style="border:1.5px solid #222;border-radius:3px;padding:2px 12px;background:#222;color:#fff">Scan this machine</span><span style="border:1.5px solid #222;border-radius:3px;padding:2px 12px">Open folder</span><span style="border:1.5px solid #222;border-radius:3px;padding:2px 12px">Clone URL</span></div>
+   <div style="margin-top:14px;border:1.5px dashed #222;border-radius:4px;padding:6px 10px;font-size:11px;color:#777;max-width:340px">Later: first time an agent asks for a target → connect it inline (<a class="dv-oid" href="#1e">1e</a>). First “spawn agent” → detect CLIs.</div>
+  </div>
+ </div>
+</div>
+<p class="dv-note">Lower drop-off than a wizard; every concept is introduced at the moment it becomes useful (just-in-time). Risk: users never discover targets/policies unless prompted by an agent request.</p></div>
+</div>
+
+<p class="dv-row">Command palette</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1k"><div class="dv-olabel"><a class="dv-oid" href="#1k">1k</a>Verb-first, mixed results grouped by primitive</div>
+<div class="dv-card" style="width:560px;height:300px;display:flex;flex-direction:column;position:relative;background:#f4f4f4">
+ <div style="position:absolute;left:60px;top:30px;width:440px;border:1.5px solid #222;border-radius:8px;background:#fff;box-shadow:4px 4px 0 #222;font-size:13px">
+  <div style="border-bottom:1.5px solid #222;padding:8px 10px;font-size:14px">&gt; deploy acme<span style="border-left:1.5px solid #222;margin-left:1px"></span></div>
+  <div style="padding:6px 10px;font-size:10px;color:#777;letter-spacing:.08em">ACTIONS</div>
+  <div style="padding:4px 10px;background:#fff3a3;display:flex">▲ Deploy <b>acme-shop</b> → Vercel prod <span style="margin-left:auto">🔓 1h · ↵</span></div>
+  <div style="padding:4px 10px;display:flex">▲ Deploy acme-shop → Vercel preview <span style="margin-left:auto">🔓</span></div>
+  <div style="padding:6px 10px;font-size:10px;color:#777;letter-spacing:.08em">AGENTS</div>
+  <div style="padding:4px 10px;display:flex">● Ask Claude (acme-shop) to deploy… <span style="margin-left:auto">⇥</span></div>
+  <div style="padding:6px 10px;font-size:10px;color:#777;letter-spacing:.08em">PROJECTS</div>
+  <div style="padding:4px 10px">Switch to acme-shop</div>
+  <div style="border-top:1.5px solid #222;padding:6px 10px;font-size:11px;color:#777">↵ run · ⌘↵ run in new window · ? help</div>
+ </div>
+</div>
+<p class="dv-note">One box for everything, Raycast/Linear-style. Results always show the target's lock state so a blocked action is visible before you hit enter. Verbs: switch, open, spawn, ask, deploy, grant, revoke, diff.</p></div>
+
+<div class="dv-opt" id="1l"><div class="dv-olabel"><a class="dv-oid" href="#1l">1l</a>Scoped palette — tab through Projects / Agents / Targets</div>
+<div class="dv-card" style="width:560px;height:300px;display:flex;flex-direction:column;position:relative;background:#f4f4f4">
+ <div style="position:absolute;left:60px;top:30px;width:440px;border:1.5px solid #222;border-radius:8px;background:#fff;box-shadow:4px 4px 0 #222;font-size:13px">
+  <div style="border-bottom:1.5px solid #222;padding:6px 10px;display:flex;gap:6px;font-size:12px"><span style="border:1.5px solid #222;border-radius:10px;padding:0 8px">Projects</span><span style="border:1.5px solid #222;border-radius:10px;padding:0 8px;background:#222;color:#fff">Agents</span><span style="border:1.5px solid #222;border-radius:10px;padding:0 8px">Targets</span><span style="margin-left:auto;color:#777">⇥ to switch scope</span></div>
+  <div style="border-bottom:1.5px solid #222;padding:8px 10px;font-size:14px">🔍 <span style="color:#999">filter agents…</span></div>
+  <div style="padding:4px 10px;display:grid;grid-template-columns:1fr auto auto;gap:10px;background:#fff3a3">● Codex · acme-shop <span><i>waiting</i></span><span>↵</span></div>
+  <div style="padding:4px 10px;display:grid;grid-template-columns:1fr auto auto;gap:10px">● Claude · acme-shop <span>working 12m</span><span></span></div>
+  <div style="padding:4px 10px;display:grid;grid-template-columns:1fr auto auto;gap:10px">● Claude · blog-v2 <span>plan ready</span><span></span></div>
+  <div style="padding:4px 10px;display:grid;grid-template-columns:1fr auto auto;gap:10px;color:#777">○ Gemini · infra-tools <span>idle</span><span></span></div>
+  <div style="padding:4px 10px;color:#777;border-top:1.5px dashed #222">+ spawn new agent in current project</div>
+  <div style="border-top:1.5px solid #222;padding:6px 10px;font-size:11px;color:#777">↵ focus · ⌘↵ open in split · ⌫ kill</div>
+ </div>
+</div>
+<p class="dv-note">Explicit scope means results are homogeneous and scannable (status columns line up). Cheaper to build than intent parsing. Slightly slower for cross-cutting actions like “deploy”.</p></div>
+</div>
+
+<p class="dv-row">Settings</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1m"><div class="dv-olabel"><a class="dv-oid" href="#1m">1m</a>Two-level: App settings vs. this project</div>
+<div class="dv-card" style="width:560px;height:340px;display:flex;flex-direction:column">
+ <div style="height:26px;border-bottom:1.5px solid #222;display:flex;align-items:center;padding:0 10px;font-size:13px"><b>Settings</b></div>
+ <div style="flex:1;display:flex;font-size:13px">
+  <div style="width:160px;border-right:1.5px solid #222;padding:10px;line-height:1.8">
+   <div style="font-size:10px;color:#777;letter-spacing:.08em">APP</div><div>General</div><div>Editor</div><div>Agents &amp; CLIs</div><div>Keychain &amp; secrets</div><div>Policies</div><div>Shortcuts</div>
+   <div style="font-size:10px;color:#777;letter-spacing:.08em;margin-top:8px">PROJECT · acme-shop</div><div style="background:#fff3a3">Targets</div><div>Agent defaults</div><div>Env &amp; secrets</div>
+  </div>
+  <div style="flex:1;padding:12px;display:flex;flex-direction:column;gap:8px">
+   <div style="font-family:Caveat;font-size:20px;font-weight:600">Targets · acme-shop</div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px;display:flex">Vercel prod <span style="margin-left:auto">ask · MFA · expires 1h</span></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px;display:flex">Supabase prod <span style="margin-left:auto">ask each time</span></div>
+   <div style="border:1.5px solid #222;border-radius:4px;padding:6px;display:flex">GitHub <span style="margin-left:auto">persistent</span></div>
+   <div style="font-size:11px;color:#777">Overrides app-level policy. <a class="dv-oid" href="#1f">1f</a> policies apply where no override.</div>
+  </div>
+ </div>
+</div>
+<p class="dv-note">Mirrors VS Code's User/Workspace split, which this audience already understands. Project settings are stored in the repo as a shareable file (minus secrets) so teams get the same targets.</p></div>
+
+<div class="dv-opt" id="1n"><div class="dv-olabel"><a class="dv-oid" href="#1n">1n</a>Single searchable list, project scope as a filter</div>
+<div class="dv-card" style="width:560px;height:340px;display:flex;flex-direction:column">
+ <div style="height:26px;border-bottom:1.5px solid #222;display:flex;align-items:center;gap:10px;padding:0 10px;font-size:13px"><b>Settings</b><span style="border:1.5px solid #222;border-radius:3px;padding:0 6px;flex:1;color:#999">search settings…</span><span style="border:1.5px solid #222;border-radius:10px;padding:0 8px">All</span><span style="border:1.5px solid #222;border-radius:10px;padding:0 8px;background:#222;color:#fff">acme-shop</span></div>
+ <div style="flex:1;padding:12px 16px;font-size:13px;display:flex;flex-direction:column;gap:10px">
+  <div style="display:flex;border-bottom:1.5px dashed #ccc;padding-bottom:6px"><span>Default agent for new sessions</span><span style="margin-left:auto;border:1.5px solid #222;border-radius:3px;padding:0 6px">Claude Code ▾</span></div>
+  <div style="display:flex;border-bottom:1.5px dashed #ccc;padding-bottom:6px"><span>Auto-create worktree per agent</span><span style="margin-left:auto;width:28px;height:14px;border:1.5px solid #222;border-radius:8px;background:#222"></span></div>
+  <div style="display:flex;border-bottom:1.5px dashed #ccc;padding-bottom:6px"><span>Prod write grants require MFA</span><span style="margin-left:auto;width:28px;height:14px;border:1.5px solid #222;border-radius:8px;background:#222"></span></div>
+  <div style="display:flex;border-bottom:1.5px dashed #ccc;padding-bottom:6px"><span>Grant expiry (idle)</span><span style="margin-left:auto;border:1.5px solid #222;border-radius:3px;padding:0 6px">1 hour ▾</span></div>
+  <div style="display:flex;border-bottom:1.5px dashed #ccc;padding-bottom:6px"><span>Notify when agent needs me</span><span style="margin-left:auto;border:1.5px solid #222;border-radius:3px;padding:0 6px">Badge + sound ▾</span></div>
+  <div style="display:flex;border-bottom:1.5px dashed #ccc;padding-bottom:6px"><span>Editor</span><span style="margin-left:auto;border:1.5px solid #222;border-radius:3px;padding:0 6px">Embedded ▾</span></div>
+  <div style="font-size:11px;color:#777;margin-top:auto">Rows marked with project pill are overrides · reset to app default</div>
+ </div>
+</div>
+<p class="dv-note">Flat and searchable, like Linear/Arc. Fewer places to look; project scope is a toggle rather than a second tree. Harder to browse when settings grow past ~40 rows.</p></div>
+</div>
+
+<p class="dv-next">Try next: "hi-fi <a class="dv-oid" href="#1a">1a</a> with the board from <a class="dv-oid" href="#1c">1c</a>" · "merge <a class="dv-oid" href="#1e">1e</a> and <a class="dv-oid" href="#1f">1f</a>" · "show the full flow: agent asks for prod → grant → deploy" · "Windows variant of <a class="dv-oid" href="#1h">1h</a>"</p>
+</section>
+</x-dc>
+</body>
+</html>

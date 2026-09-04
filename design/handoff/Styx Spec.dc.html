@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><script src="./doc-page.js"></script><style>doc-page:not(:defined){visibility:hidden}body{margin:0;font-family:'Archivo',system-ui,sans-serif;color:#14160f}a{color:#14160f}a:hover{color:#6e8f00}table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.45}th{text-align:left;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#5d6259;padding:6px 8px;border-bottom:1px solid #14160f}td{padding:7px 8px;border-bottom:1px solid #c9ccc3;vertical-align:top}tr{break-inside:avoid}code{font-family:'JetBrains Mono',monospace;font-size:12px}h2{font-size:22px;font-weight:600;letter-spacing:-.01em;margin:40px 0 10px;break-after:avoid}h3{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin:24px 0 8px;break-after:avoid}p,li{font-size:14px;line-height:1.6;orphans:3;widows:3}p{margin:0 0 10px}ul,ol{margin:0 0 12px;padding-left:22px}.kv{display:grid;grid-template-columns:150px 1fr;gap:4px 14px;font-size:13px;line-height:1.5;margin:0 0 12px}.kv b{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#5d6259;padding-top:3px}.box{border:1px solid #14160f;padding:12px 14px;margin:0 0 14px;break-inside:avoid}pre{font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.6;margin:0 0 14px;padding:12px 14px;border:1px solid #c9ccc3;white-space:pre-wrap;break-inside:avoid}</style></helmet>
+<doc-page margin="0.8in">
+<div slot="footer" style="display:flex;justify-content:space-between;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#5d6259;padding:0 0 6px"><span>Styx · design specification v1</span><span>September 2026</span></div>
+
+<div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#5d6259;display:flex;gap:14px;margin-bottom:14px"><span>Design specification</span><span>·</span><span>v1 · Sept 2026</span><span>·</span><a href="Styx.dc.html" style="text-decoration:none">Prototype</a><span>·</span><a href="UX Research Memo.dc.html" style="text-decoration:none">Research memo</a></div>
+<h1 style="font-size:40px;font-weight:600;letter-spacing:-.03em;line-height:1.05;margin:0 0 10px">Styx</h1>
+<p style="font-size:17px;color:#5d6259;margin:0 0 28px;max-width:600px">Desktop app (macOS, Windows) that switches between projects in one window, embeds an editor, supervises coding-agent sessions, and gates agent access to deploy and server targets. Target stack: Electron + React.</p>
+
+<div class="box"><div class="kv">
+ <b>Fidelity</b><span>High. Colors, type, spacing and copy in <a href="Styx.dc.html">Styx.dc.html</a> are final for v1. Recreate in React; do not ship the prototype HTML.</span>
+ <b>Files</b><span><code>Styx.dc.html</code> (interactive prototype, all screens and states) · <code>styx-tokens.json</code> / <code>styx-tokens.css</code> · <code>Wireframes.dc.html</code> (lo-fi history) · <code>UX Research Memo.dc.html</code></span>
+ <b>Frame</b><span>1280 × 800 design size. Minimum window 1100 × 680. Layout is fluid horizontally; fixed-width panes are listed in §3.</span>
+ <b>Aesthetic</b><span>Brutalist: 1px hairlines, zero radius, zero shadows, uppercase tracked labels, tabular numerals, one accent used only for "needs you" and "prod".</span>
+</div></div>
+
+<h2>1. Object model</h2>
+<p>Six objects. UI copy uses these names exactly; nothing else is introduced.</p>
+<table><thead><tr><th style="width:120px">Object</th><th>Fields</th><th style="width:200px">Relationships</th></tr></thead><tbody>
+<tr><td><b>Project</b></td><td>id, name, path, repo, createdAt, settings (<code>.styx/project.json</code>, committed, secrets excluded)</td><td>1 Repo · N Worktrees · N Targets · N Sessions</td></tr>
+<tr><td><b>Repo</b></td><td>remote(s), defaultBranch, ahead/behind</td><td>belongs to Project</td></tr>
+<tr><td><b>Worktree</b></td><td>branch, path, owner (<code>user | sessionId</code>), changes (+/−, files), pr {number, state}, conflict?</td><td>owned by ≤1 Session</td></tr>
+<tr><td><b>Session</b></td><td>id, agent (<code>claude | codex | gemini | cursor | shell</code>), projectId, worktreeId, state, startedAt, lastActivityAt, transcript[], pendingAsk?</td><td>bound to 1 Worktree</td></tr>
+<tr><td><b>Target</b></td><td>id, provider (<code>vercel | aws | gcp | supabase | github | ssh</code>), name, env (<code>prod | staging | preview | scm</code>), authMethod, policy, credentialRef (OS keychain), health</td><td>belongs to Project</td></tr>
+<tr><td><b>Grant</b></td><td>id, sessionId, targetId, scope[] (<code>read | write | deploy | delete</code>), duration (<code>once | 1h | session | always</code>), issuedAt, expiresAt, reason (agent's verbatim), policyId?, revokedAt?</td><td>Session × Target</td></tr>
+</tbody></table>
+<h3>Session state machine</h3>
+<pre>idle ──start──▶ working ──ask | needs-grant──▶ needs-you ──approve | reply──▶ working
+                  │                                 └──deny──▶ working (agent adapts; no reason required)
+                  ├──finish──▶ done (kept 7 days, then archived)
+                  └──error (cli-missing | conflict | auth-expired)──▶ paused ──resolve──▶ working
+needs-you never times out; the badge persists until answered.</pre>
+<h3>Grant state machine</h3>
+<pre>requested ──policy match──▶ active                     logged "auto: policy #n"
+requested ──user grant (+MFA when env=prod and scope∋write|deploy|delete)──▶ active
+requested ──user deny──▶ denied
+active ──expiresAt | idle 1h | session end | user revoke──▶ revoked   token invalidated, logged
+One requested grant per session at a time; further requests queue. "always" never expires, is listed as persistent, revocable from any lock glyph.</pre>
+
+<h2>2. Tokens</h2>
+<p>Source of truth: <code>styx-tokens.json</code>; CSS custom properties in <code>styx-tokens.css</code>. Theme is a <code>data-theme</code> attribute on <code>&lt;html&gt;</code>; default dark, follows OS when set to System.</p>
+<table><thead><tr><th>Token</th><th>Dark</th><th>Light</th><th>Use</th></tr></thead><tbody>
+<tr><td><code>--bg</code></td><td>#0d0e0c</td><td>#eeefe9</td><td>window background, editor, inputs, grant sheet, drawers</td></tr>
+<tr><td><code>--s1</code></td><td>#121411</td><td>#f7f8f3</td><td>titlebar, rail, chat pane, status bar, banners, modals, hunk headers</td></tr>
+<tr><td><code>--s2</code></td><td>#1c1e1a</td><td>#e1e3db</td><td>hover background (instant)</td></tr>
+<tr><td><code>--ln</code></td><td>#2d302a</td><td>#b3b7ab</td><td>all hairlines, unchecked boxes, idle dots</td></tr>
+<tr><td><code>--tx</code></td><td>#e9ebe3</td><td>#14160f</td><td>text, primary button fill, inverted selection fill, floating-surface border</td></tr>
+<tr><td><code>--mu</code></td><td>#858a81</td><td>#5d6259</td><td>labels, metadata, placeholders, secondary buttons</td></tr>
+<tr><td><code>--ac</code> / <code>--acx</code></td><td>#d6ff3d / #0d0e0c</td><td>#c6f20f / #14160f</td><td>accent fill + ink on it. Only: needs-you dots/badges, PROD tag, chosen duration chip, policy-on box, access-request header, Grant button, toast header</td></tr>
+<tr><td><code>--act</code></td><td>#d6ff3d</td><td>#6e8f00</td><td>accent as <i>text</i> (diff +N, file marks, palette prompt). Never <code>--ac</code> as text on light surfaces.</td></tr>
+<tr><td><code>--add</code></td><td>rgba(214,255,61,.13)</td><td>rgba(150,200,0,.2)</td><td>added-line background in editor and diffs</td></tr>
+<tr><td><code>--term</code> / <code>--termtx</code></td><td>#080908 / #c9cdc2</td><td>#14160f / #d5d8cc</td><td>terminal pane (always dark)</td></tr>
+<tr><td><code>--dim</code></td><td>rgba(0,0,0,.6)</td><td>rgba(20,22,15,.45)</td><td>modal backdrop</td></tr>
+</tbody></table>
+<h3>Type</h3>
+<table><thead><tr><th>Style</th><th>Spec</th><th>Where</th></tr></thead><tbody>
+<tr><td>Label</td><td>Archivo 600 10px, tracking .1em, uppercase, <code>--mu</code></td><td>pane headers, table headers, hints, button text</td></tr>
+<tr><td>Label strong</td><td>Archivo 700 10px, tracking .1em, uppercase</td><td>column heads, sheet/modal headers, footer buttons (11px)</td></tr>
+<tr><td>Tag</td><td>Archivo 700 9px, tracking .1em, 1px border, padding 1px 5px</td><td>PROD / WRITE / CLAUDE</td></tr>
+<tr><td>Body / strong</td><td>Archivo 400/600 13px, lh 1.5</td><td>chat, rows, descriptions / names</td></tr>
+<tr><td>Mono / meta</td><td>JetBrains Mono 400 12px lh 1.6 / 11px <code>--mu</code></td><td>paths, branches, stats, terminal, audit / secondary meta</td></tr>
+<tr><td>Code</td><td>JetBrains Mono 400 12.5px, lh 1.75</td><td>editor and diff bodies</td></tr>
+<tr><td>Title</td><td>Archivo 600 18px / 20px (sheet, drawer)</td><td>screen titles</td></tr>
+<tr><td>Headline</td><td>Archivo 600 28px, tracking −.02em</td><td>onboarding, empty states</td></tr>
+<tr><td>Numeral M / L</td><td>Archivo 600 28px / 56px, tabular-nums, tracking −.02 / −.03em</td><td>board counts, step numbers / home counters</td></tr>
+</tbody></table>
+<h3>Space, shape, motion</h3>
+<ul>
+<li>4px base. Pane padding 12–16px; table rows 14px 20px; cells 8–10px. Buttons: compact 5px 10px, regular 6px 12px, footer rows 14px tall full-width. Minimum hit target 28px; footer buttons 44px.</li>
+<li>Radius 0 everywhere except macOS traffic lights (50%). Shadows none. Floating surfaces get a 1px <code>--tx</code> border instead.</li>
+<li>Motion: sheet slides in 160ms <code>cubic-bezier(.2,.8,.2,1)</code>; modals and toast fade/slide 120–160ms; hover instant; caret blinks 1s stepped. <code>prefers-reduced-motion</code>: fades only.</li>
+<li>Two selection vocabularies. <code>data-inv</code> (inverted) = "current": tabs, nav, lanes, palette row, files, chosen IDE, checked step. <code>data-on</code> (accent) = "attention or armed": needs-you, PROD, chosen duration, policy on, selected repo checkbox.</li>
+</ul>
+
+<h2>3. Window and layout</h2>
+<table><thead><tr><th style="width:130px">Region</th><th style="width:110px">Size</th><th>Notes</th></tr></thead><tbody>
+<tr><td>Titlebar</td><td>38px, <code>--s1</code></td><td>Frameless window; whole bar is a drag region except controls. macOS: traffic lights 12px inset left. Windows: three 44px caption buttons right (─ ☐ ✕). Centre: STYX wordmark, project button (opens palette in Projects scope), branch (mono), palette field 280px, needs-you and locked counters.</td></tr>
+<tr><td>Error banners</td><td>auto, stacked</td><td>Under the titlebar, one row per active error: accent square, text, action button, dismiss. Dismissed banners return on next launch if unresolved.</td></tr>
+<tr><td>Project rail</td><td>56px</td><td>36px tiles, 2-letter initials; 8px accent corner square when a session needs you; active = accent fill. Dashed "+" adds a project. Drag to reorder. Tooltip = name.</td></tr>
+<tr><td>Nav</td><td>168px</td><td>All projects · Workspace · Agents · Repo · Approvals · Settings; right-aligned mono meta. Footer: path, active grants.</td></tr>
+<tr><td>Content</td><td>fluid</td><td>Per screen, §4.</td></tr>
+<tr><td>Floating</td><td>palette 640 · connect 560 · spawn 600 · sheet 360 · drawer 380 · toast 340 · pop-out 400×500</td><td>1px <code>--tx</code> border. <code>--s1</code> fill (sheet and drawer use <code>--bg</code>). Backdrop <code>--dim</code> for palette and modals only; sheet, toast, pop-out sit over live UI.</td></tr>
+</tbody></table>
+
+<h2>4. Screens</h2>
+<h3>4.1 Workspace (default)</h3>
+<p>Files 200px · Editor fluid · Chat 360px. Editor stack: tab row 34px → code → hunk bar 40px (present only when an agent has pending hunks) → terminal 130px (drag-resizable, collapsible) → status bar 26px. Engine: Monaco. Agent hunks render with <code>--add</code> line background and a right-aligned <code>AGENT · AGE</code> label; hunk bar: Accept all (primary) / Review (opens Diff review) / Reject. Files footer: "Open in {IDE}" launches the fallback editor on the current worktree.</p>
+<p>Chat: session tabs (3 visible, rest in ▾; needs-you tab shows accent <code>!</code>), meta line (agent · branch · age · "waiting on you"), transcript, composer (min 56px; @file, /command, Model ▾; ⏎ send, ⇧⏎ newline). User messages <code>--tx</code>-filled right-aligned; agent messages hairline-bordered; file lists and decisions are bordered blocks with inline buttons. Access requests render as an accent-bordered card with an accent header and Review request / Deny. ⤢ pops the chat out (§4.11).</p>
+<h3>4.2 Home (All projects)</h3>
+<p>Counter strip (Numeral L ×4: needs you, agents working, grants active, projects) → project table (project with status square, path, branch, agents, targets, last activity; row click opens Workspace) → add row (Open folder, Clone URL) → Activity feed (mono, newest first). Empty: headline "No projects yet.", one line, Scan this machine (primary) / Open folder / Clone URL.</p>
+<h3>4.3 Agents (board)</h3>
+<p>Three equal columns: Needs you (label accent-filled), Working (includes idle), Done. Header: label + Numeral M count (zero-padded). Card: agent + age, project · branch (mono), note, action row; needs-you cards add Deny. Dashed "Spawn agent" under Working opens the spawn modal. Empty texts: "Nothing waiting on you." · "No agents running. Spawn one below, or ask in the palette." · "Finished sessions land here for 7 days."</p>
+<h3>4.4 Repo (Worktrees)</h3>
+<p>Header: Worktrees, remote + ahead/behind, Fetch, + Worktree (primary). Table: branch (mono 500), owner (dot + name), changes, PR, action. Selected lane inverted; unified diff of the selection below. Conflict: changes reads <code>CONFLICT · file vs main</code>, action becomes Resolve, owner dot stays; the owning session is paused.</p>
+<h3>4.5 Approvals</h3>
+<p>Tabs Inbox · N / Policies / Audit log; Policies pane 380px always on the right. Inbox row: agent, project, → target, ENV tag (accent when prod), SCOPE tag, quoted reason (mono), age; Review (primary, opens that session with the sheet) / Deny. Footer line: auto-approved count. Policies: 16px checkbox (accent when on), rule, mono meta; + Rule, Export JSON. Audit rows open the entry drawer (§4.8).</p>
+<h3>4.6 Settings</h3>
+<p>Nav 220px: App group (General, Editor, Agents &amp; CLIs, Keychain &amp; secrets, Policies, Shortcuts) and Project · name group (Targets, Agent defaults, Env &amp; secrets); footer notes <code>.styx/project.json</code>. Targets is a table (target, ENV, policy select 170px, state mono, action). Other sections: label/value rows with a select on the right (min 140px). Project values that override app defaults show a reset affordance.</p>
+<h3>4.7 Diff review</h3>
+<p>Header: Review, meta (agent · branch · a accepted · r rejected · p pending), Accept all / Reject all / Done (primary). Files 220px with +N counts and a Keys legend. Each hunk: <code>--s1</code> header (file, range, status tag, Accept / Reject) and code body. Accepted → status tag accent-filled, Accept inverted; rejected → Reject inverted. Done applies accepted hunks to the worktree and returns to Workspace; pending stays pending. Keys: a / r / j / k / Mod+⏎.</p>
+<h3>4.8 Audit entry drawer</h3>
+<p>380px over the Approvals content, <code>--bg</code>, <code>--tx</code> left border. Header label + ✕; action as title (20px); time · actor → target (mono); rows: Actor, Target, Scope, Duration, Session, Worktree, Triggered by (command), Policy. Footer: Copy JSON / Revoke now (disabled when already revoked or system-issued).</p>
+<h3>4.9 Onboarding</h3>
+<p>Covers everything below the titlebar; the rail and nav are hidden until it finishes. Step strip: 01 Editor · 02 Projects · 03 Agents · 04 Targets (current inverted). Footer: Back · Skip · Continue/Finish (primary). Skip on any step goes to Home.</p>
+<ul>
+<li><b>Editor.</b> Detected IDEs (VS Code, Cursor, JetBrains, Neovim) with version/location, importable items, and a role tag; the chosen row is the "Open in…" fallback. Toggles: Import keybindings, Import theme &amp; font, Import recent folders (feeds step 2), Install "Open in Styx" command. Styx's own editor is always the embedded default.</li>
+<li><b>Projects.</b> Repos found by scan and IDE recents; checkbox (accent), path, remote/branch. Unchecked by default when no remote and stale. Add folder / clone URL row.</li>
+<li><b>Agents.</b> Detected CLIs with version, auth state ("signed in", "Sign in →", "Install →"), health dot (accent when missing). Sign-in defers to each CLI's own flow.</li>
+<li><b>Targets.</b> Provider grid (Vercel, AWS, GCP, Supabase, GitHub, SSH host) with method label; each opens the connect modal (§4.10). Optional; Finish available regardless.</li>
+</ul>
+<h3>4.10 Connect target (modal, 560)</h3>
+<p>Step 1 provider grid. Step 2 by method. <i>OAuth</i> (Vercel, Supabase, GitHub): explanation, Environment chips (prod / staging / preview), "Waiting for browser…" mono line, Back / Open browser. <i>IAM / key</i> (AWS, GCP): Name, Access key or service account, Secret (masked, never re-shown), Environment; Back / Test connection / Save to Keychain (Credential Manager on Windows). <i>SSH</i>: Host, User, Key path with Browse, Environment; Back / Test connection / Save. Explanatory copy per method is in the prototype and is final.</p>
+<h3>4.11 Spawn agent (modal, 600)</h3>
+<p>Header label "Spawn agent · project". Five agent tiles (name, version); chosen inverted. If the chosen CLI is missing, an inline error row appears (accent square, text, Install guide / Locate binary) and Spawn is disabled. Fields: Worktree (New from main ▾), Branch (auto <code>agent/&lt;name&gt;-&lt;n&gt;</code>, editable), First message (textarea), toggles: Auto-approve edits (off), May request targets (on), Notify when it needs me (on). Footer: Cancel / Spawn · Mod+⏎. Spawning creates the worktree, starts the CLI, opens Workspace on that session.</p>
+<h3>4.12 New project (modal, 600)</h3>
+<p>Greenfield entry point, reachable from the rail "+", Home ("+ New project" and the empty state), onboarding step 2, and the palette ("New project…"). Fields: Name; Location (default <code>~/code/&lt;name&gt;</code>, <code>C:\dev\&lt;name&gt;</code> on Windows, Browse). Start from, three tiles: <i>Empty folder</i> (git init + README) · <i>Template</i> (built-ins: Node, Python, Go, Rust, static; plus repos tagged <code>styx-template</code> in the user's GitHub org) · <i>Agent scaffolds it</i> (brief textarea; the chosen default agent builds the skeleton in an empty worktree on <code>main</code>, then pauses in needs-you before the first commit). Toggles: git init (on), Create GitHub repo · private (on when a GitHub target exists; otherwise the row reads "Connect GitHub to create the remote" and links to §4.10), Copy targets from {current project} (off), Open in {IDE} too (off). Footer: Cancel / Create (· spawn {agent} when the agent option is chosen). Result: project appears in rail and Home; agent option lands in Workspace on the new session.</p>
+<h3>4.13 Pop-out chat window</h3>
+<p>Separate OS window (400 × 500 default, resizable, remembers position per session). Own titlebar with platform chrome, agent name, project · branch, Dock button. Same transcript/composer as the pane. Docking returns it to the chat pane; closing the main window closes pop-outs.</p>
+<h3>4.14 Notifications</h3>
+<p>In-app toast (340px, top-right under the titlebar, 8s or until action): accent header "Needs you · Styx · now", title (agent wants target · scope), mono meta, Review / Later. macOS: dock badge = count of needs-you sessions, single bounce on first request, menu with recent requests and Do Not Disturb. Windows: tray icon with accent dot; Action Center toast with the same two actions; left-click opens the Agents board. No sound by default; "Badge + sound" is a setting.</p>
+<h3>4.15 Error states</h3>
+<ul>
+<li><b>Auth expired</b> (target health): banner "AWS acme-prod: credentials expired 2h ago. Agents requesting it are paused." → Reconnect opens connect modal on that provider's key step. Target row state reads <i>expired</i>.</li>
+<li><b>CLI missing</b>: banner "codex not found on PATH. 1 session cannot start." → Install guide (onboarding step 3). Spawn modal shows the inline error; board card shows <i>paused</i>.</li>
+<li><b>Merge conflict</b>: banner "fix/checkout conflicts with main in checkout.ts. Claude is paused until resolved." → Resolve opens Repo with the lane selected; lane shows CONFLICT.</li>
+</ul>
+
+<h2>5. Command palette</h2>
+<p>Mod+K anywhere; also the titlebar field and project button (Projects scope). 640px, <code>--tx</code> border, mono prompt with accent <code>&gt;</code>. Groups: Actions, Agents, Projects; first row inverted; ↑↓ move, ⏎ run, Mod+⏎ run in new window, ⇥ cycles scope, Esc closes. Every row that can be blocked by a grant shows lock state in its meta (e.g. "open · 58m", "needs you"). Verbs: switch, open, spawn, ask, deploy, grant, revoke, diff. Fuzzy match on label and meta.</p>
+
+<h2>6. Keyboard map</h2>
+<table><thead><tr><th>Action</th><th>macOS</th><th>Windows</th><th>Scope</th></tr></thead><tbody>
+<tr><td>Command palette</td><td>⌘K</td><td>Ctrl+K</td><td>global</td></tr>
+<tr><td>Switch project</td><td>⌘P</td><td>Ctrl+P</td><td>global (palette, Projects scope)</td></tr>
+<tr><td>Focus agent 1–4</td><td>⌘1–4</td><td>Ctrl+1–4</td><td>Workspace</td></tr>
+<tr><td>Pop out / dock chat</td><td>⌘⇧O</td><td>Ctrl+Shift+O</td><td>Workspace</td></tr>
+<tr><td>Spawn agent</td><td>⌘⇧N</td><td>Ctrl+Shift+N</td><td>global</td></tr>
+<tr><td>Approve / deny pending ask</td><td>⌘⏎ / ⌘⌫</td><td>Ctrl+Enter / Ctrl+Backspace</td><td>chat, sheet, board card</td></tr>
+<tr><td>Accept / reject hunk, next / prev, done</td><td>a / r / j / k / ⌘⏎</td><td>a / r / j / k / Ctrl+Enter</td><td>Diff review</td></tr>
+<tr><td>Send / newline</td><td>⏎ / ⇧⏎</td><td>Enter / Shift+Enter</td><td>composer</td></tr>
+<tr><td>Toggle theme</td><td>⌘⇧T</td><td>Ctrl+Shift+T</td><td>global</td></tr>
+<tr><td>Close overlay</td><td>Esc</td><td>Esc</td><td>palette, modals, sheet, drawer, toast</td></tr>
+</tbody></table>
+<p>Imported IDE keybindings apply inside the editor pane only and never override the global set above. Avoid Ctrl+Alt combos (AltGr collisions).</p>
+
+<h2>7. Platform differences</h2>
+<table><thead><tr><th style="width:150px">Concern</th><th>macOS</th><th>Windows</th></tr></thead><tbody>
+<tr><td>Window chrome</td><td>Frameless, traffic lights left, 38px drag bar</td><td>Frameless, caption buttons right (44px each), snap layouts on hover of ☐</td></tr>
+<tr><td>Modifier glyphs</td><td>⌘ ⇧ ⌥ ⏎ ⌫</td><td>Ctrl / Shift / Alt / Enter / Backspace as words</td></tr>
+<tr><td>Secret store</td><td>Keychain ("Save to Keychain")</td><td>Credential Manager ("Save to Credential Manager")</td></tr>
+<tr><td>MFA for prod write</td><td>Touch ID (fallback: password)</td><td>Windows Hello (fallback: PIN)</td></tr>
+<tr><td>Background presence</td><td>Dock badge + menu</td><td>Tray icon + Action Center toast</td></tr>
+<tr><td>Shell for agents</td><td>login shell (zsh)</td><td>PowerShell or WSL, per project setting</td></tr>
+<tr><td>Paths</td><td>—</td><td>Long-path support, CRLF per repo, drive-letter worktrees</td></tr>
+<tr><td>Fonts</td><td>Archivo / JetBrains Mono bundled</td><td>Same, bundled (no system fallback differences)</td></tr>
+</tbody></table>
+
+<h2>8. Components</h2>
+<table><thead><tr><th style="width:140px">Component</th><th>Variants / states</th><th>Notes</th></tr></thead><tbody>
+<tr><td>Button</td><td>secondary (hairline, <code>--tx</code> text; hover <code>--s2</code>) · primary (<code>--tx</code> fill) · accent (Grant only) · ghost (<code>--mu</code> text) · dashed (add actions) · footer (full-width row, 14px) · disabled (50% opacity, no hover)</td><td>Label type, uppercase. Focus ring: 1px <code>--ac</code> outline, offset 1px.</td></tr>
+<tr><td>Tab</td><td>default · inverted (current) · with badge (accent <code>!</code>) · overflow ▾</td><td>Right hairline between tabs; no bottom indicator.</td></tr>
+<tr><td>Nav item</td><td>default · inverted · with meta</td><td>Full-width; bottom hairline.</td></tr>
+<tr><td>Rail tile</td><td>default · active (accent) · needs-you (corner square) · add (dashed)</td><td>36px; tooltip on hover.</td></tr>
+<tr><td>Table</td><td>header row (Label) · row · row hover · row inverted (selected) · empty block</td><td>Grid columns per screen; rows 14px 20px; hairline dividers.</td></tr>
+<tr><td>Card (board)</td><td>needs-you · working · done (muted)</td><td>No border radius; bottom hairline; action row.</td></tr>
+<tr><td>Message</td><td>user (filled) · agent (bordered) · file list · decision (buttons) · access request (accent border + header) · system (mono muted)</td><td>Max width 88–92% of pane.</td></tr>
+<tr><td>Tag</td><td>neutral · accent (PROD) · agent (CLAUDE)</td><td>9px, uppercase.</td></tr>
+<tr><td>Checkbox / toggle</td><td>14px unchecked (hairline) · checked (<code>--tx</code> fill) · policy 16px on (accent)</td><td>Square. Whole row is the hit target.</td></tr>
+<tr><td>Chip group</td><td>duration chips (once / 1h / session / always), env chips</td><td>Adjacent hairlines collapse (−1px margin); chosen = accent.</td></tr>
+<tr><td>Select</td><td>closed (bordered, ▾) · open (native menu in v1)</td><td>Min 140px; 170px in Targets table.</td></tr>
+<tr><td>Input / textarea</td><td>default · focus (<code>--tx</code> border) · masked (secret) · placeholder (<code>--mu</code>)</td><td><code>--bg</code> fill inside <code>--s1</code> surfaces.</td></tr>
+<tr><td>Status dot</td><td>8px: accent (needs you) · <code>--tx</code> (working) · <code>--ln</code> (idle/done); 7px in tabs and lanes</td><td>Square, never round.</td></tr>
+<tr><td>Numeral</td><td>M (28) · L (56)</td><td>Zero-padded, tabular.</td></tr>
+<tr><td>Banner</td><td>error (accent square) · info (<code>--ln</code> square)</td><td>Stacks under titlebar.</td></tr>
+<tr><td>Sheet / Drawer</td><td>grant sheet · audit drawer</td><td>Right-anchored, full content height, <code>--tx</code> left border, footer button row.</td></tr>
+<tr><td>Modal</td><td>connect · spawn · new project</td><td>Top-anchored at 90px, backdrop, Esc and backdrop click close.</td></tr>
+<tr><td>Toast</td><td>needs-you</td><td>Top-right, 8s, two actions.</td></tr>
+<tr><td>Palette</td><td>grouped results, scope tabs</td><td>§5.</td></tr>
+</tbody></table>
+
+<h2>9. Accessibility</h2>
+<ul>
+<li>Contrast: <code>--tx</code> on <code>--bg</code> 15.6:1 dark / 15.1:1 light; <code>--mu</code> on <code>--bg</code> 5.4:1 / 5.6:1; <code>--acx</code> on <code>--ac</code> 16:1 / 14:1; <code>--act</code> on light <code>--bg</code> 4.6:1. Never use <code>--ac</code> as text on light.</li>
+<li>Colour is never the sole signal: needs-you also has the <code>!</code> badge and "waiting on you" text; PROD is a text tag; selected rows are inverted, not tinted.</li>
+<li>Focus: visible 1px <code>--ac</code> outline on every control; focus trapped inside modals and sheet; Esc returns focus to the invoker. Palette input autofocused; results are a listbox with <code>aria-activedescendant</code>.</li>
+<li>Live regions: the board's Needs-you count and toasts announce via <code>aria-live="polite"</code>; grant results announce "Granted Codex read, write on Supabase prod for 1 hour".</li>
+<li>Terminal and editor expose their own accessible modes (Monaco screen-reader mode, xterm.js accessibility tree). Uppercase labels use <code>text-transform</code>, not capitalised source, so screen readers read words.</li>
+<li>All hit targets ≥ 28px; footer actions 44px. Keyboard parity per §6. Reduced motion respected.</li>
+</ul>
+
+<h2>10. Copy</h2>
+<table><thead><tr><th style="width:170px">Where</th><th>Copy</th></tr></thead><tbody>
+<tr><td>Palette placeholder</td><td>switch, spawn, deploy, grant, diff…</td></tr>
+<tr><td>Titlebar field</td><td>Switch, spawn, deploy, grant…</td></tr>
+<tr><td>Counters</td><td>Needs you · Agents working · Grants active · Projects</td></tr>
+<tr><td>Board columns</td><td>Needs you · Working · Done</td></tr>
+<tr><td>Access request card</td><td>Access request · {Target} — Scope: {scopes}. No grant on file for this target. — Review request / Deny</td></tr>
+<tr><td>Grant sheet</td><td>Access request · {agent} · {branch} — {Target} / {env} — Scope: Read schema, Write, Delete / drop — Duration: once, 1h, session, always — "Prod write requires {Touch ID | Windows Hello}. Token is scoped to this session and revoked on expiry or when the session ends. Logged to audit." — Deny / Grant {duration} · {MFA}</td></tr>
+<tr><td>Grant result (chat)</td><td>grant: {target} · {scopes} · expires in {t}</td></tr>
+<tr><td>Denied (agent adapts)</td><td>No copy from Styx; the agent's reply stands.</td></tr>
+<tr><td>Policies</td><td>Auto-approve read on any staging or preview target · Always ask, require {MFA} for prod write · Expire grants after 1h idle</td></tr>
+<tr><td>Empty states</td><td>No projects yet. Add a folder or clone a repo. Agents and targets attach to projects, so Styx asks about those when they're first needed. · Nothing waiting on you. · No agents running. Spawn one below, or ask in the palette. · Finished sessions land here for 7 days. · No targets connected. Agents can still work locally; the first time one asks for a deploy or server, Styx opens this connect flow inline.</td></tr>
+<tr><td>Errors</td><td>{Target}: credentials expired {t} ago. Agents requesting it are paused. — Reconnect · {cli} not found on PATH. {n} session(s) cannot start. — Install guide · {branch} conflicts with main in {file}. {Agent} is paused until resolved. — Resolve</td></tr>
+<tr><td>Onboarding</td><td>Connect your editor. · Found {n} repos on this machine. · Detected agent CLIs. · Connect deploy and server targets. — Back · Skip · Continue · Finish</td></tr>
+<tr><td>Connect (OAuth)</td><td>Styx opens your browser to authorize. The token lands in the {store}; agents receive short-lived scoped tokens derived from it. — Open browser</td></tr>
+<tr><td>Connect (key)</td><td>Paste credentials for a role scoped to this project. Styx recommends a dedicated IAM role with no delete permissions; the key is stored in the {store} and never shown again. — Test connection · Save to {store}</td></tr>
+<tr><td>Connect (SSH)</td><td>Agents get a forwarded agent socket for the grant's duration, never the key file.</td></tr>
+<tr><td>New project</td><td>New project — Name · Location · Start from: Empty folder (Just git init and a README.) · Template (Built-in stacks or repos tagged in your org.) · Agent scaffolds it (Describe it; the agent builds the skeleton and pauses for review.) — git init · Create GitHub repo · private · Copy targets from {project} · Open in {IDE} too — Cancel · Create · spawn {agent} · {Mod}⏎</td></tr>
+<tr><td>Spawn</td><td>Spawn agent · {project} — What should {agent} do? Reference files with @. — Auto-approve edits · May request targets · Notify when it needs me — Cancel · Spawn · {Mod}⏎</td></tr>
+<tr><td>Toast</td><td>Needs you — {Agent} wants {target} · {scope} — Review / Later</td></tr>
+<tr><td>Tone</td><td>Plain, present tense, no exclamation marks, no "please". Agents are named by product (Claude, Codex, Gemini, Cursor), targets by provider + env. Numbers zero-padded only in counters.</td></tr>
+</tbody></table>
+
+<h2>11. Out of scope for v1</h2>
+<ul>
+<li>Linux build; team sync of policies (per-machine JSON export only); custom themes beyond dark/light/system; more than 4 visible agent tabs; extension marketplace (Monaco only, VS Code as fallback).</li>
+</ul>
+</doc-page>
+</x-dc>
+</body>
+</html>
