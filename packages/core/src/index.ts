@@ -11,3 +11,4 @@ export * from './copy';
 export * from './keys/chords';
 export * from './diff/unified';
 export * as fixtures from './fixtures/demo';
+export * from './ipc/api';
