@@ -1,6 +1,6 @@
 import { forwardRef, useId, useRef, type HTMLAttributes, type ReactNode, type RefObject } from 'react';
 import { Icon } from '../../primitives';
-import { useEscape, useFocusTrap, useReturnFocus } from '../../hooks';
+import { useEscape, useFocusTrap, useOverflows, useReturnFocus } from '../../hooks';
 import { SheetFooter } from '../Sheet';
 import s from './Drawer.module.css';
 
@@ -36,6 +36,8 @@ export const Drawer = forwardRef<HTMLDivElement, DrawerProps>(function Drawer(
   ref,
 ) {
   const inner = useRef<HTMLDivElement | null>(null);
+  const body = useRef<HTMLDivElement | null>(null);
+  const bodyScrolls = useOverflows(body);
   const headingId = useId();
   useReturnFocus(true);
   useFocusTrap(inner, { active: true, initialFocus });
@@ -65,7 +67,9 @@ export const Drawer = forwardRef<HTMLDivElement, DrawerProps>(function Drawer(
       </div>
       {title !== undefined && <div className={s['title']}>{title}</div>}
       {meta !== undefined && <div className={s['meta']}>{meta}</div>}
-      <div className={s['body']}>{children}</div>
+      <div ref={body} className={s['body']} tabIndex={bodyScrolls ? 0 : undefined}>
+        {children}
+      </div>
       {footer !== undefined && footer !== null && <SheetFooter>{footer}</SheetFooter>}
     </div>
   );

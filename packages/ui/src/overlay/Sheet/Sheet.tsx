@@ -1,5 +1,5 @@
 import { forwardRef, useId, useRef, type HTMLAttributes, type ReactNode, type RefObject } from 'react';
-import { useEscape, useFocusTrap, useReturnFocus } from '../../hooks';
+import { useEscape, useFocusTrap, useOverflows, useReturnFocus } from '../../hooks';
 import s from './Sheet.module.css';
 
 export interface SheetProps {
@@ -23,6 +23,8 @@ export const Sheet = forwardRef<HTMLDivElement, SheetProps>(function Sheet(
   ref,
 ) {
   const inner = useRef<HTMLDivElement | null>(null);
+  const body = useRef<HTMLDivElement | null>(null);
+  const bodyScrolls = useOverflows(body);
   const titleId = useId();
   useReturnFocus(true);
   useFocusTrap(inner, { active: true, initialFocus });
@@ -49,7 +51,10 @@ export const Sheet = forwardRef<HTMLDivElement, SheetProps>(function Sheet(
           {title}
         </div>
       )}
-      <div className={s['body']}>{children}</div>
+      {/* Tabbable only while it scrolls, so keyboard users can reach overflowing content (no extra stop otherwise). */}
+      <div ref={body} className={s['body']} tabIndex={bodyScrolls ? 0 : undefined}>
+        {children}
+      </div>
       {footer}
     </div>
   );

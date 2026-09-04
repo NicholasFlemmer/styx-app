@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Table, TableRow, TableCell, TABLE_COLUMNS } from './Table';
 
@@ -16,6 +16,14 @@ describe('Table', () => {
     expect(rows).toHaveLength(2);
     expect(rows[1]).toHaveStyle({ gridTemplateColumns: TABLE_COLUMNS.repo, padding: '14px 20px' });
     expect(screen.getByRole('cell')).toHaveTextContent('a');
+  });
+  it('names blank header cells for assistive tech with visually hidden text', () => {
+    render(<Table columns={TABLE_COLUMNS.repo} header={['Branch', '']} />);
+    const blank = screen.getByRole('columnheader', { name: 'Actions' });
+    expect(blank).not.toHaveAttribute('aria-label');
+    // Text is present for AT but visually hidden (clip recipe), so the column stays blank.
+    expect(within(blank).getByText('Actions').className).toMatch(/srOnly/);
+    expect(screen.getByRole('columnheader', { name: 'Branch' })).toBeInTheDocument();
   });
   it('propagates rowPad and gap from the table', () => {
     render(

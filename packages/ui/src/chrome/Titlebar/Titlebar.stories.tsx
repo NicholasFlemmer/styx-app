@@ -37,8 +37,8 @@ export const LeftOnly: Story = { args: { right: undefined } };
 export const Matrix: Story = {
   render: (a) => (
     <div style={{ display: 'grid', gap: 16 }}>
-      <Titlebar {...a} platform="darwin" />
-      <Titlebar {...a} platform="win32" right={right('win32')} />
+      <Titlebar {...a} platform="darwin" asLandmark={false} />
+      <Titlebar {...a} platform="win32" right={right('win32')} asLandmark={false} />
     </div>
   ),
 };

@@ -20,6 +20,9 @@ export const TABLE_COLUMNS = {
   onboardingClis: '1.2fr 1.2fr 1fr auto',
 } as const;
 
+/** Name for visually blank (action) header cells: rendered visually hidden (axe `empty-table-header` needs DOM text). */
+const BLANK_HEADER_LABEL = 'Actions';
+
 interface TableCtx {
   columns: string;
   rowPad: string;
@@ -30,7 +33,10 @@ const Ctx = createContext<TableCtx>({ columns: '1fr', rowPad: '14px 20px', gap: 
 export interface TableProps extends HTMLAttributes<HTMLDivElement> {
   /** grid-template-columns string (see TABLE_COLUMNS). */
   columns: string;
-  /** Header labels rendered as a t-label row with a hairline below. */
+  /**
+   * Header labels rendered as a t-label row with a hairline below. An empty string keeps the column visually blank
+   * (trailing OPEN / REVOKE / Review columns) but is exposed to assistive tech as "Actions".
+   */
   header?: string[];
   /** Row padding; `14px 20px` by default, `12px 20px` in Targets, `10px 14px` in onboarding. */
   rowPad?: string;
@@ -54,7 +60,7 @@ export const Table = forwardRef<HTMLDivElement, TableProps>(function Table(
           <div role="row" className={s['header']} style={gridStyle}>
             {header.map((h, i) => (
               <span key={`${i}-${h}`} role="columnheader" className={s['headerCell']}>
-                {h}
+                {h === '' ? <span className={s['srOnly']}>{BLANK_HEADER_LABEL}</span> : h}
               </span>
             ))}
           </div>

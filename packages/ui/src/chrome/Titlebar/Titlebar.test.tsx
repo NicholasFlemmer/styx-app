@@ -13,6 +13,14 @@ describe('Titlebar', () => {
     render(<Titlebar />);
     expect(screen.getByRole('banner')).toHaveAttribute('data-platform', 'darwin');
   });
+  it('asLandmark=false renders a plain div, not a banner', () => {
+    render(<Titlebar asLandmark={false} data-testid="bar" left={<span>L</span>} />);
+    expect(screen.queryByRole('banner')).not.toBeInTheDocument();
+    const bar = screen.getByTestId('bar');
+    expect(bar.tagName).toBe('DIV');
+    expect(bar).toHaveAttribute('data-platform', 'darwin');
+    expect(bar).toHaveTextContent('L');
+  });
   it('exports a non-empty noDrag class', () => {
     expect(typeof noDrag).toBe('string');
     expect(noDrag.length).toBeGreaterThan(0);
