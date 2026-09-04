@@ -1,0 +1,41 @@
+@layer components {
+  .button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    border: 1px solid var(--ln);
+    background: transparent;
+    color: var(--tx);
+    cursor: pointer;
+    border-radius: 0;
+    user-select: none;
+  }
+  /* spec §9: hit targets ≥ 28px even for 22px-tall compact buttons */
+  .button::after { content: ''; position: absolute; inset: -3px; }
+
+  .compact { padding: 5px 10px; }
+  .regular { padding: 6px 12px; }
+  .hunk { padding: 4px 10px; }
+  .footer { flex: 1; padding: 14px; min-height: 44px; font-size: 11px; font-weight: 700; border: 0; }
+  .footer::after { inset: 0; }
+
+  .secondary:hover { background: var(--s2); }
+  .primary { border-color: var(--tx); background: var(--tx); color: var(--bg); }
+  .accent { border-color: var(--ac); background: var(--ac); color: var(--acx); }
+  .ghost { color: var(--mu); }
+  .ghost:hover { background: var(--s2); }
+  .footer.ghost { border: 0; }
+  .dashed { border-style: dashed; color: var(--mu); }
+  .dashed:hover { background: var(--s2); }
+
+  .button:disabled, .button[aria-disabled='true'] { opacity: 0.5; pointer-events: none; }
+}
