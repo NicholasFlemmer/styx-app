@@ -1,35 +1,12 @@
-import { copy } from '@styx/core';
-import { Drawer, Sheet, SheetAccentHeader } from '@styx/ui';
 import { useEffect } from 'react';
+import { AuditDrawer } from '../features/audit-drawer/AuditDrawer';
+import { GrantSheet } from '../features/grant-sheet/GrantSheet';
 import { ConnectModal, NewProjectModal, SpawnModal } from '../features/modals/Placeholders';
 import { Palette } from '../features/palette/Palette';
 import { ToastHost } from '../features/toast/ToastHost';
 import { isTrapping, type Overlay } from '../overlays/stack';
 import { useUi } from '../state/hooks';
 import s from './OverlayHost.module.css';
-
-function GrantSheetPlaceholder({ id }: { id: string }) {
-  const popOverlay = useUi((u) => u.popOverlay);
-  return (
-    <Sheet
-      header={<SheetAccentHeader label={copy.grantSheet.title} />}
-      title={copy.accessRequest.title}
-      onClose={() => popOverlay(id)}
-      escapeEnabled={false}
-    >
-      <span className="t-label">{copy.grantSheet.scopeLabel}</span>
-    </Sheet>
-  );
-}
-
-function AuditDrawerPlaceholder({ id }: { id: string }) {
-  const popOverlay = useUi((u) => u.popOverlay);
-  return (
-    <Drawer heading={copy.audit.drawerTitle} onClose={() => popOverlay(id)} escapeEnabled={false}>
-      <span className="t-label">{copy.audit.drawerTitle}</span>
-    </Drawer>
-  );
-}
 
 const render = (o: Overlay) => {
   switch (o.kind) {
@@ -46,9 +23,9 @@ const render = (o: Overlay) => {
       }
       return null;
     case 'sheet':
-      return <GrantSheetPlaceholder key={o.id} id={o.id} />;
+      return <GrantSheet key={o.id} id={o.id} sessionId={o.sessionId} askId={o.askId} />;
     case 'drawer':
-      return <AuditDrawerPlaceholder key={o.id} id={o.id} />;
+      return <AuditDrawer key={o.id} id={o.id} auditId={o.auditId} />;
     case 'toast':
       return null;
   }
