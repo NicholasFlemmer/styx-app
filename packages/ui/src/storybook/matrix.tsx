@@ -42,7 +42,6 @@ export function renderMatrix<R, C>(
   const corner = [opts.rowTitle, opts.colTitle].filter(Boolean).join(' × ');
   return (
     <div
-      role="table"
       style={{
         display: 'grid',
         gridTemplateColumns: `max-content repeat(${cs.length}, max-content)`,

@@ -1,0 +1,202 @@
+{
+  "bakedAt": "2026-09-04T17:42:31.691Z",
+  "source": "design/handoff/Styx.dc.html",
+  "sourceSha256": "d9ec5b6dd15e8ea21816c5ec4c874b8ea13b16f96974c05c3a0f5e8a169c25a9",
+  "chromium": "151.0.7922.34",
+  "window": {
+    "width": 1280,
+    "height": 800
+  },
+  "deviceScaleFactor": 1,
+  "states": [
+    {
+      "name": "home",
+      "screen": "home"
+    },
+    {
+      "name": "workspace",
+      "screen": "workspace"
+    },
+    {
+      "name": "workspace-sheet",
+      "screen": "workspace"
+    },
+    {
+      "name": "agents",
+      "screen": "agents"
+    },
+    {
+      "name": "repo",
+      "screen": "repo"
+    },
+    {
+      "name": "approvals",
+      "screen": "approvals"
+    },
+    {
+      "name": "approvals-audit",
+      "screen": "approvals"
+    },
+    {
+      "name": "settings",
+      "screen": "settings"
+    },
+    {
+      "name": "diff",
+      "screen": "diff"
+    },
+    {
+      "name": "onboarding-1",
+      "screen": "onboarding"
+    },
+    {
+      "name": "onboarding-2",
+      "screen": "onboarding"
+    },
+    {
+      "name": "onboarding-3",
+      "screen": "onboarding"
+    },
+    {
+      "name": "onboarding-4",
+      "screen": "onboarding"
+    },
+    {
+      "name": "connect",
+      "screen": "workspace"
+    },
+    {
+      "name": "spawn",
+      "screen": "workspace"
+    },
+    {
+      "name": "new-project",
+      "screen": "workspace"
+    },
+    {
+      "name": "palette",
+      "screen": "workspace"
+    },
+    {
+      "name": "toast",
+      "screen": "workspace"
+    },
+    {
+      "name": "popout",
+      "screen": "workspace"
+    },
+    {
+      "name": "workspace-error",
+      "screen": "workspace"
+    },
+    {
+      "name": "repo-error",
+      "screen": "repo"
+    }
+  ],
+  "themes": [
+    "dark",
+    "light"
+  ],
+  "chromes": [
+    "mac",
+    "win"
+  ],
+  "produced": [
+    "home-dark-mac.png",
+    "workspace-dark-mac.png",
+    "workspace-sheet-dark-mac.png",
+    "agents-dark-mac.png",
+    "repo-dark-mac.png",
+    "approvals-dark-mac.png",
+    "approvals-audit-dark-mac.png",
+    "settings-dark-mac.png",
+    "diff-dark-mac.png",
+    "onboarding-1-dark-mac.png",
+    "onboarding-2-dark-mac.png",
+    "onboarding-3-dark-mac.png",
+    "onboarding-4-dark-mac.png",
+    "connect-dark-mac.png",
+    "spawn-dark-mac.png",
+    "new-project-dark-mac.png",
+    "palette-dark-mac.png",
+    "toast-dark-mac.png",
+    "popout-dark-mac.png",
+    "workspace-error-dark-mac.png",
+    "repo-error-dark-mac.png",
+    "home-dark-win.png",
+    "workspace-dark-win.png",
+    "workspace-sheet-dark-win.png",
+    "agents-dark-win.png",
+    "repo-dark-win.png",
+    "approvals-dark-win.png",
+    "approvals-audit-dark-win.png",
+    "settings-dark-win.png",
+    "diff-dark-win.png",
+    "onboarding-1-dark-win.png",
+    "onboarding-2-dark-win.png",
+    "onboarding-3-dark-win.png",
+    "onboarding-4-dark-win.png",
+    "connect-dark-win.png",
+    "spawn-dark-win.png",
+    "new-project-dark-win.png",
+    "palette-dark-win.png",
+    "toast-dark-win.png",
+    "popout-dark-win.png",
+    "workspace-error-dark-win.png",
+    "repo-error-dark-win.png",
+    "home-light-mac.png",
+    "workspace-light-mac.png",
+    "workspace-sheet-light-mac.png",
+    "agents-light-mac.png",
+    "repo-light-mac.png",
+    "approvals-light-mac.png",
+    "approvals-audit-light-mac.png",
+    "settings-light-mac.png",
+    "diff-light-mac.png",
+    "onboarding-1-light-mac.png",
+    "onboarding-2-light-mac.png",
+    "onboarding-3-light-mac.png",
+    "onboarding-4-light-mac.png",
+    "connect-light-mac.png",
+    "spawn-light-mac.png",
+    "new-project-light-mac.png",
+    "palette-light-mac.png",
+    "toast-light-mac.png",
+    "popout-light-mac.png",
+    "workspace-error-light-mac.png",
+    "repo-error-light-mac.png",
+    "home-light-win.png",
+    "workspace-light-win.png",
+    "workspace-sheet-light-win.png",
+    "agents-light-win.png",
+    "repo-light-win.png",
+    "approvals-light-win.png",
+    "approvals-audit-light-win.png",
+    "settings-light-win.png",
+    "diff-light-win.png",
+    "onboarding-1-light-win.png",
+    "onboarding-2-light-win.png",
+    "onboarding-3-light-win.png",
+    "onboarding-4-light-win.png",
+    "connect-light-win.png",
+    "spawn-light-win.png",
+    "new-project-light-win.png",
+    "palette-light-win.png",
+    "toast-light-win.png",
+    "popout-light-win.png",
+    "workspace-error-light-win.png",
+    "repo-error-light-win.png"
+  ],
+  "failed": [],
+  "unreachable": [
+    {
+      "name": "home-empty",
+      "reason": "prototype throws in renderVals() when 'Empty states' is on (activeSession is undefined with no sessions) and falls back to a placeholder skeleton; bake once design/handoff fixes it"
+    },
+    {
+      "name": "agents-empty",
+      "reason": "prototype throws in renderVals() when 'Empty states' is on (activeSession is undefined with no sessions) and falls back to a placeholder skeleton; bake once design/handoff fixes it"
+    }
+  ]
+}
