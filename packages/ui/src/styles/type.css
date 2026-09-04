@@ -5,14 +5,12 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--mu);
-    line-height: 1;
   }
   .t-label-strong {
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    line-height: 1;
   }
   .t-mono {
     font-family: var(--font-mono);

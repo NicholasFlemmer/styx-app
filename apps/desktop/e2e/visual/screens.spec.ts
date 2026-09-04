@@ -104,7 +104,8 @@ test.describe('visual fidelity vs prototype', () => {
         test.skip(true, 'renderer does not set [data-screen-ready] yet');
       }
 
-      const { app, page } = await launchStyx({ screen: b.state, theme: b.theme, chrome: b.chrome });
+      const fixture = b.state.endsWith('-empty') ? 'empty' : b.state.endsWith('-error') ? 'error' : 'demo';
+      const { app, page } = await launchStyx({ screen: b.state, theme: b.theme, chrome: b.chrome, fixture });
       try {
         await sizeWindow(app, page);
         const ready = await waitForReady(page, READY_TIMEOUT);

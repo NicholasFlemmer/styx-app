@@ -3,6 +3,9 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+/** Matches `fixtures.DEMO_NOW` in @styx/core (2026-03-12 09:43 UTC) so demo ages render 2m/3m/9m. */
+export const DEMO_NOW = Date.UTC(2026, 2, 12, 9, 43, 0);
+
 export interface LaunchOptions {
   fixture?: string;
   screen?: string;
@@ -34,7 +37,7 @@ export async function launchStyx(
       STYX_USER_DATA: userData,
       STYX_FIXTURE: opts.fixture ?? 'demo',
       STYX_KEYCHAIN: 'memory',
-      STYX_NOW: String(opts.now ?? 1_800_000_000_000),
+      STYX_NOW: String(opts.now ?? DEMO_NOW),
       ...(opts.screen ? { STYX_SCREEN: opts.screen } : {}),
       ...(opts.theme ? { STYX_THEME: opts.theme } : {}),
       ...(opts.chrome ? { STYX_CHROME: opts.chrome } : {}),

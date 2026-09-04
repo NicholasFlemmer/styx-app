@@ -21,7 +21,6 @@
     color: var(--tx);
     font-family: var(--font-ui);
     font-size: var(--body);
-    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     overflow: hidden;
     user-select: none;
