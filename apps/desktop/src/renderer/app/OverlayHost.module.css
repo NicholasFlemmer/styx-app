@@ -1,0 +1,25 @@
+@layer screens {
+  .host {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .host > * {
+    pointer-events: auto;
+  }
+  /* Sheets and drawers live inside the content region (right of rail + nav, below titlebar + banners). */
+  .region {
+    position: absolute;
+    top: calc(var(--h-titlebar) + var(--h-banners, 0px));
+    left: calc(var(--w-rail) + var(--w-nav));
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+  }
+  .region[data-chrome-hidden='true'] {
+    left: 0;
+  }
+  .region > * {
+    pointer-events: auto;
+  }
+}

@@ -1,0 +1,68 @@
+@layer screens {
+  .popout {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--s1);
+    color: var(--tx);
+  }
+  .titlebar {
+    height: 32px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--ln);
+    font-size: 12px;
+    user-select: none;
+    -webkit-app-region: drag;
+  }
+  .titlebar[data-platform='darwin'] {
+    padding-left: 70px;
+  }
+  .titlebar[data-platform='win32'] {
+    padding-right: 72px;
+  }
+  .titlebar button {
+    -webkit-app-region: no-drag;
+  }
+  .agent {
+    font-weight: 600;
+  }
+  .meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--mu);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .spacer {
+    flex: 1;
+  }
+  .chat {
+    flex: 1;
+    min-height: 0;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: hidden;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .composer {
+    border-top: 1px solid var(--ln);
+    padding: 10px 12px;
+  }
+  .composerBox {
+    border: 1px solid var(--ln);
+    background: var(--bg);
+    padding: 8px 10px;
+    min-height: 44px;
+    font-size: 12.5px;
+    color: var(--mu);
+  }
+}

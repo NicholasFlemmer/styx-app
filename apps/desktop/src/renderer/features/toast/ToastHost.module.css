@@ -1,0 +1,15 @@
+@layer screens {
+  .host {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .slot {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .slot > * {
+    pointer-events: auto;
+  }
+}

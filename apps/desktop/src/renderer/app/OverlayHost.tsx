@@ -1,0 +1,92 @@
+import { copy } from '@styx/core';
+import { Drawer, Sheet, SheetAccentHeader } from '@styx/ui';
+import { useEffect } from 'react';
+import { ConnectModal, NewProjectModal, SpawnModal } from '../features/modals/Placeholders';
+import { Palette } from '../features/palette/Palette';
+import { ToastHost } from '../features/toast/ToastHost';
+import { isTrapping, type Overlay } from '../overlays/stack';
+import { useUi } from '../state/hooks';
+import s from './OverlayHost.module.css';
+
+function GrantSheetPlaceholder({ id }: { id: string }) {
+  const popOverlay = useUi((u) => u.popOverlay);
+  return (
+    <Sheet
+      header={<SheetAccentHeader label={copy.grantSheet.title} />}
+      title={copy.accessRequest.title}
+      onClose={() => popOverlay(id)}
+      escapeEnabled={false}
+    >
+      <span className="t-label">{copy.grantSheet.scopeLabel}</span>
+    </Sheet>
+  );
+}
+
+function AuditDrawerPlaceholder({ id }: { id: string }) {
+  const popOverlay = useUi((u) => u.popOverlay);
+  return (
+    <Drawer heading={copy.audit.drawerTitle} onClose={() => popOverlay(id)} escapeEnabled={false}>
+      <span className="t-label">{copy.audit.drawerTitle}</span>
+    </Drawer>
+  );
+}
+
+const render = (o: Overlay) => {
+  switch (o.kind) {
+    case 'palette':
+      return <Palette key={o.id} id={o.id} />;
+    case 'modal':
+      switch (o.modal) {
+        case 'spawn':
+          return <SpawnModal key={o.id} id={o.id} projectId={o.projectId} />;
+        case 'new-project':
+          return <NewProjectModal key={o.id} id={o.id} />;
+        case 'connect':
+          return <ConnectModal key={o.id} id={o.id} />;
+      }
+      return null;
+    case 'sheet':
+      return <GrantSheetPlaceholder key={o.id} id={o.id} />;
+    case 'drawer':
+      return <AuditDrawerPlaceholder key={o.id} id={o.id} />;
+    case 'toast':
+      return null;
+  }
+};
+
+/**
+ * Renders the overlay stack as a sibling of `#layer-app` (plan §8 Overlays). Sheets and drawers sit in the
+ * content region; palette and modals cover the window; toasts are hosted by `ToastHost`. While any trapping
+ * overlay is open `#layer-app` is inert.
+ */
+export function OverlayHost() {
+  const overlays = useUi((u) => u.overlays);
+  const screen = useUi((u) => u.screen);
+  const trapping = isTrapping(overlays);
+
+  useEffect(() => {
+    const app = document.getElementById('layer-app');
+    if (app === null) return;
+    if (trapping) app.setAttribute('inert', '');
+    else app.removeAttribute('inert');
+    return () => app.removeAttribute('inert');
+  }, [trapping]);
+
+  const regional = overlays.filter((o) => o.kind === 'sheet' || o.kind === 'drawer');
+  const global = overlays.filter((o) => o.kind === 'palette' || o.kind === 'modal');
+
+  return (
+    <div
+      id="layer-overlay"
+      className={s['host']}
+      data-keyscope="overlay"
+      data-trapping={trapping ? 'true' : undefined}
+    >
+      <div className={s['region']} data-chrome-hidden={screen === 'onboarding' ? 'true' : undefined}>
+        {regional.map(render)}
+      </div>
+      {global.map(render)}
+      <ToastHost />
+    </div>
+  );
+}

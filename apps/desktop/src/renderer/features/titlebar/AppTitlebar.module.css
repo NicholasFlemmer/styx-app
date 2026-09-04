@@ -1,0 +1,35 @@
+@layer screens {
+  .divider {
+    width: 1px;
+    height: 16px;
+    background: var(--ln);
+    flex: none;
+  }
+  .project {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 0;
+    white-space: nowrap;
+  }
+  .project:hover {
+    background: var(--s2);
+  }
+  .chevron {
+    color: var(--mu);
+  }
+  .branch {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--mu);
+    white-space: nowrap;
+  }
+}
