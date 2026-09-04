@@ -24,7 +24,7 @@ export function sessionPolicy(scope: Scope[]): string {
 export async function defaultSts(): Promise<StsLike> {
   const sdk = await import('@aws-sdk/client-sts');
   const client = (c: AwsKeys) => new sdk.STSClient({ region: c.region, credentials: { accessKeyId: c.accessKeyId, secretAccessKey: c.secretAccessKey } });
-  const toSession = (r: { Credentials?: { AccessKeyId?: string; SecretAccessKey?: string; SessionToken?: string; Expiration?: Date } }): AwsSession => {
+  const toSession = (r: { Credentials?: { AccessKeyId?: string | undefined; SecretAccessKey?: string | undefined; SessionToken?: string | undefined; Expiration?: Date | undefined } | undefined }): AwsSession => {
     const c = r.Credentials;
     if (!c?.AccessKeyId || !c.SecretAccessKey || !c.SessionToken) throw new Error('STS returned no credentials');
     return { accessKeyId: c.AccessKeyId, secretAccessKey: c.SecretAccessKey, sessionToken: c.SessionToken, expiration: c.Expiration?.getTime() ?? Date.now() + 3_600_000 };
