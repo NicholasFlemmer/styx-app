@@ -1,3 +1,4 @@
+import { chainRows } from '../services/audit-service';
 import { defaultPolicies, fixtures, type ProjectSettings } from '@styx/core';
 import type { Repos } from './repos';
 
@@ -75,30 +76,35 @@ export function seed(
         .map(() => '?')
         .join(', ')})`,
     );
-    for (const e of fixture.auditEntries) {
+    const chained = chainRows(
+      fixture.auditEntries.map((e) => ({
+        id: e.id,
+        seq: e.seq,
+        time: e.time,
+        actorKind: e.actorKind,
+        actorLabel: e.actorLabel,
+        action: e.action,
+        projectId: e.projectId,
+        targetId: e.targetId,
+        sessionId: e.sessionId,
+        worktreeId: e.worktreeId,
+        grantId: e.grantId,
+        policyId: e.policyId,
+        targetLabel: e.targetLabel,
+        sessionLabel: e.sessionLabel,
+        worktreeLabel: e.worktreeLabel,
+        agent: e.agent,
+        scopeJson: e.scope === null ? null : JSON.stringify(e.scope),
+        duration: e.duration,
+        triggeredBy: e.triggeredBy ?? '',
+        detailJson: JSON.stringify(e.detail),
+      })),
+    );
+    for (const e of chained) {
       insertAudit.run(
-        e.id,
-        e.seq,
-        e.time,
-        e.actorKind,
-        e.actorLabel,
-        e.action,
-        e.projectId,
-        e.targetId,
-        e.sessionId,
-        e.worktreeId,
-        e.grantId,
-        e.policyId,
-        e.targetLabel,
-        e.sessionLabel,
-        e.worktreeLabel,
-        e.agent,
-        e.scope === null ? null : JSON.stringify(e.scope),
-        e.duration,
-        e.triggeredBy ?? '',
-        JSON.stringify(e.detail),
-        e.prevHash ?? '',
-        e.hash,
+        e.id, e.seq, e.time, e.actorKind, e.actorLabel, e.action, e.projectId, e.targetId, e.sessionId, e.worktreeId,
+        e.grantId, e.policyId, e.targetLabel, e.sessionLabel, e.worktreeLabel, e.agent, e.scopeJson, e.duration,
+        e.triggeredBy, e.detailJson, e.prevHash, e.hash,
       );
     }
     for (const list of Object.values(fixture.hunks)) for (const h of list) repos.agentChanges.upsert(h);

@@ -12,6 +12,8 @@ export function registerTargetCommands(bus: CommandBus, app: Container): void {
 
   bus.register('target.connect.saveKey', async (input) => ({ targetId: (await targets.saveKey(input)).id }));
 
+  bus.register('target.connect.saveToken', async ({ targetId, token }) => ({ targetId: (await targets.saveToken(targetId, token)).id }));
+
   bus.register('target.connect.saveSsh', async (input) => ({ targetId: (await targets.saveSsh(input)).id }));
 
   bus.register('target.test', ({ targetId }) => targets.test(targetId));

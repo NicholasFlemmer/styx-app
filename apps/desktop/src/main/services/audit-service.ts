@@ -127,7 +127,20 @@ export class AuditService {
   }
 }
 
-function hashRow(row: Omit<AuditRow, 'hash'>): string {
+/** Re-chains fixture rows (sorted by seq) so seeded audit logs verify. */
+export function chainRows(rows: Omit<AuditRow, 'hash' | 'prevHash'>[]): AuditRow[] {
+  const out: AuditRow[] = [];
+  let prev = '';
+  for (const r of [...rows].sort((a, b) => a.seq - b.seq)) {
+    const row: Omit<AuditRow, 'hash'> = { ...r, prevHash: prev };
+    const hash = hashRow(row);
+    out.push({ ...row, hash });
+    prev = hash;
+  }
+  return out;
+}
+
+export function hashRow(row: Omit<AuditRow, 'hash'>): string {
   const canonical = JSON.stringify(row, Object.keys(row).sort());
   return createHash('sha256').update(row.prevHash).update('\n').update(canonical).digest('hex');
 }

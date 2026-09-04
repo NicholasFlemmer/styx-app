@@ -96,7 +96,7 @@ describe('GrantService', () => {
       duration: '1h',
       detail: { decidedBy: 'user', mfaVerified: true },
     });
-    expect(t.app.audit.verifyChain()).toMatchObject({ ok: false, brokenAtSeq: 1 }); // demo placeholder rows; new rows chain from them
+    expect(t.app.audit.verifyChain()).toMatchObject({ ok: true }); // seeded rows are re-chained; new rows chain from them
     expect(t.app.repos.transcripts.last(ids.session.gemini).at(-1)).toMatchObject({
       payload: { kind: 'system' },
       body: 'grant: supabase-prod · read+write · expires in 1h',

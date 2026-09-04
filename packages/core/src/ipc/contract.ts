@@ -200,6 +200,11 @@ export const commands = {
     }),
     output: idOut('targetId', targetIdSchema),
   },
+  'target.connect.saveToken': {
+    /** Pasted token for Vercel / Supabase / GitHub PAT flows started by target.connect.start. */
+    input: z.object({ targetId: targetIdSchema, token: z.string().min(1) }),
+    output: idOut('targetId', targetIdSchema),
+  },
   'target.connect.saveSsh': {
     input: z.object({
       projectId: projectIdSchema,

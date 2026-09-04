@@ -1,0 +1,40 @@
+@layer screens {
+  /* Prototype `data-screen-label="Agents"`: three equal columns filling the content region. */
+  .board {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    min-width: 0;
+    min-height: 0;
+  }
+  .column {
+    border-right: 1px solid var(--ln);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+  .head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid var(--ln);
+    flex: none;
+  }
+  /* Column label: 700 · 10px · .1em; the border only shows filled when hot (data-on). */
+  .label {
+    border-color: transparent;
+  }
+  .empty {
+    padding: 24px 16px;
+    color: var(--mu);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .spawn {
+    flex: none;
+    margin: 14px 16px;
+    padding: 10px;
+  }
+}

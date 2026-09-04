@@ -89,10 +89,10 @@ describe('command contract', () => {
       ok: true,
       value: { entries: [{ seq: 3 }, { seq: 2 }, { seq: 1 }], nextCursor: null },
     });
-    // Demo audit hashes are placeholders, so the chain reports broken at seq 1 (real rows are hash-chained by AuditService).
+    // Seeding re-chains fixture rows, so the demo chain verifies.
     expect(await app.bus.dispatch(sender, 'audit.verifyChain', {})).toMatchObject({
       ok: true,
-      value: { ok: false, brokenAtSeq: 1 },
+      value: { ok: true },
     });
   });
 
