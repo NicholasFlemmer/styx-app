@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Tag, type TagTone, type TagSize } from './Tag';
+import { renderMatrix } from '../../storybook/matrix';
 
 const meta = {
   title: 'Primitives/Tag',
@@ -19,18 +20,15 @@ export const Inverted: Story = { args: { tone: 'neutral', inv: true, children: '
 const tones: TagTone[] = ['neutral', 'accent', 'agent', 'strong'];
 const sizes: TagSize[] = ['sm', 'md'];
 export const Matrix: Story = {
-  render: () => (
-    <div style={{ display: 'grid', gridTemplateColumns: 'auto repeat(3, auto)', gap: 12, alignItems: 'center', justifyContent: 'start' }}>
-      {sizes.map((size) =>
-        tones.map((tone) => (
-          <div key={`${size}-${tone}`} style={{ display: 'contents' }}>
-            <span className="t-label">{size} · {tone}</span>
-            <Tag tone={tone} size={size}>prod</Tag>
-            <Tag tone={tone} size={size} inv>prod</Tag>
-            <Tag tone={tone} size={size} on>prod</Tag>
-          </div>
-        )),
-      )}
-    </div>
-  ),
+  render: () =>
+    renderMatrix<{ size: TagSize; tone: TagTone }, string>(
+      sizes.flatMap((size) => tones.map((tone) => ({ label: `${size} · ${tone}`, value: { size, tone } }))),
+      ['default', 'inv', 'on'],
+      ({ size, tone }, state) => (
+        <Tag tone={tone} size={size} inv={state === 'inv'} on={state === 'on'}>
+          prod
+        </Tag>
+      ),
+      { rowTitle: 'size · tone', colTitle: 'state' },
+    ),
 };

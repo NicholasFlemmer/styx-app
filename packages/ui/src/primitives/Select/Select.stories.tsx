@@ -21,7 +21,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
-export const Targets170: Story = { args: { 'aria-label': 'Policy', options: policies, defaultValue: 'ask', width: 170 } };
+export const Targets170: Story = {
+  args: { 'aria-label': 'Policy', options: policies, defaultValue: 'ask', width: 170 },
+};
 export const Disabled: Story = { args: { disabled: true } };
 
 export const Matrix: Story = {

@@ -38,13 +38,13 @@ describe('Table', () => {
     );
     const row = screen.getByRole('row');
     expect(row).toHaveAttribute('tabindex', '0');
-    await userEvent.click(row);
-    expect(onActivate).toHaveBeenCalledTimes(1);
     await userEvent.tab();
     expect(row).toHaveFocus();
     await userEvent.keyboard('{Enter}');
-    expect(onActivate).toHaveBeenCalledTimes(2);
+    expect(onActivate).toHaveBeenCalledTimes(1);
     await userEvent.keyboard(' ');
+    expect(onActivate).toHaveBeenCalledTimes(2);
+    await userEvent.click(row);
     expect(onActivate).toHaveBeenCalledTimes(3);
   });
   it('keys from nested controls do not activate the row', async () => {

@@ -2,7 +2,14 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { renderMatrix } from '../../storybook/matrix';
 import { Icon, type IconName } from './Icon';
 
-const NAMES = ['chevron', 'close', 'popout', 'minimize', 'maximize', 'plus'] as const satisfies readonly IconName[];
+const NAMES = [
+  'chevron',
+  'close',
+  'popout',
+  'minimize',
+  'maximize',
+  'plus',
+] as const satisfies readonly IconName[];
 
 const meta = {
   title: 'Primitives/Icon',

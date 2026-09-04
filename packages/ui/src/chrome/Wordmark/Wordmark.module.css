@@ -1,0 +1,10 @@
+@layer components {
+  .wordmark {
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    white-space: nowrap;
+    user-select: none;
+  }
+}

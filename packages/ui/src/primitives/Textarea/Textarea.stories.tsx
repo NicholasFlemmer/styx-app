@@ -9,7 +9,13 @@ const meta = {
     defaultValue:
       'A TypeScript service that receives Shopify order webhooks, validates them, and writes to Supabase. Include tests and a Dockerfile.',
   },
-  decorators: [(Story) => <div style={{ width: 420, background: 'var(--s1)', padding: 16 }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ width: 420, background: 'var(--s1)', padding: 16 }}>
+        <Story />
+      </div>
+    ),
+  ],
 } satisfies Meta<typeof Textarea>;
 export default meta;
 type Story = StoryObj<typeof meta>;

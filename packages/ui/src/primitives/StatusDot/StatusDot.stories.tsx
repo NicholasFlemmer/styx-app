@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { StatusDot, type DotTone } from './StatusDot';
+import { StatusDot, type DotTone, type DotSize } from './StatusDot';
+import { renderMatrix } from '../../storybook/matrix';
 
 const meta = {
   title: 'Primitives/StatusDot',
@@ -18,16 +19,15 @@ export const Small: Story = { args: { tone: 'accent', size: 7 } };
 
 const tones: DotTone[] = ['accent', 'text', 'line', 'hollow', 'hollowStrong'];
 export const Matrix: Story = {
-  render: () => (
-    <div style={{ display: 'grid', gridTemplateColumns: 'auto repeat(3, 24px)', gap: 12, alignItems: 'center', justifyContent: 'start' }}>
-      {tones.map((tone) => (
-        <div key={tone} style={{ display: 'contents' }}>
-          <span className="t-label">{tone}</span>
-          <StatusDot tone={tone} size={8} />
-          <StatusDot tone={tone} size={7} />
-          <StatusDot tone={tone} size={8} on />
-        </div>
-      ))}
-    </div>
-  ),
+  render: () =>
+    renderMatrix<DotTone, { size: DotSize; on: boolean }>(
+      tones,
+      [
+        { label: '8', value: { size: 8 as const, on: false } },
+        { label: '7', value: { size: 7 as const, on: false } },
+        { label: '8 · on', value: { size: 8 as const, on: true } },
+      ],
+      (tone, { size, on }) => <StatusDot tone={tone} size={size} on={on} />,
+      { rowTitle: 'tone', colTitle: 'size' },
+    ),
 };

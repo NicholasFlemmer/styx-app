@@ -1,0 +1,40 @@
+@layer components {
+  .titlebar {
+    height: var(--h-titlebar);
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--ln);
+    background: var(--s1);
+    min-width: 0;
+    user-select: none;
+    -webkit-app-region: drag;
+  }
+  .mac {
+    padding-left: 70px;
+  }
+  .win {
+    padding-right: 138px;
+  }
+  .slot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    height: 100%;
+  }
+  .center {
+    flex: 1;
+  }
+  .noDrag,
+  .titlebar button,
+  .titlebar input,
+  .titlebar select,
+  .titlebar textarea,
+  .titlebar a,
+  .titlebar [role='button'] {
+    -webkit-app-region: no-drag;
+  }
+}

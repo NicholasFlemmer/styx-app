@@ -1,0 +1,21 @@
+@layer components {
+  .counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mu);
+    white-space: nowrap;
+  }
+  .text {
+    font-variant-numeric: tabular-nums;
+  }
+  .counter[data-inv='true'],
+  .counter[data-on='true'] {
+    color: inherit;
+  }
+}

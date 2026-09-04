@@ -26,7 +26,7 @@ export const Home: Story = {
     <Table {...a}>
       {projects.map((p) => (
         <TableRow key={p.name} onActivate={() => {}}>
-          <TableCell strong><StatusDot tone="hollow" on={p.needs} label={p.needs ? 'needs you' : undefined} />{p.name}</TableCell>
+          <TableCell strong><StatusDot tone="hollow" on={p.needs} {...(p.needs ? { label: 'needs you' } : {})} />{p.name}</TableCell>
           <TableCell mono muted>{p.path}</TableCell>
           <TableCell mono>{p.branch}</TableCell>
           <TableCell>{p.agents}</TableCell>

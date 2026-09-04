@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Numeral } from './Numeral';
+import { Numeral, type NumeralSize } from './Numeral';
+import { renderMatrix } from '../../storybook/matrix';
 
 const meta = {
   title: 'Primitives/Numeral',
@@ -14,15 +15,13 @@ export const Large: Story = { args: { size: 'L', value: 7 } };
 export const Unpadded: Story = { args: { size: 'M', value: 7, pad: 0 } };
 export const Inverted: Story = { args: { size: 'M', value: 1, inv: true } };
 
+const sizes: NumeralSize[] = ['M', 'L'];
 export const Matrix: Story = {
-  render: () => (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, auto)', gap: 16, alignItems: 'end', justifyContent: 'start' }}>
-      <Numeral size="M" value={2} />
-      <Numeral size="M" value={12} inv />
-      <Numeral size="M" value={0} on />
-      <Numeral size="L" value={2} />
-      <Numeral size="L" value={12} inv />
-      <Numeral size="L" value={0} on />
-    </div>
-  ),
+  render: () =>
+    renderMatrix(
+      sizes,
+      ['default', 'inv', 'on'],
+      (size, state) => <Numeral size={size} value={state === 'on' ? 0 : 12} inv={state === 'inv'} on={state === 'on'} />,
+      { rowTitle: 'size', colTitle: 'state' },
+    ),
 };

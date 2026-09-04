@@ -3,7 +3,13 @@ import { withSurface } from '../../storybook/decorators';
 import { renderMatrix } from '../../storybook/matrix';
 import { Button, type ButtonSize, type ButtonVariant } from './Button';
 
-const VARIANTS = ['secondary', 'primary', 'accent', 'ghost', 'dashed'] as const satisfies readonly ButtonVariant[];
+const VARIANTS = [
+  'secondary',
+  'primary',
+  'accent',
+  'ghost',
+  'dashed',
+] as const satisfies readonly ButtonVariant[];
 const SIZES = ['compact', 'regular', 'hunk', 'footer'] as const satisfies readonly ButtonSize[];
 
 const meta = {

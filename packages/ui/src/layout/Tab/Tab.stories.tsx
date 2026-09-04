@@ -5,35 +5,35 @@ import { Tag } from '../../primitives/Tag';
 const meta = {
   title: 'Layout/Tab',
   component: Tab,
-  args: { label: 'Claude', dot: 'text' },
+  args: { label: 'Claude' },
 } satisfies Meta<typeof Tab>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Session: Story = { render: (a) => <TabRow aria-label="Sessions"><Tab {...a} /></TabRow> };
-export const SessionCurrent: Story = { render: (a) => <TabRow aria-label="Sessions"><Tab {...a} inv /></TabRow> };
+export const Session: Story = { args: { dot: 'text' }, render: (a) => <TabRow aria-label="Sessions"><Tab {...a} /></TabRow> };
+export const SessionCurrent: Story = { args: { dot: 'text' }, render: (a) => <TabRow aria-label="Sessions"><Tab {...a} inv /></TabRow> };
 export const SessionBadge: Story = {
   args: { label: 'Codex', dot: 'accent', badge: true },
   render: (a) => <TabRow aria-label="Sessions"><Tab {...a} /></TabRow>,
 };
 export const SessionOverflow: Story = {
-  args: { label: '2 more', dot: undefined, overflow: true },
+  args: { label: '2 more', overflow: true },
   render: (a) => <TabRow aria-label="Sessions"><Tab {...a} /></TabRow>,
 };
 export const File: Story = {
-  args: { variant: 'file', label: 'pay.ts', dot: undefined },
+  args: { variant: 'file', label: 'pay.ts' },
   render: (a) => <TabRow variant="file" aria-label="Files"><Tab {...a} /></TabRow>,
 };
 export const FileCurrent: Story = {
-  args: { variant: 'file', label: 'checkout.ts', dot: undefined, inv: true },
+  args: { variant: 'file', label: 'checkout.ts', inv: true },
   render: (a) => <TabRow variant="file" aria-label="Files"><Tab {...a} /></TabRow>,
 };
 export const FileWithAgentTag: Story = {
-  args: { variant: 'file', label: 'validate.ts', dot: undefined, meta: <Tag tone="agent">CLAUDE</Tag> },
+  args: { variant: 'file', label: 'validate.ts', meta: <Tag tone="agent">CLAUDE</Tag> },
   render: (a) => <TabRow variant="file" aria-label="Files"><Tab {...a} /></TabRow>,
 };
 export const Approvals: Story = {
-  args: { variant: 'approvals', label: 'Inbox', dot: undefined },
+  args: { variant: 'approvals', label: 'Inbox' },
   render: (a) => <TabRow variant="approvals" aria-label="Approvals"><Tab {...a} inv /><Tab {...a} label="Active grants" /><Tab {...a} label="Audit" /></TabRow>,
 };
 

@@ -1,0 +1,37 @@
+@layer components {
+  .field {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 280px;
+    min-height: 28px;
+    padding: 4px 10px;
+    border: 1px solid var(--ln);
+    background: transparent;
+    color: var(--mu);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 0;
+    user-select: none;
+  }
+  .field:hover {
+    background: var(--s2);
+  }
+  .placeholder {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hint {
+    flex: none;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-align: right;
+  }
+}

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Label } from './Label';
+import { renderMatrix } from '../../storybook/matrix';
 
 const meta = {
   title: 'Primitives/Label',
@@ -16,14 +17,18 @@ export const AsFormLabel: Story = { args: { as: 'label', htmlFor: 'x', children:
 export const Inverted: Story = { args: { inv: true, strong: true, children: 'Inbox' } };
 
 export const Matrix: Story = {
-  render: () => (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, auto)', gap: 12, justifyContent: 'start' }}>
-      <Label>Project</Label>
-      <Label inv>Project</Label>
-      <Label on>Project</Label>
-      <Label strong>Project</Label>
-      <Label strong inv>Project</Label>
-      <Label strong on>Project</Label>
-    </div>
-  ),
+  render: () =>
+    renderMatrix<boolean, string>(
+      [
+        { label: 'label', value: false },
+        { label: 'strong', value: true },
+      ],
+      ['default', 'inv', 'on'],
+      (strong, state) => (
+        <Label strong={strong} inv={state === 'inv'} on={state === 'on'}>
+          Project
+        </Label>
+      ),
+      { rowTitle: 'weight', colTitle: 'state' },
+    ),
 };

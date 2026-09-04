@@ -30,12 +30,20 @@ export const LabelStart: Story = {
     </div>
   ),
 };
-export const Disabled: Story = { args: { disabled: true, label: 'Delete / drop' }, render: (a) => <Controlled {...a} /> };
-export const NoLabel: Story = { args: { label: undefined, 'aria-label': 'Select repo' }, render: (a) => <Controlled {...a} /> };
+export const Disabled: Story = {
+  args: { disabled: true, label: 'Delete / drop' },
+  render: (a) => <Controlled {...a} />,
+};
+export const NoLabel: Story = {
+  args: { label: undefined, 'aria-label': 'Select repo' },
+  render: (a) => <Controlled {...a} />,
+};
 
 export const Matrix: Story = {
   render: () => (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: 12, justifyContent: 'start' }}>
+    <div
+      style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: 12, justifyContent: 'start' }}
+    >
       <Checkbox checked={false} label="14 · off" />
       <Checkbox checked label="14 · on" />
       <Checkbox checked={false} size={16} tone="accent" label="16 accent · off" />
