@@ -1,0 +1,262 @@
+import { execa, type Options as ExecaOptions } from 'execa';
+import { join, sep } from 'node:path';
+
+export interface GitStatus {
+  branch: string;
+  head: string | null;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  changed: { path: string; kind: 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflict' }[];
+  clean: boolean;
+}
+
+export interface NumStat {
+  added: number;
+  removed: number;
+  files: number;
+}
+
+export interface WorktreeInfo {
+  path: string;
+  head: string | null;
+  branch: string | null;
+  bare: boolean;
+  detached: boolean;
+  main: boolean;
+}
+
+export interface ConflictInfo {
+  file: string;
+  against: string;
+}
+
+export interface GitRunner {
+  run(args: string[], cwd: string, opts?: { reject?: boolean; input?: string }): Promise<{ stdout: string; stderr: string; exitCode: number }>;
+}
+
+export class ExecaGitRunner implements GitRunner {
+  constructor(private readonly gitBin = 'git') {}
+  async run(args: string[], cwd: string, opts: { reject?: boolean; input?: string } = {}) {
+    const options: ExecaOptions = {
+      cwd,
+      reject: opts.reject ?? true,
+      stripFinalNewline: false,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' },
+      ...(opts.input !== undefined ? { input: opts.input } : {}),
+    };
+    try {
+      const r = await execa(this.gitBin, args, options);
+      return { stdout: String(r.stdout ?? ''), stderr: String(r.stderr ?? ''), exitCode: r.exitCode ?? 0 };
+    } catch (e) {
+      const err = e as { stderr?: string; exitCode?: number; message: string };
+      throw new Error(`git ${args.join(' ')} failed (${err.exitCode ?? '?'}): ${err.stderr || err.message}`);
+    }
+  }
+}
+
+/** Wraps system git (≥2.38 for merge-tree --write-tree). All paths are absolute. */
+export class GitService {
+  constructor(private readonly git: GitRunner = new ExecaGitRunner()) {}
+
+  async version(): Promise<string> {
+    const { stdout } = await this.git.run(['--version'], process.cwd());
+    return stdout.replace(/^git version\s*/, '').trim();
+  }
+
+  async isRepo(path: string): Promise<boolean> {
+    const r = await this.git.run(['rev-parse', '--is-inside-work-tree'], path, { reject: false });
+    return r.exitCode === 0 && r.stdout.trim() === 'true';
+  }
+
+  async init(path: string, defaultBranch = 'main'): Promise<void> {
+    await this.git.run(['init', '-q', '-b', defaultBranch], path);
+  }
+
+  async headCommit(path: string): Promise<string | null> {
+    const r = await this.git.run(['rev-parse', 'HEAD'], path, { reject: false });
+    return r.exitCode === 0 ? r.stdout.trim() : null;
+  }
+
+  async defaultBranch(path: string): Promise<string> {
+    const r = await this.git.run(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], path, { reject: false });
+    if (r.exitCode === 0) return r.stdout.trim().replace(/^origin\//, '');
+    for (const b of ['main', 'master']) {
+      const has = await this.git.run(['show-ref', '--verify', '--quiet', `refs/heads/${b}`], path, { reject: false });
+      if (has.exitCode === 0) return b;
+    }
+    const cur = await this.git.run(['branch', '--show-current'], path, { reject: false });
+    return cur.stdout.trim() || 'main';
+  }
+
+  async remotes(path: string): Promise<{ name: string; url: string; host: 'github' | 'gitlab' | 'other'; owner?: string; repo?: string }[]> {
+    const r = await this.git.run(['remote', '-v'], path, { reject: false });
+    const seen = new Map<string, string>();
+    for (const line of r.stdout.split('\n')) {
+      const m = /^(\S+)\s+(\S+)\s+\(fetch\)/.exec(line);
+      if (m && m[1] && m[2]) seen.set(m[1], m[2]);
+    }
+    return [...seen].map(([name, url]) => {
+      const host = url.includes('github.com') ? 'github' : url.includes('gitlab.com') ? 'gitlab' : 'other';
+      const m = /[:/]([^/:]+)\/([^/]+?)(?:\.git)?$/.exec(url);
+      return { name, url, host, ...(m && m[1] && m[2] ? { owner: m[1], repo: m[2] } : {}) };
+    });
+  }
+
+  async status(path: string): Promise<GitStatus> {
+    const { stdout } = await this.git.run(['status', '--porcelain=v2', '--branch', '-z'], path);
+    const status: GitStatus = { branch: '', head: null, upstream: null, ahead: 0, behind: 0, changed: [], clean: true };
+    const entries = stdout.split('\0');
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      if (!e) continue;
+      if (e.startsWith('# branch.head ')) status.branch = e.slice('# branch.head '.length);
+      else if (e.startsWith('# branch.oid ')) status.head = e.slice('# branch.oid '.length) === '(initial)' ? null : e.slice('# branch.oid '.length);
+      else if (e.startsWith('# branch.upstream ')) status.upstream = e.slice('# branch.upstream '.length);
+      else if (e.startsWith('# branch.ab ')) {
+        const m = /\+(\d+) -(\d+)/.exec(e);
+        if (m) {
+          status.ahead = Number(m[1]);
+          status.behind = Number(m[2]);
+        }
+      } else if (e.startsWith('1 ') || e.startsWith('2 ')) {
+        const parts = e.split(' ');
+        const xy = parts[1] ?? '..';
+        const file = e.startsWith('2 ') ? (parts.slice(9).join(' ') ?? '') : parts.slice(8).join(' ');
+        if (e.startsWith('2 ')) i++; // rename: next entry is the original path
+        const kind = xy.includes('A') ? 'added' : xy.includes('D') ? 'deleted' : xy.includes('R') ? 'renamed' : 'modified';
+        status.changed.push({ path: file, kind });
+      } else if (e.startsWith('u ')) {
+        const parts = e.split(' ');
+        status.changed.push({ path: parts.slice(10).join(' '), kind: 'conflict' });
+      } else if (e.startsWith('? ')) {
+        status.changed.push({ path: e.slice(2), kind: 'untracked' });
+      }
+    }
+    status.clean = status.changed.length === 0;
+    return status;
+  }
+
+  async numstat(path: string, base: string): Promise<NumStat> {
+    const { stdout } = await this.git.run(['diff', '--numstat', base], path);
+    let added = 0;
+    let removed = 0;
+    let files = 0;
+    for (const line of stdout.split('\n')) {
+      const m = /^(\d+|-)\t(\d+|-)\t/.exec(line);
+      if (!m) continue;
+      files++;
+      if (m[1] !== '-') added += Number(m[1]);
+      if (m[2] !== '-') removed += Number(m[2]);
+    }
+    const untracked = await this.git.run(['ls-files', '--others', '--exclude-standard'], path);
+    for (const f of untracked.stdout.split('\n').filter(Boolean)) {
+      files++;
+      const c = await this.git.run(['diff', '--numstat', '--no-index', '--', '/dev/null', f], path, { reject: false });
+      const m = /^(\d+)\t/.exec(c.stdout);
+      if (m) added += Number(m[1]);
+    }
+    return { added, removed, files };
+  }
+
+  async diff(path: string, base: string, files?: string[]): Promise<string> {
+    const { stdout } = await this.git.run(['diff', '--no-color', '-U3', base, '--', ...(files ?? [])], path);
+    return stdout;
+  }
+
+  async aheadBehind(path: string, branch: string, upstream: string): Promise<{ ahead: number; behind: number }> {
+    const r = await this.git.run(['rev-list', '--left-right', '--count', `${branch}...${upstream}`], path, { reject: false });
+    const m = /^(\d+)\s+(\d+)/.exec(r.stdout.trim());
+    return m ? { ahead: Number(m[1]), behind: Number(m[2]) } : { ahead: 0, behind: 0 };
+  }
+
+  async fetch(path: string): Promise<void> {
+    await this.git.run(['fetch', '--prune', '--quiet'], path, { reject: false });
+  }
+
+  async branches(path: string): Promise<string[]> {
+    const { stdout } = await this.git.run(['for-each-ref', '--format=%(refname:short)', 'refs/heads'], path);
+    return stdout.split('\n').filter(Boolean);
+  }
+
+  /** `agent/<name>-<n>`: next free integer for that prefix across existing branches (spec §1). */
+  async nextAgentBranch(path: string, agent: string, prefix = 'agent/'): Promise<string> {
+    const existing = await this.branches(path);
+    const re = new RegExp(`^${escapeRe(prefix + agent)}-(\\d+)$`);
+    let n = 0;
+    for (const b of existing) {
+      const m = re.exec(b);
+      if (m) n = Math.max(n, Number(m[1]));
+    }
+    return `${prefix}${agent}-${n + 1}`;
+  }
+
+  async worktreeList(path: string): Promise<WorktreeInfo[]> {
+    const { stdout } = await this.git.run(['worktree', 'list', '--porcelain'], path);
+    const out: WorktreeInfo[] = [];
+    let cur: Partial<WorktreeInfo> | null = null;
+    for (const line of stdout.split('\n')) {
+      if (line.startsWith('worktree ')) {
+        if (cur?.path) out.push(finish(cur, out.length === 0));
+        cur = { path: line.slice(9), head: null, branch: null, bare: false, detached: false };
+      } else if (cur && line.startsWith('HEAD ')) cur.head = line.slice(5);
+      else if (cur && line.startsWith('branch ')) cur.branch = line.slice(7).replace(/^refs\/heads\//, '');
+      else if (cur && line === 'bare') cur.bare = true;
+      else if (cur && line === 'detached') cur.detached = true;
+    }
+    if (cur?.path) out.push(finish(cur, out.length === 0));
+    return out;
+  }
+
+  async worktreeAdd(repoPath: string, opts: { branch: string; base: string; path: string; createBranch?: boolean }): Promise<void> {
+    const args = ['worktree', 'add', '--quiet'];
+    if (opts.createBranch ?? true) args.push('-b', opts.branch, opts.path, opts.base);
+    else args.push(opts.path, opts.branch);
+    await this.git.run(args, repoPath);
+  }
+
+  async worktreeRemove(repoPath: string, worktreePath: string, force = false): Promise<void> {
+    await this.git.run(['worktree', 'remove', ...(force ? ['--force'] : []), worktreePath], repoPath);
+    await this.git.run(['worktree', 'prune'], repoPath, { reject: false });
+  }
+
+  /** Dry-run merge via `git merge-tree --write-tree`; returns the first conflicting file or null. */
+  async detectConflict(repoPath: string, branch: string, against: string): Promise<ConflictInfo | null> {
+    const r = await this.git.run(['merge-tree', '--write-tree', '--name-only', against, branch], repoPath, { reject: false });
+    if (r.exitCode === 0) return null;
+    if (r.exitCode !== 1) throw new Error(`merge-tree failed: ${r.stderr}`);
+    const lines = r.stdout.split('\n').filter(Boolean);
+    const file = lines[1] ?? lines[0] ?? '';
+    return { file, against };
+  }
+
+  async applyPatch(path: string, patch: string, opts: { cached?: boolean; reverse?: boolean }): Promise<void> {
+    const args = ['apply', '--unidiff-zero', '--whitespace=nowarn'];
+    if (opts.cached) args.push('--cached');
+    if (opts.reverse) args.push('-R');
+    await this.git.run(args, path, { input: patch });
+  }
+
+  async configureRepo(path: string, opts: { longPaths?: boolean; lineEndings?: 'auto' | 'lf' | 'crlf' }): Promise<void> {
+    if (opts.longPaths) await this.git.run(['config', 'core.longpaths', 'true'], path);
+    if (opts.lineEndings && opts.lineEndings !== 'auto') {
+      await this.git.run(['config', 'core.autocrlf', opts.lineEndings === 'crlf' ? 'true' : 'false'], path);
+    }
+  }
+}
+
+/** Sibling worktree location: `<repoParent>/.styx/worktrees/<repoName>/<branchSlug>` (short paths on Windows). */
+export function worktreeLocation(repoPath: string, branch: string): string {
+  const parts = repoPath.split(sep);
+  const name = parts.pop() ?? 'repo';
+  const parent = parts.join(sep) || sep;
+  return join(parent, '.styx', 'worktrees', name, branch.replace(/[^A-Za-z0-9._-]+/g, '-'));
+}
+
+function finish(w: Partial<WorktreeInfo>, main: boolean): WorktreeInfo {
+  return { path: w.path ?? '', head: w.head ?? null, branch: w.branch ?? null, bare: w.bare ?? false, detached: w.detached ?? false, main };
+}
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+}
