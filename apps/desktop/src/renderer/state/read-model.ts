@@ -52,6 +52,7 @@ export const snapshotToModel = (snapshot: ReadModelSnapshot): ReadModel => ({
     project: snapshot.settings.project as Readonly<Record<string, EffectiveProjectSettings>>,
   },
   popouts: snapshot.popouts,
+  activity: snapshot.activity,
 });
 
 export const useReadModel = create<ReadModelStore>()(

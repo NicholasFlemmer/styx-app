@@ -22,6 +22,7 @@ const snapshotOf = (seq: number): ReadModelSnapshot => {
     discovery: { ides: f.ides, clis: f.clis },
     settings: { app: f.appSettings, project: f.projectSettings },
     popouts: [],
+    activity: f.activity,
   };
 };
 

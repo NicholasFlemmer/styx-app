@@ -4,7 +4,13 @@
     inset: 0;
     pointer-events: none;
   }
-  .host > * {
+  /* Palette and modals cover the window; each wrapper stays click-through until it has an overlay. */
+  .global {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .global > * {
     pointer-events: auto;
   }
   /* Sheets and drawers live inside the content region (right of rail + nav, below titlebar + banners). */

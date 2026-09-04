@@ -62,7 +62,7 @@ export function OverlayHost() {
       <div className={s['region']} data-chrome-hidden={screen === 'onboarding' ? 'true' : undefined}>
         {regional.map(render)}
       </div>
-      {global.map(render)}
+      <div className={s['global']}>{global.map(render)}</div>
       <ToastHost />
     </div>
   );
