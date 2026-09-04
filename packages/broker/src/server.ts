@@ -2,8 +2,8 @@ import { createServer, type Server, type Socket } from 'node:net';
 import { chmodSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { onNdjson, writeNdjson } from './ndjson';
-import { ErrorCode, methods, RpcRequest, type MethodName, type NotificationName, type Params, type Result, type RpcError, type SessionBrief, PROTOCOL_VERSION } from './protocol';
-import { z } from 'zod';
+import { ErrorCode, methods, RpcRequest, type MethodName, type NotificationName, type Params, type Result, type RpcError, type SessionBrief, PROTOCOL_VERSION, type notifications } from './protocol';
+import type { z } from 'zod';
 
 export class BrokerError extends Error {
   constructor(public readonly code: number, message: string, public readonly data?: unknown) {
@@ -82,7 +82,7 @@ export class BrokerServer {
   }
 
   /** Push a notification to every connection bound to the session. */
-  notify<N extends NotificationName>(sessionId: string, method: N, params: z.infer<(typeof import('./protocol').notifications)[N]>): void {
+  notify<N extends NotificationName>(sessionId: string, method: N, params: z.infer<(typeof notifications)[N]>): void {
     for (const c of this.conns.values()) {
       if (c.ctx?.session.sessionId === sessionId) writeNdjson(c.socket, { jsonrpc: '2.0', method, params });
     }
