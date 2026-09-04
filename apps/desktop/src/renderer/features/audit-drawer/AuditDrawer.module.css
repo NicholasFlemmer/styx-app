@@ -1,0 +1,13 @@
+@layer screens {
+  /* Prototype "Audit detail" state: the drawer body inherits the prototype's `normal` line-height. */
+  .title {
+    line-height: 1.2;
+  }
+  .meta {
+    line-height: normal;
+  }
+  .rows {
+    line-height: normal;
+    outline: 0;
+  }
+}
