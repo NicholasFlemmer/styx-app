@@ -36,10 +36,6 @@ export interface VisualState {
   unreachable?: string;
 }
 
-const EMPTY_MODE_BUG =
-  "prototype throws in renderVals() when 'Empty states' is on (activeSession is undefined with no sessions) and " +
-  'falls back to a placeholder skeleton; bake once design/handoff fixes it';
-
 export const THEMES: readonly VisualTheme[] = ['dark', 'light'];
 export const CHROMES: readonly VisualChrome[] = ['mac', 'win'];
 
@@ -102,7 +98,6 @@ export const STATES: readonly VisualState[] = [
       { kind: 'screen', label: 'All projects' },
       { kind: 'flow', label: 'Empty states' },
     ],
-    unreachable: EMPTY_MODE_BUG,
   },
   {
     name: 'agents-empty',
@@ -111,7 +106,6 @@ export const STATES: readonly VisualState[] = [
       { kind: 'screen', label: 'Agents' },
       { kind: 'flow', label: 'Empty states' },
     ],
-    unreachable: EMPTY_MODE_BUG,
   },
   {
     name: 'workspace-error',

@@ -12,6 +12,7 @@ import { chromium, type Locator, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   CHROMES,
   STATES,
@@ -26,6 +27,7 @@ import {
 const here = import.meta.dirname;
 const ROOT = resolve(here, '../../../..');
 const PROTOTYPE = join(ROOT, 'design/handoff/Styx.dc.html');
+const PROTOTYPE_URL = pathToFileURL(PROTOTYPE).href;
 const FONT_DIR = join(ROOT, 'packages/tokens/fonts');
 const FONT_CSS = join(ROOT, 'packages/tokens/css/fonts.css');
 const VENDOR = join(here, 'vendor');
@@ -43,6 +45,42 @@ if (unknown.length) {
 }
 
 const fontCss = readFileSync(FONT_CSS, 'utf8').replace(/url\('\.\.\/fonts\//g, `url('${FONT_HOST}`);
+
+/**
+ * Viewer fix, NOT a design change. design/handoff/ is read-only, so the prototype is served through page.route with
+ * these exact-substring replacements applied to its inline script in memory; the file on disk (and `sourceSha256` in
+ * manifest.json) is untouched. Each `find` must occur exactly once or the bake aborts, so a handoff update can never
+ * drift past a stale patch unnoticed. The applied list is recorded in manifest.json as `prototypePatches`.
+ *
+ * 1. With the "Empty states" strip toggle on, renderVals() has no sessions, so
+ *      const activeSession = tabsSrc.find(s => s.id === st.session) || tabsSrc[0] || sessions[0];
+ *    is undefined and the chat-header values (`activeSession.id/.agent/.branch/.age/.state`) throw
+ *    "Cannot read properties of undefined (reading 'id')", which makes the viewer fall back to a placeholder skeleton
+ *    for the whole frame. Extending the fallback chain with a blank stub session keeps the render alive; only the
+ *    (hidden on Home/Agents) chat header reads it, so the empty-state layouts are rendered exactly as designed.
+ */
+const PROTOTYPE_PATCHES: readonly { find: string; replace: string }[] = [
+  {
+    find: 'const activeSession = tabsSrc.find(s => s.id === st.session) || tabsSrc[0] || sessions[0];',
+    replace:
+      'const activeSession = tabsSrc.find(s => s.id === st.session) || tabsSrc[0] || sessions[0] || ' +
+      "{ id: '', agent: '', project: '', branch: '', state: 'idle', note: '', age: '—' };",
+  },
+];
+
+function patchPrototype(html: string): string {
+  return PROTOTYPE_PATCHES.reduce((out, { find, replace }) => {
+    const at = out.indexOf(find);
+    if (at === -1 || out.indexOf(find, at + 1) !== -1) {
+      throw new Error(
+        `Prototype patch target ${at === -1 ? 'not found' : 'not unique'} in ${PROTOTYPE}:\n  ${find}`,
+      );
+    }
+    return out.slice(0, at) + replace + out.slice(at + find.length);
+  }, html);
+}
+
+const prototypeHtml = patchPrototype(readFileSync(PROTOTYPE, 'utf8'));
 const vendorFor = (url: string): string | undefined => {
   if (/\/react@18\.3\.1\/umd\/react\.production\.min\.js$/.test(url))
     return join(VENDOR, 'react.production.min.js');
@@ -55,7 +93,7 @@ const FRAME = `div[style^="width: ${WINDOW.width}px; height: ${WINDOW.height}px"
 const STRIPS = 'div[style*="min-width: 1328px"] > div';
 
 async function loadPrototype(page: Page): Promise<{ frame: Locator; strips: Locator }> {
-  await page.goto(`file://${PROTOTYPE}`);
+  await page.goto(PROTOTYPE_URL);
   await page.waitForSelector('[data-screen-label]', { state: 'attached' });
   await page.evaluate(() => document.fonts.ready);
   const frame = page.locator(FRAME);
@@ -122,22 +160,22 @@ async function main(): Promise<void> {
   const page = await context.newPage();
   const blocked = new Set<string>();
 
-  await page.route(
-    (u) => u.protocol !== 'file:',
-    async (route) => {
-      const url = route.request().url();
-      if (url.startsWith('https://fonts.googleapis.com/'))
-        return route.fulfill({ contentType: 'text/css', body: fontCss });
-      if (url.startsWith(FONT_HOST)) {
-        const file = join(FONT_DIR, url.slice(FONT_HOST.length).split('?')[0] ?? '');
-        if (existsSync(file)) return route.fulfill({ contentType: 'font/woff2', body: readFileSync(file) });
-      }
-      const vendored = vendorFor(url);
-      if (vendored) return route.fulfill({ contentType: 'text/javascript', body: readFileSync(vendored) });
-      blocked.add(url);
-      return route.abort();
-    },
-  );
+  await page.route('**/*', async (route) => {
+    const url = route.request().url();
+    // The prototype itself is served from memory with PROTOTYPE_PATCHES applied; its siblings (support.js) as-is.
+    if (url === PROTOTYPE_URL) return route.fulfill({ contentType: 'text/html', body: prototypeHtml });
+    if (url.startsWith('file:')) return route.continue();
+    if (url.startsWith('https://fonts.googleapis.com/'))
+      return route.fulfill({ contentType: 'text/css', body: fontCss });
+    if (url.startsWith(FONT_HOST)) {
+      const file = join(FONT_DIR, url.slice(FONT_HOST.length).split('?')[0] ?? '');
+      if (existsSync(file)) return route.fulfill({ contentType: 'font/woff2', body: readFileSync(file) });
+    }
+    const vendored = vendorFor(url);
+    if (vendored) return route.fulfill({ contentType: 'text/javascript', body: readFileSync(vendored) });
+    blocked.add(url);
+    return route.abort();
+  });
 
   const produced: string[] = [];
   const failed: { file: string; error: string }[] = [];
@@ -175,21 +213,45 @@ async function main(): Promise<void> {
 
   await browser.close();
 
+  // A partial bake (`pnpm visual:baseline <state...>`) merges into the existing manifest instead of replacing it:
+  // entries for the states just attempted are superseded, everything else is carried over.
+  const manifestPath = join(OUT, 'manifest.json');
+  type Baked = {
+    states: { name: string; screen: string }[];
+    produced: string[];
+    failed: { file: string; error: string }[];
+  };
+  const previous: Baked =
+    only.size && existsSync(manifestPath)
+      ? (JSON.parse(readFileSync(manifestPath, 'utf8')) as Baked)
+      : { states: [], produced: [], failed: [] };
+  const attempted = new Set(
+    states.flatMap((s) => THEMES.flatMap((t) => CHROMES.map((c) => baselineName(s.name, t, c)))),
+  );
+  const producedAll = new Set([...previous.produced.filter((f) => !attempted.has(f)), ...produced]);
+  const bakedStates = new Set([...previous.states.map((s) => s.name), ...states.map((s) => s.name)]);
+
   const manifest = {
     bakedAt: new Date().toISOString(),
     source: 'design/handoff/Styx.dc.html',
     sourceSha256: createHash('sha256').update(readFileSync(PROTOTYPE)).digest('hex'),
+    prototypePatches: PROTOTYPE_PATCHES,
     chromium: browser.version(),
     window: WINDOW,
     deviceScaleFactor: 1,
-    states: states.map((s) => ({ name: s.name, screen: s.screen })),
+    states: STATES.filter((s) => bakedStates.has(s.name)).map((s) => ({ name: s.name, screen: s.screen })),
     themes: THEMES,
     chromes: CHROMES,
-    produced,
-    failed,
-    unreachable: unreachable.map((s) => ({ name: s.name, reason: s.unreachable })),
+    produced: THEMES.flatMap((t) =>
+      CHROMES.flatMap((c) => STATES.map((s) => baselineName(s.name, t, c)).filter((f) => producedAll.has(f))),
+    ),
+    failed: [...previous.failed.filter((f) => !attempted.has(f.file)), ...failed],
+    unreachable: STATES.filter((s) => s.unreachable !== undefined).map((s) => ({
+      name: s.name,
+      reason: s.unreachable,
+    })),
   };
-  writeFileSync(join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
 
   if (blocked.size)
     console.log(`Blocked ${blocked.size} network request(s):\n  ${[...blocked].join('\n  ')}`);
