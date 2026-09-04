@@ -68,6 +68,8 @@ export interface UiActions {
   /** Focus a session: switches project and screen too. */
   openSession(projectId: ProjectId, sessionId: SessionId): void;
   resolveInitialScreen(model: ReadModel): void;
+  /** Seeds screen/project/pane state from the snapshot's persisted `ui` block (env overrides win). */
+  hydratePersisted(ui: { screen: string | null; projectId: ProjectId | null; projectSession: Record<string, SessionId>; paneSizes: Record<string, number> }): void;
   setResolvedTheme(theme: 'dark' | 'light'): void;
   setPaneSize(key: string, size: number): void;
   setPalette(patch: Partial<PaletteUiState>): void;
@@ -143,6 +145,16 @@ export const useUiStore = create<UiStore>()(
         s.projectSession[projectId] = sessionId;
         s.screen = 'workspace';
         s.screenResolved = true;
+      }),
+    hydratePersisted: (ui) =>
+      set((s) => {
+        if (s.projectId === null && ui.projectId !== null) s.projectId = ui.projectId;
+        s.projectSession = { ...ui.projectSession, ...s.projectSession };
+        s.paneSizes = { ...ui.paneSizes, ...s.paneSizes };
+        if (!s.screenResolved && ui.screen !== null && isScreen(ui.screen)) {
+          s.screen = ui.screen;
+          s.screenResolved = true;
+        }
       }),
     resolveInitialScreen: (model) =>
       set((s) => {

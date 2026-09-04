@@ -54,7 +54,7 @@ describe('projection', () => {
     expect(byId(snap.grants)).toEqual(byId(fixture.grants));
     expect(byId(snap.pendingAsks)).toEqual(byId(fixture.pendingAsks));
     expect(byId(snap.policies)).toEqual(byId(fixture.policies));
-    const stripHashes = (rows: { hash?: unknown; prevHash?: unknown }[]) => rows.map(({ hash: _h, prevHash: _p, ...rest }) => rest);
+    const stripHashes = <T extends { id: string; hash?: unknown; prevHash?: unknown }>(rows: T[]) => rows.map(({ hash: _h, prevHash: _p, ...rest }) => rest);
     expect(byId(stripHashes(snap.auditEntries))).toEqual(byId(stripHashes(fixture.auditEntries))); // seeding re-chains hashes
     expect(snap.transcripts).toEqual(fixture.transcripts);
     expect(snap.hunks).toEqual(fixture.hunks);

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { deltaSchema } from '../deltas';
+import { deltaSchema, effectiveProjectSettingsSchema } from '../deltas';
 import { activityRowSchema } from '../model/activity';
 import { auditEntrySchema } from '../model/audit';
 import {
@@ -73,7 +73,14 @@ const readModelSnapshotSchema = z.object({
   transcripts: z.record(z.string(), z.array(transcriptMessageSchema)),
   hunks: z.record(z.string(), z.array(agentChangeSchema)),
   discovery: z.object({ ides: z.array(ideInstallSchema), clis: z.array(cliInstallSchema) }),
-  settings: z.object({ app: appSettingsSchema, project: z.record(z.string(), z.unknown()) }),
+  settings: z.object({ app: appSettingsSchema, project: z.record(z.string(), effectiveProjectSettingsSchema) }),
+  /** Per-machine persisted UI state (README: ui.screen / projectId / window positions). */
+  ui: z.object({
+    screen: z.string().nullable(),
+    projectId: projectIdSchema.nullable(),
+    projectSession: z.record(z.string(), sessionIdSchema),
+    paneSizes: z.record(z.string(), z.number()),
+  }),
   popouts: z.array(sessionIdSchema),
   activity: z.array(activityRowSchema),
 });

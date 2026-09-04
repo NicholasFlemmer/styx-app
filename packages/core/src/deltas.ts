@@ -14,7 +14,7 @@ import { targetSchema } from './model/target';
 import type { ReadModel, ReadModelTables, TableName } from './read-model';
 import { removeRows, upsertRows } from './read-model';
 
-const effectiveProjectSettingsSchema = z.object(
+export const effectiveProjectSettingsSchema = z.object(
   Object.fromEntries(
     Object.entries(projectSettingsSchema.shape).map(([k, v]) => [
       k,

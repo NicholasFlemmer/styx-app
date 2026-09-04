@@ -5,7 +5,6 @@ import {
   hasSeqGap,
   tableFrom,
   type DeltaBatch,
-  type EffectiveProjectSettings,
   type ReadModel,
   type ReadModelSnapshot,
 } from '@styx/core';
@@ -47,9 +46,7 @@ export const snapshotToModel = (snapshot: ReadModelSnapshot): ReadModel => ({
   discovery: snapshot.discovery,
   settings: {
     app: snapshot.settings.app,
-    // Core gap: `readModelSnapshotSchema.settings.project` is `Record<string, unknown>`; main emits
-    // EffectiveProjectSettings (same shape the `settings.set` delta validates). Narrowed here until the schema is typed.
-    project: snapshot.settings.project as Readonly<Record<string, EffectiveProjectSettings>>,
+    project: snapshot.settings.project,
   },
   popouts: snapshot.popouts,
   activity: snapshot.activity,

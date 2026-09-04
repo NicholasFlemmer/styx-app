@@ -3,6 +3,7 @@ import {
   mergeSettings,
   type AgentChange,
   type EffectiveProjectSettings,
+  type ProjectId,
   type ReadModelSnapshot,
   type SessionId,
   type TranscriptMessage,
@@ -50,6 +51,12 @@ export function buildSnapshot(deps: ProjectionDeps, seq: number): ReadModelSnaps
     hunks,
     discovery: { ides: repos.discovery.ides(), clis: repos.discovery.clis() },
     settings: { app: repos.settings.app(), project },
+    ui: {
+      screen: repos.uiState.get<string>('screen') ?? null,
+      projectId: repos.uiState.get<ProjectId>('projectId') ?? null,
+      projectSession: repos.uiState.get<Record<string, SessionId>>('projectSession') ?? {},
+      paneSizes: repos.uiState.get<Record<string, number>>('paneSizes') ?? {},
+    },
     popouts: deps.popouts() as SessionId[],
     activity: repos.activity.recent(ACTIVITY_WINDOW),
   };

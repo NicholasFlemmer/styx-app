@@ -54,6 +54,7 @@ export const connectSync = (): (() => void) => {
       const snapshot = await api.snapshot?.();
       if (disposed || snapshot === undefined) return;
       useReadModel.getState().applySnapshot(snapshot);
+      useUiStore.getState().hydratePersisted(snapshot.ui);
       useUiStore.getState().resolveInitialScreen(useReadModel.getState().model);
     } catch (err) {
       console.error('[styx] store.snapshot failed', err);
