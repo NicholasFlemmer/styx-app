@@ -35,7 +35,7 @@ export const projectFileAgentsSchema = z
     mayRequestTargets: z.boolean().optional(),
     notifyWhenNeedsMe: z.boolean().optional(),
     perAgent: z
-      .record(agentSchema, z.object({ model: z.string().nullable().optional() }).passthrough())
+      .partialRecord(agentSchema, z.object({ model: z.string().nullable().optional() }).passthrough())
       .optional(),
   })
   .passthrough();

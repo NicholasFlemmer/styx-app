@@ -1,3 +1,13 @@
 export * from './ids';
 export * from './model';
 export * from './project-file';
+export * from './machines';
+export * from './policy';
+export * from './read-model';
+export * from './deltas';
+export * from './ipc/contract';
+export * from './selectors';
+export * from './copy';
+export * from './keys/chords';
+export * from './diff/unified';
+export * as fixtures from './fixtures/demo';

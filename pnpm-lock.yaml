@@ -196,6 +196,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@styx/tokens':
+        specifier: workspace:*
+        version: link:../tokens
       ulid:
         specifier: ^3.0.2
         version: 3.0.2

@@ -3,7 +3,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 
 export default tseslint.config(
-  { ignores: ['**/node_modules/**', '**/dist/**', '**/out/**', 'design/**', '.planning/**', '**/storybook-static/**', '**/*.d.ts', '**/e2e/visual/vendor/**', '**/__baseline__/**'] },
+  { ignores: ['**/node_modules/**', '**/dist/**', '**/out/**', 'design/**', '.planning/**', '**/storybook-static/**', '**/*.d.ts', '**/e2e/visual/vendor/**', '**/__baseline__/**', '**/coverage/**'] },
   ...tseslint.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],

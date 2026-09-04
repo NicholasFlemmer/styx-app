@@ -153,7 +153,7 @@ export const copy = {
       granted: 'granted {scopes} to {agent} · {duration}',
       denied: 'denied {scopes} to {agent}',
       revoked: 'revoked {agent} grant · {reason}',
-      expired: 'expired {agent} grant · {reason}',
+      expired: 'revoked {agent} grant · {reason}',
       requested: 'requested {scopes}',
       openedPr: 'opened PR #{n}',
       mergedPr: 'merged PR #{n}',
@@ -203,10 +203,10 @@ export const copy = {
   empty: {
     projects: {
       headline: 'No projects yet.',
-      body: 'Add a folder or clone a repo. Agents and targets attach to projects, so Styx asks about those when they're first needed.',
+      body: "Add a folder or clone a repo. Agents and targets attach to projects, so Styx asks about those when they're first needed.",
       /** Prototype body (visuals win, ADR-0012). */
       bodyPrototype:
-        'Start something new, add a folder, or clone a repo. Agents and targets attach to projects, so Styx asks about those when they're first needed.',
+        "Start something new, add a folder, or clone a repo. Agents and targets attach to projects, so Styx asks about those when they're first needed.",
       scan: 'Scan this machine',
       newProject: 'New project',
       openFolder: 'Open folder',
@@ -257,7 +257,7 @@ export const copy = {
     },
     agents: {
       headline: 'Detected agent CLIs.',
-      body: 'Styx runs the CLIs you already have. Sign-in happens in the CLI's own flow; Styx only stores where it lives.',
+      body: "Styx runs the CLIs you already have. Sign-in happens in the CLI's own flow; Styx only stores where it lives.",
       signedIn: 'signed in',
       signIn: 'Sign in →',
       install: 'Install →',
@@ -294,7 +294,7 @@ export const copy = {
       user: 'User',
       key: 'Key',
       browse: 'Browse',
-      body: 'Agents get a forwarded agent socket for the grant's duration, never the key file.',
+      body: "Agents get a forwarded agent socket for the grant's duration, never the key file.",
       test: 'Test connection',
       save: 'Save',
     },

@@ -138,3 +138,6 @@ export const evaluate = (input: PolicyInput): PolicyDecision => {
   }
   return { ...base, decision: 'ask', decidedBy: 'user', maxDuration: 'always' };
 };
+
+/** Alias used by the package docs (`evaluatePolicies()`); same function. */
+export const evaluatePolicies = evaluate;
