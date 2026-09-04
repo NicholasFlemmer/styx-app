@@ -137,7 +137,10 @@ export class WindowService {
 
   control(win: BrowserWindow, action: 'minimize' | 'maximize' | 'close'): void {
     if (action === 'minimize') win.minimize();
-    else if (action === 'maximize') (win.isMaximized() ? win.unmaximize() : win.maximize());
+    else if (action === 'maximize') {
+      if (win.isMaximized()) win.unmaximize();
+      else win.maximize();
+    }
     else win.close();
   }
 }

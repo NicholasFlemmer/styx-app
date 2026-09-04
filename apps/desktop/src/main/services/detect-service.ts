@@ -1,5 +1,5 @@
 import { execa } from 'execa';
-import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:fs';
+import { accessSync, constants, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
 
@@ -210,7 +210,6 @@ function readPlistVersion(app: string): string | null {
 function countJetbrainsRecents(home: string, platform: NodeJS.Platform): number {
   const base = platform === 'darwin' ? join(home, 'Library', 'Application Support', 'JetBrains') : join(process.env['APPDATA'] ?? '', 'JetBrains');
   try {
-    const { readdirSync } = require('node:fs') as typeof import('node:fs');
     let n = 0;
     for (const d of readdirSync(base)) {
       const f = join(base, d, 'options', 'recentProjects.xml');
