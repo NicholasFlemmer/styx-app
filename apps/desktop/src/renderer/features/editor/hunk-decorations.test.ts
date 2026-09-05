@@ -18,8 +18,8 @@ const agentOf = () => 'Claude';
 describe('hunk decorations', () => {
   it('parses the new side of a hunk patch', () => {
     expect(newSideOf(hunks[0]?.patch ?? '')).toEqual([
-      { text: "import { sum } from './cart'", added: false },
-      { text: "import { validate } from './validate'", added: true },
+      { text: 'import { sum } from "./cart"', added: false },
+      { text: 'import { validate } from "./validate"', added: true },
       { text: '', added: false },
     ]);
   });
@@ -27,7 +27,7 @@ describe('hunk decorations', () => {
   it('locates hunks by content, not by the recorded newStart', () => {
     // The fixture header says +5 but the context line sits on line 4 of the prototype file.
     expect(locateHunk(hunks[1] ?? { patch: '', newStart: 1 }, lines)).toBe(4);
-    expect(addedLinesOf(hunks[1] ?? { patch: '', newStart: 1 }, lines)).toEqual([5, 8]);
+    expect(addedLinesOf(hunks[1] ?? { patch: '', newStart: 1 }, lines)).toEqual([5]);
   });
 
   it('falls back to newStart when the text drifted away', () => {
@@ -50,7 +50,6 @@ describe('hunk decorations', () => {
     expect(decos.map((d) => [d.line, d.label])).toEqual([
       [2, 'Claude · 2m'],
       [5, 'Claude · 2m'],
-      [8, null],
     ]);
   });
 
@@ -63,7 +62,7 @@ describe('hunk decorations', () => {
       agentOf,
       now: fixtures.DEMO_NOW,
     });
-    expect(decos.map((d) => d.line)).toEqual([5, 8]);
+    expect(decos.map((d) => d.line)).toEqual([5]);
   });
 
   it('collects pending hunks of a worktree across sessions', () => {

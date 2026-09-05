@@ -43,8 +43,8 @@ export const FIXTURE_CHANGES: readonly { path: string; status: GitStatus }[] = [
 export const FIXTURE_DEFAULT_FILE = 'src/checkout.ts';
 
 const CHECKOUT_TS = [
-  "import { sum } from './cart'",
-  "import { validate } from './validate'",
+  'import { sum } from "./cart"',
+  'import { validate } from "./validate"',
   '',
   'export async function checkout(cart) {',
   '  validate(cart)',
