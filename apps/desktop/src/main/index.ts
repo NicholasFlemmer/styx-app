@@ -26,6 +26,7 @@ import { isFixtureName, loadFixture, seed, seedDefaults } from './db/seed';
 import { seedDemoRepos } from './db/seed-repos';
 import { attachPtyChannel } from './ipc/pty-channel';
 import { createVault } from './services/credential-vault';
+import { seedFixtureVault } from './db/seed-vault';
 import { logger } from './services/logger';
 import {
   FakeMfaProvider,
@@ -188,6 +189,7 @@ function electronSurface(): ElectronLike {
 
 async function boot(): Promise<void> {
   const userData = app.getPath('userData');
+  const vault = createVault(env['STYX_KEYCHAIN']);
   const clock = clockFromEnv(env);
   const dbFile = join(userData, 'styx.db');
   if (env['STYX_FIXTURE_RESET'] === '1' && existsSync(dbFile)) rmSync(dbFile);
@@ -203,6 +205,10 @@ async function boot(): Promise<void> {
       );
     }
   } else seedDefaults(repos, clock.now());
+  if (fixtureName && env['STYX_KEYCHAIN'] === 'memory') {
+    const n = await seedFixtureVault(vault, repos.targets.all());
+    logger.info('fixture vault', { seeded: n });
+  }
 
   const shims = writeShims(userData, platform);
   const cliPath = app.isPackaged
@@ -280,7 +286,7 @@ async function boot(): Promise<void> {
   container = buildContainer({
     db,
     clock,
-    vault: createVault(env['STYX_KEYCHAIN']),
+    vault,
     mfaProvider: mfaProvider(),
     runtime: {
       userData,
