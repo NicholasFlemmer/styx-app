@@ -15,7 +15,17 @@ const productionCsp = (): Plugin => ({
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin({ exclude: ['@styx/core', '@styx/broker', '@styx/tokens'] })],
+    // Only native modules stay external; everything else is bundled so the packaged app never `require`s
+    // ESM-only packages at runtime (execa/chokidar hang under require() inside the packaged app).
+    plugins: [
+      externalizeDepsPlugin({
+        exclude: [
+          '@styx/core', '@styx/broker', '@styx/tokens',
+          '@aws-sdk/client-sts', '@msgpack/msgpack', '@modelcontextprotocol/sdk', 'chokidar', 'drizzle-orm',
+          'electron-log', 'execa', 'jose', 'parse-diff', 'ulid', 'zod',
+        ],
+      }),
+    ],
     resolve: { alias: { '@main': resolve('src/main') } },
     build: { rollupOptions: { input: { index: resolve('src/main/index.ts') } } },
   },
