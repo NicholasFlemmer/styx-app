@@ -31,7 +31,9 @@ export const scopeLabel = (scope: Scope): string => copy.grantSheet.scopes[scope
 /** A file the agent modified (vs. created): some hunk of it removes or keeps old lines. */
 const preExisting = (model: ReadModel, sessionId: SessionId, path: string): boolean =>
   (model.hunks[sessionId] ?? []).some(
-    (h) => hunkMatchesFile(h, path) && (h.oldLines > 0 || hunkBody(h.patch).some((l) => !l.startsWith('+'))),
+    (h) =>
+      hunkMatchesFile(h, path) &&
+      (h.oldLines > 0 || hunkBody(h.patch).some((l) => !l.startsWith('+') && l.trim() !== '')),
   );
 
 /**
