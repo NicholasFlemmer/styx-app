@@ -19,7 +19,7 @@ const render = (o: Overlay) => {
         case 'new-project':
           return <NewProjectModal key={o.id} id={o.id} />;
         case 'connect':
-          return <ConnectModal key={o.id} id={o.id} />;
+          return <ConnectModal key={o.id} id={o.id} projectId={o.projectId} provider={o.provider} targetId={o.targetId} />;
       }
       return null;
     case 'sheet':

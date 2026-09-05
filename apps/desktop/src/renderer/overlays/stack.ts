@@ -1,4 +1,4 @@
-import type { AskId, AuditId, ProjectId, SessionId } from '@styx/core';
+import type { AskId, AuditId, ProjectId, Provider, SessionId, TargetId } from '@styx/core';
 
 /** Overlay kinds and their z-order / behaviour (plan §8 Overlays). */
 export type OverlayKind = 'palette' | 'modal' | 'sheet' | 'drawer' | 'toast';
@@ -10,7 +10,8 @@ export type ToastPayload =
 export type ModalPayload =
   | { modal: 'spawn'; projectId: ProjectId }
   | { modal: 'new-project' }
-  | { modal: 'connect'; projectId: ProjectId };
+  /** projectId is null during onboarding (no project yet); provider/targetId preselect the flow (Reconnect, step 4). */
+  | { modal: 'connect'; projectId: ProjectId | null; provider?: Provider; targetId?: TargetId };
 
 export type Overlay =
   | { id: string; kind: 'palette' }
