@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
 import { AuditDrawer } from '../features/audit-drawer/AuditDrawer';
 import { GrantSheet } from '../features/grant-sheet/GrantSheet';
-import { ConnectModal, NewProjectModal, SpawnModal } from '../features/modals/Placeholders';
+import { ConnectModal } from '../features/modals/ConnectModal';
+import { NewProjectModal } from '../features/modals/NewProjectModal';
+import { SpawnModal } from '../features/modals/SpawnModal';
 import { Palette } from '../features/palette/Palette';
 import { ToastHost } from '../features/toast/ToastHost';
 import { isTrapping, type Overlay } from '../overlays/stack';
@@ -19,7 +21,15 @@ const render = (o: Overlay) => {
         case 'new-project':
           return <NewProjectModal key={o.id} id={o.id} />;
         case 'connect':
-          return <ConnectModal key={o.id} id={o.id} projectId={o.projectId} provider={o.provider} targetId={o.targetId} />;
+          return (
+            <ConnectModal
+              key={o.id}
+              id={o.id}
+              projectId={o.projectId}
+              {...(o.provider !== undefined ? { provider: o.provider } : {})}
+              {...(o.targetId !== undefined ? { targetId: o.targetId } : {})}
+            />
+          );
       }
       return null;
     case 'sheet':
