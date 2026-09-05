@@ -1,5 +1,6 @@
 {
   "name": "@styx/desktop",
+  "productName": "Styx",
   "version": "0.1.0",
   "private": true,
   "description": "Styx \u2014 project, agent and repo switcher",
