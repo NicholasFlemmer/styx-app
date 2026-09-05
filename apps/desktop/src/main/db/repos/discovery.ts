@@ -16,11 +16,15 @@ export const ideFromRow = (r: Raw): IdeInstall =>
     launcher: asStr(r['launcher']),
     configDir: asStr(r['config_dir']),
     isFallback: asBool(r['is_fallback']),
+    // `recentsSource` rides along in imported_json (no schema migration needed).
+    recentsSource: asJson<Record<string, unknown>>(r['imported_json'], {})['recentsSource'] ?? null,
     imported: {
       recents: 0,
       keybindings: false,
       theme: false,
-      ...asJson<Record<string, unknown>>(r['imported_json'], {}),
+      ...Object.fromEntries(
+        Object.entries(asJson<Record<string, unknown>>(r['imported_json'], {})).filter(([k]) => k !== 'recentsSource'),
+      ),
     },
     detectedAt: Number(r['detected_at']),
   });
@@ -80,7 +84,7 @@ export class DiscoveryRepo {
       i.launcher,
       i.configDir,
       toBit(i.isFallback),
-      toJson(i.imported),
+      toJson({ ...i.imported, recentsSource: i.recentsSource }),
       i.detectedAt,
     );
   }

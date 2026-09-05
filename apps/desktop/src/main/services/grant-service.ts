@@ -353,11 +353,11 @@ export class GrantService {
     reason: 'user' | 'session-end' | 'target-removed' | 'policy' = 'user',
   ): Grant {
     const grant = this.require(grantId);
-    if (grant.state === 'requested')
-      return this.apply(grant, {
-        type: 'cancel',
-        reason: reason === 'target-removed' ? 'target-removed' : 'session-end',
-      });
+    // Spec §1: the only user path out of `requested` is deny; system cancels keep their reason.
+    if (grant.state === 'requested') {
+      if (reason === 'user') return this.deny(grantId, triggeredBy);
+      return this.apply(grant, { type: 'cancel', reason: reason === 'target-removed' ? 'target-removed' : 'session-end' });
+    }
     if (grant.state !== 'active') fail('invalid-transition', `grant is ${grant.state}`);
     return this.apply(grant, { type: 'revoke', reason, triggeredBy });
   }

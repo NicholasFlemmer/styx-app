@@ -65,6 +65,11 @@ describe('auditRows (prototype audit log)', () => {
     );
     expect(at({ action: 'granted', duration: null })).toBe('granted deploy to Claude · —');
     expect(at({ action: 'granted', scope: null })).toBe('granted  to Claude · 1h');
+    const auto = policies.find((p) => p.ord === 1);
+    expect(at({ action: 'granted', policyId: auto?.id ?? null, detail: { decidedBy: 'policy' } })).toBe(
+      'granted deploy to Claude · 1h (auto: policy #1)',
+    );
+    expect(at({ action: 'granted', policyId: null, detail: { decidedBy: 'policy' } })).toBe('granted deploy to Claude · 1h');
     expect(at({ action: 'merged-pr', detail: { prNumber: '7' } })).toBe('merged PR #7');
     expect(at({ action: 'opened-pr', detail: {} })).toBe('opened PR #?');
     expect(at({ action: 'connected' })).toBe('connected');

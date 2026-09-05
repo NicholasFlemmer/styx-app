@@ -143,6 +143,15 @@ describe('GrantService', () => {
     ]);
   });
 
+  it('revoke on a still-requested grant denies it (spec §1: the only user path out of requested)', async () => {
+    const t = makeTestApp();
+    const out = await requestSupabase(t);
+    if (out.kind !== 'pending') throw new Error('expected pending');
+    const r = t.app.grants.revoke(out.grant.id);
+    expect(r.state).toBe('denied');
+    expect(t.app.repos.audit.all().some((e) => e.grantId === r.id && e.action === 'denied')).toBe(true);
+  });
+
   it('revoke → revoked, credential dropped, audit revoked by you, target locked', async () => {
     const t = makeTestApp();
     const out = await requestSupabase(t);
