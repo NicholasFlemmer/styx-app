@@ -1,4 +1,4 @@
-import { copy, fill, projectNameOf, type ProjectId } from '@styx/core';
+import { copy, fill, projectNameOf, type ProjectId, type Provider, type TargetId } from '@styx/core';
 import { Button, Modal } from '@styx/ui';
 import { useModel, useUi } from '../../state/hooks';
 
