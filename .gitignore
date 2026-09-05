@@ -23,3 +23,4 @@ CLAUDE.local.md
 .planning/.cache/
 apps/desktop/test-results/
 apps/desktop/e2e/test-results/
+apps/desktop/resources/cli/
