@@ -42,7 +42,8 @@ const int = (s: string | undefined, fallback: number): number =>
 /** Parse `git diff -U3` output. Tolerates missing `diff --git` headers (plain `---`/`+++`). */
 export const parseUnifiedDiff = (text: string): UnifiedDiff => {
   const files: DiffFile[] = [];
-  const lines = text.split('\n');
+  // A patch's terminating newline is not a line of its own.
+  const lines = (text.endsWith('\n') ? text.slice(0, -1) : text).split('\n');
   let file: DiffFile | null = null;
   let hunk: {
     header: string;

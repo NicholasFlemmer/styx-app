@@ -126,4 +126,12 @@ describe('parseUnifiedDiff', () => {
     expect(parseUnifiedDiff('')).toEqual({ files: [] });
     expect(parseUnifiedDiff('diff --git a/e b/e\n')).toEqual({ files: [] });
   });
+
+  it('ignores the terminating newline of a patch', () => {
+    const withNl = parseUnifiedDiff(TWO_FILES.endsWith('\n') ? TWO_FILES : TWO_FILES + '\n');
+    const withoutNl = parseUnifiedDiff(TWO_FILES.endsWith('\n') ? TWO_FILES.slice(0, -1) : TWO_FILES);
+    expect(withNl).toEqual(withoutNl);
+    const last = withNl.files.at(-1)?.hunks.at(-1)?.lines.at(-1);
+    expect(last?.text ?? 'x').not.toBe('');
+  });
 });
