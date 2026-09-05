@@ -2,7 +2,7 @@ node_modules/
 dist/
 out/
 build/
-release/
+apps/desktop/release/
 coverage/
 .dev/
 *.log
