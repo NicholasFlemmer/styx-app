@@ -1,0 +1,138 @@
+@layer screens {
+  /* Prototype: absolute below the titlebar, --bg, column. The outlet already spans the body with rail/nav hidden. */
+  .root {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: var(--bg);
+    color: var(--tx);
+  }
+  /* Step strip: 4 cells, numeral + strong label on the baseline, 16px 20px, hairline right; current inverted. */
+  .strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-bottom: 1px solid var(--ln);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .stepCell {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 16px 20px;
+    border-right: 1px solid var(--ln);
+  }
+  .body {
+    flex: 1;
+    min-height: 0;
+    padding: 32px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    max-width: 900px;
+    overflow-y: auto;
+  }
+  .headline {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .lead {
+    margin: 0;
+    color: var(--mu);
+    line-height: 1.5;
+  }
+  .tableFrame {
+    border: 1px solid var(--ln);
+  }
+  /* Repo rows are mono 12.5 throughout (prototype sets it on the row). */
+  .monoCell {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+  }
+  .addRow {
+    display: block;
+    width: 100%;
+    padding: 10px 14px;
+    border: 0;
+    background: transparent;
+    color: var(--mu);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .addRow:hover {
+    background: var(--s2);
+  }
+  .toggles {
+    display: flex;
+    gap: 18px;
+    font-size: 12.5px;
+  }
+  /* Targets: 3-up provider grid with top/left hairlines on the grid, right/bottom on each tile. */
+  .providers {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--ln);
+    border-left: 1px solid var(--ln);
+  }
+  .provider {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 16px;
+    border: 0;
+    border-right: 1px solid var(--ln);
+    border-bottom: 1px solid var(--ln);
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    cursor: pointer;
+    text-align: left;
+    border-radius: 0;
+  }
+  .provider:hover {
+    background: var(--s2);
+  }
+  .providerName {
+    font-weight: 600;
+    font-size: 14px;
+  }
+  /* Footer: Back (hairline right) · spacer · Skip (hairline left) · Continue/Finish primary 14px 28px. */
+  .footer {
+    display: flex;
+    border-top: 1px solid var(--ln);
+  }
+  .spacer {
+    flex: 1;
+  }
+  .back,
+  .skip,
+  .next {
+    flex: none;
+    min-height: 0;
+    line-height: normal;
+  }
+  .back {
+    padding: 14px 24px;
+    border-right: 1px solid var(--ln);
+  }
+  .back[aria-disabled='true'] {
+    opacity: 1;
+    pointer-events: auto;
+    cursor: default;
+  }
+  .skip {
+    padding: 14px 24px;
+    border-left: 1px solid var(--ln);
+  }
+  .next {
+    padding: 14px 28px;
+  }
+}

@@ -97,6 +97,37 @@ describe('command contract', () => {
     });
   });
 
+  it('ide.import reads keybindings + theme from the editor config dir and stores them in app_settings', async () => {
+    const { app, sender } = makeTestApp();
+    const configDir = join(__dirname, '../../services/__fixtures__/vscode/User');
+    app.repos.discovery.saveIde({
+      id: 'ide-vscode',
+      kind: 'vscode',
+      product: 'VS Code',
+      version: '1.99.0',
+      location: null,
+      launcher: 'code',
+      configDir,
+      isFallback: false,
+      imported: { recents: 0, keybindings: false, theme: false },
+      detectedAt: app.clock.now(),
+    });
+    const r = await app.bus.dispatch(sender, 'ide.import', { ideId: 'ide-vscode', keybindings: true, theme: true, recents: true });
+    expect(r).toEqual({ ok: true, value: { recents: [], keybindingsImported: 3, themeImported: true } });
+    expect(app.repos.settings.kv.get('editor.importedKeybindings')).toEqual([
+      { key: 'cmd+shift+p', command: 'workbench.action.showCommands' },
+      { key: 'ctrl+k ctrl+t', command: 'workbench.action.selectTheme', when: 'editorTextFocus' },
+      { key: 'alt+z', command: '-editor.action.toggleWordWrap' },
+    ]);
+    expect(app.repos.settings.kv.get('editor.importedTheme')).toEqual({ colorTheme: 'GitHub Dark Default', fontFamily: 'JetBrains Mono, Menlo, monospace', from: 'vscode' });
+    expect(app.repos.discovery.ides()[0]?.imported).toEqual({ recents: 0, keybindings: true, theme: true });
+    expect(app.repos.settings.app()).not.toHaveProperty('editor.importedTheme'); // extra keys never leak into AppSettings
+    expect(await app.bus.dispatch(sender, 'ide.import', { ideId: 'nope', keybindings: true, theme: true, recents: true })).toEqual({
+      ok: true,
+      value: { recents: [], keybindingsImported: 0, themeImported: false },
+    });
+  });
+
   it('window.popout / dock publish popouts.set', async () => {
     const { app, sender, win, popouts } = makeTestApp();
     await app.bus.dispatch(sender, 'window.popout', { sessionId: fixtures.ids.session.claude });

@@ -76,6 +76,8 @@ export const ids = {
     shell: fid<'SessionId'>('sess', 6),
     cursor: fid<'SessionId'>('sess', 7),
     side: fid<'SessionId'>('sess', 8),
+    /** Error fixture only: a Codex session that cannot start because the CLI is missing. */
+    codexMissing: fid<'SessionId'>('sess', 9),
   },
   target: {
     vercelProd: fid<'TargetId'>('tgt', 1),
@@ -905,29 +907,36 @@ const change = (
   decidedAt: null,
 });
 
-/** The three pending hunks of the prototype's hunk bar / Diff review (checkout.ts ×2, validate.ts). */
+/**
+ * The three pending hunks of the prototype's hunk bar / Diff review, rows verbatim from `hunkSrc`
+ * (checkout.ts ×2, validate.ts; double quotes, three rows each).
+ */
 export const demoHunks = (): AgentChange[] => [
   change(
     1,
     'checkout.ts',
     [1, 2, 1, 3],
-    " import { sum } from './cart'\n+import { validate } from './validate'\n ",
+    ' import { sum } from "./cart"\n+import { validate } from "./validate"\n ',
   ),
   change(
     2,
     'checkout.ts',
     [4, 3, 5, 5],
-    ' export async function checkout(cart) {\n+  validate(cart)\n   const total = sum(cart.items)\n   const receipt = await pay(total)\n+  audit(receipt)',
+    ' export async function checkout(cart) {\n+  validate(cart)\n   const total = sum(cart.items)',
   ),
   change(
     3,
     'validate.ts',
     [0, 0, 1, 31],
-    '+export function validate(cart) {\n+  if (!cart.items.length) throw new CartError("empty")\n+}',
+    ' \n+export function validate(cart) {\n+  if (!cart.items.length) throw new CartError("empty")',
   ),
 ];
 
-/** Repo lane diff for fix/checkout (`git diff -U3`). */
+/**
+ * Repo lane diff for fix/checkout (`git diff -U3`), rows verbatim from the prototype's Repo block. The prototype's
+ * hardcoded header reads `+2 −0` although the block has three `+` rows; the app derives `+3 −0`
+ * (docs/handoff-discrepancies.md).
+ */
 export const demoLaneDiff = `diff --git a/checkout.ts b/checkout.ts
 --- a/checkout.ts
 +++ b/checkout.ts
@@ -1199,9 +1208,22 @@ export const errorFixture = (): DemoFixture => {
     worktrees: base.worktrees.map((w) =>
       w.id === ids.worktree.fixCheckout ? { ...w, conflict: { file: 'checkout.ts', against: 'main' } } : w,
     ),
-    sessions: base.sessions.map((s) =>
-      s.id === ids.session.claude ? { ...s, state: 'paused', pausedReason: 'conflict' } : s,
-    ),
+    sessions: [
+      ...base.sessions.map((s): Session =>
+        s.id === ids.session.claude ? { ...s, state: 'paused', pausedReason: 'conflict' } : s,
+      ),
+      /** "codex not found on PATH. 1 session cannot start." — outside acme-shop so its nav/tab counts hold. */
+      session(
+        ids.session.codexMissing,
+        ids.project.sideApi,
+        ids.worktree.sideMain,
+        'codex',
+        'paused',
+        'codex not found on PATH',
+        ago(3 * MIN),
+        { pausedReason: 'cli-missing', pid: null, startedAt: ago(3 * MIN) },
+      ),
+    ],
     notifications: [
       ...base.notifications,
       {

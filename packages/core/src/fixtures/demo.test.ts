@@ -74,6 +74,38 @@ describe('demo fixture', () => {
     expect(f.policies).toHaveLength(3);
     expect(f.auditEntries).toHaveLength(4);
     expect(f.hunks[ids.session.claude]).toHaveLength(3);
+    expect(f.hunks[ids.session.claude]?.map((h) => [h.file, h.patch.split('\n').slice(2)])).toEqual([
+      [
+        'checkout.ts',
+        [
+          '@@ -1,2 +1,3 @@',
+          ' import { sum } from "./cart"',
+          '+import { validate } from "./validate"',
+          ' ',
+          '',
+        ],
+      ],
+      [
+        'checkout.ts',
+        [
+          '@@ -4,3 +5,5 @@',
+          ' export async function checkout(cart) {',
+          '+  validate(cart)',
+          '   const total = sum(cart.items)',
+          '',
+        ],
+      ],
+      [
+        'validate.ts',
+        [
+          '@@ -0,0 +1,31 @@',
+          ' ',
+          '+export function validate(cart) {',
+          '+  if (!cart.items.length) throw new CartError("empty")',
+          '',
+        ],
+      ],
+    ]);
     expect(f.activity).toHaveLength(6);
     expect(f.now).toBe(DEMO_NOW);
   });
@@ -154,6 +186,18 @@ describe('demo fixture', () => {
       'fix/checkout conflicts with main in checkout.ts. Claude is paused until resolved.',
     ]);
     expect(errorReadModel().notifications.ids).toHaveLength(4);
+    // The three prototype banners derive from: expired target, paused cli-missing session, conflicting worktree.
+    expect(err.sessions).toHaveLength(9);
+    expect(err.sessions.find((s) => s.id === ids.session.codexMissing)).toMatchObject({
+      projectId: ids.project.sideApi,
+      agent: 'codex',
+      state: 'paused',
+      pausedReason: 'cli-missing',
+      pid: null,
+    });
+    expect(err.sessions.filter((s) => s.projectId === ids.project.acmeShop)).toHaveLength(
+      f.sessions.filter((s) => s.projectId === ids.project.acmeShop).length,
+    );
   });
 
   it('never contains a secret value (only keychain refs)', () => {

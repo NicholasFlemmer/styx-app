@@ -136,6 +136,14 @@ export const commands = {
     input: z.object({ projectId: projectIdSchema, key: projectSettingsKey }),
     output: ok,
   },
+  /** Template tile (spec §4.12): built-ins from `resources/templates` plus repos tagged `styx-template` in the GitHub org. */
+  'project.templates': {
+    input: z.object({}),
+    output: z.object({
+      builtins: z.array(z.string().min(1)),
+      org: z.array(z.object({ name: z.string().min(1), fullName: z.string().min(1) })),
+    }),
+  },
 
   // --- session ---
   'session.spawn': {
@@ -457,6 +465,8 @@ export const events = {
     pending: z.number().int().nonnegative(),
   }),
   'theme.resolved': z.object({ theme: z.enum(['dark', 'light']) }),
+  /** OS-side navigation (tray left-click / dock menu → Agents board, spec §4.14). The renderer switches screen. */
+  'nav.go': z.object({ screen: z.enum(['home', 'workspace', 'agents', 'repo', 'approvals', 'settings']) }),
 } as const;
 
 export type Events = typeof events;

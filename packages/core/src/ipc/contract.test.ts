@@ -44,6 +44,9 @@ describe('ipc contract', () => {
     expect(isEventName('store.delta')).toBe(true);
     expect(isEventName('nope')).toBe(false);
     expect(EVENT_NAMES).toContain('theme.resolved');
+    expect(EVENT_NAMES).toContain('nav.go');
+    expect(isCommandName('project.templates')).toBe(true);
+    expect(commands['project.templates'].output.safeParse({ builtins: ['node'], org: [{ name: 'tpl', fullName: 'acme/tpl' }] }).success).toBe(true);
     expect(CHANNELS).toEqual({ command: 'styx:cmd', store: 'styx:store', pty: 'styx:pty' });
   });
 
@@ -119,5 +122,7 @@ describe('ipc contract', () => {
       }).success,
     ).toBe(true);
     expect(events['theme.resolved'].safeParse({ theme: 'sepia' }).success).toBe(false);
+    expect(events['nav.go'].safeParse({ screen: 'agents' }).success).toBe(true);
+    expect(events['nav.go'].safeParse({ screen: 'diff' }).success).toBe(false);
   });
 });
