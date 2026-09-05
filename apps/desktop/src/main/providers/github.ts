@@ -4,11 +4,35 @@ import { hasVerb } from './types';
 
 const DEVICE_SCOPES = 'repo read:org workflow';
 
+export interface CreatedRepo {
+  fullName: string;
+  cloneUrl: string;
+  htmlUrl: string;
+  defaultBranch: string;
+}
+
+export interface TemplateRepo {
+  name: string;
+  fullName: string;
+}
+
+/** Repo-level GitHub operations ProjectService needs (repo creation, `styx-template` discovery). */
+export interface GitHubRepoApi {
+  /** The login the stored token belongs to (from `config.login`, else `/user`). */
+  login(target: TargetInfo): Promise<string>;
+  /** `POST /user/repos` for the token owner; `POST /orgs/{owner}/repos` when `owner` is someone else (an org). */
+  createRepo(target: TargetInfo, opts: { name: string; owner: string | null; isPrivate: boolean }): Promise<CreatedRepo>;
+  /** Repos tagged `styx-template` in `org` (spec §4.12 Template tile). */
+  templateRepos(target: TargetInfo, org: string): Promise<TemplateRepo[]>;
+  /** Raw token for a one-shot `git push` auth header; never persisted by the caller. */
+  pushToken(target: TargetInfo): Promise<string>;
+}
+
 /**
  * GitHub. Connect via device flow (Styx GitHub App / OAuth app client id) or a pasted token.
  * Token issuance is not scoped per grant by GitHub (installation tokens need a server); scope is enforced at the `gh` shim.
  */
-export class GitHubAdapter implements ProviderAdapter {
+export class GitHubAdapter implements ProviderAdapter, GitHubRepoApi {
   readonly provider = 'github' as const;
   readonly authMethod = 'oauth' as const;
   readonly tools = ['gh', 'git-credential-styx'];
@@ -77,6 +101,48 @@ export class GitHubAdapter implements ProviderAdapter {
     const raw = await this.deps.vault.get(target.credentialRef);
     if (!raw) throw new Error('credential missing from keychain');
     return (JSON.parse(raw) as { token: string }).token;
+  }
+
+  private headers(token: string): Record<string, string> {
+    return { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'styx', 'X-GitHub-Api-Version': '2022-11-28' };
+  }
+
+  async login(target: TargetInfo): Promise<string> {
+    const cfg = target.config['login'];
+    if (typeof cfg === 'string' && cfg) return cfg;
+    return (await this.whoami(await this.token(target))).login;
+  }
+
+  async pushToken(target: TargetInfo): Promise<string> {
+    return this.token(target);
+  }
+
+  async createRepo(target: TargetInfo, opts: { name: string; owner: string | null; isPrivate: boolean }): Promise<CreatedRepo> {
+    const token = await this.token(target);
+    const login = await this.login(target);
+    const owner = opts.owner && opts.owner !== login ? opts.owner : null;
+    const url = owner ? `https://api.github.com/orgs/${encodeURIComponent(owner)}/repos` : 'https://api.github.com/user/repos';
+    const r = await this.deps.fetch(url, {
+      method: 'POST',
+      headers: { ...this.headers(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: opts.name, private: opts.isPrivate, auto_init: false }),
+    });
+    if (!r.ok) {
+      const body = (await r.json().catch(() => ({}))) as { message?: string; errors?: { message?: string }[] };
+      const detail = body.errors?.map((e) => e.message).filter(Boolean).join('; ');
+      throw new Error(`GitHub could not create the repo (${r.status}): ${body.message ?? r.statusText}${detail ? ` — ${detail}` : ''}`);
+    }
+    const repo = (await r.json()) as { full_name: string; clone_url: string; html_url: string; default_branch?: string };
+    return { fullName: repo.full_name, cloneUrl: repo.clone_url, htmlUrl: repo.html_url, defaultBranch: repo.default_branch ?? 'main' };
+  }
+
+  async templateRepos(target: TargetInfo, org: string): Promise<TemplateRepo[]> {
+    const token = await this.token(target);
+    const q = encodeURIComponent(`topic:styx-template org:${org}`);
+    const r = await this.deps.fetch(`https://api.github.com/search/repositories?q=${q}&per_page=50`, { headers: this.headers(token) });
+    if (!r.ok) throw new Error(`GitHub template search failed (${r.status})`);
+    const body = (await r.json()) as { items?: { name: string; full_name: string }[] };
+    return (body.items ?? []).map((i) => ({ name: i.name, fullName: i.full_name }));
   }
 
   async issue(grant: GrantInfo, target: TargetInfo): Promise<IssuedCredential> {

@@ -31,18 +31,25 @@ export interface ConflictInfo {
   against: string;
 }
 
+export interface GitRunOptions {
+  reject?: boolean;
+  input?: string;
+  /** Extra environment (e.g. `GIT_CONFIG_*` for a one-shot auth header); never logged. */
+  env?: Record<string, string>;
+}
+
 export interface GitRunner {
-  run(args: string[], cwd: string, opts?: { reject?: boolean; input?: string }): Promise<{ stdout: string; stderr: string; exitCode: number }>;
+  run(args: string[], cwd: string, opts?: GitRunOptions): Promise<{ stdout: string; stderr: string; exitCode: number }>;
 }
 
 export class ExecaGitRunner implements GitRunner {
   constructor(private readonly gitBin = 'git') {}
-  async run(args: string[], cwd: string, opts: { reject?: boolean; input?: string } = {}) {
+  async run(args: string[], cwd: string, opts: GitRunOptions = {}) {
     const options: ExecaOptions = {
       cwd,
       reject: opts.reject ?? true,
       stripFinalNewline: false,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' },
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', ...(opts.env ?? {}) },
       ...(opts.input !== undefined ? { input: opts.input } : {}),
     };
     try {
@@ -276,6 +283,25 @@ export class GitService {
 
   async commit(path: string, message: string): Promise<void> {
     await this.git.run(['-c', 'user.name=Styx', '-c', 'user.email=styx@localhost', 'commit', '-q', '-m', message], path);
+  }
+
+  async addRemote(path: string, name: string, url: string): Promise<void> {
+    await this.git.run(['remote', 'add', name, url], path);
+  }
+
+  /**
+   * `git push -u <remote> <branch>`. A bearer token, when given, travels as a one-shot `http.extraheader` through
+   * `GIT_CONFIG_*` env (not argv, so it never shows in `ps`) and is not persisted in the repo config.
+   */
+  async push(path: string, remote: string, branch: string, opts: { token?: string } = {}): Promise<void> {
+    const env = opts.token
+      ? {
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: 'http.extraheader',
+          GIT_CONFIG_VALUE_0: `AUTHORIZATION: bearer ${opts.token}`,
+        }
+      : undefined;
+    await this.git.run(['push', '-q', '-u', remote, branch], path, env ? { env } : {});
   }
 
   async configureRepo(path: string, opts: { longPaths?: boolean; lineEndings?: 'auto' | 'lf' | 'crlf' }): Promise<void> {

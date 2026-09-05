@@ -1,0 +1,9 @@
+// Place your key bindings in this file to override the defaults
+[
+  { "key": "cmd+shift+p", "command": "workbench.action.showCommands" },
+  /* a chord with a when clause */
+  { "key": "ctrl+k ctrl+t", "command": "workbench.action.selectTheme", "when": "editorTextFocus" },
+  { "key": "", "command": "ignored.empty-key" },
+  { "command": "ignored.no-key" },
+  { "key": "alt+z", "command": "-editor.action.toggleWordWrap", },
+]

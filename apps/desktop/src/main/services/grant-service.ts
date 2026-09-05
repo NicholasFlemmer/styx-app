@@ -23,6 +23,7 @@ import {
   type GrantId,
   type GrantUseVia,
   type PendingAsk,
+  type Policy,
   type PolicyDecision,
   type Scope,
   type Session,
@@ -56,6 +57,8 @@ export interface GrantServiceDeps {
   activity: ActivityService;
   sessions: Pick<SessionService, 'applyEvent' | 'resolveAsk' | 'setNote'>;
   platform: NodeJS.Platform;
+  /** `.styx/project.json` `policies.extra` for the target's project (ProjectService.projectRules); evaluated after app rules. */
+  projectRules?: (projectId: string) => Policy[];
   /** Sweep interval after sleep; timers may lag (spec: 60 s). */
   sweepMs?: number;
 }
@@ -157,17 +160,20 @@ export class GrantService {
 
   // --- request -------------------------------------------------------------
 
-  decide(target: Target, session: Session | null, scope: Scope[]): PolicyDecision {
+  decide(target: Target, session: Session | null, scope: Scope[]): PolicyDecision & { projectRuleId: string | null } {
     const { repos, clock } = this.deps;
-    return evaluate({
+    const d = evaluate({
       target,
       scope,
       session: session ? { id: session.id, mayRequestTargets: session.toggles.mayRequestTargets } : null,
       appRules: repos.policies.all(),
-      projectRules: [],
+      projectRules: this.deps.projectRules?.(target.projectId) ?? [],
       persistentGrants: repos.grants.byTarget(target.id).filter((g) => g.state === 'active'),
       now: clock.now(),
     });
+    // `.styx/project.json` rules are not `policies` rows (grants.policy_id is an FK): cite them in the audit detail instead.
+    if (d.policyId !== null && !repos.policies.get(d.policyId)) return { ...d, policyId: null, projectRuleId: d.policyId };
+    return { ...d, projectRuleId: null };
   }
 
   /** Any live grant of this session (or persistent on the target) covering `scope`. */
@@ -227,7 +233,7 @@ export class GrantService {
       policyId: decision.policyId,
       scope: grant.scope,
       triggeredBy: req.triggeredBy,
-      detail: { reason: req.reason },
+      detail: { reason: req.reason, ...(decision.projectRuleId ? { projectRule: decision.projectRuleId } : {}) },
     });
 
     if (decision.decision === 'deny') {

@@ -1,12 +1,29 @@
+import { agentSchema, copy, idFrom, type EventPayload } from '@styx/core';
 import type { KvStore } from '../db/kv';
+import type { Repos } from '../db/repos';
+
+export interface TrayMenuItem {
+  label: string;
+  click?: () => void;
+  type?: 'separator' | 'checkbox';
+  checked?: boolean;
+}
 
 export interface OsNotifier {
   /** macOS: dock badge count + single bounce on first ask; Windows: tray accent dot. */
   setBadge(count: number): void;
   bounceOnce(): void;
   /** OS toast (Windows Action Center; macOS Notification Center) with Review / Later actions. */
-  toast(n: { id: string; title: string; body: string; onReview: () => void; onLater: () => void }): void;
-  setTray(opts: { attention: boolean; menu: { label: string; click?: () => void; type?: 'separator' | 'checkbox'; checked?: boolean }[] }): void;
+  toast(n: {
+    id: string;
+    title: string;
+    body: string;
+    sound: boolean;
+    onReview: () => void;
+    onLater: () => void;
+  }): void;
+  /** Windows tray (accent dot when `attention`, left-click → `onClick`) / macOS dock menu with the same items. */
+  setTray(opts: { attention: boolean; menu: TrayMenuItem[]; onClick: () => void }): void;
 }
 
 export interface AskSummary {
@@ -29,7 +46,13 @@ export class NotificationService {
     private readonly os: OsNotifier,
     private readonly kv: KvStore,
     private readonly platform: NodeJS.Platform,
-    private readonly actions: { review: (ask: AskSummary) => void; later: (ask: AskSummary) => void; openBoard: () => void },
+    private readonly actions: {
+      review: (ask: AskSummary) => void;
+      later: (ask: AskSummary) => void;
+      openBoard: () => void;
+    },
+    /** "Badge + sound" app setting; badge-only by default. */
+    private readonly soundEnabled: () => boolean = () => false,
   ) {}
 
   get dnd(): boolean {
@@ -41,9 +64,15 @@ export class NotificationService {
     this.refreshTray();
   }
 
-  /** Sound is opt-in ("Badge + sound" setting); default is badge only. */
   get sound(): boolean {
-    return this.kv.get<string>('notify.mode') === 'badge+sound';
+    return this.soundEnabled();
+  }
+
+  /** Puts the tray / dock menu up at launch with the persisted open-ask count and DND state. */
+  start(openCount: number): void {
+    this.openCount = openCount;
+    this.os.setBadge(openCount);
+    this.refreshTray();
   }
 
   onAskOpened(ask: AskSummary, openCount: number): void {
@@ -55,7 +84,15 @@ export class NotificationService {
       this.bounced = true; // never repeatedly
     }
     this.refreshTray();
-    if (!this.dnd) this.os.toast({ id: ask.askId, title: ask.title, body: ask.meta, onReview: () => this.actions.review(ask), onLater: () => this.actions.later(ask) });
+    if (!this.dnd)
+      this.os.toast({
+        id: ask.askId,
+        title: ask.title,
+        body: ask.meta,
+        sound: this.sound,
+        onReview: () => this.actions.review(ask),
+        onLater: () => this.actions.later(ask),
+      });
   }
 
   onAskResolved(askId: string, openCount: number): void {
@@ -69,12 +106,77 @@ export class NotificationService {
   private refreshTray(): void {
     this.os.setTray({
       attention: this.openCount > 0,
+      onClick: this.actions.openBoard,
       menu: [
-        { label: this.openCount ? `${this.openCount} need you` : 'Nothing waiting on you', click: this.actions.openBoard },
-        ...this.recent.map((a) => ({ label: `${a.agentLabel} · ${a.projectName} · ${a.title}`, click: () => this.actions.review(a) })),
+        {
+          label: this.openCount ? `${this.openCount} need you` : 'Nothing waiting on you',
+          click: this.actions.openBoard,
+        },
+        ...this.recent.map((a) => ({
+          label: `${a.agentLabel} · ${a.projectName} · ${a.title}`,
+          click: () => this.actions.review(a),
+        })),
         { label: '', type: 'separator' as const },
-        { label: 'Do Not Disturb', type: 'checkbox' as const, checked: this.dnd, click: () => this.setDnd(!this.dnd) },
+        {
+          label: 'Do Not Disturb',
+          type: 'checkbox' as const,
+          checked: this.dnd,
+          click: () => this.setDnd(!this.dnd),
+        },
       ],
     });
   }
+}
+
+/**
+ * Persistent banners still `shown` in `notifications` (keyed by `banner_key`), rebuilt as `banner.set` payloads so a
+ * freshly connected window sees them again after a restart. Keys: `auth-expired:<targetId>` · `cli-missing:<agent>` ·
+ * `conflict:<worktreeId>`; unknown keys are skipped.
+ */
+export function bannersToReemit(repos: Repos): EventPayload<'banner.set'>[] {
+  const out: EventPayload<'banner.set'>[] = [];
+  for (const n of repos.notifications.all()) {
+    if (n.kind !== 'error-banner' || n.state !== 'shown' || !n.bannerKey) continue;
+    const sep = n.bannerKey.indexOf(':');
+    const kind = n.bannerKey.slice(0, sep);
+    const id = n.bannerKey.slice(sep + 1);
+    if (!id) continue;
+    if (kind === 'auth-expired') {
+      if (!repos.targets.get(id)) continue;
+      out.push({
+        bannerKey: n.bannerKey,
+        kind: 'auth-expired',
+        text: n.title,
+        cta: copy.errors.authExpired.cta,
+        action: { kind: 'reconnect', targetId: idFrom<'TargetId'>(id) },
+        sessionId: n.sessionId,
+        reason: 'auth-expired',
+      });
+    } else if (kind === 'cli-missing') {
+      const agent = agentSchema.safeParse(id);
+      if (!agent.success) continue;
+      out.push({
+        bannerKey: n.bannerKey,
+        kind: 'cli-missing',
+        text: n.title,
+        cta: copy.errors.cliMissing.cta,
+        action: { kind: 'install-guide', agent: agent.data },
+        sessionId: n.sessionId,
+        reason: 'cli-missing',
+      });
+    } else if (kind === 'conflict') {
+      const wt = repos.worktrees.get(id);
+      if (!wt) continue;
+      out.push({
+        bannerKey: n.bannerKey,
+        kind: 'conflict',
+        text: n.title,
+        cta: copy.errors.conflict.cta,
+        action: { kind: 'resolve', worktreeId: wt.id },
+        sessionId: n.sessionId,
+        reason: 'conflict',
+      });
+    }
+  }
+  return out;
 }

@@ -1,11 +1,18 @@
 import type { Container } from '../../container';
+import { bannersToReemit } from '../../services/notification-service';
 import type { CommandBus } from '../bus';
 
 /** store.snapshot · settings.* · ui.persist · onboarding.complete · notify.* */
 export function registerStoreCommands(bus: CommandBus, app: Container): void {
   const { repos, publisher } = app;
 
-  bus.register('store.snapshot', () => publisher.snapshot());
+  bus.register('store.snapshot', () => {
+    const snapshot = publisher.snapshot();
+    // Persistent banners (notifications.banner_key, state 'shown') survive restarts: re-emit them to the window that
+    // just connected until the underlying condition resolves (spec §4.14 / plan §5 NotificationService).
+    for (const b of bannersToReemit(repos)) publisher.sendEvent('banner.set', b);
+    return snapshot;
+  });
 
   bus.register('settings.get', () => ({ app: repos.settings.app() }));
 

@@ -1,0 +1,8 @@
+{
+  // theme + font are the only keys Styx reads
+  "workbench.colorTheme": "GitHub Dark Default",
+  "editor.fontFamily": "JetBrains Mono, Menlo, monospace",
+  "editor.fontSize": 13,
+  "github.copilot.enable": { "*": true },
+  "terminal.integrated.env.osx": { "SECRET_LOOKING_KEY": "not read" },
+}

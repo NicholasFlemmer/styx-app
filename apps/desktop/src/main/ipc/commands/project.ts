@@ -24,10 +24,8 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
       gitInit: input.gitInit,
       template: input.startFrom.kind === 'template' ? input.startFrom.template : null,
       copyTargetsFrom: input.copyTargetsFrom,
+      createGithubRepo: input.createGithubRepo,
     });
-    if (input.createGithubRepo) {
-      // TODO(github-create): create the private repo through the project's GitHub target (needs a connected `github` target).
-    }
     let sessionId: SessionId | null = null;
     if (input.startFrom.kind === 'agent') {
       const main = repos.worktrees.mainOf(project.id) ?? fail('internal', 'main worktree missing');
@@ -54,6 +52,8 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
     }
     return { projectId: project.id, sessionId };
   });
+
+  bus.register('project.templates', () => projects.templates());
 
   bus.register('project.remove', async ({ projectId, deleteFiles }) => {
     const { sessionIds } = await projects.remove(projectId, deleteFiles);
