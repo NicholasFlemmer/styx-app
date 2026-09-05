@@ -90,6 +90,8 @@ describe('project file policies.extra → projectRules', () => {
 
     const target = t.app.repos.targets.get(ids.target.supabaseProd);
     if (!target?.credentialRef) throw new Error('fixture target');
+    // Supabase hands the agent the whole token, so on *prod* an auto rule still asks (+MFA); staging auto-issues.
+    t.app.repos.targets.upsert({ ...target, env: 'staging' });
     await t.vault.set(target.credentialRef, JSON.stringify({ token: 'sbp_test' }));
     const out = await t.app.grants.request({
       sessionId: ids.session.gemini,

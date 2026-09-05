@@ -1,6 +1,6 @@
 import { makeCredentialRef } from '../services/credential-vault';
 import type { AdapterDeps, ConnectInput, GrantInfo, IssuedCredential, ProviderAdapter, Scope, TargetInfo, TestResult } from './types';
-import { expiryFor, hasVerb } from './types';
+import { commandHead, expiryFor, hasVerb } from './types';
 
 export interface StsLike {
   callerIdentity(creds: AwsKeys): Promise<{ arn: string; account: string }>;
@@ -101,7 +101,8 @@ export class AwsAdapter implements ProviderAdapter {
   scopeOfCommand(argv: string[]): Scope[] {
     if (hasVerb(argv, /^(delete-|terminate-|remove-|destroy|rb$|rm$)/) || (argv[0] === 's3' && argv[1] === 'rm') || (argv[0] === 'cloudformation' && argv[1] === 'delete-stack')) return ['delete'];
     if (hasVerb(argv, /^(deploy|update-function-code|update-service|create-deployment|sync|cp|put-object|publish)$/) || argv[0] === 'deploy') return ['deploy'];
-    if (hasVerb(argv, /^(get-|list-|describe-|ls$|head-)/) || argv.includes('--dry-run') || argv[0] === 'sts') return ['read'];
+    const head = commandHead(argv);
+    if (hasVerb(head, /^(get-|list-|describe-|ls$|head-)/) || argv.includes('--dry-run') || head[0] === 'sts') return ['read'];
     return ['write'];
   }
 }

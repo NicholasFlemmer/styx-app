@@ -5,6 +5,7 @@ import { execa } from 'execa';
 import { makeCredentialRef } from '../services/credential-vault';
 import { StyxSshAgent } from './ssh-agent';
 import type { AdapterDeps, ConnectInput, GrantInfo, IssuedCredential, ProviderAdapter, Scope, TargetInfo, TestResult } from './types';
+import { hasVerb } from './types';
 
 export interface SshAdapterOptions {
   socketDir?: string;
@@ -88,10 +89,13 @@ export class SshAdapter implements ProviderAdapter {
   }
 
   issuesScoped(): boolean {
-    return true; // the agent only ever sees a forwarded agent socket, never the key
+    // The forwarded agent socket signs anything the remote host asks for; a "read" grant still opens a full login.
+    return false;
   }
 
-  scopeOfCommand(argv: string[]): Scope[] {
+  scopeOfCommand(argv: string[], tool = 'ssh'): Scope[] {
+    // scp/sftp/rsync move files in both directions: always a write; `rsync --delete` removes remote files.
+    if (tool !== 'ssh') return hasVerb(argv, /^--delete(-[a-z]+)?$/) ? ['delete'] : ['write'];
     // ssh [-opts] user@host [command…] — classify the remote command only.
     const hostIdx = argv.findIndex((a) => !a.startsWith('-') && a.includes('@'));
     const remote = (hostIdx >= 0 ? argv.slice(hostIdx + 1) : argv.filter((a) => !a.startsWith('-')).slice(1)).join(' ');
@@ -100,7 +104,9 @@ export class SshAdapter implements ProviderAdapter {
     // behind a benign-looking first word (`ls; rm …`), so they can never classify as read.
     if (/[;&|$`\n><]/.test(remote) || /\(|\{/.test(remote)) return ['write'];
     if (/\b(deploy|systemctl restart|docker compose up|pm2 (restart|reload))\b/.test(remote)) return ['deploy'];
-    if (remote === '' || /^(ls|cat|tail|head|df|uptime|true|hostname|whoami)\b/.test(remote)) return ['read'];
+    // A bare `ssh host` is an interactive login: anything can happen in it.
+    if (remote === '') return ['write'];
+    if (/^(ls|cat|tail|head|df|uptime|true|hostname|whoami)\b/.test(remote)) return ['read'];
     return ['write'];
   }
 }

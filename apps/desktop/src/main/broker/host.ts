@@ -19,7 +19,7 @@ import {
 } from '@styx/core';
 import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
-import type { ProviderRegistry } from '../providers';
+import type { IssuedCredential, ProviderRegistry } from '../providers';
 import type { GrantOutcome, GrantService } from '../services/grant-service';
 import type { HunkService } from '../services/hunk-service';
 import { logger, redact, redactArgv } from '../services/logger';
@@ -222,7 +222,7 @@ export class BrokerHost {
     server.on('exec_authorize', async (p, ctx, req) => {
       const adapter = deps.providers.forTool(p.tool);
       if (!adapter) throw new BrokerError(ErrorCode.notAllowed, `${p.tool} is not a Styx-managed tool`);
-      const scopes = adapter.scopeOfCommand(p.argv) as Scope[];
+      const scopes = adapter.scopeOfCommand(p.argv, p.tool) as Scope[];
       // Persisted as grants.reason / grant_uses.command / audit triggered_by: never the raw argv (M1).
       const command = redact(`$ ${[p.tool, ...redactArgv(p.argv)].join(' ')}`);
       const target = this.pickTarget(ctx, adapter.provider, p.argv, scopes);
@@ -232,7 +232,11 @@ export class BrokerHost {
           `no ${adapter.provider} target in ${ctx.session.projectName}`,
         );
       const covering = deps.grants.covering(target, ctx.session.sessionId, scopes);
-      if (covering) return this.authorizeUse(covering, command, scopes, ctx);
+      if (covering) {
+        // Through credentialFor so a persistent grant issued before a restart is re-issued (project-bound, M3).
+        const cred = await deps.grants.credentialFor(covering.id, { sessionId: ctx.session.sessionId, projectId: ctx.session.projectId });
+        return this.authorizeUse(covering, command, scopes, ctx, cred);
+      }
       // Only the path that inserts a grant request consumes the session's request bucket (L1); covered shim
       // execs stay unmetered.
       if (!server.allow(ctx.session.sessionId))
@@ -358,8 +362,9 @@ export class BrokerHost {
     command: string,
     scopes: Scope[],
     ctx: ConnectionContext,
+    issued?: IssuedCredential,
   ): Result<'exec_authorize'> {
-    const cred = this.deps.grants.issuedCredential(grant.id);
+    const cred = issued ?? this.deps.grants.issuedCredential(grant.id);
     const { useId } = this.deps.grants.use(grant.id, {
       command,
       scopeUsed: scopes[0] ?? 'read',

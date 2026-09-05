@@ -168,7 +168,7 @@ describe('BrokerHost security regressions', () => {
     const ghp = `ghp_${'c'.repeat(36)}`;
     const r = await client.call('exec_authorize', {
       tool: 'vercel',
-      argv: ['--token', 'secretvalue123', 'deploy', '--password=hunter2', ghp],
+      argv: ['--token', 'secretvalue123', 'env', 'add', 'X', '--password=hunter2', ghp],
       cwd: '/tmp',
     });
     expect(r.env).toEqual({ VERCEL_TOKEN: 'vt-preview' }); // the real credential still flows to the shim
@@ -190,9 +190,23 @@ describe('BrokerHost security regressions', () => {
     expect(dump).not.toContain('secretvalue123');
     expect(dump).not.toContain('hunter2');
     expect(dump).not.toContain(ghp);
-    expect(app.app.repos.grants.get(r.grantId)?.reason).toBe('$ vercel --token [redacted] deploy --password=[redacted] [redacted]');
+    expect(app.app.repos.grants.get(r.grantId)?.reason).toBe('$ vercel --token [redacted] env add X --password=[redacted] [redacted]');
     expect(requested?.reason).toBe('migrate with [redacted]');
     app.app.grants.deny(requested?.id ?? '');
+    await pending;
+    client.close();
+  });
+
+  it('M1: report_status notes and ask_user prompts are redacted before they are stored', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const ghp = `ghp_${'g'.repeat(36)}`;
+    await client.call('report_status', { note: `pushing with ${ghp}` });
+    expect(app.app.repos.sessions.get(ids.session.gemini)?.note).toBe('pushing with [redacted]');
+    const pending = client.call('ask_user', { kind: 'decision', payload: { prompt: `Use ${ghp}?`, options: ['Yes', `No ${ghp}`] }, waitMs: 1000 }).catch(() => undefined);
+    await new Promise((res) => setTimeout(res, 50));
+    const ask = app.app.repos.pendingAsks.openBySession(ids.session.gemini).find((a) => a.kind === 'decision');
+    expect(JSON.stringify(ask)).not.toContain(ghp);
+    expect(ask?.payload).toMatchObject({ prompt: 'Use [redacted]?', options: ['Yes', 'No [redacted]'] });
     await pending;
     client.close();
   });

@@ -184,6 +184,14 @@ export class GrantService {
     return { ...d, projectRuleId: null };
   }
 
+  /**
+   * Unscoped providers (GitHub, Vercel, Supabase, SSH, GCP non-read) hand the agent the whole stored credential
+   * whatever the shim heuristics classified, so on prod the user verifies even for "read" (M2). No hint = unscoped.
+   */
+  private unscopedProd(target: Target, scope: readonly Scope[]): boolean {
+    return target.env === 'prod' && !(this.deps.providers.get(target.provider).issuesScoped?.(scope) ?? false);
+  }
+
   /** Any live grant of this session (or persistent on the target) covering `scope`. */
   covering(target: Target, sessionId: string | null, scope: readonly Scope[]): Grant | null {
     const now = this.deps.clock.now();
@@ -203,12 +211,16 @@ export class GrantService {
     const target = repos.targets.get(req.targetId) ?? fail('not-found', `target ${req.targetId} not found`);
     const session = req.sessionId ? repos.sessions.get(req.sessionId) : null;
     const now = clock.now();
-    const decision = this.decide(target, session, req.scope);
+    let decision = this.decide(target, session, req.scope);
 
     if (decision.decision === 'auto' && decision.grantId !== null) {
       const existing = repos.grants.get(decision.grantId);
       if (existing) return { kind: 'active', grant: existing, decidedBy: 'persistent-grant' };
     }
+    // Policies and `always` target policies never hand out a prod token the agent gets whole without the user
+    // verifying: prod ∧ unscoped adapter downgrades auto → ask, and approve() then forces MFA (M2).
+    if (decision.decision === 'auto' && this.unscopedProd(target, req.scope))
+      decision = { ...decision, decision: 'ask', requireMfa: true };
 
     // A duplicate ask (same session, target, scope set) while the first is still open returns the pending grant
     // instead of stacking a second row and a second sheet (L1: prompt-injection spam cannot flood the queue).
@@ -335,12 +347,11 @@ export class GrantService {
     if (scope && scope.length > 0 && !scope.every((s) => grant.scope.includes(s)))
       fail('invalid-input', 'scope must be a subset of the requested scope');
     const decision = this.decide(target, session, scopes);
-    // Unscoped providers (GitHub, Vercel, Supabase, GCP non-read) hand the agent the whole stored token whatever the
-    // shim heuristics classified, so on prod the user verifies even for "read" (M2). Absent hint = unscoped.
-    const unscopedProd =
-      target.env === 'prod' && !(this.deps.providers.get(target.provider).issuesScoped?.(scopes) ?? false);
     const needMfa =
-      requiresMfa(target.env, scopes) || target.policy === 'ask-mfa' || decision.requireMfa || unscopedProd;
+      requiresMfa(target.env, scopes) ||
+      target.policy === 'ask-mfa' ||
+      decision.requireMfa ||
+      this.unscopedProd(target, scopes);
     let mfaVerified = false;
     if (needMfa) {
       const reason = `Grant ${session ? AGENT_LABEL[session.agent] : 'access'} ${scopes.join('+')} on ${target.name} ${target.env}`;

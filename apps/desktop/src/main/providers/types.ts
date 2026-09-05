@@ -42,8 +42,11 @@ export interface ProviderAdapter {
   /** Scoped short-lived credential where the provider supports it, else the stored token as env (scoped: false). */
   issue(grant: GrantInfo, target: TargetInfo): Promise<IssuedCredential>;
   revoke(issued: IssuedCredential): Promise<void>;
-  /** Maps a shim invocation to the scopes it needs (spec: "Styx enforces scope at the command level"). */
-  scopeOfCommand(argv: string[]): Scope[];
+  /**
+   * Maps a shim invocation to the scopes it needs (spec: "Styx enforces scope at the command level"). `tool` is the
+   * shim binary that was invoked (`ssh` vs `scp`/`rsync`, `aws` vs `sam`); adapters with one tool may ignore it.
+   */
+  scopeOfCommand(argv: string[], tool?: string): Scope[];
   /**
    * Whether `issue` for these scopes yields a credential narrower than the stored one. Absent = unscoped (fail
    * closed): GrantService.approve then forces MFA on prod regardless of the classified scope, because the agent
@@ -72,6 +75,23 @@ export function expiryFor(grant: GrantInfo, now: number, providerMax = HOUR): nu
 
 export function hasVerb(argv: string[], verbs: RegExp): boolean {
   return argv.some((a) => verbs.test(a));
+}
+
+/**
+ * The command words of an invocation: leading global flags (`--profile x`, `--region=y`) are skipped, then tokens up
+ * to the first flag. Read/write classification only ever looks at these, never at flag values, so
+ * `aws ssm put-parameter --name list-foo` cannot pass as a read (M2).
+ */
+export function commandHead(argv: string[]): string[] {
+  let i = 0;
+  while (i < argv.length && (argv[i] ?? '').startsWith('-')) i += (argv[i] ?? '').includes('=') || (argv[i + 1] ?? '-').startsWith('-') ? 1 : 2;
+  const head: string[] = [];
+  for (; i < argv.length; i += 1) {
+    const a = argv[i] ?? '';
+    if (a.startsWith('-')) break;
+    head.push(a);
+  }
+  return head;
 }
 
 /** `--help` / `--version` / `help` anywhere in argv: no remote effect. */

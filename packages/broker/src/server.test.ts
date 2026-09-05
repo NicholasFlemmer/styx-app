@@ -1,4 +1,5 @@
 import { chmodSync, mkdirSync, mkdtempSync, statSync, symlinkSync } from 'node:fs';
+import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -18,6 +19,7 @@ beforeEach(async () => {
   server = new BrokerServer({
     authenticate: async (sid, tok) => (sid === 's1' && tok === TOKEN ? session : null),
     rateLimitPerMinute: 2,
+    askRateLimitPerMinute: 3,
     now: () => now,
   });
   await server.listen(path);
@@ -105,17 +107,52 @@ describe('BrokerServer hardening', () => {
     c.close();
   });
 
-  it('L1: ask_user shares the per-session bucket, and allow() is public for host-metered paths', async () => {
+  it('L1: ask_user has its own (larger) bucket; allow() is public so the host can meter exec_authorize into the request bucket', async () => {
     server.on('ask_user', async () => ({ resolution: { kind: 'question', answer: 'y' } }));
+    server.on('request_access', async () => ({ status: 'denied', grantId: 'x' }));
     const c = client();
     await c.connect();
-    await c.call('ask_user', { kind: 'question', payload: {}, waitMs: 0 });
-    expect(server.allow('s1')).toBe(true); // second slot, consumed by the host
-    await expect(c.call('ask_user', { kind: 'question', payload: {}, waitMs: 0 })).rejects.toMatchObject({ code: ErrorCode.rateLimited });
+    const ask = () => c.call('ask_user', { kind: 'question', payload: {}, waitMs: 0 });
+    await ask();
+    await ask();
+    await ask();
+    await expect(ask()).rejects.toMatchObject({ code: ErrorCode.rateLimited, message: /questions/ });
+    // The request bucket is untouched by asks: one request_access + one host-metered slot, then exhausted.
+    await c.call('request_access', { target: 't', scope: ['read'], reason: 'r' });
+    expect(server.allow('s1')).toBe(true);
     expect(server.allow('s1')).toBe(false);
+    await expect(c.call('request_access', { target: 't', scope: ['read'], reason: 'r' })).rejects.toMatchObject({ code: ErrorCode.rateLimited });
     now += 61_000;
     expect(server.allow('s1')).toBe(true);
+    expect(server.allow('s1', 'ask')).toBe(true);
     c.close();
+  });
+
+  it('L3: two hellos racing through authenticate bind once and drop the connection', async () => {
+    const slow = new BrokerServer({
+      authenticate: async (sid, tok) => {
+        await new Promise((r) => setTimeout(r, 30));
+        return sid === 's1' && tok === TOKEN ? session : null;
+      },
+    });
+    const p2 = join(mkdtempSync(join(tmpdir(), 'styx-brk-')), 'b.sock');
+    await slow.listen(p2);
+    const sock = connect(p2);
+    await new Promise<void>((r) => sock.once('connect', () => r()));
+    const lines: { id: number; error?: { code: number } }[] = [];
+    let buf = '';
+    sock.on('data', (d) => {
+      buf += String(d);
+      for (const l of buf.split('\n').slice(0, -1)) lines.push(JSON.parse(l) as (typeof lines)[number]);
+      buf = buf.slice(buf.lastIndexOf('\n') + 1);
+    });
+    const hello = (id: number) => `${JSON.stringify({ jsonrpc: '2.0', id, method: 'hello', params: { v: 1, sessionId: 's1', token: TOKEN, client: 'mcp', pid: 1 } })}\n`;
+    sock.write(hello(1) + hello(2));
+    await new Promise((r) => setTimeout(r, 150));
+    expect(lines.map((l) => [l.id, l.error?.code ?? 'ok'])).toEqual([[1, 'ok'], [2, ErrorCode.invalidRequest]]);
+    expect(slow.connectionCount()).toBe(0);
+    sock.destroy();
+    await slow.close();
   });
 
   it.skipIf(process.platform === 'win32')('L2: the socket directory must be ours, 0700 and not a symlink; the socket is born 0600', async () => {

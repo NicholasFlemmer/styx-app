@@ -31,7 +31,7 @@ import type { Publisher } from '../store/publisher';
 import type { DetectService } from './detect-service';
 import type { GitService } from './git';
 import { worktreeLocation } from './git';
-import { logger } from './logger';
+import { logger, redact } from './logger';
 import type { NotificationService } from './notification-service';
 import type { PtyLog } from './pty-log';
 import type { PtyService } from './pty-service';
@@ -709,8 +709,9 @@ export class SessionService {
     return next;
   }
 
-  setNote(sessionId: string, note: string | null): void {
+  setNote(sessionId: string, rawNote: string | null): void {
     const s = this.require(sessionId);
+    const note = rawNote === null ? null : redact(rawNote); // `report_status` notes are agent text
     if (s.note === note) return;
     this.deps.repos.sessions.upsert({ ...s, note });
     this.deps.publisher.upsert('sessions', [s.id]);
@@ -963,11 +964,12 @@ export class SessionService {
   /** Opens a non-grant ask (plan / decision / question) from the broker, a stream permission request or a CLI hook. */
   openAsk(
     sessionId: string,
-    payload: Exclude<PendingAsk['payload'], { kind: 'grant' }>,
+    rawPayload: Exclude<PendingAsk['payload'], { kind: 'grant' }>,
     brokerRequestId: string | null,
     opts: { silent?: boolean } = {},
   ): PendingAsk {
     const { repos, publisher, clock } = this.deps;
+    const payload = redact(rawPayload); // `ask_user` prompts/options are agent text
     const s = this.require(sessionId);
     const ask: PendingAsk = {
       id: newId<'AskId'>(),

@@ -2,6 +2,7 @@ import { newId, type AskId, type MessagePayload, type SessionId, type Transcript
 import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
 import type { Publisher } from '../store/publisher';
+import { redact } from './logger';
 
 /** Appends transcript rows and publishes `transcript.append` deltas. */
 export class TranscriptService {
@@ -13,10 +14,13 @@ export class TranscriptService {
 
   append(
     sessionId: SessionId,
-    body: string,
-    payload: MessagePayload,
+    rawBody: string,
+    rawPayload: MessagePayload,
     askId: AskId | null = null,
   ): TranscriptMessage {
+    // Agent output and agent-supplied reasons are persisted and mirrored to the renderer: scrub secret shapes.
+    const body = redact(rawBody);
+    const payload = redact(rawPayload);
     const message: TranscriptMessage = {
       id: newId<'MessageId'>(),
       sessionId,
@@ -39,7 +43,8 @@ export class TranscriptService {
     return this.append(sessionId, body, { kind: 'user' });
   }
 
-  patch(sessionId: SessionId, messageId: string, body: string): void {
+  patch(sessionId: SessionId, messageId: string, rawBody: string): void {
+    const body = redact(rawBody);
     this.repos.transcripts.patchBody(messageId, body);
     this.publisher.transcriptPatch(sessionId, messageId, body);
   }

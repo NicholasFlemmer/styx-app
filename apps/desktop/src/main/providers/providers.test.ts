@@ -137,7 +137,7 @@ describe('SshAdapter', () => {
     await ssh.revoke(issued);
     await expect(new Promise((resolve, reject) => new OpenSSHAgent(issued.env['SSH_AUTH_SOCK'] ?? '').getIdentities((err, k) => (err ? reject(err) : resolve(k))))).rejects.toBeTruthy();
     expect(ssh.scopeOfCommand(['deploy@h', 'rm -rf /srv'])).toEqual(['delete']);
-    expect(ssh.scopeOfCommand(['deploy@h'])).toEqual(['read']);
+    expect(ssh.scopeOfCommand(['deploy@h', 'uptime'])).toEqual(['read']);
   });
 });
 
@@ -163,10 +163,19 @@ describe('scope classification fails closed (M2)', () => {
     expect(ssh.scopeOfCommand(['deploy@h', 'ls > /etc/passwd'])).toEqual(['write']);
     expect(ssh.scopeOfCommand(['-p', '22', 'deploy@h', 'ls -la'])).toEqual(['read']);
     expect(ssh.scopeOfCommand(['deploy@h', 'systemctl restart app'])).toEqual(['deploy']);
-    expect(ssh.issuesScoped()).toBe(true);
+    // A bare login and every file-transfer tool are writes; `rsync --delete` removes remote files.
+    expect(ssh.scopeOfCommand(['deploy@h'])).toEqual(['write']);
+    expect(ssh.scopeOfCommand(['-p', '22', 'deploy@h'])).toEqual(['write']);
+    expect(ssh.scopeOfCommand(['a.txt', 'deploy@h:/srv/'], 'scp')).toEqual(['write']);
+    expect(ssh.scopeOfCommand(['deploy@h:/srv/x', '.'], 'sftp')).toEqual(['write']);
+    expect(ssh.scopeOfCommand(['-av', './', 'deploy@h:/srv/'], 'rsync')).toEqual(['write']);
+    expect(ssh.scopeOfCommand(['-av', '--delete', './', 'deploy@h:/srv/'], 'rsync')).toEqual(['delete']);
+    expect(ssh.scopeOfCommand(['-av', '--delete-after', './', 'deploy@h:/srv/'], 'rsync')).toEqual(['delete']);
+    // The agent socket is all-or-nothing: never "scoped", so prod ssh always verifies.
+    expect(ssh.issuesScoped()).toBe(false);
   });
+  const gh = new GitHubAdapter(d, undefined);
   it('gh: api method decides, mutating verbs and unknown verbs are writes, explicit reads stay reads', () => {
-    const gh = new GitHubAdapter(d, undefined);
     expect(gh.scopeOfCommand(['api', 'repos/a/b'])).toEqual(['read']);
     expect(gh.scopeOfCommand(['api', '-X', 'DELETE', 'repos/a/b'])).toEqual(['delete']);
     expect(gh.scopeOfCommand(['api', '--method=POST', 'repos/a/b/issues'])).toEqual(['write']);
@@ -202,9 +211,20 @@ describe('scope classification fails closed (M2)', () => {
     expect((s as ProviderAdapter).issuesScoped).toBeUndefined();
     const aws = new AwsAdapter(d, async () => ({ callerIdentity: async () => ({ arn: 'a', account: '1' }), assumeRole: async () => ({ accessKeyId: 'k', secretAccessKey: 's', sessionToken: 't', expiration: 0 }) }) as unknown as StsLike);
     expect(aws.scopeOfCommand(['brand', 'new-thing'])).toEqual(['write']);
+    // Flag values are never classified: a read-looking value after a mutating verb stays a write.
+    expect(aws.scopeOfCommand(['ssm', 'put-parameter', '--name', 'list-foo', '--value', 'x'])).toEqual(['write']);
+    expect(aws.scopeOfCommand(['--profile', 'p', 's3', 'ls'])).toEqual(['read']);
+    expect(aws.scopeOfCommand(['--region=eu-west-1', 'sts', 'get-caller-identity'])).toEqual(['read']);
     expect(aws.issuesScoped()).toBe(true);
     const gcp = new GcpAdapter(d);
     expect(gcp.scopeOfCommand(['compute', 'instances', 'frobnicate'])).toEqual(['write']);
+    expect(gcp.scopeOfCommand(['compute', 'instances', 'create', 'x', '--metadata', 'list'])).toEqual(['write']);
+    expect(gcp.scopeOfCommand(['--project', 'p', 'compute', 'instances', 'list'])).toEqual(['read']);
+    expect(gh.scopeOfCommand(['pr', 'create', '--title', 'view'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['--repo', 'a/b', 'pr', 'view', '1'])).toEqual(['read']);
+    expect(v.scopeOfCommand(['--scope', 'team', 'env', 'ls'])).toEqual(['read']);
+    expect(v.scopeOfCommand(['env', 'add', 'X', '--value', 'ls'])).toEqual(['write']);
+    expect(s.scopeOfCommand(['--workdir', 'w', 'projects', 'list'])).toEqual(['read']);
     expect(gcp.issuesScoped(['read'])).toBe(true);
     expect(gcp.issuesScoped(['read', 'write'])).toBe(false);
   });

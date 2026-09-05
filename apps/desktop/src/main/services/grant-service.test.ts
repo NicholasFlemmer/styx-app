@@ -298,6 +298,24 @@ describe('GrantService security regressions', () => {
     expect(await ok.app.grants.approve(out2.grant.id, '1h')).toMatchObject({ state: 'active', mfaVerified: true });
   });
 
+  it('M2: an auto policy on a prod target with an unscoped adapter downgrades to ask + MFA', async () => {
+    const t = makeTestApp({ mfa: 'failed' });
+    const target = t.app.repos.targets.get(ids.target.supabaseProd);
+    if (!target?.credentialRef) throw new Error('fixture target');
+    t.app.repos.targets.upsert({ ...target, policy: 'always' });
+    await t.vault.set(target.credentialRef, JSON.stringify({ token: 'sbp_test' }));
+    const out = await t.app.grants.request({ sessionId: ids.session.gemini, targetId: ids.target.supabaseProd, scope: ['read'], reason: 'peek', triggeredBy: 'mcp:request_access' });
+    expect(out.kind).toBe('pending'); // not auto-issued
+    if (out.kind !== 'pending') return;
+    await expect(t.app.grants.approve(out.grant.id, '1h')).rejects.toMatchObject({ code: 'mfa-failed' });
+    // Non-prod stays auto (the Vercel preview target has the same `always` policy).
+    const preview = t.app.repos.targets.get(ids.target.vercelPreview);
+    if (!preview?.credentialRef) throw new Error('fixture target');
+    await t.vault.set(preview.credentialRef, JSON.stringify({ token: 'vt' }));
+    const auto = await t.app.grants.request({ sessionId: ids.session.gemini, targetId: ids.target.vercelPreview, scope: ['write'], reason: 'x', triggeredBy: 'mcp:request_access' });
+    expect(auto.kind).toBe('active');
+  });
+
   it('M1: reasons and triggers are redacted on request', async () => {
     const t = makeTestApp();
     const ghp = `ghp_${'d'.repeat(36)}`;

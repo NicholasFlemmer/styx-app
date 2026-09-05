@@ -21,5 +21,13 @@ describe('redactArgv', () => {
     ]);
     expect(redactArgv(['env', 'add', 'X', `ghp_${'a'.repeat(36)}`])).toEqual(['env', 'add', 'X', '[redacted]']);
     expect(redactArgv(['--token'])).toEqual(['--token']);
+    // Bare secret words, env-style KEY=value, secret payload flags, and more token shapes.
+    expect(redactArgv(['configure', 'set', 'aws_secret_access_key', 'wJalrXUt'])).toEqual(['configure', 'set', 'aws_secret_access_key', '[redacted]']);
+    expect(redactArgv(['AWS_SECRET_ACCESS_KEY=wJalrXUt', 'GH_TOKEN=x', 'REGION=eu'])).toEqual(['AWS_SECRET_ACCESS_KEY=[redacted]', 'GH_TOKEN=[redacted]', 'REGION=eu']);
+    expect(redactArgv(['secret', 'set', 'NPM', '--body', 'npm_abc'])).toEqual(['secret', 'set', 'NPM', '--body', '[redacted]']);
+    expect(redactArgv(['secret', 'set', 'NPM', '-b', 'npm_abc'])).toEqual(['secret', 'set', 'NPM', '-b', '[redacted]']);
+    expect(redactArgv(['env', 'add', 'K', '--value=npm_abc'])).toEqual(['env', 'add', 'K', '--value=[redacted]']);
+    expect(redact(`login sbp_${'a'.repeat(40)} sk_live_${'b'.repeat(24)} sk_test_${'c'.repeat(24)} gho_${'d'.repeat(36)} xoxa-1-2`)).toBe('login [redacted] [redacted] [redacted] [redacted] [redacted]');
+    expect(redact(`eyJ${'a'.repeat(20)}.eyJ${'b'.repeat(20)}.${'c'.repeat(20)}`)).toBe('[redacted]');
   });
 });

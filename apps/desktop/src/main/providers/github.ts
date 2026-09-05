@@ -1,6 +1,6 @@
 import { makeCredentialRef } from '../services/credential-vault';
 import type { AdapterDeps, ConnectInput, GrantInfo, IssuedCredential, ProviderAdapter, Scope, TargetInfo, TestResult } from './types';
-import { hasVerb, isHelp } from './types';
+import { commandHead, hasVerb, isHelp } from './types';
 
 /** Read-only `gh <group> <verb>` verbs; anything else defaults to write. */
 const GH_READ_VERBS = new Set(['view', 'list', 'ls', 'status', 'diff', 'checks', 'download', 'watch', 'search', 'browse', 'clone', 'get', 'verify', 'token']);
@@ -175,7 +175,7 @@ export class GitHubAdapter implements ProviderAdapter, GitHubRepoApi {
   }
 
   scopeOfCommand(argv: string[]): Scope[] {
-    const [group, verb] = argv;
+    const [group, verb] = commandHead(argv);
     if (isHelp(argv) || group === 'auth') return ['read'];
     if (group === 'api') return apiScope(argv.slice(1));
     if (hasVerb(argv, /^(delete|--delete-branch|--delete)$/) || (group === 'repo' && verb === 'delete') || (group === 'release' && verb === 'delete')) return ['delete'];

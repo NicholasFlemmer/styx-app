@@ -24,8 +24,13 @@ export type MethodHandler<M extends MethodName> = (params: Params<M>, ctx: Conne
 /** Marks this request as held under `key`; reply later with `BrokerServer.resolveHeld(key, result)`. */
 export type HoldHandle = (key: string) => void;
 
-/** Methods that always open a user decision (a grant request or an ask) and therefore share the per-session bucket. */
-export const RATE_LIMITED_METHODS: readonly MethodName[] = ['request_access', 'ask_user'];
+/**
+ * Methods the server meters itself, by bucket: grant requests (`request`, 5/min — the host also charges
+ * `exec_authorize` to it when a shim call opens a request) and agent questions (`ask`, larger: plan/decision
+ * prompts are a normal part of a session but still must not flood the inbox).
+ */
+export type RateBucket = 'request' | 'ask';
+export const RATE_LIMITED_METHODS: Readonly<Partial<Record<MethodName, RateBucket>>> = { request_access: 'request', ask_user: 'ask' };
 
 /**
  * The socket directory must be a real directory (not a symlink) owned by this user with mode 0700, or another local
@@ -43,10 +48,12 @@ export function assertPrivateDir(dir: string): void {
 export interface BrokerServerOptions {
   /** Returns the session when sessionId + token match; null otherwise. Compare hashes, never store raw tokens. */
   authenticate: (sessionId: string, token: string) => Promise<SessionBrief | null>;
-  /** Decision-opening calls (`RATE_LIMITED_METHODS`, plus whatever the host meters through `allow`) per session per minute. */
+  /** Grant requests per session per minute (`request` bucket: request_access + host-metered exec_authorize). */
   rateLimitPerMinute?: number;
-  /** Override which methods the server meters itself; the host meters `exec_authorize` only when it inserts a request. */
-  rateLimitedMethods?: readonly MethodName[];
+  /** `ask_user` calls per session per minute (`ask` bucket). */
+  askRateLimitPerMinute?: number;
+  /** Override which methods the server meters itself (and in which bucket). */
+  rateLimitedMethods?: Readonly<Partial<Record<MethodName, RateBucket>>>;
   now?: () => number;
   onLog?: (level: 'info' | 'warn', msg: string, meta?: Record<string, unknown>) => void;
 }
@@ -195,13 +202,20 @@ export class BrokerServer {
         conn.socket.destroy();
         return;
       }
+      if (conn.ctx) {
+        // Two hellos raced through `authenticate`; the first bound the connection, the second is an attack or a bug.
+        fail(ErrorCode.invalidRequest, 'already authenticated');
+        conn.socket.end(() => conn.socket.destroy());
+        return;
+      }
       conn.ctx = { session, client: p.client, pid: p.pid, connectionId: conn.id };
       this.opts.onLog?.('info', 'broker hello', { sessionId: session.sessionId, client: p.client, pid: p.pid });
       return reply({ ok: true, session } satisfies Result<'hello'>);
     }
 
     if (!conn.ctx) return fail(ErrorCode.unauthenticated, 'hello first');
-    if ((this.opts.rateLimitedMethods ?? RATE_LIMITED_METHODS).includes(m) && !this.allow(conn.ctx.session.sessionId)) return fail(ErrorCode.rateLimited, 'too many access requests; try again in a minute');
+    const bucket = (this.opts.rateLimitedMethods ?? RATE_LIMITED_METHODS)[m];
+    if (bucket && !this.allow(conn.ctx.session.sessionId, bucket)) return fail(ErrorCode.rateLimited, bucket === 'ask' ? 'too many questions; try again in a minute' : 'too many access requests; try again in a minute');
 
     const handler = this.handlers.get(m);
     if (!handler) return fail(ErrorCode.methodNotFound, `no handler for ${m}`);
@@ -226,16 +240,17 @@ export class BrokerServer {
   }
 
   /** Consumes one slot of the session's per-minute bucket; false when exhausted. Public so the host can meter other grant-creating paths. */
-  allow(sessionId: string): boolean {
-    const limit = this.opts.rateLimitPerMinute ?? 5;
+  allow(sessionId: string, bucket: RateBucket = 'request'): boolean {
+    const limit = bucket === 'ask' ? (this.opts.askRateLimitPerMinute ?? 30) : (this.opts.rateLimitPerMinute ?? 5);
+    const key = `${bucket}:${sessionId}`;
     const t = this.now();
-    const arr = (this.buckets.get(sessionId) ?? []).filter((x) => t - x < 60_000);
+    const arr = (this.buckets.get(key) ?? []).filter((x) => t - x < 60_000);
     if (arr.length >= limit) {
-      this.buckets.set(sessionId, arr);
+      this.buckets.set(key, arr);
       return false;
     }
     arr.push(t);
-    this.buckets.set(sessionId, arr);
+    this.buckets.set(key, arr);
     return true;
   }
 }

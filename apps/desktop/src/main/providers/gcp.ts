@@ -1,6 +1,6 @@
 import { makeCredentialRef } from '../services/credential-vault';
 import type { AdapterDeps, ConnectInput, GrantInfo, IssuedCredential, ProviderAdapter, Scope, TargetInfo, TestResult } from './types';
-import { expiryFor, hasVerb } from './types';
+import { commandHead, expiryFor, hasVerb } from './types';
 
 interface ServiceAccount { client_email: string; private_key: string; project_id?: string; token_uri?: string }
 
@@ -85,7 +85,8 @@ export class GcpAdapter implements ProviderAdapter {
   scopeOfCommand(argv: string[]): Scope[] {
     if (hasVerb(argv, /^(delete|rm|remove|destroy|undeploy)$/)) return ['delete'];
     if (hasVerb(argv, /^(deploy|rollout|submit|rsync|cp|mv)$/) || (argv[0] === 'run' && argv[1] === 'deploy') || (argv[0] === 'app' && argv[1] === 'deploy')) return ['deploy'];
-    if (hasVerb(argv, /^(list|describe|get|ls|cat|stat|show|query|head)$/) || argv[0] === 'auth' || argv[0] === 'config') return ['read'];
+    const head = commandHead(argv);
+    if (hasVerb(head, /^(list|describe|get|ls|cat|stat|show|query|head)$/) || head[0] === 'auth' || head[0] === 'config') return ['read'];
     return ['write'];
   }
 }

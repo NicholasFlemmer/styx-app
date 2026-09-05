@@ -15,6 +15,6 @@ Audit the Styx codebase against these invariants (from CLAUDE.md § Security):
 3. `requireMfa` computed in main (`GrantService.approve`) from DB rows; prod ∧ {write,deploy,delete} forced; never trusted from renderer input.
 4. Broker: `hello` token check before any method; connection bound to one session; rate limit; reasons rendered as text.
 5. Electron: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`; preload exposes only `window.styx`; `ipcMain.handle` validates sender; `setWindowOpenHandler` denies; `will-navigate` blocked; CSP present; `fs.*` confined to worktree.
-6. Timers cancel on revoke; `cred_nonce` rotates; SSH uses agent socket, never key file paths in env.
+6. Timers cancel on revoke and the in-memory bundle is dropped (no `cred_nonce`: broker calls re-check row state); SSH uses agent socket, never key file paths in env.
 
 Output: findings with severity, file:line, exploit sketch, fix; then an explicit "invariant held" list.

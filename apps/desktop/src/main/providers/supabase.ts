@@ -1,6 +1,6 @@
 import { makeCredentialRef } from '../services/credential-vault';
 import type { AdapterDeps, ConnectInput, GrantInfo, IssuedCredential, ProviderAdapter, Scope, TargetInfo, TestResult } from './types';
-import { isHelp } from './types';
+import { commandHead, isHelp } from './types';
 
 const SUPABASE_READ_SUB = new Set(['list', 'ls', 'get', 'status', 'diff', 'dump', 'lint', 'inspect', 'show', 'fetch']);
 
@@ -54,7 +54,7 @@ export class SupabaseAdapter implements ProviderAdapter {
   async revoke(): Promise<void> {}
 
   scopeOfCommand(argv: string[]): Scope[] {
-    const [cmd, sub, sub2] = argv;
+    const [cmd, sub, sub2] = commandHead(argv);
     if ((cmd === 'db' && sub === 'reset') || (cmd === 'projects' && sub === 'delete') || (cmd === 'branches' && sub === 'delete') || sub === 'delete' || sub === 'rm' || sub === 'unset') return ['delete'];
     if (cmd === 'functions' && sub === 'deploy') return ['deploy'];
     if ((cmd === 'db' && (sub === 'push' || sub === 'seed')) || (cmd === 'migration' && (sub === 'up' || sub === 'repair')) || (cmd === 'secrets' && sub === 'set') || sub === 'create' || sub === 'update' || sub2 === 'push') return ['write'];

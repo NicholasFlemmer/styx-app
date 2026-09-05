@@ -4,11 +4,14 @@ const SECRET_KEYS =
   /(token|secret|password|passphrase|private[_-]?key|authorization|cookie|session_token|access_key)/i;
 const SECRET_SHAPES = [
   /AKIA[0-9A-Z]{16}/g,
-  /ghp_[A-Za-z0-9]{36}/g,
+  /gh[pousr]_[A-Za-z0-9]{36}/g,
   /github_pat_[A-Za-z0-9_]{20,}/g,
-  /sk-[A-Za-z0-9]{20,}/g,
+  /sk-[A-Za-z0-9-]{20,}/g,
+  /sk_(?:live|test)_[A-Za-z0-9]{10,}/g,
+  /sbp_[A-Za-z0-9]{20,}/g,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
-  /xox[bp]-[0-9A-Za-z-]+/g,
+  /xox[bpsa]-[0-9A-Za-z-]+/g,
+  /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
 ];
 
 /** Redacts secret-shaped values so nothing sensitive reaches logs, audit detail, or IPC payloads. */
@@ -28,9 +31,17 @@ export function redact<T>(value: T): T {
   return value;
 }
 
-/** CLI flags whose *next* argument (or `=value`) is a secret. `-p` covers `--password` short forms (ssh's port is collateral). */
-const SECRET_FLAGS = /^(--token|--with-token|--password|--passphrase|--secret[a-z-]*|--api-key|-p)$/i;
-const SECRET_KV = /^(--?[a-z][a-z0-9-]*)=(.*)$/is;
+/**
+ * CLI flags whose *next* argument (or `=value`) is a secret. `-p` covers `--password` short forms (ssh's port is
+ * collateral); `--body`/`-b`/`--value` carry `gh secret set` / `vercel env add` payloads (PR bodies are collateral).
+ */
+const SECRET_FLAGS = /^(--token|--with-token|--password|--passphrase|--secret[a-z-]*|--api-key|--body|--value|-p|-b)$/i;
+/**
+ * Compound identifiers that name a secret and take the next token as its value (`aws configure set
+ * aws_secret_access_key X`, `--set api-token X`). Bare `secret`/`token` are subcommands (`gh secret set`) and stay.
+ */
+const SECRET_WORD = /^(?:[a-z0-9.]+[_-])+(?:token|secret|password|passphrase|access_key|access-key|private_key|private-key)(?:[_-][a-z0-9.]+)*$|^(?:token|secret|password|passphrase)(?:[_-][a-z0-9.]+)+$/i;
+const SECRET_KV = /^(--?[a-z][a-z0-9_.-]*|[A-Za-z_][A-Za-z0-9_.-]*)=(.*)$/s;
 
 /**
  * Redacts argv before it is persisted (grants.reason, grant_uses.command, audit triggered_by, transcript rows):
@@ -46,7 +57,7 @@ export function redactArgv(argv: readonly string[]): string[] {
       dropNext = false;
       continue;
     }
-    if (SECRET_FLAGS.test(a)) {
+    if (SECRET_FLAGS.test(a) || SECRET_WORD.test(a)) {
       out.push(a);
       dropNext = true;
       continue;
