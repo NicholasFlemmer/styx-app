@@ -9,6 +9,8 @@ import { migrate } from './db/migrate';
 import { loadFixture, seed, type FixtureName } from './db/seed';
 import { MemoryVault } from './services/credential-vault';
 import { FakeMfaProvider, type MfaResult } from './services/mfa-service';
+import type { PtyService } from './services/pty-service';
+import type { StreamRunnerLike } from './services/stream-runner';
 import { EVENT_CHANNEL, type WindowLike } from './store/publisher';
 
 /** Records everything main would `webContents.send`. */
@@ -50,6 +52,8 @@ export interface TestAppOptions {
   mfa?: MfaResult;
   fetch?: typeof fetch;
   tickMs?: number;
+  pty?: PtyService;
+  stream?: StreamRunnerLike;
 }
 
 /** An in-memory app: SQLite `:memory:`, MemoryVault, FakeMfa, no Electron, one registered fake window. */
@@ -93,6 +97,8 @@ export function makeTestApp(opts: TestAppOptions = {}): TestApp {
     openInIde: async () => undefined,
     ...(opts.fetch ? { fetch: opts.fetch } : {}),
     ...(opts.tickMs !== undefined ? { tickMs: opts.tickMs } : {}),
+    ...(opts.pty ? { pty: opts.pty } : {}),
+    ...(opts.stream ? { stream: opts.stream } : {}),
   });
   const fixture = opts.fixture === undefined ? 'demo' : opts.fixture;
   if (fixture) seed(app.repos, loadFixture(fixture));

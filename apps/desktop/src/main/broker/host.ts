@@ -445,49 +445,8 @@ export class BrokerHost {
     this.server.disconnectSession(sessionId);
   }
 
+  /** Hook → session-state mapping lives in SessionService.onHook (plan §5); the host only authenticates and forwards. */
   private onHook(sessionId: string, agent: Params<'hook'>['agent'], event: string, payload: unknown): void {
-    const { sessions } = this.deps;
-    const p = (payload ?? {}) as Record<string, unknown>;
-    if (agent === 'claude') {
-      switch (event) {
-        case 'Stop':
-        case 'SubagentStop':
-        case 'SessionEnd':
-          sessions.applyEvent(sessionId, { type: 'quiet' });
-          return;
-        case 'UserPromptSubmit':
-        case 'PreToolUse':
-        case 'SessionStart':
-          sessions.applyEvent(sessionId, { type: 'activity' });
-          return;
-        case 'PostToolUse': {
-          sessions.applyEvent(sessionId, { type: 'activity' });
-          const tool = String(p['tool_name'] ?? '');
-          if (/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(tool))
-            void this.deps.hunks.rescan(sessionId).catch(() => undefined);
-          return;
-        }
-        case 'Notification': {
-          const message = typeof p['message'] === 'string' ? p['message'] : null;
-          if (message) sessions.setNote(sessionId, message);
-          sessions.applyEvent(sessionId, { type: 'quiet' });
-          return;
-        }
-        default:
-          return;
-      }
-    }
-    if (agent === 'codex') {
-      const type = String(p['type'] ?? event);
-      if (/turn-complete|agent-turn-complete/.test(type)) {
-        const msg =
-          typeof p['last-assistant-message'] === 'string' ? (p['last-assistant-message'] as string) : null;
-        if (msg) sessions.setNote(sessionId, msg.slice(0, 200));
-        sessions.applyEvent(sessionId, { type: 'quiet' });
-        void this.deps.hunks.rescan(sessionId).catch(() => undefined);
-      } else sessions.applyEvent(sessionId, { type: 'activity' });
-      return;
-    }
-    sessions.applyEvent(sessionId, { type: /stop|end|idle|complete/i.test(event) ? 'quiet' : 'activity' });
+    this.deps.sessions.onHook(sessionId, agent, event, payload);
   }
 }

@@ -2,10 +2,13 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  Menu,
+  nativeImage,
   nativeTheme,
   Notification as OsNotification,
   shell,
   systemPreferences,
+  Tray,
 } from 'electron';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
@@ -18,6 +21,7 @@ import { buildContainer, type Container, type WindowsPort } from './container';
 import { openDatabase } from './db/open';
 import { Repos } from './db/repos';
 import { isFixtureName, loadFixture, seed, seedDefaults } from './db/seed';
+import { seedDemoRepos } from './db/seed-repos';
 import { attachPtyChannel } from './ipc/pty-channel';
 import { createVault } from './services/credential-vault';
 import { logger } from './services/logger';
@@ -27,7 +31,8 @@ import {
   WindowsHelloProvider,
   type MfaProvider,
 } from './services/mfa-service';
-import { NotificationService, type AskSummary, type OsNotifier } from './services/notification-service';
+import { NotificationService, type AskSummary } from './services/notification-service';
+import { ElectronOsNotifier, type ElectronLike } from './services/os-notifier';
 import { writeShims } from './services/shim-service';
 import { rendererPaths, WindowService } from './services/window-service';
 
@@ -49,6 +54,7 @@ if (env['STYX_THEME'] === 'dark' || env['STYX_THEME'] === 'light' || env['STYX_T
 
 let container: Container | null = null;
 let windows: WindowService | null = null;
+let osNotifierRef: ElectronOsNotifier | null = null;
 let pendingUrl: string | null = null;
 
 const resolvedTheme = (): 'dark' | 'light' => (nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
@@ -130,28 +136,24 @@ function mfaProvider(): MfaProvider {
   return new FakeMfaProvider('unavailable');
 }
 
-function osNotifier(get: () => Container | null): OsNotifier {
+/** Real Electron surface for `ElectronOsNotifier` (spec §4.14: dock badge/bounce/menu on macOS, tray + Action Center on Windows). */
+function electronSurface(): ElectronLike {
   return {
-    setBadge(count) {
-      if (isMac) app.dock?.setBadge(count > 0 ? String(count) : '');
-      else windows?.mainWindow()?.setOverlayIcon(null, count > 0 ? `${count} need you` : '');
-    },
-    bounceOnce() {
-      if (isMac) app.dock?.bounce('informational');
-    },
-    toast(n) {
-      if (!OsNotification.isSupported()) return;
-      const note = new OsNotification({
-        title: n.title,
-        body: n.body,
-        silent: !(get()?.notifications?.sound ?? false),
-      });
-      note.on('click', () => n.onReview());
-      note.show();
-    },
-    setTray() {
-      // TODO(tray): Windows tray with accent-dot icon (needs the icon asset); macOS uses the dock badge + menu only.
-    },
+    platform,
+    dock: isMac && app.dock ? { setBadge: (t) => app.dock?.setBadge(t), bounce: (k) => void app.dock?.bounce(k), setMenu: (m) => app.dock?.setMenu(m as Menu) } : null,
+    createTray: (image) => new Tray(image as Electron.NativeImage),
+    buildMenu: (template) =>
+      Menu.buildFromTemplate(
+        template.map((i) =>
+          i.type === 'separator'
+            ? { type: 'separator' as const }
+            : { label: i.label, type: i.type ?? 'normal', ...(i.checked !== undefined ? { checked: i.checked } : {}), click: i.click ?? (() => undefined) },
+        ),
+      ),
+    imageFromDataUrl: (url) => nativeImage.createFromDataURL(url),
+    notificationsSupported: () => OsNotification.isSupported(),
+    createNotification: (opts) => new OsNotification(opts),
+    setOverlayIcon: (image, description) => windows?.mainWindow()?.setOverlayIcon(image as Electron.NativeImage | null, description),
   };
 }
 
@@ -165,6 +167,12 @@ async function boot(): Promise<void> {
   if (fixtureName) {
     const { seeded } = seed(repos, loadFixture(fixtureName), { reset: env['STYX_FIXTURE_RESET'] === '1' });
     logger.info('fixture', { name: fixtureName, seeded, userData });
+    if ((fixtureName === 'demo' || fixtureName === 'error') && env['STYX_DEMO_REPOS'] !== '0') {
+      // Real git repos behind the fixture rows so fs.*, worktree.diff, hunks and terminals work on the demo.
+      await seedDemoRepos({ repos, userData, fixture: fixtureName }).catch((e: Error) =>
+        logger.warn('demo repos failed', { error: e.message }),
+      );
+    }
   } else seedDefaults(repos, clock.now());
 
   const shims = writeShims(userData, platform);
@@ -214,16 +222,25 @@ async function boot(): Promise<void> {
     },
   };
 
+  const osNotifier = new ElectronOsNotifier(electronSurface(), resolvedTheme);
+  osNotifierRef = osNotifier;
   const notifications = new NotificationService(
-    osNotifier(() => container),
+    osNotifier,
     repos.uiState,
     platform,
     {
       review: (ask: AskSummary) => void handleUrl(`styx://ask/${ask.askId}/review`),
       later: (ask: AskSummary) => void handleUrl(`styx://ask/${ask.askId}/later`),
-      openBoard: () => windowsPort.focusMain(),
+      // Tray left-click / dock menu: focus the main window and switch to the Agents board (`nav.go`).
+      openBoard: () => {
+        windowsPort.focusMain();
+        container?.publisher.sendEvent('nav.go', { screen: 'agents' });
+      },
     },
+    () => repos.settings.app().notify === 'badge-sound',
   );
+  // DND is persisted in app_settings (`dnd`) and mirrored into ui_state for the service; settings win after a restart.
+  notifications.setDnd(repos.settings.app().dnd);
 
   const applyAppSettings = (s: AppSettings) => {
     if (!env['STYX_THEME']) nativeTheme.themeSource = s.theme;
@@ -262,6 +279,7 @@ async function boot(): Promise<void> {
 
   container.bus.attach(ipcMain);
   attachPtyChannel(ipcMain, container);
+  notifications.start(repos.pendingAsks.openAll().length);
   try {
     await container.start();
   } catch (e) {
@@ -318,5 +336,8 @@ app.on('before-quit', (e) => {
   void c
     .shutdown()
     .catch((err: Error) => logger.warn('shutdown error', { error: err.message }))
-    .finally(() => app.quit());
+    .finally(() => {
+      osNotifierRef?.dispose();
+      app.quit();
+    });
 });

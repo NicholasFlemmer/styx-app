@@ -8,7 +8,11 @@ import type { AgentLaunch, AgentLaunchContext } from './types';
 export * from './types';
 export { gitExcludeFile, excludeLocally } from './git-exclude';
 
-/** Per-agent argv + MCP/hook config injection (plan §6). Each adapter stays small; flags marked UNVERIFIED are confirmed in the Phase 8 spike. */
+/**
+ * Per-agent argv + MCP/hook config injection (plan §6). Claude Code flags were verified against the installed CLI
+ * (see claude.ts); codex/gemini/cursor adapters carry an UNVERIFIED note because those CLIs were not installed on the
+ * verifying machine.
+ */
 export function buildAgentLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch> {
   switch (ctx.agent) {
     case 'claude':

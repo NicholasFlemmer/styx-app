@@ -5,7 +5,12 @@ import { styxMcpServer, type AgentLaunch, type AgentLaunchContext } from './type
 
 /**
  * Gemini CLI reads `<worktree>/.gemini/settings.json`; the styx MCP server is merged in and the file is kept out
- * of the repo via `.git/info/exclude`. UNVERIFIED FLAG: `-i/--prompt-interactive <prompt>` for the first message.
+ * of the repo via `.git/info/exclude`.
+ *
+ * UNVERIFIED (2026-09-04): `gemini` is not installed on the verifying machine; `-m <model>` and
+ * `-i/--prompt-interactive <prompt>` follow the Gemini CLI docs and were not checked with `--help`. Gemini stays on
+ * the `pty` runner (ADR-0010): its headless mode is one-shot (`-p`) with no stream input, so idle/working comes from
+ * pty output + the 3 s quiet timer.
  */
 export async function geminiLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch> {
   const dir = join(ctx.worktreePath, '.gemini');

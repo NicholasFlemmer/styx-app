@@ -4,8 +4,20 @@ import { styxBin, styxMcpServer, type AgentLaunch, type AgentLaunchContext } fro
 
 /**
  * Claude Code: temp `--mcp-config` (styx MCP server) + `--settings` with hooks that forward lifecycle events
- * through `styx hook claude`. Both flags are documented Claude Code CLI flags; hook event names are from the
- * Claude Code hooks reference (Stop, SessionEnd, Notification, UserPromptSubmit, PostToolUse).
+ * through `styx hook claude`.
+ *
+ * VERIFIED 2026-09-04 against `claude` 2.1.199 (`claude --help`, plus `strings` of the native binary for hidden flags):
+ * - `--mcp-config <configs...>`, `--settings <file-or-json>`, `--model`, `--permission-mode <mode>`: listed in --help.
+ * - `-p/--print`, `--input-format stream-json`, `--output-format stream-json`, `--verbose`,
+ *   `--replay-user-messages`, `--include-hook-events`: listed in --help (stream-json input is print-only).
+ * - `--permission-prompt-tool`: NOT in --help but present in the binary (hidden flag used by the Agent SDK). The
+ *   `stdio` value routes permission prompts as `control_request{subtype:'can_use_tool'}` lines on stdout and expects
+ *   a `control_response` on stdin (see stream-runner.ts). Not exercised against a live account (no
+ *   `~/.claude/.credentials.json` on the verifying machine), so the runner tolerates its absence: without it, print
+ *   mode simply denies un-allowlisted tools.
+ * - Hook event names (Stop, SessionEnd, SessionStart, Notification, UserPromptSubmit, PostToolUse) and the
+ *   Notification `notification_type` values permission_prompt | idle_prompt | agent_needs_input | agent_completed are
+ *   present in the binary.
  */
 export async function claudeLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch> {
   await mkdir(ctx.configDir, { recursive: true });
@@ -19,11 +31,14 @@ export async function claudeLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch
     JSON.stringify(
       {
         hooks: {
+          SessionStart: hookEntry,
           Stop: hookEntry,
           SessionEnd: hookEntry,
           Notification: hookEntry,
           UserPromptSubmit: hookEntry,
-          PostToolUse: [{ matcher: 'Edit|Write|MultiEdit', hooks: [{ type: 'command', command: hook }] }],
+          PostToolUse: [
+            { matcher: 'Edit|Write|MultiEdit|NotebookEdit', hooks: [{ type: 'command', command: hook }] },
+          ],
         },
       },
       null,
@@ -32,12 +47,29 @@ export async function claudeLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch
   );
   const args = ['--mcp-config', mcpPath, '--settings', settingsPath];
   if (ctx.model) args.push('--model', ctx.model);
+  if (ctx.autoApproveEdits) args.push('--permission-mode', 'acceptEdits');
+  const cleanup = () => rm(ctx.configDir, { recursive: true, force: true });
+  if (ctx.runner === 'stream') {
+    args.push(
+      '-p',
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--permission-prompt-tool',
+      'stdio',
+    );
+    // The first message goes down stdin as the first user turn (StreamRunner), never as argv.
+    return {
+      command: ctx.binary,
+      args,
+      env: {},
+      typeFirstMessage: false,
+      stream: { kind: 'stdin' },
+      cleanup,
+    };
+  }
   if (ctx.firstMessage) args.push(ctx.firstMessage);
-  return {
-    command: ctx.binary,
-    args,
-    env: {},
-    typeFirstMessage: false,
-    cleanup: () => rm(ctx.configDir, { recursive: true, force: true }),
-  };
+  return { command: ctx.binary, args, env: {}, typeFirstMessage: false, cleanup };
 }

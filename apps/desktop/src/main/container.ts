@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import type { AppSettings } from '@styx/core';
 import type { Clock } from './clock';
 import type { Db } from './db/open';
@@ -5,6 +6,7 @@ import { Repos } from './db/repos';
 import { CommandBus } from './ipc/bus';
 import { registerAllCommands } from './ipc/commands';
 import { ProviderRegistry } from './providers';
+import { GitHubAdapter } from './providers/github';
 import { BrokerHost } from './broker/host';
 import { ActivityService } from './services/activity-service';
 import { AuditService } from './services/audit-service';
@@ -13,11 +15,15 @@ import { DetectService } from './services/detect-service';
 import { GitService } from './services/git';
 import { GrantService } from './services/grant-service';
 import { HunkService, type WatchFactory } from './services/hunk-service';
+import { IdeImportService } from './services/ide-import-service';
 import { MfaService, type MfaProvider } from './services/mfa-service';
 import type { NotificationService } from './services/notification-service';
 import { ProjectService } from './services/project-service';
+import { PtyLog } from './services/pty-log';
 import { PtyService } from './services/pty-service';
+import { RetentionJob } from './services/retention-job';
 import { SessionService } from './services/session-service';
+import { StreamRunner, type StreamRunnerLike } from './services/stream-runner';
 import { TargetService } from './services/target-service';
 import { TerminalService } from './services/terminal-service';
 import { TranscriptService } from './services/transcript-service';
@@ -62,9 +68,13 @@ export interface ContainerOptions {
   onAppSettings?: (settings: AppSettings) => void;
   fetch?: typeof fetch;
   detect?: DetectService;
+  ideImport?: IdeImportService;
   pty?: PtyService;
+  stream?: StreamRunnerLike;
   watch?: WatchFactory;
   tickMs?: number;
+  /** RetentionJob period (hourly by default). */
+  retentionMs?: number;
 }
 
 export interface Container {
@@ -75,7 +85,11 @@ export interface Container {
   bus: CommandBus;
   git: GitService;
   pty: PtyService;
+  stream: StreamRunnerLike;
+  ptyLog: PtyLog;
+  retention: RetentionJob;
   detect: DetectService;
+  ideImport: IdeImportService;
   vault: CredentialVault;
   providers: ProviderRegistry;
   mfa: MfaService;
@@ -115,7 +129,11 @@ export function buildContainer(opts: ContainerOptions): Container {
   });
   const git = new GitService();
   const pty = opts.pty ?? new PtyService(runtime.platform);
+  const stream = opts.stream ?? new StreamRunner();
+  const ptyLog = new PtyLog(`${runtime.userData}/logs/pty`);
   const detect = opts.detect ?? new DetectService();
+  const ideImport =
+    opts.ideImport ?? new IdeImportService({ platform: runtime.platform, home: homedir(), env: process.env });
   const providers = new ProviderRegistry(
     { vault: opts.vault, fetch: opts.fetch ?? fetch, now },
     { platform: runtime.platform },
@@ -128,6 +146,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     publisher,
     clock,
     pty,
+    stream,
+    ptyLog,
     git,
     detect,
     transcript,
@@ -146,6 +166,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     activity,
     sessions,
     platform: runtime.platform,
+    projectRules: (projectId) => projects.projectRules(projectId),
   });
   const hunks = new HunkService({
     repos,
@@ -154,6 +175,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     git,
     ...(opts.watch ? { watch: opts.watch } : {}),
   });
+  const githubAdapter = providers.get('github');
   const projects = new ProjectService({
     repos,
     publisher,
@@ -161,6 +183,13 @@ export function buildContainer(opts: ContainerOptions): Container {
     git,
     platform: runtime.platform,
     templatesDir: `${runtime.resourcesDir}/templates`,
+    audit,
+    activity,
+    github: githubAdapter instanceof GitHubAdapter ? githubAdapter : null,
+    ideRecents: () =>
+      ideImport.allRecentFolders(
+        repos.discovery.ides().map((i) => ({ kind: i.kind, configDir: i.configDir })),
+      ),
   });
   const targets = new TargetService({
     repos,
@@ -189,11 +218,20 @@ export function buildContainer(opts: ContainerOptions): Container {
     endpoint: runtime.brokerEndpoint,
   });
 
+  const retention = new RetentionJob({
+    repos,
+    publisher,
+    clock,
+    deleteLogs: (id) => ptyLog.remove(id),
+    ...(opts.retentionMs !== undefined ? { intervalMs: opts.retentionMs } : {}),
+  });
+
   sessions.bind({
     revokeSessionGrants: (id) => grants.cancelSessionGrants(id),
     cancelHeldAsk: (ask) => broker.cancelAsk(ask),
     watchWorktree: (s, w) => void hunks.watch(s, w),
     unwatchWorktree: (id) => void hunks.unwatch(id),
+    rescanHunks: (id) => void hunks.rescan(id).catch(() => undefined),
   });
 
   const container: Container = {
@@ -204,7 +242,11 @@ export function buildContainer(opts: ContainerOptions): Container {
     bus,
     git,
     pty,
+    stream,
+    ptyLog,
+    retention,
     detect,
+    ideImport,
     vault: opts.vault,
     providers,
     mfa,
@@ -225,10 +267,12 @@ export function buildContainer(opts: ContainerOptions): Container {
     onAppSettings: opts.onAppSettings ?? (() => undefined),
     async start() {
       grants.start();
+      retention.start();
       await broker.listen();
     },
     async shutdown() {
       for (const s of repos.sessions.live()) broker.notifyStopping(s.id);
+      retention.stop();
       sessions.killAll();
       await hunks.closeAll();
       await broker.close();

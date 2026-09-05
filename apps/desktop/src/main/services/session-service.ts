@@ -10,8 +10,10 @@ import {
   sessionTransition,
   type Agent,
   type AskId,
+  type CliInstall,
   type PendingAsk,
   type Project,
+  type Runner,
   type Session,
   type SessionEffect,
   type SessionEvent,
@@ -27,21 +29,28 @@ import { fail } from '../ipc/bus';
 import { projectSettingsFor } from '../store/projection';
 import type { Publisher } from '../store/publisher';
 import type { DetectService } from './detect-service';
-import type { GitService} from './git';
+import type { GitService } from './git';
 import { worktreeLocation } from './git';
 import { logger } from './logger';
 import type { NotificationService } from './notification-service';
+import type { PtyLog } from './pty-log';
 import type { PtyService } from './pty-service';
 import type { ActivityService } from './activity-service';
+import type { StreamEffect, StreamRunnerLike } from './stream-runner';
 import type { TranscriptService } from './transcript-service';
 
 export const QUIET_MS = 3000;
+
+/** Hook payloads (`styx hook <agent>` → broker `hook`) are untyped JSON from the CLI. */
+export type HookAgent = 'claude' | 'codex' | 'gemini' | 'cursor' | 'shell';
 
 export interface SessionServiceDeps {
   repos: Repos;
   publisher: Publisher;
   clock: Clock;
   pty: PtyService;
+  stream: StreamRunnerLike;
+  ptyLog: PtyLog;
   git: GitService;
   detect: DetectService;
   transcript: TranscriptService;
@@ -58,7 +67,7 @@ export interface SessionServiceDeps {
   };
 }
 
-/** Late-bound collaborators (GrantService and the broker host depend on SessionService in turn). */
+/** Late-bound collaborators (GrantService, HunkService and the broker host depend on SessionService in turn). */
 export interface SessionHooks {
   revokeSessionGrants: (sessionId: SessionId) => void;
   /** Reject a broker request that was held on an ask which is now cancelled. */
@@ -66,6 +75,8 @@ export interface SessionHooks {
   /** Hunk watcher lifecycle for agent worktrees. */
   watchWorktree: (session: Session, worktree: Worktree) => void;
   unwatchWorktree: (worktreeId: WorktreeId) => void;
+  /** `PostToolUse Edit|Write` and stream tool results re-diff the worktree. */
+  rescanHunks: (sessionId: SessionId) => void;
 }
 
 export interface SpawnInput {
@@ -79,18 +90,38 @@ export interface SpawnInput {
 
 export const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 
+const EDIT_TOOL = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
+const PERMISSION_OPTIONS = ['Allow', 'Deny'] as const;
+
 /**
- * Owns session rows, their ptys, and the session state machine (core `machines/session`): every transition is
- * write DB → effects → `store.delta`. Runner is `pty` for every agent until the Phase 7 stream spike (ADR-0010).
+ * ADR-0010: Claude Code streams when its CLI advertises stream-json (print-only, so that implies `-p`); cursor-agent
+ * additionally needs `--print` in its help. Everything else (codex, gemini, shell) is a TUI in xterm.
+ */
+export function runnerFor(agent: Agent, cli: Pick<CliInstall, 'capabilities'> | null): Runner {
+  const caps = cli?.capabilities ?? {};
+  if (agent === 'claude' && caps['streamJson'] === true) return 'stream';
+  if (agent === 'cursor' && caps['streamJson'] === true && caps['printMode'] === true) return 'stream';
+  return 'pty';
+}
+
+/**
+ * Owns session rows, their processes (pty or stream runner), and the session state machine (core
+ * `machines/session`): every transition is write DB → effects → `store.delta`.
  */
 export class SessionService {
   private hooks: SessionHooks | null = null;
   private readonly quietTimers = new Map<string, NodeJS.Timeout>();
   private readonly launches = new Map<string, AgentLaunch>();
+  /** Asks opened from a CLI hook (`permission_prompt` / `agent_needs_input`), cancelled once the agent moves on. */
+  private readonly hookAsks = new Map<string, AskId>();
+  /** Stream `can_use_tool` requests waiting on a decision ask: askId → request id. */
+  private readonly permissionAsks = new Map<string, { sessionId: string; requestId: string }>();
 
   constructor(private readonly deps: SessionServiceDeps) {
     deps.pty.on('data', (id, data) => this.onPtyData(id, data));
     deps.pty.on('exit', (id, exitCode) => this.onPtyExit(id, exitCode));
+    deps.stream.on('effect', (id, effect) => this.onStreamEffect(id, effect));
+    deps.stream.on('exit', (id, exitCode) => this.onStreamExit(id, exitCode));
   }
 
   bind(hooks: SessionHooks): void {
@@ -103,6 +134,11 @@ export class SessionService {
 
   require(id: string): Session {
     return this.deps.repos.sessions.get(id) ?? fail('not-found', `session ${id} not found`);
+  }
+
+  /** True while a pty or stream process is attached. */
+  isRunning(id: string): boolean {
+    return this.deps.pty.has(id) || this.deps.stream.has(id);
   }
 
   // --- spawn ---------------------------------------------------------------
@@ -155,7 +191,7 @@ export class SessionService {
       projectId: project.id,
       worktreeId: worktree.id,
       agent: input.agent,
-      runner: 'pty',
+      runner: runnerFor(input.agent, repos.discovery.cli(input.agent)),
       model: input.model,
       state: 'idle',
       pausedReason: null,
@@ -172,7 +208,14 @@ export class SessionService {
     repos.transaction(() => {
       repos.sessions.upsert(session);
       repos.sessions.setBrokerTokenHash(session.id, sha256(token));
-      if (input.worktree.kind === 'new' || worktree.owner.kind === 'user') {
+      const previousOwner =
+        worktree.owner.kind === 'session' ? repos.sessions.get(worktree.owner.sessionId) : null;
+      const reassign =
+        input.worktree.kind === 'new' ||
+        worktree.owner.kind === 'user' ||
+        previousOwner === null ||
+        previousOwner.state === 'done';
+      if (reassign) {
         worktree = {
           ...worktree,
           owner: worktree.isMain ? worktree.owner : { kind: 'session', sessionId },
@@ -180,13 +223,18 @@ export class SessionService {
         };
         repos.worktrees.upsert(worktree);
       }
-      repos.projects.upsert({ ...project, lastActivityAt: now });
+      repos.projects.upsert({ ...project, lastActivityAt: now }, repos.projects.settings(project.id));
     });
     this.deps.publisher.upsert('sessions', [session.id]);
     this.deps.publisher.upsert('worktrees', [worktree.id]);
     this.deps.publisher.upsert('projects', [project.id]);
     if (input.firstMessage) this.deps.transcript.user(session.id, input.firstMessage);
-    this.deps.activity.append({ who: AGENT_LABEL[session.agent], what: `${project.name} · spawned on ${worktree.branch}`, projectId: project.id, sessionId: session.id });
+    this.deps.activity.append({
+      who: AGENT_LABEL[session.agent],
+      what: `${project.name} · spawned on ${worktree.branch}`,
+      projectId: project.id,
+      sessionId: session.id,
+    });
 
     await this.launch(session, worktree, project, token);
     this.hooks?.watchWorktree(this.require(session.id), worktree);
@@ -200,6 +248,12 @@ export class SessionService {
     if (session.agent !== 'shell' && (binary === null || cli?.found === false)) {
       this.applyEvent(session.id, { type: 'error', reason: 'cli-missing' });
       return;
+    }
+    const runner = runnerFor(session.agent, cli);
+    if (runner !== session.runner) {
+      repos.sessions.upsert({ ...session, runner });
+      this.deps.publisher.upsert('sessions', [session.id]);
+      session = this.require(session.id);
     }
     const env: Record<string, string> = {
       STYX_SESSION_ID: session.id,
@@ -220,6 +274,8 @@ export class SessionService {
       worktreePath: worktree.path,
       firstMessage: session.firstMessage,
       model: session.model,
+      runner,
+      autoApproveEdits: session.toggles.autoApproveEdits,
       configDir: join(runtime.userData, 'agents', session.id),
       shimDir: runtime.shimDir,
       platform: runtime.platform,
@@ -228,22 +284,41 @@ export class SessionService {
     const launch = await buildAgentLaunch(ctx);
     this.launches.set(session.id, launch);
     try {
-      const { pid } = await this.deps.pty.spawn({
-        id: session.id,
-        cwd: worktree.path,
-        shell: launch.command,
-        args: launch.args,
-        env: { ...env, ...launch.env },
-      });
+      let pid: number;
+      if (launch.stream) {
+        const r = await this.deps.stream.spawn({
+          id: session.id,
+          command: launch.command,
+          args: launch.args,
+          cwd: worktree.path,
+          env: { ...env, ...launch.env },
+          input: launch.stream,
+          worktreePath: worktree.path,
+          firstMessage: session.firstMessage,
+        });
+        pid = r.pid;
+        if (session.firstMessage) this.render(session.id, `> ${session.firstMessage}\r\n`);
+      } else {
+        const r = await this.deps.pty.spawn({
+          id: session.id,
+          cwd: worktree.path,
+          shell: launch.command,
+          args: launch.args,
+          env: { ...env, ...launch.env },
+        });
+        pid = r.pid;
+      }
       const s = this.require(session.id);
       repos.sessions.upsert({ ...s, pid });
       this.deps.publisher.upsert('sessions', [s.id]);
       this.applyEvent(session.id, { type: 'start' });
-      if (launch.typeFirstMessage && session.firstMessage) {
+      if (!launch.stream && launch.typeFirstMessage && session.firstMessage) {
         setTimeout(() => this.deps.pty.write(session.id, `${session.firstMessage ?? ''}\r`), 400).unref?.();
       }
     } catch (e) {
       logger.error('session spawn failed', { sessionId: session.id, error: (e as Error).message });
+      this.launches.delete(session.id);
+      void launch.cleanup().catch(() => undefined);
       this.applyEvent(session.id, { type: 'error', reason: 'cli-missing' });
     }
   }
@@ -254,11 +329,16 @@ export class SessionService {
     const s = this.require(sessionId);
     if (s.state === 'done') fail('invalid-transition', 'session has finished');
     this.deps.transcript.user(s.id, body);
-    if (this.deps.pty.has(s.id)) this.deps.pty.write(s.id, `${body}\r`);
+    if (this.deps.stream.has(s.id)) {
+      this.deps.stream.send(s.id, body);
+      this.render(s.id, `> ${body}\r\n`);
+    } else if (this.deps.pty.has(s.id)) this.deps.pty.write(s.id, `${body}\r`);
     this.applyEvent(s.id, { type: 'activity' });
   }
 
+  /** Raw bytes from the terminal pane. Stream sessions have no TTY, so typed input is ignored there. */
   ptyInput(sessionId: string, data: string): void {
+    if (this.deps.stream.has(sessionId)) return;
     this.deps.pty.write(sessionId, data);
   }
 
@@ -268,10 +348,13 @@ export class SessionService {
 
   stop(sessionId: string): void {
     const s = this.require(sessionId);
+    if (this.deps.stream.has(s.id)) {
+      this.deps.stream.kill(s.id);
+      return; // `finish` follows from the stream exit event
+    }
     if (this.deps.pty.has(s.id)) {
       this.deps.pty.kill(s.id);
-      // `finish` follows from the pty exit event
-      return;
+      return; // `finish` follows from the pty exit event
     }
     if (s.state !== 'done') this.applyEvent(s.id, { type: 'finish', exitCode: null });
   }
@@ -283,49 +366,98 @@ export class SessionService {
     this.deps.publisher.upsert('sessions', [s.id]);
   }
 
+  /**
+   * Leaves `paused` once its reason is gone: cli-missing → re-detect and respawn; conflict → the worktree merges
+   * cleanly again; auth-expired → no expired target remains in the project. The process is relaunched when none is
+   * attached any more.
+   */
   async resume(sessionId: string): Promise<void> {
     const s = this.require(sessionId);
     if (s.state !== 'paused') fail('invalid-transition', 'session is not paused');
-    if (s.pausedReason === 'cli-missing' && !this.deps.pty.has(s.id)) {
-      const clis = await this.deps.detect.detectClis();
-      const now = this.deps.clock.now();
-      for (const c of clis)
-        this.deps.repos.discovery.saveCli({
-          agent: c.agent,
-          binary: c.binary,
-          version: c.version,
-          found: c.found,
-          authState: c.authState,
-          capabilities: c.capabilities,
-          checkedAt: now,
-        });
-      this.deps.publisher.discoverySet(this.deps.repos.discovery.ides(), this.deps.repos.discovery.clis());
-      const cli = this.deps.repos.discovery.cli(s.agent);
-      if (!cli?.found) fail('cli-missing', fill(copy.errors.spawnCliMissing, { cli: s.agent }));
-      this.applyEvent(s.id, { type: 'resolve' });
-      const worktree = this.deps.repos.worktrees.get(s.worktreeId) ?? fail('not-found', 'worktree missing');
-      const project = this.deps.repos.projects.get(s.projectId) ?? fail('not-found', 'project missing');
-      const token = randomBytes(32).toString('hex');
-      this.deps.repos.sessions.setBrokerTokenHash(s.id, sha256(token));
-      await this.launch(this.require(s.id), worktree, project, token);
-      return;
+    const { repos } = this.deps;
+    const worktree = repos.worktrees.get(s.worktreeId) ?? fail('not-found', 'worktree missing');
+    const project = repos.projects.get(s.projectId) ?? fail('not-found', 'project missing');
+
+    if (s.pausedReason === 'cli-missing') {
+      await this.refreshClis();
+      const cli = repos.discovery.cli(s.agent);
+      if (s.agent !== 'shell' && !cli?.found)
+        fail('cli-missing', fill(copy.errors.spawnCliMissing, { cli: s.agent }));
+    } else if (s.pausedReason === 'conflict') {
+      const repo = repos.repos.byProject(project.id);
+      const conflict = await this.deps.git
+        .detectConflict(project.path, worktree.branch, repo?.defaultBranch ?? 'main')
+        .catch(() => worktree.conflict);
+      if (conflict) {
+        if ((conflict.file ?? null) !== (worktree.conflict?.file ?? null)) {
+          repos.worktrees.upsert({ ...worktree, conflict });
+          this.deps.publisher.upsert('worktrees', [worktree.id]);
+        }
+        fail(
+          'git-error',
+          fill(copy.errors.conflict.text, {
+            branch: worktree.branch,
+            file: conflict.file,
+            agent: AGENT_LABEL[s.agent],
+          }),
+        );
+      }
+      if (worktree.conflict !== null) {
+        repos.worktrees.upsert({ ...worktree, conflict: null });
+        this.deps.publisher.upsert('worktrees', [worktree.id]);
+      }
+    } else if (s.pausedReason === 'auth-expired') {
+      const expired = repos.targets.byProject(project.id).find((t) => t.health === 'expired');
+      if (expired) fail('provider-error', `${expired.name} ${expired.env} is still expired`);
     }
+
     this.applyEvent(s.id, { type: 'resolve' });
+    if (!this.isRunning(s.id)) {
+      const token = randomBytes(32).toString('hex');
+      repos.sessions.setBrokerTokenHash(s.id, sha256(token));
+      await this.launch(this.require(s.id), worktree, project, token);
+      this.hooks?.watchWorktree(this.require(s.id), worktree);
+    }
   }
 
-  /** Kill every live pty (shutdown). */
+  private async refreshClis(): Promise<void> {
+    const clis = await this.deps.detect.detectClis();
+    const now = this.deps.clock.now();
+    for (const c of clis)
+      this.deps.repos.discovery.saveCli({
+        agent: c.agent,
+        binary: c.binary,
+        version: c.version,
+        found: c.found,
+        authState: c.authState,
+        capabilities: c.capabilities,
+        checkedAt: now,
+      });
+    this.deps.publisher.discoverySet(this.deps.repos.discovery.ides(), this.deps.repos.discovery.clis());
+  }
+
+  /** Kill every live process (shutdown). */
   killAll(): void {
     for (const t of this.quietTimers.values()) clearTimeout(t);
     this.quietTimers.clear();
+    this.deps.stream.killAll();
     this.deps.pty.killAll();
+    this.deps.ptyLog.closeAll();
   }
 
   // --- pty events ----------------------------------------------------------
+
+  /** Text for the session's terminal pane (and its log). */
+  private render(id: string, text: string): void {
+    this.deps.publisher.pty(id, text);
+    this.deps.ptyLog.write(id, text);
+  }
 
   private onPtyData(id: string, data: string): void {
     this.deps.publisher.pty(id, data);
     const s = this.deps.repos.sessions.get(id);
     if (!s) return; // user terminals share the pty service
+    this.deps.ptyLog.write(id, data);
     this.applyEvent(id, { type: 'activity' });
     const prev = this.quietTimers.get(id);
     if (prev) clearTimeout(prev);
@@ -341,12 +473,191 @@ export class SessionService {
     this.deps.publisher.ptyExit(id, exitCode);
     const s = this.deps.repos.sessions.get(id);
     if (!s) return;
-    const launch = this.launches.get(id);
+    this.deps.ptyLog.close(id);
+    this.onProcessExit(s, exitCode);
+  }
+
+  private onProcessExit(s: Session, exitCode: number | null): void {
+    const launch = this.launches.get(s.id);
     if (launch) {
       void launch.cleanup().catch(() => undefined);
-      this.launches.delete(id);
+      this.launches.delete(s.id);
     }
-    this.applyEvent(id, { type: 'finish', exitCode });
+    if (s.state === 'done') {
+      // A SessionEnd hook already finished it; keep the real exit code.
+      if (s.exitCode === null && exitCode !== null) {
+        this.deps.repos.sessions.upsert({ ...s, exitCode });
+        this.deps.publisher.upsert('sessions', [s.id]);
+      }
+      return;
+    }
+    this.applyEvent(s.id, { type: 'finish', exitCode });
+  }
+
+  // --- stream events -------------------------------------------------------
+
+  private onStreamEffect(id: string, effect: StreamEffect): void {
+    const s = this.deps.repos.sessions.get(id);
+    if (!s) return;
+    switch (effect.type) {
+      case 'init':
+        return;
+      case 'render':
+        this.render(id, effect.text);
+        return;
+      case 'transcript':
+        this.deps.transcript.append(s.id, effect.body, effect.payload);
+        return;
+      case 'note':
+        this.setNote(s.id, effect.note);
+        return;
+      case 'session':
+        this.applyEvent(s.id, { type: effect.event });
+        return;
+      case 'rescan':
+        this.hooks?.rescanHunks(s.id);
+        return;
+      case 'error':
+        this.deps.transcript.system(s.id, `error: ${effect.message}`);
+        return;
+      case 'permission':
+        this.onPermissionRequest(s, effect.requestId, effect.toolName, effect.input);
+        return;
+    }
+  }
+
+  private onStreamExit(id: string, exitCode: number | null): void {
+    this.render(id, `— exited${exitCode !== null ? ` (${exitCode})` : ''}\r\n`);
+    this.deps.publisher.ptyExit(id, exitCode);
+    const s = this.deps.repos.sessions.get(id);
+    if (!s) return;
+    this.deps.ptyLog.close(id);
+    this.onProcessExit(s, exitCode);
+  }
+
+  /** `can_use_tool` from the stream: edits pass when the toggle says so, everything else is an Allow/Deny decision. */
+  private onPermissionRequest(
+    s: Session,
+    requestId: string,
+    toolName: string,
+    input: Record<string, unknown>,
+  ): void {
+    if (s.toggles.autoApproveEdits && EDIT_TOOL.test(toolName)) {
+      this.deps.stream.respondPermission(s.id, requestId, true);
+      return;
+    }
+    const hint =
+      typeof input['command'] === 'string'
+        ? input['command']
+        : typeof input['file_path'] === 'string'
+          ? input['file_path']
+          : '';
+    const prompt = `${toolName}${hint ? `: ${hint.split('\n')[0]?.slice(0, 160) ?? ''}` : ''}`;
+    const ask = this.openAsk(s.id, { kind: 'decision', prompt, options: [...PERMISSION_OPTIONS] }, null);
+    this.permissionAsks.set(ask.id, { sessionId: s.id, requestId });
+  }
+
+  // --- CLI hooks (`styx hook <agent>`) --------------------------------------
+
+  /**
+   * Maps agent lifecycle hooks onto the session machine (plan §5). Claude Code: SessionStart/UserPromptSubmit/
+   * PreToolUse/PostToolUse → activity (PostToolUse Edit|Write also rescans hunks); Stop → quiet; SessionEnd → finish
+   * (reason `clear` only ends the turn); Notification permission_prompt|agent_needs_input → a `question` ask
+   * (needs-you) unless one is already open; idle_prompt|agent_completed → quiet. Codex `notify`
+   * agent-turn-complete → quiet + rescan. Anything else: stop/end/idle/complete → quiet, otherwise activity.
+   */
+  onHook(sessionId: string, agent: HookAgent, event: string, payload: unknown): void {
+    const s = this.deps.repos.sessions.get(sessionId);
+    if (!s) return;
+    const p = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
+    if (agent === 'claude') {
+      switch (event) {
+        case 'SessionStart':
+        case 'UserPromptSubmit':
+        case 'PreToolUse':
+          this.agentMovedOn(s);
+          this.applyEvent(s.id, { type: 'activity' });
+          return;
+        case 'PostToolUse': {
+          this.agentMovedOn(s);
+          this.applyEvent(s.id, { type: 'activity' });
+          if (EDIT_TOOL.test(String(p['tool_name'] ?? ''))) this.hooks?.rescanHunks(s.id);
+          return;
+        }
+        case 'Stop':
+          this.agentMovedOn(s);
+          this.hooks?.rescanHunks(s.id);
+          this.applyEvent(s.id, { type: 'quiet' });
+          return;
+        case 'SubagentStop':
+          this.applyEvent(s.id, { type: 'activity' });
+          return;
+        case 'SessionEnd':
+          this.agentMovedOn(s);
+          if (p['reason'] === 'clear') this.applyEvent(s.id, { type: 'quiet' });
+          else this.applyEvent(s.id, { type: 'finish', exitCode: null });
+          return;
+        case 'Notification': {
+          const message = typeof p['message'] === 'string' ? p['message'] : null;
+          const kind = String(p['notification_type'] ?? '');
+          if (message) this.setNote(s.id, message);
+          if (kind === 'permission_prompt' || kind === 'agent_needs_input') {
+            this.openHookAsk(
+              s,
+              message ?? (kind === 'permission_prompt' ? 'Permission requested' : 'Input requested'),
+            );
+            return;
+          }
+          this.applyEvent(s.id, { type: 'quiet' });
+          return;
+        }
+        default:
+          return;
+      }
+    }
+    if (agent === 'codex') {
+      const type = String(p['type'] ?? event);
+      if (/turn-complete|agent-turn-complete/.test(type)) {
+        const msg = typeof p['last-assistant-message'] === 'string' ? p['last-assistant-message'] : null;
+        if (msg) this.setNote(s.id, msg.slice(0, 200));
+        this.applyEvent(s.id, { type: 'quiet' });
+        this.hooks?.rescanHunks(s.id);
+      } else this.applyEvent(s.id, { type: 'activity' });
+      return;
+    }
+    this.applyEvent(s.id, { type: /stop|end|idle|complete/i.test(event) ? 'quiet' : 'activity' });
+  }
+
+  /** The CLI is waiting in its own TUI: a `system` line + a `question` ask so the board shows needs-you. */
+  private openHookAsk(s: Session, message: string): void {
+    const { repos } = this.deps;
+    if (openAskCount(repos.pendingAsks.openBySession(s.id)) > 0) return;
+    this.deps.transcript.system(s.id, `${AGENT_LABEL[s.agent]} is waiting in the terminal: ${message}`);
+    const ask = this.openAsk(s.id, { kind: 'question', prompt: message }, null, { silent: true });
+    this.hookAsks.set(s.id, ask.id);
+  }
+
+  /** The agent continued (the user answered in the terminal): drop the hook ask so needs-you clears. */
+  private agentMovedOn(s: Session): void {
+    const askId = this.hookAsks.get(s.id);
+    if (!askId) return;
+    this.hookAsks.delete(s.id);
+    const ask = this.deps.repos.pendingAsks.get(askId);
+    if (ask && ask.state === 'open') this.cancelAsk(ask);
+  }
+
+  private cancelAsk(ask: PendingAsk): void {
+    const { repos, publisher, clock } = this.deps;
+    const now = clock.now();
+    repos.pendingAsks.upsert({ ...ask, state: 'cancelled', resolvedAt: now });
+    publisher.upsert('pendingAsks', [ask.id]);
+    for (const n of repos.notifications.byAsk(ask.id)) {
+      if (n.state === 'resolved') continue;
+      repos.notifications.upsert({ ...n, state: 'resolved', resolvedAt: now });
+      publisher.upsert('notifications', [n.id]);
+    }
+    this.deps.notifications?.onAskResolved(ask.id, repos.pendingAsks.openAll().length);
+    this.applyEvent(ask.sessionId, { type: 'ask-resolved', askId: ask.id });
   }
 
   // --- state machine -------------------------------------------------------
@@ -386,14 +697,21 @@ export class SessionService {
     }
     for (const effect of t.effects) this.runEffect(effect, next);
     if (t.state === 'done' && s.state !== 'done') {
+      this.hookAsks.delete(s.id);
       const project = repos.projects.get(next.projectId);
-      this.deps.activity.append({ who: AGENT_LABEL[next.agent], what: `${project?.name ?? ''} · finished${next.exitCode !== null && next.exitCode !== 0 ? ` (exit ${next.exitCode})` : ''}`, projectId: next.projectId, sessionId: next.id });
+      this.deps.activity.append({
+        who: AGENT_LABEL[next.agent],
+        what: `${project?.name ?? ''} · finished${next.exitCode !== null && next.exitCode !== 0 ? ` (exit ${next.exitCode})` : ''}`,
+        projectId: next.projectId,
+        sessionId: next.id,
+      });
     }
     return next;
   }
 
   setNote(sessionId: string, note: string | null): void {
     const s = this.require(sessionId);
+    if (s.note === note) return;
     this.deps.repos.sessions.upsert({ ...s, note });
     this.deps.publisher.upsert('sessions', [s.id]);
   }
@@ -416,6 +734,11 @@ export class SessionService {
           repos.pendingAsks.upsert({ ...a, state: 'cancelled', resolvedAt: now });
           ids.push(a.id);
           this.hooks?.cancelHeldAsk(a);
+          const perm = this.permissionAsks.get(a.id);
+          if (perm) {
+            this.permissionAsks.delete(a.id);
+            this.deps.stream.respondPermission(perm.sessionId, perm.requestId, false, 'Session stopped');
+          }
           for (const n of repos.notifications.byAsk(a.id)) {
             repos.notifications.upsert({ ...n, state: 'resolved', resolvedAt: now });
             publisher.upsert('notifications', [n.id]);
@@ -601,7 +924,11 @@ export class SessionService {
     }
   }
 
-  /** Marks the head ask resolved and moves the session on (used by ask.respond and GrantService). */
+  /**
+   * Marks the head ask resolved and moves the session on (used by ask.respond and GrantService). Asks that did not
+   * come from the broker are answered into the process: stream permission decisions reply to the `can_use_tool`
+   * request, hook questions are typed/sent as the next user turn.
+   */
   resolveAsk(askId: string, resolution: PendingAsk['resolution']): PendingAsk {
     const { repos, publisher, clock } = this.deps;
     const ask = repos.pendingAsks.get(askId) ?? fail('not-found', `ask ${askId} not found`);
@@ -617,14 +944,28 @@ export class SessionService {
     }
     this.deps.notifications?.onAskResolved(ask.id, repos.pendingAsks.openAll().length);
     this.applyEvent(ask.sessionId, { type: 'ask-resolved', askId: ask.id });
+    const perm = this.permissionAsks.get(ask.id);
+    if (perm) {
+      this.permissionAsks.delete(ask.id);
+      const allow = resolution?.kind === 'decision' && resolution.chosen === PERMISSION_OPTIONS[0];
+      this.deps.stream.respondPermission(perm.sessionId, perm.requestId, allow);
+    } else if (this.hookAsks.get(ask.sessionId) === ask.id) {
+      this.hookAsks.delete(ask.sessionId);
+      const answer = resolution?.kind === 'question' ? resolution.answer.trim() : '';
+      if (answer) {
+        if (this.deps.stream.has(ask.sessionId)) this.deps.stream.send(ask.sessionId, answer);
+        else if (this.deps.pty.has(ask.sessionId)) this.deps.pty.write(ask.sessionId, `${answer}\r`);
+      }
+    }
     return next;
   }
 
-  /** Opens a non-grant ask (plan / decision / question) from the broker. */
+  /** Opens a non-grant ask (plan / decision / question) from the broker, a stream permission request or a CLI hook. */
   openAsk(
     sessionId: string,
     payload: Exclude<PendingAsk['payload'], { kind: 'grant' }>,
     brokerRequestId: string | null,
+    opts: { silent?: boolean } = {},
   ): PendingAsk {
     const { repos, publisher, clock } = this.deps;
     const s = this.require(sessionId);
@@ -643,16 +984,18 @@ export class SessionService {
     };
     repos.pendingAsks.upsert(ask);
     publisher.upsert('pendingAsks', [ask.id]);
-    if (payload.kind === 'plan')
-      this.deps.transcript.append(s.id, payload.summary, { kind: 'agent' }, ask.id);
-    else if (payload.kind === 'decision')
-      this.deps.transcript.append(
-        s.id,
-        payload.prompt,
-        { kind: 'decision', options: payload.options, chosen: null },
-        ask.id,
-      );
-    else this.deps.transcript.append(s.id, payload.prompt, { kind: 'agent' }, ask.id);
+    if (!opts.silent) {
+      if (payload.kind === 'plan')
+        this.deps.transcript.append(s.id, payload.summary, { kind: 'agent' }, ask.id);
+      else if (payload.kind === 'decision')
+        this.deps.transcript.append(
+          s.id,
+          payload.prompt,
+          { kind: 'decision', options: payload.options, chosen: null },
+          ask.id,
+        );
+      else this.deps.transcript.append(s.id, payload.prompt, { kind: 'agent' }, ask.id);
+    }
     this.setNote(s.id, payload.kind === 'plan' ? payload.summary : payload.prompt);
     this.applyEvent(s.id, { type: 'ask', askId: ask.id });
     return ask;
