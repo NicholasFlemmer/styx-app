@@ -12,11 +12,13 @@
     user-select: none;
     -webkit-app-region: drag;
   }
+  /* Prototype: 12px padding + 52px traffic-light row + 6px margin, then the 10px flex gap → content at x=80. */
   .mac {
-    padding-left: 70px;
+    padding-left: 80px;
   }
+  /* Prototype: 132px caption strip (3 × 44, margin-right -12) + 8px margin + 10px gap → content ends at 1130 (also clears the 138px overlay). */
   .win {
-    padding-right: 138px;
+    padding-right: 150px;
   }
   .slot {
     display: flex;

@@ -4,7 +4,7 @@ import s from './Titlebar.module.css';
 export type TitlebarPlatform = 'darwin' | 'win32';
 
 export interface TitlebarProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
-  /** darwin reserves 70px for traffic lights; win32 reserves 138px for the overlay controls. */
+  /** darwin: content starts at 80px (traffic lights + gap); win32: content ends 150px before the edge (caption strip + gap). */
   platform?: TitlebarPlatform;
   /** Wordmark, project switcher, branch. */
   left?: ReactNode;

@@ -11,8 +11,18 @@
     color: var(--mu);
     white-space: nowrap;
   }
+  /* Proportional digits like the prototype: tabular-nums widens "02" by 0.07px and shifts the field text off-grid. */
   .text {
-    font-variant-numeric: tabular-nums;
+    font-variant-numeric: normal;
+  }
+  /* Keeps "02 needs you" as one accessible phrase without occupying flex space. */
+  .srSpace {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: pre;
   }
   .counter[data-inv='true'],
   .counter[data-on='true'] {

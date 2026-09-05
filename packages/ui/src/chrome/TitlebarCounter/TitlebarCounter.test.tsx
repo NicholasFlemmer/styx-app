@@ -4,8 +4,11 @@ import { TitlebarCounter } from './TitlebarCounter';
 
 describe('TitlebarCounter', () => {
   it('renders a zero-padded count with label', () => {
-    render(<TitlebarCounter count={2} label="needs you" />);
-    expect(screen.getByText('02 needs you')).toBeInTheDocument();
+    const { container } = render(<TitlebarCounter count={2} label="needs you" />);
+    expect(container.firstElementChild).toHaveTextContent('02 needs you');
+    // Numeral and label are separate flex items (prototype: the 6px gap, not a space, separates them).
+    expect(screen.getByText('02')).toBeInTheDocument();
+    expect(screen.getByText('needs you')).toBeInTheDocument();
   });
   it('is a polite live region only when live', () => {
     const { container, rerender } = render(<TitlebarCounter count={2} label="needs you" live />);

@@ -1,7 +1,7 @@
 import { copy, fill, lockedCount, needsYouCount, projectBranch, projectNameOf } from '@styx/core';
 import { Titlebar, TitlebarCounter, TitlebarField, Wordmark } from '@styx/ui';
 import { useCallback } from 'react';
-import { chromePlatform } from '../../state/bridge';
+import { chromePlatform, platform } from '../../state/bridge';
 import { useModel, useNow, useUi } from '../../state/hooks';
 import s from './AppTitlebar.module.css';
 
@@ -13,11 +13,12 @@ export function AppTitlebar() {
   const projectId = useUi((u) => u.projectId);
   const openPalette = useUi((u) => u.openPalette);
   const now = useNow();
+  // Prototype: `projectName: 'No project'`, `branchName: ''` when nothing is selected (the branch span stays for its gap).
   const projectName = useModel(
-    useCallback((m) => (projectId === null ? copy.general.none : projectNameOf(m, projectId)), [projectId]),
+    useCallback((m) => (projectId === null ? copy.empty.noProject : projectNameOf(m, projectId)), [projectId]),
   );
   const branch = useModel(
-    useCallback((m) => (projectId === null ? copy.general.none : projectBranch(m, projectId)), [projectId]),
+    useCallback((m) => (projectId === null ? '' : projectBranch(m, projectId)), [projectId]),
   );
   const needs = useModel(needsYouCount);
   const locked = useModel(
@@ -46,8 +47,9 @@ export function AppTitlebar() {
       }
       right={
         <>
+          {/* Layout follows the visual chrome; the shortcut hint follows the keyboard platform (Mod = ⌘ on darwin). */}
           <TitlebarField
-            platform={chrome}
+            platform={platform()}
             placeholder={copy.palette.titlebarField}
             onClick={() => openPalette('all')}
           />

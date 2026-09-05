@@ -33,9 +33,10 @@ export const TitlebarCounter = forwardRef<HTMLSpanElement, TitlebarCounterProps>
       {...rest}
     >
       <StatusDot tone={tone} size={8} />
-      <span className={s['text']}>
-        {formatNumeral(count, pad)} {label}
-      </span>
+      {/* Prototype: the numeral is its own flex item, so the 6px gap (not a space) separates it from the label. */}
+      <span className={s['text']}>{formatNumeral(count, pad)}</span>
+      <span className={s['srSpace']}> </span>
+      <span className={s['text']}>{label}</span>
     </span>
   );
 });
