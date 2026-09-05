@@ -67,7 +67,7 @@ describe('sectionRows', () => {
     const values = (section: Parameters<typeof sectionRows>[1]) =>
       sectionRows(model, section, ctx).map((r) => r.options.find((o) => o.value === r.value)?.label);
     expect(values('app:general')).toEqual(['System', 'Badge + sound', 'On']);
-    expect(values('app:editor')).toEqual(['Monaco (embedded)', 'Styx', 'VS Code', 'Per repo']);
+    expect(values('app:editor')).toEqual(['Monaco (embedded)', 'Styx', 'VS Code', 'Per repo', 'Off']);
     expect(values('app:agents')).toEqual([
       'Claude Code',
       'On',
@@ -164,6 +164,15 @@ describe('<Settings />', () => {
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Theme' }), { target: { value: 'dark' } });
     expect(commandMock).toHaveBeenCalledWith('settings.set', { patch: { theme: 'dark' } });
+  });
+
+  it('Editor · Screen reader mode dispatches settings.set { screenReader } (spec §9)', () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByRole('button', { name: 'Editor' }));
+    const select = screen.getByRole('combobox', { name: copy.settings.rows.screenReader });
+    expect((select as HTMLSelectElement).value).toBe('off');
+    fireEvent.change(select, { target: { value: 'on' } });
+    expect(commandMock).toHaveBeenCalledWith('settings.set', { patch: { screenReader: true } });
   });
 
   it('project rows: change → project.settings.set, Reset → project.settings.reset', () => {

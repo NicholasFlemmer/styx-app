@@ -3,7 +3,7 @@ import { fixtures, sessionTabs, type ProjectId } from '@styx/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../state/read-model';
 import { selectSessionId, useUiStore } from '../state/ui-store';
-import { popoutBindings, shellBindings } from './bindings';
+import { boardBindings, popoutBindings, shellBindings } from './bindings';
 import { KeyRegistry } from './registry';
 
 /** Dispatches from inside the workspace scope (spec §6: approve/deny are chat/workspace chords). */
@@ -63,6 +63,32 @@ describe('shell bindings', () => {
     expect(useUiStore.getState().overlays).toHaveLength(0);
   });
 
+  it('Escape pops the trapping sheet before the toast ([sheet, toast] → [toast])', () => {
+    const ui = useUiStore.getState();
+    const sheet = ui.pushOverlay({
+      kind: 'sheet',
+      sheet: 'grant',
+      sessionId: fixtures.ids.session.codex,
+      askId: fixtures.ids.ask.codexGrant,
+    });
+    const toast = ui.pushOverlay({
+      kind: 'toast',
+      toast: {
+        kind: 'ask',
+        askId: fixtures.ids.ask.codexGrant,
+        sessionId: fixtures.ids.session.codex,
+        projectId: fixtures.ids.project.acmeShop as ProjectId,
+      },
+    });
+    expect(useUiStore.getState().overlays.map((o) => o.id)).toEqual([sheet, toast]);
+    // From `body` (no scoped ancestor): the registry prepends `overlay` while any overlay is open.
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    expect(useUiStore.getState().overlays.map((o) => o.id)).toEqual([toast]);
+    // Nothing traps any more: Esc now dismisses the toast.
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    expect(useUiStore.getState().overlays).toHaveLength(0);
+  });
+
   it('Mod+P opens the palette in the Projects scope', () => {
     press({ key: 'p', metaKey: true });
     expect(useUiStore.getState().palette.scope).toBe('projects');
@@ -117,6 +143,46 @@ describe('shell bindings', () => {
       .openSession(fixtures.ids.project.acmeShop as ProjectId, fixtures.ids.session.claude);
     press({ key: 'o', metaKey: true, shiftKey: true });
     expect(commands).toEqual(['window.popout']);
+  });
+});
+
+describe('board bindings (spec §6 "board card")', () => {
+  let reg: KeyRegistry;
+  let off: () => void;
+  const calls: string[] = [];
+
+  beforeEach(() => {
+    calls.length = 0;
+    document.body.innerHTML = '<div data-keyscope="board"><button id="cta">Review grant</button></div>';
+    reg = new KeyRegistry({ platform: () => 'darwin', overlayOpen: () => false });
+    reg.registerAll(
+      boardBindings({
+        approve: () => {
+          calls.push('approve');
+        },
+        deny: () => {
+          calls.push('deny');
+        },
+      }),
+    );
+    off = reg.install(window);
+  });
+  afterEach(() => {
+    off();
+    document.body.innerHTML = '';
+  });
+
+  it('Mod+⏎ / Mod+⌫ fire only inside the board scope', () => {
+    const card = document.querySelector('[data-keyscope="board"]') as HTMLElement;
+    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true, cancelable: true }));
+    card.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, bubbles: true, cancelable: true }),
+    );
+    expect(calls).toEqual(['approve', 'deny']);
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true, cancelable: true }),
+    );
+    expect(calls).toEqual(['approve', 'deny']);
   });
 });
 

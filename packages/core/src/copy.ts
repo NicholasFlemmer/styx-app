@@ -8,6 +8,8 @@ export const copy = {
   app: { name: 'Styx', wordmark: 'STYX' },
 
   palette: {
+    /** Accessible name of the palette dialog (not rendered). */
+    dialogLabel: 'Command palette',
     placeholder: 'switch, spawn, deploy, grant, diff…',
     titlebarField: 'Switch, spawn, deploy, grant…',
     groups: { actions: 'Actions', agents: 'Agents', projects: 'Projects' },
@@ -240,6 +242,8 @@ export const copy = {
 
   onboarding: {
     steps: { editor: 'Editor', projects: 'Projects', agents: 'Agents', targets: 'Targets' },
+    /** Accessible name of the step strip (spec §9); not a §10 string. */
+    stepsLabel: 'Steps',
     editor: {
       headline: 'Connect your editor.',
       body: 'Styx embeds its own editor for reviewing and editing agent work. Connecting your IDE imports recents, keybindings and theme, and sets where "Open in…" goes. Nothing in your IDE changes.',
@@ -426,6 +430,8 @@ export const copy = {
       openFilesIn: 'Open files in',
       fallbackEditor: 'Fallback editor',
       lineEndings: 'Line endings',
+      /** Spec §9: Monaco screen-reader mode + xterm accessibility tree; not a §10 string. */
+      screenReader: 'Screen reader mode',
       defaultAgent: 'Default agent',
       autoWorktree: 'Auto-create worktree per agent',
       shellWindows: 'Shell (Windows)',

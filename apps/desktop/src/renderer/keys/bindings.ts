@@ -11,7 +11,7 @@ import {
 } from '@styx/core';
 import { shortcuts } from '@styx/tokens';
 import { announce } from '../app/announcer';
-import { findOverlay, topOverlay } from '../overlays/stack';
+import { escapeTarget, findOverlay } from '../overlays/stack';
 import { command } from '../state/commands';
 import { useReadModel } from '../state/read-model';
 import { selectSessionId, useUiStore } from '../state/ui-store';
@@ -46,9 +46,11 @@ const focusAgent = (n: number): boolean => {
   return true;
 };
 
-const approvePending = (): boolean => {
-  const grant = pendingGrantOfActiveSession();
-  if (grant === null) return false;
+/**
+ * Approves `grant` as requested (its own scope, 1h) and announces the result (spec §9). Shared by the chat /
+ * workspace Mod+⏎ chord and the Agents board cards.
+ */
+export const approveGrantAsRequested = (grant: Grant): void => {
   const m = model();
   const target = m.targets.byId[grant.targetId];
   const session = grant.sessionId === null ? undefined : m.sessions.byId[grant.sessionId];
@@ -64,6 +66,12 @@ const approvePending = (): boolean => {
       }),
     );
   });
+};
+
+const approvePending = (): boolean => {
+  const grant = pendingGrantOfActiveSession();
+  if (grant === null) return false;
+  approveGrantAsRequested(grant);
   return true;
 };
 
@@ -87,6 +95,15 @@ const spawn = (): boolean => {
   const ui = useUiStore.getState();
   if (ui.projectId === null) return false;
   ui.pushOverlay({ kind: 'modal', modal: 'spawn', projectId: ui.projectId });
+  return true;
+};
+
+/** Esc pops the topmost trapping overlay (sheet / drawer / modal / palette) before any toast. */
+const closeTopmost = (): boolean => {
+  const ui = useUiStore.getState();
+  const target = escapeTarget(ui.overlays);
+  if (target === null) return false;
+  ui.popOverlay(target.id);
   return true;
 };
 
@@ -167,15 +184,15 @@ export const shellBindings = (): KeyBinding[] => [
     id: 'close',
     chord: shortcuts.close,
     scope: 'overlay',
-    when: () => topOverlay(useUiStore.getState().overlays) !== null,
-    run: () => useUiStore.getState().popOverlay(),
+    when: () => escapeTarget(useUiStore.getState().overlays) !== null,
+    run: closeTopmost,
   },
   {
     id: 'close:palette',
     chord: shortcuts.close,
     scope: 'palette',
-    when: () => topOverlay(useUiStore.getState().overlays) !== null,
-    run: () => useUiStore.getState().popOverlay(),
+    when: () => escapeTarget(useUiStore.getState().overlays) !== null,
+    run: closeTopmost,
   },
 ];
 
@@ -210,4 +227,17 @@ export const diffBindings = (actions: DiffActions): KeyBinding[] => [
   { id: 'diffNext', chord: shortcuts.diffNext, scope: 'diff', run: actions.next },
   { id: 'diffPrev', chord: shortcuts.diffPrev, scope: 'diff', run: actions.prev },
   { id: 'diffDone', chord: shortcuts.diffDone, scope: 'diff', run: actions.done },
+];
+
+export interface BoardActions {
+  /** Mod+⏎ on the focused needs-you card: approve the grant as requested / run the card's CTA. */
+  approve: () => void | boolean;
+  /** Mod+⌫ on the focused needs-you card: deny the grant / reject the plan. */
+  deny: () => void | boolean;
+}
+
+/** Spec §6: approve / deny also fire on a focused Agents board card (scope `board`). */
+export const boardBindings = (actions: BoardActions): KeyBinding[] => [
+  { id: 'boardApprove', chord: shortcuts.approve, scope: 'board', run: actions.approve },
+  { id: 'boardDeny', chord: shortcuts.deny, scope: 'board', run: actions.deny },
 ];

@@ -40,3 +40,28 @@ describe('AuditService', () => {
     expect(out.entries[0]?.id).toBe(r.id);
   });
 });
+
+describe('AuditService redaction', () => {
+  it('redacts secret shapes in free-text fields before hashing so they never enter the chain (M1)', () => {
+    const { audit } = svc();
+    const ghp = `ghp_${'b'.repeat(36)}`;
+    const row = audit.append({
+      actorKind: 'agent',
+      actorLabel: 'Codex',
+      action: 'used',
+      triggeredBy: `$ gh auth login --with-token ${ghp}`,
+      targetLabel: `label ${ghp}`,
+      sessionLabel: `session ${ghp}`,
+      worktreeLabel: `wt ${ghp}`,
+      detail: { reason: `use ${ghp}`, token: 'plain', nested: { accessKey: 'AKIAABCDEFGHIJKLMNOP' } },
+    });
+    const dumped = JSON.stringify(audit.get(row.id));
+    expect(dumped).not.toContain(ghp);
+    expect(dumped).not.toContain('AKIAABCDEFGHIJKLMNOP');
+    expect(dumped).not.toContain('plain');
+    expect(row.triggeredBy).toBe('$ gh auth login --with-token [redacted]');
+    expect(row.targetLabel).toBe('label [redacted]');
+    expect(JSON.parse(row.detailJson ?? '{}')).toEqual({ reason: 'use [redacted]', token: '[redacted]', nested: { accessKey: '[redacted]' } });
+    expect(audit.verifyChain()).toEqual({ ok: true, count: 1 });
+  });
+});

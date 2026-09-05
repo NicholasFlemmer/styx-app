@@ -1,6 +1,17 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'node:path';
+import type { Plugin } from 'vite';
+
+/**
+ * `connect-src ws://localhost:*` exists only for Vite HMR. Production bundles are served from `file://`, so the
+ * built index.html keeps `connect-src 'self'` alone (the source file stays dev-friendly).
+ */
+const productionCsp = (): Plugin => ({
+  name: 'styx-production-csp',
+  apply: 'build',
+  transformIndexHtml: (html) => html.replace(/connect-src 'self' ws:\/\/localhost:\*/, "connect-src 'self'"),
+});
 
 export default defineConfig({
   main: {
@@ -13,7 +24,7 @@ export default defineConfig({
     build: { rollupOptions: { input: { index: resolve('src/preload/index.ts') } } },
   },
   renderer: {
-    plugins: [react()],
+    plugins: [react(), productionCsp()],
     resolve: { alias: { '@renderer': resolve('src/renderer') } },
     css: { modules: { localsConvention: 'camelCaseOnly' } },
     worker: { format: 'es' },

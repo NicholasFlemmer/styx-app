@@ -22,6 +22,7 @@ import {
 } from '../model/common';
 import { cliInstallSchema, ideInstallSchema, ideKindSchema } from '../model/discovery';
 import { policyRuleSchema, policySchema } from '../model/policy';
+import { targetNameSchema } from '../project-file';
 import {
   askResolutionSchema,
   pausedReasonSchema,
@@ -199,7 +200,7 @@ export const commands = {
       projectId: projectIdSchema,
       provider: providerSchema,
       env: envSchema,
-      name: z.string().min(1).optional(),
+      name: targetNameSchema.optional(),
     }),
     output: z.object({ flowId: z.string(), authMethod: authMethodSchema, browserUrl: z.string().nullable() }),
   },
@@ -207,7 +208,7 @@ export const commands = {
     input: z.object({
       projectId: projectIdSchema,
       provider: z.enum(['aws', 'gcp']),
-      name: z.string().min(1),
+      name: targetNameSchema,
       env: envSchema,
       accessKey: z.string().min(1),
       secret: z.string().min(1),
@@ -223,7 +224,7 @@ export const commands = {
   'target.connect.saveSsh': {
     input: z.object({
       projectId: projectIdSchema,
-      name: z.string().min(1),
+      name: targetNameSchema,
       env: envSchema,
       host: z.string().min(1),
       user: z.string().min(1),

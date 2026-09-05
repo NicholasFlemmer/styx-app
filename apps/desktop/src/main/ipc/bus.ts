@@ -120,6 +120,31 @@ export class CommandBus {
     }
   }
 
+  /**
+   * Main-process-originated dispatch (boot-time discovery refresh, protocol handlers): skips the sender-frame check
+   * because there is no renderer sender, but still validates the command name and input against the contract.
+   */
+  dispatchInternal<N extends CommandName>(name: N, input: CommandInput<N>): Promise<CommandResult<N>>;
+  async dispatchInternal(name: unknown, input: unknown): Promise<CommandResult> {
+    if (typeof name !== 'string' || !isCommandName(name)) {
+      return { ok: false, error: { code: 'invalid-input', message: `unknown command ${String(name)}` } };
+    }
+    const handler = this.handlers.get(name);
+    if (!handler)
+      return { ok: false, error: { code: 'internal', message: `no handler registered for ${name}` } };
+    const parsed = commands[name].input.safeParse(input ?? {});
+    if (!parsed.success)
+      return { ok: false, error: { code: 'invalid-input', message: z.prettifyError(parsed.error) } };
+    try {
+      const value = await handler(parsed.data as never, { senderId: -1 });
+      return { ok: true, value } as CommandResult;
+    } catch (e) {
+      const error = toError(e);
+      logger.warn(`ipc(internal): ${name} failed`, { code: error.code, message: error.message });
+      return { ok: false, error };
+    }
+  }
+
   attach(ipcMain: IpcMain): void {
     ipcMain.handle(CHANNELS.command, (event: IpcMainInvokeEvent, name: unknown, input: unknown) =>
       this.dispatch({ senderId: event.sender.id, frameUrl: event.senderFrame?.url ?? null }, name, input),

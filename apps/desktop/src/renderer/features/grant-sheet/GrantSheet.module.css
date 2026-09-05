@@ -10,6 +10,10 @@
     line-height: normal;
     text-align: center;
   }
+  /* 40px visible, 44px hit area (spec §9). */
+  .footerButton::after {
+    inset: -2px 0;
+  }
   .slash {
     color: var(--mu);
   }
@@ -69,8 +73,15 @@
     background: var(--ac);
   }
   .errorClose {
+    position: relative;
     margin-left: auto;
     color: var(--mu);
     cursor: pointer;
+  }
+  /* Text-sized link: ≥ 28px hit area without changing the glyph box (spec §9). */
+  .errorClose::after {
+    content: '';
+    position: absolute;
+    inset: -8px -4px;
   }
 }

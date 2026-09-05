@@ -1,6 +1,6 @@
 import { closeSync, existsSync, mkdirSync, openSync, renameSync, rmSync, statSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
-import { logger } from './logger';
+import { logger, redact } from './logger';
 
 export const PTY_LOG_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -21,7 +21,9 @@ export class PtyLog {
     return join(this.dir, `${sessionId}.log`);
   }
 
-  write(sessionId: string, data: string): void {
+  write(sessionId: string, raw: string): void {
+    // Agents echo tokens (`vercel --token …`, pasted keys) into their terminals; the on-disk log never keeps them.
+    const data = redact(raw);
     try {
       let f = this.open.get(sessionId);
       if (!f) {

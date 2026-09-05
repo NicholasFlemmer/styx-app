@@ -20,12 +20,20 @@
     max-height: 60%;
   }
   .row {
+    position: relative;
     padding: 4px 12px;
     display: flex;
     justify-content: space-between;
     cursor: pointer;
     white-space: nowrap;
     user-select: none;
+  }
+  /* 24px rows, ≥ 28px hit area (spec §9); neighbours tile, so the bleed only widens the edge rows. */
+  .row::after,
+  .change::after {
+    content: '';
+    position: absolute;
+    inset: -2px 0;
   }
   .row:hover {
     background: var(--s2);
@@ -42,6 +50,7 @@
     margin-top: 10px;
   }
   .change {
+    position: relative;
     padding: 4px 12px;
     display: flex;
     gap: 10px;

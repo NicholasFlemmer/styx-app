@@ -58,7 +58,8 @@
   }
   /* Template select matches the input recipe: --bg fill, 8px 10px, 12.5px. */
   .template select {
-    height: auto;
+    /* Prototype box: 31px content + borders (Archivo 12.5px, normal line box). */
+    height: 33px;
     padding: 8px 24px 8px 10px;
     background: var(--bg);
     font-size: 12.5px;
@@ -70,6 +71,7 @@
     flex-wrap: wrap;
   }
   .link {
+    position: relative;
     border: 0;
     padding: 0;
     background: transparent;
@@ -77,6 +79,12 @@
     font: inherit;
     text-decoration: underline;
     cursor: pointer;
+  }
+  /* Text-sized link: ≥ 28px hit area without changing the glyph box (spec §9). */
+  .link::after {
+    content: '';
+    position: absolute;
+    inset: -8px -4px;
   }
   .link:hover {
     color: var(--tx);

@@ -56,7 +56,7 @@ describe('Diff review screen', () => {
     expect(legend).toContain(copy.diff.keys.acceptReject);
     expect(legend).toContain(copy.diff.keys.nextPrev);
     expect(legend).toContain('⌘⏎ done');
-    expect(screen.getAllByRole('article')).toHaveLength(3);
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
     const first = within(hunk(1));
     expect(first.getByText('@@ -1,2 +1,3 @@')).toBeTruthy();
     expect(first.getByText('pending')).toBeTruthy();

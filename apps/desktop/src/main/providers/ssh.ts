@@ -87,11 +87,18 @@ export class SshAdapter implements ProviderAdapter {
     }
   }
 
+  issuesScoped(): boolean {
+    return true; // the agent only ever sees a forwarded agent socket, never the key
+  }
+
   scopeOfCommand(argv: string[]): Scope[] {
     // ssh [-opts] user@host [command…] — classify the remote command only.
     const hostIdx = argv.findIndex((a) => !a.startsWith('-') && a.includes('@'));
     const remote = (hostIdx >= 0 ? argv.slice(hostIdx + 1) : argv.filter((a) => !a.startsWith('-')).slice(1)).join(' ');
-    if (/\b(rm -rf|rm -r|dropdb|DROP |truncate)\b/i.test(remote)) return ['delete'];
+    if (/\b(rm -rf|rm -r|rm -fr|dropdb|DROP |truncate|mkfs|shred)\b/i.test(remote)) return ['delete'];
+    // Fail closed: shell metacharacters, command chains, pipes, redirects, or substitutions could hide anything
+    // behind a benign-looking first word (`ls; rm …`), so they can never classify as read.
+    if (/[;&|$`\n><]/.test(remote) || /\(|\{/.test(remote)) return ['write'];
     if (/\b(deploy|systemctl restart|docker compose up|pm2 (restart|reload))\b/.test(remote)) return ['deploy'];
     if (remote === '' || /^(ls|cat|tail|head|df|uptime|true|hostname|whoami)\b/.test(remote)) return ['read'];
     return ['write'];

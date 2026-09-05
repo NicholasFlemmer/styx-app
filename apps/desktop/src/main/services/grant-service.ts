@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import {
   AGENT_LABEL,
   copy,
@@ -41,7 +40,7 @@ import type { Publisher } from '../store/publisher';
 import type { ActivityService } from './activity-service';
 import type { AuditService } from './audit-service';
 import { auditContext, draftToInput, sessionLabel } from './labels';
-import { logger } from './logger';
+import { logger, redact } from './logger';
 import type { MfaService } from './mfa-service';
 import type { SessionService } from './session-service';
 import type { TranscriptService } from './transcript-service';
@@ -144,13 +143,22 @@ export class GrantService {
     return this.issued.get(grantId) ?? null;
   }
 
-  /** The credential bundle for an active grant; re-issued through the adapter when the in-memory copy is gone (restart). */
-  async credentialFor(grantId: string): Promise<IssuedCredential> {
+  /**
+   * The credential bundle for an active grant; re-issued through the adapter when the in-memory copy is gone (restart).
+   * `caller` binds the fetch to a session: a session-bound grant must belong to it, and a persistent grant
+   * (`sessionId === null`) must sit on a target in the caller's project — a session in project B can never pull
+   * project A's `always` grant.
+   */
+  async credentialFor(grantId: string, caller?: { sessionId: string; projectId: string }): Promise<IssuedCredential> {
+    const grant = this.require(grantId);
+    const target = this.deps.repos.targets.get(grant.targetId) ?? fail('not-found', 'target not found');
+    if (caller) {
+      if (grant.sessionId !== null && grant.sessionId !== caller.sessionId) fail('forbidden', 'grant belongs to another session');
+      if (target.projectId !== caller.projectId) fail('forbidden', 'grant belongs to another project');
+    }
     const cached = this.issued.get(grantId);
     if (cached) return cached;
-    const grant = this.require(grantId);
     if (grant.state !== 'active') fail('invalid-transition', `grant is ${grant.state}`);
-    const target = this.deps.repos.targets.get(grant.targetId) ?? fail('not-found', 'target not found');
     const info: GrantInfo = { id: grant.id, scope: [...grant.scope], duration: grant.duration, expiresAt: grant.expiresAt };
     const tinfo: TargetInfo = { id: target.id, provider: target.provider, name: target.name, env: target.env, config: target.config, credentialRef: target.credentialRef };
     const cred = await this.deps.providers.get(target.provider).issue(info, tinfo).catch((e: Error) => fail('provider-error', e.message));
@@ -188,8 +196,10 @@ export class GrantService {
     );
   }
 
-  async request(req: GrantRequest): Promise<GrantOutcome> {
+  async request(input: GrantRequest): Promise<GrantOutcome> {
     const { repos, publisher, clock } = this.deps;
+    // Agent-supplied free text is persisted (grants.reason, audit, transcript): scrub secret shapes first (M1).
+    const req: GrantRequest = { ...input, reason: redact(input.reason), triggeredBy: redact(input.triggeredBy) };
     const target = repos.targets.get(req.targetId) ?? fail('not-found', `target ${req.targetId} not found`);
     const session = req.sessionId ? repos.sessions.get(req.sessionId) : null;
     const now = clock.now();
@@ -198,6 +208,17 @@ export class GrantService {
     if (decision.decision === 'auto' && decision.grantId !== null) {
       const existing = repos.grants.get(decision.grantId);
       if (existing) return { kind: 'active', grant: existing, decidedBy: 'persistent-grant' };
+    }
+
+    // A duplicate ask (same session, target, scope set) while the first is still open returns the pending grant
+    // instead of stacking a second row and a second sheet (L1: prompt-injection spam cannot flood the queue).
+    if (decision.decision === 'ask' && session) {
+      const wanted = [...req.scope].sort().join('+');
+      const dup = repos.grants
+        .bySession(session.id)
+        .find((g) => g.state === 'requested' && g.targetId === target.id && [...g.scope].sort().join('+') === wanted);
+      const ask = dup ? repos.pendingAsks.byGrant(dup.id) : null;
+      if (dup && ask && ask.state === 'open') return { kind: 'pending', grant: dup, ask };
     }
 
     const grant: Grant = {
@@ -314,7 +335,12 @@ export class GrantService {
     if (scope && scope.length > 0 && !scope.every((s) => grant.scope.includes(s)))
       fail('invalid-input', 'scope must be a subset of the requested scope');
     const decision = this.decide(target, session, scopes);
-    const needMfa = requiresMfa(target.env, scopes) || target.policy === 'ask-mfa' || decision.requireMfa;
+    // Unscoped providers (GitHub, Vercel, Supabase, GCP non-read) hand the agent the whole stored token whatever the
+    // shim heuristics classified, so on prod the user verifies even for "read" (M2). Absent hint = unscoped.
+    const unscopedProd =
+      target.env === 'prod' && !(this.deps.providers.get(target.provider).issuesScoped?.(scopes) ?? false);
+    const needMfa =
+      requiresMfa(target.env, scopes) || target.policy === 'ask-mfa' || decision.requireMfa || unscopedProd;
     let mfaVerified = false;
     if (needMfa) {
       const reason = `Grant ${session ? AGENT_LABEL[session.agent] : 'access'} ${scopes.join('+')} on ${target.name} ${target.env}`;
@@ -490,7 +516,6 @@ export class GrantService {
       fail('provider-error', (e as Error).message);
     }
     this.issued.set(grant.id, cred);
-    repos.grants.setCredNonce(grant.id, randomBytes(16).toString('hex'));
     const next = this.commit(grant, t.state, t.patch, t.effects);
     // Chat system line (spec §10): "grant: supabase-prod · read+write · expires in 59m".
     if (next.sessionId ?? grant.sessionId) {
@@ -553,9 +578,11 @@ export class GrantService {
         return; // done ahead of commit in `issue`
       case 'revokeCredential': {
         for (const fn of this.listeners) fn(grant, grant.state === 'expired' ? 'expired' : 'revoked');
+        // Replay protection after revoke is the row state + dropping the in-memory bundle: `get_credential` and
+        // `exec_authorize` re-check `isLive` on every call, and the broker connection is bound to one session.
+        // (The unused `cred_nonce` column stays in the schema for migration compatibility; nothing reads it.)
         const cred = this.issued.get(grant.id);
         this.issued.delete(grant.id);
-        this.deps.repos.grants.setCredNonce(grant.id, null);
         if (cred) {
           const target = this.deps.repos.targets.get(grant.targetId);
           if (target)

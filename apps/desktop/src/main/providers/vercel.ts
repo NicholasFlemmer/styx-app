@@ -1,6 +1,9 @@
 import { makeCredentialRef } from '../services/credential-vault';
 import type { AdapterDeps, ConnectInput, GrantInfo, IssuedCredential, ProviderAdapter, Scope, TargetInfo, TestResult } from './types';
-import { hasVerb } from './types';
+import { hasVerb, isHelp } from './types';
+
+const VERCEL_READ = new Set(['ls', 'list', 'inspect', 'logs', 'whoami', 'help', 'bisect', 'curl']);
+const VERCEL_READ_SUB = new Set(['ls', 'list', 'inspect', 'pull', 'get', 'logs', 'status']);
 
 /** Vercel: token from the dashboard (or imported from `vercel login`). No per-grant scoping API; scope enforced at the shim. */
 export class VercelAdapter implements ProviderAdapter {
@@ -51,10 +54,11 @@ export class VercelAdapter implements ProviderAdapter {
 
   scopeOfCommand(argv: string[]): Scope[] {
     const [cmd, sub] = argv;
-    if (cmd === 'remove' || cmd === 'rm' || (cmd === 'env' && sub === 'rm') || (cmd === 'domains' && sub === 'rm') || (cmd === 'projects' && sub === 'rm')) return ['delete'];
+    if (cmd === 'remove' || cmd === 'rm' || (cmd === 'env' && sub === 'rm') || (cmd === 'domains' && sub === 'rm') || (cmd === 'projects' && sub === 'rm') || sub === 'rm' || sub === 'remove') return ['delete'];
     if (cmd === undefined || cmd === 'deploy' || cmd === 'promote' || cmd === 'rollback' || cmd === 'redeploy' || cmd === 'alias' || cmd === 'build') return ['deploy'];
     if (cmd === 'env' && (sub === 'add' || sub === 'pull')) return sub === 'pull' ? ['read'] : ['write'];
     if (hasVerb(argv, /^(add|link|set)$/)) return ['write'];
-    return ['read'];
+    if (isHelp(argv) || VERCEL_READ.has(cmd) || (sub !== undefined && VERCEL_READ_SUB.has(sub))) return ['read'];
+    return ['write']; // unknown verbs fail closed
   }
 }

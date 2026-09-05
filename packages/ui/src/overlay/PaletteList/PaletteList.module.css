@@ -21,6 +21,10 @@
     font-family: var(--font-mono);
     font-size: 14px;
   }
+  /* Focus indicator for the autofocused prompt (spec §9): the row's own hairline turns accent. */
+  .prompt:focus-within {
+    border-bottom-color: var(--ac);
+  }
   .caret {
     color: var(--act);
   }

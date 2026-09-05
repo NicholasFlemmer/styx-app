@@ -6,6 +6,7 @@
     flex: none;
   }
   .project {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -22,6 +23,12 @@
   }
   .project:hover {
     background: var(--s2);
+  }
+  /* 22px visible box, ≥ 28px hit area (spec §9). */
+  .project::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
   }
   .chevron {
     color: var(--mu);

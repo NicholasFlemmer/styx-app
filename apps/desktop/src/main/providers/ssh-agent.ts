@@ -1,6 +1,7 @@
 import { createServer, type Server, type Socket } from 'node:net';
 import { chmodSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { assertPrivateDir } from '@styx/broker';
 import { AgentProtocol, utils } from 'ssh2';
 
 interface ParsedKey {
@@ -26,18 +27,25 @@ export class StyxSshAgent {
     const key = Array.isArray(parsed) ? parsed[0] : parsed;
     if (!key || key instanceof Error) throw new Error(`Cannot parse SSH key: ${(key as Error | undefined)?.message ?? 'unknown'}`);
     this.key = key;
-    if (process.platform !== 'win32') {
+    const posix = process.platform !== 'win32';
+    if (posix) {
       mkdirSync(dirname(socketPath), { recursive: true, mode: 0o700 });
+      assertPrivateDir(dirname(socketPath)); // owned by us, 0700, not a symlink (L2)
       if (existsSync(socketPath)) unlinkSync(socketPath);
     }
     this.server = createServer((sock) => this.handle(sock));
-    await new Promise<void>((resolve, reject) => {
-      this.server?.once('error', reject);
-      this.server?.listen(socketPath, () => {
-        if (process.platform !== 'win32') chmodSync(socketPath, 0o600);
-        resolve();
+    const prevUmask = posix ? process.umask(0o077) : null; // socket is born 0600; no chmod window
+    try {
+      await new Promise<void>((resolve, reject) => {
+        this.server?.once('error', reject);
+        this.server?.listen(socketPath, () => {
+          if (posix) chmodSync(socketPath, 0o600);
+          resolve();
+        });
       });
-    });
+    } finally {
+      if (prevUmask !== null) process.umask(prevUmask);
+    }
   }
 
   private handle(sock: Socket): void {

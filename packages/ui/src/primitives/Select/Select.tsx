@@ -1,4 +1,4 @@
-import { forwardRef, type CSSProperties, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { forwardRef, useRef, type CSSProperties, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { Icon } from '../Icon';
 import s from './Select.module.css';
 
@@ -24,14 +24,33 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   ref,
 ) {
   const cls = [s['wrap'], disabled && s['disabled'], className].filter(Boolean).join(' ');
+  const inner = useRef<HTMLSelectElement | null>(null);
+  const setRef = (el: HTMLSelectElement | null) => {
+    inner.current = el;
+    if (typeof ref === 'function') ref(el);
+    else if (ref !== null) ref.current = el;
+  };
+  /** Clicks on the wrapper's 2px bleed (outside the 25px box) still open the select (spec §9 hit targets). */
+  const onWrapClick = (e: MouseEvent<HTMLSpanElement>) => {
+    if (e.target !== e.currentTarget || disabled) return;
+    const el = inner.current;
+    if (el === null) return;
+    el.focus();
+    try {
+      (el as HTMLSelectElement & { showPicker?: () => void }).showPicker?.();
+    } catch {
+      /* needs a user gesture; focus is enough */
+    }
+  };
   return (
     <span
       className={cls}
       style={width !== undefined ? { ...style, width } : style}
       data-inv={inv ? 'true' : undefined}
       data-on={on ? 'true' : undefined}
+      onClick={onWrapClick}
     >
-      <select ref={ref} className={s['select']} disabled={disabled} {...rest}>
+      <select ref={setRef} className={s['select']} disabled={disabled} {...rest}>
         {options?.map((o) => (
           <option key={o.value} value={o.value} disabled={o.disabled}>
             {o.label}

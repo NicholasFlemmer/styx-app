@@ -15,9 +15,18 @@ import { envShareSchema, windowsShellSchema, worktreeLocationSchema } from './mo
 export const PROJECT_FILE_SCHEMA_URL = 'https://styx.dev/schema/project.v1.json';
 export const PROJECT_FILE_PATH = '.styx/project.json';
 
+/**
+ * Target names travel into shell-adjacent places (audit labels, MFA prompt reasons, shim `list_targets`), so they
+ * are limited to a plain charset: letters, digits, space, `. _ / @ : + -`, 1–80 chars.
+ */
+export const TARGET_NAME_PATTERN = /^[A-Za-z0-9 ._/@:+-]{1,80}$/;
+export const targetNameSchema = z
+  .string()
+  .regex(TARGET_NAME_PATTERN, 'target name: letters, digits, space, . _ / @ : + - only (max 80)');
+
 export const projectFileTargetSchema = z
   .object({
-    name: z.string().min(1),
+    name: targetNameSchema,
     provider: providerSchema,
     env: envSchema,
     authMethod: authMethodSchema,

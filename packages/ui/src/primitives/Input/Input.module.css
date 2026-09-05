@@ -14,6 +14,8 @@
   }
   .field:focus-within {
     border-color: var(--tx);
+    outline: 1px solid var(--ac);
+    outline-offset: 1px;
   }
   .mono {
     font-family: var(--font-mono);

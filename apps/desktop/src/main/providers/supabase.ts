@@ -1,5 +1,8 @@
 import { makeCredentialRef } from '../services/credential-vault';
 import type { AdapterDeps, ConnectInput, GrantInfo, IssuedCredential, ProviderAdapter, Scope, TargetInfo, TestResult } from './types';
+import { isHelp } from './types';
+
+const SUPABASE_READ_SUB = new Set(['list', 'ls', 'get', 'status', 'diff', 'dump', 'lint', 'inspect', 'show', 'fetch']);
 
 /** Supabase: personal access token (PKCE OAuth needs a registered Styx OAuth app; token paste ships in v1). */
 export class SupabaseAdapter implements ProviderAdapter {
@@ -52,9 +55,10 @@ export class SupabaseAdapter implements ProviderAdapter {
 
   scopeOfCommand(argv: string[]): Scope[] {
     const [cmd, sub, sub2] = argv;
-    if ((cmd === 'db' && sub === 'reset') || (cmd === 'projects' && sub === 'delete') || (cmd === 'branches' && sub === 'delete') || sub === 'delete' || sub === 'rm') return ['delete'];
+    if ((cmd === 'db' && sub === 'reset') || (cmd === 'projects' && sub === 'delete') || (cmd === 'branches' && sub === 'delete') || sub === 'delete' || sub === 'rm' || sub === 'unset') return ['delete'];
     if (cmd === 'functions' && sub === 'deploy') return ['deploy'];
     if ((cmd === 'db' && (sub === 'push' || sub === 'seed')) || (cmd === 'migration' && (sub === 'up' || sub === 'repair')) || (cmd === 'secrets' && sub === 'set') || sub === 'create' || sub === 'update' || sub2 === 'push') return ['write'];
-    return ['read'];
+    if (isHelp(argv) || cmd === 'login' || cmd === 'status' || (sub !== undefined && SUPABASE_READ_SUB.has(sub)) || (cmd === 'gen' && sub === 'types')) return ['read'];
+    return ['write']; // unknown verbs fail closed
   }
 }

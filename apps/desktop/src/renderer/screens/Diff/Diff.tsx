@@ -33,6 +33,7 @@ function HunkView({
   return (
     <article
       ref={setEl}
+      role="listitem"
       className={s['hunk']}
       tabIndex={-1}
       aria-label={`${hunk.file} ${hunk.range}`}

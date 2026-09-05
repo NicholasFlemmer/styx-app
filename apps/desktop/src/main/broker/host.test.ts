@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { BrokerClient } from '@styx/broker';
+import { BrokerClient, ErrorCode } from '@styx/broker';
 import { fixtures } from '@styx/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { sha256 } from '../services/session-service';
@@ -145,6 +145,128 @@ describe('BrokerHost', () => {
     expect(r).toEqual({ ok: true, value: {} });
     expect(await pending).toEqual({ resolution: { kind: 'decision', answer: 'Yes' } });
     expect(app.app.repos.sessions.get(ids.session.gemini)?.state).toBe('working');
+    client.close();
+  });
+});
+
+/** A second connection for another session on the same broker (`t` must already be listening). */
+async function secondClient(app: TestApp, sessionId: string): Promise<BrokerClient> {
+  const token = randomBytes(32).toString('hex');
+  app.app.repos.sessions.setBrokerTokenHash(sessionId, sha256(token));
+  const client = new BrokerClient({ endpoint: app.app.runtime.brokerEndpoint, sessionId, token, client: 'shim' });
+  await client.connect();
+  return client;
+}
+
+describe('BrokerHost security regressions', () => {
+  it('M1: shim argv and agent reasons are redacted before anything is persisted', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const preview = app.app.repos.targets.get(ids.target.vercelPreview);
+    const prod = app.app.repos.targets.get(ids.target.supabaseProd);
+    if (!preview?.credentialRef || !prod?.credentialRef) throw new Error('fixture');
+    await app.vault.set(preview.credentialRef, JSON.stringify({ token: 'vt-preview' }));
+    const ghp = `ghp_${'c'.repeat(36)}`;
+    const r = await client.call('exec_authorize', {
+      tool: 'vercel',
+      argv: ['--token', 'secretvalue123', 'deploy', '--password=hunter2', ghp],
+      cwd: '/tmp',
+    });
+    expect(r.env).toEqual({ VERCEL_TOKEN: 'vt-preview' }); // the real credential still flows to the shim
+    await client.call('exec_report', { useId: r.useId, exitCode: 0 });
+    const pending = client
+      .call('request_access', { target: 'supabase-prod', scope: ['read'], reason: `migrate with ${ghp}`, triggeredBy: `$ supabase --token ${ghp} db push` })
+      .catch(() => undefined);
+    await new Promise((res) => setTimeout(res, 50));
+    const requested = app.app.repos.grants.bySession(ids.session.gemini).find((g) => g.state === 'requested');
+    expect(requested).toBeDefined();
+    const dump = JSON.stringify({
+      grants: app.app.repos.grants.all(),
+      uses: [...app.app.repos.grantUses.byGrant(r.grantId), ...app.app.repos.grantUses.byGrant(requested?.id ?? '')],
+      audit: app.app.repos.audit.all(),
+      transcript: app.app.repos.transcripts.last(ids.session.gemini),
+      asks: app.app.repos.pendingAsks.openBySession(ids.session.gemini),
+      session: app.app.repos.sessions.get(ids.session.gemini),
+    });
+    expect(dump).not.toContain('secretvalue123');
+    expect(dump).not.toContain('hunter2');
+    expect(dump).not.toContain(ghp);
+    expect(app.app.repos.grants.get(r.grantId)?.reason).toBe('$ vercel --token [redacted] deploy --password=[redacted] [redacted]');
+    expect(requested?.reason).toBe('migrate with [redacted]');
+    app.app.grants.deny(requested?.id ?? '');
+    await pending;
+    client.close();
+  });
+
+  it('M3: a session in another project cannot see or fetch a persistent grant', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const preview = app.app.repos.targets.get(ids.target.vercelPreview);
+    if (!preview?.credentialRef) throw new Error('fixture');
+    await app.vault.set(preview.credentialRef, JSON.stringify({ token: 'vt-preview' }));
+    // Control: the persistent preview grant is visible from its own project.
+    await expect(client.call('get_credential', { grantId: ids.grant.vercelPreviewAlways })).resolves.toMatchObject({ env: { VERCEL_TOKEN: 'vt-preview' } });
+    const blog = await secondClient(app, ids.session.blog);
+    expect(app.app.repos.sessions.get(ids.session.blog)?.projectId).toBe(ids.project.blogV2);
+    await expect(blog.call('get_credential', { grantId: ids.grant.vercelPreviewAlways })).rejects.toMatchObject({ code: ErrorCode.targetNotFound });
+    await expect(blog.call('check_grant', { grantId: ids.grant.vercelPreviewAlways, waitMs: 0 })).rejects.toMatchObject({ code: ErrorCode.targetNotFound });
+    await expect(
+      app.app.grants.credentialFor(ids.grant.vercelPreviewAlways, { sessionId: ids.session.blog, projectId: ids.project.blogV2 }),
+    ).rejects.toThrow(/another project/);
+    expect(app.app.repos.grantUses.byGrant(ids.grant.vercelPreviewAlways).filter((u) => u.sessionId === ids.session.blog)).toEqual([]);
+    blog.close();
+    client.close();
+  });
+
+  it('L7: exec_report is rejected for a use row opened by another session', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const preview = app.app.repos.targets.get(ids.target.vercelPreview);
+    if (!preview?.credentialRef) throw new Error('fixture');
+    await app.vault.set(preview.credentialRef, JSON.stringify({ token: 'vt-preview' }));
+    const r = await client.call('exec_authorize', { tool: 'vercel', argv: ['env', 'ls'], cwd: '/tmp' });
+    const blog = await secondClient(app, ids.session.blog);
+    await expect(blog.call('exec_report', { useId: r.useId, exitCode: 0 })).rejects.toMatchObject({ code: ErrorCode.targetNotFound });
+    expect(app.app.repos.grantUses.get(r.useId)?.exitCode).toBeNull();
+    await client.call('exec_report', { useId: r.useId, exitCode: 3 });
+    expect(app.app.repos.grantUses.get(r.useId)?.exitCode).toBe(3);
+    blog.close();
+    client.close();
+  });
+
+  it('L1: exec_authorize shares the request bucket only when it opens a new grant request', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const preview = app.app.repos.targets.get(ids.target.vercelPreview);
+    if (!preview?.credentialRef) throw new Error('fixture');
+    await app.vault.set(preview.credentialRef, JSON.stringify({ token: 'vt-preview' }));
+    // Covered shim execs are not metered.
+    for (let i = 0; i < 7; i += 1) await client.call('exec_authorize', { tool: 'vercel', argv: ['env', 'ls'], cwd: '/tmp' });
+    // Requests that need the user are: the 6th within a minute is refused.
+    const held = Array.from({ length: 5 }, (_, i) =>
+      client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push', `--n=${i}`], cwd: '/tmp' }, { timeoutMs: 5_000 }).catch(() => undefined),
+    );
+    await new Promise((res) => setTimeout(res, 50));
+    await expect(client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' })).rejects.toMatchObject({ code: ErrorCode.rateLimited });
+    // Duplicate asks collapsed onto one requested grant + one open ask (GrantService dedupe).
+    const requested = app.app.repos.grants.bySession(ids.session.gemini).filter((g) => g.state === 'requested' && g.targetId === ids.target.supabaseProd);
+    expect(requested).toHaveLength(1);
+    expect(app.app.repos.pendingAsks.openBySession(ids.session.gemini).filter((a) => a.grantId === requested[0]?.id)).toHaveLength(1);
+    app.app.grants.deny(requested[0]?.id ?? '');
+    await Promise.all(held);
+    client.close();
+  });
+
+  it('held exec requests resolved as `always` grants attribute the use to the holding session', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const prod = app.app.repos.targets.get(ids.target.supabaseProd);
+    if (!prod?.credentialRef) throw new Error('fixture');
+    await app.vault.set(prod.credentialRef, JSON.stringify({ token: 'sbp-prod' }));
+    const pending = client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' }, { timeoutMs: 5_000 });
+    await new Promise((res) => setTimeout(res, 50));
+    const grant = app.app.repos.grants.bySession(ids.session.gemini).find((g) => g.state === 'requested' && g.targetId === ids.target.supabaseProd);
+    if (!grant) throw new Error('expected a requested grant');
+    const issued = await app.app.grants.approve(grant.id, 'always');
+    expect(issued.sessionId).toBeNull(); // detached persistent grant
+    const r = await pending;
+    expect(r.env).toEqual({ SUPABASE_ACCESS_TOKEN: 'sbp-prod' });
+    expect(app.app.repos.grantUses.get(r.useId)).toMatchObject({ sessionId: ids.session.gemini, via: 'shim', scopeUsed: 'write' });
     client.close();
   });
 });

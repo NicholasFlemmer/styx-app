@@ -5,8 +5,8 @@ import { KeyRegistry } from './registry';
 export { KeyRegistry } from './registry';
 export type { KeyBinding, KeyContext } from './registry';
 export * from './scopes';
-export { shellBindings, diffBindings, popoutBindings } from './bindings';
-export type { DiffActions } from './bindings';
+export { shellBindings, diffBindings, popoutBindings, boardBindings } from './bindings';
+export type { DiffActions, BoardActions } from './bindings';
 
 /** The app-wide registry; `AppRoot` installs it once. */
 export const keys = new KeyRegistry({

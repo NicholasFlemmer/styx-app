@@ -161,7 +161,6 @@ describe('GrantService', () => {
     const r = t.app.grants.revoke(g.id);
     expect(r).toMatchObject({ state: 'revoked', revokeReason: 'user', revokedAt: t.clock.now() });
     expect(t.app.grants.issuedCredential(g.id)).toBeNull();
-    expect(t.app.repos.grants.credNonce(g.id)).toBeNull();
     expect(t.app.repos.audit.all().find((e) => e.grantId === g.id && e.action === 'revoked')).toMatchObject({
       actorKind: 'you',
       triggeredBy: 'lock glyph',
@@ -262,5 +261,50 @@ describe('GrantService', () => {
       t.app.grants.sweepExpired();
       expect(t.app.repos.grants.get(g.id)?.state).toBe('expired');
     });
+  });
+});
+
+describe('GrantService security regressions', () => {
+  it('L1: a duplicate request for the same session + target + scope returns the pending grant instead of a second row', async () => {
+    const t = makeTestApp();
+    const a = await requestSupabase(t);
+    const b = await requestSupabase(t);
+    expect(a.kind).toBe('pending');
+    expect(b.kind).toBe('pending');
+    if (a.kind !== 'pending' || b.kind !== 'pending') return;
+    expect(b.grant.id).toBe(a.grant.id);
+    expect(b.ask.id).toBe(a.ask.id);
+    expect(t.app.repos.grants.bySession(ids.session.gemini).filter((g) => g.state === 'requested' && g.targetId === ids.target.supabaseProd)).toHaveLength(1);
+    expect(t.app.repos.pendingAsks.openBySession(ids.session.gemini)).toHaveLength(1);
+    // A different scope set is a new ask (queued behind the first).
+    const c = await t.app.grants.request({ sessionId: ids.session.gemini, targetId: ids.target.supabaseProd, scope: ['read'], reason: 'x', triggeredBy: 'mcp:request_access' });
+    expect(c.kind).toBe('pending');
+    if (c.kind === 'pending') expect(c.grant.id).not.toBe(a.grant.id);
+  });
+
+  it('M2: an unscoped provider on prod requires MFA even for a read grant', async () => {
+    const t = makeTestApp({ mfa: 'failed' });
+    const target = t.app.repos.targets.get(ids.target.supabaseProd);
+    if (!target?.credentialRef) throw new Error('fixture target');
+    await t.vault.set(target.credentialRef, JSON.stringify({ token: 'sbp_test' }));
+    const out = await t.app.grants.request({ sessionId: ids.session.gemini, targetId: ids.target.supabaseProd, scope: ['read'], reason: 'peek', triggeredBy: 'mcp:request_access' });
+    if (out.kind !== 'pending') throw new Error('expected pending');
+    await expect(t.app.grants.approve(out.grant.id, '1h')).rejects.toMatchObject({ code: 'mfa-failed' });
+    expect(t.app.repos.grants.get(out.grant.id)?.state).toBe('requested');
+    const ok = makeTestApp({ mfa: 'ok' });
+    await ok.vault.set(target.credentialRef, JSON.stringify({ token: 'sbp_test' }));
+    const out2 = await ok.app.grants.request({ sessionId: ids.session.gemini, targetId: ids.target.supabaseProd, scope: ['read'], reason: 'peek', triggeredBy: 'mcp:request_access' });
+    if (out2.kind !== 'pending') throw new Error('expected pending');
+    expect(await ok.app.grants.approve(out2.grant.id, '1h')).toMatchObject({ state: 'active', mfaVerified: true });
+  });
+
+  it('M1: reasons and triggers are redacted on request', async () => {
+    const t = makeTestApp();
+    const ghp = `ghp_${'d'.repeat(36)}`;
+    const out = await t.app.grants.request({ sessionId: ids.session.gemini, targetId: ids.target.supabaseProd, scope: ['read'], reason: `use ${ghp}`, triggeredBy: `$ x --token ${ghp}` });
+    if (out.kind !== 'pending') throw new Error('expected pending');
+    expect(out.grant.reason).toBe('use [redacted]');
+    const dump = JSON.stringify([t.app.repos.audit.all(), t.app.repos.transcripts.last(ids.session.gemini), t.app.repos.grants.get(out.grant.id)]);
+    expect(dump).not.toContain(ghp);
   });
 });

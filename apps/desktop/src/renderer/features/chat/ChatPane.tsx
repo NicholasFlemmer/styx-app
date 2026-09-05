@@ -9,7 +9,7 @@ import {
   type SessionId,
 } from '@styx/core';
 import { Button, Composer, Message, StatusDot, Tab, TabRow, Transcript } from '@styx/ui';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { command } from '../../state/commands';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
 import s from './ChatPane.module.css';
@@ -55,6 +55,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const pushOverlay = useUi((u) => u.pushOverlay);
   const [menuOpen, setMenuOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
+  const overflowTab = useRef<HTMLButtonElement>(null);
 
   const tabs = useMemo(() => sessionTabs(model, projectId, sessionId), [model, projectId, sessionId]);
   const activeId: SessionId | null = tabs.activeId;
@@ -72,9 +73,34 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
     return () => document.removeEventListener('mousedown', close);
   }, [menuOpen]);
 
+  // Menu keyboard (spec §9): first item takes focus on open; ↑ / ↓ move; Esc closes and refocuses the ▾ tab.
+  useEffect(() => {
+    if (!menuOpen) return;
+    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+  }, [menuOpen]);
+  const closeMenu = (refocus: boolean) => {
+    setMenuOpen(false);
+    if (refocus) overflowTab.current?.focus();
+  };
+  const onMenuKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeMenu(true);
+      return;
+    }
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    const items = Array.from(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+    if (items.length === 0) return;
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    const next = e.key === 'ArrowDown' ? (i + 1) % items.length : (i - 1 + items.length) % items.length;
+    items[next]?.focus();
+  };
+
   const pick = (id: SessionId) => {
     setSession(projectId, id);
-    setMenuOpen(false);
+    closeMenu(true);
   };
 
   const review = (item: Extract<TranscriptItem, { kind: 'accessRequest' }>) => {
@@ -163,6 +189,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
             {tabs.overflow.length > 0 && (
               <div ref={menu} className={s['overflow']}>
                 <Tab
+                  ref={overflowTab}
                   overflow
                   label={`+${tabs.overflow.length}`}
                   aria-haspopup="menu"
@@ -171,7 +198,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
                   data-session-overflow="true"
                 />
                 {menuOpen && (
-                  <div role="menu" className={s['menu']}>
+                  <div role="menu" aria-label="Sessions" className={s['menu']} onKeyDown={onMenuKeyDown}>
                     {tabs.overflow.map((t) => (
                       <button
                         key={t.sessionId}

@@ -14,7 +14,8 @@
   }
   .textarea:focus {
     border-color: var(--tx);
-    outline: 0;
+    outline: 1px solid var(--ac);
+    outline-offset: 1px;
   }
   .textarea::placeholder {
     color: var(--mu);

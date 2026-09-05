@@ -1,6 +1,6 @@
 import { rows, sessionsInProject, type Project, type ProjectId, type ReadModel } from '@styx/core';
 import { RailTile } from '@styx/ui';
-import { useCallback, useRef, type DragEvent } from 'react';
+import { useCallback, useRef, type DragEvent, type KeyboardEvent } from 'react';
 import { command } from '../state/commands';
 import { useModel, useUi } from '../state/hooks';
 import s from './Shell.module.css';
@@ -41,6 +41,19 @@ export function Rail() {
     void command('project.reorder', { projectIds: order });
   };
 
+  /** Keyboard parity for drag-to-reorder (spec §9): Alt+↑ / Alt+↓ move the focused tile. */
+  const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>, id: ProjectId) => {
+    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    e.preventDefault();
+    const order = projects.map((p) => p.id);
+    const from = order.indexOf(id);
+    const to = from + (e.key === 'ArrowUp' ? -1 : 1);
+    if (from < 0 || to < 0 || to >= order.length) return;
+    order.splice(from, 1);
+    order.splice(to, 0, id);
+    void command('project.reorder', { projectIds: order });
+  };
+
   return (
     <nav className={s['rail']} aria-label="Projects" data-rail="true">
       {projects.map((p) => (
@@ -64,6 +77,7 @@ export function Rail() {
           onDragEnd={() => {
             dragId.current = null;
           }}
+          onKeyDown={(e) => onKeyDown(e, p.id)}
           data-project-id={p.id}
         />
       ))}

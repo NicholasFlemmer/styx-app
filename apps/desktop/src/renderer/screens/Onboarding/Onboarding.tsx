@@ -134,7 +134,7 @@ export function Onboarding() {
 
   return (
     <div className={s['root']} data-onboarding-step={step}>
-      <ol className={s['strip']} aria-label={copy.onboarding.steps.editor}>
+      <ol className={s['strip']} aria-label={copy.onboarding.stepsLabel}>
         {STEPS.map((st) => (
           <li
             key={st.n}

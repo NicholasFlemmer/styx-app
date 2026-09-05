@@ -44,6 +44,12 @@ export interface ProviderAdapter {
   revoke(issued: IssuedCredential): Promise<void>;
   /** Maps a shim invocation to the scopes it needs (spec: "Styx enforces scope at the command level"). */
   scopeOfCommand(argv: string[]): Scope[];
+  /**
+   * Whether `issue` for these scopes yields a credential narrower than the stored one. Absent = unscoped (fail
+   * closed): GrantService.approve then forces MFA on prod regardless of the classified scope, because the agent
+   * receives the full token no matter what the shim heuristics decided.
+   */
+  issuesScoped?(scope: readonly Scope[]): boolean;
   /** Which shim binaries route to this provider. */
   readonly tools: string[];
 }
@@ -66,4 +72,9 @@ export function expiryFor(grant: GrantInfo, now: number, providerMax = HOUR): nu
 
 export function hasVerb(argv: string[], verbs: RegExp): boolean {
   return argv.some((a) => verbs.test(a));
+}
+
+/** `--help` / `--version` / `help` anywhere in argv: no remote effect. */
+export function isHelp(argv: string[]): boolean {
+  return argv.length === 0 || argv.some((a) => a === '--help' || a === '-h' || a === '--version' || a === '-v') || argv[0] === 'help' || argv[0] === 'version';
 }

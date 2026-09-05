@@ -1,6 +1,26 @@
 import { makeCredentialRef } from '../services/credential-vault';
 import type { AdapterDeps, ConnectInput, GrantInfo, IssuedCredential, ProviderAdapter, Scope, TargetInfo, TestResult } from './types';
-import { hasVerb } from './types';
+import { hasVerb, isHelp } from './types';
+
+/** Read-only `gh <group> <verb>` verbs; anything else defaults to write. */
+const GH_READ_VERBS = new Set(['view', 'list', 'ls', 'status', 'diff', 'checks', 'download', 'watch', 'search', 'browse', 'clone', 'get', 'verify', 'token']);
+
+/** `gh api [-X METHOD] …`: the method decides (GET when absent, but any body field makes gh POST). */
+function apiScope(rest: string[]): Scope[] {
+  let method = 'GET';
+  let hasBody = false;
+  for (let i = 0; i < rest.length; i += 1) {
+    const a = rest[i] ?? '';
+    if (a === '-X' || a === '--method') method = (rest[i + 1] ?? '').toUpperCase();
+    else if (/^(-X|--method)=/.test(a)) method = a.replace(/^(-X|--method)=/, '').toUpperCase();
+    else if (/^(-X|--method)./.test(a) && !a.startsWith('--')) method = a.slice(2).toUpperCase();
+    else if (/^(-f|-F|--field|--raw-field|--input)(=|$)/.test(a)) hasBody = true;
+  }
+  if (method === 'DELETE') return ['delete'];
+  if (method === 'GET' && !hasBody) return ['read'];
+  if (method === 'HEAD') return ['read'];
+  return ['write'];
+}
 
 const DEVICE_SCOPES = 'repo read:org workflow';
 
@@ -156,10 +176,13 @@ export class GitHubAdapter implements ProviderAdapter, GitHubRepoApi {
 
   scopeOfCommand(argv: string[]): Scope[] {
     const [group, verb] = argv;
-    if (argv[0] === 'auth') return ['read'];
-    if (hasVerb(argv, /^(delete|--delete-branch|--delete)$/) || (group === 'repo' && verb === 'delete')) return ['delete'];
-    if (['create', 'merge', 'edit', 'close', 'reopen', 'comment', 'review', 'push', 'sync', 'fork', 'rename', 'release', 'ready', 'checkout'].includes(verb ?? '')) return ['write'];
+    if (isHelp(argv) || group === 'auth') return ['read'];
+    if (group === 'api') return apiScope(argv.slice(1));
+    if (hasVerb(argv, /^(delete|--delete-branch|--delete)$/) || (group === 'repo' && verb === 'delete') || (group === 'release' && verb === 'delete')) return ['delete'];
     if (group === 'workflow' && verb === 'run') return ['deploy'];
-    return ['read'];
+    if (verb !== undefined && GH_READ_VERBS.has(verb)) return ['read'];
+    // Everything else — `secret set`, `variable set`, `run cancel|rerun`, `pr merge`, and verbs added by newer `gh`
+    // releases — is a write until proven otherwise (fail closed).
+    return ['write'];
   }
 }

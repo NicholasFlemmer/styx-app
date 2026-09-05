@@ -64,7 +64,8 @@
   }
   /* Worktree select matches the input recipe: --bg fill, 8px 10px, 12.5px. */
   .worktree select {
-    height: auto;
+    /* Prototype box: 31px content + borders (Archivo 12.5px, normal line box). */
+    height: 33px;
     padding: 8px 24px 8px 10px;
     background: var(--bg);
     font-size: 12.5px;

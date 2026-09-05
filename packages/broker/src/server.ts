@@ -1,5 +1,5 @@
 import { createServer, type Server, type Socket } from 'node:net';
-import { chmodSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { onNdjson, writeNdjson } from './ndjson';
 import { ErrorCode, methods, RpcRequest, type MethodName, type NotificationName, type Params, type Result, type RpcError, type SessionBrief, PROTOCOL_VERSION, type notifications } from './protocol';
@@ -24,11 +24,29 @@ export type MethodHandler<M extends MethodName> = (params: Params<M>, ctx: Conne
 /** Marks this request as held under `key`; reply later with `BrokerServer.resolveHeld(key, result)`. */
 export type HoldHandle = (key: string) => void;
 
+/** Methods that always open a user decision (a grant request or an ask) and therefore share the per-session bucket. */
+export const RATE_LIMITED_METHODS: readonly MethodName[] = ['request_access', 'ask_user'];
+
+/**
+ * The socket directory must be a real directory (not a symlink) owned by this user with mode 0700, or another local
+ * user could pre-create it and race the socket (L2). POSIX only; Windows pipes carry their own ACL.
+ */
+export function assertPrivateDir(dir: string): void {
+  if (process.platform === 'win32') return;
+  const st = lstatSync(dir);
+  const uid = process.getuid?.();
+  if (!st.isDirectory()) throw new Error(`${dir} is not a directory`);
+  if (uid !== undefined && st.uid !== uid) throw new Error(`${dir} is owned by uid ${st.uid}, expected ${uid}`);
+  if ((st.mode & 0o777) !== 0o700) throw new Error(`${dir} has mode ${(st.mode & 0o777).toString(8)}, expected 0700`);
+}
+
 export interface BrokerServerOptions {
   /** Returns the session when sessionId + token match; null otherwise. Compare hashes, never store raw tokens. */
   authenticate: (sessionId: string, token: string) => Promise<SessionBrief | null>;
-  /** request_access calls allowed per session per minute (spec: blunt prompt-injection spam). */
+  /** Decision-opening calls (`RATE_LIMITED_METHODS`, plus whatever the host meters through `allow`) per session per minute. */
   rateLimitPerMinute?: number;
+  /** Override which methods the server meters itself; the host meters `exec_authorize` only when it inserts a request. */
+  rateLimitedMethods?: readonly MethodName[];
   now?: () => number;
   onLog?: (level: 'info' | 'warn', msg: string, meta?: Record<string, unknown>) => void;
 }
@@ -59,18 +77,27 @@ export class BrokerServer {
   }
 
   async listen(path: string): Promise<void> {
-    if (process.platform !== 'win32') {
+    const posix = process.platform !== 'win32';
+    if (posix) {
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+      assertPrivateDir(dirname(path));
       if (existsSync(path)) unlinkSync(path);
     }
     this.server = createServer((socket) => this.accept(socket));
-    await new Promise<void>((resolve, reject) => {
-      this.server?.once('error', reject);
-      this.server?.listen(path, () => {
-        if (process.platform !== 'win32') chmodSync(path, 0o600);
-        resolve();
+    // The socket is created 0600 from the start (umask 077) instead of chmod'ing after bind, so there is no window
+    // in which another local user can connect (L2).
+    const prevUmask = posix ? process.umask(0o077) : null;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        this.server?.once('error', reject);
+        this.server?.listen(path, () => {
+          if (posix) chmodSync(path, 0o600);
+          resolve();
+        });
       });
-    });
+    } finally {
+      if (prevUmask !== null) process.umask(prevUmask);
+    }
   }
 
   async close(): Promise<void> {
@@ -154,6 +181,12 @@ export class BrokerServer {
     if (!parsed.success) return fail(ErrorCode.invalidParams, 'invalid params', parsed.error.issues);
 
     if (m === 'hello') {
+      if (conn.ctx) {
+        // A bound connection never re-binds: a second hello could swap the session under held requests (L3).
+        fail(ErrorCode.invalidRequest, 'already authenticated');
+        conn.socket.end(() => conn.socket.destroy());
+        return;
+      }
       const p = parsed.data as Params<'hello'>;
       if (p.v !== PROTOCOL_VERSION) return fail(ErrorCode.invalidRequest, `unsupported protocol version ${p.v}`);
       const session = await this.opts.authenticate(p.sessionId, p.token);
@@ -168,7 +201,7 @@ export class BrokerServer {
     }
 
     if (!conn.ctx) return fail(ErrorCode.unauthenticated, 'hello first');
-    if (m === 'request_access' && !this.allow(conn.ctx.session.sessionId)) return fail(ErrorCode.rateLimited, 'too many access requests; try again in a minute');
+    if ((this.opts.rateLimitedMethods ?? RATE_LIMITED_METHODS).includes(m) && !this.allow(conn.ctx.session.sessionId)) return fail(ErrorCode.rateLimited, 'too many access requests; try again in a minute');
 
     const handler = this.handlers.get(m);
     if (!handler) return fail(ErrorCode.methodNotFound, `no handler for ${m}`);
@@ -192,7 +225,8 @@ export class BrokerServer {
     }
   }
 
-  private allow(sessionId: string): boolean {
+  /** Consumes one slot of the session's per-minute bucket; false when exhausted. Public so the host can meter other grant-creating paths. */
+  allow(sessionId: string): boolean {
     const limit = this.opts.rateLimitPerMinute ?? 5;
     const t = this.now();
     const arr = (this.buckets.get(sessionId) ?? []).filter((x) => t - x < 60_000);

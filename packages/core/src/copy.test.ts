@@ -25,6 +25,11 @@ describe('copy (spec §10 verbatim)', () => {
     expect(copy.toast.title).toBe('{agent} wants {target} · {scope}');
   });
 
+  it('a11y-only strings (spec §9, not §10) keep the spec tone', () => {
+    expect(copy.settings.rows.screenReader).toBe('Screen reader mode');
+    expect(copy.onboarding.stepsLabel).toBe('Steps');
+  });
+
   it('tone: no exclamation marks, no "please"', () => {
     const walk = (v: unknown): string[] =>
       typeof v === 'string' ? [v] : v !== null && typeof v === 'object' ? Object.values(v).flatMap(walk) : [];

@@ -1,6 +1,6 @@
 import { copy, fill, type SessionId, type WorktreeId } from '@styx/core';
 import { sizes } from '@styx/tokens';
-import { useCallback, useEffect, useRef, type PointerEvent } from 'react';
+import { useCallback, useEffect, useRef, type KeyboardEvent, type PointerEvent } from 'react';
 import { command } from '../../state/commands';
 import { useUi } from '../../state/hooks';
 import {
@@ -18,6 +18,8 @@ export const TERMINAL_MAX_RATIO = 0.6;
 /** Header strip height when collapsed (padding + 9px label + gap). */
 export const TERMINAL_COLLAPSED = 24;
 const PANE_KEY = 'terminal';
+/** ↑ / ↓ on the focused handle. */
+export const KEY_STEP = 16;
 const LAST_KEY = 'terminalLast';
 
 export const clampTerminalHeight = (h: number, columnHeight: number): number =>
@@ -106,6 +108,19 @@ export function TerminalPane({
 
   const toggle = () => persist(collapsed ? clampTerminalHeight(last, columnHeight()) : TERMINAL_COLLAPSED);
 
+  /** Keyboard parity for the drag handle (spec §9): ↑ / ↓ resize by 16px, ⏎ toggles collapse. */
+  const onHandleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      toggle();
+      return;
+    }
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    const base = collapsed ? TERMINAL_COLLAPSED : height;
+    persist(clampTerminalHeight(base + (e.key === 'ArrowUp' ? KEY_STEP : -KEY_STEP), columnHeight()));
+  };
+
   return (
     <div
       className={s['pane']}
@@ -120,6 +135,9 @@ export function TerminalPane({
         aria-orientation="horizontal"
         aria-label={copy.workspace.terminal.split(' ·')[0]}
         aria-valuenow={height}
+        aria-valuemin={TERMINAL_COLLAPSED}
+        tabIndex={0}
+        onKeyDown={onHandleKeyDown}
         onPointerDown={onPointerDown}
         onDoubleClick={toggle}
       />

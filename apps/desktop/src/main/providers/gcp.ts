@@ -78,6 +78,10 @@ export class GcpAdapter implements ProviderAdapter {
     if (token) await this.deps.fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, { method: 'POST' }).catch(() => undefined);
   }
 
+  issuesScoped(scope: readonly Scope[]): boolean {
+    return scope.every((s) => s === 'read'); // read → cloud-platform.read-only token; anything else gets the full scope
+  }
+
   scopeOfCommand(argv: string[]): Scope[] {
     if (hasVerb(argv, /^(delete|rm|remove|destroy|undeploy)$/)) return ['delete'];
     if (hasVerb(argv, /^(deploy|rollout|submit|rsync|cp|mv)$/) || (argv[0] === 'run' && argv[1] === 'deploy') || (argv[0] === 'app' && argv[1] === 'deploy')) return ['deploy'];

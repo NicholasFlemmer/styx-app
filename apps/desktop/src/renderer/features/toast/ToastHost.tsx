@@ -12,7 +12,7 @@ import {
 import { motion } from '@styx/tokens';
 import { Toast } from '@styx/ui';
 import { useEffect } from 'react';
-import { findOverlay, type Overlay, type ToastPayload } from '../../overlays/stack';
+import { findOverlay, invokerOf, rememberInvoker, type Overlay, type ToastPayload } from '../../overlays/stack';
 import { onEvent } from '../../state/bridge';
 import { command } from '../../state/commands';
 import { useUi, useUiShallow } from '../../state/hooks';
@@ -43,10 +43,14 @@ export function AskToast({ id, askId, sessionId, projectId }: AskToastProps) {
     (session === undefined ? undefined : `${projectNameOf(model, projectId)} · ${branchOf(model, session)}`);
 
   const review = () => {
+    // Focus return chains through the toast (spec §9 "Esc returns focus to the invoker"): the sheet inherits
+    // whatever had focus when the toast appeared, since the toast itself is gone by the time the sheet closes.
+    const invoker = invokerOf(id);
     popOverlay(id);
     openSession(projectId, sessionId);
     if (ask !== undefined && ask.kind === 'grant') {
-      pushOverlay({ kind: 'sheet', sheet: 'grant', sessionId, askId });
+      const sheetId = pushOverlay({ kind: 'sheet', sheet: 'grant', sessionId, askId });
+      if (invoker !== null) rememberInvoker(sheetId, invoker);
     }
   };
   const later = () => {
@@ -107,8 +111,9 @@ export function ToastHost() {
       }),
     [],
   );
+  // Each Toast is its own `role=status` live region; no aria-live on the host (it would announce twice).
   return (
-    <div className={s['host']} aria-live="polite">
+    <div className={s['host']}>
       {toasts.map((o, i) => (
         <div key={o.id} className={s['slot']} style={{ transform: `translateY(${i * 130}px)` }}>
           {renderToast(o)}

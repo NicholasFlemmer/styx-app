@@ -30,7 +30,7 @@ export const grantFromRow = (r: Raw): Grant =>
     decidedBy: asStr(r['decided_by']),
   });
 
-/** `grants` table. `cred_nonce` (replay guard) is main-only and not part of the entity. */
+/** `grants` table. (`cred_nonce` is a legacy column kept for migration compatibility; it is never read or written.) */
 export class GrantsRepo {
   private readonly upsertStmt;
   private readonly getStmt;
@@ -39,8 +39,6 @@ export class GrantsRepo {
   private readonly byTargetStmt;
   private readonly activeStmt;
   private readonly delStmt;
-  private readonly setNonceStmt;
-  private readonly nonceStmt;
 
   constructor(private readonly db: Db) {
     this.upsertStmt = db.prepare(
@@ -62,8 +60,6 @@ export class GrantsRepo {
       `SELECT ${COLS} FROM grants WHERE state = 'active' ORDER BY requested_at ASC`,
     );
     this.delStmt = db.prepare('DELETE FROM grants WHERE id = ?');
-    this.setNonceStmt = db.prepare('UPDATE grants SET cred_nonce = ? WHERE id = ?');
-    this.nonceStmt = db.prepare('SELECT cred_nonce FROM grants WHERE id = ?');
   }
 
   upsert(g: Grant): void {
@@ -122,15 +118,6 @@ export class GrantsRepo {
 
   remove(id: string): void {
     this.delStmt.run(id);
-  }
-
-  setCredNonce(id: string, nonce: string | null): void {
-    this.setNonceStmt.run(nonce, id);
-  }
-
-  credNonce(id: string): string | null {
-    const r = this.nonceStmt.get(id) as { cred_nonce: string | null } | undefined;
-    return r ? asStr(r.cred_nonce) : null;
   }
 }
 

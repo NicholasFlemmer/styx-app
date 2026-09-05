@@ -6,7 +6,9 @@ import {
   parseProjectFile,
   projectSettingsFromFile,
   serializeProjectFile,
+  targetNameSchema,
 } from './project-file';
+import { commands } from './ipc/contract';
 import type { ProjectFileV1 } from './project-file';
 
 const SAMPLE: ProjectFileV1 = {
@@ -174,5 +176,19 @@ describe('mergeSettings', () => {
       envFiles: ['.env.local'],
       envShareWithAgents: 'per-grant',
     });
+  });
+});
+
+describe('target names', () => {
+  it('M4: are limited to a plain charset in project.json and connect inputs', () => {
+    for (const ok of ['Vercel', 'AWS acme-prod', 'GitHub acme/shop', 'db@prod:5432', 'a+b_c.d']) expect(targetNameSchema.safeParse(ok).success).toBe(true);
+    for (const bad of ['', 'x; rm -rf /', 'a"b', "a'b", 'a$(id)', 'a`b', 'a\nb', 'x'.repeat(81), 'ünïcode'])
+      expect(targetNameSchema.safeParse(bad).success).toBe(false);
+    const r = parseProjectFile(JSON.stringify({ version: 1, name: 'x', targets: [{ name: 'x; rm', provider: 'vercel', env: 'prod', authMethod: 'oauth' }] }));
+    expect(r).toMatchObject({ ok: false, error: { code: 'invalid-schema', message: expect.stringContaining('target name') } });
+    const ssh = commands['target.connect.saveSsh'].input.safeParse({ projectId: 'p', name: 'host"; calc', env: 'prod', host: 'h', user: 'u', keyPath: '/k' });
+    expect(ssh.success).toBe(false);
+    expect(commands['target.connect.saveKey'].input.safeParse({ projectId: 'p', provider: 'aws', name: 'a$(id)', env: 'prod', accessKey: 'a', secret: 's' }).success).toBe(false);
+    expect(commands['target.connect.start'].input.safeParse({ projectId: 'p', provider: 'aws', env: 'prod', name: 'AWS acme-prod' }).success).toBe(true);
   });
 });

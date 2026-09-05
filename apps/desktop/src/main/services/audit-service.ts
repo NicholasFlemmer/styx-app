@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { ulid } from 'ulid';
 import type { Db } from '../db/open';
+import { redact } from './logger';
 
 export type AuditActorKind = 'you' | 'system' | 'agent';
 export type AuditAction =
@@ -53,6 +54,17 @@ export class AuditService {
   }
 
   append(input: AuditInput): AuditRow {
+    // Free-text fields (shim argv, agent reasons, labels) are redacted before hashing so a secret never lands in the
+    // chain: rows are immutable, so there is no second chance (rules/security.md).
+    const safe: AuditInput = {
+      ...input,
+      actorLabel: redact(input.actorLabel),
+      triggeredBy: redact(input.triggeredBy),
+      ...(typeof input.targetLabel === 'string' ? { targetLabel: redact(input.targetLabel) } : {}),
+      ...(typeof input.sessionLabel === 'string' ? { sessionLabel: redact(input.sessionLabel) } : {}),
+      ...(typeof input.worktreeLabel === 'string' ? { worktreeLabel: redact(input.worktreeLabel) } : {}),
+      ...(input.detail ? { detail: redact(input.detail) } : {}),
+    };
     const tx = this.db.transaction((inp: AuditInput): AuditRow => {
       const last = this.lastRow.get() as { seq: number; hash: string } | undefined;
       const seq = (last?.seq ?? 0) + 1;
@@ -88,7 +100,7 @@ export class AuditService {
       );
       return { ...row, hash };
     });
-    return tx(input);
+    return tx(safe);
   }
 
   list(opts: { limit?: number; beforeSeq?: number; targetId?: string; sessionId?: string } = {}): AuditRow[] {

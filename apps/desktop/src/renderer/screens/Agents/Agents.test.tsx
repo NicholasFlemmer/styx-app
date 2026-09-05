@@ -2,6 +2,7 @@
 import { boardColumns, copy, fixtures, type ProjectId } from '@styx/core';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { keys } from '../../keys';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
 import { Agents } from './Agents';
@@ -119,6 +120,54 @@ describe('Agents board', () => {
       modal: 'spawn',
       projectId: acme,
     });
+  });
+
+  it('Mod+⏎ / Mod+⌫ on a focused needs-you card approve (as requested, 1h) / deny (spec §6 "board card")', () => {
+    const off = keys.install(window);
+    try {
+      render(<Agents />);
+      const needs = column(copy.board.columns.needsYou);
+      const cards = needs.getAllByRole('group');
+      expect(cards).toHaveLength(2);
+      const grantCard = cards.find((c) => c.getAttribute('data-session') === fixtures.ids.session.codex);
+      const planCard = cards.find((c) => c.getAttribute('data-session') === fixtures.ids.session.blog);
+      if (grantCard === undefined || planCard === undefined) throw new Error('fixture cards');
+      expect(grantCard.getAttribute('data-keyscope')).toBe('board');
+      expect(grantCard.tabIndex).toBe(-1);
+      // Working cards are not focusable.
+      expect(column(copy.board.columns.working).queryAllByRole('group')).toHaveLength(0);
+
+      const press = (el: HTMLElement, key: string) =>
+        fireEvent.keyDown(el, { key, metaKey: true, bubbles: true, cancelable: true });
+
+      grantCard.focus();
+      press(grantCard, 'Enter');
+      const model = useReadModel.getState().model;
+      const grantId = model.pendingAsks.byId[fixtures.ids.ask.codexGrant]?.grantId;
+      const grant = grantId == null ? undefined : model.grants.byId[grantId];
+      expect(commandMock).toHaveBeenCalledWith('grant.approve', {
+        grantId,
+        duration: '1h',
+        scope: [...(grant?.scope ?? [])],
+      });
+      press(grantCard, 'Backspace');
+      expect(commandMock).toHaveBeenCalledWith('grant.deny', { grantId });
+
+      // Focus inside the card (its Deny button) still resolves to the card's scope.
+      const planDeny = within(planCard).getByRole('button', { name: copy.board.actions.deny });
+      planDeny.focus();
+      press(planDeny, 'Backspace');
+      expect(commandMock).toHaveBeenCalledWith('ask.respond', {
+        askId: fixtures.ids.ask.blogPlan,
+        resolution: { kind: 'plan', outcome: 'rejected', note: null },
+      });
+      // Plan asks have no grant: Mod+⏎ runs the CTA (Review plan → workspace).
+      press(planDeny, 'Enter');
+      expect(useUiStore.getState().screen).toBe('workspace');
+      expect(useUiStore.getState().projectId).toBe(fixtures.ids.project.blogV2);
+    } finally {
+      off();
+    }
   });
 
   it('empty fixture shows the verbatim empty copy with 00 counts', () => {

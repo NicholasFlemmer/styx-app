@@ -62,6 +62,18 @@ export const removeOverlay = (stack: readonly Overlay[], id: string): Overlay[] 
 export const isTrapping = (stack: readonly Overlay[]): boolean =>
   stack.some((o) => OVERLAY_TRAITS[o.kind].trap);
 
+/**
+ * The overlay Esc should close (spec §6 "Close overlay: palette, modals, sheet, drawer, toast"): the topmost
+ * *trapping* overlay owns the keyboard, so it goes first; a toast is only popped when nothing traps.
+ */
+export const escapeTarget = (stack: readonly Overlay[]): Overlay | null => {
+  for (let i = stack.length - 1; i >= 0; i--) {
+    const o = stack[i];
+    if (o !== undefined && OVERLAY_TRAITS[o.kind].trap) return o;
+  }
+  return topOverlay(stack);
+};
+
 export const findOverlay = <K extends OverlayKind>(
   stack: readonly Overlay[],
   kind: K,

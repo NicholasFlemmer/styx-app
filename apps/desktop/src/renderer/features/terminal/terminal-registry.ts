@@ -34,6 +34,10 @@ const RESIZE_DEBOUNCE_MS = 50;
 
 const currentTheme = (): Theme => (document.documentElement.dataset['theme'] === 'light' ? 'light' : 'dark');
 
+/** Spec §9 "reduced motion respected": no blinking caret when the OS asks for less motion. */
+const reducedMotion = (): boolean =>
+  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 let themeWatched = false;
 const watchTheme = (): void => {
   if (themeWatched || typeof MutationObserver !== 'function') return;
@@ -144,7 +148,7 @@ export const getTerminal = (
     theme: xtermTheme(currentTheme()),
     cursorStyle: 'block',
     cursorInactiveStyle: 'block',
-    cursorBlink: env().e2e !== true,
+    cursorBlink: env().e2e !== true && !reducedMotion(),
     scrollback: 5000,
     allowTransparency: false,
     minimumContrastRatio: 1,

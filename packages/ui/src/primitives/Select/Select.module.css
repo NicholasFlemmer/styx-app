@@ -4,6 +4,10 @@
     display: inline-flex;
     min-width: 140px;
     vertical-align: middle;
+    /* 25px visible box (prototype), 29px hit area (spec §9 ≥ 28): transparent padding cancelled by margin so
+       the line box and every row height stay put; the wrapper forwards clicks on the bleed to the select. */
+    padding: 2px 0;
+    margin: -2px 0;
   }
   .select {
     appearance: none;

@@ -32,8 +32,8 @@ describe('Home', () => {
     ];
     const values = labels.map((l) => screen.getByText(l).previousElementSibling?.textContent);
     expect(values).toEqual(['02', '03', '02', '05']);
-    // Needs-you tile is the live region.
-    expect(screen.getByText(copy.counters.needsYou).parentElement?.getAttribute('aria-live')).toBe('polite');
+    // The titlebar counter is the one needs-you live region; the tile must not announce a second time.
+    expect(screen.getByText(copy.counters.needsYou).parentElement?.getAttribute('aria-live')).toBeNull();
   });
 
   it('renders one row per project with the core selector strings and the needs-you dot', () => {

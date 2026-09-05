@@ -2,7 +2,7 @@
   "name": "@styx/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Styx \u2014 project, agent and repo switcher",
+  "description": "Styx — project, agent and repo switcher",
   "main": "./out/main/index.js",
   "author": "Styx",
   "scripts": {
@@ -45,6 +45,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@electron/rebuild": "^4.2.0",
     "@playwright/test": "^1.62.1",
     "@types/better-sqlite3": "^7.6.13",

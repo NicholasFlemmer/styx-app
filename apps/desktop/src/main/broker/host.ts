@@ -22,7 +22,7 @@ import type { Repos } from '../db/repos';
 import type { ProviderRegistry } from '../providers';
 import type { GrantOutcome, GrantService } from '../services/grant-service';
 import type { HunkService } from '../services/hunk-service';
-import { logger } from '../services/logger';
+import { logger, redact, redactArgv } from '../services/logger';
 import { sha256, type SessionService } from '../services/session-service';
 
 export interface BrokerHostDeps {
@@ -68,6 +68,8 @@ const toBrokerResolution = (ask: PendingAsk, r: AskResolution): Result<'ask_user
 export class BrokerHost {
   readonly server: BrokerServer;
   private readonly waits = new Map<string, NodeJS.Timeout>();
+  /** Session that opened each held `exec:` request; `always` grants detach from their session on issue. */
+  private readonly holdSessions = new Map<string, string>();
 
   constructor(private readonly deps: BrokerHostDeps) {
     this.server = new BrokerServer({
@@ -87,6 +89,7 @@ export class BrokerHost {
   async close(): Promise<void> {
     for (const t of this.waits.values()) clearTimeout(t);
     this.waits.clear();
+    this.holdSessions.clear();
     await this.server.close();
   }
 
@@ -121,6 +124,20 @@ export class BrokerHost {
     if (t.health === 'expired')
       throw new BrokerError(ErrorCode.notAllowed, `${t.name} credentials expired; reconnect it in Styx`);
     return t;
+  }
+
+  /**
+   * A grant this connection may see: bound to its session, or persistent (`sessionId === null`) on a target in its
+   * project. Persistent grants are otherwise reachable from any project by id (M3).
+   */
+  private visibleGrant(ctx: ConnectionContext, grantId: string): Grant {
+    const grant = this.deps.repos.grants.get(grantId);
+    if (!grant || (grant.sessionId !== null && grant.sessionId !== ctx.session.sessionId))
+      throw new BrokerError(ErrorCode.targetNotFound, 'unknown grant');
+    const target = this.deps.repos.targets.get(grant.targetId);
+    if (!target || target.projectId !== ctx.session.projectId)
+      throw new BrokerError(ErrorCode.targetNotFound, 'unknown grant');
+    return grant;
   }
 
   private holdKey(
@@ -162,9 +179,7 @@ export class BrokerHost {
     });
 
     server.on('check_grant', async (p, ctx, req) => {
-      const grant = deps.repos.grants.get(p.grantId);
-      if (!grant || (grant.sessionId !== null && grant.sessionId !== ctx.session.sessionId))
-        throw new BrokerError(ErrorCode.targetNotFound, 'unknown grant');
+      const grant = this.visibleGrant(ctx, p.grantId);
       if (grant.state === 'active') return activeResult(grant, grant.decidedBy ?? 'user');
       if (grant.state === 'requested') {
         const key = this.holdKey('grant', grant.id, req, ctx);
@@ -182,12 +197,13 @@ export class BrokerHost {
     });
 
     server.on('get_credential', async (p, ctx) => {
-      const grant = deps.repos.grants.get(p.grantId);
-      if (!grant || (grant.sessionId !== null && grant.sessionId !== ctx.session.sessionId))
-        throw new BrokerError(ErrorCode.targetNotFound, 'unknown grant');
+      const grant = this.visibleGrant(ctx, p.grantId);
       if (!isLive(grant, deps.clock.now()))
         throw new BrokerError(ErrorCode.revoked, `grant is ${grant.state}`);
-      const cred = await deps.grants.credentialFor(grant.id);
+      const cred = await deps.grants.credentialFor(grant.id, {
+        sessionId: ctx.session.sessionId,
+        projectId: ctx.session.projectId,
+      });
       deps.grants.use(grant.id, {
         command: null,
         scopeUsed: grant.scope[0] ?? 'read',
@@ -207,7 +223,8 @@ export class BrokerHost {
       const adapter = deps.providers.forTool(p.tool);
       if (!adapter) throw new BrokerError(ErrorCode.notAllowed, `${p.tool} is not a Styx-managed tool`);
       const scopes = adapter.scopeOfCommand(p.argv) as Scope[];
-      const command = `$ ${[p.tool, ...p.argv].join(' ')}`;
+      // Persisted as grants.reason / grant_uses.command / audit triggered_by: never the raw argv (M1).
+      const command = redact(`$ ${[p.tool, ...redactArgv(p.argv)].join(' ')}`);
       const target = this.pickTarget(ctx, adapter.provider, p.argv, scopes);
       if (!target)
         throw new BrokerError(
@@ -216,6 +233,10 @@ export class BrokerHost {
         );
       const covering = deps.grants.covering(target, ctx.session.sessionId, scopes);
       if (covering) return this.authorizeUse(covering, command, scopes, ctx);
+      // Only the path that inserts a grant request consumes the session's request bucket (L1); covered shim
+      // execs stay unmetered.
+      if (!server.allow(ctx.session.sessionId))
+        throw new BrokerError(ErrorCode.rateLimited, 'too many access requests; try again in a minute');
       const outcome = await deps.grants.request({
         sessionId: ctx.session.sessionId as Grant['sessionId'],
         targetId: target.id,
@@ -227,14 +248,20 @@ export class BrokerHost {
       if (outcome.kind === 'denied') throw new BrokerError(ErrorCode.notAllowed, 'access denied');
       const key = this.holdKey('exec', outcome.grant.id, req, ctx);
       req.hold(key);
-      this.armWait(key, 600_000, () =>
-        server.rejectHeld(key, { code: ErrorCode.notAllowed, message: 'timed out waiting for a decision' }),
-      );
+      this.holdSessions.set(key, ctx.session.sessionId);
+      this.armWait(key, 600_000, () => {
+        this.holdSessions.delete(key);
+        server.rejectHeld(key, { code: ErrorCode.notAllowed, message: 'timed out waiting for a decision' });
+      });
       // resolved in onGrantDecision with { grantId, useId, env }
       return { grantId: outcome.grant.id, useId: '', env: {} };
     });
 
-    server.on('exec_report', async (p) => {
+    server.on('exec_report', async (p, ctx) => {
+      // A use row can only be closed by the session that opened it (L7).
+      const use = deps.repos.grantUses.get(p.useId);
+      if (!use || use.sessionId !== ctx.session.sessionId)
+        throw new BrokerError(ErrorCode.targetNotFound, 'unknown use');
       deps.grants.endUse(p.useId, p.exitCode);
       return { ok: true };
     });
@@ -389,6 +416,9 @@ export class BrokerHost {
       );
     }
     for (const key of this.heldFor(`exec:${grant.id}:`)) {
+      // `always` grants detach from the session on issue (grant.sessionId === null): attribute the use to the
+      // session that held the request, never to ''.
+      const heldSession = this.holdSessions.get(key) ?? grant.sessionId ?? '';
       this.clearWait(key);
       if (outcome !== 'granted') {
         this.server.rejectHeld(key, {
@@ -400,7 +430,7 @@ export class BrokerHost {
       const parts = key.split(':');
       const connId = Number(parts[2]);
       const ctx = {
-        session: { sessionId: grant.sessionId ?? '' },
+        session: { sessionId: heldSession },
         connectionId: connId,
       } as ConnectionContext;
       const command = grant.reason;
@@ -438,6 +468,7 @@ export class BrokerHost {
     const t = this.waits.get(key);
     if (t) clearTimeout(t);
     this.waits.delete(key);
+    this.holdSessions.delete(key);
   }
 
   notifyStopping(sessionId: string): void {

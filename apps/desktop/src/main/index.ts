@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   Menu,
   nativeImage,
@@ -10,7 +11,8 @@ import {
   systemPreferences,
   Tray,
 } from 'electron';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execa } from 'execa';
@@ -108,6 +110,19 @@ async function handleUrl(url: string): Promise<void> {
   if (u.host === 'open') {
     const path = u.searchParams.get('path');
     if (!path) return;
+    // Any app or web page can fire `styx://open?path=`; the user confirms before a folder becomes a project.
+    if (env['STYX_E2E'] !== '1') {
+      container.windows.focusMain();
+      const { response } = await dialog.showMessageBox({
+        type: 'question',
+        buttons: ['Add project', 'Cancel'],
+        defaultId: 1,
+        cancelId: 1,
+        message: 'Add this folder as a Styx project?',
+        detail: path,
+      });
+      if (response !== 0) return;
+    }
     try {
       const p = await projects.add(path);
       projects.select(p.id);
@@ -127,6 +142,20 @@ app.on('second-instance', (_e, argv) => {
   if (url) void handleUrl(url);
   windows?.openMain();
 });
+
+/** Random per-user suffix for the Windows pipe name (L2), persisted in userData so shims and restarts agree. */
+function brokerPipeSecret(userData: string): string {
+  const file = join(userData, 'broker-secret');
+  try {
+    const cur = readFileSync(file, 'utf8').trim();
+    if (/^[a-f0-9]{16,}$/.test(cur)) return cur;
+  } catch {
+    /* first run */
+  }
+  const secret = randomBytes(12).toString('hex');
+  writeFileSync(file, secret, { mode: 0o600 });
+  return secret;
+}
 
 function mfaProvider(): MfaProvider {
   if (env['STYX_MFA'] === 'auto') return new FakeMfaProvider('ok');
@@ -186,6 +215,7 @@ async function boot(): Promise<void> {
     username: userInfo().username,
     userData,
     tmpdir: tmpdir(),
+    ...(platform === 'win32' ? { secret: brokerPipeSecret(userData) } : {}),
   });
   const paths = rendererPaths(__dirname);
   const rendererUrl = env['ELECTRON_RENDERER_URL'];
@@ -301,12 +331,8 @@ async function boot(): Promise<void> {
   if (!fixtureName) {
     // Refresh discovery in the background on a real profile (the fixture already carries its own rows).
     const c = container;
-    void c.bus
-      .dispatch({ senderId: -1, frameUrl: 'file://internal' }, 'detect.clis', {})
-      .catch(() => undefined);
-    void c.bus
-      .dispatch({ senderId: -1, frameUrl: 'file://internal' }, 'detect.ides', {})
-      .catch(() => undefined);
+    void c.bus.dispatchInternal('detect.clis', {}).catch(() => undefined);
+    void c.bus.dispatchInternal('detect.ides', {}).catch(() => undefined);
   }
 }
 

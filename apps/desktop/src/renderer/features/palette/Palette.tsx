@@ -81,6 +81,9 @@ export function Palette({ id }: PaletteProps) {
     <Backdrop paddingTop={sizes.paletteTop} onClose={close}>
       <div
         className={s['frame']}
+        role="dialog"
+        aria-modal="true"
+        aria-label={copy.palette.dialogLabel}
         data-keyscope="palette"
         data-overlay="palette"
         onKeyDownCapture={onKeyDownCapture}

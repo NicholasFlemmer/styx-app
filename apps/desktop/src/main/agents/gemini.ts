@@ -1,11 +1,20 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { excludeLocally } from './git-exclude';
-import { styxMcpServer, type AgentLaunch, type AgentLaunchContext } from './types';
+import { writeWorktreeMcpConfig, type AgentLaunch, type AgentLaunchContext } from './types';
+
+const io = {
+  mkdir: (d: string) => mkdir(d, { recursive: true }).then(() => undefined),
+  read: (f: string) => readFile(f, 'utf8'),
+  write: (f: string, text: string) => writeFile(f, text),
+  remove: (f: string) => rm(f, { force: true }),
+};
 
 /**
  * Gemini CLI reads `<worktree>/.gemini/settings.json`; the styx MCP server is merged in and the file is kept out
- * of the repo via `.git/info/exclude`.
+ * of the repo via `.git/info/exclude`. The entry carries no env block — Gemini spawns MCP servers with its own
+ * environment, which is the session env (`STYX_TOKEN` never touches the worktree) — and `cleanup` restores the file
+ * to what it was before the session (or deletes it).
  *
  * UNVERIFIED (2026-09-04): `gemini` is not installed on the verifying machine; `-m <model>` and
  * `-i/--prompt-interactive <prompt>` follow the Gemini CLI docs and were not checked with `--help`. Gemini stays on
@@ -15,18 +24,10 @@ import { styxMcpServer, type AgentLaunch, type AgentLaunchContext } from './type
 export async function geminiLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch> {
   const dir = join(ctx.worktreePath, '.gemini');
   const file = join(dir, 'settings.json');
-  await mkdir(dir, { recursive: true });
-  let existing: Record<string, unknown> = {};
-  try {
-    existing = JSON.parse(await readFile(file, 'utf8')) as Record<string, unknown>;
-  } catch {
-    existing = {};
-  }
-  const mcpServers = { ...((existing['mcpServers'] as Record<string, unknown> | undefined) ?? {}), styx: styxMcpServer(ctx) };
-  await writeFile(file, JSON.stringify({ ...existing, mcpServers }, null, 2));
+  const written = await writeWorktreeMcpConfig(file, ctx, io, dir);
   await excludeLocally(ctx.worktreePath, '.gemini/settings.json');
   const args: string[] = [];
   if (ctx.model) args.push('-m', ctx.model);
   if (ctx.firstMessage) args.push('-i', ctx.firstMessage);
-  return { command: ctx.binary, args, env: {}, typeFirstMessage: false, cleanup: async () => undefined };
+  return { command: ctx.binary, args, env: {}, typeFirstMessage: false, cleanup: () => written.restore() };
 }

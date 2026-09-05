@@ -179,6 +179,15 @@ const editorRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
       optionsOf(v.lineEndings, ['auto', 'lf', 'crlf']),
       false,
     ),
+    // Spec §9: Monaco screen-reader mode + xterm accessibility tree (settings.app.screenReader).
+    {
+      id: 'screenReader',
+      label: r.screenReader,
+      value: onOff(app.screenReader),
+      options: ON_OFF,
+      change: { kind: 'app', patch: (b) => ({ screenReader: isOn(b) }) },
+      overridden: false,
+    },
   ];
 };
 

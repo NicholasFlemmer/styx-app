@@ -14,6 +14,8 @@ export const ideInstallSchema = z.object({
   launcher: z.string().nullable(),
   configDir: z.string().nullable(),
   isFallback: z.boolean(),
+  /** Where recent folders are read from; `shada` recents are only counted after an import. */
+  recentsSource: z.enum(['state-db', 'recent-projects', 'shada']).nullable(),
   imported: z.object({
     recents: z.number().int().nonnegative(),
     keybindings: z.boolean(),

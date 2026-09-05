@@ -1,9 +1,19 @@
 /**
- * Key scopes (plan §8 Keyboard): `overlay > palette > composer|editor|terminal > diff|workspace|chat > global`.
+ * Key scopes (plan §8 Keyboard): `overlay > palette > composer|editor|terminal > diff|workspace|chat|board > global`.
  * A DOM subtree declares its scope with `data-keyscope`; the active chain is read from the event target up.
+ * `board` is a focused needs-you card on the Agents screen (spec §6: approve / deny on "board card").
  */
 export type KeyScope =
-  'global' | 'overlay' | 'palette' | 'workspace' | 'chat' | 'composer' | 'editor' | 'terminal' | 'diff';
+  | 'global'
+  | 'overlay'
+  | 'palette'
+  | 'workspace'
+  | 'chat'
+  | 'composer'
+  | 'editor'
+  | 'terminal'
+  | 'diff'
+  | 'board';
 
 export const KEY_SCOPES: readonly KeyScope[] = [
   'global',
@@ -15,6 +25,7 @@ export const KEY_SCOPES: readonly KeyScope[] = [
   'editor',
   'terminal',
   'diff',
+  'board',
 ];
 
 export const isKeyScope = (v: string): v is KeyScope => (KEY_SCOPES as readonly string[]).includes(v);

@@ -43,7 +43,11 @@ export interface AgentLaunch {
 export const styxBin = (ctx: Pick<AgentLaunchContext, 'shimDir' | 'platform'>): string =>
   `${ctx.shimDir}${ctx.platform === 'win32' ? '\\styx.cmd' : '/styx'}`;
 
-/** MCP server entry every agent gets: `styx mcp` proxies the broker over stdio (plan §6). */
+/**
+ * MCP server entry every agent gets: `styx mcp` proxies the broker over stdio (plan §6). The env block (with the
+ * session's broker token) belongs only in files under `<userData>/agents/<sessionId>` (Claude, Codex); config
+ * written into the worktree (Gemini, Cursor) uses `styxMcpServerInherit` so the token never lands in the repo (L5).
+ */
 export const styxMcpServer = (
   ctx: AgentLaunchContext,
 ): { command: string; args: string[]; env: Record<string, string> } => ({
@@ -55,3 +59,39 @@ export const styxMcpServer = (
     STYX_TOKEN: ctx.env['STYX_TOKEN'] ?? '',
   },
 });
+
+/** Same entry without an env block: the CLI spawns MCP servers with its own (session) environment. */
+export const styxMcpServerInherit = (ctx: AgentLaunchContext): { command: string; args: string[] } => ({
+  command: styxBin(ctx),
+  args: ['mcp'],
+});
+
+/** Merges the styx server into an existing MCP config file; `restore()` puts the file back (or removes it). */
+export async function writeWorktreeMcpConfig(
+  file: string,
+  ctx: AgentLaunchContext,
+  io: { mkdir(dir: string): Promise<void>; read(file: string): Promise<string>; write(file: string, text: string): Promise<void>; remove(file: string): Promise<void> },
+  dir: string,
+): Promise<{ restore(): Promise<void> }> {
+  await io.mkdir(dir);
+  let previous: string | null = null;
+  let existing: Record<string, unknown> = {};
+  try {
+    previous = await io.read(file);
+    existing = JSON.parse(previous) as Record<string, unknown>;
+  } catch {
+    previous = null;
+    existing = {};
+  }
+  const mcpServers = {
+    ...((existing['mcpServers'] as Record<string, unknown> | undefined) ?? {}),
+    styx: styxMcpServerInherit(ctx),
+  };
+  await io.write(file, JSON.stringify({ ...existing, mcpServers }, null, 2));
+  return {
+    restore: async () => {
+      if (previous === null) await io.remove(file);
+      else await io.write(file, previous);
+    },
+  };
+}

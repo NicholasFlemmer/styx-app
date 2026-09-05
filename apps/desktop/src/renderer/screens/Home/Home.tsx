@@ -60,7 +60,8 @@ export function Home() {
   return (
     <div className={s['home']} data-home-empty={empty ? 'true' : undefined}>
       <CounterStrip columns={4}>
-        <CounterTile value={needsYou} label={copy.counters.needsYou} live />
+        {/* Not live: the titlebar counter already announces needs-you changes (one live region, spec §9). */}
+        <CounterTile value={needsYou} label={copy.counters.needsYou} />
         <CounterTile value={working} label={copy.counters.agentsWorking} />
         <CounterTile value={grants} label={copy.counters.grantsActive} />
         <CounterTile value={projects} label={copy.counters.projects} />

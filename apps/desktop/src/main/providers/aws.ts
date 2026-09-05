@@ -94,6 +94,10 @@ export class AwsAdapter implements ProviderAdapter {
     /* STS credentials cannot be revoked early; they are short-lived and no longer delivered */
   }
 
+  issuesScoped(): boolean {
+    return true; // STS session policy narrows the long-lived key per grant
+  }
+
   scopeOfCommand(argv: string[]): Scope[] {
     if (hasVerb(argv, /^(delete-|terminate-|remove-|destroy|rb$|rm$)/) || (argv[0] === 's3' && argv[1] === 'rm') || (argv[0] === 'cloudformation' && argv[1] === 'delete-stack')) return ['delete'];
     if (hasVerb(argv, /^(deploy|update-function-code|update-service|create-deployment|sync|cp|put-object|publish)$/) || argv[0] === 'deploy') return ['deploy'];
