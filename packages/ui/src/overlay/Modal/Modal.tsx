@@ -7,6 +7,8 @@ import s from './Modal.module.css';
 export interface ModalProps {
   /** 560 = connect (`--w-modal-connect`) · 600 = spawn / new project (`--w-modal-spawn`). */
   width?: 560 | 600;
+  /** Backdrop top anchor: 90 for connect / spawn (spec §8), 70 for new project (prototype). */
+  top?: 70 | 90;
   /** Header label, e.g. "Connect target · Pick a provider". Rendered as t-label. */
   title: ReactNode;
   onClose: () => void;
@@ -26,6 +28,7 @@ export interface ModalProps {
 export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal(
   {
     width = 560,
+    top = 90,
     title,
     onClose,
     footer,
@@ -44,7 +47,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal(
   useEscape(true, onClose, escapeEnabled);
 
   return (
-    <Backdrop ref={ref} paddingTop={90} onClose={onClose}>
+    <Backdrop ref={ref} paddingTop={top} onClose={onClose}>
       <div
         ref={panel}
         role="dialog"

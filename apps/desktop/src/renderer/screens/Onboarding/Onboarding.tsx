@@ -1,4 +1,14 @@
-import { copy, fill, platformCopy, type IdeInstall, type ReadModel } from '@styx/core';
+import {
+  cliAuthLabel,
+  cliVersionLabel,
+  copy,
+  fill,
+  ideImportsLabel,
+  ideVersionLabel,
+  platformCopy,
+  type IdeInstall,
+  type ReadModel,
+} from '@styx/core';
 import {
   Button,
   Checkbox,
@@ -20,10 +30,6 @@ import s from './Onboarding.module.css';
 import {
   DEFAULT_IDE_IMPORTS,
   STEPS,
-  cliAuthLabel,
-  cliVersionLabel,
-  ideImportsLabel,
-  ideVersionLabel,
   repoMeta,
   type IdeImports,
   type ScannedRepo,

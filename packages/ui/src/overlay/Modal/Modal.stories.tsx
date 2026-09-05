@@ -107,6 +107,25 @@ export const Spawn: Story = {
   },
 };
 
+export const NewProject: Story = {
+  args: {
+    width: 600,
+    top: 70,
+    title: 'New project',
+    children: field('Name', 'orders-service'),
+    footer: (
+      <>
+        <Button size="footer" variant="ghost">
+          Cancel
+        </Button>
+        <Button size="footer" variant="primary">
+          Create
+        </Button>
+      </>
+    ),
+  },
+};
+
 export const NoFooter: Story = {
   args: {
     width: 560,

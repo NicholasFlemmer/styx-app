@@ -93,6 +93,14 @@ describe('Modal', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('anchors the backdrop at 90px by default and 70px for top={70}', () => {
+    const { unmount } = render(<Modal title="Connect" onClose={() => {}} />);
+    expect(screen.getByRole('dialog').parentElement).toHaveStyle({ paddingTop: '90px' });
+    unmount();
+    render(<Modal title="New project" top={70} onClose={() => {}} />);
+    expect(screen.getByRole('dialog').parentElement).toHaveStyle({ paddingTop: '70px' });
+  });
+
   it('ignores Esc when escapeEnabled is false', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();

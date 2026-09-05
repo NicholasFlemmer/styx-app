@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
 import { Onboarding } from './Onboarding';
-import { cliAuthLabel, cliVersionLabel, ideImportsLabel, ideVersionLabel, repoMeta } from './onboarding-rows';
+import { repoMeta } from './onboarding-rows';
 
 const YEAR = 365 * 24 * 60 * 60 * 1000;
 const scanned = [
@@ -82,9 +82,9 @@ describe('Onboarding', () => {
       ),
     ).toEqual([
       ['', 'VS Code', '1.98 · /Applications', '14 recents · keybindings · theme', 'Fallback · Open in'],
-      ['', 'Cursor', '1.4 · /Applications', '6 recents · keybindings', 'Detected'],
-      ['', 'JetBrains (WebStorm)', '2026.2 · ~/Applications/JetBrains Toolbox', '3 recents', 'Detected'],
-      ['', 'Neovim', '0.11 · /opt/homebrew', '—', 'Detected'],
+      ['', 'Cursor', '1.4', '6 recents · keybindings', 'Detected'],
+      ['', 'JetBrains (WebStorm)', '2026.2', '3 recents', 'Detected'],
+      ['', 'Neovim', '0.11 · /opt/homebrew', 'recents via shada', 'Detected'],
     ]);
     expect(rows[0]?.querySelector('[data-tone], [data-on]')?.getAttribute('data-on')).toBe('true');
     expect(
@@ -224,30 +224,14 @@ describe('Onboarding', () => {
     expect(commandMock).toHaveBeenCalledWith('onboarding.complete', {});
   });
 
-  it('row helpers format prototype strings', () => {
-    const model = fixtures.demoReadModel();
-    const [vscode, , , neovim] = model.discovery.ides;
-    if (vscode === undefined || neovim === undefined) throw new Error('fixture');
-    expect(ideVersionLabel(vscode)).toBe('1.98 · /Applications');
-    expect(ideVersionLabel({ ...vscode, location: null })).toBe('1.98');
-    expect(ideVersionLabel({ ...vscode, version: null })).toBe('not found');
-    expect(ideImportsLabel(vscode)).toBe('14 recents · keybindings · theme');
-    expect(ideImportsLabel(neovim)).toBe('—');
-    const [claude, , gemini] = model.discovery.clis;
-    if (claude === undefined || gemini === undefined) throw new Error('fixture');
-    expect(cliVersionLabel(claude)).toBe('claude 2.4.1');
-    expect(cliAuthLabel(claude)).toBe('signed in');
-    expect(cliAuthLabel(gemini)).toBe('Sign in →');
-    expect(cliAuthLabel({ ...claude, found: false, binary: null })).toBe('Install →');
+  it('repoMeta formats prototype strings', () => {
     expect(repoMeta({ ...scanned[0], remote: 'https://github.com/acme/shop' }, fixtures.DEMO_NOW)).toBe(
       'github · main',
     );
-    expect(
-      repoMeta({ ...scanned[0], remote: 'git@gitlab.com:x/y.git', branch: null }, fixtures.DEMO_NOW),
-    ).toBe('gitlab');
-    expect(repoMeta(scanned[2], fixtures.DEMO_NOW)).toBe('no remote · 2y old');
-    expect(repoMeta({ ...scanned[2], lastModifiedAt: fixtures.DEMO_NOW }, fixtures.DEMO_NOW)).toBe(
-      'no remote',
+    expect(repoMeta({ ...scanned[0], remote: 'git@gitlab.com:x/y.git', branch: null }, fixtures.DEMO_NOW)).toBe(
+      'gitlab',
     );
+    expect(repoMeta(scanned[2], fixtures.DEMO_NOW)).toBe('no remote · 2y old');
+    expect(repoMeta({ ...scanned[2], lastModifiedAt: fixtures.DEMO_NOW }, fixtures.DEMO_NOW)).toBe('no remote');
   });
 });

@@ -1,0 +1,77 @@
+@layer screens {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  /* Tiles + error row bleed to the panel edges above the 16px body; +2px so the body gap reads as 16. */
+  .bleed {
+    margin: calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4)) 2px;
+  }
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+  }
+  /* Prototype tile: 14px 12px, hairline right + bottom, name 13/600 over mono 10.5 version at .7. */
+  .tile {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 14px 12px;
+    border: 0;
+    border-right: 1px solid var(--ln);
+    border-bottom: 1px solid var(--ln);
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    cursor: pointer;
+    text-align: left;
+    border-radius: 0;
+  }
+  .tile:not([data-inv='true']):hover {
+    background: var(--s2);
+  }
+  .tile[data-inv='true'] {
+    background: var(--tx);
+    color: var(--bg);
+  }
+  .tileName {
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .tileVer {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    opacity: 0.7;
+  }
+  /* CLI missing: accent square · text · Install guide / Locate binary. */
+  .error {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--ln);
+    font-size: 12.5px;
+  }
+  .errorText {
+    flex: 1;
+  }
+  .two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  /* Worktree select matches the input recipe: --bg fill, 8px 10px, 12.5px. */
+  .worktree select {
+    height: auto;
+    padding: 8px 24px 8px 10px;
+    background: var(--bg);
+    font-size: 12.5px;
+  }
+  .toggles {
+    display: flex;
+    gap: 18px;
+    font-size: 12.5px;
+  }
+}

@@ -1,0 +1,92 @@
+@layer screens {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .head {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 12px;
+  }
+  .browse {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--mu);
+    font: inherit;
+    cursor: pointer;
+  }
+  .browse:disabled {
+    cursor: default;
+  }
+  /* Start-from tiles: 3-up, hairline boxes collapsing by -1px; chosen inverted. */
+  .starts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .start {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 12px;
+    border: 1px solid var(--ln);
+    margin-right: -1px;
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    cursor: pointer;
+    text-align: left;
+    border-radius: 0;
+  }
+  .start:not([data-inv='true']):hover {
+    background: var(--s2);
+  }
+  .start[data-inv='true'] {
+    background: var(--tx);
+    color: var(--bg);
+  }
+  .startLabel {
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .startDesc {
+    font-size: 11.5px;
+    line-height: 1.4;
+    opacity: 0.75;
+  }
+  /* Template select matches the input recipe: --bg fill, 8px 10px, 12.5px. */
+  .template select {
+    height: auto;
+    padding: 8px 24px 8px 10px;
+    background: var(--bg);
+    font-size: 12.5px;
+  }
+  .toggles {
+    display: flex;
+    gap: 18px;
+    font-size: 12.5px;
+    flex-wrap: wrap;
+  }
+  .link {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--mu);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .link:hover {
+    color: var(--tx);
+  }
+  /* GitHub note: mono 11.5 muted in a hairline box. */
+  .note {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--mu);
+    border: 1px solid var(--ln);
+    padding: 8px 10px;
+  }
+}

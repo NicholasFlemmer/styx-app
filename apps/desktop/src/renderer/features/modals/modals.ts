@@ -1,0 +1,206 @@
+import {
+  cliVersionLabel as coreCliVersionLabel,
+  copy,
+  fill,
+  projectSettingsOfOrDefault,
+  rows,
+  type Agent,
+  type AuthMethod,
+  type CliInstall,
+  type CommandInput,
+  type Env,
+  type IdeInstall,
+  type Platform,
+  type ProjectId,
+  type Provider,
+  type ReadModel,
+  type SessionToggles,
+  type Target,
+  type Worktree,
+} from '@styx/core';
+
+/** Prototype order of the provider grid (spec §4.9 / §4.10). */
+export const PROVIDERS: readonly Provider[] = ['vercel', 'aws', 'gcp', 'supabase', 'github', 'ssh'];
+
+/** `methodOf` in the prototype state script: AWS/GCP → key, SSH host → ssh, everything else → OAuth. */
+export const methodOf = (provider: Provider): AuthMethod =>
+  provider === 'aws' || provider === 'gcp' ? 'key' : provider === 'ssh' ? 'ssh' : 'oauth';
+
+export const methodLabel = (provider: Provider): string => copy.connect.methods[methodOf(provider)];
+
+export type ConnectStep = 'pick' | AuthMethod;
+
+/** Connect env chips (prototype `envs`): prod · staging · preview. */
+export const CONNECT_ENVS: readonly Extract<Env, 'prod' | 'staging' | 'preview'>[] = [
+  'prod',
+  'staging',
+  'preview',
+];
+
+export interface KeyForm {
+  name: string;
+  accessKey: string;
+  secret: string;
+}
+export const keyFormValid = (f: KeyForm): boolean =>
+  f.name.trim() !== '' && f.accessKey.trim() !== '' && f.secret !== '';
+
+export interface SshForm {
+  host: string;
+  user: string;
+  keyPath: string;
+}
+export const sshFormValid = (f: SshForm): boolean =>
+  f.host.trim() !== '' && f.user.trim() !== '' && f.keyPath.trim() !== '';
+
+/** SSH targets are named after the host (the prototype shows no Name field on the SSH step). */
+export const sshTargetName = (f: SshForm): string => f.host.trim();
+
+// --- Spawn ---------------------------------------------------------------
+
+export const SPAWN_AGENTS: readonly Agent[] = ['claude', 'codex', 'gemini', 'cursor', 'shell'];
+
+/** Tile subtitle: `claude 2.4.1` / `cursor-agent 0.5.2` / `zsh 5.9`; unknown or missing binaries read `not found on PATH`. */
+export const cliVersionLabel = (cli: CliInstall | undefined): string =>
+  cli === undefined ? copy.onboarding.agents.notFound : coreCliVersionLabel(cli);
+
+export const cliOf = (model: ReadModel, agent: Agent): CliInstall | undefined =>
+  model.discovery.clis.find((c) => c.agent === agent);
+
+export const cliMissing = (model: ReadModel, agent: Agent): boolean => {
+  const cli = cliOf(model, agent);
+  return cli !== undefined && !cli.found;
+};
+
+/** Worktrees of a project, main first. */
+export const projectWorktrees = (model: ReadModel, projectId: ProjectId): Worktree[] =>
+  rows(model.worktrees)
+    .filter((w) => w.projectId === projectId)
+    .sort((a, b) => Number(b.isMain) - Number(a.isMain));
+
+/** `agent/<name>-<n>` (spec §4.11): prefix from project settings, n = first free counter among existing branches. */
+export const autoBranch = (agent: Agent, prefix: string, existingBranches: readonly string[]): string => {
+  const name = copy.agentProducts[agent].toLowerCase().split(' ')[0] ?? agent;
+  const taken = new Set<number>();
+  const re = new RegExp(`^${prefix.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')}${name}-(\\d+)$`);
+  for (const b of existingBranches) {
+    const m = re.exec(b);
+    if (m?.[1] !== undefined) taken.add(Number(m[1]));
+  }
+  let n = 1;
+  while (taken.has(n)) n += 1;
+  return `${prefix}${name}-${n}`;
+};
+
+export const autoBranchFor = (model: ReadModel, projectId: ProjectId, agent: Agent): string =>
+  autoBranch(
+    agent,
+    projectSettingsOfOrDefault(model, projectId).branchPrefix,
+    projectWorktrees(model, projectId).map((w) => w.branch),
+  );
+
+export const defaultToggles = (model: ReadModel, projectId: ProjectId): SessionToggles => {
+  const s = projectSettingsOfOrDefault(model, projectId);
+  return {
+    autoApproveEdits: s.autoApproveEdits,
+    mayRequestTargets: s.mayRequestTargets,
+    notifyWhenNeedsMe: s.notifyWhenNeedsMe,
+  };
+};
+
+export interface SpawnForm {
+  agent: Agent;
+  /** 'new' = New from main; otherwise an existing worktree id. */
+  worktree: string;
+  branch: string;
+  firstMessage: string;
+  toggles: SessionToggles;
+}
+
+export const spawnPayload = (
+  model: ReadModel,
+  projectId: ProjectId,
+  f: SpawnForm,
+): CommandInput<'session.spawn'> => {
+  const existing = projectWorktrees(model, projectId).find((w) => w.id === f.worktree);
+  const worktree: CommandInput<'session.spawn'>['worktree'] =
+    f.worktree !== 'new' && existing !== undefined
+      ? { kind: 'existing', worktreeId: existing.id }
+      : { kind: 'new', base: projectSettingsOfOrDefault(model, projectId).baseBranch, branch: f.branch.trim() };
+  return { projectId, agent: f.agent, worktree, firstMessage: f.firstMessage, toggles: f.toggles, model: null };
+};
+
+export const spawnValid = (model: ReadModel, f: SpawnForm): boolean =>
+  !cliMissing(model, f.agent) && (f.worktree !== 'new' || f.branch.trim() !== '');
+
+// --- New project ---------------------------------------------------------
+
+export type StartFrom = 'empty' | 'template' | 'agent';
+export const START_FROM: readonly StartFrom[] = ['empty', 'template', 'agent'];
+
+/** Built-in templates (spec §4.12); org templates are appended when discovery provides them. */
+export const BUILTIN_TEMPLATES: readonly { value: string; label: string }[] = [
+  { value: 'node', label: 'Node' },
+  { value: 'python', label: 'Python' },
+  { value: 'go', label: 'Go' },
+  { value: 'rust', label: 'Rust' },
+  { value: 'static', label: 'static' },
+];
+
+export interface NewProjectForm {
+  name: string;
+  location: string;
+  startFrom: StartFrom;
+  template: string;
+  brief: string;
+  gitInit: boolean;
+  createGithubRepo: boolean;
+  copyTargets: boolean;
+  openInIde: boolean;
+}
+
+export const githubTargetOf = (model: ReadModel, projectId: ProjectId | null): Target | undefined =>
+  projectId === null
+    ? undefined
+    : rows(model.targets).find((t) => t.projectId === projectId && t.provider === 'github');
+
+/** The IDE "Open in … too" points at: the fallback IDE, else app setting, else nothing. */
+export const fallbackIde = (model: ReadModel): IdeInstall | undefined =>
+  model.discovery.ides.find((i) => i.isFallback) ??
+  model.discovery.ides.find((i) => i.kind === model.settings.app.fallbackIde);
+
+export const newProjectValid = (f: NewProjectForm): boolean => {
+  if (f.name.trim() === '' || f.location.trim() === '') return false;
+  if (f.startFrom === 'template') return f.template !== '';
+  if (f.startFrom === 'agent') return f.brief.trim() !== '';
+  return true;
+};
+
+export const newProjectPayload = (f: NewProjectForm, agent: Agent, copyTargetsFrom: ProjectId | null) => ({
+  name: f.name.trim(),
+  location: f.location.trim(),
+  startFrom:
+    f.startFrom === 'empty'
+      ? ({ kind: 'empty' } as const)
+      : f.startFrom === 'template'
+        ? ({ kind: 'template', template: f.template } as const)
+        : ({ kind: 'agent', agent, brief: f.brief.trim() } as const),
+  gitInit: f.gitInit,
+  createGithubRepo: f.createGithubRepo,
+  copyTargetsFrom: f.copyTargets ? copyTargetsFrom : null,
+  openInIde: f.openInIde,
+});
+
+/** `GitHub acme · persistent grant · repo will be acme/orders-service`. */
+export const githubNote = (target: Target, name: string): string => {
+  const owner = typeof target.config['owner'] === 'string' ? target.config['owner'] : null;
+  return fill(copy.newProject.githubNote, {
+    target: owner === null ? target.name : `${copy.providers.github} ${owner}`,
+    repo: owner === null ? name : `${owner}/${name}`,
+  });
+};
+
+export const createLabel = (startFrom: StartFrom, agent: Agent, platform: Platform, mod: string): string =>
+  startFrom === 'agent'
+    ? fill(copy.newProject.createSpawn, { agent: copy.agentProducts[agent], mod })
+    : fill(copy.newProject.create, { mod, platform });

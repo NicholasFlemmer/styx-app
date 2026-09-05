@@ -1,0 +1,95 @@
+@layer screens {
+  /* Pick step: 3-up provider grid bleeding to the panel edges (the modal body pads 16px). */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin: calc(-1 * var(--sp-4));
+  }
+  /* Prototype tile: 18px 16px, hairline right + bottom, name 14/600 over the method label. */
+  .tile {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 18px 16px;
+    border: 0;
+    border-right: 1px solid var(--ln);
+    border-bottom: 1px solid var(--ln);
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    cursor: pointer;
+    text-align: left;
+    border-radius: 0;
+  }
+  .tile:hover {
+    background: var(--s2);
+  }
+  .tileName {
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .providerName {
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .body {
+    color: var(--mu);
+    line-height: 1.5;
+    font-size: 12.5px;
+  }
+  /* Environment: label + chips 6px apart (the chip group collapses borders by -1px, so 7px gap). */
+  .envRow {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .envChips {
+    gap: 7px;
+  }
+  /* "Waiting for browser…" mono box with a blinking block cursor. */
+  .waiting {
+    display: flex;
+    justify-content: space-between;
+    border: 1px solid var(--ln);
+    padding: 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 12px;
+    background: var(--mu);
+    animation: styx-blink var(--motion-blink, 1s steps(1) infinite);
+  }
+  .two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .browse {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--mu);
+    font: inherit;
+    cursor: pointer;
+  }
+  .browse:disabled {
+    cursor: default;
+  }
+  .status {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--mu);
+  }
+  /* Back sits left of the footer spacer with a hairline to its right (prototype 14px 20px). */
+  .back {
+    order: -1;
+    border-left: 0;
+    border-right: 1px solid var(--ln);
+  }
+}
