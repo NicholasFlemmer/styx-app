@@ -81,6 +81,8 @@ export interface ContainerOptions {
   retentionMs?: number;
   /** RefreshScheduler period (30 min by default). */
   refreshMs?: number;
+  /** Fixture profiles carry fake credentials; probing them would only flag every target `expired`. */
+  disableRefresh?: boolean;
 }
 
 export interface Container {
@@ -290,7 +292,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     async start() {
       grants.start();
       retention.start();
-      refresh.start();
+      if (!opts.disableRefresh) refresh.start();
       await broker.listen();
     },
     async shutdown() {

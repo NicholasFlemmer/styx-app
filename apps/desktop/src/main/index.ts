@@ -299,6 +299,7 @@ async function boot(): Promise<void> {
   };
 
   container = buildContainer({
+    disableRefresh: fixtureName !== null && env['STYX_KEYCHAIN'] === 'memory',
     db,
     clock,
     vault,
