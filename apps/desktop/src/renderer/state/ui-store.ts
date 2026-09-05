@@ -120,7 +120,7 @@ export const useUiStore = create<UiStore>()(
     palette: { query: '', scope: 'all', activeId: null },
     diffFocusIndex: 0,
     approvalsTab: 'inbox',
-    settingsSection: 'general',
+    settingsSection: 'project:targets',
     onboardingStep: initialFromEnv?.step ?? 1,
     editorFile: null,
     banners: {},
