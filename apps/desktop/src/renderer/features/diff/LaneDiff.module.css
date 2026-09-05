@@ -1,0 +1,27 @@
+@layer components {
+  /* Repo lane diff (prototype): hairline box, mono 12px/1.75, 10px 14px padding. Vertical padding comes from the
+     virtualizer (paddingStart/End) so it scrolls with the rows. */
+  .lane {
+    flex: 1;
+    min-height: 0;
+    margin: 0 20px 20px;
+    border: 1px solid var(--ln);
+    padding: 0 14px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.75;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  .inner {
+    position: relative;
+    width: 100%;
+    min-width: max-content;
+  }
+  .row {
+    position: absolute;
+    top: 0;
+    left: 0;
+    min-width: 100%;
+  }
+}

@@ -1,0 +1,25 @@
+@layer components {
+  /* Monochrome unified diff (custom DiffBlock, not Monaco): mono 12.5/1.75, `--add` band on additions. */
+  .block {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.75;
+    padding: 6px 0;
+    min-width: 0;
+    overflow-x: auto;
+  }
+  .row {
+    padding: 0 16px;
+    white-space: pre;
+  }
+  .row[data-kind='add'] {
+    background: var(--add);
+  }
+  .row[data-kind='header'] {
+    color: var(--mu);
+  }
+  /* Repo lane diff rows: no inner padding (the bordered container pads 10px 14px). */
+  .lane {
+    padding: 0;
+  }
+}

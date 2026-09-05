@@ -1,0 +1,57 @@
+@layer screens {
+  /* Prototype `data-screen-label="Repo"`: header · lanes table · lane diff header · bordered lane diff. */
+  .screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--ln);
+    flex: none;
+  }
+  .title {
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .meta {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .spacer {
+    flex: 1;
+  }
+  .lanes {
+    flex: none;
+  }
+  /* Branch cell: mono 500 at the row's 12.5px (not the 12px mono cell). */
+  .branch {
+    font-family: var(--font-mono);
+    font-weight: 500;
+  }
+  /* Action cell is a label-styled button: the row is the hit target for select, the label for the verb. */
+  .action {
+    all: unset;
+    cursor: pointer;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
+    position: relative;
+  }
+  .action::after {
+    content: '';
+    position: absolute;
+    inset: -9px -6px;
+  }
+  .diffHead {
+    padding: 14px 20px 6px;
+    flex: none;
+  }
+}
