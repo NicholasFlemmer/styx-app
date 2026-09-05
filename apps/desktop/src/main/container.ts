@@ -292,7 +292,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     async start() {
       grants.start();
       retention.start();
-      if (!opts.disableRefresh) refresh.start();
+      if (opts.disableRefresh) refresh.disable();
+      else refresh.start();
       await broker.listen();
     },
     async shutdown() {

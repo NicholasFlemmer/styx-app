@@ -28,6 +28,9 @@ export class RefreshScheduler {
   private handle: unknown = null;
   private inFlight: Promise<void> | null = null;
 
+  /** Fixture profiles disable probing entirely (fake credentials would only flag every target expired). */
+  private enabled = true;
+
   constructor(private readonly deps: RefreshSchedulerDeps) {}
 
   start(): void {
@@ -46,7 +49,13 @@ export class RefreshScheduler {
   }
 
   /** Probes every connected target (or one), skipping recently-checked ones unless `manual`. Never throws. */
+  disable(): void {
+    this.enabled = false;
+    this.stop();
+  }
+
   runNow(reason: RefreshReason, targetId?: string): Promise<void> {
+    if (!this.enabled && reason !== 'manual') return Promise.resolve();
     if (this.inFlight && targetId === undefined) return this.inFlight;
     const run = this.run(reason, targetId).finally(() => {
       if (this.inFlight === run) this.inFlight = null;
