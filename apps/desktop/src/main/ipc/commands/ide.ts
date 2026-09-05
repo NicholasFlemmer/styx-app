@@ -12,6 +12,9 @@ import type { CommandBus } from '../bus';
 export const IMPORTED_KEYBINDINGS_KEY = 'editor.importedKeybindings';
 export const IMPORTED_THEME_KEY = 'editor.importedTheme';
 
+/** Where each IDE keeps its recent folders (spec §4.9: VS Code/Cursor state.vscdb, JetBrains recentProjects.xml, Neovim shada). */
+const RECENTS_SOURCE = { vscode: 'state-db', cursor: 'state-db', jetbrains: 'recent-projects', neovim: 'shada' } as const;
+
 /** detect.* · ide.* */
 export function registerIdeCommands(bus: CommandBus, app: Container): void {
   const { repos, publisher, detect, ideImport, clock, runtime } = app;
@@ -28,6 +31,7 @@ export function registerIdeCommands(bus: CommandBus, app: Container): void {
         const recents = ideImport.recentFolders({ kind: i.kind, configDir: i.configDir }).length;
         return {
           id: `ide-${i.kind}`,
+          recentsSource: RECENTS_SOURCE[i.kind],
           kind: i.kind,
           product: i.product,
           version: i.version,

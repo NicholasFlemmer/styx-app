@@ -103,6 +103,7 @@ describe('command contract', () => {
     app.repos.discovery.saveIde({
       id: 'ide-vscode',
       kind: 'vscode',
+      recentsSource: 'state-db',
       product: 'VS Code',
       version: '1.99.0',
       location: null,
