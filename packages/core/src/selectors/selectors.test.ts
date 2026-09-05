@@ -160,7 +160,7 @@ describe('targetDerivedState', () => {
     const table = targetRows(model, ids.project.acmeShop, NOW);
     expect(table.map((r) => [r.name, r.env, r.policyLabel, r.state.label, r.action])).toEqual([
       ['Vercel', 'prod', 'Ask · MFA', 'open · 58m left', 'Revoke'],
-      ['Vercel', 'preview', 'Always allow', 'persistent', 'Revoke'],
+      ['Vercel', 'preview', 'Always allow', 'persistent', 'Edit'],
       ['Supabase', 'prod', 'Ask each time', 'locked', 'Edit'],
       ['AWS acme-prod', 'prod', 'Ask · MFA', 'locked', 'Edit'],
       ['GitHub acme/shop', 'scm', 'Always allow', 'persistent', 'Edit'],

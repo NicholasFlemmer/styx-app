@@ -62,13 +62,15 @@ export interface TargetRow {
   policy: Target['policy'];
   policyLabel: string;
   state: TargetDerivedState;
-  /** Revoke when open/persistent-by-grant, Connect when unconnected, else Edit. */
+  /** Revoke when open, Connect when unconnected, else Edit (prototype: persistent rows read EDIT). */
   action: 'Revoke' | 'Edit' | 'Connect';
 }
 
-/** Revoke is offered when a grant backs the state (open, or persistent via an `always` grant). */
-export const revokable = (state: TargetDerivedState): boolean =>
-  state.kind === 'open' || (state.kind === 'persistent' && state.grantId !== undefined);
+/**
+ * Revoke is offered only for a timed open grant. A persistent row (policy `always`, or an `always` grant) reads
+ * EDIT in the prototype's Targets table; its grant is revoked from the audit drawer or by changing the policy.
+ */
+export const revokable = (state: TargetDerivedState): boolean => state.kind === 'open';
 
 /** Settings → Targets table rows for a project. */
 export const targetRows = (model: ReadModel, projectId: ProjectId, now: number): TargetRow[] =>

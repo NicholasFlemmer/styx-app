@@ -108,10 +108,10 @@ describe('<Settings />', () => {
       expect.stringContaining('locked'),
       expect.stringContaining('persistent'),
     ]);
-    // core `revokable`: open grants and `always`-grant-backed persistent rows offer Revoke (Vercel prod + preview).
+    // core `revokable`: only the open (timed) grant offers Revoke; persistent rows read Edit like the prototype.
     expect(screen.getByRole('button', { name: /^Revoke · Vercel prod/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^Revoke · Vercel preview/ })).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: /^Edit · / })).toHaveLength(3);
+    expect(screen.queryByRole('button', { name: /^Revoke · Vercel preview/ })).toBeNull();
+    expect(screen.getAllByRole('button', { name: /^Edit · / })).toHaveLength(4);
   });
 
   it('policy select dispatches target.setPolicy', () => {
