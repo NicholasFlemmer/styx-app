@@ -18,6 +18,8 @@ pnpm test && pnpm typecheck && pnpm lint
 pnpm e2e                       # Playwright Electron
 pnpm visual                    # screenshots vs prototype baselines
 pnpm storybook
+pnpm -F @styx/desktop package:mac:dir && pnpm -F @styx/desktop package:smoke   # unsigned .app + boot check
+pnpm package:mac                # signed + notarized (needs identity + notarytool env)
 ```
 
 If Electron starts as plain Node (`electron.app` undefined), your shell has `ELECTRON_RUN_AS_NODE` set; the scripts

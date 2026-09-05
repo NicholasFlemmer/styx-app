@@ -19,3 +19,12 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+      - name: Playwright browsers (Storybook axe + prototype baker)
+        run: npx playwright install --with-deps chromium
+      - run: pnpm -F @styx/ui storybook:test
+      - name: Electron e2e (main window, shell, grant flow, a11y)
+        if: runner.os == 'macOS'
+        run: pnpm e2e
+      - name: Packaged app smoke (unsigned)
+        if: runner.os == 'macOS'
+        run: pnpm -F @styx/desktop package:mac:dir && pnpm -F @styx/desktop package:smoke
