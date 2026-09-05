@@ -1,4 +1,4 @@
-import { agentSchema, copy, idFrom, type EventPayload } from '@styx/core';
+import { agentSchema, copy, idFrom, policyHashSchema, type EventPayload } from '@styx/core';
 import type { KvStore } from '../db/kv';
 import type { Repos } from '../db/repos';
 
@@ -131,17 +131,31 @@ export class NotificationService {
 /**
  * Persistent banners still `shown` in `notifications` (keyed by `banner_key`), rebuilt as `banner.set` payloads so a
  * freshly connected window sees them again after a restart. Keys: `auth-expired:<targetId>` · `cli-missing:<agent>` ·
- * `conflict:<worktreeId>`; unknown keys are skipped.
+ * `conflict:<worktreeId>` (kind `error-banner`) · `project-policy:<projectId>` (kind `info`); unknown keys are skipped.
  */
 export function bannersToReemit(repos: Repos): EventPayload<'banner.set'>[] {
   const out: EventPayload<'banner.set'>[] = [];
   for (const n of repos.notifications.all()) {
-    if (n.kind !== 'error-banner' || n.state !== 'shown' || !n.bannerKey) continue;
+    if ((n.kind !== 'error-banner' && n.kind !== 'info') || n.state !== 'shown' || !n.bannerKey) continue;
     const sep = n.bannerKey.indexOf(':');
     const kind = n.bannerKey.slice(0, sep);
     const id = n.bannerKey.slice(sep + 1);
     if (!id) continue;
-    if (kind === 'auth-expired') {
+    if (kind === 'project-policy') {
+      const hash = policyHashSchema.safeParse(n.meta);
+      if (n.kind !== 'info' || !hash.success || !repos.projects.get(id)) continue;
+      out.push({
+        bannerKey: n.bannerKey,
+        kind: 'project-policy',
+        text: n.title,
+        cta: copy.errors.projectPolicyUntrusted.cta,
+        action: { kind: 'review-project-policy', projectId: idFrom<'ProjectId'>(id), hash: hash.data },
+        sessionId: null,
+        reason: null,
+      });
+    } else if (n.kind !== 'error-banner') {
+      continue;
+    } else if (kind === 'auth-expired') {
       if (!repos.targets.get(id)) continue;
       out.push({
         bannerKey: n.bannerKey,

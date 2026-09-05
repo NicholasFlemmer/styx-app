@@ -1,9 +1,39 @@
 import { makeCredentialRef } from '../services/credential-vault';
 import type { AdapterDeps, ConnectInput, GrantInfo, IssuedCredential, ProviderAdapter, Scope, TargetInfo, TestResult } from './types';
-import { commandHead, hasVerb, isHelp } from './types';
+import { commandHead, hasVerb, isHelp, shortFlags } from './types';
 
-const VERCEL_READ = new Set(['ls', 'list', 'inspect', 'logs', 'whoami', 'help', 'bisect', 'curl']);
+const VERCEL_READ = new Set(['ls', 'list', 'inspect', 'logs', 'whoami', 'help', 'bisect']);
 const VERCEL_READ_SUB = new Set(['ls', 'list', 'inspect', 'pull', 'get', 'logs', 'status']);
+
+const CURL_LONG_BODY = /^(--data(-[a-z]+)?|--form(-string)?|--json|--upload-file)(=|$)/;
+/** curl short options that take a value; `d`/`F`/`T` carry a body, `X` the method. */
+const CURL_VALUE_FLAGS = 'XdFTHAbcCeEKmoruUwyYz';
+
+/**
+ * `vercel curl` proxies an arbitrary authenticated API call (M-2): the HTTP method (`-X`/`--request`, attached or
+ * clustered like `-sXDELETE`) and any body flag (`-d`/`--data*`, `-F`/`--form*`, `--json`, `-T`/`--upload-file`,
+ * clustered like `-sd '{}'` or attached like `-Fname=@x`) decide. DELETE → delete; any non-GET method or a body
+ * → write; a plain GET → read.
+ */
+function curlScope(rest: string[]): Scope[] {
+  let method = 'GET';
+  let hasBody = false;
+  for (let i = 0; i < rest.length; i += 1) {
+    const a = rest[i] ?? '';
+    if (a === '--request') method = (rest[i + 1] ?? '').toUpperCase();
+    else if (a.startsWith('--request=')) method = a.slice('--request='.length).toUpperCase();
+    else if (CURL_LONG_BODY.test(a)) hasBody = true;
+    else if (a.startsWith('-') && !a.startsWith('--')) {
+      const { flags, value, consumedNext } = shortFlags(a, rest[i + 1], CURL_VALUE_FLAGS);
+      if (flags.some((f) => f === 'd' || f === 'F' || f === 'T')) hasBody = true;
+      if (flags.at(-1) === 'X') method = (value ?? '').toUpperCase();
+      if (consumedNext) i += 1;
+    }
+  }
+  if (method === 'DELETE') return ['delete'];
+  if (method === 'GET' && !hasBody) return ['read'];
+  return ['write'];
+}
 
 /** Vercel: token from the dashboard (or imported from `vercel login`). No per-grant scoping API; scope enforced at the shim. */
 export class VercelAdapter implements ProviderAdapter {
@@ -55,6 +85,7 @@ export class VercelAdapter implements ProviderAdapter {
   scopeOfCommand(argv: string[]): Scope[] {
     const [cmd, sub] = commandHead(argv);
     if (isHelp(argv)) return ['read']; // before the bare-`vercel`-deploys rule
+    if (cmd === 'curl') return curlScope(argv.slice(1));
     if (cmd === 'remove' || cmd === 'rm' || (cmd === 'env' && sub === 'rm') || (cmd === 'domains' && sub === 'rm') || (cmd === 'projects' && sub === 'rm') || sub === 'rm' || sub === 'remove') return ['delete'];
     if (cmd === undefined || cmd === 'deploy' || cmd === 'promote' || cmd === 'rollback' || cmd === 'redeploy' || cmd === 'alias' || cmd === 'build') return ['deploy'];
     if (cmd === 'env' && (sub === 'add' || sub === 'pull')) return sub === 'pull' ? ['read'] : ['write'];

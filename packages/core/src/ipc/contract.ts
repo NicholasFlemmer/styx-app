@@ -42,6 +42,26 @@ const ok = z.object({});
 const idOut = <S extends z.ZodType>(key: string, schema: S) => z.object({ [key]: schema });
 
 const projectSettingsPatch = projectSettingsSchema.partial();
+
+/** sha256 (hex) of the canonical grant-policy summary of `.styx/project.json` (H-1 trust gate). */
+export const policyHashSchema = z.string().regex(/^[0-9a-f]{64}$/);
+export const projectPolicySummarySchema = z.object({
+  rules: z.array(
+    z.object({ id: z.string(), rule: policyRuleSchema, ruleText: z.string(), enabled: z.boolean().optional() }),
+  ),
+  targets: z.array(
+    z.object({ key: z.string(), policy: targetPolicySchema.nullable(), config: jsonObjectSchema }),
+  ),
+});
+export type ProjectPolicySummary = z.infer<typeof projectPolicySummarySchema>;
+export const projectPolicyDiffSchema = z.object({
+  rules: z.object({ added: z.array(z.string()), removed: z.array(z.string()), changed: z.array(z.string()) }),
+  targets: z.array(
+    z.object({ target: z.string(), from: targetPolicySchema.nullable(), to: targetPolicySchema.nullable() }),
+  ),
+  configChanged: z.array(z.string()),
+});
+export type ProjectPolicyDiff = z.infer<typeof projectPolicyDiffSchema>;
 const projectSettingsKey = z.enum(
   Object.keys(projectSettingsSchema.shape) as [
     keyof typeof projectSettingsSchema.shape,
@@ -132,6 +152,24 @@ export const commands = {
   'project.settings.set': {
     input: z.object({ projectId: projectIdSchema, patch: projectSettingsPatch }),
     output: ok,
+  },
+  /**
+   * Trust gate for repo-authored grant policy (`policies.extra`, `targets[].policy`): records the file's current policy
+   * hash as accepted for this machine, applies it, clears the `project-policy:<projectId>` banner and audits the diff.
+   */
+  'project.policy.accept': {
+    input: z.object({ projectId: projectIdSchema, hash: policyHashSchema }),
+    output: ok,
+  },
+  /** What the file currently asks for, its hash (pass it to `project.policy.accept`) and the diff against the accepted set. */
+  'project.policy.pending': {
+    input: z.object({ projectId: projectIdSchema }),
+    output: z.object({
+      hash: policyHashSchema,
+      accepted: z.boolean(),
+      summary: projectPolicySummarySchema,
+      diff: projectPolicyDiffSchema,
+    }),
   },
   'project.settings.reset': {
     input: z.object({ projectId: projectIdSchema, key: projectSettingsKey }),
@@ -448,13 +486,15 @@ export const events = {
   }),
   'banner.set': z.object({
     bannerKey: z.string().min(1),
-    kind: z.enum(['auth-expired', 'cli-missing', 'conflict']),
+    kind: z.enum(['auth-expired', 'cli-missing', 'conflict', 'project-policy']),
     text: z.string(),
     cta: z.string(),
     action: z.discriminatedUnion('kind', [
       z.object({ kind: z.literal('reconnect'), targetId: targetIdSchema }),
       z.object({ kind: z.literal('install-guide'), agent: agentSchema }),
       z.object({ kind: z.literal('resolve'), worktreeId: worktreeIdSchema }),
+      /** `.styx/project.json` wants to change grant policies: review in Settings › Project targets (H-1 trust gate). */
+      z.object({ kind: z.literal('review-project-policy'), projectId: projectIdSchema, hash: policyHashSchema }),
     ]),
     sessionId: sessionIdSchema.nullable(),
     reason: pausedReasonSchema.nullable(),

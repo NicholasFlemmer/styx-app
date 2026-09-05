@@ -267,6 +267,31 @@ describe('BrokerHost security regressions', () => {
     client.close();
   });
 
+  it('L-c: exec_authorize refuses expired or unconnected targets before opening a request, like request_access', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const prod = app.app.repos.targets.get(ids.target.supabaseProd);
+    if (!prod?.credentialRef) throw new Error('fixture');
+    const before = app.app.repos.grants.all().length;
+    app.app.repos.targets.upsert({ ...prod, health: 'expired', expiredAt: app.clock.now() });
+    await expect(client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' })).rejects.toMatchObject({
+      code: ErrorCode.notAllowed,
+      message: expect.stringContaining('expired'),
+    });
+    await expect(client.call('request_access', { target: 'supabase-prod', scope: ['read'], reason: 'r', waitMs: 0 })).rejects.toMatchObject({
+      code: ErrorCode.notAllowed,
+    });
+    app.app.repos.targets.upsert({ ...prod, credentialRef: null, health: 'unconnected' });
+    await expect(client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' })).rejects.toMatchObject({
+      code: ErrorCode.notAllowed,
+      message: expect.stringContaining('not connected'),
+    });
+    await expect(client.call('request_access', { target: 'supabase-prod', scope: ['read'], reason: 'r', waitMs: 0 })).rejects.toMatchObject({
+      code: ErrorCode.notAllowed,
+    });
+    expect(app.app.repos.grants.all().length).toBe(before); // no grant row was opened
+    client.close();
+  });
+
   it('held exec requests resolved as `always` grants attribute the use to the holding session', async () => {
     const { t: app, client } = await connectedClient(ids.session.gemini);
     const prod = app.app.repos.targets.get(ids.target.supabaseProd);

@@ -1,24 +1,33 @@
 import { makeCredentialRef } from '../services/credential-vault';
 import type { AdapterDeps, ConnectInput, GrantInfo, IssuedCredential, ProviderAdapter, Scope, TargetInfo, TestResult } from './types';
-import { commandHead, hasVerb, isHelp } from './types';
+import { commandHead, hasVerb, isHelp, shortFlags } from './types';
 
 /** Read-only `gh <group> <verb>` verbs; anything else defaults to write. */
 const GH_READ_VERBS = new Set(['view', 'list', 'ls', 'status', 'diff', 'checks', 'download', 'watch', 'search', 'browse', 'clone', 'get', 'verify', 'token']);
 
-/** `gh api [-X METHOD] …`: the method decides (GET when absent, but any body field makes gh POST). */
+/**
+ * `gh api [-X METHOD] …`: the method decides (GET when absent), but any body token makes gh POST. Body tokens:
+ * `-f k=v` / `-F k=v`, their attached forms `-fk=v` / `-Fk=v`, clustered forms (`-if k=v`), `--field` /
+ * `--raw-field` / `--input` (bare or `=`). `-X` is read attached, clustered (`-iX DELETE`) or separate.
+ * Only GET/HEAD with no body is a read.
+ */
 function apiScope(rest: string[]): Scope[] {
   let method = 'GET';
   let hasBody = false;
   for (let i = 0; i < rest.length; i += 1) {
     const a = rest[i] ?? '';
-    if (a === '-X' || a === '--method') method = (rest[i + 1] ?? '').toUpperCase();
-    else if (/^(-X|--method)=/.test(a)) method = a.replace(/^(-X|--method)=/, '').toUpperCase();
-    else if (/^(-X|--method)./.test(a) && !a.startsWith('--')) method = a.slice(2).toUpperCase();
-    else if (/^(-f|-F|--field|--raw-field|--input)(=|$)/.test(a)) hasBody = true;
+    if (a === '--method') method = (rest[i + 1] ?? '').toUpperCase();
+    else if (a.startsWith('--method=')) method = a.slice('--method='.length).toUpperCase();
+    else if (/^--(field|raw-field|input)(=|$)/.test(a)) hasBody = true;
+    else if (a.startsWith('-') && !a.startsWith('--')) {
+      const { flags, value, consumedNext } = shortFlags(a, rest[i + 1], 'XfFHq');
+      if (flags.includes('f') || flags.includes('F')) hasBody = true;
+      if (flags.at(-1) === 'X') method = (value ?? '').toUpperCase();
+      if (consumedNext) i += 1;
+    }
   }
   if (method === 'DELETE') return ['delete'];
-  if (method === 'GET' && !hasBody) return ['read'];
-  if (method === 'HEAD') return ['read'];
+  if ((method === 'GET' || method === 'HEAD') && !hasBody) return ['read'];
   return ['write'];
 }
 

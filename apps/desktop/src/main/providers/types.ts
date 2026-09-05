@@ -98,3 +98,29 @@ export function commandHead(argv: string[]): string[] {
 export function isHelp(argv: string[]): boolean {
   return argv.length === 0 || argv.some((a) => a === '--help' || a === '-h' || a === '--version' || a === '-v') || argv[0] === 'help' || argv[0] === 'version';
 }
+
+/**
+ * Walks a single-dash short-option cluster (`-iX`, `-sXDELETE`, `-if title=x`, `-Fname=@x`) the way pflag/getopt do:
+ * every letter is a flag until a value-taking one (`takesValue`) is hit, whose value is the rest of the arg or, when
+ * empty, the next argv token. Returns the value-taking letters seen and the value of the last one. Unknown letters
+ * are stepped over so a flag hidden behind a boolean (`-iX`) is never missed (fail closed).
+ */
+export function shortFlags(
+  arg: string,
+  next: string | undefined,
+  takesValue: string,
+): { flags: string[]; value: string | null; consumedNext: boolean } {
+  if (!/^-[^-]/.test(arg)) return { flags: [], value: null, consumedNext: false };
+  const flags: string[] = [];
+  for (let i = 1; i < arg.length; i += 1) {
+    const c = arg[i] ?? '';
+    if (takesValue.includes(c)) {
+      flags.push(c);
+      const rest = arg.slice(i + 1);
+      if (rest !== '') return { flags, value: rest, consumedNext: false };
+      return { flags, value: next ?? '', consumedNext: next !== undefined };
+    }
+    flags.push(c);
+  }
+  return { flags, value: null, consumedNext: false };
+}

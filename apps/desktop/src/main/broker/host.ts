@@ -121,6 +121,13 @@ export class BrokerHost {
     const t = this.deps.repos.targets.resolve(ctx.session.projectId, name);
     if (!t)
       throw new BrokerError(ErrorCode.targetNotFound, `no target "${name}" in ${ctx.session.projectName}`);
+    return this.usable(t);
+  }
+
+  /** A target an agent may open a request on: connected and not expired (both `request_access` and `exec_authorize`, L-c). */
+  private usable(t: Target): Target {
+    if (t.credentialRef === null)
+      throw new BrokerError(ErrorCode.notAllowed, `${t.name} is not connected; connect it in Styx`);
     if (t.health === 'expired')
       throw new BrokerError(ErrorCode.notAllowed, `${t.name} credentials expired; reconnect it in Styx`);
     return t;
@@ -225,12 +232,13 @@ export class BrokerHost {
       const scopes = adapter.scopeOfCommand(p.argv, p.tool) as Scope[];
       // Persisted as grants.reason / grant_uses.command / audit triggered_by: never the raw argv (M1).
       const command = redact(`$ ${[p.tool, ...redactArgv(p.argv)].join(' ')}`);
-      const target = this.pickTarget(ctx, adapter.provider, p.argv, scopes);
-      if (!target)
+      const picked = this.pickTarget(ctx, adapter.provider, p.argv, scopes);
+      if (!picked)
         throw new BrokerError(
           ErrorCode.targetNotFound,
           `no ${adapter.provider} target in ${ctx.session.projectName}`,
         );
+      const target = this.usable(picked);
       const covering = deps.grants.covering(target, ctx.session.sessionId, scopes);
       if (covering) {
         // Through credentialFor so a persistent grant issued before a restart is re-issued (project-bound, M3).

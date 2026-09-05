@@ -181,6 +181,24 @@ describe('scope classification fails closed (M2)', () => {
     expect(gh.scopeOfCommand(['api', '--method=POST', 'repos/a/b/issues'])).toEqual(['write']);
     expect(gh.scopeOfCommand(['api', '--method', 'patch', 'x'])).toEqual(['write']);
     expect(gh.scopeOfCommand(['api', 'repos/a/b/issues', '-f', 'title=x'])).toEqual(['write']);
+    // M-1: attached shorthand bodies (`-ftitle=x`, `-Fk=v`) and `--input` make gh POST; HEAD with a body is a write too.
+    expect(gh.scopeOfCommand(['api', 'repos/a/b', '-ftitle=x'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['api', 'repos/a/b', '-Fk=v'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['api', 'repos/a/b', '--field=k=v'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['api', 'repos/a/b', '--raw-field', 'k=v'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['api', 'repos/a/b', '--input', 'body.json'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['api', '-X', 'HEAD', 'repos/a/b', '-f', 'k=v'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['api', '-X', 'HEAD', 'repos/a/b'])).toEqual(['read']);
+    expect(gh.scopeOfCommand(['api', '-XDELETE', 'repos/a/b'])).toEqual(['delete']);
+    expect(gh.scopeOfCommand(['api', 'repos/a/b', '--paginate', '--jq', '.name'])).toEqual(['read']);
+    // Short-option clusters (pflag): a flag behind a boolean is still seen.
+    expect(gh.scopeOfCommand(['api', '-iX', 'DELETE', 'repos/a/b'])).toEqual(['delete']);
+    expect(gh.scopeOfCommand(['api', '-iXPATCH', 'repos/a/b'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['api', '-if', 'title=x', 'repos/a/b'])).toEqual(['write']);
+    expect(gh.scopeOfCommand(['api', '-i', 'repos/a/b'])).toEqual(['read']);
+    expect(gh.scopeOfCommand(['api', '-H', 'Accept: x', 'repos/a/b'])).toEqual(['read']);
+    expect(gh.scopeOfCommand(['api', '-HX-Custom: y', 'repos/a/b'])).toEqual(['read']); // header value, not a method
+    expect(gh.scopeOfCommand(['api', '-XGET', 'repos/a/b', '-f', 'k=v'])).toEqual(['write']);
     expect(gh.scopeOfCommand(['secret', 'set', 'X'])).toEqual(['write']);
     expect(gh.scopeOfCommand(['secret', 'list'])).toEqual(['read']);
     expect(gh.scopeOfCommand(['variable', 'set', 'X'])).toEqual(['write']);
@@ -202,6 +220,30 @@ describe('scope classification fails closed (M2)', () => {
     expect(v.scopeOfCommand(['env', 'ls'])).toEqual(['read']);
     expect(v.scopeOfCommand(['domains', 'inspect', 'x'])).toEqual(['read']);
     expect(v.scopeOfCommand(['--help'])).toEqual(['read']);
+    // M-2: `vercel curl` proxies arbitrary API calls; the method and body decide, never a blanket read.
+    expect(v.scopeOfCommand(['curl', '/v9/projects'])).toEqual(['read']);
+    expect(v.scopeOfCommand(['curl', '-X', 'DELETE', '/v9/projects/x'])).toEqual(['delete']);
+    expect(v.scopeOfCommand(['curl', '--request=delete', '/v9/projects/x'])).toEqual(['delete']);
+    expect(v.scopeOfCommand(['curl', '-XPOST', '/v10/projects'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '--request', 'PATCH', '/v9/projects/x'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '/v9/projects', '-d', '{"name":"x"}'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '/v9/projects', '-d{"name":"x"}'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '/v9/projects', '--data-raw', '{}'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '/v9/projects', '--json', '{}'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '/v9/files', '-F', 'file=@x'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '/v9/files', '--form-string', 'a=b'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '/v9/files', '-T', 'x.bin'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '/v9/files', '--upload-file=x.bin'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '-sX', 'DELETE', '/v9/projects/x'])).toEqual(['delete']);
+    expect(v.scopeOfCommand(['curl', '-sXDELETE', '/v9/projects/x'])).toEqual(['delete']);
+    expect(v.scopeOfCommand(['curl', '/v9/p', '-sd', '{}'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '/v9/p', '-Fname=@x'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '/v9/p', '-Tfile'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '/v9/p', '-d@body.json'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '/v9/p', '--data-binary', '@f'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '-XGET', '/v9/p', '-d', 'q=1'])).toEqual(['write']);
+    expect(v.scopeOfCommand(['curl', '-s', '-H', 'Accept: json', '/v9/p'])).toEqual(['read']);
+    expect(v.scopeOfCommand(['curl', '-sI', '/v9/p'])).toEqual(['read']);
     const s = new SupabaseAdapter(d);
     expect(s.scopeOfCommand(['brand-new', 'thing'])).toEqual(['write']);
     expect(s.scopeOfCommand(['db', 'diff'])).toEqual(['read']);

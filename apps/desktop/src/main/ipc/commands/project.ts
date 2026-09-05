@@ -76,6 +76,13 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
     return {};
   });
 
+  bus.register('project.policy.accept', async ({ projectId, hash }) => {
+    await projects.acceptPolicies(projectId, hash);
+    return {};
+  });
+
+  bus.register('project.policy.pending', ({ projectId }) => projects.pendingPolicy(projectId));
+
   bus.register('project.settings.reset', async ({ projectId, key }) => {
     if (!(key in DEFAULT_PROJECT_SETTINGS)) fail('invalid-input', `unknown setting ${key}`);
     await projects.resetSetting(projectId, key);

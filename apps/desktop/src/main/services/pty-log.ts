@@ -13,8 +13,26 @@ import { join } from 'node:path';
 import { logger, redact } from './logger';
 
 export const PTY_LOG_MAX_BYTES = 5 * 1024 * 1024;
-/** Longer than any secret shape `redact()` recognises (short of PEM blocks): how much on-disk text is re-scanned with the next chunk. */
-const REDACT_TAIL = 128;
+/**
+ * How much on-disk text is re-scanned together with the next chunk so a secret split across chunks is still caught:
+ * longer than any single-line secret shape `redact()` recognises, including a pasted JWT (L-a). PEM blocks longer
+ * than this can still slip through when a chunk boundary lands inside them.
+ */
+export const REDACT_TAIL = 4096;
+
+/** Last `REDACT_TAIL` chars, never starting on the low half of a surrogate pair (its byte length must match the file). */
+const tailOf = (text: string): string => {
+  let tail = text.slice(-REDACT_TAIL);
+  const first = tail.charCodeAt(0);
+  if (first >= 0xdc00 && first <= 0xdfff) tail = tail.slice(1);
+  return tail;
+};
+
+/** `String.prototype.toWellFormed` (ES2024; Node ≥ 20) behind the ES2023 lib target. */
+const wellFormed = (text: string): string => {
+  const fn = (text as unknown as { toWellFormed?: () => string }).toWellFormed;
+  return typeof fn === 'function' ? fn.call(text) : text;
+};
 
 interface OpenLog {
   fd: number;
@@ -48,6 +66,9 @@ export class PtyLog {
   write(sessionId: string, raw: string): void {
     try {
       const f = this.file(sessionId);
+      // A surrogate pair split across pty chunks would otherwise re-join in `tail` (4 bytes) while the file holds two
+      // U+FFFD (6 bytes) and the byte accounting behind every truncation would drift.
+      raw = wellFormed(raw);
       const chunk = redact(raw);
       const joined = redact(f.tail + raw);
       if (joined === f.tail + chunk) {
@@ -81,16 +102,23 @@ export class PtyLog {
     if (data === '') return;
     const bytes = Buffer.byteLength(data);
     if (f.size + bytes > this.maxBytes) {
+      // The tail moves into the new file (truncated off the rotated one) so a secret straddling the rotation
+      // boundary is rewritten in one place; the rotated file ends where the carried tail begins (L-a).
+      const tailBytes = Buffer.byteLength(f.tail);
+      ftruncateSync(f.fd, Math.max(0, f.size - tailBytes));
       closeSync(f.fd);
       const p = this.path(sessionId);
       renameSync(p, `${p}.1`);
       f.fd = openSync(p, 'a');
       f.size = 0;
-      f.tail = ''; // the old tail lives in the rotated file; boundary fix-ups never reach across files
+      if (f.tail !== '') {
+        writeSync(f.fd, f.tail);
+        f.size = tailBytes;
+      }
     }
     writeSync(f.fd, data);
     f.size += bytes;
-    f.tail = (f.tail + data).slice(-REDACT_TAIL);
+    f.tail = tailOf(f.tail + data);
   }
 
   close(sessionId: string): void {

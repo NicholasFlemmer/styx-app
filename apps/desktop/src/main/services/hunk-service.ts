@@ -7,6 +7,7 @@ import {
   type Worktree,
   type WorktreeId,
 } from '@styx/core';
+import { normalize } from 'node:path';
 import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
 import { fail } from '../ipc/bus';
@@ -15,6 +16,13 @@ import type { GitService } from './git';
 import { logger } from './logger';
 
 export const HUNK_DEBOUNCE_MS = 300;
+
+/**
+ * `.styx/project.json` carries grant policy (H-1): its hunks are never swept up by a bulk or automatic accept and
+ * an `autoApproveEdits` session still asks before an agent edits it. Accept them one at a time in the diff view.
+ */
+export const isPolicyFile = (file: string): boolean =>
+  /(^|\/)\.styx\/project\.json$/i.test(normalize(file).replace(/\\/g, '/'));
 
 export interface FsWatcherLike {
   on(event: 'all', cb: (event: string, path: string) => void): unknown;
@@ -210,10 +218,11 @@ export class HunkService {
     await this.rescanWorktree(worktree.id, hunk.sessionId);
   }
 
+  /** Accepts every pending hunk except those touching `.styx/project.json` (they stay pending for an explicit accept). */
   async acceptAll(sessionId: string): Promise<number> {
     let n = 0;
     for (const h of this.deps.repos.agentChanges.bySession(sessionId)) {
-      if (h.status !== 'pending') continue;
+      if (h.status !== 'pending' || isPolicyFile(h.file)) continue;
       await this.accept(h.id);
       n += 1;
     }

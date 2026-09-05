@@ -31,6 +31,7 @@ import type { Publisher } from '../store/publisher';
 import type { DetectService } from './detect-service';
 import type { GitService } from './git';
 import { worktreeLocation } from './git';
+import { isPolicyFile } from './hunk-service';
 import { logger, redact } from './logger';
 import type { NotificationService } from './notification-service';
 import type { PtyLog } from './pty-log';
@@ -542,7 +543,14 @@ export class SessionService {
     toolName: string,
     input: Record<string, unknown>,
   ): void {
-    if (s.toggles.autoApproveEdits && EDIT_TOOL.test(toolName)) {
+    const editPath =
+      typeof input['file_path'] === 'string'
+        ? input['file_path']
+        : typeof input['notebook_path'] === 'string'
+          ? input['notebook_path']
+          : '';
+    // Edits to `.styx/project.json` (grant policy) are never auto-approved, whatever the toggle says (H-1).
+    if (s.toggles.autoApproveEdits && EDIT_TOOL.test(toolName) && !isPolicyFile(editPath)) {
       this.deps.stream.respondPermission(s.id, requestId, true);
       return;
     }

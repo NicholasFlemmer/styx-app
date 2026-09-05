@@ -49,11 +49,13 @@ export const projectFileAgentsSchema = z
   })
   .passthrough();
 
+/** Rule ids land in audit rows and `ui_state`; keep them plain and short. */
+export const PROJECT_POLICY_ID_PATTERN = /^[A-Za-z0-9._:-]{1,64}$/;
 export const projectFilePolicySchema = z
   .object({
-    id: z.string().min(1),
+    id: z.string().regex(PROJECT_POLICY_ID_PATTERN, 'policy id: letters, digits, . _ : - only (max 64)'),
     rule: policyRuleSchema,
-    ruleText: z.string().min(1),
+    ruleText: z.string().min(1).max(200),
     enabled: z.boolean().optional(),
   })
   .passthrough();

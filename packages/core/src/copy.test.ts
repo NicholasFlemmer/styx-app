@@ -27,6 +27,8 @@ describe('copy (spec §10 verbatim)', () => {
 
   it('a11y-only strings (spec §9, not §10) keep the spec tone', () => {
     expect(copy.settings.rows.screenReader).toBe('Screen reader mode');
+    expect(copy.palette.resultsLabel).toBe('Results');
+    expect(copy.targets.acceptProjectPolicies).toBe('Accept project policies');
     expect(copy.onboarding.stepsLabel).toBe('Steps');
   });
 

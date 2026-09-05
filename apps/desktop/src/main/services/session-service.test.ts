@@ -275,6 +275,26 @@ describe('SessionService spawn + stream runner', () => {
     expect(a.sessions.get(session.id)?.state).toBe('done');
   });
 
+  it('H-1: autoApproveEdits never auto-approves an edit to .styx/project.json', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn({
+      ...spawnInput('claude', ids.worktree.featPromo),
+      toggles: { autoApproveEdits: true, mayRequestTargets: true, notifyWhenNeedsMe: true },
+    });
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'p1',
+      toolName: 'Write',
+      input: { file_path: '/repo/.styx/project.json' },
+    });
+    expect(stream.permissions).toEqual([]);
+    expect(a.sessions.get(session.id)?.state).toBe('needs-you');
+    expect(a.repos.pendingAsks.openBySession(session.id)[0]?.payload).toMatchObject({
+      kind: 'decision',
+      prompt: 'Write: /repo/.styx/project.json',
+    });
+  });
+
   it('spawn failure (ENOENT) pauses the session with cli-missing and a banner', async () => {
     const { app: a, win } = app();
     stream.failNext = Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' });

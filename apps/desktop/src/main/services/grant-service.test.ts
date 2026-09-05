@@ -1,4 +1,7 @@
-import { fixtures, targetDerivedState, tableFrom, type ReadModel, type ReadModelSnapshot } from '@styx/core';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fixtures, targetDerivedState, tableFrom, type ProjectFileV1, type ReadModel, type ReadModelSnapshot } from '@styx/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
 
@@ -324,5 +327,65 @@ describe('GrantService security regressions', () => {
     expect(out.grant.reason).toBe('use [redacted]');
     const dump = JSON.stringify([t.app.repos.audit.all(), t.app.repos.transcripts.last(ids.session.gemini), t.app.repos.grants.get(out.grant.id)]);
     expect(dump).not.toContain(ghp);
+  });
+});
+
+describe('GrantService project-file trust gate (H-1)', () => {
+  it('a repo-authored `auto-approve github always` rule asks until project.policy.accept, then auto-issues', async () => {
+    const t = makeTestApp();
+    const file: ProjectFileV1 = {
+      version: 1,
+      name: 'acme-shop',
+      policies: {
+        extra: [
+          {
+            id: 'gh-all',
+            rule: { kind: 'auto-approve', match: { provider: ['github'] }, scopes: ['read', 'write'], duration: 'always' },
+            ruleText: 'Auto-approve GitHub',
+          },
+        ],
+      },
+    };
+    const dir = mkdtempSync(join(tmpdir(), 'styx-h1-'));
+    mkdirSync(join(dir, '.styx'));
+    writeFileSync(join(dir, '.styx', 'project.json'), JSON.stringify(file));
+    const project = t.app.repos.projects.get(ids.project.acmeShop);
+    if (!project) throw new Error('fixture project');
+    t.app.repos.projects.upsert({ ...project, path: dir });
+    const target = t.app.repos.targets.get(ids.target.github);
+    if (!target?.credentialRef) throw new Error('fixture target');
+    t.app.repos.targets.upsert({ ...target, policy: 'ask', policySource: 'app' });
+    await t.vault.set(target.credentialRef, JSON.stringify({ token: 'gh-token' }));
+    const req = () =>
+      t.app.grants.request({
+        sessionId: ids.session.gemini,
+        targetId: ids.target.github,
+        scope: ['write'],
+        reason: '$ gh pr merge 1',
+        triggeredBy: '$ gh pr merge 1',
+      });
+
+    // Fresh clone: the file's hash is not accepted on this machine → the rule is advisory and the request asks.
+    expect(t.app.projects.projectPolicyTrusted(project.id)).toBe(false);
+    const first = await req();
+    expect(first.kind).toBe('pending');
+    if (first.kind !== 'pending') return;
+    const requested = t.app.repos.audit.all().find((e) => e.action === 'requested' && e.grantId === first.grant.id);
+    expect(requested?.detail).toMatchObject({ projectRule: 'project:gh-all' }); // still cited, downgraded to ask
+    t.app.grants.deny(first.grant.id);
+
+    const { hash } = await t.app.projects.pendingPolicy(project.id);
+    const r = await t.app.bus.dispatch(t.sender, 'project.policy.accept', { projectId: project.id, hash });
+    expect(r).toEqual({ ok: true, value: {} });
+    expect(t.app.projects.projectPolicyTrusted(project.id)).toBe(true);
+    const second = await req();
+    expect(second).toMatchObject({ kind: 'active', decidedBy: 'policy', grant: { state: 'active', duration: 'always' } });
+
+    // Editing the file (new hash) drops back to untrusted until accepted again.
+    writeFileSync(
+      join(dir, '.styx', 'project.json'),
+      JSON.stringify({ ...file, policies: { extra: [{ ...file.policies!.extra![0]!, ruleText: 'changed' }] } }),
+    );
+    expect(t.app.projects.projectPolicyTrusted(project.id)).toBe(false);
   });
 });

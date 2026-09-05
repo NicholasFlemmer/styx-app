@@ -10,6 +10,8 @@ export const copy = {
   palette: {
     /** Accessible name of the palette dialog (not rendered). */
     dialogLabel: 'Command palette',
+    /** Accessible name of the results listbox (not rendered). */
+    resultsLabel: 'Results',
     placeholder: 'switch, spawn, deploy, grant, diff…',
     titlebarField: 'Switch, spawn, deploy, grant…',
     groups: { actions: 'Actions', agents: 'Agents', projects: 'Projects' },
@@ -194,6 +196,8 @@ export const copy = {
       open: 'open · {t} left',
     },
     actions: { revoke: 'Revoke', edit: 'Edit', connect: 'Connect' },
+    /** Settings › Targets affordance for repo-authored grant policies (security audit H-1). */
+    acceptProjectPolicies: 'Accept project policies',
     statusBar: {
       open: '{target} · open {t}',
       locked: '{target} · locked',
@@ -235,6 +239,11 @@ export const copy = {
     conflict: {
       text: '{branch} conflicts with main in {file}. {agent} is paused until resolved.',
       cta: 'Resolve',
+    },
+    /** Repo-authored grant policy is advisory until accepted on this machine (security audit H-1). */
+    projectPolicyUntrusted: {
+      text: "{project}'s .styx/project.json wants to change grant policies. Review in Settings.",
+      cta: 'Review',
     },
     spawnCliMissing: '{cli} CLI not found on PATH.',
     locateBinary: 'Locate binary',

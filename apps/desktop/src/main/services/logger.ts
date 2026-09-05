@@ -72,9 +72,10 @@ export function redactArgv(argv: readonly string[]): string[] {
   return out;
 }
 
+/** Every log line passes through `redact()`: the message too, since callers interpolate error text into it (L-b). */
 export const logger = {
-  info: (msg: string, meta?: unknown) => log.info(msg, meta === undefined ? '' : redact(meta)),
-  warn: (msg: string, meta?: unknown) => log.warn(msg, meta === undefined ? '' : redact(meta)),
-  error: (msg: string, meta?: unknown) => log.error(msg, meta === undefined ? '' : redact(meta)),
-  debug: (msg: string, meta?: unknown) => log.debug(msg, meta === undefined ? '' : redact(meta)),
+  info: (msg: string, meta?: unknown) => log.info(redact(msg), meta === undefined ? '' : redact(meta)),
+  warn: (msg: string, meta?: unknown) => log.warn(redact(msg), meta === undefined ? '' : redact(meta)),
+  error: (msg: string, meta?: unknown) => log.error(redact(msg), meta === undefined ? '' : redact(meta)),
+  debug: (msg: string, meta?: unknown) => log.debug(redact(msg), meta === undefined ? '' : redact(meta)),
 };

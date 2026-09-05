@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { redact, redactArgv } from './logger';
+import { describe, expect, it, vi } from 'vitest';
+import log from 'electron-log/main';
+import { logger, redact, redactArgv } from './logger';
+
+vi.mock('electron-log/main', () => ({
+  default: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
 
 describe('redact', () => {
   it('masks secret-named keys and secret-shaped strings', () => {
@@ -29,5 +34,19 @@ describe('redactArgv', () => {
     expect(redactArgv(['env', 'add', 'K', '--value=npm_abc'])).toEqual(['env', 'add', 'K', '--value=[redacted]']);
     expect(redact(`login sbp_${'a'.repeat(40)} sk_live_${'b'.repeat(24)} sk_test_${'c'.repeat(24)} gho_${'d'.repeat(36)} xoxa-1-2`)).toBe('login [redacted] [redacted] [redacted] [redacted] [redacted]');
     expect(redact(`eyJ${'a'.repeat(20)}.eyJ${'b'.repeat(20)}.${'c'.repeat(20)}`)).toBe('[redacted]');
+  });
+});
+
+describe('logger', () => {
+  it('L-b: redacts the message as well as the meta on every level', () => {
+    const ghp = `ghp_${'a'.repeat(36)}`;
+    logger.info(`token ${ghp} rejected`, { token: 'x', ok: 'fine' });
+    logger.warn(`AKIAABCDEFGHIJKLMNOP failed`);
+    logger.error(`key ${ghp}`, { nested: { password: 'p' } });
+    logger.debug(`sbp_${'b'.repeat(24)}`, ['gho_' + 'c'.repeat(36)]);
+    expect(vi.mocked(log.info)).toHaveBeenCalledWith('token [redacted] rejected', { token: '[redacted]', ok: 'fine' });
+    expect(vi.mocked(log.warn)).toHaveBeenCalledWith('[redacted] failed', '');
+    expect(vi.mocked(log.error)).toHaveBeenCalledWith('key [redacted]', { nested: { password: '[redacted]' } });
+    expect(vi.mocked(log.debug)).toHaveBeenCalledWith('[redacted]', ['[redacted]']);
   });
 });

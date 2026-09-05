@@ -1,8 +1,11 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import {
+  copy,
+  fill,
   idFrom,
   newId,
   parseProjectFile,
@@ -13,6 +16,8 @@ import {
   type Project,
   type ProjectFileV1,
   type ProjectId,
+  type ProjectPolicyDiff,
+  type ProjectPolicySummary,
   type ProjectSettings,
   type Repo,
   type Target,
@@ -29,7 +34,7 @@ import type { ActivityService } from './activity-service';
 import type { AuditService } from './audit-service';
 import type { GitService } from './git';
 import { auditContext } from './labels';
-import { logger } from './logger';
+import { logger, redact } from './logger';
 
 export interface ProjectServiceDeps {
   repos: Repos;
@@ -99,38 +104,148 @@ const PROJECT_KEYS: (keyof ProjectSettings)[] = [
   'envShareWithAgents',
 ];
 
+/**
+ * Machine-local acceptance record, stored in `ui_state` under `project-policy-accepted:<projectId>` (H-1 trust gate).
+ * The summary is the grant-relevant part of `.styx/project.json`: `policies.extra` (file order) and, per target
+ * keyed by `(provider, env, name)`, its `policy` and `config` (config steers where a credential points).
+ */
+export interface AcceptedProjectPolicy {
+  hash: string;
+  summary: ProjectPolicySummary;
+}
+
+export const PROJECT_POLICY_BANNER_PREFIX = 'project-policy:';
+const acceptedKey = (projectId: string): string => `project-policy-accepted:${projectId}`;
+export const targetKey = (t: { provider: string; env: string; name: string }): string =>
+  `${t.provider}/${t.env}/${t.name}`;
+
+export const policySummaryOf = (file: ProjectFileV1): ProjectPolicySummary => ({
+  rules: (file.policies?.extra ?? []).map((p) => ({ id: p.id, rule: p.rule, ruleText: p.ruleText, ...(p.enabled !== undefined ? { enabled: p.enabled } : {}) })),
+  targets: (file.targets ?? [])
+    .map((t) => ({ key: targetKey(t), policy: t.policy ?? null, config: t.config ?? {} }))
+    .sort((a, b) => a.key.localeCompare(b.key)),
+});
+
+export const policyHashOf = (summary: ProjectPolicySummary): string =>
+  createHash('sha256').update(JSON.stringify(summary)).digest('hex');
+
+/** A file that sets no grant policy and no target config has nothing to trust: it is never gated. */
+export const hasPolicyContent = (s: ProjectPolicySummary): boolean =>
+  s.rules.length > 0 || s.targets.some((t) => t.policy !== null || Object.keys(t.config).length > 0);
+
+/** What accepting changes, for the `policy-changed` audit row and the Settings review row. */
+export const policyDiff = (before: ProjectPolicySummary | null, after: ProjectPolicySummary): ProjectPolicyDiff => {
+  const prevRules = new Map((before?.rules ?? []).map((r) => [r.id, JSON.stringify(r)]));
+  const nextRules = new Map(after.rules.map((r) => [r.id, JSON.stringify(r)]));
+  const rules = { added: [] as string[], removed: [] as string[], changed: [] as string[] };
+  for (const [id, json] of nextRules) {
+    const prev = prevRules.get(id);
+    if (prev === undefined) rules.added.push(id);
+    else if (prev !== json) rules.changed.push(id);
+  }
+  for (const id of prevRules.keys()) if (!nextRules.has(id)) rules.removed.push(id);
+  const prevTargets = new Map((before?.targets ?? []).map((t) => [t.key, t]));
+  const nextTargets = new Map(after.targets.map((t) => [t.key, t]));
+  const targets: ProjectPolicyDiff['targets'] = [];
+  const configChanged: string[] = [];
+  for (const key of new Set([...prevTargets.keys(), ...nextTargets.keys()])) {
+    const from = prevTargets.get(key)?.policy ?? null;
+    const to = nextTargets.get(key)?.policy ?? null;
+    if (from !== to) targets.push({ target: key, from, to });
+    if (JSON.stringify(prevTargets.get(key)?.config ?? {}) !== JSON.stringify(nextTargets.get(key)?.config ?? {}))
+      configChanged.push(key);
+  }
+  return { rules, targets, configChanged };
+};
+
+/**
+ * Untrusted file rules are advisory: `auto-approve` becomes `ask` (same id, so the audit still cites it) and
+ * `idle-expiry` is dropped (it could only lengthen grant lifetimes). `ask` rules only tighten and pass through.
+ */
+export const advisoryRules = (rules: readonly Policy[]): Policy[] =>
+  rules.flatMap((r) => {
+    if (r.rule.kind === 'auto-approve')
+      return [{ ...r, rule: { kind: 'ask' as const, match: r.rule.match, scopes: r.rule.scopes, requireMfa: false } }];
+    if (r.rule.kind === 'idle-expiry') return [];
+    return [r];
+  });
+
+interface CachedProjectFile {
+  mtime: number;
+  file: ProjectFileV1 | null;
+  hash: string;
+  summary: ProjectPolicySummary;
+  /** Engine rows when the file's policy hash is accepted on this machine. */
+  trustedRules: Policy[];
+  /** Engine rows otherwise (auto-approve → ask, idle-expiry dropped). */
+  untrustedRules: Policy[];
+}
+
 /** Projects, repos and the `.styx/project.json` reconcile (plan §4, §5). Never writes secrets to the file. */
 export class ProjectService {
-  private readonly rulesCache = new Map<string, { mtime: number; rules: Policy[] }>();
+  private readonly fileCache = new Map<string, CachedProjectFile>();
 
   constructor(private readonly deps: ProjectServiceDeps) {}
 
   /**
    * `.styx/project.json` `policies.extra` as core `Policy` rows for the policy engine's `projectRules` (evaluated after
-   * app rules). Read synchronously and cached by file mtime so a grant request never awaits disk.
+   * app rules). Read synchronously and cached by file mtime so a grant request never awaits disk. Until the file's
+   * policy hash is accepted on this machine (`project.policy.accept`) the rules are advisory only: a fresh clone can
+   * never auto-approve a grant by committing a rule (security audit H-1).
    */
   projectRules(projectId: string): Policy[] {
+    const cached = this.cachedFile(projectId);
+    if (!cached) return [];
+    return this.isAccepted(projectId, cached.summary, cached.hash) ? cached.trustedRules : cached.untrustedRules;
+  }
+
+  /** Whether the file's current grant policy is in force on this machine (no policy content counts as trusted). */
+  projectPolicyTrusted(projectId: string): boolean {
+    const cached = this.cachedFile(projectId);
+    return cached ? this.isAccepted(projectId, cached.summary, cached.hash) : true;
+  }
+
+  acceptedPolicy(projectId: string): AcceptedProjectPolicy | null {
+    return this.deps.repos.uiState.get<AcceptedProjectPolicy>(acceptedKey(projectId)) ?? null;
+  }
+
+  private isAccepted(projectId: string, summary: ProjectPolicySummary, hash: string): boolean {
+    if (!hasPolicyContent(summary)) return true;
+    return this.acceptedPolicy(projectId)?.hash === hash;
+  }
+
+  private cachedFile(projectId: string): CachedProjectFile | null {
     const project = this.deps.repos.projects.get(projectId);
-    if (!project) return [];
+    if (!project) return null;
     const file = join(project.path, PROJECT_FILE_PATH);
     let mtime: number;
     try {
       mtime = statSync(file).mtimeMs;
     } catch {
-      this.rulesCache.delete(projectId);
-      return [];
+      this.fileCache.delete(projectId);
+      return null;
     }
-    const cached = this.rulesCache.get(projectId);
-    if (cached && cached.mtime === mtime) return cached.rules;
-    let rules: Policy[] = [];
+    const cached = this.fileCache.get(projectId);
+    if (cached && cached.mtime === mtime) return cached;
+    let parsedFile: ProjectFileV1 | null = null;
     try {
       const parsed = parseProjectFile(readFileSync(file, 'utf8'));
-      if (parsed.ok) rules = projectFileRules(parsed.file, this.deps.clock.now());
+      if (parsed.ok) parsedFile = parsed.file;
     } catch (e) {
       logger.warn('project.json rules unreadable', { project: project.name, error: (e as Error).message });
     }
-    this.rulesCache.set(projectId, { mtime, rules });
-    return rules;
+    const summary = parsedFile ? policySummaryOf(parsedFile) : { rules: [], targets: [] };
+    const trustedRules = parsedFile ? projectFileRules(parsedFile, this.deps.clock.now()) : [];
+    const entry: CachedProjectFile = {
+      mtime,
+      file: parsedFile,
+      hash: policyHashOf(summary),
+      summary,
+      trustedRules,
+      untrustedRules: advisoryRules(trustedRules),
+    };
+    this.fileCache.set(projectId, entry);
+    return entry;
   }
 
   private get home(): string {
@@ -499,6 +614,7 @@ export class ProjectService {
         publisher.upsert('projects', [project.id]);
         publisher.settingsSet(undefined, { [project.id]: projectSettingsFor(repos, project.id) });
       }
+      this.clearPolicyBanner(project);
       return { ok: true, error: null };
     }
     const text = await readFile(file, 'utf8');
@@ -509,18 +625,27 @@ export class ProjectService {
     }
     const mtime = Math.round((await stat(file)).mtimeMs) || clock.now();
     repos.projects.setSettings(project.id, projectSettingsFromFile(parsed.file), mtime);
+    // Repo-authored grant policy is advisory until accepted on this machine: an unaccepted `targets[].policy` never
+    // lands on the row (the app value and `policySource: 'app'` stay), and the banner asks the user to review (H-1).
+    const summary = policySummaryOf(parsed.file);
+    const hash = policyHashOf(summary);
+    const trusted = this.isAccepted(project.id, summary, hash);
     const targetIds: string[] = [];
     const existing = repos.targets.byProject(project.id);
     for (const ft of parsed.file.targets ?? []) {
       const match = existing.find(
         (t) => t.provider === ft.provider && t.env === ft.env && t.name === ft.name,
       );
+      const filePolicy = trusted ? ft.policy : undefined;
+      // `config` steers where a credential points (host, project, ref): an untrusted file never re-points a
+      // connected target; unconnected rows take it so the Connect flow is pre-filled.
+      const fileConfig = trusted || !match || match.credentialRef === null ? (ft.config ?? {}) : {};
       const target: Target = match
         ? {
             ...match,
-            config: { ...match.config, ...(ft.config ?? {}) },
-            policy: ft.policy ?? match.policy,
-            policySource: ft.policy ? 'project' : match.policySource,
+            config: { ...match.config, ...fileConfig },
+            policy: filePolicy ?? match.policy,
+            policySource: filePolicy ? 'project' : match.policySource,
             fromProjectFile: true,
           }
         : {
@@ -530,8 +655,8 @@ export class ProjectService {
             name: ft.name,
             env: ft.env,
             authMethod: ft.authMethod,
-            policy: ft.policy ?? 'ask',
-            policySource: ft.policy ? 'project' : 'app',
+            policy: filePolicy ?? 'ask',
+            policySource: filePolicy ? 'project' : 'app',
             credentialRef: null,
             health: 'unconnected',
             healthCheckedAt: null,
@@ -546,7 +671,101 @@ export class ProjectService {
     publisher.upsert('targets', targetIds);
     publisher.upsert('projects', [project.id]);
     publisher.settingsSet(undefined, { [project.id]: projectSettingsFor(repos, project.id) });
+    if (trusted) this.clearPolicyBanner(project);
+    else this.setPolicyBanner(project, hash);
     return { ok: true, error: null };
+  }
+
+  /** The file's current grant policy, its hash and the diff against what this machine accepted (Settings review row). */
+  async pendingPolicy(projectId: string): Promise<{ hash: string; accepted: boolean; summary: ProjectPolicySummary; diff: ProjectPolicyDiff }> {
+    const project = this.require(projectId);
+    const summary = policySummaryOf(await this.readProjectFile(project));
+    const hash = policyHashOf(summary);
+    const before = this.acceptedPolicy(project.id);
+    return { hash, accepted: this.isAccepted(project.id, summary, hash), summary, diff: policyDiff(before?.summary ?? null, summary) };
+  }
+
+  private async readProjectFile(project: Project): Promise<ProjectFileV1> {
+    const file = join(project.path, PROJECT_FILE_PATH);
+    if (!existsSync(file)) fail('not-found', `${project.name} has no ${PROJECT_FILE_PATH}`);
+    const parsed = parseProjectFile(await readFile(file, 'utf8'));
+    if (!parsed.ok) fail('invalid-input', parsed.error.message);
+    return parsed.file;
+  }
+
+  /**
+   * `project.policy.accept`: records the file's current policy hash as accepted on this machine, applies its rules and
+   * target policies, clears the banner and audits `policy-changed` with the diff against the previously accepted set.
+   * `hash` must match what is on disk now (the value the banner / review row showed), so a file rewritten between
+   * review and click is never accepted unseen. Any later change to the hash (a new commit, a fresh clone) starts
+   * untrusted again.
+   */
+  async acceptPolicies(projectId: string, hash: string): Promise<void> {
+    const { repos, publisher } = this.deps;
+    const project = this.require(projectId);
+    const summary = policySummaryOf(await this.readProjectFile(project));
+    const current = policyHashOf(summary);
+    if (current !== hash) fail('invalid-input', `${PROJECT_FILE_PATH} changed since it was reviewed; review it again`);
+    const before = this.acceptedPolicy(project.id);
+    repos.uiState.set(acceptedKey(project.id), { hash: current, summary: redact(summary) } satisfies AcceptedProjectPolicy);
+    await this.reconcileProjectFile(project.id);
+    if (this.deps.audit) {
+      const row = this.deps.audit.append({
+        actorKind: 'you',
+        actorLabel: 'you',
+        action: 'policy-changed',
+        ...auditContext(repos, { projectId: project.id }),
+        triggeredBy: 'settings',
+        detail: { file: PROJECT_FILE_PATH, hash: current, ...policyDiff(before?.summary ?? null, summary) },
+      });
+      publisher.upsert('auditEntries', [row.id]);
+      const entry = repos.audit.get(row.id);
+      if (entry && this.deps.activity) this.deps.activity.fromAudit(entry);
+    }
+  }
+
+  /** The hash rides in `notifications.meta` so a restart can re-emit the banner with the same accept token. */
+  private setPolicyBanner(project: Project, hash: string): void {
+    const { repos, publisher, clock } = this.deps;
+    const bannerKey = `${PROJECT_POLICY_BANNER_PREFIX}${project.id}`;
+    const text = fill(copy.errors.projectPolicyUntrusted.text, { project: project.name });
+    const existing = repos.notifications.byBannerKey(bannerKey);
+    const id = existing?.id ?? `banner-${bannerKey}`;
+    repos.notifications.upsert({
+      id,
+      kind: 'info',
+      sessionId: null,
+      askId: null,
+      projectId: project.id,
+      title: text,
+      body: '',
+      meta: hash,
+      osDelivered: false,
+      state: 'shown',
+      bannerKey,
+      createdAt: existing?.createdAt ?? clock.now(),
+      resolvedAt: null,
+    });
+    publisher.upsert('notifications', [id]);
+    publisher.sendEvent('banner.set', {
+      bannerKey,
+      kind: 'project-policy',
+      text,
+      cta: copy.errors.projectPolicyUntrusted.cta,
+      action: { kind: 'review-project-policy', projectId: project.id, hash },
+      sessionId: null,
+      reason: null,
+    });
+  }
+
+  private clearPolicyBanner(project: Project): void {
+    const { repos, publisher, clock } = this.deps;
+    const bannerKey = `${PROJECT_POLICY_BANNER_PREFIX}${project.id}`;
+    const n = repos.notifications.byBannerKey(bannerKey);
+    if (!n || n.state === 'resolved') return;
+    repos.notifications.upsert({ ...n, state: 'resolved', resolvedAt: clock.now() });
+    publisher.upsert('notifications', [n.id]);
+    publisher.sendEvent('banner.clear', { bannerKey });
   }
 
   async setSettings(projectId: string, patch: Partial<ProjectSettings>): Promise<void> {
