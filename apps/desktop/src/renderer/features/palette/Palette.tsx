@@ -14,6 +14,7 @@ import { useCallback, useMemo, useRef, type KeyboardEvent } from 'react';
 import { useNow, useUi, useUiShallow } from '../../state/hooks';
 import { useReadModel } from '../../state/read-model';
 import { runPaletteAction } from './actions';
+import s from './Palette.module.css';
 
 export interface PaletteProps {
   /** Overlay id from the stack. */
@@ -78,7 +79,12 @@ export function Palette({ id }: PaletteProps) {
 
   return (
     <Backdrop paddingTop={sizes.paletteTop} onClose={close}>
-      <div data-keyscope="palette" data-overlay="palette" onKeyDownCapture={onKeyDownCapture}>
+      <div
+        className={s['frame']}
+        data-keyscope="palette"
+        data-overlay="palette"
+        onKeyDownCapture={onKeyDownCapture}
+      >
         <PaletteList
           query={palette.query}
           onQuery={(q) => setPalette({ query: q, activeId: null })}

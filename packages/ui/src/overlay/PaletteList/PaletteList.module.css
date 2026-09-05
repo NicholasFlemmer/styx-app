@@ -6,6 +6,9 @@
     color: var(--tx);
     display: flex;
     flex-direction: column;
+    /* Content-sized like the prototype (no clamp); only when the results outgrow the window does the list scroll. */
+    max-height: 100%;
+    min-height: 0;
     border-radius: 0;
     animation: styx-modal-in var(--motion-modal) ease-out;
   }
@@ -36,7 +39,7 @@
   }
   .list {
     overflow: auto;
-    max-height: 60vh;
+    min-height: 0;
   }
   .group {
     padding: 10px 14px 4px;

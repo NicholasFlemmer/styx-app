@@ -933,23 +933,24 @@ export const demoHunks = (): AgentChange[] => [
 ];
 
 /**
- * Repo lane diff for fix/checkout (`git diff -U3`), rows verbatim from the prototype's Repo block. The prototype's
- * hardcoded header reads `+2 −0` although the block has three `+` rows; the app derives `+3 −0`
- * (docs/handoff-discrepancies.md).
+ * Repo lane diff for fix/checkout (`git diff -U3`), rows verbatim from the prototype's Repo block as it renders:
+ * the block's rows are `white-space: normal`, so its `&nbsp;` context row collapses (nine rows) and the two-space
+ * indentation collapses to one. The prototype's hardcoded header reads `+2 −0` although the block has three `+`
+ * rows; the app derives `+3 −0`, and the `@@` counts describe the eight body rows
+ * (docs/handoff-discrepancies.md #25, #28).
  */
 export const demoLaneDiff = `diff --git a/checkout.ts b/checkout.ts
 --- a/checkout.ts
 +++ b/checkout.ts
-@@ -1,8 +1,10 @@
+@@ -1,5 +1,8 @@
  import { sum } from './cart'
 +import { validate } from './validate'
-
  export async function checkout(cart) {
-+  validate(cart)
-   const total = sum(cart.items)
-   const receipt = await pay(total)
-+  audit(receipt)
-   return receipt
++ validate(cart)
+  const total = sum(cart.items)
+  const receipt = await pay(total)
++ audit(receipt)
+  return receipt
 `;
 
 // --- Notifications, discovery, activity ------------------------------------

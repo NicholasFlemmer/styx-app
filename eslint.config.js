@@ -21,7 +21,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/*.config.{ts,js}', '**/.storybook/**', '**/*.stories.tsx', '**/vitest.workspace.ts', '**/drizzle.config.ts'],
+    files: ['**/*.config.{ts,js}', '**/.storybook/**', '**/*.stories.tsx', '**/vitest.workspace.ts', '**/drizzle.config.ts', '**/e2e/visual/global-setup.ts'],
     rules: { 'no-restricted-syntax': 'off' },
   },
   {

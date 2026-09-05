@@ -5,18 +5,17 @@ import { changeHeader, changeRows, laneRows, parsePatch, rowText } from './diff-
 describe('diff rows', () => {
   it('flattens the demo lane diff into a header row followed by body rows (prototype Repo block)', () => {
     const rows = laneRows(parsePatch(fixtures.demoLaneDiff));
-    expect(rows[0]).toEqual({ kind: 'header', text: '@@ -1,8 +1,10 @@' });
+    expect(rows[0]).toEqual({ kind: 'header', text: '@@ -1,5 +1,8 @@' });
     expect(rows.map((r) => rowText(r, 'compact'))).toEqual([
-      '@@ -1,8 +1,10 @@',
+      '@@ -1,5 +1,8 @@',
       " import { sum } from './cart'",
       "+import { validate } from './validate'",
-      ' ',
       ' export async function checkout(cart) {',
-      '+  validate(cart)',
-      '   const total = sum(cart.items)',
-      '   const receipt = await pay(total)',
-      '+  audit(receipt)',
-      '   return receipt',
+      '+ validate(cart)',
+      '  const total = sum(cart.items)',
+      '  const receipt = await pay(total)',
+      '+ audit(receipt)',
+      '  return receipt',
     ]);
     expect(rows.filter((r) => r.kind === 'add')).toHaveLength(3);
   });
@@ -26,7 +25,7 @@ describe('diff rows', () => {
     const rows = laneRows(parsePatch(two));
     expect(rows.filter((r) => r.kind === 'header').map((r) => r.text)).toEqual([
       'checkout.ts',
-      '@@ -1,8 +1,10 @@',
+      '@@ -1,5 +1,8 @@',
       'b.ts',
       '@@ -1 +1 @@',
     ]);

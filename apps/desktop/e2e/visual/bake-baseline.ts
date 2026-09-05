@@ -195,10 +195,15 @@ async function main(): Promise<void> {
           await page.mouse.move(0, 0); // clear style-hover
           await page.evaluate(() => document.fonts.ready);
           await page.waitForTimeout(120);
-          const fontsOk = await page.evaluate(
-            () => document.fonts.check('600 13px Archivo') && document.fonts.check('12px "JetBrains Mono"'),
-          );
-          if (!fontsOk) throw new Error('bundled fonts not active');
+          const fontsOk = await page.evaluate(async () => {
+            // fonts.check() is true when no face is declared at all, so load the faces and inspect their status.
+            const faces = await Promise.all([
+              document.fonts.load('600 13px Archivo'),
+              document.fonts.load('12px "JetBrains Mono"'),
+            ]);
+            return faces.every((list) => list.length > 0 && list.every((f) => f.status === 'loaded'));
+          });
+          if (!fontsOk) throw new Error('bundled Archivo / JetBrains Mono faces not loaded');
           await frame.screenshot({ path: join(OUT, file), animations: 'disabled', caret: 'hide' });
           produced.push(file);
           process.stdout.write(`[${String(index).padStart(2, '0')}/${total}] ${file}\n`);

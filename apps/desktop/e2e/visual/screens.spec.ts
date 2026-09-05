@@ -9,7 +9,7 @@
  * States the app cannot render yet are skipped, not failed.
  */
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { launchStyx } from '../launch';
 import { comparePng, type CompareResult, type Rect } from './compare';
@@ -17,7 +17,11 @@ import { WINDOW, parseBaselineName, type VisualChrome } from './states';
 
 const BASELINE_DIR = join(__dirname, '__baseline__');
 const APP_BASELINE_DIR = join(BASELINE_DIR, 'app');
-const RESULTS_DIR = join(__dirname, '../test-results/visual');
+// Outside Playwright's outputDir (e2e/test-results), which every run wipes at startup; gitignored as visual/output/.
+const RESULTS_ROOT = join(__dirname, 'output');
+// Minted once per run in playwright.config.ts so concurrent `pnpm visual` runs (and worker restarts) never share a dir.
+const RUN_ID = process.env['STYX_VISUAL_RUN'] ?? `${process.pid}`;
+const RESULTS_DIR = join(RESULTS_ROOT, RUN_ID);
 const RESULTS_FILE = join(RESULTS_DIR, 'results.ndjson');
 const UPDATE = process.env['STYX_VISUAL_UPDATE'] === '1';
 const READY_TIMEOUT = 5_000;
@@ -81,6 +85,8 @@ let appRendersScreens = false;
 
 test.describe('visual fidelity vs prototype', () => {
   test.beforeAll(async () => {
+    mkdirSync(RESULTS_DIR, { recursive: true });
+    writeFileSync(join(RESULTS_ROOT, 'latest'), RUN_ID); // `pnpm visual:report` reads this run by default
     if (baselines.length === 0) return;
     // Fast path: if a plain launch never reports a ready screen, every state is skipped without a launch each.
     const { app, page } = await launchStyx();
@@ -105,7 +111,13 @@ test.describe('visual fidelity vs prototype', () => {
 
       const fixture = b.state.endsWith('-empty') ? 'empty' : b.state.endsWith('-error') ? 'error' : 'demo';
       // Screenshots use fixture data only; real demo repos would re-point project paths (nav footer) away from the prototype.
-      const { app, page } = await launchStyx({ screen: b.state, theme: b.theme, chrome: b.chrome, fixture, env: { STYX_DEMO_REPOS: '0' } });
+      const { app, page } = await launchStyx({
+        screen: b.state,
+        theme: b.theme,
+        chrome: b.chrome,
+        fixture,
+        env: { STYX_DEMO_REPOS: '0' },
+      });
       try {
         await sizeWindow(app, page);
         const ready = await waitForReady(page, READY_TIMEOUT);
@@ -117,7 +129,18 @@ test.describe('visual fidelity vs prototype', () => {
           });
           test.skip(true, `renderer has no "${b.state}" screen yet`);
         }
-        await page.evaluate(() => document.fonts.ready);
+        const fontsLoaded = await page.evaluate(async () => {
+          // fonts.check() is true when no face is declared at all, so load the faces and inspect their status.
+          const faces = await Promise.all([
+            document.fonts.load('600 13px Archivo'),
+            document.fonts.load('12px "JetBrains Mono"'),
+          ]);
+          return faces.map((list) => list.length > 0 && list.every((f) => f.status === 'loaded'));
+        });
+        expect(fontsLoaded, 'bundled [Archivo, JetBrains Mono] faces loaded in the renderer').toEqual([
+          true,
+          true,
+        ]);
         await page.mouse.move(0, 0);
 
         mkdirSync(RESULTS_DIR, { recursive: true });

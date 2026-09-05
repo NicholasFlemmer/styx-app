@@ -57,6 +57,8 @@ export const PaletteList = forwardRef<HTMLDivElement, PaletteListProps>(function
   const listId = `${baseId}-list`;
   const optionId = (id: string) => `${baseId}-opt-${id}`;
   const input = useRef<HTMLInputElement>(null);
+  /** Last pointer position over the list: a row is hover-selected only when the pointer actually moved. */
+  const pointer = useRef<{ x: number; y: number } | null>(null);
   const flat = groups.flatMap((g) => g.items.map((i) => i.id));
   const activeIndex = activeId === undefined ? -1 : flat.indexOf(activeId);
   const activeOptionId = activeId !== undefined && activeIndex >= 0 ? optionId(activeId) : undefined;
@@ -158,7 +160,12 @@ export const PaletteList = forwardRef<HTMLDivElement, PaletteListProps>(function
                     aria-selected={active}
                     data-inv={active ? 'true' : undefined}
                     className={s['row']}
-                    onMouseMove={() => {
+                    onMouseMove={(e) => {
+                      // Chromium re-dispatches mousemove after layout under a stationary pointer (and the OS does on
+                      // window show); only a real move steals the selection from the keyboard.
+                      const last = pointer.current;
+                      pointer.current = { x: e.clientX, y: e.clientY };
+                      if (last === null || (last.x === e.clientX && last.y === e.clientY)) return;
                       if (!active) onActive(i.id);
                     }}
                     onMouseDown={(e) => e.preventDefault()}

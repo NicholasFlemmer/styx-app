@@ -2,7 +2,7 @@
   "name": "@styx/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Styx — project, agent and repo switcher",
+  "description": "Styx \u2014 project, agent and repo switcher",
   "main": "./out/main/index.js",
   "author": "Styx",
   "scripts": {
@@ -11,7 +11,7 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
-    "e2e": "env -u ELECTRON_RUN_AS_NODE playwright test -c e2e/playwright.config.ts",
+    "e2e": "env -u ELECTRON_RUN_AS_NODE playwright test -c e2e/playwright.config.ts --project e2e",
     "visual": "env -u ELECTRON_RUN_AS_NODE playwright test -c e2e/playwright.config.ts --project visual",
     "visual:baseline": "node --experimental-strip-types e2e/visual/bake-baseline.ts",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3,node-pty",

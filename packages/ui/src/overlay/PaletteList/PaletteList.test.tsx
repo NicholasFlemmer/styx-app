@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PaletteList, type PaletteGroup } from './PaletteList';
@@ -96,6 +96,18 @@ describe('PaletteList', () => {
     expect(onScopeCycle).toHaveBeenLastCalledWith(1);
     await user.keyboard('{Shift>}{Tab}{/Shift}');
     expect(onScopeCycle).toHaveBeenLastCalledWith(-1);
+    expect(screen.getByRole('combobox')).toHaveFocus();
+  });
+
+  it('hover selects a row only once the pointer really moves (a stationary pointer keeps the keyboard row)', () => {
+    render(<Live />);
+    const codex = screen.getByRole('option', { name: /Codex/ });
+    // Chromium re-dispatches mousemove under a stationary pointer after layout: same coordinates, no selection.
+    fireEvent.mouseMove(codex, { clientX: 400, clientY: 300 });
+    fireEvent.mouseMove(codex, { clientX: 400, clientY: 300 });
+    expect(codex).not.toHaveAttribute('data-inv');
+    fireEvent.mouseMove(codex, { clientX: 401, clientY: 300 });
+    expect(codex).toHaveAttribute('data-inv', 'true');
     expect(screen.getByRole('combobox')).toHaveFocus();
   });
 

@@ -4,13 +4,21 @@ import { join } from 'node:path';
 import type { VisualRecord } from './screens.spec.ts';
 
 const here = import.meta.dirname;
-const RESULTS = join(here, '../test-results/visual/results.ndjson');
+const RESULTS_ROOT = join(here, 'output');
 const BASELINE_DIR = join(here, '__baseline__');
 
-if (!existsSync(RESULTS)) {
-  console.log(`No results at ${RESULTS}. Run \`pnpm visual\` first.`);
+// `pnpm visual:report [runId]` — defaults to the run recorded in visual/output/latest.
+const latest = join(RESULTS_ROOT, 'latest');
+const runId = process.argv[2] ?? (existsSync(latest) ? readFileSync(latest, 'utf8').trim() : undefined);
+const RESULTS = runId ? join(RESULTS_ROOT, runId, 'results.ndjson') : undefined;
+
+if (!RESULTS || !existsSync(RESULTS)) {
+  console.log(
+    `No results${runId ? ` for run ${runId}` : ''} under ${RESULTS_ROOT}. Run \`pnpm visual\` first.`,
+  );
   process.exit(0);
 }
+console.log(`run ${runId} · ${join(RESULTS_ROOT, runId ?? '')}\n`);
 
 const records: VisualRecord[] = readFileSync(RESULTS, 'utf8')
   .split('\n')

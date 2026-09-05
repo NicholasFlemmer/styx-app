@@ -28,7 +28,13 @@ describe('Repo screen', () => {
       styx: { platform: 'darwin', env: { now: fixtures.DEMO_NOW, fixture: 'demo' }, command: commandMock },
     });
     useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
-    useUiStore.setState({ overlays: [], screen: 'repo', platform: 'darwin', projectId: acme, projectSession: {} });
+    useUiStore.setState({
+      overlays: [],
+      screen: 'repo',
+      platform: 'darwin',
+      projectId: acme,
+      projectSession: {},
+    });
   });
   afterEach(() => {
     cleanup();
@@ -55,17 +61,21 @@ describe('Repo screen', () => {
     }
     expect(rowOf('fix/checkout').getAttribute('data-inv')).toBe('true');
     expect(rowOf('main').getAttribute('data-inv')).toBeNull();
-    expect(within(rowOf('test/flaky')).getByText('Codex').querySelector('[data-tone]')?.getAttribute('data-tone')).toBe(
-      'accent',
-    );
+    expect(
+      within(rowOf('test/flaky')).getByText('Codex').querySelector('[data-tone]')?.getAttribute('data-tone'),
+    ).toBe('accent');
 
     // worktree.diff fails on the demo fixture → prototype lane diff.
     await waitFor(() => expect(screen.getByText('fix/checkout · checkout.ts · +3 −0')).toBeTruthy());
-    expect(commandMock).toHaveBeenCalledWith('worktree.diff', { worktreeId: fixtures.ids.worktree.fixCheckout });
+    expect(commandMock).toHaveBeenCalledWith('worktree.diff', {
+      worktreeId: fixtures.ids.worktree.fixCheckout,
+    });
     const region = screen.getByRole('region', { name: 'fix/checkout' });
-    expect(region.getAttribute('data-rows')).toBe('10');
-    expect(within(region).getByText('@@ -1,8 +1,10 @@').getAttribute('data-kind')).toBe('header');
-    expect(within(region).getByText("+import { validate } from './validate'").getAttribute('data-kind')).toBe('add');
+    expect(region.getAttribute('data-rows')).toBe('9');
+    expect(within(region).getByText('@@ -1,5 +1,8 @@').getAttribute('data-kind')).toBe('header');
+    expect(within(region).getByText("+import { validate } from './validate'").getAttribute('data-kind')).toBe(
+      'add',
+    );
   });
 
   it('clicking a lane selects it (inverted) and requests its diff', async () => {
@@ -74,7 +84,9 @@ describe('Repo screen', () => {
     expect(rowOf('test/flaky').getAttribute('data-inv')).toBe('true');
     expect(rowOf('fix/checkout').getAttribute('data-inv')).toBeNull();
     await waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith('worktree.diff', { worktreeId: fixtures.ids.worktree.testFlaky }),
+      expect(commandMock).toHaveBeenCalledWith('worktree.diff', {
+        worktreeId: fixtures.ids.worktree.testFlaky,
+      }),
     );
     expect(screen.getByRole('region', { name: 'test/flaky' })).toBeTruthy();
   });
@@ -84,9 +96,15 @@ describe('Repo screen', () => {
     fireEvent.click(screen.getByRole('button', { name: copy.repo.fetch }));
     expect(commandMock).toHaveBeenCalledWith('worktree.fetch', { projectId: acme });
     fireEvent.click(screen.getByRole('button', { name: copy.repo.addWorktree }));
-    expect(commandMock).toHaveBeenCalledWith('worktree.create', { projectId: acme, branch: 'wt-1', base: 'main' });
+    expect(commandMock).toHaveBeenCalledWith('worktree.create', {
+      projectId: acme,
+      branch: 'wt-1',
+      base: 'main',
+    });
     fireEvent.click(within(rowOf('feat/promo')).getByRole('button', { name: 'Archive' }));
-    expect(commandMock).toHaveBeenCalledWith('worktree.archive', { worktreeId: fixtures.ids.worktree.featPromo });
+    expect(commandMock).toHaveBeenCalledWith('worktree.archive', {
+      worktreeId: fixtures.ids.worktree.featPromo,
+    });
     // The action click does not also change the selection.
     expect(rowOf('feat/promo').getAttribute('data-inv')).toBeNull();
   });
