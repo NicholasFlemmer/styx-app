@@ -1,0 +1,21 @@
+@layer screens {
+  .bar {
+    height: var(--h-statusbar);
+    flex: none;
+    border-top: 1px solid var(--ln);
+    background: var(--s1);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 12px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mu);
+    overflow: hidden;
+  }
+  .spacer {
+    flex: 1;
+  }
+}

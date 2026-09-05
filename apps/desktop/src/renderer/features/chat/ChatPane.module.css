@@ -1,0 +1,106 @@
+@layer screens {
+  .pane {
+    width: var(--w-chat);
+    flex: none;
+    border-left: 1px solid var(--ln);
+    background: var(--s1);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+  }
+  .tabsRow {
+    height: var(--h-tabrow);
+    flex: none;
+    border-bottom: 1px solid var(--ln);
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+  }
+  .tabs {
+    border-bottom: 0;
+    height: auto;
+  }
+  .overflow {
+    position: relative;
+    display: flex;
+  }
+  .menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 2;
+    min-width: 160px;
+    background: var(--s1);
+    border: 1px solid var(--tx);
+    display: flex;
+    flex-direction: column;
+  }
+  .menuItem {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--tx);
+    white-space: nowrap;
+  }
+  .menuItem:hover {
+    background: var(--s2);
+  }
+  .badge {
+    background: var(--ac);
+    color: var(--acx);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 0 4px;
+  }
+  .plus {
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    color: var(--mu);
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .spacer {
+    flex: 1;
+  }
+  .popout {
+    padding: 0 12px;
+    border-left: 1px solid var(--ln);
+    display: flex;
+    align-items: center;
+    color: var(--mu);
+    cursor: pointer;
+  }
+  .popout:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .meta {
+    flex: none;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--ln);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--mu);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .popped {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px;
+  }
+}

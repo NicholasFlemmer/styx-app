@@ -21,7 +21,7 @@ const projects = [
 ];
 
 export const Home: Story = {
-  args: { header: ['Project', 'Path', 'Branch', 'Agents', 'Targets', 'Last activity'] },
+  args: { header: ['Project', 'Path', 'Branch', 'Agents', 'Targets', 'Last activity'], fontSize: '13px' },
   render: (a) => (
     <Table {...a}>
       {projects.map((p) => (
@@ -29,8 +29,8 @@ export const Home: Story = {
           <TableCell strong><StatusDot tone="hollow" on={p.needs} {...(p.needs ? { label: 'needs you' } : {})} />{p.name}</TableCell>
           <TableCell mono muted>{p.path}</TableCell>
           <TableCell mono>{p.branch}</TableCell>
-          <TableCell>{p.agents}</TableCell>
-          <TableCell muted>{p.targets}</TableCell>
+          <TableCell small>{p.agents}</TableCell>
+          <TableCell small muted>{p.targets}</TableCell>
           <TableCell mono muted>{p.last}</TableCell>
         </TableRow>
       ))}

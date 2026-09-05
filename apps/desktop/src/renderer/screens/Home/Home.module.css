@@ -1,0 +1,63 @@
+@layer screens {
+  /* Prototype: flex:1;display:flex;flex-direction:column;min-width:0 */
+  .home {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .table {
+    flex: none;
+  }
+  /* Project cell: dot + name at the prototype's 10px gap (shared cell gap is 8px). */
+  .name {
+    gap: 10px;
+  }
+  /* Add row: padding 14px 20px, hairline, dashed regular buttons 10 apart. */
+  .addRow {
+    flex: none;
+    display: flex;
+    gap: 10px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--ln);
+  }
+  .activityHead {
+    flex: none;
+    padding: 12px 20px 6px;
+  }
+  /* Feed: mono 12 / 1.9, muted, newest first; the screen keeps its height and clips overflow. */
+  .feed {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0 20px;
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.9;
+    color: var(--mu);
+    list-style: none;
+  }
+  .feedRow {
+    display: flex;
+    gap: 16px;
+    min-width: 0;
+  }
+  .feedTime {
+    flex: none;
+    width: 44px;
+  }
+  .feedWho {
+    flex: none;
+    width: 110px;
+    color: var(--tx);
+  }
+  .feedWhat {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

@@ -33,6 +33,16 @@ describe('Table', () => {
     );
     expect(screen.getByRole('row')).toHaveStyle({ padding: '10px 14px', gap: '14px' });
   });
+  it('applies an explicit row fontSize and small cells (Home recipe)', () => {
+    render(
+      <Table columns="1fr 1fr" fontSize="13px">
+        <TableRow><TableCell strong>acme-shop</TableCell><TableCell small>Claude · Codex</TableCell></TableRow>
+      </Table>,
+    );
+    expect(screen.getByRole('row')).toHaveStyle({ fontSize: '13px' });
+    expect(screen.getByText('Claude · Codex').className).toMatch(/small/);
+    expect(screen.getByText('acme-shop').className).not.toMatch(/small/);
+  });
   it('static rows are not focusable', () => {
     render(<Table columns="1fr"><TableRow><TableCell>a</TableCell></TableRow></Table>);
     expect(screen.getByRole('row')).not.toHaveAttribute('tabindex');

@@ -68,6 +68,9 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
   }
+  .small {
+    font-size: 12px;
+  }
   .end {
     justify-content: flex-end;
     text-align: right;

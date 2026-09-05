@@ -1,0 +1,31 @@
+@layer screens {
+  .root {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    position: relative;
+    background: var(--bg);
+    outline: 0;
+  }
+  .host {
+    position: absolute;
+    inset: 0;
+  }
+}
+
+/* Decoration classes stay unlayered so they win against Monaco's own (unlayered) line styles. */
+.root :global(.monaco-editor) :global(.styx-hunk-line) {
+  background: var(--add);
+}
+.root :global(.monaco-editor) :global(.styx-hunk-label) {
+  position: absolute;
+  right: 12px;
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mu);
+  font-style: normal;
+  pointer-events: none;
+}

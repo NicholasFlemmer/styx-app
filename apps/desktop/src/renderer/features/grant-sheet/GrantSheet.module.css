@@ -1,0 +1,68 @@
+@layer screens {
+  .root {
+    display: contents;
+  }
+  .slash {
+    color: var(--mu);
+  }
+  .tags {
+    padding: 0 0 14px;
+    display: flex;
+    gap: 6px;
+  }
+  .reason {
+    padding: 10px;
+    border: 1px solid var(--ln);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--mu);
+    user-select: text;
+  }
+  .sectionLabel {
+    padding: 16px 0 6px;
+  }
+  .scopeBox {
+    border: 1px solid var(--ln);
+  }
+  .scopeRow {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--ln);
+    font-size: 13px;
+    min-height: 0;
+  }
+  .scopeRow:last-child {
+    border-bottom: 0;
+  }
+  .scopeRowOff {
+    color: var(--mu);
+    cursor: default;
+  }
+  .finePrint {
+    padding: 14px 0;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--mu);
+  }
+  .error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--ac);
+    font-size: 11.5px;
+    line-height: 1.5;
+    margin-bottom: 14px;
+  }
+  .errorDot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    background: var(--ac);
+  }
+  .errorClose {
+    margin-left: auto;
+    color: var(--mu);
+    cursor: pointer;
+  }
+}

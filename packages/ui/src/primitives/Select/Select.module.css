@@ -8,13 +8,15 @@
   .select {
     appearance: none;
     width: 100%;
+    /* prototype box is 25px: its ▾ glyph fell back to a taller font; our SVG chevron does not, so fix the height */
+    height: 25px;
     border: 1px solid var(--ln);
     background: transparent;
     color: var(--tx);
-    padding: 4px 24px 4px 8px;
+    /* 4 top / 6 bottom: Chromium centres option text in the content box; 13px box lands the text on the prototype's rows */
+    padding: 4px 24px 6px 8px;
     font-family: var(--font-ui);
     font-size: 12px;
-    line-height: 1.5;
     cursor: pointer;
     border-radius: 0;
   }

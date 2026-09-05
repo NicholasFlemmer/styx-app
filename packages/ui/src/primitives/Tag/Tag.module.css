@@ -1,6 +1,7 @@
 @layer components {
   .tag {
-    display: inline-block;
+    /* inline like the prototype's spans: padding/border must not enlarge the parent line box */
+    display: inline;
     font-family: var(--font-ui);
     font-size: 9px;
     font-weight: 700;

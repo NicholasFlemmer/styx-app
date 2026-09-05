@@ -4,10 +4,15 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    min-height: 28px;
     font-size: 12.5px;
     cursor: pointer;
     user-select: none;
+  }
+  /* spec §9: whole row is the hit target, ≥ 28px tall, without changing the row's layout height */
+  .row::after {
+    content: '';
+    position: absolute;
+    inset: -6px 0;
   }
   .labelStart {
     flex-direction: row-reverse;

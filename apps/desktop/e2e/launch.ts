@@ -29,7 +29,13 @@ export async function launchStyx(
 ): Promise<{ app: ElectronApplication; page: Page; userData: string }> {
   const userData = mkdtempSync(join(tmpdir(), 'styx-e2e-'));
   const app = await electron.launch({
-    args: [resolve(__dirname, '../out/main/index.js'), `--user-data-dir=${userData}`],
+    args: [
+      resolve(__dirname, '../out/main/index.js'),
+      `--user-data-dir=${userData}`,
+      // Visual baselines are baked at DPR 1. Chromium rounds font ascent/descent in device pixels, so at DPR 2 every
+      // `line-height: normal` box drifts by 0.5px and downsampled screenshots never match; pin the scale factor instead.
+      '--force-device-scale-factor=1',
+    ],
     env: {
       ...cleanEnv(),
       NODE_ENV: 'test',

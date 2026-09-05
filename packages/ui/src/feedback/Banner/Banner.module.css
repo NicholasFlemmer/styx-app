@@ -20,18 +20,22 @@
     min-width: 0;
   }
   .dismiss {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 28px;
-    min-height: 28px;
-    margin: -5px -8px -5px 0;
     padding: 0 4px;
     border: 0;
     background: transparent;
     color: var(--mu);
     cursor: pointer;
     border-radius: 0;
+  }
+  /* spec §9: 28px hit target around the 14px glyph */
+  .dismiss::after {
+    content: '';
+    position: absolute;
+    inset: -7px -6px;
   }
   .dismiss:hover {
     color: var(--tx);

@@ -1,0 +1,69 @@
+@layer screens {
+  .pane {
+    width: var(--w-files);
+    flex: none;
+    border-right: 1px solid var(--ln);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .head {
+    padding: 12px 12px 6px;
+  }
+  .tree {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+    flex: none;
+    max-height: 60%;
+  }
+  .row {
+    padding: 4px 12px;
+    display: flex;
+    justify-content: space-between;
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .row:hover {
+    background: var(--s2);
+  }
+  .row[data-inv='true']:hover {
+    background: var(--tx);
+  }
+  .mark {
+    color: var(--act);
+  }
+  .changesHead {
+    padding: 16px 12px 6px;
+    border-top: 1px solid var(--ln);
+    margin-top: 10px;
+  }
+  .change {
+    padding: 4px 12px;
+    display: flex;
+    gap: 10px;
+    font: inherit;
+    color: var(--tx);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .change:hover {
+    background: var(--s2);
+  }
+  .statusMuted {
+    color: var(--mu);
+  }
+  .statusAccent {
+    color: var(--act);
+  }
+  .spacer {
+    flex: 1;
+  }
+  .openIn {
+    margin: 12px;
+    padding: 6px;
+  }
+}

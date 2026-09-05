@@ -27,8 +27,9 @@ interface TableCtx {
   columns: string;
   rowPad: string;
   gap: string | undefined;
+  fontSize: string | undefined;
 }
-const Ctx = createContext<TableCtx>({ columns: '1fr', rowPad: '14px 20px', gap: undefined });
+const Ctx = createContext<TableCtx>({ columns: '1fr', rowPad: '14px 20px', gap: undefined, fontSize: undefined });
 
 export interface TableProps extends HTMLAttributes<HTMLDivElement> {
   /** grid-template-columns string (see TABLE_COLUMNS). */
@@ -42,19 +43,21 @@ export interface TableProps extends HTMLAttributes<HTMLDivElement> {
   rowPad?: string;
   /** Column gap (onboarding tables use 14px). */
   gap?: string;
+  /** Row font-size; 12.5px by default (Repo, Targets, onboarding). Home rows inherit 13px. */
+  fontSize?: string;
   inv?: boolean;
   on?: boolean;
   children?: ReactNode;
 }
 
 export const Table = forwardRef<HTMLDivElement, TableProps>(function Table(
-  { columns, header, rowPad = '14px 20px', gap, inv, on, className, children, ...rest },
+  { columns, header, rowPad = '14px 20px', gap, fontSize, inv, on, className, children, ...rest },
   ref,
 ) {
   const cls = [s['table'], className].filter(Boolean).join(' ');
   const gridStyle: CSSProperties = { gridTemplateColumns: columns, ...(gap ? { gap } : {}) };
   return (
-    <Ctx.Provider value={{ columns, rowPad, gap }}>
+    <Ctx.Provider value={{ columns, rowPad, gap, fontSize }}>
       <div ref={ref} role="table" className={cls} data-inv={inv ? 'true' : undefined} data-on={on ? 'true' : undefined} {...rest}>
         {header ? (
           <div role="row" className={s['header']} style={gridStyle}>
@@ -92,6 +95,7 @@ export const TableRow = forwardRef<HTMLDivElement, TableRowProps>(function Table
     gridTemplateColumns: ctx.columns,
     padding: rowPad ?? ctx.rowPad,
     ...(ctx.gap ? { gap: ctx.gap } : {}),
+    ...(ctx.fontSize ? { fontSize: ctx.fontSize } : {}),
     ...style,
   };
   return (
@@ -127,12 +131,14 @@ export interface TableCellProps extends HTMLAttributes<HTMLSpanElement> {
   strong?: boolean;
   /** t-label styling for trailing action cells (OPEN, REVOKE …). */
   label?: boolean;
+  /** 12px plain text (Home agents/targets cells). */
+  small?: boolean;
   align?: 'start' | 'end';
   children?: ReactNode;
 }
 
 export const TableCell = forwardRef<HTMLSpanElement, TableCellProps>(function TableCell(
-  { mono, muted, strong, label, align, className, ...rest },
+  { mono, muted, strong, label, small, align, className, ...rest },
   ref,
 ) {
   const cls = [
@@ -141,6 +147,7 @@ export const TableCell = forwardRef<HTMLSpanElement, TableCellProps>(function Ta
     muted && s['muted'],
     strong && s['strong'],
     label && s['label'],
+    small && s['small'],
     align === 'end' && s['end'],
     className,
   ]

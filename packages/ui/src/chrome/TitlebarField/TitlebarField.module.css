@@ -1,21 +1,26 @@
 @layer components {
   .field {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 14px;
     width: 280px;
-    min-height: 28px;
     padding: 4px 10px;
     border: 1px solid var(--ln);
     background: transparent;
     color: var(--mu);
     font-family: var(--font-ui);
     font-size: 12px;
-    line-height: 1.5;
     text-align: left;
     cursor: pointer;
     border-radius: 0;
     user-select: none;
+  }
+  /* spec §9: hit targets ≥ 28px for the ~22px field */
+  .field::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
   }
   .field:hover {
     background: var(--s2);
