@@ -79,7 +79,10 @@ const applyEnvState = (): void => {
       return;
     }
     case 'approvals-audit': {
-      const entry = rows(model.auditEntries)[0];
+      // Prototype "Audit detail" flow: Audit log tab with the `granted deploy to Claude · 1h` (09:12) entry open.
+      ui.setApprovalsTab('audit');
+      const entries = rows(model.auditEntries);
+      const entry = entries.find((e) => e.action === 'granted') ?? entries[0];
       if (entry !== undefined) ui.pushOverlay({ kind: 'drawer', drawer: 'audit', auditId: entry.id });
       return;
     }

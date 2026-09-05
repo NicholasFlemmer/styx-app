@@ -72,7 +72,7 @@ describe('demo fixture', () => {
     ]);
     expect(f.targets.filter((t) => t.projectId === ids.project.acmeShop)).toHaveLength(5);
     expect(f.policies).toHaveLength(3);
-    expect(f.auditEntries).toHaveLength(5);
+    expect(f.auditEntries).toHaveLength(4);
     expect(f.hunks[ids.session.claude]).toHaveLength(3);
     expect(f.activity).toHaveLength(6);
     expect(f.now).toBe(DEMO_NOW);
@@ -85,6 +85,25 @@ describe('demo fixture', () => {
     expect(f.sessions.every((s) => wt.has(s.worktreeId) && pj.has(s.projectId))).toBe(true);
     expect(f.grants.every((g) => tg.has(g.targetId))).toBe(true);
     expect(f.pendingAsks.every((a) => f.sessions.some((s) => s.id === a.sessionId))).toBe(true);
+  });
+
+  it('the two other inbox requests sit on infra-tools AWS and the blog-v2 Vercel preview targets', () => {
+    const byId = (id: string) => f.targets.find((t) => t.id === id);
+    expect(byId(ids.target.infraAws)).toMatchObject({ projectId: ids.project.infraTools, env: 'prod' });
+    expect(byId(ids.target.blogVercelPreview)).toMatchObject({
+      projectId: ids.project.blogV2,
+      env: 'preview',
+    });
+    expect(f.grants.find((g) => g.id === ids.grant.awsClaude)).toMatchObject({
+      state: 'requested',
+      targetId: ids.target.infraAws,
+      sessionId: ids.session.claude,
+    });
+    expect(f.grants.find((g) => g.id === ids.grant.vercelPreviewCursor)).toMatchObject({
+      state: 'requested',
+      targetId: ids.target.blogVercelPreview,
+      sessionId: ids.session.cursor,
+    });
   });
 
   it('the Codex session has one open grant ask for Supabase prod read+write "migration 0042"', () => {
@@ -101,7 +120,7 @@ describe('demo fixture', () => {
 
   it('worktrees: main, fix/checkout (+142 −38 · 3 files, PR #214 draft), test/flaky, feat/promo (#212 merged)', () => {
     const acme = f.worktrees.filter((w) => w.projectId === ids.project.acmeShop);
-    expect(acme.map((w) => w.branch)).toEqual(['main', 'fix/checkout', 'test/flaky', 'feat/promo', 'docs']);
+    expect(acme.map((w) => w.branch)).toEqual(['main', 'fix/checkout', 'test/flaky', 'feat/promo']);
     expect(acme[1]).toMatchObject({
       changes: { added: 142, removed: 38, files: 3 },
       pr: { number: 214, state: 'draft' },

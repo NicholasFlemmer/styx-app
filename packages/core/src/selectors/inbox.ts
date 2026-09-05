@@ -1,10 +1,24 @@
 import type { GrantId, ProjectId, SessionId, TargetId } from '../ids';
 import { copy, fill } from '../copy';
+import { PROVIDER_LABEL } from '../model/common';
 import type { Env, Scope } from '../model/common';
+import type { Target } from '../model/target';
 import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
 import { agentLabel, branchOf, projectNameOf } from './common';
 import { formatAge, joinScopes } from './format';
+
+/** Most-privileged first: the inbox tag shows the one scope that decides the policy (`read+write` → `WRITE`). */
+const SCOPE_PRIORITY: readonly Scope[] = ['delete', 'deploy', 'write', 'read'];
+
+/** "Supabase prod" / "AWS acme-prod" / "Vercel": prod targets named after their bare provider get the env appended. */
+export const inboxTargetLabel = (target: Pick<Target, 'name' | 'provider' | 'env'>): string =>
+  target.env === 'prod' && target.name === PROVIDER_LABEL[target.provider]
+    ? `${target.name} ${target.env}`
+    : target.name;
+
+export const headlineScope = (scopes: readonly Scope[]): string =>
+  SCOPE_PRIORITY.find((s) => scopes.includes(s)) ?? joinScopes(scopes, ', ');
 
 export interface InboxRow {
   grantId: GrantId;
@@ -13,9 +27,11 @@ export interface InboxRow {
   targetId: TargetId;
   agent: string;
   project: string;
+  /** "Supabase prod" / "AWS acme-prod" / "Vercel" — see `inboxTargetLabel`. */
   target: string;
   env: Env;
   prod: boolean;
+  /** The headline scope tag (`write` for a read+write request); `scopes` carries the full request. */
   scope: string;
   scopes: Scope[];
   reason: string;
@@ -40,10 +56,10 @@ export const inboxRows = (model: ReadModel, now: number): InboxRow[] =>
           targetId: target.id,
           agent: session === undefined ? copy.general.none : agentLabel(session),
           project: projectNameOf(model, target.projectId),
-          target: target.name,
+          target: inboxTargetLabel(target),
           env: target.env,
           prod: target.env === 'prod',
-          scope: joinScopes(g.scope, ', '),
+          scope: headlineScope(g.scope),
           scopes: [...g.scope],
           reason: g.reason,
           age: formatAge(g.requestedAt, now),

@@ -1,7 +1,7 @@
 import { copy, fill } from '../copy';
 import type { AuditEntry } from '../model/audit';
 import { AGENT_LABEL } from '../model/common';
-import type { Policy } from '../model/policy';
+import type { BuiltinPolicyKey, Policy } from '../model/policy';
 import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
 import { formatClock, joinScopes } from './format';
@@ -24,6 +24,16 @@ const agentName = (entry: AuditEntry): string =>
 
 const policyOrd = (policies: readonly Policy[], entry: AuditEntry): number | null =>
   policies.find((p) => p.id === entry.policyId)?.ord ?? null;
+
+/** Drawer "Policy" row (prototype `adRows`): builtins get the short prototype label, custom rules their text. */
+const BUILTIN_POLICY_SHORT_LABEL: Record<BuiltinPolicyKey, string> = {
+  'auto-read-staging-preview': 'auto-approve staging reads',
+  'ask-mfa-prod-write': 'ask + MFA',
+  'idle-expiry-1h': 'idle expiry',
+};
+
+export const policyShortLabel = (policy: Pick<Policy, 'ord' | 'ruleText' | 'builtinKey'>): string =>
+  `#${policy.ord} ${policy.builtinKey === null ? policy.ruleText : BUILTIN_POLICY_SHORT_LABEL[policy.builtinKey]}`;
 
 const detailNumber = (entry: AuditEntry, key: string): string => {
   const v = entry.detail[key];
@@ -126,7 +136,7 @@ export const auditDetailRows = (
     { k: copy.audit.rows.session, v: entry.sessionLabel ?? none },
     { k: copy.audit.rows.worktree, v: entry.worktreeLabel ?? none },
     { k: copy.audit.rows.triggeredBy, v: entry.triggeredBy ?? none },
-    { k: copy.audit.rows.policy, v: policy === undefined ? none : `#${policy.ord} ${policy.ruleText}` },
+    { k: copy.audit.rows.policy, v: policy === undefined ? none : policyShortLabel(policy) },
   ];
 };
 

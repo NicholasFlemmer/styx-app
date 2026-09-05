@@ -58,7 +58,7 @@ describe('Approvals', () => {
     expect(first.textContent).toContain('Codex');
     expect(first.textContent).toContain('Supabase');
     expect(within(first).getByText('prod').getAttribute('data-on')).toBe('true');
-    expect(within(first).getByText('read, write').getAttribute('data-on')).toBeNull();
+    expect(within(first).getByText('write').getAttribute('data-on')).toBeNull();
     expect(within(first).getByText('"migration 0042" · 3m')).toBeTruthy();
     expect(screen.getByText('auto-approved today: 12 (preview deploys, github reads)')).toBeTruthy();
   });
@@ -114,7 +114,7 @@ describe('Approvals', () => {
     expect(useUiStore.getState().approvalsTab).toBe('audit');
     const log = screen.getByRole('table', { name: 'Audit log' });
     const rows = within(log).getAllByRole('row');
-    expect(rows).toHaveLength(5);
+    expect(rows).toHaveLength(4);
     expect(rows[0]?.textContent).toBe('09:41Claudevercel-prodused deploy token (auto: policy #1)');
     const granted = rows.find((r) => r.textContent?.includes('granted deploy to Claude · 1h'));
     if (granted === undefined) throw new Error('granted row missing');

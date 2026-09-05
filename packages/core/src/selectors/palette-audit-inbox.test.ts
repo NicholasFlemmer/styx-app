@@ -8,7 +8,7 @@ import type { PendingAsk } from '../model/session';
 import type { ReadModel } from '../read-model';
 import { removeRows, rows, upsertRows } from '../read-model';
 import { auditDetailRows, auditRow, auditRows, auditWhat, canRevokeFromAudit } from './audit';
-import { inboxRows, inboxTabLabel, toastFor } from './inbox';
+import { headlineScope, inboxRows, inboxTabLabel, inboxTargetLabel, toastFor } from './inbox';
 import { DEPLOYABLE_PROVIDERS, flattenPalette, nextPaletteScope, paletteResults } from './palette';
 
 const NOW = DEMO_NOW;
@@ -19,7 +19,6 @@ describe('auditRows (prototype audit log)', () => {
   it('renders the prototype rows newest first', () => {
     expect(auditRows(model, NOW).map((r) => `${r.t} ${r.who} ${r.target} ${r.what}`)).toEqual([
       '09:41 Claude vercel-prod used deploy token (auto: policy #1)',
-      '09:40 Codex supabase-prod requested read+write',
       '09:12 you vercel-prod granted deploy to Claude · 1h',
       '08:58 system aws-acme-prod revoked Gemini grant · idle 1h',
       '08:30 Cursor github opened PR #212',
@@ -50,6 +49,7 @@ describe('auditRows (prototype audit log)', () => {
     const at = (over: Partial<AuditEntry>): string => auditWhat({ ...base, ...over }, policies);
     expect(at({ policyId: null })).toBe('used deploy token');
     expect(at({ action: 'denied', scope: ['write'] })).toBe('denied write to Claude');
+    expect(at({ action: 'requested', scope: ['read', 'write'] })).toBe('requested read+write');
     expect(at({ action: 'revoked', detail: { reason: 'user' } })).toBe(
       'revoked Claude grant · revoked by you',
     );
@@ -84,7 +84,7 @@ describe('auditRows (prototype audit log)', () => {
       ['Session', 'claude · acme-shop'],
       ['Worktree', 'fix/checkout'],
       ['Triggered by', 'grant sheet'],
-      ['Policy', '#2 Always ask, require {mfa} for prod write'],
+      ['Policy', '#2 ask + MFA'],
     ]);
     const used = rows(model.auditEntries).find((e) => e.action === 'used') as AuditEntry;
     expect(auditDetailRows(used, policies).map((r) => r.v)).toEqual([
@@ -95,8 +95,21 @@ describe('auditRows (prototype audit log)', () => {
       'claude · acme-shop',
       'fix/checkout',
       '$ vercel deploy --prod',
-      '#1 Auto-approve read on any staging or preview target',
+      '#1 auto-approve staging reads',
     ]);
+    const expired = rows(model.auditEntries).find((e) => e.action === 'expired') as AuditEntry;
+    expect(auditDetailRows(expired, policies).map((r) => r.v)).toEqual([
+      'system',
+      'aws-acme-prod',
+      'read',
+      '—',
+      'gemini · acme-shop',
+      'main',
+      'idle timer',
+      '#3 idle expiry',
+    ]);
+    const custom = policies.map((p) => ({ ...p, builtinKey: null, ruleText: 'Deny deploys after 18:00' }));
+    expect(auditDetailRows(granted, custom)[7]?.v).toBe('#2 Deny deploys after 18:00');
     const bare: AuditEntry = {
       ...used,
       action: 'used',
@@ -156,14 +169,22 @@ describe('inbox', () => {
         r.age,
       ]),
     ).toEqual([
-      ['Codex', 'acme-shop', 'Supabase', 'prod', true, 'read, write', 'migration 0042', '3m'],
-      ['Claude', 'acme-shop', 'AWS acme-prod', 'prod', true, 'read', 'list ECS services', '9m'],
-      ['Cursor', 'acme-shop', 'Vercel', 'preview', false, 'deploy', 'preview deploy for #88', '14m'],
+      ['Codex', 'acme-shop', 'Supabase prod', 'prod', true, 'write', 'migration 0042', '3m'],
+      ['Claude', 'infra-tools', 'AWS acme-prod', 'prod', true, 'read', 'list ECS services', '9m'],
+      ['Cursor', 'blog-v2', 'Vercel', 'preview', false, 'deploy', 'preview deploy for #88', '14m'],
     ]);
+    expect(inboxRows(model, NOW)[0]?.scopes).toEqual(['read', 'write']);
     expect(inboxTabLabel(model, NOW)).toBe('Inbox · 3');
   });
+  it('headline scope and target label', () => {
+    expect(headlineScope(['read', 'delete'])).toBe('delete');
+    expect(headlineScope([])).toBe('');
+    expect(inboxTargetLabel({ name: 'Supabase', provider: 'supabase', env: 'staging' })).toBe('Supabase');
+    expect(inboxTargetLabel({ name: 'Supabase', provider: 'supabase', env: 'prod' })).toBe('Supabase prod');
+    expect(inboxTargetLabel({ name: 'AWS acme-prod', provider: 'aws', env: 'prod' })).toBe('AWS acme-prod');
+  });
   it('drops requests whose target is gone; no session → —', () => {
-    const noTarget = { ...model, targets: removeRows(model.targets, [ids.target.awsProd]) };
+    const noTarget = { ...model, targets: removeRows(model.targets, [ids.target.infraAws]) };
     expect(inboxRows(noTarget, NOW)).toHaveLength(2);
     const g = model.grants.byId[ids.grant.awsClaude] as Grant;
     const detached = { ...model, grants: upsertRows(model.grants, [{ ...g, sessionId: null }]) };

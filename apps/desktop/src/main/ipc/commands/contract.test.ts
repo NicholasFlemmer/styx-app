@@ -82,12 +82,13 @@ describe('command contract', () => {
 
   it('audit.list pages by seq and audit.verifyChain reports the fixture chain', async () => {
     const { app, sender } = makeTestApp();
+    const n = fixtures.demoFixture().auditEntries.length;
     const page = await app.bus.dispatch(sender, 'audit.list', { limit: 2 });
-    expect(page).toMatchObject({ ok: true, value: { entries: [{ seq: 5 }, { seq: 4 }], nextCursor: 4 } });
-    const next = await app.bus.dispatch(sender, 'audit.list', { cursor: 4, limit: 10 });
+    expect(page).toMatchObject({ ok: true, value: { entries: [{ seq: n }, { seq: n - 1 }], nextCursor: n - 1 } });
+    const next = await app.bus.dispatch(sender, 'audit.list', { cursor: n - 1, limit: 10 });
     expect(next).toMatchObject({
       ok: true,
-      value: { entries: [{ seq: 3 }, { seq: 2 }, { seq: 1 }], nextCursor: null },
+      value: { entries: Array.from({ length: n - 2 }, (_, i) => ({ seq: n - 2 - i })), nextCursor: null },
     });
     // Seeding re-chains fixture rows, so the demo chain verifies.
     expect(await app.bus.dispatch(sender, 'audit.verifyChain', {})).toMatchObject({

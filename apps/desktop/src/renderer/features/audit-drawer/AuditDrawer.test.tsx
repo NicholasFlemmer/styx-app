@@ -44,7 +44,7 @@ describe('AuditDrawer', () => {
       ['Session', 'claude · acme-shop'],
       ['Worktree', 'fix/checkout'],
       ['Triggered by', 'grant sheet'],
-      ['Policy', '#2 Always ask, require Touch ID for prod write'],
+      ['Policy', '#2 ask + MFA'],
     ]) {
       expect(screen.getByText(k as string)).toBeTruthy();
       expect(screen.getByText(v as string)).toBeTruthy();
@@ -74,7 +74,6 @@ describe('AuditDrawer', () => {
 
   it.each([
     ['system-issued expiry', fixtures.ids.audit(2)],
-    ['agent request without a live grant', fixtures.ids.audit(4)],
     ['entry without a grant', fixtures.ids.audit(1)],
   ])('Revoke now is disabled for %s', (_name, auditId) => {
     open(auditId);
@@ -82,7 +81,7 @@ describe('AuditDrawer', () => {
   });
 
   it('✕ pops the overlay; an unknown entry closes itself', () => {
-    const id = open(fixtures.ids.audit(5));
+    const id = open(fixtures.ids.audit(4));
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(useUiStore.getState().overlays.some((o) => o.id === id)).toBe(false);
     cleanup();

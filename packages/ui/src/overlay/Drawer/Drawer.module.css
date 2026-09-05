@@ -18,6 +18,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    box-sizing: border-box;
+    /* Prototype row: 12px padding around a 14px text ✕ at normal line-height (17px) + hairline = 42px. */
+    min-height: 42px;
     padding: 12px 16px;
     border-bottom: 1px solid var(--ln);
   }
@@ -78,7 +81,8 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--mu);
-    line-height: 1.6;
+    /* Prototype label spans carry no line-height: `normal` keeps the cap height 1px under the row's top padding. */
+    line-height: normal;
   }
   .rowValue {
     font-family: var(--font-mono);

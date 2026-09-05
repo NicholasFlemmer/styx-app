@@ -61,7 +61,6 @@ export const ids = {
     fixCheckout: fid<'WorktreeId'>('wt', 2),
     testFlaky: fid<'WorktreeId'>('wt', 3),
     featPromo: fid<'WorktreeId'>('wt', 4),
-    docs: fid<'WorktreeId'>('wt', 5),
     blogMain: fid<'WorktreeId'>('wt', 6),
     featMdx: fid<'WorktreeId'>('wt', 7),
     infraMain: fid<'WorktreeId'>('wt', 8),
@@ -91,6 +90,7 @@ export const ids = {
     clientGcp: fid<'TargetId'>('tgt', 10),
     clientGithub: fid<'TargetId'>('tgt', 11),
     sideSupabase: fid<'TargetId'>('tgt', 12),
+    blogVercelPreview: fid<'TargetId'>('tgt', 13),
   },
   grant: {
     vercelProdClaude: fid<'GrantId'>('grant', 1),
@@ -103,8 +103,6 @@ export const ids = {
   ask: {
     codexGrant: fid<'AskId'>('ask', 1),
     blogPlan: fid<'AskId'>('ask', 2),
-    claudeAws: fid<'AskId'>('ask', 3),
-    cursorPreview: fid<'AskId'>('ask', 4),
   },
   audit: (n: number): AuditId => fid<'AuditId'>('audit', n),
   message: (n: number): MessageId => fid<'MessageId'>('msg', n),
@@ -220,10 +218,6 @@ export const demoWorktrees = (): Worktree[] => [
     mergedAt: ago(1 * DAY),
     createdAt: ago(2 * DAY),
   }),
-  worktree(ids.worktree.docs, ids.repo.acmeShop, ids.project.acmeShop, 'docs', {
-    owner: { kind: 'session', sessionId: ids.session.gemini },
-    createdAt: ago(50 * MIN),
-  }),
   worktree(ids.worktree.blogMain, ids.repo.blogV2, ids.project.blogV2, 'main'),
   worktree(ids.worktree.featMdx, ids.repo.blogV2, ids.project.blogV2, 'feat/mdx', {
     owner: { kind: 'session', sessionId: ids.session.blog },
@@ -312,7 +306,8 @@ export const demoSessions = (): Session[] => [
       startedAt: ago(1 * HOUR),
     },
   ),
-  session(ids.session.gemini, ids.project.acmeShop, ids.worktree.docs, 'gemini', 'idle', 'Idle', null, {
+  /** Idle on the main worktree: the prototype nav counts `4 wt` and Repo has four lanes (discrepancy #16). */
+  session(ids.session.gemini, ids.project.acmeShop, ids.worktree.acmeMain, 'gemini', 'idle', 'Idle', null, {
     startedAt: ago(20 * MIN),
   }),
   session(
@@ -415,6 +410,10 @@ export const demoAcmeTargets = (): Target[] => [
 /** Targets of the other projects (Home table "Targets" column). */
 export const demoOtherTargets = (): Target[] => [
   target(ids.target.blogVercel, ids.project.blogV2, 'vercel', 'Vercel', 'prod', 'ask-mfa', {
+    teamSlug: 'acme',
+    project: 'blog-v2',
+  }),
+  target(ids.target.blogVercelPreview, ids.project.blogV2, 'vercel', 'Vercel', 'preview', 'always', {
     teamSlug: 'acme',
     project: 'blog-v2',
   }),
@@ -524,11 +523,16 @@ export const demoGrants = (): Grant[] => [
       requestedAt: ago(3 * MIN),
     },
   ),
-  /** Inbox row: Claude → AWS acme-prod · read · "list ECS services". */
+  /**
+   * Inbox row: `Claude · infra-tools → AWS acme-prod · read · "list ECS services"`. The prototype has no Claude
+   * session in infra-tools, so the request hangs off the acme-shop Claude session and the row's project comes
+   * from the target. Like the prototype (`review: () => {}`) it has no PendingAsk, so the Claude session stays
+   * `working` and its fix/checkout lane is not "waiting on grant" (docs/handoff-discrepancies.md #10).
+   */
   grant(
     ids.grant.awsClaude,
     ids.session.claude,
-    ids.target.awsProd,
+    ids.target.infraAws,
     ids.worktree.fixCheckout,
     ['read'],
     'list ECS services',
@@ -536,11 +540,11 @@ export const demoGrants = (): Grant[] => [
       requestedAt: ago(9 * MIN),
     },
   ),
-  /** Inbox row: Cursor → Vercel preview · deploy · "preview deploy for #88". */
+  /** Inbox row: `Cursor · blog-v2 → Vercel · preview · deploy · "preview deploy for #88"` (same caveat as above). */
   grant(
     ids.grant.vercelPreviewCursor,
     ids.session.cursor,
-    ids.target.vercelPreview,
+    ids.target.blogVercelPreview,
     ids.worktree.featPromo,
     ['deploy'],
     'preview deploy for #88',
@@ -553,7 +557,7 @@ export const demoGrants = (): Grant[] => [
     ids.grant.awsGeminiExpired,
     ids.session.gemini,
     ids.target.awsProd,
-    ids.worktree.docs,
+    ids.worktree.acmeMain,
     ['read'],
     'list ECS services',
     {
@@ -605,32 +609,6 @@ export const demoPendingAsks = (): PendingAsk[] => [
     createdAt: ago(9 * MIN),
     resolvedAt: null,
   },
-  {
-    id: ids.ask.claudeAws,
-    sessionId: ids.session.claude,
-    kind: 'grant',
-    grantId: ids.grant.awsClaude,
-    payload: { kind: 'grant', grantId: ids.grant.awsClaude },
-    state: 'open',
-    resolution: null,
-    position: 0,
-    brokerRequestId: 'req-0043',
-    createdAt: ago(9 * MIN),
-    resolvedAt: null,
-  },
-  {
-    id: ids.ask.cursorPreview,
-    sessionId: ids.session.cursor,
-    kind: 'grant',
-    grantId: ids.grant.vercelPreviewCursor,
-    payload: { kind: 'grant', grantId: ids.grant.vercelPreviewCursor },
-    state: 'open',
-    resolution: null,
-    position: 0,
-    brokerRequestId: 'req-0088',
-    createdAt: ago(14 * MIN),
-    resolvedAt: null,
-  },
 ];
 
 // --- Policies -----------------------------------------------------------------
@@ -675,7 +653,7 @@ const auditEntry = (
   ...extra,
 });
 
-/** Five rows; newest first they read 09:41 used · 09:40 requested · 09:12 granted · 08:58 revoked · 08:30 opened PR (UTC). */
+/** The prototype's four rows; newest first they read 09:41 used · 09:12 granted · 08:58 revoked · 08:30 opened PR (UTC). */
 export const demoAuditEntries = (): AuditEntry[] => [
   auditEntry(1, ago(73 * MIN), {
     actorKind: 'agent',
@@ -698,15 +676,14 @@ export const demoAuditEntries = (): AuditEntry[] => [
     action: 'expired',
     targetId: ids.target.awsProd,
     sessionId: ids.session.gemini,
-    worktreeId: ids.worktree.docs,
+    worktreeId: ids.worktree.acmeMain,
     grantId: ids.grant.awsGeminiExpired,
     policyId: ids.policy['idle-expiry-1h'],
     targetLabel: 'aws-acme-prod',
     sessionLabel: 'gemini · acme-shop',
-    worktreeLabel: 'docs',
+    worktreeLabel: 'main',
     agent: 'gemini',
     scope: ['read'],
-    duration: '1h',
     triggeredBy: 'idle timer',
     detail: { reason: 'idle' },
   }),
@@ -728,23 +705,7 @@ export const demoAuditEntries = (): AuditEntry[] => [
     triggeredBy: 'grant sheet',
     detail: { decidedBy: 'user', mfaVerified: true },
   }),
-  auditEntry(4, ago(3 * MIN), {
-    actorKind: 'agent',
-    actorLabel: 'Codex',
-    action: 'requested',
-    targetId: ids.target.supabaseProd,
-    sessionId: ids.session.codex,
-    worktreeId: ids.worktree.testFlaky,
-    grantId: ids.grant.supabaseCodex,
-    targetLabel: 'supabase-prod',
-    sessionLabel: 'codex · acme-shop',
-    worktreeLabel: 'test/flaky',
-    agent: 'codex',
-    scope: ['read', 'write'],
-    triggeredBy: 'mcp:request_access',
-    detail: { reason: 'migration 0042' },
-  }),
-  auditEntry(5, ago(2 * MIN), {
+  auditEntry(4, ago(2 * MIN), {
     actorKind: 'agent',
     actorLabel: 'Claude',
     action: 'used',

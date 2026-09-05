@@ -305,7 +305,7 @@ describe('chat', () => {
   it('meta lines', () => {
     expect(chatMeta(model, ids.session.codex, NOW)).toBe('codex · test/flaky · 3m · waiting on you');
     expect(chatMeta(model, ids.session.claude, NOW)).toBe('claude · fix/checkout · 14m');
-    expect(chatMeta(model, ids.session.gemini, NOW)).toBe('gemini · docs · —');
+    expect(chatMeta(model, ids.session.gemini, NOW)).toBe('gemini · main · —');
     expect(chatMeta(model, idFrom<'SessionId'>('nope') as SessionId, NOW)).toBe('');
   });
   it('queued label and composer placeholder', () => {
