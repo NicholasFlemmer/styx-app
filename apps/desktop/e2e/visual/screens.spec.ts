@@ -9,7 +9,7 @@
  * States the app cannot render yet are skipped, not failed.
  */
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { launchStyx } from '../launch';
 import { comparePng, type CompareResult, type Rect } from './compare';
@@ -81,7 +81,6 @@ let appRendersScreens = false;
 
 test.describe('visual fidelity vs prototype', () => {
   test.beforeAll(async () => {
-    rmSync(RESULTS_FILE, { force: true });
     if (baselines.length === 0) return;
     // Fast path: if a plain launch never reports a ready screen, every state is skipped without a launch each.
     const { app, page } = await launchStyx();
@@ -105,7 +104,8 @@ test.describe('visual fidelity vs prototype', () => {
       }
 
       const fixture = b.state.endsWith('-empty') ? 'empty' : b.state.endsWith('-error') ? 'error' : 'demo';
-      const { app, page } = await launchStyx({ screen: b.state, theme: b.theme, chrome: b.chrome, fixture });
+      // Screenshots use fixture data only; real demo repos would re-point project paths (nav footer) away from the prototype.
+      const { app, page } = await launchStyx({ screen: b.state, theme: b.theme, chrome: b.chrome, fixture, env: { STYX_DEMO_REPOS: '0' } });
       try {
         await sizeWindow(app, page);
         const ready = await waitForReady(page, READY_TIMEOUT);

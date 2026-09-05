@@ -2,6 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: '.',
+  globalSetup: './visual/global-setup.ts',
   timeout: 60_000,
   retries: 0,
   workers: 1,
