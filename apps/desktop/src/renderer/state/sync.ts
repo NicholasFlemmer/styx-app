@@ -82,6 +82,8 @@ export const connectSync = (): (() => void) => {
   const offBannerClear = onEvent('banner.clear', ({ bannerKey }) =>
     useUiStore.getState().clearBanner(bannerKey),
   );
+  // Tray left-click / dock-menu items (spec §4.14) route the main window to a screen.
+  const offNavGo = onEvent('nav.go', ({ screen }) => useUiStore.getState().setScreen(screen));
 
   void resync();
 
@@ -90,5 +92,6 @@ export const connectSync = (): (() => void) => {
     offDelta();
     offBannerSet();
     offBannerClear();
+    offNavGo();
   };
 };
