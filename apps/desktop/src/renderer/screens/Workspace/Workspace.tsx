@@ -2,6 +2,7 @@ import {
   AGENT_LABEL,
   copy,
   rows,
+  sessionTabs,
   sessionsInProject,
   type AgentChange,
   type ProjectId,
@@ -76,6 +77,8 @@ export function Workspace() {
   const column = useRef<HTMLDivElement>(null);
 
   const worktree = projectId === null ? null : editorWorktree(model, projectId);
+  // The chat's active tab (falls back to the first tab when no session was picked yet).
+  const activeSessionId = projectId === null ? null : sessionTabs(model, projectId, sessionId).activeId;
   const worktreeId = worktree?.id ?? null;
   const changes = useMemo(
     () => (worktreeId === null ? [] : pendingHunksOf(model.hunks, worktreeId)),
@@ -179,9 +182,9 @@ export function Workspace() {
             }}
           />
         )}
-        {sessionId !== null && (
+        {activeSessionId !== null && (
           <TerminalPane
-            sessionId={sessionId}
+            sessionId={activeSessionId}
             worktreeId={worktreeId}
             branch={worktree.branch}
             screenReader={screenReader}

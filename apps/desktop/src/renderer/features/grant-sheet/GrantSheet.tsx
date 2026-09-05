@@ -15,6 +15,7 @@ import {
 import { Button, Checkbox, ChipGroup, Label, Sheet, SheetAccentHeader, SheetFooter, Tag } from '@styx/ui';
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { announce } from '../../app/announcer';
+import { chromePlatform } from '../../state/bridge';
 import { command } from '../../state/commands';
 import { useModel, useUi } from '../../state/hooks';
 import { useUiStore } from '../../state/ui-store';
@@ -95,7 +96,9 @@ interface GrantFormProps extends GrantSheetProps {
 
 function GrantForm({ id, sessionId, askId, grant, target, session, model }: GrantFormProps) {
   const popOverlay = useUi((u) => u.popOverlay);
+  /** Keyboard Mod follows the OS; platform words (Touch ID / Windows Hello) follow the rendered chrome (spec §7). */
   const platform = useUi((u) => u.platform);
+  const copyPlatform = chromePlatform();
   const grantButton = useRef<HTMLButtonElement>(null);
   const requested: readonly Scope[] = grant.scope;
 
@@ -175,7 +178,7 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
         initialFocus={grantButton}
         footer={
           <SheetFooter>
-            <Button size="footer" grow={1} onClick={deny} data-grant-deny="true">
+            <Button size="footer" grow={1} className={s['footerButton']} onClick={deny} data-grant-deny="true">
               {copy.grantSheet.deny}
             </Button>
             <Button
@@ -183,11 +186,12 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
               size="footer"
               variant="accent"
               grow={1.4}
+              className={s['footerButton']}
               onClick={approve}
               disabled={payload.scope.length === 0}
               data-grant-approve="true"
             >
-              {grantButtonLabel(target.env, payload.scope, duration, platform)}
+              {grantButtonLabel(target.env, payload.scope, duration, copyPlatform)}
             </Button>
           </SheetFooter>
         }
@@ -237,7 +241,7 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
         />
         {target.env === 'prod' && (
           <div className={s['finePrint']}>
-            {fill(copy.grantSheet.prodNote, { mfa: platformCopy(platform).mfa })}
+            {fill(copy.grantSheet.prodNote, { mfa: platformCopy(copyPlatform).mfa })}
           </div>
         )}
         {error !== null && (

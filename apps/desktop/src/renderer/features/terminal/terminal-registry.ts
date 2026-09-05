@@ -6,7 +6,7 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { bridge, env, platform } from '../../state/bridge';
-import { staticLines, xtermTheme } from './terminal-theme';
+import { STATIC_CARET, staticLines, xtermTheme } from './terminal-theme';
 
 const RESERVED_CHORDS = RESERVED.map(parseChord);
 
@@ -71,12 +71,19 @@ export const fitTerminal = (entry: TerminalEntry): void => {
   });
 };
 
+/** Prototype lines with a drawn caret (xterm only paints its own cursor once the terminal was focused). */
+const writeStatic = (entry: TerminalEntry): void => {
+  entry.term.options.cursorInactiveStyle = 'none';
+  entry.term.options.cursorStyle = 'block';
+  entry.term.write(staticLines(currentTheme()) + STATIC_CARET);
+};
+
 const attachPty = async (entry: TerminalEntry, worktreeId: WorktreeId): Promise<void> => {
   const api = bridge();
   const pty = api?.pty;
   // e2e / renderer-only dev: the prototype's static lines, deterministic and prompt-free.
   if (api?.command === undefined || pty === undefined || env().e2e === true) {
-    entry.term.write(staticLines(currentTheme()));
+    writeStatic(entry);
     return;
   }
   let terminalId: string | null = null;
@@ -87,7 +94,7 @@ const attachPty = async (entry: TerminalEntry, worktreeId: WorktreeId): Promise<
     terminalId = null;
   }
   if (terminalId === null) {
-    entry.term.write(staticLines(currentTheme()));
+    writeStatic(entry);
     return;
   }
   entry.terminalId = terminalId;
@@ -132,7 +139,8 @@ export const getTerminal = (
   const term = new Terminal({
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 12,
-    lineHeight: 1.6,
+    // xterm scales the measured glyph box (~16px for JetBrains Mono 12), not the font size: 1.2 ≈ the prototype's 1.6 × 12px.
+    lineHeight: 1.2,
     theme: xtermTheme(currentTheme()),
     cursorStyle: 'block',
     cursorInactiveStyle: 'block',

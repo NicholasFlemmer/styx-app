@@ -32,7 +32,6 @@
     text-transform: uppercase;
     color: var(--mu);
     margin-bottom: 4px;
-    line-height: normal;
     user-select: none;
   }
   .host {

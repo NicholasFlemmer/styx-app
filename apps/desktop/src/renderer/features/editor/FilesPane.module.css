@@ -62,8 +62,11 @@
   .spacer {
     flex: 1;
   }
+  /* Prototype: the footer button inherits the pane's mono face. */
   .openIn {
     margin: 12px;
     padding: 6px;
+    font-family: var(--font-mono);
+    line-height: normal;
   }
 }

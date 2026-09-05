@@ -48,10 +48,13 @@ export const sgrColor = (hex: string): string => {
   const r = Number.parseInt(v.slice(0, 2), 16);
   const g = Number.parseInt(v.slice(2, 4), 16);
   const b = Number.parseInt(v.slice(4, 6), 16);
-  return `[38;2;${r};${g};${b}m`;
+  return `\u001b[38;2;${r};${g};${b}m`;
 };
 
-export const SGR_RESET = '[0m';
+export const SGR_RESET = '\u001b[0m';
+
+/** Reverse-video cell standing in for the caret in the static fallback. */
+export const STATIC_CARET = '\u001b[7m \u001b[0m';
 
 /** Prototype terminal lines: `$ npx vitest` / `✓ 42 passed (1.2s)` (timing in `--mu`) / `$ ▮`. */
 export const staticLines = (theme: Theme): string =>

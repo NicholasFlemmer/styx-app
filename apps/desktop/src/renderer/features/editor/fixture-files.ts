@@ -53,7 +53,6 @@ const CHECKOUT_TS = [
   '  audit(receipt)',
   '  return receipt',
   '}',
-  '',
 ].join('\n');
 
 const VALIDATE_TS = [

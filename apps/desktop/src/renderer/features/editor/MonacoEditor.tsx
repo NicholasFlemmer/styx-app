@@ -23,7 +23,15 @@ interface EditorEntry {
   models: Map<string, ModelEntry>;
   viewStates: Map<string, monaco.editor.ICodeEditorViewState | null>;
   decorations: monaco.editor.IEditorDecorationsCollection;
+  /** Right-pinned `{agent} · {age}` labels, one overlay widget per labelled line. */
+  labels: LabelWidget[];
   path: string | null;
+}
+
+interface LabelWidget {
+  widget: monaco.editor.IOverlayWidget;
+  node: HTMLDivElement;
+  line: number;
 }
 
 const editors = new Map<string, EditorEntry>();
@@ -42,13 +50,16 @@ const watchTheme = (): void => {
   );
 };
 
-/** Prototype recipe: JetBrains Mono 12.5/22, 3-char gutter + 14px decoration gap, nothing else drawn. */
+/**
+ * Prototype recipe: JetBrains Mono 12.5/22, 30px right-aligned line numbers (4 × 7.5px digits; the spec's 3 chars
+ * would sit the code 7px left of the prototype) + 14px decoration gap, nothing else drawn.
+ */
 const OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
   fontFamily: "'JetBrains Mono', ui-monospace, monospace",
   fontSize: 12.5,
   lineHeight: 22,
   fontLigatures: false,
-  lineNumbersMinChars: 3,
+  lineNumbersMinChars: 4,
   lineDecorationsWidth: 14,
   glyphMargin: false,
   folding: false,
@@ -107,8 +118,10 @@ const getEntry = (worktreeId: WorktreeId, screenReader: boolean): EditorEntry =>
     models: new Map(),
     viewStates: new Map(),
     decorations: editor.createDecorationsCollection([]),
+    labels: [],
     path: null,
   };
+  editor.onDidScrollChange(() => positionLabels(entry));
   editors.set(worktreeId, entry);
   void document.fonts.ready.then(() => monaco.editor.remeasureFonts());
   return entry;
@@ -125,6 +138,8 @@ const getModel = async (entry: EditorEntry, worktreeId: WorktreeId, path: string
   const again = entry.models.get(path);
   if (again !== undefined) return again;
   const model = monaco.editor.createModel(loaded.text, languageOf(path), uriFor(worktreeId, path));
+  // Monochrome: bracket pair colours are a model option, not an editor one.
+  model.updateOptions({ bracketColorizationOptions: { enabled: false, independentColorPoolPerBracketType: false } });
   model.setEOL(
     loaded.eol === 'crlf' ? monaco.editor.EndOfLineSequence.CRLF : monaco.editor.EndOfLineSequence.LF,
   );
@@ -164,34 +179,49 @@ const toDecorations = (
   model: monaco.editor.ITextModel,
   decos: ReturnType<typeof buildHunkDecorations>,
 ): monaco.editor.IModelDeltaDecoration[] =>
-  decos.flatMap((d) => {
-    if (d.line > model.getLineCount()) return [];
-    const out: monaco.editor.IModelDeltaDecoration[] = [
-      {
-        range: new monaco.Range(d.line, 1, d.line, 1),
-        options: {
-          isWholeLine: true,
-          className: 'styx-hunk-line',
-          stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-        },
+  decos
+    .filter((d) => d.line <= model.getLineCount())
+    .map((d) => ({
+      range: new monaco.Range(d.line, 1, d.line, 1),
+      options: {
+        isWholeLine: true,
+        className: 'styx-hunk-line',
+        marginClassName: 'styx-hunk-line',
+        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
       },
-    ];
-    if (d.label !== null) {
-      const col = model.getLineMaxColumn(d.line);
-      out.push({
-        range: new monaco.Range(d.line, col, d.line, col),
-        options: {
-          showIfCollapsed: true,
-          after: {
-            content: d.label,
-            inlineClassName: 'styx-hunk-label',
-            cursorStops: monaco.editor.InjectedTextCursorStops.None,
-          },
-        },
-      });
-    }
-    return out;
-  });
+    }));
+
+const positionLabels = (entry: EditorEntry): void => {
+  const scrollTop = entry.editor.getScrollTop();
+  for (const l of entry.labels) {
+    l.node.style.top = `${entry.editor.getTopForLineNumber(l.line) - scrollTop}px`;
+  }
+};
+
+/**
+ * `{agent} · {age}` pinned to the right of the first added line of each hunk. Overlay widgets rather than
+ * injected text: Monaco positions `.view-line > span` absolutely, so an inline label can only pin to the text's
+ * right edge, not the line's.
+ */
+const setLabels = (entry: EditorEntry, decos: ReturnType<typeof buildHunkDecorations>): void => {
+  for (const l of entry.labels) entry.editor.removeOverlayWidget(l.widget);
+  entry.labels = [];
+  const lineCount = entry.editor.getModel()?.getLineCount() ?? 0;
+  for (const d of decos) {
+    if (d.label === null || d.line > lineCount) continue;
+    const node = document.createElement('div');
+    node.className = 'styx-hunk-label';
+    node.textContent = d.label;
+    const widget: monaco.editor.IOverlayWidget = {
+      getId: () => `styx.hunk-label.${d.hunkId}.${d.line}`,
+      getDomNode: () => node,
+      getPosition: () => null,
+    };
+    entry.editor.addOverlayWidget(widget);
+    entry.labels.push({ widget, node, line: d.line });
+  }
+  positionLabels(entry);
+};
 
 /**
  * Monaco bound to a worktree: models per path, hunk decorations (`.styx-hunk-line` + right-pinned label),
@@ -301,6 +331,7 @@ export function MonacoEditor({
       now,
     });
     entry.decorations.set(toDecorations(model, decos));
+    setLabels(entry, decos);
   }, [loaded, path, changes, agentOf, now, contentVersion]);
 
   const onFocus = useCallback((e: FocusEvent<HTMLDivElement>) => {

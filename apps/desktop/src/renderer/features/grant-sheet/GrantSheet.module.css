@@ -2,6 +2,14 @@
   .root {
     display: contents;
   }
+  /* Prototype footer: 14px padding around normal-leading labels (40px), long labels wrap. */
+  .footerButton {
+    min-height: 0;
+    min-width: 0;
+    white-space: normal;
+    line-height: normal;
+    text-align: center;
+  }
   .slash {
     color: var(--mu);
   }

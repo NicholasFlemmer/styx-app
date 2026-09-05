@@ -20,6 +20,8 @@
 .root :global(.monaco-editor) :global(.styx-hunk-label) {
   position: absolute;
   right: 12px;
+  line-height: 1.75;
+  white-space: nowrap;
   font-family: var(--font-ui);
   font-size: 9px;
   font-weight: 600;

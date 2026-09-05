@@ -73,6 +73,7 @@
     display: flex;
     align-items: center;
     color: var(--mu);
+    font-size: 13px;
     cursor: pointer;
   }
   .popout:disabled {
@@ -89,6 +90,15 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  /* Prototype bubbles inherit the transcript's 1.5 leading. */
+  .pane [data-kind='user'] {
+    line-height: 1.5;
+  }
+  /* Prototype hint row: 10px labels at normal leading (the shared Composer squeezes them to 1). */
+  .pane textarea + div,
+  .pane textarea {
+    line-height: normal;
   }
   .code {
     font-family: var(--font-mono);

@@ -8,7 +8,7 @@ import {
   type ReadModel,
   type SessionId,
 } from '@styx/core';
-import { Button, Composer, Icon, Message, StatusDot, Tab, TabRow, Transcript } from '@styx/ui';
+import { Button, Composer, Message, StatusDot, Tab, TabRow, Transcript } from '@styx/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { command } from '../../state/commands';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
@@ -200,7 +200,7 @@ export function ChatPane({ projectId, compact = false }: ChatPaneProps) {
               if (activeId !== null) void command('window.popout', { sessionId: activeId });
             }}
           >
-            <Icon name="popout" />
+            {copy.window.popout}
           </button>
         </div>
       )}
