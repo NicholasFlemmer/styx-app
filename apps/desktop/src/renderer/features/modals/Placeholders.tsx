@@ -46,7 +46,7 @@ export function NewProjectModal({ id }: { id: string }) {
 }
 
 /** Placeholder until Phase 6 ports the connect flow. */
-export function ConnectModal({ id }: { id: string; projectId?: ProjectId | null; provider?: Provider; targetId?: TargetId }) {
+export function ConnectModal({ id }: { id: string; projectId?: ProjectId | null; provider?: Provider | undefined; targetId?: TargetId | undefined }) {
   const popOverlay = useUi((s) => s.popOverlay);
   const close = () => popOverlay(id);
   return (
