@@ -13,6 +13,8 @@ export default defineConfig({
   outputDir: './test-results',
   projects: [
     { name: 'e2e', testMatch: /.*\.spec\.ts/, testIgnore: /visual\// },
+    // axe over every harness state (also runs inside `e2e`: `pnpm e2e -- --grep a11y`).
+    { name: 'a11y', testMatch: /a11y\.spec\.ts/ },
     { name: 'visual', testMatch: /visual\/.*\.spec\.ts/ },
   ],
 });
