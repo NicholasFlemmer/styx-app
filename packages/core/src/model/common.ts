@@ -42,7 +42,8 @@ export type Provider = z.infer<typeof providerSchema>;
 export const envSchema = z.enum(['prod', 'staging', 'preview', 'scm']);
 export type Env = z.infer<typeof envSchema>;
 
-export const authMethodSchema = z.enum(['oauth', 'key', 'ssh']);
+/** `cli` = Styx reuses the login the provider's own CLI already holds (`gcloud`/`aws`/`gh`/`vercel`/`supabase`); no secret in the vault. */
+export const authMethodSchema = z.enum(['oauth', 'key', 'ssh', 'cli']);
 export type AuthMethod = z.infer<typeof authMethodSchema>;
 
 export const targetPolicySchema = z.enum(['ask-mfa', 'ask', 'always']);

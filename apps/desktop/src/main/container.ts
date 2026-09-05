@@ -6,6 +6,7 @@ import { Repos } from './db/repos';
 import { CommandBus } from './ipc/bus';
 import { registerAllCommands } from './ipc/commands';
 import { ProviderRegistry } from './providers';
+import { ExecaCliRunner, type CliRunner } from './providers/cli-runner';
 import { GitHubAdapter } from './providers/github';
 import { BrokerHost } from './broker/host';
 import { ActivityService } from './services/activity-service';
@@ -21,6 +22,7 @@ import type { NotificationService } from './services/notification-service';
 import { ProjectService } from './services/project-service';
 import { PtyLog } from './services/pty-log';
 import { PtyService } from './services/pty-service';
+import { RefreshScheduler } from './services/refresh-scheduler';
 import { RetentionJob } from './services/retention-job';
 import { SessionService } from './services/session-service';
 import { StreamRunner, type StreamRunnerLike } from './services/stream-runner';
@@ -72,9 +74,13 @@ export interface ContainerOptions {
   pty?: PtyService;
   stream?: StreamRunnerLike;
   watch?: WatchFactory;
+  /** Provider CLI runner (`gcloud` / `aws` / `gh` / `vercel` / `supabase`); faked in tests. */
+  cli?: CliRunner;
   tickMs?: number;
   /** RetentionJob period (hourly by default). */
   retentionMs?: number;
+  /** RefreshScheduler period (30 min by default). */
+  refreshMs?: number;
 }
 
 export interface Container {
@@ -88,6 +94,8 @@ export interface Container {
   stream: StreamRunnerLike;
   ptyLog: PtyLog;
   retention: RetentionJob;
+  refresh: RefreshScheduler;
+  cli: CliRunner;
   detect: DetectService;
   ideImport: IdeImportService;
   vault: CredentialVault;
@@ -134,8 +142,10 @@ export function buildContainer(opts: ContainerOptions): Container {
   const detect = opts.detect ?? new DetectService();
   const ideImport =
     opts.ideImport ?? new IdeImportService({ platform: runtime.platform, home: homedir(), env: process.env });
+  const cli =
+    opts.cli ?? new ExecaCliRunner({ loginPath: () => pty.resolveLoginPath(), platform: runtime.platform });
   const providers = new ProviderRegistry(
-    { vault: opts.vault, fetch: opts.fetch ?? fetch, now },
+    { vault: opts.vault, fetch: opts.fetch ?? fetch, now, cli },
     { platform: runtime.platform },
   );
   const mfa = new MfaService(opts.mfaProvider);
@@ -167,6 +177,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     sessions,
     platform: runtime.platform,
     projectRules: (projectId) => projects.projectRules(projectId),
+    onIssueFailure: (targetId, error) => targets.noteIssueFailure(targetId, error),
   });
   const hunks = new HunkService({
     repos,
@@ -191,6 +202,12 @@ export function buildContainer(opts: ContainerOptions): Container {
         repos.discovery.ides().map((i) => ({ kind: i.kind, configDir: i.configDir })),
       ),
   });
+  const terminals = new TerminalService(repos, pty, () => ({
+    STYX_SHIM_DIR: runtime.shimDir,
+    STYX_CLI: runtime.cliPath,
+    STYX_EXE: runtime.exePath,
+    STYX_BROKER: runtime.brokerEndpoint,
+  }));
   const targets = new TargetService({
     repos,
     publisher,
@@ -201,13 +218,16 @@ export function buildContainer(opts: ContainerOptions): Container {
     grants,
     activity,
     openExternal: opts.openExternal,
+    terminals,
+    pty,
+    cli,
   });
-  const terminals = new TerminalService(repos, pty, () => ({
-    STYX_SHIM_DIR: runtime.shimDir,
-    STYX_CLI: runtime.cliPath,
-    STYX_EXE: runtime.exePath,
-    STYX_BROKER: runtime.brokerEndpoint,
-  }));
+  const refresh = new RefreshScheduler({
+    repos,
+    clock,
+    checkHealth: (t, reason) => targets.checkHealth(t, reason),
+    ...(opts.refreshMs !== undefined ? { intervalMs: opts.refreshMs } : {}),
+  });
   const broker = new BrokerHost({
     repos,
     grants,
@@ -245,6 +265,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     stream,
     ptyLog,
     retention,
+    refresh,
+    cli,
     detect,
     ideImport,
     vault: opts.vault,
@@ -268,11 +290,13 @@ export function buildContainer(opts: ContainerOptions): Container {
     async start() {
       grants.start();
       retention.start();
+      refresh.start();
       await broker.listen();
     },
     async shutdown() {
       for (const s of repos.sessions.live()) broker.notifyStopping(s.id);
       retention.stop();
+      refresh.stop();
       sessions.killAll();
       await hunks.closeAll();
       await broker.close();

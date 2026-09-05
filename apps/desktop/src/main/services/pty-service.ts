@@ -1,6 +1,7 @@
 import type { IPty } from 'node-pty';
 import { execa } from 'execa';
 import { EventEmitter } from 'node:events';
+import { STRIPPED_ENV } from '../providers/cli-runner';
 
 export interface PtySpawnOptions {
   id: string;
@@ -27,7 +28,7 @@ export class PtyService extends EventEmitter<PtyEvents> {
   private mod: PtyModule | null = null;
   private loginPath: string | null = null;
 
-  constructor(private readonly platform: NodeJS.Platform = process.platform) {
+  constructor(readonly platform: NodeJS.Platform = process.platform) {
     super();
   }
 
@@ -62,7 +63,7 @@ export class PtyService extends EventEmitter<PtyEvents> {
     const args = opts.args ?? (this.platform === 'win32' ? [] : ['-il']);
     const loginPath = await this.resolveLoginPath();
     const env: Record<string, string> = {};
-    for (const [k, v] of Object.entries(process.env)) if (v !== undefined && k !== 'ELECTRON_RUN_AS_NODE') env[k] = v;
+    for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !STRIPPED_ENV.has(k)) env[k] = v;
     Object.assign(env, { TERM: 'xterm-256color', COLORTERM: 'truecolor', LANG: env['LANG'] ?? 'en_US.UTF-8', PATH: loginPath }, opts.env ?? {});
     const p = spawn(shell, args, { name: 'xterm-256color', cols: opts.cols ?? 120, rows: opts.rows ?? 30, cwd: opts.cwd, env });
     this.ptys.set(opts.id, p);

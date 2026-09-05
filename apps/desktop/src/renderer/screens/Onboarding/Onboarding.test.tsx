@@ -195,11 +195,11 @@ describe('Onboarding', () => {
     expect(screen.getByText(/macOS Keychain/)).toBeTruthy();
     const tiles = screen.getByRole('heading').parentElement?.querySelectorAll('[data-provider]') ?? [];
     expect([...tiles].map((t) => t.textContent)).toEqual([
-      'VercelOAuth · connect →',
-      'AWSIAM / key · connect →',
-      'GCPIAM / key · connect →',
-      'SupabaseOAuth · connect →',
-      'GitHubOAuth · connect →',
+      'Vercelvercel CLI · connect →',
+      'AWSaws CLI · connect →',
+      'GCPgcloud CLI · connect →',
+      'Supabasesupabase CLI · connect →',
+      'GitHubgh CLI · connect →',
       'SSH hostSSH · connect →',
     ]);
     fireEvent.click(screen.getByRole('button', { name: /^AWS/ }));

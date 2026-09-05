@@ -63,6 +63,19 @@
   .state {
     font-size: 11.5px;
   }
+  /* CLI-backed targets: `via gcloud · nic@acme.dev` under the state, same mono muted recipe. */
+  .meta {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Refresh · Edit side by side in the trailing cell. */
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 14px;
+  }
   .action {
     position: relative;
     font: inherit;

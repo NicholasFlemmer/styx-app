@@ -46,7 +46,61 @@ describe('ipc contract', () => {
     expect(EVENT_NAMES).toContain('theme.resolved');
     expect(EVENT_NAMES).toContain('nav.go');
     expect(isCommandName('project.templates')).toBe(true);
-    expect(commands['project.templates'].output.safeParse({ builtins: ['node'], org: [{ name: 'tpl', fullName: 'acme/tpl' }] }).success).toBe(true);
+    // CLI-first connect: status / login terminal / save, plus the health refresh.
+    for (const n of [
+      'target.connect.cliStatus',
+      'target.connect.cliLogin',
+      'target.connect.cliSave',
+      'target.refresh',
+    ])
+      expect(isCommandName(n), n).toBe(true);
+    expect(EVENT_NAMES).toContain('connect.cliLogin');
+    expect(
+      commands['target.connect.cliStatus'].output.safeParse({
+        installed: true,
+        binary: '/usr/local/bin/gcloud',
+        version: '500.0.0',
+        loginCommand: 'gcloud auth login',
+        accounts: [{ id: 'nic@acme.dev', label: 'nic@acme.dev', active: true, detail: 'project acme-shop' }],
+      }).success,
+    ).toBe(true);
+    expect(
+      commands['target.connect.cliSave'].input.parse({
+        projectId: ids.project.acmeShop,
+        provider: 'aws',
+        env: 'prod',
+        name: 'AWS acme-prod',
+        account: 'acme-prod',
+      }),
+    ).toMatchObject({ config: {} });
+    expect(
+      commands['target.connect.cliSave'].input.safeParse({
+        projectId: ids.project.acmeShop,
+        provider: 'aws',
+        env: 'prod',
+        name: 'AWS acme-prod',
+        account: '',
+      }).success,
+    ).toBe(false);
+    expect(commands['target.refresh'].input.parse({})).toEqual({});
+    expect(
+      events['connect.cliLogin'].safeParse({ terminalId: 'term:1', provider: 'gh', status: 'running' })
+        .success,
+    ).toBe(false);
+    expect(
+      events['connect.cliLogin'].safeParse({
+        terminalId: 'term:1',
+        provider: 'github',
+        status: 'exited',
+        exitCode: 0,
+      }).success,
+    ).toBe(true);
+    expect(
+      commands['project.templates'].output.safeParse({
+        builtins: ['node'],
+        org: [{ name: 'tpl', fullName: 'acme/tpl' }],
+      }).success,
+    ).toBe(true);
     expect(CHANNELS).toEqual({ command: 'styx:cmd', store: 'styx:store', pty: 'styx:pty' });
   });
 

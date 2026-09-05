@@ -6,7 +6,9 @@ import {
   Menu,
   nativeImage,
   nativeTheme,
+  net,
   Notification as OsNotification,
+  powerMonitor,
   shell,
   systemPreferences,
   Tray,
@@ -170,20 +172,33 @@ function mfaProvider(): MfaProvider {
 function electronSurface(): ElectronLike {
   return {
     platform,
-    dock: isMac && app.dock ? { setBadge: (t) => app.dock?.setBadge(t), bounce: (k) => void app.dock?.bounce(k), setMenu: (m) => app.dock?.setMenu(m as Menu) } : null,
+    dock:
+      isMac && app.dock
+        ? {
+            setBadge: (t) => app.dock?.setBadge(t),
+            bounce: (k) => void app.dock?.bounce(k),
+            setMenu: (m) => app.dock?.setMenu(m as Menu),
+          }
+        : null,
     createTray: (image) => new Tray(image as Electron.NativeImage),
     buildMenu: (template) =>
       Menu.buildFromTemplate(
         template.map((i) =>
           i.type === 'separator'
             ? { type: 'separator' as const }
-            : { label: i.label, type: i.type ?? 'normal', ...(i.checked !== undefined ? { checked: i.checked } : {}), click: i.click ?? (() => undefined) },
+            : {
+                label: i.label,
+                type: i.type ?? 'normal',
+                ...(i.checked !== undefined ? { checked: i.checked } : {}),
+                click: i.click ?? (() => undefined),
+              },
         ),
       ),
     imageFromDataUrl: (url) => nativeImage.createFromDataURL(url),
     notificationsSupported: () => OsNotification.isSupported(),
     createNotification: (opts) => new OsNotification(opts),
-    setOverlayIcon: (image, description) => windows?.mainWindow()?.setOverlayIcon(image as Electron.NativeImage | null, description),
+    setOverlayIcon: (image, description) =>
+      windows?.mainWindow()?.setOverlayIcon(image as Electron.NativeImage | null, description),
   };
 }
 
@@ -326,6 +341,14 @@ async function boot(): Promise<void> {
     windowService.applyTheme();
     container?.publisher.sendEvent('theme.resolved', { theme: resolvedTheme() });
   });
+  // Connected targets stay honest without babysitting: re-probe on wake and on focus (plus the 30 min interval).
+  powerMonitor.on('resume', () => {
+    // Wi-Fi comes back a few seconds after the lid opens; probing before that would look like every login is gone.
+    setTimeout(() => {
+      if (net.isOnline()) void container?.refresh.runNow('wake');
+    }, 5000).unref?.();
+  });
+  app.on('browser-window-focus', () => void container?.refresh.runNow('focus'));
 
   windowService.openMain();
   if (pendingUrl) {

@@ -31,6 +31,42 @@ describe('migrations', () => {
     expect(() => db.prepare("DELETE FROM audit_entries WHERE id = 'a'").run()).toThrow(/append-only/);
   });
 
+  it('0002 widens targets.auth_method to cli, keeps rows, grants and the unique key (forward from a DB seeded at 0001)', () => {
+    const db = new Database(':memory:');
+    const all = listMigrations();
+    expect(all.map((m) => m.name)).toEqual(['0000_init', '0001_activity', '0002_auth_method_cli']);
+    // Seed at 0001: a project, two targets and an active grant that cascades on the target.
+    migrate(db, all.slice(0, 2));
+    db.prepare("INSERT INTO projects (id, name, path, initials, created_at, last_activity_at) VALUES ('p', 'x', '/x', 'X', 0, 0)").run();
+    const insertTarget = db.prepare(
+      "INSERT INTO targets (id, project_id, provider, name, env, auth_method, credential_ref, config_json, health, created_at) VALUES (?, 'p', ?, ?, ?, ?, ?, ?, 'ok', 1)",
+    );
+    insertTarget.run('t1', 'aws', 'AWS acme-prod', 'prod', 'key', 'styx:v1:aws:t1:key', '{"region":"us-east-1"}');
+    insertTarget.run('t2', 'github', 'GitHub', 'scm', 'oauth', null, '{}');
+    expect(() => insertTarget.run('t3', 'gcp', 'GCP', 'prod', 'cli', null, '{}')).toThrow(/CHECK/);
+    db.prepare(
+      "INSERT INTO grants (id, target_id, scope_json, scope_mask, duration, reason, state, requested_at, issued_at) VALUES ('g1', 't1', '[\"read\"]', 1, '1h', 'r', 'active', 1, 1)",
+    ).run();
+
+    const res = migrate(db);
+    expect(res).toEqual({ applied: ['0002_auth_method_cli'], version: 3 });
+    expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    const targets = db.prepare('SELECT id, auth_method, credential_ref, config_json FROM targets ORDER BY rowid').all();
+    expect(targets).toEqual([
+      { id: 't1', auth_method: 'key', credential_ref: 'styx:v1:aws:t1:key', config_json: '{"region":"us-east-1"}' },
+      { id: 't2', auth_method: 'oauth', credential_ref: null, config_json: '{}' },
+    ]);
+    expect(db.prepare("SELECT count(*) AS n FROM grants WHERE target_id = 't1'").get()).toEqual({ n: 1 }); // the rebuild did not cascade
+    expect(() => insertTarget.run('t3', 'gcp', 'GCP', 'prod', 'cli', 'styx:v1:gcp:t3:cli', '{}')).not.toThrow();
+    expect(() => insertTarget.run('t4', 'gcp', 'GCP', 'prod', 'cli', null, '{}')).toThrow(/UNIQUE/); // (project, provider, env, name) survives
+    expect(() => insertTarget.run('t5', 'gcp', 'GCP', 'prod', 'magic', null, '{}')).toThrow(/CHECK/);
+    // FK actions are live again after the migration.
+    db.prepare("DELETE FROM targets WHERE id = 't1'").run();
+    expect(db.prepare("SELECT count(*) AS n FROM grants").get()).toEqual({ n: 0 });
+    expect(db.prepare("SELECT sql FROM sqlite_master WHERE name = 'targets'").get()).toMatchObject({ sql: expect.stringContaining("'cli'") });
+  });
+
   it('enforces state invariants with CHECK constraints', () => {
     const db = new Database(':memory:');
     migrate(db);

@@ -47,7 +47,12 @@ const projectSettingsPatch = projectSettingsSchema.partial();
 export const policyHashSchema = z.string().regex(/^[0-9a-f]{64}$/);
 export const projectPolicySummarySchema = z.object({
   rules: z.array(
-    z.object({ id: z.string(), rule: policyRuleSchema, ruleText: z.string(), enabled: z.boolean().optional() }),
+    z.object({
+      id: z.string(),
+      rule: policyRuleSchema,
+      ruleText: z.string(),
+      enabled: z.boolean().optional(),
+    }),
   ),
   targets: z.array(
     z.object({ key: z.string(), policy: targetPolicySchema.nullable(), config: jsonObjectSchema }),
@@ -94,7 +99,10 @@ const readModelSnapshotSchema = z.object({
   transcripts: z.record(z.string(), z.array(transcriptMessageSchema)),
   hunks: z.record(z.string(), z.array(agentChangeSchema)),
   discovery: z.object({ ides: z.array(ideInstallSchema), clis: z.array(cliInstallSchema) }),
-  settings: z.object({ app: appSettingsSchema, project: z.record(z.string(), effectiveProjectSettingsSchema) }),
+  settings: z.object({
+    app: appSettingsSchema,
+    project: z.record(z.string(), effectiveProjectSettingsSchema),
+  }),
   /** Per-machine persisted UI state (README: ui.screen / projectId / window positions). */
   ui: z.object({
     screen: z.string().nullable(),
@@ -270,9 +278,47 @@ export const commands = {
     }),
     output: idOut('targetId', targetIdSchema),
   },
+  /**
+   * "Connect with the provider's CLI" (primary path): what the local `gcloud` / `aws` / `gh` / `vercel` / `supabase`
+   * already knows. Accounts are identities only (emails, profile names, logins); tokens never cross IPC.
+   */
+  'target.connect.cliStatus': {
+    input: z.object({ provider: providerSchema }),
+    output: z.object({
+      installed: z.boolean(),
+      binary: z.string().nullable(),
+      version: z.string().nullable(),
+      loginCommand: z.string(),
+      accounts: z.array(
+        z.object({ id: z.string(), label: z.string(), active: z.boolean(), detail: z.string().optional() }),
+      ),
+    }),
+  },
+  /** Runs the CLI's own login flow in a terminal the renderer attaches to over the `pty` channel; `connect.cliLogin` reports exit. */
+  'target.connect.cliLogin': {
+    input: z.object({ projectId: projectIdSchema, provider: providerSchema, account: z.string().optional() }),
+    output: z.object({ terminalId: z.string() }),
+  },
+  /** Saves a target bound to a CLI account (`authMethod: 'cli'`); the vault entry names the account, never a secret. */
+  'target.connect.cliSave': {
+    input: z.object({
+      projectId: projectIdSchema,
+      provider: providerSchema,
+      env: envSchema,
+      name: targetNameSchema,
+      account: z.string().min(1),
+      config: jsonObjectSchema.default({}),
+    }),
+    output: idOut('targetId', targetIdSchema),
+  },
   'target.test': {
     input: z.object({ targetId: targetIdSchema }),
     output: z.object({ ok: z.boolean(), message: z.string().nullable() }),
+  },
+  /** Runs the health check now (one target, or every connected target when omitted). */
+  'target.refresh': {
+    input: z.object({ targetId: targetIdSchema.optional() }),
+    output: z.object({ ok: z.boolean() }),
   },
   'target.setPolicy': {
     input: z.object({ targetId: targetIdSchema, policy: targetPolicySchema }),
@@ -484,6 +530,13 @@ export const events = {
     phase: z.enum(['waiting-browser', 'exchanging', 'testing', 'saved', 'failed']),
     message: z.string().nullable(),
   }),
+  /** Progress of a `target.connect.cliLogin` terminal: emitted `running` on spawn and `exited` when the CLI returns. */
+  'connect.cliLogin': z.object({
+    terminalId: z.string().min(1),
+    provider: providerSchema,
+    status: z.enum(['running', 'exited']),
+    exitCode: z.number().int().nullable().optional(),
+  }),
   'banner.set': z.object({
     bannerKey: z.string().min(1),
     kind: z.enum(['auth-expired', 'cli-missing', 'conflict', 'project-policy']),
@@ -494,7 +547,11 @@ export const events = {
       z.object({ kind: z.literal('install-guide'), agent: agentSchema }),
       z.object({ kind: z.literal('resolve'), worktreeId: worktreeIdSchema }),
       /** `.styx/project.json` wants to change grant policies: review in Settings › Project targets (H-1 trust gate). */
-      z.object({ kind: z.literal('review-project-policy'), projectId: projectIdSchema, hash: policyHashSchema }),
+      z.object({
+        kind: z.literal('review-project-policy'),
+        projectId: projectIdSchema,
+        hash: policyHashSchema,
+      }),
     ]),
     sessionId: sessionIdSchema.nullable(),
     reason: pausedReasonSchema.nullable(),

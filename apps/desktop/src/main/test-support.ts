@@ -7,6 +7,7 @@ import { ManualClock } from './clock';
 import { buildContainer, type Container, type WindowsPort } from './container';
 import { migrate } from './db/migrate';
 import { loadFixture, seed, type FixtureName } from './db/seed';
+import { FakeCliRunner } from './providers/cli-runner';
 import { MemoryVault } from './services/credential-vault';
 import { FakeMfaProvider, type MfaResult } from './services/mfa-service';
 import type { PtyService } from './services/pty-service';
@@ -40,6 +41,7 @@ export interface TestApp {
   app: Container;
   clock: ManualClock;
   vault: MemoryVault;
+  cli: FakeCliRunner;
   win: FakeWindow;
   userData: string;
   sender: { senderId: number; frameUrl: string };
@@ -54,6 +56,7 @@ export interface TestAppOptions {
   tickMs?: number;
   pty?: PtyService;
   stream?: StreamRunnerLike;
+  cli?: FakeCliRunner;
 }
 
 /** An in-memory app: SQLite `:memory:`, MemoryVault, FakeMfa, no Electron, one registered fake window. */
@@ -62,6 +65,7 @@ export function makeTestApp(opts: TestAppOptions = {}): TestApp {
   migrate(db);
   const clock = new ManualClock(opts.now ?? fixtures.DEMO_NOW);
   const vault = new MemoryVault();
+  const cli = opts.cli ?? new FakeCliRunner();
   const userData = mkdtempSync(join(tmpdir(), 'styx-test-'));
   const popouts: string[] = [];
   const windows: WindowsPort = {
@@ -99,6 +103,7 @@ export function makeTestApp(opts: TestAppOptions = {}): TestApp {
     ...(opts.tickMs !== undefined ? { tickMs: opts.tickMs } : {}),
     ...(opts.pty ? { pty: opts.pty } : {}),
     ...(opts.stream ? { stream: opts.stream } : {}),
+    cli,
   });
   const fixture = opts.fixture === undefined ? 'demo' : opts.fixture;
   if (fixture) seed(app.repos, loadFixture(fixture));
@@ -108,6 +113,7 @@ export function makeTestApp(opts: TestAppOptions = {}): TestApp {
     app,
     clock,
     vault,
+    cli,
     win,
     userData,
     sender: { senderId: 1, frameUrl: 'file:///index.html' },

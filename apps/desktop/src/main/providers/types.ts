@@ -1,4 +1,5 @@
 import type { CredentialVault } from '../services/credential-vault';
+import type { CliRunner } from './cli-runner';
 
 export type Provider = 'vercel' | 'aws' | 'gcp' | 'supabase' | 'github' | 'ssh';
 export type Scope = 'read' | 'write' | 'deploy' | 'delete';
@@ -22,22 +23,73 @@ export interface GrantInfo {
 
 export type ConnectInput =
   | { method: 'token'; token: string; name?: string; config?: Record<string, unknown> }
-  | { method: 'device'; onCode: (code: { userCode: string; verificationUri: string }) => void; abort?: AbortSignal }
-  | { method: 'key'; accessKeyId: string; secretAccessKey: string; region?: string; roleArn?: string; name?: string }
+  /**
+   * Reuse the login the provider's own CLI holds (`gcloud auth list` account, `aws` profile, `gh` login, the
+   * `vercel` / `supabase` CLI token). Nothing secret is stored: the vault entry names the account and the CLI
+   * mints on every grant.
+   */
+  | { method: 'cli'; account: string; name?: string; config?: Record<string, unknown> }
+  | {
+      method: 'device';
+      onCode: (code: { userCode: string; verificationUri: string }) => void;
+      abort?: AbortSignal;
+    }
+  | {
+      method: 'key';
+      accessKeyId: string;
+      secretAccessKey: string;
+      region?: string;
+      roleArn?: string;
+      name?: string;
+    }
   | { method: 'service-account'; json: string; projectId?: string }
   | { method: 'ssh'; host: string; user: string; keyPath: string; port?: number; passphrase?: string };
 
 export type IssuedCredential =
   | { kind: 'env'; env: Record<string, string>; expiresAt: number | null; scoped: boolean; handle?: string }
-  | { kind: 'ssh-agent'; socketPath: string; env: Record<string, string>; expiresAt: number | null; scoped: boolean; handle: string };
+  | {
+      kind: 'ssh-agent';
+      socketPath: string;
+      env: Record<string, string>;
+      expiresAt: number | null;
+      scoped: boolean;
+      handle: string;
+    };
 
 export type TestResult = { ok: true; identity: string } | { ok: false; error: string };
 
+/**
+ * Periodic health probe (RefreshScheduler). `expired: true` means minting actually failed for an auth reason
+ * (SSO session over, token revoked, CLI logged out) and the target should show the auth-expired banner;
+ * `expired: false` is transient (CLI missing, timeout, network) and leaves the row alone.
+ */
+export type HealthResult = { ok: true; identity: string } | { ok: false; expired: boolean; error: string };
+
+/** What the provider's CLI currently knows (`target.connect.cliStatus`); identities only, never tokens. */
+export interface CliStatus {
+  installed: boolean;
+  binary: string | null;
+  version: string | null;
+  loginCommand: string;
+  accounts: { id: string; label: string; active: boolean; detail?: string }[];
+}
+
+/** A login command Styx runs in a terminal the user can see (`target.connect.cliLogin`). */
+export interface CliCommand {
+  bin: string;
+  args: string[];
+  env?: Record<string, string>;
+}
+
 export interface ProviderAdapter {
   readonly provider: Provider;
+  /** The Advanced (non-CLI) method this adapter's `connect` accepts; `cli` mode is available when `cliStatus` exists. */
   readonly authMethod: 'oauth' | 'key' | 'ssh';
   /** Stores the secret in the vault; returns the ref plus non-secret config and a display label. */
-  connect(input: ConnectInput, targetId: string): Promise<{ credentialRef: string; config: Record<string, unknown>; label: string }>;
+  connect(
+    input: ConnectInput,
+    targetId: string,
+  ): Promise<{ credentialRef: string; config: Record<string, unknown>; label: string }>;
   test(target: TargetInfo): Promise<TestResult>;
   /** Scoped short-lived credential where the provider supports it, else the stored token as env (scoped: false). */
   issue(grant: GrantInfo, target: TargetInfo): Promise<IssuedCredential>;
@@ -52,9 +104,15 @@ export interface ProviderAdapter {
    * closed): GrantService.approve then forces MFA on prod regardless of the classified scope, because the agent
    * receives the full token no matter what the shim heuristics decided.
    */
-  issuesScoped?(scope: readonly Scope[]): boolean;
+  issuesScoped?(scope: readonly Scope[], target?: Pick<TargetInfo, 'credentialRef' | 'config'>): boolean;
   /** Which shim binaries route to this provider. */
   readonly tools: string[];
+  /** CLI-first connect: what the local CLI knows (installed, version, accounts). Absent = no CLI mode (SSH). */
+  cliStatus?(): Promise<CliStatus>;
+  /** The CLI's own login flow for `account` (or a fresh login when omitted); runs in a visible terminal. */
+  cliLoginCommand?(account?: string): CliCommand;
+  /** Health probe that distinguishes auth expiry from transient failure; falls back to `test()` when absent. */
+  health?(target: TargetInfo): Promise<HealthResult>;
 }
 
 export type Fetch = typeof fetch;
@@ -63,6 +121,8 @@ export interface AdapterDeps {
   vault: CredentialVault;
   fetch: Fetch;
   now: () => number;
+  /** Runs provider CLIs on the login-shell PATH; output is never logged. */
+  cli: CliRunner;
 }
 
 export const HOUR = 3_600_000;
@@ -84,7 +144,8 @@ export function hasVerb(argv: string[], verbs: RegExp): boolean {
  */
 export function commandHead(argv: string[]): string[] {
   let i = 0;
-  while (i < argv.length && (argv[i] ?? '').startsWith('-')) i += (argv[i] ?? '').includes('=') || (argv[i + 1] ?? '-').startsWith('-') ? 1 : 2;
+  while (i < argv.length && (argv[i] ?? '').startsWith('-'))
+    i += (argv[i] ?? '').includes('=') || (argv[i + 1] ?? '-').startsWith('-') ? 1 : 2;
   const head: string[] = [];
   for (; i < argv.length; i += 1) {
     const a = argv[i] ?? '';
@@ -96,7 +157,12 @@ export function commandHead(argv: string[]): string[] {
 
 /** `--help` / `--version` / `help` anywhere in argv: no remote effect. */
 export function isHelp(argv: string[]): boolean {
-  return argv.length === 0 || argv.some((a) => a === '--help' || a === '-h' || a === '--version' || a === '-v') || argv[0] === 'help' || argv[0] === 'version';
+  return (
+    argv.length === 0 ||
+    argv.some((a) => a === '--help' || a === '-h' || a === '--version' || a === '-v') ||
+    argv[0] === 'help' ||
+    argv[0] === 'version'
+  );
 }
 
 /**

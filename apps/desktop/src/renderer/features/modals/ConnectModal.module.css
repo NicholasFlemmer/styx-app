@@ -92,4 +92,186 @@
     border-left: 0;
     border-right: 1px solid var(--ln);
   }
+
+  /* --- CLI step ------------------------------------------------------------------------------------- */
+  /* Status row: `gcloud 512.0.0` / `gcloud · not found on PATH · Install guide`, mono muted like the waiting box. */
+  .cliStatus {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--ln);
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .cliStatusText {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .accounts {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-start;
+  }
+  /* Signed-in accounts as selectable rows (`data-inv` = chosen), hairline box, collapsed borders. */
+  .accountList {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--ln);
+  }
+  .account {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 8px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--ln);
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 0;
+  }
+  .account:last-child {
+    border-bottom: 0;
+  }
+  .account:hover {
+    background: var(--s2);
+  }
+  .account[data-inv='true'] {
+    background: var(--tx);
+    color: var(--bg);
+  }
+  .accountLabel {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .accountDetail {
+    font-size: 11px;
+    color: var(--mu);
+  }
+  .account[data-inv='true'] .accountDetail {
+    color: inherit;
+    opacity: 0.7;
+  }
+  /* Text links: `Sign in with gcloud…`, `Install guide` (t-label, 28px hit area per spec §9). */
+  .link {
+    position: relative;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--mu);
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .link::after {
+    content: '';
+    position: absolute;
+    inset: -8px -4px;
+  }
+  .link:hover:not(:disabled) {
+    color: var(--tx);
+  }
+  .link:disabled {
+    cursor: default;
+  }
+  /* Inline login terminal: the prototype's 130px terminal recipe (8px 12px, mono 12/1.6, 9px label). */
+  .terminal {
+    height: var(--h-terminal);
+    flex: none;
+    border: 1px solid var(--ln);
+    background: var(--term);
+    color: var(--termtx);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .terminalLabel {
+    flex: none;
+    font-family: var(--font-ui);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mu);
+    margin-bottom: 4px;
+    user-select: none;
+  }
+  .terminalHost {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+  }
+  /* Advanced ▾ disclosure: t-label with the chevron, the hint in mono muted. */
+  .disclosure {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--mu);
+    font-family: var(--font-ui);
+    cursor: pointer;
+    position: relative;
+  }
+  .disclosure::after {
+    content: '';
+    position: absolute;
+    inset: -8px -4px;
+  }
+  .disclosure:hover {
+    color: var(--tx);
+  }
+  .disclosureLabel {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .chevronOpen {
+    transform: rotate(180deg);
+  }
+  .disclosureHint {
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .advanced {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    border-top: 1px solid var(--ln);
+    padding-top: 14px;
+  }
+  .advancedTitle {
+    font-size: 14px;
+    font-weight: 600;
+  }
+}
+
+/* xterm paints its own surface; keep the terminal background and drop the default padding. */
+.terminalHost :global(.xterm) {
+  padding: 0;
+}
+.terminalHost :global(.xterm .xterm-viewport) {
+  background: var(--term) !important;
 }

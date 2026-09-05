@@ -8,6 +8,7 @@ import {
   type AuthMethod,
   type CliInstall,
   type CommandInput,
+  type CommandOutput,
   type Env,
   type IdeInstall,
   type Platform,
@@ -28,7 +29,81 @@ export const methodOf = (provider: Provider): AuthMethod =>
 
 export const methodLabel = (provider: Provider): string => copy.connect.methods[methodOf(provider)];
 
+/** The provider's own CLI (`gcloud auth login`, `gh auth login` …); SSH has none. */
+export const CLI_OF: Readonly<Record<Exclude<Provider, 'ssh'>, string>> = {
+  vercel: 'vercel',
+  aws: 'aws',
+  gcp: 'gcloud',
+  supabase: 'supabase',
+  github: 'gh',
+};
+
+export const providerCli = (provider: Provider): string | null =>
+  provider === 'ssh' ? null : CLI_OF[provider];
+
+/** Primary connect path: the provider's CLI for everything but SSH (which stays the SSH form). */
+export const primaryStepOf = (provider: Provider): ConnectStep => (provider === 'ssh' ? 'ssh' : 'cli');
+
+/** Tile / title label of the primary path: `gcloud CLI` · `SSH`. */
+export const cliMethodLabel = (provider: Provider): string => {
+  const cli = providerCli(provider);
+  return cli === null ? copy.connect.methods.ssh : fill(copy.connect.cli.method, { cli });
+};
+
 export type ConnectStep = 'pick' | AuthMethod;
+
+export type CliStatus = CommandOutput<'target.connect.cliStatus'>;
+export type CliAccount = CliStatus['accounts'][number];
+
+/** `gcloud 512.0.0` · `gcloud · not found on PATH`. */
+export const cliStatusLine = (cli: string, status: CliStatus | null): string => {
+  if (status === null || !status.installed) return `${cli} · ${copy.connect.cli.notFound}`;
+  const binary = status.binary ?? cli;
+  return status.version === null ? binary : `${binary} ${status.version}`;
+};
+
+/** The account the modal preselects: the CLI's active one, else the first. */
+export const defaultAccount = (status: CliStatus | null): string | null =>
+  status === null
+    ? null
+    : (status.accounts.find((a) => a.active)?.id ?? status.accounts[0]?.id ?? null);
+
+/** `AWS acme-prod` · `GCP nic@acme.dev`: provider + account label when no name is typed. */
+export const cliTargetName = (provider: Provider, account: CliAccount | undefined, name: string): string => {
+  const typed = name.trim();
+  if (typed !== '') return typed;
+  const p = copy.providers[provider];
+  return account === undefined || account.label.trim() === '' ? p : `${p} ${account.label.trim()}`;
+};
+
+export const cliSavePayload = (
+  projectId: ProjectId,
+  provider: Provider,
+  env: Env,
+  status: CliStatus,
+  accountId: string,
+  name: string,
+): CommandInput<'target.connect.cliSave'> => ({
+  projectId,
+  provider,
+  env,
+  name: cliTargetName(provider, status.accounts.find((a) => a.id === accountId), name),
+  account: accountId,
+  config: {},
+});
+
+export const isCliTarget = (target: Target): boolean => target.authMethod === 'cli';
+
+/** Settings › Targets meta for CLI-backed targets: `via gcloud · nic@acme.dev` (account from `cliSave`'s config). */
+export const cliTargetMeta = (target: Target): string | null => {
+  const cli = providerCli(target.provider);
+  if (!isCliTarget(target) || cli === null) return null;
+  const account = target.config['account'];
+  return fill(copy.connect.cli.via, {
+    cli,
+    account: typeof account === 'string' && account !== '' ? account : copy.general.none,
+  });
+};
 
 /** Connect env chips (prototype `envs`): prod · staging · preview. */
 export const CONNECT_ENVS: readonly Extract<Env, 'prod' | 'staging' | 'preview'>[] = [

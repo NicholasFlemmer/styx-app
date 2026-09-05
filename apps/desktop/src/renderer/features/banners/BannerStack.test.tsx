@@ -35,3 +35,36 @@ describe('<BannerStack /> project-policy banner (security H-1)', () => {
     expect(ui.projectId).toBe(acme);
   });
 });
+
+describe('<BannerStack /> auth-expired banner', () => {
+  beforeEach(() => {
+    useReadModel.getState().replaceModel(fixtures.errorReadModel(), 'fixture');
+    useUiStore.setState({
+      projectId: acme,
+      screen: 'workspace',
+      settingsSection: 'app:general',
+      overlays: [],
+      banners: {},
+      dismissedBanners: [],
+    });
+  });
+  afterEach(cleanup);
+
+  it('Reconnect opens the connect modal on the expired target (provider + targetId), not Settings', () => {
+    render(<BannerStack />);
+    const texts = screen.getAllByRole('alert').map((a) => a.textContent);
+    expect(texts.some((x) => x?.includes('AWS acme-prod: credentials expired'))).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: copy.errors.authExpired.cta }));
+    const ui = useUiStore.getState();
+    expect(ui.overlays).toMatchObject([
+      {
+        kind: 'modal',
+        modal: 'connect',
+        projectId: acme,
+        provider: 'aws',
+        targetId: fixtures.ids.target.awsProd,
+      },
+    ]);
+    expect(ui.screen).toBe('workspace');
+  });
+});

@@ -157,6 +157,35 @@ describe('<Settings />', () => {
     ]);
   });
 
+  it('Edit reopens the connect modal on that target', () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByRole('button', { name: /^Edit · AWS acme-prod/ }));
+    expect(useUiStore.getState().overlays).toMatchObject([
+      { kind: 'modal', modal: 'connect', projectId: acme, provider: 'aws', targetId: fixtures.ids.target.awsProd },
+    ]);
+  });
+
+  it('cli targets show `via <cli> · <account>` under the state and a Refresh action (target.refresh)', () => {
+    const m = fixtures.demoReadModel();
+    const aws = m.targets.byId[fixtures.ids.target.awsProd];
+    if (aws === undefined) throw new Error('no aws target');
+    seed({
+      ...m,
+      targets: {
+        ...m.targets,
+        byId: { ...m.targets.byId, [aws.id]: { ...aws, authMethod: 'cli', config: { account: 'acme-prod' } } },
+      },
+    });
+    render(<Settings />);
+    const row = screen.getByRole('table', { name: 'Targets' }).querySelector(`[data-target-id="${aws.id}"]`);
+    expect(row?.textContent).toContain('via aws · acme-prod');
+    expect(row?.querySelector('[data-target-meta="cli"]')?.textContent).toBe('via aws · acme-prod');
+    expect(screen.getAllByRole('button', { name: /^Refresh · / })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /^Refresh · AWS acme-prod/ }));
+    expect(commandMock).toHaveBeenCalledWith('target.refresh', { targetId: aws.id });
+    expect(screen.getByRole('button', { name: /^Edit · AWS acme-prod/ })).toBeTruthy();
+  });
+
   it('+ Connect target opens the connect modal', () => {
     render(<Settings />);
     fireEvent.click(screen.getByRole('button', { name: copy.targets.connectRow }));

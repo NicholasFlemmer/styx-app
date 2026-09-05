@@ -9,17 +9,30 @@ import {
   type Target,
   type TargetPolicy,
 } from '@styx/core';
+import { homedir } from 'node:os';
 import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
 import { fail } from '../ipc/bus';
-import type { ConnectInput, ProviderRegistry, TargetInfo } from '../providers';
+import type {
+  CliCommand,
+  CliStatus,
+  ConnectInput,
+  HealthResult,
+  ProviderRegistry,
+  TargetInfo,
+} from '../providers';
+import { ACCOUNT_PATTERN, CliAuthError, testToHealth } from '../providers/cli-auth';
+import type { CliRunner } from '../providers/cli-runner';
 import type { Publisher } from '../store/publisher';
 import type { ActivityService } from './activity-service';
 import type { AuditService } from './audit-service';
 import type { CredentialVault } from './credential-vault';
 import type { GrantService } from './grant-service';
 import { auditContext } from './labels';
-import { logger } from './logger';
+import { logger, redact } from './logger';
+import type { PtyService } from './pty-service';
+import type { RefreshReason } from './refresh-scheduler';
+import type { TerminalService } from './terminal-service';
 
 export interface TargetServiceDeps {
   repos: Repos;
@@ -31,7 +44,14 @@ export interface TargetServiceDeps {
   grants: Pick<GrantService, 'cancelTargetGrants'>;
   activity: ActivityService;
   openExternal: (url: string) => Promise<void>;
+  /** CLI login terminals (`target.connect.cliLogin`) run through the user-terminal path. */
+  terminals: Pick<TerminalService, 'spawnCommand'>;
+  pty: Pick<PtyService, 'on' | 'off'>;
+  cli: Pick<CliRunner, 'which' | 'home'>;
 }
+
+/** Accounts travel into argv (`--profile x`, `--account x`) and audit rows: plain charset, no leading dash. */
+const ACCOUNT = ACCOUNT_PATTERN;
 
 /** Where a pasted token comes from for providers without a registered Styx OAuth app (spec: PAT/paste paths ship regardless). */
 const TOKEN_PAGES: Partial<Record<Provider, string>> = {
@@ -92,7 +112,13 @@ export class TargetService {
     if (entry) this.deps.activity.fromAudit(entry);
   }
 
-  private placeholder(projectId: string, provider: Provider, env: Env, name: string | undefined): Target {
+  private placeholder(
+    projectId: string,
+    provider: Provider,
+    env: Env,
+    name: string | undefined,
+    authMethod: AuthMethod = AUTH_METHOD[provider],
+  ): Target {
     const existing = this.deps.repos.targets
       .byProject(projectId)
       .find((t) => t.provider === provider && t.env === env && (name === undefined || t.name === name));
@@ -103,7 +129,7 @@ export class TargetService {
       provider,
       name: name ?? copy.providers[provider],
       env,
-      authMethod: AUTH_METHOD[provider],
+      authMethod,
       policy: env === 'prod' ? 'ask-mfa' : env === 'scm' ? 'always' : 'ask',
       policySource: 'app',
       credentialRef: null,
@@ -183,10 +209,15 @@ export class TargetService {
   private async finishConnect(
     target: Target,
     r: { credentialRef: string; config: Record<string, unknown>; label: string },
+    authMethod: AuthMethod = target.authMethod,
   ): Promise<Target> {
     const now = this.deps.clock.now();
+    // Switching modes (key → cli or back) leaves the old keychain entry orphaned unless it goes now.
+    if (target.credentialRef && target.credentialRef !== r.credentialRef)
+      await this.deps.vault.delete(target.credentialRef).catch(() => undefined);
     const next: Target = {
       ...target,
+      authMethod,
       credentialRef: r.credentialRef,
       config: { ...target.config, ...r.config } as Target['config'],
       name: target.fromProjectFile ? target.name : target.name || r.label,
@@ -250,6 +281,144 @@ export class TargetService {
     return this.finishConnect(target, r);
   }
 
+  // --- CLI-first connect (plan §5: reuse the login gcloud / aws / gh / vercel / supabase already hold) --------
+
+  /** What the provider's CLI knows right now: installed, version, accounts. Identities only; tokens never cross IPC. */
+  async cliStatus(provider: Provider): Promise<CliStatus> {
+    const adapter = this.deps.providers.get(provider);
+    if (!adapter.cliStatus) fail('invalid-input', `${copy.providers[provider]} has no CLI login`);
+    try {
+      return await adapter.cliStatus();
+    } catch (e) {
+      logger.warn('connect: cli status failed', { provider, error: (e as Error).message });
+      fail('provider-error', (e as Error).message);
+    }
+  }
+
+  /**
+   * Runs the CLI's own login flow (`gcloud auth login`, `aws sso login --profile x`, `gh auth login --web`,
+   * `vercel login`, `supabase login`) in a pty the renderer attaches to over the `pty` channel; `connect.cliLogin`
+   * reports `running` now and `exited` with the exit code when the CLI returns.
+   */
+  async cliLogin(projectId: string, provider: Provider, account?: string): Promise<{ terminalId: string }> {
+    const adapter = this.deps.providers.get(provider);
+    if (!adapter.cliLoginCommand) fail('invalid-input', `${copy.providers[provider]} has no CLI login`);
+    if (account !== undefined && !ACCOUNT.test(account))
+      fail('invalid-input', 'account: letters, digits, space, . _ @ + : / - only');
+    const cmd: CliCommand = adapter.cliLoginCommand(account);
+    const file = await this.deps.cli.which(cmd.bin);
+    if (!file) fail('cli-missing', `${cmd.bin} not found on PATH`);
+    const project = this.deps.repos.projects.get(projectId);
+    const cwd = project?.path ?? this.deps.cli.home ?? homedir();
+    const terminalId = await this.deps.terminals
+      .spawnCommand({ file, args: cmd.args, cwd, ...(cmd.env ? { env: cmd.env } : {}) })
+      .catch((e: Error) => fail('internal', `could not start ${cmd.bin}: ${e.message}`));
+    const { publisher } = this.deps;
+    const onExit = (id: string, exitCode: number) => {
+      if (id !== terminalId) return;
+      this.deps.pty.off('exit', onExit);
+      publisher.sendEvent('connect.cliLogin', { terminalId, provider, status: 'exited', exitCode });
+    };
+    this.deps.pty.on('exit', onExit);
+    logger.info('connect: cli login started', { provider, bin: cmd.bin, args: cmd.args, terminalId });
+    publisher.sendEvent('connect.cliLogin', { terminalId, provider, status: 'running' });
+    return { terminalId };
+  }
+
+  /** Saves a target bound to a CLI account (`authMethod: 'cli'`), then runs the health check to set `health`. */
+  async cliSave(input: {
+    projectId: string;
+    provider: Provider;
+    env: Env;
+    name: string;
+    account: string;
+    config: Record<string, unknown>;
+  }): Promise<Target> {
+    const adapter = this.deps.providers.get(input.provider);
+    if (!adapter.cliStatus) fail('invalid-input', `${copy.providers[input.provider]} has no CLI login`);
+    if (!ACCOUNT.test(input.account))
+      fail('invalid-input', 'account: letters, digits, space, . _ @ + : / - only');
+    const target = this.placeholder(input.projectId, input.provider, input.env, input.name, 'cli');
+    const r = await adapter
+      .connect(
+        {
+          method: 'cli',
+          account: input.account,
+          name: input.name,
+          config: { ...target.config, ...input.config },
+        },
+        target.id,
+      )
+      .catch((e: Error) => fail('provider-error', e.message));
+    const saved = await this.finishConnect(
+      { ...target, config: { ...target.config, ...input.config } as Target['config'] },
+      r,
+      'cli',
+    );
+    await this.checkHealth(saved, 'manual');
+    return this.require(saved.id);
+  }
+
+  /** `target.refresh`: the health check now, for one target or every connected one. */
+  async refresh(targetId?: string): Promise<{ ok: boolean }> {
+    const list = targetId === undefined ? this.deps.repos.targets.all() : [this.require(targetId)];
+    let ok = true;
+    for (const t of list) {
+      if (t.credentialRef === null) continue;
+      await this.checkHealth(t, 'manual');
+      if (this.deps.repos.targets.get(t.id)?.health !== 'ok') ok = false;
+    }
+    return { ok };
+  }
+
+  /**
+   * Health probe (RefreshScheduler + `target.refresh`). Only a real mint failure (`expired: true`) flips the row to
+   * `expired` and raises the auth-expired banner; a transient failure (CLI missing, timeout, network) keeps the
+   * current health. Audit rows only on transitions so a 30-minute cadence does not flood the log.
+   */
+  async checkHealth(target: Target, reason: RefreshReason): Promise<void> {
+    if (target.credentialRef === null) return;
+    const adapter = this.deps.providers.get(target.provider);
+    // No CLI to refresh and a real `ssh host true` per probe: SSH hosts are checked on demand only.
+    if (!adapter.health && reason !== 'manual') return;
+    let r: HealthResult;
+    try {
+      if (adapter.health) r = await adapter.health(this.info(target));
+      else r = testToHealth(await adapter.test(this.info(target)));
+    } catch (e) {
+      r = { ok: false, expired: e instanceof CliAuthError ? e.expired : false, error: (e as Error).message };
+    }
+    const now = this.deps.clock.now();
+    if (r.ok) {
+      this.upsertRow({ ...target, health: 'ok', healthCheckedAt: now, expiredAt: null });
+      this.clearExpiredBanner(target);
+      if (target.health === 'expired')
+        this.audit('tested', target, `refresh (${reason})`, { ok: true, identity: r.identity });
+      return;
+    }
+    if (!r.expired) {
+      logger.warn('refresh: health check inconclusive', {
+        targetId: target.id,
+        provider: target.provider,
+        error: r.error,
+      });
+      this.upsertRow({ ...target, healthCheckedAt: now });
+      return;
+    }
+    if (target.health !== 'expired')
+      this.audit('tested', target, `refresh (${reason})`, { ok: false, error: r.error });
+    this.markExpired(target, r.error);
+  }
+
+  /** GrantService could not mint through the adapter: an auth failure from the CLI expires the target right away. */
+  noteIssueFailure(targetId: string, error: Error): void {
+    const target = this.deps.repos.targets.get(targetId);
+    if (!target || !(error instanceof CliAuthError) || !error.expired) return;
+    if (target.health !== 'expired')
+      this.audit('tested', target, 'grant issue', { ok: false, error: error.message });
+    this.markExpired(target, error.message);
+  }
+
   async test(targetId: string): Promise<{ ok: boolean; message: string | null }> {
     const target = this.require(targetId);
     if (target.credentialRef === null) return { ok: false, message: copy.targets.state.unconnected };
@@ -284,7 +453,7 @@ export class TargetService {
       askId: null,
       projectId: target.projectId,
       title: text,
-      body: message ?? '',
+      body: redact(message ?? ''),
       meta: null,
       osDelivered: false,
       state: 'shown',
@@ -333,8 +502,22 @@ export class TargetService {
     this.clearExpiredBanner(target);
   }
 
-  reconnect(targetId: string): { flowId: string; authMethod: AuthMethod } {
+  /**
+   * Banner Reconnect. A cli target reruns the CLI login (aws: `aws sso login --profile <p>`) and returns the
+   * terminal id as `flowId`; the renderer attaches to it and re-runs `target.refresh` when it exits.
+   */
+  async reconnect(targetId: string): Promise<{ flowId: string; authMethod: AuthMethod }> {
     const target = this.require(targetId);
+    if (target.authMethod === 'cli') {
+      const account =
+        typeof target.config['profile'] === 'string'
+          ? target.config['profile']
+          : typeof target.config['account'] === 'string'
+            ? target.config['account']
+            : undefined;
+      const r = await this.cliLogin(target.projectId, target.provider, account);
+      return { flowId: r.terminalId, authMethod: 'cli' };
+    }
     const r = this.connectStart(target.projectId, target.provider, target.env, target.name);
     return { flowId: r.flowId, authMethod: r.authMethod };
   }

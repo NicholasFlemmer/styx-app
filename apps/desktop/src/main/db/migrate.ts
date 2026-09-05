@@ -33,10 +33,15 @@ export function listMigrations(): { name: string; sql: string }[] {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Applies pending migrations in one transaction. Refuses to open a DB newer than this build knows. */
+/**
+ * Applies pending migrations in one transaction. Refuses to open a DB newer than this build knows.
+ *
+ * Foreign keys are switched off for the duration (the pragma is a no-op inside a transaction, so it is set before
+ * `BEGIN`): a table rebuild (`DROP TABLE targets` in 0002) would otherwise cascade into `grants`. The documented
+ * procedure (sqlite.org/lang_altertable.html §7) ends with `PRAGMA foreign_key_check`, which must be empty.
+ */
 export function migrate(db: BetterSqlite3.Database, migrations = listMigrations()): MigrationResult {
   db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
   db.pragma('busy_timeout = 5000');
   db.pragma('synchronous = NORMAL');
   db.exec('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
@@ -47,13 +52,20 @@ export function migrate(db: BetterSqlite3.Database, migrations = listMigrations(
   }
   const pending = migrations.slice(current);
   const applied: string[] = [];
-  const run = db.transaction(() => {
-    for (const m of pending) {
-      db.exec(m.sql);
-      applied.push(m.name);
-    }
-    db.prepare("INSERT INTO meta (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(migrations.length));
-  });
-  run();
+  db.pragma('foreign_keys = OFF');
+  try {
+    const run = db.transaction(() => {
+      for (const m of pending) {
+        db.exec(m.sql);
+        applied.push(m.name);
+      }
+      const violations = db.pragma('foreign_key_check') as unknown[];
+      if (violations.length > 0) throw new Error(`migration left ${violations.length} foreign key violation(s)`);
+      db.prepare("INSERT INTO meta (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(migrations.length));
+    });
+    run();
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
   return { applied, version: migrations.length };
 }

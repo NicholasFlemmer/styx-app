@@ -8,20 +8,30 @@ import {
   type Provider,
   type TargetId,
 } from '@styx/core';
-import { Button, ChipGroup, Field, Input, Label, Modal } from '@styx/ui';
+import { Button, ChipGroup, Field, Icon, Input, Label, Modal } from '@styx/ui';
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { onEvent } from '../../state/bridge';
 import { command } from '../../state/commands';
 import { useCopyPlatform, useUi } from '../../state/hooks';
+import { useReadModel } from '../../state/read-model';
+import { attachTerminal, detachTerminal } from '../terminal/terminal-registry';
 import s from './ConnectModal.module.css';
+import { createLoginTerminal, disposeLoginTerminal } from './login-terminal';
 import {
   CONNECT_ENVS,
   PROVIDERS,
+  providerCli,
+  cliSavePayload,
+  cliStatusLine,
+  defaultAccount,
   keyFormValid,
   methodLabel,
   methodOf,
+  cliMethodLabel,
+  primaryStepOf,
   sshFormValid,
   sshTargetName,
+  type CliStatus,
   type ConnectStep,
   type KeyForm,
   type SshForm,
@@ -44,12 +54,20 @@ interface OAuthFlow {
   message: string | null;
 }
 
+interface CliLogin {
+  terminalId: string;
+  status: EventPayload<'connect.cliLogin'>['status'];
+  exitCode: number | null;
+}
+
 type ConnectEnv = (typeof CONNECT_ENVS)[number];
+const isConnectEnv = (v: string): v is ConnectEnv => (CONNECT_ENVS as readonly string[]).includes(v);
 
 /**
- * Connect target (spec §4.10, modal 560): provider grid → per-method step (OAuth / IAM key / SSH). Secrets go
- * straight into `target.connect.*` inputs; nothing is echoed back. Token providers (`browserUrl === null`) get a
- * masked token field instead of the browser wait.
+ * Connect target (spec §4.10, modal 560): provider grid → per-provider step. The primary path is the provider's own
+ * CLI (`target.connect.cliStatus` → accounts → `cliSave`; `cliLogin` runs the CLI's login in an inline terminal);
+ * the OAuth / IAM-key / token forms sit under Advanced, SSH keeps its form. Secrets go straight into
+ * `target.connect.*` inputs; nothing is echoed back.
  */
 export function ConnectModal({
   id,
@@ -61,19 +79,31 @@ export function ConnectModal({
   const platform = useCopyPlatform();
   const activeProject = useUi((u) => u.projectId);
   const words = platformCopy(platform);
+  const target = useReadModel((st) => (targetId === undefined ? undefined : st.model.targets.byId[targetId]));
 
-  const projectId: ProjectId | null = projectIdProp ?? activeProject;
-  const initialProvider = providerProp ?? null;
+  const projectId: ProjectId | null = projectIdProp ?? target?.projectId ?? activeProject;
+  const initialProvider = target?.provider ?? providerProp ?? null;
+  /** Reconnecting a CLI-backed target: the login terminal starts as the modal opens. */
+  const reconnectCli = target !== undefined && target.authMethod === 'cli';
+  const reconnectAccount = typeof target?.config['account'] === 'string' ? target.config['account'] : null;
 
   const [provider, setProvider] = useState<Provider>(initialProvider ?? 'vercel');
   const [step, setStep] = useState<ConnectStep>(
-    initialProvider === null ? 'pick' : methodOf(initialProvider),
+    initialProvider === null ? 'pick' : primaryStepOf(initialProvider),
   );
-  const [env, setEnv] = useState<ConnectEnv>('prod');
+  const [env, setEnv] = useState<ConnectEnv>(
+    target !== undefined && isConnectEnv(target.env) ? target.env : 'prod',
+  );
   const [flow, setFlow] = useState<OAuthFlow | null>(null);
   const [token, setToken] = useState('');
   const [key, setKey] = useState<KeyForm>({ name: '', accessKey: '', secret: '' });
   const [ssh, setSsh] = useState<SshForm>({ host: '', user: '', keyPath: '' });
+  const [cliStatus, setCliStatus] = useState<CliStatus | null>(null);
+  const [account, setAccount] = useState<string | null>(reconnectAccount);
+  const [name, setName] = useState(reconnectCli ? target.name : '');
+  const [login, setLogin] = useState<CliLogin | null>(null);
+  // A non-CLI target being reconnected opens straight on its legacy form (prototype: Reconnect → AWS key step).
+  const [advanced, setAdvanced] = useState(target !== undefined && !reconnectCli);
   const [savedTargetId, setSavedTargetId] = useState<TargetId | null>(targetId ?? null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -81,16 +111,23 @@ export function ConnectModal({
   const heading = useRef<HTMLDivElement>(null);
   const firstInput = useRef<HTMLInputElement>(null);
 
+  const cli = providerCli(provider) ?? '';
+  const loginCommand = cliStatus?.loginCommand ?? `${cli} auth login`;
+
   const close = () => popOverlay(id);
   const back = () => {
     setStep('pick');
     setFlow(null);
+    setLogin(null);
+    setAdvanced(false);
     setStatus(null);
   };
   const pick = (p: Provider) => {
     setProvider(p);
-    setStep(methodOf(p));
+    setStep(primaryStepOf(p));
     setFlow(null);
+    setLogin(null);
+    setAdvanced(false);
     setStatus(null);
   };
 
@@ -109,6 +146,97 @@ export function ConnectModal({
     // `close` is stable per overlay id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flow?.flowId]);
+
+  /** What the local CLI knows: installed + version, signed-in accounts (the active one preselected). */
+  const refreshCliStatus = async (p: Provider): Promise<void> => {
+    if (p === 'ssh') return;
+    const r = await command('target.connect.cliStatus', { provider: p });
+    if (!r.ok) {
+      setCliStatus(null);
+      return;
+    }
+    setCliStatus(r.value);
+    setAccount((a) => (a !== null && r.value.accounts.some((x) => x.id === a) ? a : defaultAccount(r.value)));
+  };
+
+  useEffect(() => {
+    if (step !== 'cli') return;
+    let live = true;
+    void (async () => {
+      const r = await command('target.connect.cliStatus', { provider });
+      if (!live) return;
+      if (!r.ok) {
+        setCliStatus(null);
+        return;
+      }
+      setCliStatus(r.value);
+      setAccount((a) =>
+        a !== null && r.value.accounts.some((x) => x.id === a) ? a : defaultAccount(r.value),
+      );
+    })();
+    return () => {
+      live = false;
+    };
+  }, [step, provider]);
+
+  const startLogin = async (forAccount: string | null): Promise<void> => {
+    if (projectId === null || busy || provider === 'ssh') return;
+    setBusy(true);
+    setStatus(null);
+    const r = await command('target.connect.cliLogin', {
+      projectId,
+      provider,
+      ...(forAccount !== null ? { account: forAccount } : {}),
+    });
+    setBusy(false);
+    if (!r.ok) return;
+    setLogin({ terminalId: r.value.terminalId, status: 'running', exitCode: null });
+  };
+
+  // Reconnect of a CLI target: the login terminal is already running when the modal opens.
+  useEffect(() => {
+    if (!reconnectCli || projectId === null || provider === 'ssh') return;
+    let live = true;
+    void command('target.connect.cliLogin', {
+      projectId,
+      provider,
+      ...(reconnectAccount !== null ? { account: reconnectAccount } : {}),
+    }).then((r) => {
+      if (live && r.ok) setLogin({ terminalId: r.value.terminalId, status: 'running', exitCode: null });
+    });
+    return () => {
+      live = false;
+    };
+    // Once, on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // `connect.cliLogin` drives the terminal label; on exit the accounts list is refreshed from `cliStatus`.
+  useEffect(() => {
+    if (login === null) return;
+    return onEvent('connect.cliLogin', (e) => {
+      if (e.terminalId !== login.terminalId) return;
+      if (e.status === 'running') return;
+      const exitCode = e.exitCode ?? null;
+      setLogin(exitCode === 0 ? null : { ...login, status: 'exited', exitCode });
+      if (exitCode !== 0 && exitCode !== null) {
+        setStatus(fill(copy.connect.cli.loginFailed, { command: loginCommand, code: exitCode }));
+      }
+      void refreshCliStatus(provider);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [login?.terminalId, provider]);
+
+  const connectCli = async () => {
+    if (projectId === null || cliStatus === null || account === null || busy) return;
+    setBusy(true);
+    const r = await command(
+      'target.connect.cliSave',
+      cliSavePayload(projectId, provider, env, cliStatus, account, name),
+    );
+    setBusy(false);
+    if (r.ok) close();
+  };
 
   const startOauth = async () => {
     if (projectId === null || busy) return;
@@ -138,7 +266,17 @@ export function ConnectModal({
     if (savedTargetId !== null) return savedTargetId;
     if (projectId === null) return null;
     let r;
-    if (step === 'key') {
+    if (step === 'ssh') {
+      if (!sshFormValid(ssh)) return null;
+      r = await command('target.connect.saveSsh', {
+        projectId,
+        name: sshTargetName(ssh),
+        env,
+        host: ssh.host.trim(),
+        user: ssh.user.trim(),
+        keyPath: ssh.keyPath.trim(),
+      });
+    } else {
       if (!keyFormValid(key) || (provider !== 'aws' && provider !== 'gcp')) return null;
       r = await command('target.connect.saveKey', {
         projectId,
@@ -148,16 +286,6 @@ export function ConnectModal({
         accessKey: key.accessKey.trim(),
         secret: key.secret,
         config: {},
-      });
-    } else {
-      if (!sshFormValid(ssh)) return null;
-      r = await command('target.connect.saveSsh', {
-        projectId,
-        name: sshTargetName(ssh),
-        env,
-        host: ssh.host.trim(),
-        user: ssh.user.trim(),
-        keyPath: ssh.keyPath.trim(),
       });
     }
     if (!r.ok) return null;
@@ -192,12 +320,21 @@ export function ConnectModal({
     setBusy(false);
   };
 
+  const legacyMethod = methodOf(provider);
   const title = fill(copy.connect.title, {
-    step: step === 'pick' ? copy.connect.stepPick : methodLabel(provider),
+    step:
+      step === 'pick'
+        ? copy.connect.stepPick
+        : step === 'cli'
+          ? advanced
+            ? methodLabel(provider)
+            : cliMethodLabel(provider)
+          : methodLabel(provider),
   });
   const providerName = copy.providers[provider];
   const canSaveKey = keyFormValid(key) && projectId !== null && !busy;
   const canSaveSsh = sshFormValid(ssh) && projectId !== null && !busy;
+  const canConnectCli = projectId !== null && cliStatus !== null && account !== null && !busy;
   const tokenMode = flow !== null && flow.browserUrl === null;
   const saveLabel = fill(copy.connect.key.save, { keychainShort: words.keychainShort });
 
@@ -211,7 +348,7 @@ export function ConnectModal({
         aria-label={copy.connect.environment}
         options={CONNECT_ENVS.map((e) => ({ value: e, label: e }))}
         value={env}
-        onChange={(v) => setEnv(v as ConnectEnv)}
+        onChange={(v) => setEnv(isConnectEnv(v) ? v : 'prod')}
       />
     </div>
   );
@@ -249,7 +386,78 @@ export function ConnectModal({
     );
   }
 
-  if (step === 'oauth') {
+  // --- Advanced (legacy) forms: OAuth / token for Vercel · Supabase · GitHub, IAM key for AWS · GCP -----------
+  const oauthFooter = tokenMode ? (
+    <Button size="footer" variant="primary" disabled={token === '' || busy} onClick={() => void saveToken()}>
+      {saveLabel}
+    </Button>
+  ) : (
+    <Button
+      size="footer"
+      variant="primary"
+      disabled={projectId === null || busy}
+      onClick={() => void startOauth()}
+    >
+      {copy.connect.oauth.open}
+    </Button>
+  );
+  const oauthBody = (
+    <>
+      <div className={s['body']}>{fill(copy.connect.oauth.body, { keychainName: words.keychainName })}</div>
+      {tokenMode ? (
+        <TokenField value={token} onChange={setToken} />
+      ) : (
+        <div className={s['waiting']} aria-live="polite">
+          <span>{copy.connect.oauth.waiting}</span>
+          <span className={s['cursor']} aria-hidden="true" />
+        </div>
+      )}
+    </>
+  );
+  const keyFooter = (
+    <>
+      <Button size="footer" variant="secondary" disabled={!canSaveKey} onClick={() => void test()}>
+        {copy.connect.key.test}
+      </Button>
+      <Button size="footer" variant="primary" disabled={!canSaveKey} onClick={() => void save()}>
+        {saveLabel}
+      </Button>
+    </>
+  );
+  const keyBody = (
+    <>
+      <div className={s['body']}>{fill(copy.connect.key.body, { keychainName: words.keychainName })}</div>
+      <TextField
+        label={copy.connect.key.name}
+        value={key.name}
+        onChange={(v) => setKey({ ...key, name: v })}
+      />
+      <TextField
+        label={copy.connect.key.accessKey}
+        value={key.accessKey}
+        onChange={(v) => setKey({ ...key, accessKey: v })}
+      />
+      <TextField
+        label={copy.connect.key.secret}
+        masked
+        value={key.secret}
+        onChange={(v) => setKey({ ...key, secret: v })}
+      />
+    </>
+  );
+
+  if (step === 'cli') {
+    const installed = cliStatus?.installed === true;
+    const accounts = cliStatus?.accounts ?? [];
+    const loginLabel =
+      login === null
+        ? null
+        : login.status === 'running'
+          ? fill(copy.connect.cli.waiting, { command: loginCommand })
+          : fill(copy.connect.cli.loginFailed, {
+              command: loginCommand,
+              code: login.exitCode ?? copy.general.none,
+            });
     return (
       <Modal
         width={560}
@@ -261,86 +469,109 @@ export function ConnectModal({
         footer={
           <>
             {backButton}
-            {tokenMode ? (
-              <Button
-                size="footer"
-                variant="primary"
-                disabled={token === '' || busy}
-                onClick={() => void saveToken()}
-              >
-                {saveLabel}
-              </Button>
+            {advanced ? (
+              legacyMethod === 'key' ? (
+                keyFooter
+              ) : (
+                oauthFooter
+              )
             ) : (
               <Button
                 size="footer"
                 variant="primary"
-                disabled={projectId === null || busy}
-                onClick={() => void startOauth()}
+                disabled={!canConnectCli}
+                onClick={() => void connectCli()}
+                data-connect-cli="true"
               >
-                {copy.connect.oauth.open}
+                {copy.connect.cli.connect}
               </Button>
             )}
           </>
         }
       >
         <div ref={heading} tabIndex={-1} className={s['providerName']}>
-          {providerName}
+          {fill(copy.connect.cli.heading, { cli })}
         </div>
-        <div className={s['body']}>{fill(copy.connect.oauth.body, { keychainName: words.keychainName })}</div>
+        <div className={s['body']}>{fill(copy.connect.cli.body, { cli })}</div>
+        <div className={s['cliStatus']} data-cli-installed={installed ? 'true' : 'false'}>
+          <span className={s['cliStatusText']}>{cliStatusLine(cli, cliStatus)}</span>
+          {cliStatus !== null && !installed ? (
+            // TODO(main): no open-URL command in the contract yet; the guide link stays disabled.
+            <button type="button" className={s['link']} disabled title={copy.connect.cli.installGuide}>
+              {copy.connect.cli.installGuide}
+            </button>
+          ) : null}
+        </div>
+        <div className={s['accounts']}>
+          <Label as="div" id={`${id}-accounts`}>
+            {copy.connect.cli.account}
+          </Label>
+          {accounts.length > 0 ? (
+            <div role="radiogroup" aria-labelledby={`${id}-accounts`} className={s['accountList']}>
+              {accounts.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={account === a.id}
+                  data-inv={account === a.id ? 'true' : undefined}
+                  className={s['account']}
+                  onClick={() => setAccount(a.id)}
+                >
+                  <span className={s['accountLabel']}>{a.label}</span>
+                  <span className={s['accountDetail']}>
+                    {[a.detail, a.active ? copy.connect.cli.active : null].filter(Boolean).join(' · ')}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className={s['body']}>
+              {cliStatus === null || installed
+                ? fill(copy.connect.cli.notLoggedIn, { command: loginCommand })
+                : fill(copy.connect.cli.notInstalled, { cli })}
+            </div>
+          )}
+          <button
+            type="button"
+            className={s['link']}
+            disabled={projectId === null || busy || !installed || login?.status === 'running'}
+            onClick={() => void startLogin(null)}
+          >
+            {fill(copy.connect.cli.login, { cli })}
+          </button>
+        </div>
+        {login !== null && loginLabel !== null ? (
+          <LoginTerminal terminalId={login.terminalId} label={loginLabel} />
+        ) : null}
         {envRow}
-        {tokenMode ? (
-          <TokenField value={token} onChange={setToken} />
-        ) : (
-          <div className={s['waiting']} aria-live="polite">
-            <span>{copy.connect.oauth.waiting}</span>
-            <span className={s['cursor']} aria-hidden="true" />
-          </div>
+        {advanced ? null : (
+          <TextField
+            label={copy.connect.cli.name}
+            hint={copy.connect.cli.nameOptional}
+            value={name}
+            onChange={setName}
+          />
         )}
-        {statusLine}
-      </Modal>
-    );
-  }
-
-  if (step === 'key') {
-    return (
-      <Modal
-        width={560}
-        title={title}
-        onClose={close}
-        escapeEnabled={false}
-        bodyPad="20px 16px"
-        initialFocus={firstInput}
-        footer={
-          <>
-            {backButton}
-            <Button size="footer" variant="secondary" disabled={!canSaveKey} onClick={() => void test()}>
-              {copy.connect.key.test}
-            </Button>
-            <Button size="footer" variant="primary" disabled={!canSaveKey} onClick={() => void save()}>
-              {saveLabel}
-            </Button>
-          </>
-        }
-      >
-        <div className={s['providerName']}>{providerName}</div>
-        <div className={s['body']}>{fill(copy.connect.key.body, { keychainName: words.keychainName })}</div>
-        <TextField
-          label={copy.connect.key.name}
-          value={key.name}
-          onChange={(v) => setKey({ ...key, name: v })}
-        />
-        <TextField
-          label={copy.connect.key.accessKey}
-          value={key.accessKey}
-          onChange={(v) => setKey({ ...key, accessKey: v })}
-        />
-        <TextField
-          label={copy.connect.key.secret}
-          masked
-          value={key.secret}
-          onChange={(v) => setKey({ ...key, secret: v })}
-        />
-        {envRow}
+        <button
+          type="button"
+          className={s['disclosure']}
+          aria-expanded={advanced}
+          aria-controls={`${id}-advanced`}
+          onClick={() => setAdvanced((a) => !a)}
+        >
+          <span className={s['disclosureLabel']}>{copy.connect.cli.advanced}</span>
+          <Icon name="chevron" size={10} className={advanced ? s['chevronOpen'] : undefined} />
+          <span className={s['disclosureHint']}>{copy.connect.cli.advancedHint}</span>
+        </button>
+        {advanced ? (
+          <div id={`${id}-advanced`} className={s['advanced']} data-advanced-method={legacyMethod}>
+            <div className={s['advancedTitle']}>
+              {providerName} · {methodLabel(provider)}
+            </div>
+            {legacyMethod === 'key' ? keyBody : oauthBody}
+          </div>
+        ) : null}
         {statusLine}
       </Modal>
     );
@@ -397,8 +628,36 @@ export function ConnectModal({
   );
 }
 
+/**
+ * The CLI's login flow, inline (prototype terminal recipe at 130px): an xterm bound to the pty main spawned for
+ * `target.connect.cliLogin`, focused so prompts can be answered; the label follows `connect.cliLogin`.
+ */
+function LoginTerminal({ terminalId, label }: { terminalId: string; label: string }) {
+  const host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = host.current;
+    if (el === null) return;
+    const entry = createLoginTerminal(terminalId);
+    attachTerminal(entry, el);
+    entry.term.focus();
+    return () => {
+      detachTerminal(entry);
+      disposeLoginTerminal(entry);
+    };
+  }, [terminalId]);
+  return (
+    <div className={s['terminal']} data-login-terminal={terminalId}>
+      <div className={s['terminalLabel']} aria-live="polite">
+        {label}
+      </div>
+      <div ref={host} className={s['terminalHost']} />
+    </div>
+  );
+}
+
 function TextField({
   label,
+  hint,
   value,
   onChange,
   masked,
@@ -407,6 +666,7 @@ function TextField({
 }: {
   inputRef?: RefObject<HTMLInputElement | null>;
   label: string;
+  hint?: string;
   value: string;
   onChange: (v: string) => void;
   masked?: boolean;
@@ -414,7 +674,7 @@ function TextField({
 }) {
   const inputId = useId();
   return (
-    <Field label={label} htmlFor={inputId}>
+    <Field label={label} htmlFor={inputId} {...(hint !== undefined ? { hint } : {})}>
       <Input
         ref={inputRef}
         id={inputId}
@@ -444,4 +704,3 @@ function TokenField({ value, onChange }: { value: string; onChange: (v: string) 
     </Field>
   );
 }
-

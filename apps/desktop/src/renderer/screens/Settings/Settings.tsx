@@ -21,6 +21,7 @@ import {
   TABLE_COLUMNS,
 } from '@styx/ui';
 import { PROJECT_POLICY_BANNER } from '../../features/banners/BannerStack';
+import { cliTargetMeta } from '../../features/modals/modals';
 import { command } from '../../state/commands';
 import { useCopyPlatform, useModel, useNow, useUi } from '../../state/hooks';
 import { sectionRows, type SettingsRow } from './rows';
@@ -113,10 +114,21 @@ function Targets({ model, projectId }: { model: ReadModel; projectId: ProjectId 
   const openConnect = () => {
     if (projectId !== null) pushOverlay({ kind: 'modal', modal: 'connect', projectId });
   };
+  /** `via gcloud · nic@acme.dev` for CLI-backed targets, null otherwise. */
+  const cliMeta = (t: TargetRow): string | null => {
+    const target = model.targets.byId[t.targetId];
+    return target === undefined ? null : cliTargetMeta(target);
+  };
   const onAction = (t: TargetRow) => {
     const grantId = 'grantId' in t.state ? t.state.grantId : undefined;
     if (t.action === copy.targets.actions.revoke && grantId !== undefined) {
       void command('grant.revoke', { grantId, triggeredBy: 'settings' });
+      return;
+    }
+    // Edit / Connect on an existing row reopens the connect modal on that target (CLI targets restart their login).
+    const target = model.targets.byId[t.targetId];
+    if (projectId !== null && target !== undefined && t.action !== copy.targets.actions.revoke) {
+      pushOverlay({ kind: 'modal', modal: 'connect', projectId, provider: target.provider, targetId: target.id });
       return;
     }
     openConnect();
@@ -154,8 +166,23 @@ function Targets({ model, projectId }: { model: ReadModel; projectId: ProjectId 
             </TableCell>
             <TableCell mono muted className={s['state']}>
               {t.state.label}
+              {cliMeta(t) !== null ? (
+                <span className={s['meta']} data-target-meta="cli">
+                  {cliMeta(t)}
+                </span>
+              ) : null}
             </TableCell>
-            <TableCell label muted align="end">
+            <TableCell label muted align="end" className={s['actions']}>
+              {cliMeta(t) !== null ? (
+                <button
+                  type="button"
+                  className={s['action']}
+                  aria-label={`${copy.targets.actions.refresh} · ${t.name} ${t.env}`}
+                  onClick={() => void command('target.refresh', { targetId: t.targetId })}
+                >
+                  {copy.targets.actions.refresh}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={s['action']}

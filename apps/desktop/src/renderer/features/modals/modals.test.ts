@@ -3,9 +3,15 @@ import { describe, expect, it } from 'vitest';
 import {
   autoBranch,
   autoBranchFor,
+  cliMethodLabel,
   cliMissing,
+  cliSavePayload,
+  cliStatusLine,
+  cliTargetMeta,
+  cliTargetName,
   cliVersionLabel,
   createLabel,
+  defaultAccount,
   githubNote,
   githubTargetOf,
   keyFormValid,
@@ -13,6 +19,8 @@ import {
   methodOf,
   newProjectPayload,
   newProjectValid,
+  primaryStepOf,
+  providerCli,
   spawnPayload,
   spawnValid,
   sshFormValid,
@@ -31,6 +39,70 @@ describe('connect helpers', () => {
   ] as const)('%s → %s (%s)', (provider, method, label) => {
     expect(methodOf(provider)).toBe(method);
     expect(methodLabel(provider)).toBe(label);
+  });
+
+  it.each([
+    ['vercel', 'vercel', 'cli', 'vercel CLI'],
+    ['aws', 'aws', 'cli', 'aws CLI'],
+    ['gcp', 'gcloud', 'cli', 'gcloud CLI'],
+    ['supabase', 'supabase', 'cli', 'supabase CLI'],
+    ['github', 'gh', 'cli', 'gh CLI'],
+    ['ssh', null, 'ssh', 'SSH'],
+  ] as const)('primary path for %s is %s (%s, tile "%s")', (provider, cli, step, label) => {
+    expect(providerCli(provider)).toBe(cli);
+    expect(primaryStepOf(provider)).toBe(step);
+    expect(cliMethodLabel(provider)).toBe(label);
+  });
+
+  const gcloud = {
+    installed: true,
+    binary: 'gcloud',
+    version: '512.0.0',
+    loginCommand: 'gcloud auth login',
+    accounts: [
+      { id: 'nic@acme.dev', label: 'nic@acme.dev', active: false },
+      { id: 'ops@acme.dev', label: 'ops@acme.dev', active: true },
+    ],
+  };
+
+  it('cli status line, default account and target name', () => {
+    expect(cliStatusLine('gcloud', gcloud)).toBe('gcloud 512.0.0');
+    expect(cliStatusLine('gcloud', { ...gcloud, version: null })).toBe('gcloud');
+    expect(cliStatusLine('gcloud', { ...gcloud, binary: null, version: null })).toBe('gcloud');
+    expect(cliStatusLine('gh', { ...gcloud, installed: false })).toBe('gh · not found on PATH');
+    expect(cliStatusLine('gh', null)).toBe('gh · not found on PATH');
+    expect(defaultAccount(gcloud)).toBe('ops@acme.dev');
+    expect(defaultAccount({ ...gcloud, accounts: gcloud.accounts.map((a) => ({ ...a, active: false })) })).toBe(
+      'nic@acme.dev',
+    );
+    expect(defaultAccount({ ...gcloud, accounts: [] })).toBeNull();
+    expect(defaultAccount(null)).toBeNull();
+    expect(cliTargetName('gcp', gcloud.accounts[0], '')).toBe('GCP nic@acme.dev');
+    expect(cliTargetName('gcp', gcloud.accounts[0], '  infra ')).toBe('infra');
+    expect(cliTargetName('gcp', undefined, '')).toBe('GCP');
+    expect(cliTargetName('gcp', { id: 'x', label: ' ', active: true }, '')).toBe('GCP');
+  });
+
+  it('builds the target.connect.cliSave payload from the chosen account', () => {
+    expect(cliSavePayload(acme, 'gcp', 'staging', gcloud, 'nic@acme.dev', '')).toEqual({
+      projectId: acme,
+      provider: 'gcp',
+      env: 'staging',
+      name: 'GCP nic@acme.dev',
+      account: 'nic@acme.dev',
+      config: {},
+    });
+  });
+
+  it('cli target meta reads `via <cli> · <account>` only for cli targets', () => {
+    const aws = fixtures.demoReadModel().targets.byId[fixtures.ids.target.awsProd];
+    if (aws === undefined) throw new Error('no aws target');
+    expect(cliTargetMeta(aws)).toBeNull();
+    expect(cliTargetMeta({ ...aws, authMethod: 'cli', config: { account: 'acme-prod' } })).toBe(
+      'via aws · acme-prod',
+    );
+    expect(cliTargetMeta({ ...aws, authMethod: 'cli', config: {} })).toBe('via aws · —');
+    expect(cliTargetMeta({ ...aws, provider: 'ssh', authMethod: 'cli', config: {} })).toBeNull();
   });
 
   it('validates key and ssh forms field by field', () => {

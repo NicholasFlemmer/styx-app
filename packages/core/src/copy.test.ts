@@ -22,6 +22,13 @@ describe('copy (spec §10 verbatim)', () => {
       "Agents get a forwarded agent socket for the grant's duration, never the key file.",
     );
     expect(copy.spawn.firstMessagePlaceholder).toBe('What should {agent} do? Reference files with @.');
+    expect(copy.connect.cli.heading).toBe('Connect with {cli}');
+    expect(copy.connect.cli.body).toBe(
+      "Uses the account you're signed into in {cli}. Styx never sees the password; each grant asks {cli} for a short-lived token. Anything running as you can also use {cli}, so prefer scoped roles for prod.",
+    );
+    expect(copy.connect.cli.waiting).toBe('Waiting for {command}…');
+    expect(fill(copy.connect.cli.via, { cli: 'gcloud', account: 'nic@acme.dev' })).toBe('via gcloud · nic@acme.dev');
+    expect(copy.targets.actions.refresh).toBe('Refresh');
     expect(copy.toast.title).toBe('{agent} wants {target} · {scope}');
   });
 

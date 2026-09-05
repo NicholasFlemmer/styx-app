@@ -10,7 +10,7 @@ export interface CredentialVault {
   listRefs(): Promise<string[]>;
 }
 
-export function makeCredentialRef(provider: string, targetId: string, kind: 'oauth' | 'key' | 'ssh-key-path' | 'refresh' | 'passphrase'): string {
+export function makeCredentialRef(provider: string, targetId: string, kind: 'oauth' | 'key' | 'ssh-key-path' | 'refresh' | 'passphrase' | 'cli'): string {
   return `styx:v1:${provider}:${targetId}:${kind}`;
 }
 

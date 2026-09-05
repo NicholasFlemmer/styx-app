@@ -60,6 +60,8 @@ export interface GrantServiceDeps {
   projectRules?: (projectId: string) => Policy[];
   /** Sweep interval after sleep; timers may lag (spec: 60 s). */
   sweepMs?: number;
+  /** Adapter could not mint for a target (TargetService.noteIssueFailure: a CLI auth failure expires it). */
+  onIssueFailure?: (targetId: string, error: Error) => void;
 }
 
 export interface GrantRequest {
@@ -149,26 +151,52 @@ export class GrantService {
    * (`sessionId === null`) must sit on a target in the caller's project — a session in project B can never pull
    * project A's `always` grant.
    */
-  async credentialFor(grantId: string, caller?: { sessionId: string; projectId: string }): Promise<IssuedCredential> {
+  async credentialFor(
+    grantId: string,
+    caller?: { sessionId: string; projectId: string },
+  ): Promise<IssuedCredential> {
     const grant = this.require(grantId);
     const target = this.deps.repos.targets.get(grant.targetId) ?? fail('not-found', 'target not found');
     if (caller) {
-      if (grant.sessionId !== null && grant.sessionId !== caller.sessionId) fail('forbidden', 'grant belongs to another session');
+      if (grant.sessionId !== null && grant.sessionId !== caller.sessionId)
+        fail('forbidden', 'grant belongs to another session');
       if (target.projectId !== caller.projectId) fail('forbidden', 'grant belongs to another project');
     }
     const cached = this.issued.get(grantId);
     if (cached) return cached;
     if (grant.state !== 'active') fail('invalid-transition', `grant is ${grant.state}`);
-    const info: GrantInfo = { id: grant.id, scope: [...grant.scope], duration: grant.duration, expiresAt: grant.expiresAt };
-    const tinfo: TargetInfo = { id: target.id, provider: target.provider, name: target.name, env: target.env, config: target.config, credentialRef: target.credentialRef };
-    const cred = await this.deps.providers.get(target.provider).issue(info, tinfo).catch((e: Error) => fail('provider-error', e.message));
+    const info: GrantInfo = {
+      id: grant.id,
+      scope: [...grant.scope],
+      duration: grant.duration,
+      expiresAt: grant.expiresAt,
+    };
+    const tinfo: TargetInfo = {
+      id: target.id,
+      provider: target.provider,
+      name: target.name,
+      env: target.env,
+      config: target.config,
+      credentialRef: target.credentialRef,
+    };
+    const cred = await this.deps.providers
+      .get(target.provider)
+      .issue(info, tinfo)
+      .catch((e: Error) => {
+        this.deps.onIssueFailure?.(target.id, e);
+        return fail('provider-error', e.message);
+      });
     this.issued.set(grant.id, cred);
     return cred;
   }
 
   // --- request -------------------------------------------------------------
 
-  decide(target: Target, session: Session | null, scope: Scope[]): PolicyDecision & { projectRuleId: string | null } {
+  decide(
+    target: Target,
+    session: Session | null,
+    scope: Scope[],
+  ): PolicyDecision & { projectRuleId: string | null } {
     const { repos, clock } = this.deps;
     const d = evaluate({
       target,
@@ -180,7 +208,8 @@ export class GrantService {
       now: clock.now(),
     });
     // `.styx/project.json` rules are not `policies` rows (grants.policy_id is an FK): cite them in the audit detail instead.
-    if (d.policyId !== null && !repos.policies.get(d.policyId)) return { ...d, policyId: null, projectRuleId: d.policyId };
+    if (d.policyId !== null && !repos.policies.get(d.policyId))
+      return { ...d, policyId: null, projectRuleId: d.policyId };
     return { ...d, projectRuleId: null };
   }
 
@@ -189,7 +218,13 @@ export class GrantService {
    * whatever the shim heuristics classified, so on prod the user verifies even for "read" (M2). No hint = unscoped.
    */
   private unscopedProd(target: Target, scope: readonly Scope[]): boolean {
-    return target.env === 'prod' && !(this.deps.providers.get(target.provider).issuesScoped?.(scope) ?? false);
+    const adapter = this.deps.providers.get(target.provider);
+    return (
+      target.env === 'prod' &&
+      !(
+        adapter.issuesScoped?.(scope, { credentialRef: target.credentialRef, config: target.config }) ?? false
+      )
+    );
   }
 
   /** Any live grant of this session (or persistent on the target) covering `scope`. */
@@ -207,7 +242,11 @@ export class GrantService {
   async request(input: GrantRequest): Promise<GrantOutcome> {
     const { repos, publisher, clock } = this.deps;
     // Agent-supplied free text is persisted (grants.reason, audit, transcript): scrub secret shapes first (M1).
-    const req: GrantRequest = { ...input, reason: redact(input.reason), triggeredBy: redact(input.triggeredBy) };
+    const req: GrantRequest = {
+      ...input,
+      reason: redact(input.reason),
+      triggeredBy: redact(input.triggeredBy),
+    };
     const target = repos.targets.get(req.targetId) ?? fail('not-found', `target ${req.targetId} not found`);
     const session = req.sessionId ? repos.sessions.get(req.sessionId) : null;
     const now = clock.now();
@@ -228,7 +267,10 @@ export class GrantService {
       const wanted = [...req.scope].sort().join('+');
       const dup = repos.grants
         .bySession(session.id)
-        .find((g) => g.state === 'requested' && g.targetId === target.id && [...g.scope].sort().join('+') === wanted);
+        .find(
+          (g) =>
+            g.state === 'requested' && g.targetId === target.id && [...g.scope].sort().join('+') === wanted,
+        );
       const ask = dup ? repos.pendingAsks.byGrant(dup.id) : null;
       if (dup && ask && ask.state === 'open') return { kind: 'pending', grant: dup, ask };
     }
@@ -266,7 +308,10 @@ export class GrantService {
       policyId: decision.policyId,
       scope: grant.scope,
       triggeredBy: req.triggeredBy,
-      detail: { reason: req.reason, ...(decision.projectRuleId ? { projectRule: decision.projectRuleId } : {}) },
+      detail: {
+        reason: req.reason,
+        ...(decision.projectRuleId ? { projectRule: decision.projectRuleId } : {}),
+      },
     });
 
     if (decision.decision === 'deny') {
@@ -393,7 +438,10 @@ export class GrantService {
     // Spec §1: the only user path out of `requested` is deny; system cancels keep their reason.
     if (grant.state === 'requested') {
       if (reason === 'user') return this.deny(grantId, triggeredBy);
-      return this.apply(grant, { type: 'cancel', reason: reason === 'target-removed' ? 'target-removed' : 'session-end' });
+      return this.apply(grant, {
+        type: 'cancel',
+        reason: reason === 'target-removed' ? 'target-removed' : 'session-end',
+      });
     }
     if (grant.state !== 'active') fail('invalid-transition', `grant is ${grant.state}`);
     return this.apply(grant, { type: 'revoke', reason, triggeredBy });
@@ -424,7 +472,11 @@ export class GrantService {
       startedAt: this.deps.clock.now(),
       endedAt: null,
     });
-    const next = this.apply(grant, { type: 'use', command: opts.command, scopeUsed: opts.scopeUsed }, opts.sessionId);
+    const next = this.apply(
+      grant,
+      { type: 'use', command: opts.command, scopeUsed: opts.scopeUsed },
+      opts.sessionId,
+    );
     return { grant: next, useId };
   }
 
@@ -463,7 +515,11 @@ export class GrantService {
   private context(grant: Grant, usingSessionId: string | null = null): GrantContext {
     const { repos } = this.deps;
     const target = repos.targets.get(grant.targetId);
-    const session = grant.sessionId ? repos.sessions.get(grant.sessionId) : usingSessionId ? repos.sessions.get(usingSessionId) : null;
+    const session = grant.sessionId
+      ? repos.sessions.get(grant.sessionId)
+      : usingSessionId
+        ? repos.sessions.get(usingSessionId)
+        : null;
     const project = session ? repos.projects.get(session.projectId) : null;
     const worktree = grant.worktreeId ? repos.worktrees.get(grant.worktreeId) : null;
     return {
@@ -524,6 +580,7 @@ export class GrantService {
     try {
       cred = await this.deps.providers.get(target.provider).issue(info, tinfo);
     } catch (e) {
+      this.deps.onIssueFailure?.(target.id, e as Error);
       fail('provider-error', (e as Error).message);
     }
     this.issued.set(grant.id, cred);
@@ -548,7 +605,11 @@ export class GrantService {
     return next;
   }
 
-  private apply(grant: Grant, event: Exclude<GrantEvent, { type: 'issue' }>, usingSessionId: string | null = null): Grant {
+  private apply(
+    grant: Grant,
+    event: Exclude<GrantEvent, { type: 'issue' }>,
+    usingSessionId: string | null = null,
+  ): Grant {
     const ctx = this.context(grant, usingSessionId);
     const t = grantTransition(grant.state, event, ctx);
     if (t === null) fail('invalid-transition', `${event.type} is not valid while ${grant.state}`);
@@ -566,7 +627,8 @@ export class GrantService {
     const auditIds: string[] = [];
     repos.transaction(() => {
       repos.grants.upsert(next);
-      for (const e of effects) if (e.type === 'appendAudit') auditIds.push(this.deps.audit.append(draftToInput(e.entry)).id);
+      for (const e of effects)
+        if (e.type === 'appendAudit') auditIds.push(this.deps.audit.append(draftToInput(e.entry)).id);
     });
     publisher.upsert('auditEntries', auditIds);
     for (const id of auditIds) {

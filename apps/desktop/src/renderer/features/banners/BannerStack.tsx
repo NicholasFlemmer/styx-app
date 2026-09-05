@@ -17,14 +17,27 @@ export const reviewProjectPolicy = (projectId: ProjectId): void => {
   ui.setScreen('settings');
 };
 
-/** Banner actions dispatch navigation; the target flows (connect modal, repo lane) attach in later phases. */
+/** Banner actions: Reconnect opens the connect modal on the expired target; the others navigate. */
 export const runBannerAction = (action: BannerAction): void => {
   const ui = useUiStore.getState();
   switch (action.kind) {
-    case 'reconnect':
-      ui.setSettingsSection('targets');
+    case 'reconnect': {
+      // Opens the connect modal on that target; a CLI-backed target starts its login terminal as the modal opens.
+      const target = useReadModel.getState().model.targets.byId[action.targetId];
+      if (target !== undefined) {
+        ui.pushOverlay({
+          kind: 'modal',
+          modal: 'connect',
+          projectId: target.projectId,
+          provider: target.provider,
+          targetId: target.id,
+        });
+        return;
+      }
+      ui.setSettingsSection('project:targets');
       ui.setScreen('settings');
       return;
+    }
     case 'install-guide':
       ui.setSettingsSection('agents');
       ui.setScreen('settings');

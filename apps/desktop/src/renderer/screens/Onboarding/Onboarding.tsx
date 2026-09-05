@@ -22,7 +22,7 @@ import {
   Tag,
 } from '@styx/ui';
 import { useEffect, useState } from 'react';
-import { PROVIDERS, methodLabel } from '../../features/modals/modals';
+import { PROVIDERS, cliMethodLabel } from '../../features/modals/modals';
 import { command } from '../../state/commands';
 import { useCopyPlatform, useModel, useNow, useUi } from '../../state/hooks';
 import type { OnboardingStep } from '../../state/ui-store';
@@ -317,7 +317,7 @@ export function Onboarding() {
                 onClick={() => pushOverlay({ kind: 'modal', modal: 'connect', projectId, provider: p })}
               >
                 <span className={s['providerName']}>{copy.providers[p]}</span>
-                <Label>{fill(copy.onboarding.targets.tile, { method: methodLabel(p) })}</Label>
+                <Label>{fill(copy.onboarding.targets.tile, { method: cliMethodLabel(p) })}</Label>
               </button>
             ))}
           </div>

@@ -1,7 +1,7 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 /**
- * Drizzle mirror of `migrations/0000_init.sql` for `pnpm db:generate` diffs. The SQL file is authoritative:
+ * Drizzle mirror of `migrations/*.sql` (0000_init + 0001_activity + 0002_auth_method_cli) for `pnpm db:generate` diffs. The SQL file is authoritative:
  * CHECK constraints and the audit triggers are hand-maintained there (drizzle-kit does not emit them for SQLite).
  * Queries use prepared statements in `repos/`, not this schema.
  */
@@ -110,7 +110,7 @@ export const targets = sqliteTable(
     provider: text('provider', { enum: ['vercel', 'aws', 'gcp', 'supabase', 'github', 'ssh'] }).notNull(),
     name: text('name').notNull(),
     env: text('env', { enum: ['prod', 'staging', 'preview', 'scm'] }).notNull(),
-    authMethod: text('auth_method', { enum: ['oauth', 'key', 'ssh'] }).notNull(),
+    authMethod: text('auth_method', { enum: ['oauth', 'key', 'ssh', 'cli'] }).notNull(),
     policy: text('policy', { enum: ['ask-mfa', 'ask', 'always'] })
       .notNull()
       .default('ask'),

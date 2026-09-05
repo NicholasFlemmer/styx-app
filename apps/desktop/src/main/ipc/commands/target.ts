@@ -12,11 +12,23 @@ export function registerTargetCommands(bus: CommandBus, app: Container): void {
 
   bus.register('target.connect.saveKey', async (input) => ({ targetId: (await targets.saveKey(input)).id }));
 
-  bus.register('target.connect.saveToken', async ({ targetId, token }) => ({ targetId: (await targets.saveToken(targetId, token)).id }));
+  bus.register('target.connect.saveToken', async ({ targetId, token }) => ({
+    targetId: (await targets.saveToken(targetId, token)).id,
+  }));
 
   bus.register('target.connect.saveSsh', async (input) => ({ targetId: (await targets.saveSsh(input)).id }));
 
+  bus.register('target.connect.cliStatus', ({ provider }) => targets.cliStatus(provider));
+
+  bus.register('target.connect.cliLogin', ({ projectId, provider, account }) =>
+    targets.cliLogin(projectId, provider, account),
+  );
+
+  bus.register('target.connect.cliSave', async (input) => ({ targetId: (await targets.cliSave(input)).id }));
+
   bus.register('target.test', ({ targetId }) => targets.test(targetId));
+
+  bus.register('target.refresh', ({ targetId }) => targets.refresh(targetId));
 
   bus.register('target.setPolicy', ({ targetId, policy }) => {
     targets.setPolicy(targetId, policy);

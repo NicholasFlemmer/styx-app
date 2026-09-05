@@ -195,7 +195,7 @@ export const copy = {
       unconnected: 'unconnected',
       open: 'open · {t} left',
     },
-    actions: { revoke: 'Revoke', edit: 'Edit', connect: 'Connect' },
+    actions: { revoke: 'Revoke', edit: 'Edit', connect: 'Connect', refresh: 'Refresh' },
     /** Settings › Targets affordance for repo-authored grant policies (security audit H-1). */
     acceptProjectPolicies: 'Accept project policies',
     statusBar: {
@@ -287,7 +287,36 @@ export const copy = {
   connect: {
     title: 'Connect target · {step}',
     stepPick: 'choose provider',
-    methods: { oauth: 'OAuth', key: 'IAM / key', ssh: 'SSH' },
+    methods: { cli: 'Provider CLI', oauth: 'OAuth', key: 'IAM / key', ssh: 'SSH' },
+    /** Primary path: reuse the login the provider's CLI already holds; keys stay under Advanced. */
+    cli: {
+      /** Method-step title and onboarding tile: `gcloud CLI`. */
+      method: '{cli} CLI',
+      heading: 'Connect with {cli}',
+      body: "Uses the account you're signed into in {cli}. Styx never sees the password; each grant asks {cli} for a short-lived token. Anything running as you can also use {cli}, so prefer scoped roles for prod.",
+      notInstalled: '{cli} is not installed. Install it, or use Advanced to paste a key.',
+      /** Status row when the binary is missing: `gcloud · not found on PATH · Install guide`. */
+      notFound: 'not found on PATH',
+      installGuide: 'Install guide',
+      notLoggedIn: 'No account signed in. Run {command} to sign in.',
+      account: 'Account',
+      /** Row detail for the account the CLI currently uses. */
+      active: 'active',
+      login: 'Sign in with {cli}…',
+      loginRunning: 'Running {command}…',
+      waiting: 'Waiting for {command}…',
+      loginDone: 'Signed in. Pick the account to use.',
+      loginFailed: '{command} exited with code {code}.',
+      name: 'Name',
+      nameOptional: 'optional',
+      connect: 'Connect',
+      advanced: 'Advanced',
+      advancedHint: 'key, service account or token',
+      test: 'Test connection',
+      save: 'Save',
+      /** Settings › Targets meta line for CLI-backed targets: `via gcloud · nic@acme.dev`. */
+      via: 'via {cli} · {account}',
+    },
     environment: 'Environment',
     oauth: {
       body: 'Styx opens your browser to authorize. The token lands in the {keychainName}; agents receive short-lived scoped tokens derived from it.',
