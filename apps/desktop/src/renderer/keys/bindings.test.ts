@@ -3,7 +3,7 @@ import { fixtures, sessionTabs, type ProjectId } from '@styx/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../state/read-model';
 import { selectSessionId, useUiStore } from '../state/ui-store';
-import { shellBindings } from './bindings';
+import { popoutBindings, shellBindings } from './bindings';
 import { KeyRegistry } from './registry';
 
 /** Dispatches from inside the workspace scope (spec §6: approve/deny are chat/workspace chords). */
@@ -119,3 +119,68 @@ describe('shell bindings', () => {
     expect(commands).toEqual(['window.popout']);
   });
 });
+
+describe('popout bindings (spec §4.13)', () => {
+  let reg: KeyRegistry;
+  let off: () => void;
+  const commands: { name: string; input: unknown }[] = [];
+  const claude = fixtures.ids.session.claude;
+
+  /** Dispatches from the composer textarea inside the pop-out's chat scope. */
+  const pressInComposer = (init: KeyboardEventInit) => {
+    let box = document.querySelector<HTMLTextAreaElement>('[data-keyscope="composer"] textarea');
+    if (box === null) {
+      const chat = document.createElement('div');
+      chat.setAttribute('data-keyscope', 'chat');
+      const composer = document.createElement('div');
+      composer.setAttribute('data-keyscope', 'composer');
+      box = document.createElement('textarea');
+      composer.append(box);
+      chat.append(composer);
+      document.body.append(chat);
+    }
+    box.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+  };
+
+  beforeEach(() => {
+    commands.length = 0;
+    Object.assign(window, {
+      styx: {
+        platform: 'darwin',
+        env: {},
+        command: vi.fn(async (name: string, input: unknown) => {
+          commands.push({ name, input });
+          return { ok: true, value: {} };
+        }),
+      },
+    });
+    useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
+    useUiStore.setState({ overlays: [], screen: 'workspace', projectId: null });
+    reg = new KeyRegistry({
+      platform: () => 'darwin',
+      overlayOpen: () => useUiStore.getState().overlays.length > 0,
+    });
+    reg.registerAll(popoutBindings(claude));
+    off = reg.install(window);
+  });
+  afterEach(() => {
+    off();
+    document.body.innerHTML = '';
+    Object.assign(window, { styx: undefined });
+  });
+
+  it('Mod+Shift+O docks the window, even from the composer', () => {
+    pressInComposer({ key: 'o', metaKey: true, shiftKey: true });
+    expect(commands).toEqual([{ name: 'window.dock', input: { sessionId: claude } }]);
+  });
+
+  it('has no palette: Mod+K and Mod+P do nothing, Escape does nothing', () => {
+    pressInComposer({ key: 'k', metaKey: true });
+    pressInComposer({ key: 'p', metaKey: true });
+    pressInComposer({ key: 'Escape' });
+    expect(useUiStore.getState().overlays).toHaveLength(0);
+    expect(commands).toEqual([]);
+    expect(reg.list().map((b) => b.scope)).toEqual(['global', 'global']);
+  });
+});
+

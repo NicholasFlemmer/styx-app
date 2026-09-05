@@ -17,8 +17,10 @@ import { inlineSegments, transcriptItems, type TranscriptItem } from './transcri
 
 export interface ChatPaneProps {
   projectId: ProjectId;
-  /** Pop-out window: compact messages/composer, no tab row. */
+  /** Pop-out window (spec §4.13): compact messages/composer, no tab row, no meta line. */
   compact?: boolean;
+  /** Pins the pane to one session (the pop-out window's); defaults to the project's active session. */
+  sessionId?: SessionId;
 }
 
 const MODEL_LABEL = copy.chat.composer.model.replace(/\s*▾$/, '');
@@ -44,9 +46,10 @@ function Body({ text }: { text: string }) {
  * Chat pane (spec §4.1, 360px): session tabs (3 visible + ▾, accent `!` when needs-you, `+` spawns, ⤢ pops
  * out), meta line, transcript of the six Message kinds, composer. `data-keyscope="chat"` / `"composer"`.
  */
-export function ChatPane({ projectId, compact = false }: ChatPaneProps) {
+export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: ChatPaneProps) {
   const model = useModel(useCallback((m: ReadModel) => m, []));
-  const sessionId = useSessionId();
+  const activeSessionId = useSessionId();
+  const sessionId = pinnedId ?? activeSessionId;
   const now = useNow();
   const setSession = useUi((u) => u.setSession);
   const pushOverlay = useUi((u) => u.pushOverlay);
@@ -136,7 +139,13 @@ export function ChatPane({ projectId, compact = false }: ChatPaneProps) {
   };
 
   return (
-    <section className={s['pane']} data-keyscope="chat" data-chat-pane="true" aria-label={copy.nav.agents}>
+    <section
+      className={[s['pane'], compact ? s['compact'] : undefined].filter(Boolean).join(' ')}
+      data-keyscope="chat"
+      data-chat-pane="true"
+      data-chat-compact={compact ? 'true' : undefined}
+      aria-label={copy.nav.agents}
+    >
       {!compact && (
         <div className={s['tabsRow']}>
           <TabRow aria-label="Sessions" className={s['tabs']}>
@@ -204,9 +213,11 @@ export function ChatPane({ projectId, compact = false }: ChatPaneProps) {
           </button>
         </div>
       )}
-      <div className={s['meta']} data-chat-meta="true">
-        {meta}
-      </div>
+      {!compact && (
+        <div className={s['meta']} data-chat-meta="true">
+          {meta}
+        </div>
+      )}
       {popped && !compact ? (
         <div className={s['popped']}>
           <span className="t-label">{copy.chat.poppedOut}</span>
@@ -228,7 +239,7 @@ export function ChatPane({ projectId, compact = false }: ChatPaneProps) {
           hints={[copy.chat.composer.file, copy.chat.composer.command]}
           modelLabel={MODEL_LABEL}
           compact={compact}
-          disabled={activeId === null || popped}
+          disabled={activeId === null || (popped && !compact)}
         />
       </div>
     </section>

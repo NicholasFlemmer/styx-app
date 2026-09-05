@@ -6,6 +6,7 @@ import {
   sessionTabs,
   type Grant,
   type ReadModel,
+  type SessionId,
   type ThemePreference,
 } from '@styx/core';
 import { shortcuts } from '@styx/tokens';
@@ -176,6 +177,22 @@ export const shellBindings = (): KeyBinding[] => [
     when: () => topOverlay(useUiStore.getState().overlays) !== null,
     run: () => useUiStore.getState().popOverlay(),
   },
+];
+
+/**
+ * Pop-out chat window (spec §4.13): its own registry with `composer` + `global` only. No palette (Mod+K / Mod+P
+ * belong to the main window), no overlay close (Esc does nothing), Mod+Shift+O docks the window back.
+ */
+export const popoutBindings = (sessionId: SessionId): KeyBinding[] => [
+  {
+    id: 'dock',
+    chord: shortcuts.popoutChat,
+    scope: 'global',
+    run: () => {
+      void command('window.dock', { sessionId });
+    },
+  },
+  { id: 'toggleTheme', chord: shortcuts.toggleTheme, scope: 'global', run: cycleTheme },
 ];
 
 export interface DiffActions {

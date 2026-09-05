@@ -9,6 +9,12 @@
     min-height: 0;
     min-width: 0;
   }
+  /* Pop-out window: the pane is the whole window (no left hairline, no fixed width). */
+  .compact {
+    width: auto;
+    flex: 1;
+    border-left: 0;
+  }
   .tabsRow {
     height: var(--h-tabrow);
     flex: none;

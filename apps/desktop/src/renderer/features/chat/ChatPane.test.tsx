@@ -165,4 +165,34 @@ describe('ChatPane', () => {
     await flush();
     expect(commands).toEqual([{ name: 'window.popout', input: { sessionId: claude } }]);
   });
+
+  it('shows the "Popped out" state with a Dock button while the session is in a pop-out window', async () => {
+    const model = fixtures.demoReadModel();
+    useReadModel.getState().replaceModel({ ...model, popouts: [claude] }, 'connected');
+    render(<ChatPane projectId={acme} />);
+    expect(screen.getByText('Popped out')).toBeTruthy();
+    expect((screen.getByPlaceholderText('Message Claude…') as HTMLTextAreaElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Dock' }));
+    await flush();
+    expect(commands).toEqual([{ name: 'window.dock', input: { sessionId: claude } }]);
+  });
+
+  it('compact (pop-out window) pins to the given session: no tabs, no meta line, live composer', async () => {
+    const model = fixtures.demoReadModel();
+    useReadModel.getState().replaceModel({ ...model, popouts: [codex] }, 'connected');
+    // The ui store's active session is Claude; the pop-out shows Codex regardless.
+    useUiStore.getState().setSession(acme, claude);
+    const { container } = render(<ChatPane projectId={acme} sessionId={codex} compact />);
+    expect(container.querySelector('[data-chat-compact="true"]')).not.toBeNull();
+    expect(screen.queryAllByRole('tab')).toHaveLength(0);
+    expect(container.querySelector('[data-chat-meta]')).toBeNull();
+    expect(screen.queryByText('Popped out')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Review request' })).toBeTruthy();
+    const box = screen.getByPlaceholderText('Message Codex…') as HTMLTextAreaElement;
+    expect(box.disabled).toBe(false);
+    fireEvent.change(box, { target: { value: 'go' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await flush();
+    expect(commands).toEqual([{ name: 'session.sendMessage', input: { sessionId: codex, body: 'go' } }]);
+  });
 });
