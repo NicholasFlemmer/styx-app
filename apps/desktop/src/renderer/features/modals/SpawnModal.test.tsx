@@ -72,9 +72,10 @@ describe('SpawnModal', () => {
     const alert = screen.getByRole('alert');
     expect(alert.textContent).toContain('Codex CLI not found on PATH.');
     expect(within(alert).getByRole('button', { name: copy.errors.cliMissing.cta })).toBeTruthy();
+    // Enabled no-op until a file-picker command exists (prototype keeps it enabled).
     expect(
       within(alert).getByRole('button', { name: copy.errors.locateBinary }).hasAttribute('disabled'),
-    ).toBe(true);
+    ).toBe(false);
     expect(screen.getByRole('button', { name: 'Spawn · ⌘⏎' }).hasAttribute('disabled')).toBe(true);
     fireEvent.click(within(alert).getByRole('button', { name: copy.errors.cliMissing.cta }));
     expect(useUiStore.getState().screen).toBe('onboarding');

@@ -26,14 +26,18 @@ export interface PaletteListProps {
   activeId?: string | undefined;
   onActive: (id: string) => void;
   onRun: (id: string) => void;
-  placeholder?: string;
+  /** Prompt placeholder (app: `copy.palette.placeholder`). */
+  placeholder: string;
   /** t-label hints; the last one sits after a spacer ("esc"). */
-  footerHints?: string[];
+  footerHints: readonly string[];
   /** ⇥ cycles scope (spec §5); +1 for Tab, -1 for Shift+Tab. */
   onScopeCycle?: (dir: 1 | -1) => void;
   /** When given, Esc calls it (topmost overlay only). */
   onClose?: () => void;
-  ariaLabel?: string;
+  /** Accessible name of the dialog (app: `copy.palette.dialogLabel`). */
+  ariaLabel: string;
+  /** Accessible name of the results listbox (app: `copy.palette.resultsLabel`). */
+  resultsLabel: string;
 }
 
 /** Command palette panel: 640px, `--tx` border, mono prompt with accent `>`, grouped listbox (spec §5). */
@@ -45,11 +49,12 @@ export const PaletteList = forwardRef<HTMLDivElement, PaletteListProps>(function
     activeId,
     onActive,
     onRun,
-    placeholder = 'switch, spawn, deploy, grant, diff…',
-    footerHints = ['⏎ run', '⇥ scope', 'esc'],
+    placeholder,
+    footerHints,
     onScopeCycle,
     onClose,
-    ariaLabel = 'Command palette',
+    ariaLabel,
+    resultsLabel,
   },
   ref,
 ) {
@@ -142,7 +147,7 @@ export const PaletteList = forwardRef<HTMLDivElement, PaletteListProps>(function
           onKeyDown={onKeyDown}
         />
       </div>
-      <div id={listId} role="listbox" aria-label="Results" className={s['list']}>
+      <div id={listId} role="listbox" aria-label={resultsLabel} className={s['list']}>
         {groups.map((g) => {
           const gid = `${baseId}-grp-${g.id}`;
           return (

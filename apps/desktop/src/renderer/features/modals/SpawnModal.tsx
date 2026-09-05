@@ -11,7 +11,7 @@ import {
 import { Button, Checkbox, Field, Input, Modal, Select, StatusDot, Textarea } from '@styx/ui';
 import { useCallback, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { command } from '../../state/commands';
-import { useModel, useUi } from '../../state/hooks';
+import { useCopyPlatform, useModel, useUi } from '../../state/hooks';
 import {
   SPAWN_AGENTS,
   autoBranchFor,
@@ -42,10 +42,12 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
   const openSession = useUi((u) => u.openSession);
   const setScreen = useUi((u) => u.setScreen);
   const setOnboardingStep = useUi((u) => u.setOnboardingStep);
+  /** Keyboard Mod follows the OS; the `mod` glyph in the Spawn label follows the rendered chrome (spec §7). */
   const platform = useUi((u) => u.platform);
+  const copyPlatform = useCopyPlatform();
   const model = useModel(selectModel);
   const project = projectNameOf(model, projectId);
-  const words = platformCopy(platform);
+  const words = platformCopy(copyPlatform);
 
   const [form, setForm] = useState<SpawnForm>(() => {
     const agent = projectSettingsOfOrDefault(model, projectId).defaultAgent;
@@ -144,8 +146,8 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
               <StatusDot tone="accent" />
               <span className={s['errorText']}>{fill(copy.errors.spawnCliMissing, { cli: agentName })}</span>
               <Button onClick={installGuide}>{copy.errors.cliMissing.cta}</Button>
-              {/* TODO(main): no file-picker command in the contract yet; Locate binary stays disabled. */}
-              <Button disabled title={copy.errors.locateBinary}>
+              {/* TODO(main): no file-picker command in the contract yet (`dialog.pickFile`); enabled no-op (prototype). */}
+              <Button title={copy.errors.locateBinary} onClick={() => {}}>
                 {copy.errors.locateBinary}
               </Button>
             </div>
@@ -188,6 +190,7 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
         <Field label={copy.spawn.firstMessage} htmlFor={messageId}>
           <Textarea
             id={messageId}
+            className={s['firstMessage']}
             minHeight={64}
             placeholder={fill(copy.spawn.firstMessagePlaceholder, { agent: agentName })}
             value={form.firstMessage}

@@ -10,10 +10,10 @@ export interface ToastAction {
 }
 
 export interface ToastProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
-  /** Accent header, left. Default "Needs you". */
-  heading?: ReactNode;
-  /** Accent header, right. Default "Styx · now". */
-  meta?: ReactNode;
+  /** Accent header, left (app passes `copy.toast.header`, e.g. "Needs you"). */
+  heading: ReactNode;
+  /** Accent header, right (app passes `copy.toast.source`, e.g. "Styx · now"). */
+  meta: ReactNode;
   /** 600 13px line, e.g. "Codex wants Supabase prod · write". */
   title: ReactNode;
   /** Mono 11.5px muted line. */
@@ -27,8 +27,8 @@ export interface ToastProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'
 /** Top-right needs-you toast: 340px, `--tx` border, accent header, two footer actions; `role=status` announces politely. */
 export const Toast = forwardRef<HTMLDivElement, ToastProps>(function Toast(
   {
-    heading = 'Needs you',
-    meta = 'Styx · now',
+    heading,
+    meta,
     title,
     detail,
     actions = [],

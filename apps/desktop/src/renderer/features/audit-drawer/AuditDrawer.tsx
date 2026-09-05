@@ -12,7 +12,7 @@ import { Button, Drawer, DrawerRow } from '@styx/ui';
 import { useEffect, useRef } from 'react';
 import { env } from '../../state/bridge';
 import { command } from '../../state/commands';
-import { useModel, useNow, useUi } from '../../state/hooks';
+import { useCopyPlatform, useModel, useNow, useUi } from '../../state/hooks';
 import { clockOffsetMinutes } from '../../screens/Approvals/approvals-data';
 import s from './AuditDrawer.module.css';
 
@@ -32,7 +32,7 @@ const identity = (m: ReadModel) => m;
  */
 export function AuditDrawer({ id, auditId }: AuditDrawerProps) {
   const popOverlay = useUi((u) => u.popOverlay);
-  const platform = useUi((u) => u.platform);
+  const platform = useCopyPlatform();
   const model = useModel(identity);
   const now = useNow();
   // Initial focus lands on the (labelled) dialog body, not the ✕, so opening the drawer paints no focus ring.

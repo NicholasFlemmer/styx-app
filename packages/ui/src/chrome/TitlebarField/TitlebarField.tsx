@@ -6,15 +6,15 @@ export type TitlebarFieldPlatform = 'darwin' | 'win32';
 export interface TitlebarFieldProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   /** Muted prompt text. */
   placeholder?: string;
-  /** Picks the shortcut hint: ⌘K on darwin, Ctrl K on win32. */
+  /** Keyboard platform for `aria-keyshortcuts` (Meta+K on darwin, Control+K on win32). */
   platform?: TitlebarFieldPlatform;
-  /** Override the hint text. */
-  hint?: string;
+  /** Shortcut hint text, formatted by the app (`formatChord(shortcuts.palette, platform)`: ⌘K / Ctrl+K). */
+  hint: string;
   inv?: boolean;
   on?: boolean;
 }
 
-/** The palette field in the titlebar: a 280px hairline button with a ⌘K hint. */
+/** The palette field in the titlebar: a 280px hairline button with the palette chord as its hint. */
 export const TitlebarField = forwardRef<HTMLButtonElement, TitlebarFieldProps>(function TitlebarField(
   {
     placeholder = 'Switch, spawn, deploy, grant…',
@@ -30,7 +30,6 @@ export const TitlebarField = forwardRef<HTMLButtonElement, TitlebarFieldProps>(f
   ref,
 ) {
   const cls = [s['field'], className].filter(Boolean).join(' ');
-  const hintText = hint ?? (platform === 'darwin' ? '⌘K' : 'Ctrl K');
   return (
     <button
       ref={ref}
@@ -44,7 +43,7 @@ export const TitlebarField = forwardRef<HTMLButtonElement, TitlebarFieldProps>(f
     >
       <span className={s['placeholder']}>{placeholder}</span>
       <span className={s['hint']} aria-hidden="true">
-        {hintText}
+        {hint}
       </span>
     </button>
   );

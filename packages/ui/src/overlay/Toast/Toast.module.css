@@ -32,7 +32,6 @@
   .title {
     font-weight: 600;
     font-size: 13px;
-    line-height: 1.5;
   }
   .detail {
     font-family: var(--font-mono);
@@ -55,6 +54,8 @@
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+    /* UA buttons centre their label; the reset makes text-align inherit, so restore it (prototype). */
+    text-align: center;
     cursor: pointer;
   }
   .action:last-child {

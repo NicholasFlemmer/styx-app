@@ -1,7 +1,7 @@
 import type { ReadModel, Session, SessionId } from '@styx/core';
 import { useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { env } from './bridge';
+import { env, type BridgePlatform } from './bridge';
 import { useReadModel } from './read-model';
 import { selectSessionId, useUiStore, type UiStore } from './ui-store';
 
@@ -24,6 +24,18 @@ export function useUiShallow<T>(selector: (ui: UiStore) => T): T {
 }
 
 export const useSessionId = (): SessionId | null => useUiStore(selectSessionId);
+
+/**
+ * Platform for user-facing words (`platformCopy`, `defaultProjectLocation`: Touch ID / Windows Hello, Keychain /
+ * Credential Manager, `~/code` / `C:\dev`, the `mod` glyph in labels): follows the rendered chrome (`env.chrome`
+ * override, else `ui.platform`), so win chrome never mixes mac copy (spec §7). Keyboard *handling* (metaKey vs
+ * ctrlKey) and chord hints stay on `ui.platform` (discrepancy #21).
+ */
+export function useCopyPlatform(): BridgePlatform {
+  const platform = useUiStore((u) => u.platform);
+  const chrome = env().chrome;
+  return chrome === 'mac' ? 'darwin' : chrome === 'win' ? 'win32' : platform;
+}
 
 const frozenNow = (): number | null => {
   const n = env().now;

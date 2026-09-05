@@ -89,6 +89,10 @@
   .link:hover {
     color: var(--tx);
   }
+  /* `styx-template` / `main` inside the field hints (prototype). */
+  .mono {
+    font-family: var(--font-mono);
+  }
   /* GitHub note: mono 11.5 muted in a hairline box. */
   .note {
     font-family: var(--font-mono);

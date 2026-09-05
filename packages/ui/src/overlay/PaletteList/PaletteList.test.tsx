@@ -36,6 +36,10 @@ function Live(props: {
       groups={groups}
       activeId={active}
       onActive={setActive}
+      placeholder="switch, spawn, deploy, grant, diff…"
+      footerHints={['⏎ run', '⇥ scope', 'esc']}
+      ariaLabel="Command palette"
+      resultsLabel="Results"
       onRun={props.onRun ?? (() => {})}
       {...(props.onScopeCycle ? { onScopeCycle: props.onScopeCycle } : {})}
       {...(props.onClose ? { onClose: props.onClose } : {})}

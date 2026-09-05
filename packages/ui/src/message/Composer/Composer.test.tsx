@@ -5,11 +5,13 @@ import { Composer } from './Composer';
 
 afterEach(cleanup);
 
+const strings = { placeholder: 'Message…', hints: ['@file', '/command'], sendLabel: '⏎ send' } as const;
+
 describe('Composer', () => {
   it('⏎ sends trimmed text and clears; ⇧⏎ inserts a newline', async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
-    render(<Composer placeholder="Message Claude…" onSend={onSend} />);
+    render(<Composer {...strings} placeholder="Message Claude…" onSend={onSend} />);
     const box = screen.getByPlaceholderText('Message Claude…');
     await user.click(box);
     await user.keyboard('line one{Shift>}{Enter}{/Shift}line two');
@@ -24,7 +26,7 @@ describe('Composer', () => {
   it('does not send empty text', async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
-    render(<Composer onSend={onSend} />);
+    render(<Composer {...strings} onSend={onSend} />);
     await user.click(screen.getByRole('textbox'));
     await user.keyboard('   {Enter}');
     expect(onSend).not.toHaveBeenCalled();
@@ -35,7 +37,7 @@ describe('Composer', () => {
     const user = userEvent.setup();
     const onModel = vi.fn();
     const onSend = vi.fn();
-    render(<Composer onSend={onSend} onModel={onModel} modelLabel="Model" />);
+    render(<Composer {...strings} onSend={onSend} onModel={onModel} modelLabel="Model" />);
     expect(screen.getByText('@file')).toBeInTheDocument();
     expect(screen.getByText('/command')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Model' }));
@@ -46,7 +48,7 @@ describe('Composer', () => {
   });
 
   it('compact hides the hint row', () => {
-    render(<Composer onSend={() => {}} compact />);
+    render(<Composer {...strings} onSend={() => {}} compact />);
     expect(screen.queryByText('@file')).not.toBeInTheDocument();
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });

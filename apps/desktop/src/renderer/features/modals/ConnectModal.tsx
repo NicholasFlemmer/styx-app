@@ -12,7 +12,7 @@ import { Button, ChipGroup, Field, Input, Label, Modal } from '@styx/ui';
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { onEvent } from '../../state/bridge';
 import { command } from '../../state/commands';
-import { useUi } from '../../state/hooks';
+import { useCopyPlatform, useUi } from '../../state/hooks';
 import s from './ConnectModal.module.css';
 import {
   CONNECT_ENVS,
@@ -58,7 +58,7 @@ export function ConnectModal({
   targetId,
 }: ConnectModalProps) {
   const popOverlay = useUi((u) => u.popOverlay);
-  const platform = useUi((u) => u.platform);
+  const platform = useCopyPlatform();
   const activeProject = useUi((u) => u.projectId);
   const words = platformCopy(platform);
 

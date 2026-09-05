@@ -24,7 +24,7 @@
   .project:hover {
     background: var(--s2);
   }
-  /* 22px visible box, ≥ 28px hit area (spec §9). */
+  /* 26px visible box (the text ▾ falls back to a taller font, see #18), ≥ 28px hit area (spec §9). */
   .project::after {
     content: '';
     position: absolute;

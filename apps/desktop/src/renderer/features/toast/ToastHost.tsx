@@ -11,7 +11,7 @@ import {
 } from '@styx/core';
 import { motion } from '@styx/tokens';
 import { Toast } from '@styx/ui';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { findOverlay, invokerOf, rememberInvoker, type Overlay, type ToastPayload } from '../../overlays/stack';
 import { onEvent } from '../../state/bridge';
 import { command } from '../../state/commands';
@@ -97,9 +97,44 @@ const renderToast = (overlay: Extract<Overlay, { kind: 'toast' }>) => {
   );
 };
 
-/** Listens for `ask.opened` and stacks toasts top-right (340px, right 16, top 52). Respects DND. */
+/** Vertical gap between stacked toasts. */
+const TOAST_GAP = 8;
+
+interface ToastSlotProps {
+  overlay: Extract<Overlay, { kind: 'toast' }>;
+  offset: number;
+  onHeight: (id: string, height: number) => void;
+}
+
+/** One stacked toast; reports its rendered height so the next slot starts below it. */
+function ToastSlot({ overlay, offset, onHeight }: ToastSlotProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current?.firstElementChild;
+    if (!(el instanceof HTMLElement)) return;
+    const report = () => onHeight(overlay.id, el.offsetHeight);
+    report();
+    if (typeof ResizeObserver !== 'function') return;
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [overlay.id, onHeight]);
+  return (
+    <div ref={ref} className={s['slot']} style={{ transform: `translateY(${offset}px)` }}>
+      {renderToast(overlay)}
+    </div>
+  );
+}
+
+/** Listens for `ask.opened` and stacks toasts top-right (340px, right 16, top 52), each below the previous one. Respects DND. */
 export function ToastHost() {
   const toasts = useUiShallow((st) => st.overlays.filter((o) => o.kind === 'toast'));
+  const [heights, setHeights] = useState<Record<string, number>>({});
+  const onHeight = useCallback(
+    (id: string, height: number) =>
+      setHeights((prev) => (prev[id] === height ? prev : { ...prev, [id]: height })),
+    [],
+  );
   useEffect(
     () =>
       onEvent('ask.opened', ({ askId, sessionId, projectId }) => {
@@ -112,12 +147,16 @@ export function ToastHost() {
     [],
   );
   // Each Toast is its own `role=status` live region; no aria-live on the host (it would announce twice).
+  // Each toast starts below the previous one's rendered height (+ gap); unmeasured toasts count as 0 until they report.
+  const offsets: number[] = [];
+  for (let i = 0; i < toasts.length; i += 1) {
+    const prev = toasts[i - 1];
+    offsets.push(prev === undefined ? 0 : (offsets[i - 1] ?? 0) + (heights[prev.id] ?? 0) + TOAST_GAP);
+  }
   return (
     <div className={s['host']}>
       {toasts.map((o, i) => (
-        <div key={o.id} className={s['slot']} style={{ transform: `translateY(${i * 130}px)` }}>
-          {renderToast(o)}
-        </div>
+        <ToastSlot key={o.id} overlay={o} offset={offsets[i] ?? 0} onHeight={onHeight} />
       ))}
     </div>
   );

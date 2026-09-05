@@ -63,7 +63,7 @@
     width: 8px;
     height: 12px;
     background: var(--mu);
-    animation: styx-blink var(--motion-blink, 1s steps(1) infinite);
+    animation: styx-blink var(--motion-blink);
   }
   .two {
     display: grid;

@@ -1,4 +1,5 @@
-import { copy, fill, lockedCount, needsYouCount, projectBranch, projectNameOf } from '@styx/core';
+import { copy, fill, formatChord, lockedCount, needsYouCount, projectBranch, projectNameOf } from '@styx/core';
+import { shortcuts } from '@styx/tokens';
 import { Titlebar, TitlebarCounter, TitlebarField, Wordmark } from '@styx/ui';
 import { useCallback } from 'react';
 import { chromePlatform, platform } from '../../state/bridge';
@@ -40,6 +41,7 @@ export function AppTitlebar() {
             aria-label={`${projectName} — switch project`}
             aria-haspopup="dialog"
           >
+            {/* Text ▾, not the SVG Icon: the glyph AA costs ~0.03% per state and tips workspace-sheet/approvals-audit over the gate (discrepancy #40). */}
             {projectName} <span className={s['chevron']}>▾</span>
           </button>
           <span className={s['branch']}>{branch}</span>
@@ -50,6 +52,7 @@ export function AppTitlebar() {
           {/* Layout follows the visual chrome; the shortcut hint follows the keyboard platform (Mod = ⌘ on darwin). */}
           <TitlebarField
             platform={platform()}
+            hint={formatChord(shortcuts.palette, platform())}
             placeholder={copy.palette.titlebarField}
             onClick={() => openPalette('all')}
           />

@@ -70,6 +70,10 @@
     background: var(--bg);
     font-size: 12.5px;
   }
+  /* Prototype first-message box has no line-height (normal leading); the new-project brief keeps 1.5. */
+  .firstMessage {
+    line-height: normal;
+  }
   .toggles {
     display: flex;
     gap: 18px;

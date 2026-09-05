@@ -40,6 +40,10 @@ function Live(props: Partial<React.ComponentProps<typeof PaletteList>>) {
       groups={groups}
       activeId={active}
       onActive={setActive}
+      placeholder="switch, spawn, deploy, grant, diff…"
+      footerHints={['⏎ run', '⇥ scope', 'esc']}
+      ariaLabel="Command palette"
+      resultsLabel="Results"
       onRun={() => {}}
       {...props}
     />

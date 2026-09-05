@@ -11,7 +11,7 @@ import {
 import { sizes } from '@styx/tokens';
 import { Backdrop, PaletteList } from '@styx/ui';
 import { useCallback, useMemo, useRef, type KeyboardEvent } from 'react';
-import { useNow, useUi, useUiShallow } from '../../state/hooks';
+import { useCopyPlatform, useNow, useUi, useUiShallow } from '../../state/hooks';
 import { useReadModel } from '../../state/read-model';
 import { runPaletteAction } from './actions';
 import s from './Palette.module.css';
@@ -32,6 +32,7 @@ export function Palette({ id }: PaletteProps) {
   const now = useNow();
   const projectId = useUi((s) => s.projectId);
   const platform = useUi((s) => s.platform);
+  const copyPlatform = useCopyPlatform();
   const palette = useUiShallow((s) => s.palette);
   const setPalette = useUi((s) => s.setPalette);
   const popOverlay = useUi((s) => s.popOverlay);
@@ -72,7 +73,7 @@ export function Palette({ id }: PaletteProps) {
 
   const hints = [
     copy.palette.footer.run,
-    fill(copy.palette.footer.newWindow, { mod: platformCopy(platform).mod }),
+    fill(copy.palette.footer.newWindow, { mod: platformCopy(copyPlatform).mod }),
     copy.palette.footer.scope,
     copy.palette.footer.close,
   ];
@@ -96,6 +97,8 @@ export function Palette({ id }: PaletteProps) {
           onActive={(activeId) => setPalette({ activeId })}
           onRun={run}
           placeholder={copy.palette.placeholder}
+          ariaLabel={copy.palette.dialogLabel}
+          resultsLabel={copy.palette.resultsLabel}
           footerHints={hints}
           onScopeCycle={(dir) =>
             setPalette({

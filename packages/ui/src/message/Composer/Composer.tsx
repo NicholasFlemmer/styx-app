@@ -3,31 +3,35 @@ import { Icon } from '../../primitives';
 import s from './Composer.module.css';
 
 export interface ComposerProps {
-  /** e.g. "Message Claude…" */
-  placeholder?: string;
+  /** e.g. "Message Claude…" (app: `copy.chat.composerPlaceholder`). */
+  placeholder: string;
   onSend: (text: string) => void;
-  /** t-label hints before the model control. Default ['@file', '/command']. */
-  hints?: string[];
-  /** Model picker label; rendered with a ▾ chevron. Omit to hide. Default "Model". */
+  /** t-label hints before the model control (app: `copy.chat.composer.file` / `.command`). */
+  hints: readonly string[];
+  /** Model picker label; rendered with a ▾ chevron. Omit to hide. */
   modelLabel?: ReactNode;
+  /** Send hint label (app: `copy.chat.composer.send`, "⏎ send"). */
+  sendLabel: string;
   onModel?: () => void;
   /** Pop-out chat: 10px 12px padding, 44px min-height, 12.5px type, no hint row. */
   compact?: boolean;
   disabled?: boolean;
+  /** Accessible name of the textarea; defaults to the placeholder. */
   ariaLabel?: string;
 }
 
 /** Chat composer: bordered `--bg` textarea (min 56px), ⏎ sends, ⇧⏎ inserts a newline, hint row of t-label items. */
 export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function Composer(
   {
-    placeholder = 'Message…',
+    placeholder,
     onSend,
-    hints = ['@file', '/command'],
-    modelLabel = 'Model',
+    hints,
+    modelLabel,
+    sendLabel,
     onModel,
     compact,
     disabled,
-    ariaLabel = 'Message',
+    ariaLabel = placeholder,
   },
   ref,
 ) {
@@ -83,7 +87,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
             onClick={send}
             disabled={disabled || text.trim() === ''}
           >
-            ⏎ send
+            {sendLabel}
           </button>
         </div>
       )}

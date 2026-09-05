@@ -4,7 +4,13 @@ import { Composer } from './Composer';
 const meta = {
   title: 'Message/Composer',
   component: Composer,
-  args: { placeholder: 'Message Claude…', onSend: () => {} },
+  args: {
+    placeholder: 'Message Claude…',
+    hints: ['@file', '/command'],
+    modelLabel: 'Model',
+    sendLabel: '⏎ send',
+    onSend: () => {},
+  },
   decorators: [
     (Story) => (
       <div style={{ width: 360, background: 'var(--s1)' }}>

@@ -25,6 +25,8 @@
   }
   .input:focus {
     border-color: var(--tx);
+    outline: 1px solid var(--ac);
+    outline-offset: 1px;
   }
   .input:disabled {
     opacity: 0.5;

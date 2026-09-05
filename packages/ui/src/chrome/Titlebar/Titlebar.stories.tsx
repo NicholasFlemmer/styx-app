@@ -15,7 +15,7 @@ const left = (
 );
 const right = (platform: 'darwin' | 'win32') => (
   <>
-    <TitlebarField platform={platform} onClick={() => {}} />
+    <TitlebarField platform={platform} hint={platform === 'darwin' ? '⌘K' : 'Ctrl+K'} onClick={() => {}} />
     <TitlebarCounter count={2} label="needs you" tone="accent" live />
     <TitlebarCounter count={1} label="locked" tone="hollowStrong" />
   </>

@@ -24,8 +24,9 @@ import {
 import { useEffect, useState } from 'react';
 import { PROVIDERS, methodLabel } from '../../features/modals/modals';
 import { command } from '../../state/commands';
-import { useModel, useNow, useUi } from '../../state/hooks';
+import { useCopyPlatform, useModel, useNow, useUi } from '../../state/hooks';
 import type { OnboardingStep } from '../../state/ui-store';
+import { harnessReposEnabled, harnessScannedRepos } from './harness-repos';
 import s from './Onboarding.module.css';
 import {
   DEFAULT_IDE_IMPORTS,
@@ -50,7 +51,7 @@ export function Onboarding() {
   const setScreen = useUi((u) => u.setScreen);
   const pushOverlay = useUi((u) => u.pushOverlay);
   const projectId = useUi((u) => u.projectId);
-  const platform = useUi((u) => u.platform);
+  const platform = useCopyPlatform();
   const now = useNow();
   const ides = useModel(selectIdes);
   const clis = useModel(selectClis);
@@ -59,8 +60,13 @@ export function Onboarding() {
 
   const [chosenIde, setChosenIde] = useState<string | null>(null);
   const [imports, setImports] = useState<IdeImports>(DEFAULT_IDE_IMPORTS);
-  const [repos, setRepos] = useState<ScannedRepo[] | null>(null);
-  const [checked, setChecked] = useState<Set<string>>(() => new Set());
+  // The visual harness seeds the prototype's scanned list instead of scanning the machine (harness-repos.ts).
+  const [repos, setRepos] = useState<ScannedRepo[] | null>(() =>
+    harnessReposEnabled() ? harnessScannedRepos(now) : null,
+  );
+  const [checked, setChecked] = useState<Set<string>>(
+    () => new Set((repos ?? []).filter((x) => x.suggested).map((x) => x.path)),
+  );
   const [busy, setBusy] = useState(false);
 
   const ide: IdeInstall | undefined =

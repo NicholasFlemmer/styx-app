@@ -73,11 +73,14 @@
   .spacer {
     flex: 1;
   }
+  /* Prototype: 12px padding around a 13px text ⤢ = 32px box; the SVG icon keeps that width. */
   .popout {
-    padding: 0 12px;
+    width: 32px;
+    padding: 0;
     border-left: 1px solid var(--ln);
     display: flex;
     align-items: center;
+    justify-content: center;
     color: var(--mu);
     font-size: 13px;
     cursor: pointer;

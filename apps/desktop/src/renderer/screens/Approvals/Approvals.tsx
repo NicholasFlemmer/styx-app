@@ -13,7 +13,7 @@ import { Button, Checkbox, Label, Tab, TabRow, Table, TableCell, TableRow, Tag }
 import { useCallback, useEffect } from 'react';
 import { env } from '../../state/bridge';
 import { command } from '../../state/commands';
-import { useModel, useNow, useUi } from '../../state/hooks';
+import { useCopyPlatform, useModel, useNow, useUi } from '../../state/hooks';
 import type { ApprovalsTab } from '../../state/ui-store';
 import { askForGrant, clockOffsetMinutes, inboxFooter, policiesInOrder, policyMeta } from './approvals-data';
 import s from './Approvals.module.css';
@@ -30,7 +30,7 @@ export function Approvals() {
   const now = useNow();
   const tab = useUi((u) => u.approvalsTab);
   const setApprovalsTab = useUi((u) => u.setApprovalsTab);
-  const platform = useUi((u) => u.platform);
+  const platform = useCopyPlatform();
   const openSession = useUi((u) => u.openSession);
   const setProject = useUi((u) => u.setProject);
   const setScreen = useUi((u) => u.setScreen);

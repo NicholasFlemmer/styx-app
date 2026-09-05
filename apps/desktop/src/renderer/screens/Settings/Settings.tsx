@@ -20,8 +20,9 @@ import {
   Tag,
   TABLE_COLUMNS,
 } from '@styx/ui';
+import { PROJECT_POLICY_BANNER } from '../../features/banners/BannerStack';
 import { command } from '../../state/commands';
-import { useModel, useNow, useUi } from '../../state/hooks';
+import { useCopyPlatform, useModel, useNow, useUi } from '../../state/hooks';
 import { sectionRows, type SettingsRow } from './rows';
 import {
   APP_SECTIONS,
@@ -40,6 +41,7 @@ const POLICY_OPTIONS = (['ask-mfa', 'ask', 'always'] as const).map((value) => ({
   label: copy.targets.policy[value],
 }));
 const isPolicy = (v: string): v is TargetPolicy => v in copy.targets.policy;
+
 
 /** Settings (spec §4.6): 220px section nav · header · Targets table or label/value rows. */
 export function Settings() {
@@ -103,6 +105,9 @@ export function Settings() {
 function Targets({ model, projectId }: { model: ReadModel; projectId: ProjectId | null }) {
   const now = useNow();
   const pushOverlay = useUi((u) => u.pushOverlay);
+  const policyBanner = useUi((u) => (projectId === null ? undefined : u.banners[`${PROJECT_POLICY_BANNER}${projectId}`]));
+  // The accept is bound to the reviewed file hash (security H-1 TOCTOU): main refuses and re-sets the banner if it changed.
+  const policyHash = policyBanner?.action.kind === 'review-project-policy' ? policyBanner.action.hash : null;
   const rows = projectId === null ? [] : targetRows(model, projectId, now);
 
   const openConnect = () => {
@@ -164,6 +169,18 @@ function Targets({ model, projectId }: { model: ReadModel; projectId: ProjectId 
         ))}
       </Table>
       {rows.length === 0 ? <p className={s['empty']}>{copy.empty.targets}</p> : null}
+      {policyBanner !== undefined && policyHash !== null && projectId !== null ? (
+        <div className={s['policyRow']} role="status" data-project-policy="true">
+          <span className={s['policyText']}>{policyBanner.text}</span>
+          <Button
+            variant="secondary"
+            size="compact"
+            onClick={() => void command('project.policy.accept', { projectId, hash: policyHash })}
+          >
+            {copy.targets.acceptProjectPolicies}
+          </Button>
+        </div>
+      ) : null}
       <div className={s['connectRow']}>
         <Button variant="dashed" size="regular" onClick={openConnect} disabled={projectId === null}>
           {copy.targets.connectRow}
@@ -183,7 +200,8 @@ function Rows({
   projectId: ProjectId | null;
 }) {
   const platform = useUi((u) => u.platform);
-  const rows = sectionRows(model, section, { projectId, platform });
+  const copyPlatform = useCopyPlatform();
+  const rows = sectionRows(model, section, { projectId, platform, copyPlatform });
 
   const onChange = (row: SettingsRow, value: string) => {
     const change = row.change;

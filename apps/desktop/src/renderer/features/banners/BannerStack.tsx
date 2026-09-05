@@ -1,9 +1,21 @@
+import type { ProjectId } from '@styx/core';
 import { Banner, BannerStack as UiBannerStack } from '@styx/ui';
 import { useEffect, useMemo, useRef } from 'react';
 import { useNow, useUi, useUiShallow } from '../../state/hooks';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
 import { deriveBanners, mergeBanners, type BannerAction } from './derive';
+
+/** Repo-authored grant policies are advisory until accepted (security audit H-1): banner keys `project-policy:<projectId>`. */
+export const PROJECT_POLICY_BANNER = 'project-policy:';
+
+/** `Review` on a project-policy banner: select the project and open Settings › Project › Targets (the accept row lives there). */
+export const reviewProjectPolicy = (projectId: ProjectId): void => {
+  const ui = useUiStore.getState();
+  ui.setProject(projectId);
+  ui.setSettingsSection('project:targets');
+  ui.setScreen('settings');
+};
 
 /** Banner actions dispatch navigation; the target flows (connect modal, repo lane) attach in later phases. */
 export const runBannerAction = (action: BannerAction): void => {
@@ -19,6 +31,9 @@ export const runBannerAction = (action: BannerAction): void => {
       return;
     case 'resolve':
       ui.setScreen('repo');
+      return;
+    case 'review-project-policy':
+      reviewProjectPolicy(action.projectId);
       return;
   }
 };
@@ -55,7 +70,7 @@ export function BannerStack() {
       {banners.map((b) => (
         <Banner
           key={b.key}
-          tone="error"
+          tone={b.kind === 'project-policy' ? 'info' : 'error'}
           text={b.text}
           action={{ label: b.cta, onClick: () => runBannerAction(b.action) }}
           onDismiss={() => dismissBanner(b.key)}

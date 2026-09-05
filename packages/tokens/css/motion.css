@@ -1,65 +1,12 @@
 /* Motion keyframes (spec §2). Reduced motion → fades only. */
 @layer tokens {
-  @keyframes styx-sheet-in {
-    from {
-      transform: translateX(100%);
-    }
-    to {
-      transform: translateX(0);
-    }
-  }
-  @keyframes styx-modal-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-  @keyframes styx-toast-in {
-    from {
-      transform: translateY(-8px);
-      opacity: 0;
-    }
-    to {
-      transform: translateY(0);
-      opacity: 1;
-    }
-  }
-  @keyframes styx-blink {
-    0%,
-    50% {
-      opacity: 1;
-    }
-    50.01%,
-    100% {
-      opacity: 0;
-    }
-  }
+  @keyframes styx-sheet-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  @keyframes styx-modal-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes styx-toast-in { from { transform: translateY(-8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes styx-blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
   @media (prefers-reduced-motion: reduce) {
-    @keyframes styx-sheet-in {
-      from {
-        opacity: 0;
-      }
-      to {
-        opacity: 1;
-      }
-    }
-    @keyframes styx-toast-in {
-      from {
-        opacity: 0;
-      }
-      to {
-        opacity: 1;
-      }
-    }
-    @keyframes styx-blink {
-      from {
-        opacity: 1;
-      }
-      to {
-        opacity: 1;
-      }
-    }
+    @keyframes styx-sheet-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes styx-toast-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes styx-blink { from { opacity: 1; } to { opacity: 1; } }
   }
 }

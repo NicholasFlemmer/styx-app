@@ -6,6 +6,8 @@ const meta = {
   component: Toast,
   parameters: { layout: 'fullscreen' },
   args: {
+    heading: 'Needs you',
+    meta: 'Styx · now',
     title: 'Codex wants Supabase prod · write',
     detail: 'acme-shop · test/flaky · "migration 0042"',
     actions: [

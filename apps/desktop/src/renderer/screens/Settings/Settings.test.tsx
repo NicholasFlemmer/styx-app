@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { copy, fixtures } from '@styx/core';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
@@ -28,7 +28,7 @@ describe('sections', () => {
 
 describe('sectionRows', () => {
   const model = fixtures.demoReadModel();
-  const ctx = { projectId: acme, platform: 'darwin' as const };
+  const ctx = { projectId: acme, platform: 'darwin' as const, copyPlatform: 'darwin' as const };
 
   it('shortcuts come from core formatChord per platform', () => {
     const mac = sectionRows(model, 'app:shortcuts', ctx).map((r) => r.value);
@@ -41,7 +41,7 @@ describe('sectionRows', () => {
     const [store, mfa] = sectionRows(model, 'app:keychain', ctx);
     expect(store?.value).toBe('macOS Keychain');
     expect(mfa?.value).toBe('Touch ID');
-    const [winStore, winMfa] = sectionRows(model, 'app:keychain', { ...ctx, platform: 'win32' });
+    const [winStore, winMfa] = sectionRows(model, 'app:keychain', { ...ctx, copyPlatform: 'win32' });
     expect(winStore?.value).toBe('Windows Credential Manager');
     expect(winMfa?.value).toBe('Windows Hello');
   });
@@ -112,6 +112,26 @@ describe('<Settings />', () => {
     expect(screen.getByRole('button', { name: /^Revoke · Vercel prod/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Revoke · Vercel preview/ })).toBeNull();
     expect(screen.getAllByRole('button', { name: /^Edit · / })).toHaveLength(4);
+  });
+
+  it('Accept project policies shows for a project-policy banner and dispatches project.policy.accept (security H-1)', () => {
+    render(<Settings />);
+    expect(screen.queryByRole('button', { name: copy.targets.acceptProjectPolicies })).toBeNull();
+    const text = "acme-shop's .styx/project.json wants to change grant policies. Review in Settings.";
+    act(() => {
+      useUiStore.getState().setBanner({
+        bannerKey: `project-policy:${acme}`,
+        kind: 'project-policy',
+        text,
+        cta: copy.errors.projectPolicyUntrusted.cta,
+        action: { kind: 'review-project-policy', projectId: acme, hash: 'sha256:abc' },
+        sessionId: null,
+        reason: null,
+      });
+    });
+    expect(screen.getByRole('status').textContent).toContain(text);
+    fireEvent.click(screen.getByRole('button', { name: copy.targets.acceptProjectPolicies }));
+    expect(commandMock).toHaveBeenCalledWith('project.policy.accept', { projectId: acme, hash: 'sha256:abc' });
   });
 
   it('policy select dispatches target.setPolicy', () => {

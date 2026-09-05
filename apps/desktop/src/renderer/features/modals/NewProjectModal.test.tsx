@@ -14,6 +14,10 @@ const commandMock = vi.fn(async (name: string) =>
     : { ok: true as const, value: {} },
 );
 
+/** Field hints render `styx-template` / `main` in a mono span, so match the whole hint's text content. */
+const hintText = (text: string) =>
+  screen.getByText((_, el) => el !== null && el.tagName === 'DIV' && el.textContent === text);
+
 describe('NewProjectModal', () => {
   beforeEach(() => {
     commandMock.mockClear();
@@ -41,7 +45,7 @@ describe('NewProjectModal', () => {
     const tiles = screen.getAllByRole('radio');
     expect(tiles.map((t) => t.getAttribute('data-inv'))).toEqual([null, null, 'true']);
     expect(screen.getByLabelText('Brief for Claude Code')).toBeTruthy();
-    expect(screen.getByText(copy.newProject.agentNote)).toBeTruthy();
+    expect(hintText(copy.newProject.agentNote)).toBeTruthy();
     const labels = screen.getAllByRole('checkbox').map((c) => c.closest('label')?.textContent);
     expect(labels).toEqual([
       'git init',
@@ -106,7 +110,7 @@ describe('NewProjectModal', () => {
     render(<NewProjectModal id="modal-1" />);
     fireEvent.click(screen.getByRole('radio', { name: /^Template/ }));
     expect(screen.getByLabelText(copy.newProject.templateLabel)).toBeTruthy();
-    expect(screen.getByText(copy.newProject.templateNote)).toBeTruthy();
+    expect(hintText(copy.newProject.templateNote)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Create · ⌘⏎' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText(copy.newProject.templateLabel), { target: { value: 'rust' } });
     fireEvent.click(screen.getByRole('radio', { name: /^Empty folder/ }));

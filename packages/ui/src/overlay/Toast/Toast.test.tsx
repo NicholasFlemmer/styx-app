@@ -16,6 +16,8 @@ describe('Toast', () => {
     const review = vi.fn();
     render(
       <Toast
+        heading="Needs you"
+        meta="Styx · now"
         title="Codex wants Supabase prod · write"
         detail='acme-shop · "migration 0042"'
         actions={actions(review)}
@@ -36,7 +38,7 @@ describe('Toast', () => {
 
     it('dismisses after ttl (default 8000)', () => {
       const onDismiss = vi.fn();
-      render(<Toast title="t" onDismiss={onDismiss} />);
+      render(<Toast heading="Needs you" meta="Styx · now" title="t" onDismiss={onDismiss} />);
       act(() => vi.advanceTimersByTime(7999));
       expect(onDismiss).not.toHaveBeenCalled();
       act(() => vi.advanceTimersByTime(1));
@@ -45,7 +47,7 @@ describe('Toast', () => {
 
     it('pauses while hovered and while focused', () => {
       const onDismiss = vi.fn();
-      render(<Toast title="t" ttl={1000} onDismiss={onDismiss} actions={actions()} />);
+      render(<Toast heading="Needs you" meta="Styx · now" title="t" ttl={1000} onDismiss={onDismiss} actions={actions()} />);
       const status = screen.getByRole('status');
       fireEvent.mouseEnter(status);
       act(() => vi.advanceTimersByTime(5000));
@@ -61,7 +63,7 @@ describe('Toast', () => {
 
     it('never dismisses when ttl is null', () => {
       const onDismiss = vi.fn();
-      render(<Toast title="t" ttl={null} onDismiss={onDismiss} />);
+      render(<Toast heading="Needs you" meta="Styx · now" title="t" ttl={null} onDismiss={onDismiss} />);
       act(() => vi.advanceTimersByTime(60_000));
       expect(onDismiss).not.toHaveBeenCalled();
     });

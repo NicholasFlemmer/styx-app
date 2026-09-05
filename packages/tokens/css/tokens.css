@@ -1,79 +1,25 @@
 /* Styx design tokens — generated from tokens.json by scripts/build.mjs. Do not edit. */
 @layer tokens {
-  :root,
-  [data-theme='dark'] {
-    --page: #181916;
-    --bg: #0d0e0c;
-    --s1: #121411;
-    --s2: #1c1e1a;
-    --ln: #2d302a;
-    --tx: #e9ebe3;
-    --mu: #858a81;
-    --ac: #d6ff3d;
-    --acx: #0d0e0c;
-    --act: #d6ff3d;
-    --add: rgba(214, 255, 61, 0.13);
-    --term: #080908;
-    --termtx: #c9cdc2;
-    --dim: rgba(0, 0, 0, 0.6);
+  :root, [data-theme="dark"] {
+    --page:#181916; --bg:#0d0e0c; --s1:#121411; --s2:#1c1e1a; --ln:#2d302a; --tx:#e9ebe3; --mu:#858a81; --ac:#d6ff3d; --acx:#0d0e0c; --act:#d6ff3d; --add:rgba(214,255,61,.13); --term:#080908; --termtx:#c9cdc2; --dim:rgba(0,0,0,.6);
   }
-  [data-theme='light'] {
-    --page: #d7d8d1;
-    --bg: #eeefe9;
-    --s1: #f7f8f3;
-    --s2: #e1e3db;
-    --ln: #b3b7ab;
-    --tx: #14160f;
-    --mu: #5d6259;
-    --ac: #c6f20f;
-    --acx: #14160f;
-    --act: #6e8f00;
-    --add: rgba(150, 200, 0, 0.2);
-    --term: #14160f;
-    --termtx: #d5d8cc;
-    --dim: rgba(20, 22, 15, 0.45);
+  [data-theme="light"] {
+    --page:#d7d8d1; --bg:#eeefe9; --s1:#f7f8f3; --s2:#e1e3db; --ln:#b3b7ab; --tx:#14160f; --mu:#5d6259; --ac:#c6f20f; --acx:#14160f; --act:#6e8f00; --add:rgba(150,200,0,.2); --term:#14160f; --termtx:#d5d8cc; --dim:rgba(20,22,15,.45);
   }
   :root {
     --font-ui: 'Archivo', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-    --label: 600 10px/1 var(--font-ui);
-    --label-tracking: 0.1em;
+    --label: 600 10px/1 var(--font-ui); --label-tracking: .1em;
     --body: 400 13px/1.5 var(--font-ui);
     --code: 400 12.5px/1.75 var(--font-mono);
-    --numeral-lg: 600 56px/1 var(--font-ui);
-    --numeral-md: 600 28px/1 var(--font-ui);
-    --sp-1: 4px;
-    --sp-2: 8px;
-    --sp-3: 12px;
-    --sp-4: 16px;
-    --sp-5: 20px;
-    --sp-6: 24px;
-    --sp-8: 32px;
-    --sp-10: 40px;
-    --h-titlebar: 38px;
-    --w-rail: 56px;
-    --w-nav: 168px;
-    --w-files: 200px;
-    --w-chat: 360px;
-    --w-sheet: 360px;
-    --w-drawer: 380px;
-    --w-policies: 380px;
-    --w-settings-nav: 220px;
-    --h-tabrow: 34px;
-    --h-hunkbar: 40px;
-    --h-terminal: 130px;
-    --h-statusbar: 26px;
-    --w-palette: 640px;
-    --w-modal-connect: 560px;
-    --w-modal-spawn: 600px;
-    --w-toast: 340px;
-    --radius: 0;
-    --shadow: none;
-    --border: 1px solid var(--ln);
-    --border-strong: 1px solid var(--tx);
-    --motion-sheet: 160ms;
-    --motion-modal: 120ms;
-    --motion-toast: 160ms;
-    --ease-sheet: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --numeral-lg: 600 56px/1 var(--font-ui); --numeral-md: 600 28px/1 var(--font-ui);
+    --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px; --sp-10:40px;
+    --h-titlebar:38px; --w-rail:56px; --w-nav:168px; --w-files:200px; --w-chat:360px; --w-sheet:360px; --w-drawer:380px;
+    --w-policies:380px; --w-settings-nav:220px; --h-tabrow:34px; --h-hunkbar:40px; --h-terminal:130px; --h-statusbar:26px;
+    --w-palette:640px; --w-modal-connect:560px; --w-modal-spawn:600px; --w-toast:340px;
+    --radius:0; --shadow:none;
+    --border:1px solid var(--ln); --border-strong:1px solid var(--tx);
+    --motion-sheet:160ms; --motion-modal:120ms; --motion-toast:160ms; --ease-sheet:cubic-bezier(.2,.8,.2,1);
+    --motion-blink:1s steps(1) infinite;
   }
 }

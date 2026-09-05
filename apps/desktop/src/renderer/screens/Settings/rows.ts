@@ -41,7 +41,10 @@ export interface SettingsRow {
 
 export interface RowContext {
   projectId: ProjectId | null;
+  /** Keyboard platform: shortcut chords (discrepancy #21). */
   platform: Platform;
+  /** Rendered-chrome platform: keychain / MFA words (spec §7). */
+  copyPlatform: Platform;
 }
 
 const ON = 'on';
@@ -235,7 +238,7 @@ const keychainRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
   const app = model.settings.app;
   const r = copy.settings.rows;
   const v = copy.settings.values;
-  const pc = platformCopy(ctx.platform);
+  const pc = platformCopy(ctx.copyPlatform);
   return [
     fixed('store', r.store, pc.keychainName),
     fixed('mfaProdWrite', r.mfaProdWrite, pc.mfa),

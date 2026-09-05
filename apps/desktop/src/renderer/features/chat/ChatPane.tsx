@@ -2,13 +2,14 @@ import {
   chatMeta,
   composerPlaceholder,
   copy,
+  fill,
   headAskOf,
   sessionTabs,
   type ProjectId,
   type ReadModel,
   type SessionId,
 } from '@styx/core';
-import { Button, Composer, Message, StatusDot, Tab, TabRow, Transcript } from '@styx/ui';
+import { Button, Composer, Icon, Message, StatusDot, Tab, TabRow, Transcript } from '@styx/ui';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { command } from '../../state/commands';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
@@ -153,9 +154,12 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           <Message
             key={item.id}
             kind="accessRequest"
-            target={item.target}
-            {...(item.env === undefined ? {} : { env: item.env })}
-            scopes={item.scopes}
+            header={fill(copy.accessRequest.header, {
+              target: item.env === undefined ? item.target : `${item.target} ${item.env}`,
+            })}
+            body={fill(copy.accessRequest.scopeLine, { scopes: item.scopes.join(', ') })}
+            reviewLabel={copy.accessRequest.review}
+            denyLabel={copy.accessRequest.deny}
             onReview={() => review(item)}
             onDeny={() => void command('grant.deny', { grantId: item.grantId })}
             compact={compact}
@@ -236,7 +240,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
               if (activeId !== null) void command('window.popout', { sessionId: activeId });
             }}
           >
-            {copy.window.popout}
+            <Icon name="popout" size={12} />
           </button>
         </div>
       )}
@@ -265,6 +269,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           onSend={send}
           hints={[copy.chat.composer.file, copy.chat.composer.command]}
           modelLabel={MODEL_LABEL}
+          sendLabel={copy.chat.composer.send}
           compact={compact}
           disabled={activeId === null || (popped && !compact)}
         />

@@ -9,9 +9,10 @@ import {
   type ReadModel,
 } from '@styx/core';
 import { Button, Checkbox, Field, Input, Modal, Select, Textarea } from '@styx/ui';
-import { useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { env } from '../../state/bridge';
 import { command } from '../../state/commands';
-import { useModel, useUi } from '../../state/hooks';
+import { useCopyPlatform, useModel, useUi } from '../../state/hooks';
 import {
   BUILTIN_TEMPLATES,
   START_FROM,
@@ -32,6 +33,31 @@ export interface NewProjectModalProps {
 
 const selectModel = (m: ReadModel) => m;
 
+/** Prototype hints set `styx-template` / `main` in JetBrains Mono; the §10 string stays verbatim in core. */
+const monoHint = (text: string, token: string): ReactNode => {
+  const i = text.indexOf(token);
+  if (i < 0) return text;
+  return (
+    <>
+      {text.slice(0, i)}
+      <span className={s['mono']}>{token}</span>
+      {text.slice(i + token.length)}
+    </>
+  );
+};
+
+/**
+ * HARNESS ONLY (`STYX_E2E=1` + `STYX_SCREEN=new-project`): the prototype's filled form (name, brief; the location, the
+ * agent tile and the GitHub note derive from it), so the `new-project` baseline verifies real field rendering.
+ */
+const HARNESS_PREFILL = {
+  name: 'orders-service',
+  brief:
+    'A TypeScript service that receives Shopify order webhooks, validates them, and writes to Supabase. Include tests and a Dockerfile.',
+} as const;
+const harnessPrefill = (): typeof HARNESS_PREFILL | null =>
+  env().e2e === true && env().screen === 'new-project' ? HARNESS_PREFILL : null;
+
 /**
  * New project (spec §4.12, modal 600): Name / Location, Start from tiles (empty · template · agent), per-start
  * field, four toggles, GitHub note, Cancel / `Create (· spawn {agent}) · Mod⏎`. Agent scaffolds land in Workspace.
@@ -42,10 +68,13 @@ export function NewProjectModal({ id }: NewProjectModalProps) {
   const openSession = useUi((u) => u.openSession);
   const setProject = useUi((u) => u.setProject);
   const setScreen = useUi((u) => u.setScreen);
+  /** Keyboard Mod follows the OS; words and the default location follow the rendered chrome (spec §7). */
   const platform = useUi((u) => u.platform);
+  const copyPlatform = useCopyPlatform();
   const projectId = useUi((u) => u.projectId);
   const model = useModel(selectModel);
-  const words = platformCopy(platform);
+  const words = platformCopy(copyPlatform);
+  const prefill = harnessPrefill();
 
   const github = githubTargetOf(model, projectId);
   const ide = fallbackIde(model);
@@ -55,11 +84,11 @@ export function NewProjectModal({ id }: NewProjectModalProps) {
       : projectSettingsOfOrDefault(model, projectId).defaultAgent;
 
   const [form, setForm] = useState<NewProjectForm>(() => ({
-    name: '',
-    location: defaultProjectLocation('', platform),
+    name: prefill?.name ?? '',
+    location: defaultProjectLocation(prefill?.name ?? '', copyPlatform),
     startFrom: 'agent',
     template: BUILTIN_TEMPLATES[0]?.value ?? 'node',
-    brief: '',
+    brief: prefill?.brief ?? '',
     gitInit: true,
     createGithubRepo: github !== undefined,
     copyTargets: false,
@@ -79,7 +108,7 @@ export function NewProjectModal({ id }: NewProjectModalProps) {
     setForm((f) => ({
       ...f,
       name,
-      location: locationTouched ? f.location : defaultProjectLocation(name.trim(), platform),
+      location: locationTouched ? f.location : defaultProjectLocation(name.trim(), copyPlatform),
     }));
   /** Create stays enabled (prototype); an incomplete form moves focus to the first missing field instead. */
   const create = async () => {
@@ -125,7 +154,7 @@ export function NewProjectModal({ id }: NewProjectModalProps) {
             {copy.newProject.cancel}
           </Button>
           <Button size="footer" variant="primary" disabled={busy} onClick={() => void create()}>
-            {createLabel(form.startFrom, agent, platform === 'darwin' ? 'darwin' : 'win32', words.mod)}
+            {createLabel(form.startFrom, agent, copyPlatform, words.mod)}
           </Button>
         </>
       }
@@ -188,7 +217,7 @@ export function NewProjectModal({ id }: NewProjectModalProps) {
           <Field
             label={copy.newProject.templateLabel}
             htmlFor={templateId}
-            hint={copy.newProject.templateNote}
+            hint={monoHint(copy.newProject.templateNote, 'styx-template')}
           >
             <Select
               id={templateId}
@@ -204,7 +233,7 @@ export function NewProjectModal({ id }: NewProjectModalProps) {
           <Field
             label={fill(copy.newProject.briefLabel, { agent: agentName })}
             htmlFor={briefId}
-            hint={copy.newProject.agentNote}
+            hint={monoHint(copy.newProject.agentNote, 'main')}
           >
             <Textarea
               ref={briefRef}

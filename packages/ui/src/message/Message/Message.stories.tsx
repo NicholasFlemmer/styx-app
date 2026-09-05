@@ -61,9 +61,10 @@ export const Decision: Story = {
 export const AccessRequest: Story = {
   args: {
     kind: 'accessRequest',
-    target: 'Supabase',
-    env: 'prod',
-    scopes: ['read schema', 'write'],
+    header: 'Access request · Supabase prod',
+    body: 'Scope: read schema, write. No grant on file for this target.',
+    reviewLabel: 'Review request',
+    denyLabel: 'Deny',
     onReview: () => {},
     onDeny: () => {},
   },
@@ -107,9 +108,10 @@ export const Matrix: Story = {
           </Message>
           <Message
             kind="accessRequest"
-            target="Supabase"
-            env="prod"
-            scopes={['read schema', 'write']}
+            header="Access request · Supabase prod"
+            body="Scope: read schema, write. No grant on file for this target."
+            reviewLabel="Review request"
+            denyLabel="Deny"
             onReview={() => {}}
             onDeny={() => {}}
             compact={compact}

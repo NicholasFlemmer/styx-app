@@ -12,12 +12,11 @@ import {
   type SessionId,
   type Target,
 } from '@styx/core';
-import { Button, Checkbox, ChipGroup, Label, Sheet, SheetAccentHeader, SheetFooter, Tag } from '@styx/ui';
+import { Button, Checkbox, ChipGroup, Icon, Label, Sheet, SheetAccentHeader, SheetFooter, Tag } from '@styx/ui';
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { announce } from '../../app/announcer';
-import { chromePlatform } from '../../state/bridge';
 import { command } from '../../state/commands';
-import { useModel, useUi } from '../../state/hooks';
+import { useCopyPlatform, useModel, useUi } from '../../state/hooks';
 import { useUiStore } from '../../state/ui-store';
 import {
   DEFAULT_DURATION,
@@ -98,7 +97,7 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
   const popOverlay = useUi((u) => u.popOverlay);
   /** Keyboard Mod follows the OS; platform words (Touch ID / Windows Hello) follow the rendered chrome (spec §7). */
   const platform = useUi((u) => u.platform);
-  const copyPlatform = chromePlatform();
+  const copyPlatform = useCopyPlatform();
   const grantButton = useRef<HTMLButtonElement>(null);
   const requested: readonly Scope[] = grant.scope;
 
@@ -254,7 +253,7 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
               aria-label={copy.general.close}
               onClick={() => setError(null)}
             >
-              {copy.general.close}
+              <Icon name="close" size={12} />
             </button>
           </div>
         )}

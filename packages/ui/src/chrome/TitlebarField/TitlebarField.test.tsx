@@ -4,27 +4,27 @@ import userEvent from '@testing-library/user-event';
 import { TitlebarField } from './TitlebarField';
 
 describe('TitlebarField', () => {
-  it('is a labelled button showing the mac hint by default', () => {
-    render(<TitlebarField />);
+  it('is a labelled button showing the given hint', () => {
+    render(<TitlebarField hint="⌘K" />);
     const btn = screen.getByRole('button', { name: 'Open command palette' });
     expect(btn).toHaveTextContent('Switch, spawn, deploy, grant…');
     expect(btn).toHaveTextContent('⌘K');
     expect(btn).toHaveAttribute('aria-keyshortcuts', 'Meta+K');
   });
-  it('shows the Ctrl K hint on win32', () => {
-    render(<TitlebarField platform="win32" />);
-    expect(screen.getByRole('button')).toHaveTextContent('Ctrl K');
+  it('win32 keyshortcuts use Control', () => {
+    render(<TitlebarField platform="win32" hint="Ctrl+K" />);
+    expect(screen.getByRole('button')).toHaveTextContent('Ctrl+K');
     expect(screen.getByRole('button')).toHaveAttribute('aria-keyshortcuts', 'Control+K');
   });
   it('opens on click and keyboard', async () => {
     const onClick = vi.fn();
-    render(<TitlebarField onClick={onClick} />);
+    render(<TitlebarField hint="⌘K" onClick={onClick} />);
     await userEvent.click(screen.getByRole('button'));
     await userEvent.keyboard('{Enter}');
     expect(onClick).toHaveBeenCalledTimes(2);
   });
   it('allows overriding the aria-label', () => {
-    render(<TitlebarField aria-label="Palette" />);
+    render(<TitlebarField hint="⌘K" aria-label="Palette" />);
     expect(screen.getByRole('button', { name: 'Palette' })).toBeInTheDocument();
   });
 });

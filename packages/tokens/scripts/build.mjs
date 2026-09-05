@@ -93,6 +93,7 @@ const css = `/* Styx design tokens — generated from tokens.json by scripts/bui
     --radius:0; --shadow:none;
     --border:1px solid var(--ln); --border-strong:1px solid var(--tx);
     --motion-sheet:160ms; --motion-modal:120ms; --motion-toast:160ms; --ease-sheet:cubic-bezier(.2,.8,.2,1);
+    --motion-blink:1s steps(1) infinite;
   }
 }
 `;

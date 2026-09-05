@@ -21,9 +21,12 @@ export type MessageKind =
   | { kind: 'decision'; children: ReactNode; options: DecisionOption[]; onChoose: (label: string) => void }
   | {
       kind: 'accessRequest';
-      target: string;
-      env?: string;
-      scopes: string[];
+      /** Filled header, e.g. "Access request · Supabase prod" (app: `copy.accessRequest.header`). */
+      header: ReactNode;
+      /** Filled scope line (app: `copy.accessRequest.scopeLine`). */
+      body: ReactNode;
+      reviewLabel: string;
+      denyLabel: string;
       onReview: () => void;
       onDeny: () => void;
     }
@@ -98,19 +101,14 @@ export const Message = forwardRef<HTMLDivElement, MessageProps>(function Message
     case 'accessRequest':
       return (
         <div ref={ref} data-kind="accessRequest" className={cls(s['request'])}>
-          <div className={s['requestHeader']}>
-            Access request · {props.target}
-            {props.env !== undefined && ` ${props.env}`}
-          </div>
-          <div className={s['requestBody']}>
-            Scope: {props.scopes.join(', ')}. No grant on file for this target.
-          </div>
+          <div className={s['requestHeader']}>{props.header}</div>
+          <div className={s['requestBody']}>{props.body}</div>
           <div className={s['requestActions']}>
             <Button size="compact" variant="primary" onClick={props.onReview}>
-              Review request
+              {props.reviewLabel}
             </Button>
             <Button size="compact" variant="secondary" onClick={props.onDeny}>
-              Deny
+              {props.denyLabel}
             </Button>
           </div>
         </div>
