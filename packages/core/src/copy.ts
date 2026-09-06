@@ -100,6 +100,16 @@ export const copy = {
       modelChanged: 'model: {model}',
       /** Chat meta suffix once a stream session has reported usage. */
       usage: '{cost} · {turns} turns',
+      /** Short option labels for the 360px composer line (the long forms live in `session.*`; hints via title). */
+      modeShort: {
+        default: 'Ask',
+        acceptEdits: 'Accept edits',
+        plan: 'Plan',
+        bypassPermissions: 'Bypass',
+        dontAsk: "Don't ask",
+        auto: 'Auto',
+      },
+      modelShort: { default: 'Default', fable: 'Fable', opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' },
     },
   },
 

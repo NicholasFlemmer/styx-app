@@ -47,6 +47,15 @@ describe('session controls (Claude Code parity, discrepancy #54)', () => {
     expect(full.at(-1)).toEqual({ value: 'claude-opus-4-1-20250805', label: 'claude-opus-4-1-20250805' });
     expect(modelOptions('').map((o) => o.value)).toHaveLength(5);
     expect(modelOptions(null)[0]?.label).toBe('Default model');
+    expect(modelOptions(null, true)[0]?.label).toBe('Default');
+    expect(permissionModeOptions(true).map((o) => o.label)).toEqual([
+      'Ask',
+      'Accept edits',
+      'Plan',
+      'Bypass',
+      "Don't ask",
+      'Auto',
+    ]);
   });
 
   it('effort options: default + the five levels', () => {

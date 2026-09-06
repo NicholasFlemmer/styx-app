@@ -224,10 +224,10 @@ describe('ChatPane', () => {
     expect(mode.value).toBe('default');
     expect(mode.title).toBe(copy.session.permissionModeHints.default);
     expect([...mode.options].map((o) => o.textContent)).toEqual([
-      'Ask each time',
+      'Ask',
       'Accept edits',
-      'Plan mode',
-      'Bypass permissions',
+      'Plan',
+      'Bypass',
       "Don't ask",
       'Auto',
     ]);

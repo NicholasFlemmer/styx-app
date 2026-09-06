@@ -116,12 +116,15 @@
   /* Session controls (discrepancy #54): t-label selects replace the @file / command hints on the hint line, no box.
      Effort lives in the spawn modal and Settings (it only applies at the next launch), so the line fits 360px. */
   .control {
+    flex: none;
     min-width: 0;
     margin: 0;
     padding: 0;
   }
   .control select {
     height: auto;
+    /* Hug the selected label (Chromium supports field-sizing on selects); otherwise the longest option sets the width. */
+    field-sizing: content;
     padding: 0 12px 0 0;
     border: 0;
     background: transparent;
@@ -142,9 +145,11 @@
     margin-top: -4px;
   }
   .stop {
+    flex: none;
     padding: 0;
     border: 0;
     line-height: normal;
+    white-space: nowrap;
   }
   .popped {
     flex: 1;

@@ -23,18 +23,20 @@ export interface ControlOption {
   title?: string;
 }
 
-export const permissionModeOptions = (): ControlOption[] =>
+/** `short` = the composer line (360px: native selects size to their longest option, so labels stay terse). */
+export const permissionModeOptions = (short = false): ControlOption[] =>
   PERMISSION_MODES.map((mode) => ({
     value: mode,
-    label: copy.session.permissionModes[mode],
+    label: short ? copy.chat.controls.modeShort[mode] : copy.session.permissionModes[mode],
     title: copy.session.permissionModeHints[mode],
   }));
 
 /** `Default model` + the CLI aliases; a full model name already on the session is appended so the select stays truthful. */
-export const modelOptions = (current: string | null): ControlOption[] => {
+export const modelOptions = (current: string | null, short = false): ControlOption[] => {
+  const labels = short ? copy.chat.controls.modelShort : copy.session.models;
   const out: ControlOption[] = [
-    { value: DEFAULT_VALUE, label: copy.session.models.default },
-    ...MODEL_ALIASES.map((alias) => ({ value: alias, label: copy.session.models[alias] })),
+    { value: DEFAULT_VALUE, label: labels.default },
+    ...MODEL_ALIASES.map((alias) => ({ value: alias, label: labels[alias] })),
   ];
   if (current !== null && current !== '' && !out.some((o) => o.value === current)) {
     out.push({ value: current, label: current });

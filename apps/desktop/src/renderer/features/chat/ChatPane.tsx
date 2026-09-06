@@ -56,7 +56,7 @@ function SessionControlsRow({ session }: { session: Session }) {
           aria-label={copy.chat.controls.permissions}
           title={modeHint}
           value={session.permissionMode}
-          options={permissionModeOptions().map((o) => ({ value: o.value, label: o.label }))}
+          options={permissionModeOptions(true).map((o) => ({ value: o.value, label: o.label }))}
           onChange={(e) => configure({ permissionMode: decodePermissionMode(e.currentTarget.value) })}
           data-session-control="permissionMode"
         />
@@ -68,7 +68,7 @@ function SessionControlsRow({ session }: { session: Session }) {
           aria-label={copy.chat.controls.model}
           title={copy.chat.controls.model}
           value={encodeNullable(session.model)}
-          options={modelOptions(session.model)}
+          options={modelOptions(session.model, true)}
           onChange={(e) => configure({ model: decodeModel(e.currentTarget.value) })}
           data-session-control="model"
         />
