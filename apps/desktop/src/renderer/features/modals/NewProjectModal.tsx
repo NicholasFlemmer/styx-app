@@ -1,18 +1,21 @@
 import {
   DEFAULT_PROJECT_SETTINGS,
   copy,
+  defaultCloneLocation,
   defaultProjectLocation,
   fill,
   platformCopy,
   projectNameOf,
   projectSettingsOfOrDefault,
+  repoNameOfUrl,
   type ReadModel,
 } from '@styx/core';
 import { Button, Checkbox, Field, Input, Modal, Select, Textarea } from '@styx/ui';
-import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { env } from '../../state/bridge';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { env, onEvent } from '../../state/bridge';
 import { command } from '../../state/commands';
 import { useCopyPlatform, useModel, useUi } from '../../state/hooks';
+import { enterProject } from '../../state/project-entry';
 import {
   BUILTIN_TEMPLATES,
   START_FROM,
@@ -29,7 +32,17 @@ import s from './NewProjectModal.module.css';
 
 export interface NewProjectModalProps {
   id: string;
+  /** `clone` (owner addition, docs/handoff-discrepancies #50): URL · Location · Open in IDE → `project.clone`. */
+  mode?: 'new' | 'clone';
 }
+
+/** `<picked>/<repo>` (or `<picked>\<repo>` on Windows chrome); the picked folder alone while the URL has no name. */
+export const cloneDestinationIn = (folder: string, url: string, platform: 'darwin' | 'win32'): string => {
+  const name = repoNameOfUrl(url);
+  if (name === '') return folder;
+  const sep = platform === 'win32' ? '\\' : '/';
+  return `${folder.replace(/[\\/]+$/, '')}${sep}${name}`;
+};
 
 const selectModel = (m: ReadModel) => m;
 
@@ -62,7 +75,157 @@ const harnessPrefill = (): typeof HARNESS_PREFILL | null =>
  * New project (spec §4.12, modal 600): Name / Location, Start from tiles (empty · template · agent), per-start
  * field, four toggles, GitHub note, Cancel / `Create (· spawn {agent}) · Mod⏎`. Agent scaffolds land in Workspace.
  */
-export function NewProjectModal({ id }: NewProjectModalProps) {
+export function NewProjectModal({ id, mode = 'new' }: NewProjectModalProps) {
+  if (mode === 'clone') return <CloneModal id={id} />;
+  return <CreateModal id={id} />;
+}
+
+/** Clone mode: URL, Location (`~/code/<repo>` from the URL until edited, Browse), Open in {IDE} too, Cancel / Clone. */
+function CloneModal({ id }: { id: string }) {
+  const popOverlay = useUi((u) => u.popOverlay);
+  const screen = useUi((u) => u.screen);
+  const platform = useUi((u) => u.platform);
+  const copyPlatform = useCopyPlatform();
+  const model = useModel(selectModel);
+  const words = platformCopy(copyPlatform);
+  const ide = fallbackIde(model);
+
+  const [url, setUrl] = useState('');
+  const [location, setLocation] = useState(() => defaultCloneLocation('', copyPlatform));
+  const [locationTouched, setLocationTouched] = useState(false);
+  const [openInIde, setOpenInIde] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const urlId = useId();
+  const locationId = useId();
+  const urlRef = useRef<HTMLInputElement>(null);
+  const locationRef = useRef<HTMLInputElement>(null);
+
+  const close = () => popOverlay(id);
+  const changeUrl = (next: string) => {
+    setUrl(next);
+    if (!locationTouched) setLocation(defaultCloneLocation(next, copyPlatform));
+  };
+  const browse = async () => {
+    const r = await command('dialog.pickFolder', { title: copy.newProject.location, defaultPath: location });
+    if (!r.ok || r.value.path === null) return;
+    setLocationTouched(true);
+    setLocation(cloneDestinationIn(r.value.path, url, copyPlatform));
+  };
+  // Main reports `cloning` → `done` | `error` while `project.clone` runs; the failure text stays in the modal.
+  useEffect(() => {
+    if (!busy) return;
+    return onEvent('project.cloneProgress', (p) => {
+      if (p.phase === 'error') setStatus(fill(copy.newProject.clone.failed, { message: p.message ?? '' }));
+    });
+  }, [busy]);
+  const clone = async () => {
+    if (busy) return;
+    if (url.trim() === '') {
+      urlRef.current?.focus();
+      return;
+    }
+    if (location.trim() === '') {
+      locationRef.current?.focus();
+      return;
+    }
+    setBusy(true);
+    setStatus(fill(copy.newProject.clone.cloning, { repo: repoNameOfUrl(url) || url.trim() }));
+    const r = await command('project.clone', { url: url.trim(), into: location.trim(), openInIde });
+    setBusy(false);
+    if (!r.ok) {
+      setStatus(fill(copy.newProject.clone.failed, { message: r.error.message }));
+      return;
+    }
+    close();
+    // Onboarding keeps its place (the project shows up in the rail afterwards); everywhere else lands in Workspace.
+    const projectId = r.value.projectId ?? null;
+    if (screen !== 'onboarding' && projectId !== null) enterProject(projectId);
+  };
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const mod = platform === 'darwin' ? e.metaKey : e.ctrlKey;
+    if (mod && !e.altKey && !e.shiftKey && e.key === 'Enter') {
+      e.preventDefault();
+      void clone();
+    }
+  };
+
+  return (
+    <Modal
+      width={600}
+      top={70}
+      title={copy.newProject.clone.title}
+      onClose={close}
+      escapeEnabled={false}
+      initialFocus={urlRef}
+      footer={
+        <>
+          <Button size="footer" variant="ghost" onClick={close}>
+            {copy.newProject.cancel}
+          </Button>
+          <Button size="footer" variant="primary" disabled={busy} onClick={() => void clone()}>
+            {fill(copy.newProject.clone.clone, { mod: words.mod })}
+          </Button>
+        </>
+      }
+    >
+      <div className={s['root']} onKeyDown={onKeyDown} data-new-project-modal="clone">
+        <Field label={copy.newProject.clone.url} htmlFor={urlId}>
+          <Input
+            ref={urlRef}
+            id={urlId}
+            mono
+            value={url}
+            placeholder={copy.newProject.clone.urlPlaceholder}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(e) => changeUrl(e.currentTarget.value)}
+          />
+        </Field>
+        <Field label={copy.newProject.location} htmlFor={locationId}>
+          <Input
+            ref={locationRef}
+            id={locationId}
+            mono
+            value={location}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(e) => {
+              setLocationTouched(true);
+              setLocation(e.currentTarget.value);
+            }}
+            trailing={
+              <button
+                type="button"
+                className={s['browse']}
+                title={copy.newProject.browse}
+                onClick={() => void browse()}
+              >
+                {copy.newProject.browse}
+              </button>
+            }
+          />
+        </Field>
+        {ide !== undefined ? (
+          <div className={s['toggles']}>
+            <Checkbox
+              checked={openInIde}
+              onChange={setOpenInIde}
+              label={fill(copy.newProject.openInIde, { ide: ide.product })}
+            />
+          </div>
+        ) : null}
+        {status !== null ? (
+          <div className={s['note']} role="status" data-clone-status="true">
+            {status}
+          </div>
+        ) : null}
+      </div>
+    </Modal>
+  );
+}
+
+function CreateModal({ id }: { id: string }) {
   const popOverlay = useUi((u) => u.popOverlay);
   const pushOverlay = useUi((u) => u.pushOverlay);
   const openSession = useUi((u) => u.openSession);
@@ -137,6 +300,17 @@ export function NewProjectModal({ id }: NewProjectModalProps) {
     }
   };
   const connectGithub = () => pushOverlay({ kind: 'modal', modal: 'connect', projectId, provider: 'github' });
+  /** OS folder picker: the picked folder becomes the location (the name is appended by main when it differs). */
+  const browse = async () => {
+    const r = await command('dialog.pickFolder', {
+      title: copy.newProject.location,
+      defaultPath: form.location,
+    });
+    if (!r.ok || r.value.path === null) return;
+    const location = r.value.path;
+    setLocationTouched(true);
+    setForm((f) => ({ ...f, location }));
+  };
 
   const agentName = copy.agentProducts[agent];
 
@@ -184,8 +358,12 @@ export function NewProjectModal({ id }: NewProjectModalProps) {
                 setForm({ ...form, location: e.currentTarget.value });
               }}
               trailing={
-                // TODO(main): no folder-picker command in the contract yet; Browse stays disabled.
-                <button type="button" className={s['browse']} disabled title={copy.newProject.browse}>
+                <button
+                  type="button"
+                  className={s['browse']}
+                  title={copy.newProject.browse}
+                  onClick={() => void browse()}
+                >
                   {copy.newProject.browse}
                 </button>
               }

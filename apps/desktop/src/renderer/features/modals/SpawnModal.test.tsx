@@ -7,11 +7,13 @@ import { useUiStore } from '../../state/ui-store';
 import { SpawnModal } from './SpawnModal';
 
 const acme = fixtures.ids.project.acmeShop;
-const commandMock = vi.fn(async (name: string, _input?: unknown) =>
-  name === 'session.spawn'
-    ? { ok: true as const, value: { sessionId: 'session-new', worktreeId: 'wt-new' } }
-    : { ok: true as const, value: {} },
-);
+const commandMock = vi.fn(async (name: string, _input?: unknown) => {
+  if (name === 'session.spawn')
+    return { ok: true as const, value: { sessionId: 'session-new', worktreeId: 'wt-new' } };
+  if (name === 'dialog.pickFile') return { ok: true as const, value: { path: '/opt/homebrew/bin/codex' } };
+  return { ok: true as const, value: {} };
+});
+const calls = (name: string) => commandMock.mock.calls.filter((c) => c[0] === name);
 
 describe('SpawnModal', () => {
   beforeEach(() => {
@@ -64,7 +66,7 @@ describe('SpawnModal', () => {
     expect(branch.value).toBe('feat/my-branch');
   });
 
-  it('shows the inline error and disables Spawn when the chosen CLI is missing', () => {
+  it('shows the inline error and disables Spawn when the chosen CLI is missing', async () => {
     useReadModel.getState().replaceModel(fixtures.errorReadModel(), 'connected');
     render(<SpawnModal id="modal-1" projectId={acme} />);
     expect(screen.queryByRole('alert')).toBeNull();
@@ -72,10 +74,12 @@ describe('SpawnModal', () => {
     const alert = screen.getByRole('alert');
     expect(alert.textContent).toContain('Codex CLI not found on PATH.');
     expect(within(alert).getByRole('button', { name: copy.errors.cliMissing.cta })).toBeTruthy();
-    // Enabled no-op until a file-picker command exists (prototype keeps it enabled).
-    expect(
-      within(alert).getByRole('button', { name: copy.errors.locateBinary }).hasAttribute('disabled'),
-    ).toBe(false);
+    // Locate binary: OS file picker (main) → detect.setBinary for the chosen agent.
+    const locate = within(alert).getByRole('button', { name: copy.errors.locateBinary });
+    expect(locate.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(locate);
+    await waitFor(() => expect(calls('detect.setBinary')).toHaveLength(1));
+    expect(calls('detect.setBinary')[0]?.[1]).toEqual({ agent: 'codex', path: '/opt/homebrew/bin/codex' });
     expect(screen.getByRole('button', { name: 'Spawn · ⌘⏎' }).hasAttribute('disabled')).toBe(true);
     fireEvent.click(within(alert).getByRole('button', { name: copy.errors.cliMissing.cta }));
     expect(useUiStore.getState().screen).toBe('onboarding');

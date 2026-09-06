@@ -6,14 +6,22 @@ import type { CliInstall, IdeInstall } from '@styx/core';
 import type { Container } from '../../container';
 import { installOpenIn, type OpenInInstallDeps } from '../../services/ide-import-service';
 import { logger } from '../../services/logger';
-import type { CommandBus } from '../bus';
+import { type CommandBus, fail } from '../bus';
 
 /** app_settings keys for imported editor preferences (read by the renderer's key registry / editor theme). */
 export const IMPORTED_KEYBINDINGS_KEY = 'editor.importedKeybindings';
 export const IMPORTED_THEME_KEY = 'editor.importedTheme';
+/** `cli.binary.<agent>`: a path picked with "Locate binary"; wins over PATH detection while the file exists. */
+export const CLI_BINARY_KEY_PREFIX = 'cli.binary.';
+export const cliBinaryKey = (agent: string): string => `${CLI_BINARY_KEY_PREFIX}${agent}`;
 
 /** Where each IDE keeps its recent folders (spec §4.9: VS Code/Cursor state.vscdb, JetBrains recentProjects.xml, Neovim shada). */
-const RECENTS_SOURCE = { vscode: 'state-db', cursor: 'state-db', jetbrains: 'recent-projects', neovim: 'shada' } as const;
+const RECENTS_SOURCE = {
+  vscode: 'state-db',
+  cursor: 'state-db',
+  jetbrains: 'recent-projects',
+  neovim: 'shada',
+} as const;
 
 /** detect.* · ide.* */
 export function registerIdeCommands(bus: CommandBus, app: Container): void {
@@ -52,21 +60,47 @@ export function registerIdeCommands(bus: CommandBus, app: Container): void {
     return { ides };
   });
 
+  const toInstall = (c: Awaited<ReturnType<typeof detect.probe>>, checkedAt: number): CliInstall => ({
+    agent: c.agent,
+    binary: c.binary,
+    version: c.version,
+    found: c.found,
+    authState: c.authState,
+    capabilities: c.capabilities,
+    checkedAt,
+  });
+
   bus.register('detect.clis', async () => {
     const found = await detect.detectClis();
     const now = clock.now();
-    const clis: CliInstall[] = found.map((c) => ({
-      agent: c.agent,
-      binary: c.binary,
-      version: c.version,
-      found: c.found,
-      authState: c.authState,
-      capabilities: c.capabilities,
-      checkedAt: now,
-    }));
+    const clis: CliInstall[] = [];
+    for (const c of found) {
+      // A located binary outranks the PATH hit; a vanished one is forgotten so detection is honest again.
+      const picked = c.agent === 'shell' ? undefined : repos.settings.kv.get<string>(cliBinaryKey(c.agent));
+      if (picked !== undefined && c.agent !== 'shell') {
+        if (existsSync(picked)) {
+          clis.push(toInstall(await detect.probe(c.agent, picked), now));
+          continue;
+        }
+        repos.settings.kv.delete(cliBinaryKey(c.agent));
+      }
+      clis.push(toInstall(c, now));
+    }
     repos.discovery.replaceClis(clis);
     publisher.discoverySet(repos.discovery.ides(), clis);
     return { clis };
+  });
+
+  bus.register('detect.setBinary', async ({ agent, path }) => {
+    if (agent === 'shell') fail('invalid-input', 'the shell agent has no binary to locate');
+    if (!existsSync(path)) fail('not-found', `${path} does not exist`);
+    const probed = await detect.probe(agent, path);
+    if (!probed.found) fail('invalid-input', `${path} is not a runnable ${agent} CLI`);
+    repos.settings.kv.set(cliBinaryKey(agent), path);
+    const cli = toInstall(probed, clock.now());
+    repos.discovery.saveCli(cli);
+    publisher.discoverySet(repos.discovery.ides(), repos.discovery.clis());
+    return { cli };
   });
 
   /**
@@ -83,7 +117,9 @@ export function registerIdeCommands(bus: CommandBus, app: Container): void {
     if (r.keybindings) repos.settings.kv.set(IMPORTED_KEYBINDINGS_KEY, r.keybindings);
     const themeImported = r.theme !== null && (r.theme.colorTheme !== null || r.theme.fontFamily !== null);
     if (themeImported) repos.settings.kv.set(IMPORTED_THEME_KEY, { ...r.theme, from: ide.kind });
-    const rows = await app.projects.describeRepos(r.recents.map((path) => ({ path, source: 'ide-recent' as const })));
+    const rows = await app.projects.describeRepos(
+      r.recents.map((path) => ({ path, source: 'ide-recent' as const })),
+    );
     repos.discovery.saveIde({
       ...ide,
       imported: {

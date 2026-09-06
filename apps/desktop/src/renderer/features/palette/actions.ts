@@ -1,6 +1,7 @@
 import type { PaletteAction } from '@styx/core';
 import { invokerOf, rememberInvoker } from '../../overlays/stack';
 import { command } from '../../state/commands';
+import { openFolderAsProject } from '../../state/project-entry';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
 
@@ -34,6 +35,12 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
       return;
     case 'new-project':
       open({ kind: 'modal', modal: 'new-project' });
+      return;
+    case 'open-folder':
+      void openFolderAsProject();
+      return;
+    case 'clone-url':
+      open({ kind: 'modal', modal: 'new-project', mode: 'clone' });
       return;
     case 'open-session': {
       const session = model.sessions.byId[action.sessionId];

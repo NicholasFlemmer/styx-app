@@ -69,7 +69,9 @@ describe('auditRows (prototype audit log)', () => {
     expect(at({ action: 'granted', policyId: auto?.id ?? null, detail: { decidedBy: 'policy' } })).toBe(
       'granted deploy to Claude · 1h (auto: policy #1)',
     );
-    expect(at({ action: 'granted', policyId: null, detail: { decidedBy: 'policy' } })).toBe('granted deploy to Claude · 1h');
+    expect(at({ action: 'granted', policyId: null, detail: { decidedBy: 'policy' } })).toBe(
+      'granted deploy to Claude · 1h',
+    );
     expect(at({ action: 'merged-pr', detail: { prNumber: '7' } })).toBe('merged PR #7');
     expect(at({ action: 'opened-pr', detail: {} })).toBe('opened PR #?');
     expect(at({ action: 'connected' })).toBe('connected');
@@ -239,6 +241,8 @@ describe('paletteResults', () => {
       '◆ Grant Codex → Supabase prod · needs you',
       '+ Spawn agent in acme-shop · claude ▾',
       '■ New project… · empty · template · agent',
+      '■ Open folder… · existing repo',
+      '■ Clone URL… · git clone',
     ]);
     expect(groups[1]?.items.map((i) => `${i.glyph} ${i.label} · ${i.meta}`)).toEqual([
       '● Claude · acme-shop · working',
@@ -269,8 +273,10 @@ describe('paletteResults', () => {
     });
     expect(all[3]?.action).toEqual({ kind: 'spawn', projectId: ids.project.acmeShop });
     expect(all[4]?.action).toEqual({ kind: 'new-project' });
-    expect(all[5]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
-    expect(all[11]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
+    expect(all[5]?.action).toEqual({ kind: 'open-folder' });
+    expect(all[6]?.action).toEqual({ kind: 'clone-url' });
+    expect(all[7]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
+    expect(all[13]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
   });
 
   it('fuzzy on label + meta, best first; the first visible row is flagged; empty groups dropped', () => {
@@ -289,17 +295,17 @@ describe('paletteResults', () => {
   it('scope filtering (⇥) and scope cycling', () => {
     expect(paletteResults(model, ui, '', 'agents', NOW).map((g) => g.label)).toEqual(['Agents']);
     expect(paletteResults(model, ui, '', 'projects', NOW)[0]?.items[0]?.first).toBe(true);
-    expect(flat(model, '', 'actions')).toHaveLength(5);
+    expect(flat(model, '', 'actions')).toHaveLength(7);
     expect(nextPaletteScope('all')).toBe('actions');
     expect(nextPaletteScope('actions')).toBe('agents');
     expect(nextPaletteScope('agents')).toBe('projects');
     expect(nextPaletteScope('projects')).toBe('all');
   });
 
-  it('without a current project only New project… remains in Actions', () => {
+  it('without a current project only the project-entry rows remain in Actions', () => {
     expect(
       paletteResults(model, { projectId: null }, '', 'actions', NOW)[0]?.items.map((i) => i.label),
-    ).toEqual(['New project…']);
+    ).toEqual(['New project…', 'Open folder…', 'Clone URL…']);
   });
 
   it('lock state meta: locked / expired / unconnected, and after the grant', () => {

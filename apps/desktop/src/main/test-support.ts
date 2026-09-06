@@ -9,6 +9,7 @@ import { migrate } from './db/migrate';
 import { loadFixture, seed, type FixtureName } from './db/seed';
 import { FakeCliRunner } from './providers/cli-runner';
 import { MemoryVault } from './services/credential-vault';
+import type { DetectService } from './services/detect-service';
 import { FakeMfaProvider, type MfaResult } from './services/mfa-service';
 import type { PtyService } from './services/pty-service';
 import type { StreamRunnerLike } from './services/stream-runner';
@@ -57,6 +58,7 @@ export interface TestAppOptions {
   pty?: PtyService;
   stream?: StreamRunnerLike;
   cli?: FakeCliRunner;
+  detect?: DetectService;
 }
 
 /** An in-memory app: SQLite `:memory:`, MemoryVault, FakeMfa, no Electron, one registered fake window. */
@@ -103,6 +105,7 @@ export function makeTestApp(opts: TestAppOptions = {}): TestApp {
     ...(opts.tickMs !== undefined ? { tickMs: opts.tickMs } : {}),
     ...(opts.pty ? { pty: opts.pty } : {}),
     ...(opts.stream ? { stream: opts.stream } : {}),
+    ...(opts.detect ? { detect: opts.detect } : {}),
     cli,
   });
   const fixture = opts.fixture === undefined ? 'demo' : opts.fixture;

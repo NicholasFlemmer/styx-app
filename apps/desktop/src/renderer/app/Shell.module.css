@@ -25,6 +25,36 @@
     gap: 8px;
     overflow: hidden;
   }
+  /* Rail "+" menu: chat overflow-menu recipe (1px --tx border on --s1), fixed beside the tile since the rail clips. */
+  .addMenu {
+    position: fixed;
+    z-index: 2;
+    min-width: 160px;
+    background: var(--s1);
+    border: 1px solid var(--tx);
+    display: flex;
+    flex-direction: column;
+  }
+  .addMenuItem {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border: 0;
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .addMenuItem:hover,
+  .addMenuItem:focus-visible {
+    background: var(--s2);
+  }
   .nav {
     width: var(--w-nav);
     flex: none;

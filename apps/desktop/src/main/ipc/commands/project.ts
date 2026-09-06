@@ -13,9 +13,19 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
 
   bus.register('project.add', async ({ path, name }) => ({ projectId: (await projects.add(path, name)).id }));
 
-  bus.register('project.clone', async ({ url, into }) => ({
-    projectId: (await projects.clone(url, into)).id,
-  }));
+  /** "Open in {IDE} too": the fallback IDE, else the app setting's kind; nothing when neither is detected. */
+  const openInFallbackIde = (path: string): void => {
+    const ide =
+      repos.discovery.ides().find((i) => i.isFallback) ??
+      repos.discovery.ides().find((i) => i.kind === repos.settings.app().fallbackIde);
+    if (ide?.launcher) void app.openInIde(ide.launcher, path).catch(() => undefined);
+  };
+
+  bus.register('project.clone', async ({ url, into, openInIde }) => {
+    const project = await projects.clone(url, into);
+    if (openInIde) openInFallbackIde(project.path);
+    return { projectId: project.id };
+  });
 
   bus.register('project.create', async (input) => {
     const project = await projects.create({
@@ -44,12 +54,7 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
       });
       sessionId = session.id;
     }
-    if (input.openInIde) {
-      const ide =
-        repos.discovery.ides().find((i) => i.isFallback) ??
-        repos.discovery.ides().find((i) => i.kind === repos.settings.app().fallbackIde);
-      if (ide?.launcher) void app.openInIde(ide.launcher, project.path).catch(() => undefined);
-    }
+    if (input.openInIde) openInFallbackIde(project.path);
     return { projectId: project.id, sessionId };
   });
 

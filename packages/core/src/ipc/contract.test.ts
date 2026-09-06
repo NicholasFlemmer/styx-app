@@ -20,6 +20,7 @@ describe('ipc contract', () => {
         'ask',
         'audit',
         'detect',
+        'dialog',
         'fs',
         'grant',
         'hunk',
@@ -116,6 +117,37 @@ describe('ipc contract', () => {
     expect(() => commands['grant.approve'].input.parse({ grantId: '', duration: '1h' })).toThrow();
     expect(() =>
       commands['session.spawn'].input.parse({ projectId: ids.project.acmeShop, agent: 'bash' }),
+    ).toThrow();
+    // Native pickers: optional title/defaultPath/filters in, a nullable path out (null = dismissed).
+    expect(commands['dialog.pickFolder'].input.parse({})).toEqual({});
+    expect(
+      commands['dialog.pickFile'].input.parse({ filters: [{ name: 'Keys', extensions: ['pem'] }] }),
+    ).toEqual({
+      filters: [{ name: 'Keys', extensions: ['pem'] }],
+    });
+    expect(commands['dialog.pickFolder'].output.parse({ path: null })).toEqual({ path: null });
+    expect(() => commands['dialog.pickFile'].input.parse({ title: '' })).toThrow();
+    expect(commands['detect.setBinary'].input.parse({ agent: 'codex', path: '/opt/bin/codex' }).agent).toBe(
+      'codex',
+    );
+    expect(() => commands['detect.setBinary'].input.parse({ agent: 'codex', path: '' })).toThrow();
+    expect(
+      events['project.cloneProgress'].parse({
+        url: 'u',
+        dest: '/d',
+        phase: 'cloning',
+        message: null,
+        projectId: null,
+      }),
+    ).toMatchObject({ phase: 'cloning' });
+    expect(() =>
+      events['project.cloneProgress'].parse({
+        url: 'u',
+        dest: '/d',
+        phase: 'started',
+        message: null,
+        projectId: null,
+      }),
     ).toThrow();
   });
 

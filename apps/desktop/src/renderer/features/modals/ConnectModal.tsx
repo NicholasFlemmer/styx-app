@@ -334,6 +334,13 @@ export function ConnectModal({
   const providerName = copy.providers[provider];
   const canSaveKey = keyFormValid(key) && projectId !== null && !busy;
   const canSaveSsh = sshFormValid(ssh) && projectId !== null && !busy;
+  /** OS file picker for the key path (main-owned; the key file itself is never read here). */
+  const browseKey = async () => {
+    const r = await command('dialog.pickFile', { title: copy.connect.ssh.key, defaultPath: '~/.ssh' });
+    if (!r.ok || r.value.path === null) return;
+    const keyPath = r.value.path;
+    setSsh((f) => ({ ...f, keyPath }));
+  };
   const canConnectCli = projectId !== null && cliStatus !== null && account !== null && !busy;
   const tokenMode = flow !== null && flow.browserUrl === null;
   const saveLabel = fill(copy.connect.key.save, { keychainShort: words.keychainShort });
@@ -615,8 +622,12 @@ export function ConnectModal({
         value={ssh.keyPath}
         onChange={(v) => setSsh({ ...ssh, keyPath: v })}
         trailing={
-          // TODO(main): no file-picker command in the contract yet (`dialog.pickFile`); Browse stays disabled.
-          <button type="button" className={s['browse']} disabled title={copy.connect.ssh.browse}>
+          <button
+            type="button"
+            className={s['browse']}
+            title={copy.connect.ssh.browse}
+            onClick={() => void browseKey()}
+          >
             {copy.connect.ssh.browse}
           </button>
         }

@@ -94,6 +94,12 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
       void spawn();
     }
   };
+  /** OS file picker → `detect.setBinary`; the `discovery.set` delta clears the missing row when the probe succeeds. */
+  const locateBinary = async () => {
+    const r = await command('dialog.pickFile', { title: copy.errors.locateBinary });
+    if (!r.ok || r.value.path === null) return;
+    await command('detect.setBinary', { agent: form.agent, path: r.value.path });
+  };
   const installGuide = () => {
     close();
     setOnboardingStep(3);
@@ -146,8 +152,7 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
               <StatusDot tone="accent" />
               <span className={s['errorText']}>{fill(copy.errors.spawnCliMissing, { cli: agentName })}</span>
               <Button onClick={installGuide}>{copy.errors.cliMissing.cta}</Button>
-              {/* TODO(main): no file-picker command in the contract yet (`dialog.pickFile`); enabled no-op (prototype). */}
-              <Button title={copy.errors.locateBinary} onClick={() => {}}>
+              <Button title={copy.errors.locateBinary} onClick={() => void locateBinary()}>
                 {copy.errors.locateBinary}
               </Button>
             </div>

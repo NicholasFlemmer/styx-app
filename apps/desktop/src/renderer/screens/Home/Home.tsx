@@ -13,6 +13,7 @@ import { Button, CounterStrip, CounterTile, EmptyState } from '@styx/ui';
 import { useCallback } from 'react';
 import { command } from '../../state/commands';
 import { useModel, useNow, useUi } from '../../state/hooks';
+import { openFolderAsProject } from '../../state/project-entry';
 import { ActivityFeed } from './ActivityFeed';
 import s from './Home.module.css';
 import { ProjectTable } from './ProjectTable';
@@ -20,12 +21,6 @@ import { ProjectTable } from './ProjectTable';
 const selectNeedsYou = (m: ReadModel) => needsYouCount(m);
 const selectWorking = (m: ReadModel) => workingCount(m);
 const selectProjects = (m: ReadModel) => projectCount(m);
-
-/**
- * TODO(main): the contract has no folder-picker command yet (`project.pickFolder` → dialog.showOpenDialog in main).
- * Until it exists this resolves to null and "Open folder" dispatches nothing; `project.add` is wired for the path.
- */
-const pickFolder = async (): Promise<string | null> => null;
 
 /** Home / All projects (spec §4.2): counter strip → project table (or empty state) → add row → activity feed. */
 export function Home() {
@@ -47,12 +42,9 @@ export function Home() {
     setScreen('workspace');
   };
   const openNewProject = () => pushOverlay({ kind: 'modal', modal: 'new-project' });
-  // TODO(overlays): `ModalPayload` has no clone mode yet; the new-project modal opens in its default mode.
-  const openClone = () => pushOverlay({ kind: 'modal', modal: 'new-project' });
-  const openFolder = async () => {
-    const path = await pickFolder();
-    if (path !== null) await command('project.add', { path });
-  };
+  const openClone = () => pushOverlay({ kind: 'modal', modal: 'new-project', mode: 'clone' });
+  /** OS folder picker → `project.add` → the new project's Workspace (nothing happens when dismissed). */
+  const openFolder = () => openFolderAsProject();
   const scan = () => void command('project.scan', { includeIdeRecents: true });
 
   const empty = rows.length === 0;

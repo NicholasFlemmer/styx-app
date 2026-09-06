@@ -23,6 +23,11 @@ export const copy = {
       spawnMeta: '{agent} ▾',
       newProject: 'New project…',
       newProjectMeta: 'empty · template · agent',
+      /** Owner additions (not in §10, spec tone): existing repos reachable from the palette too. */
+      openFolder: 'Open folder…',
+      openFolderMeta: 'existing repo',
+      cloneUrl: 'Clone URL…',
+      cloneUrlMeta: 'git clone',
       switchProject: 'Switch to {project}',
     },
     meta: {
@@ -267,6 +272,11 @@ export const copy = {
       headline: 'Found {n} repos on this machine.',
       body: 'Pick the ones Styx should manage. {ide} recents and workspaces are included. Nothing is modified.',
       addRow: '+ new project · add folder · clone URL',
+      /** The add row's three segments (same rendered text as `addRow`; each is its own action). */
+      addRowNew: '+ new project',
+      addRowFolder: 'add folder',
+      addRowClone: 'clone URL',
+      addRowSep: ' · ',
     },
     agents: {
       headline: 'Detected agent CLIs.',
@@ -372,6 +382,15 @@ export const copy = {
     cancel: 'Cancel',
     create: 'Create · {mod}⏎',
     createSpawn: 'Create · spawn {agent} · {mod}⏎',
+    /** Clone mode (owner addition, not in §10; spec tone): URL · Location · Open in {IDE} too · Cancel / Clone. */
+    clone: {
+      title: 'Clone repository',
+      url: 'URL',
+      urlPlaceholder: 'git@github.com:org/repo.git',
+      clone: 'Clone · {mod}⏎',
+      cloning: 'Cloning {repo}…',
+      failed: 'Clone failed: {message}',
+    },
   },
 
   spawn: {
@@ -540,6 +559,12 @@ export const copy = {
     activity: 'Activity',
   },
 
+  /** Rail "+" menu (owner addition, not in §10): the three ways a project enters Styx. */
+  rail: {
+    add: 'Add project',
+    menu: { newProject: 'New project…', openFolder: 'Open folder…', cloneUrl: 'Clone URL…' },
+  },
+
   window: { popout: '⤢', dock: 'Dock', minimize: '─', maximize: '☐', close: '✕' },
 
   general: {
@@ -594,3 +619,19 @@ export const fill = (template: string, vars: Record<string, string | number>): s
 /** Default project location for a new project name (spec §4.12). */
 export const defaultProjectLocation = (name: string, platform: Platform): string =>
   platform === 'win32' ? `C:\\dev\\${name}` : `~/code/${name}`;
+
+/** `git@github.com:acme/shop.git` · `https://github.com/acme/shop/` · `/srv/git/shop` → `shop`; '' when nothing usable. */
+export const repoNameOfUrl = (url: string): string => {
+  const last = url
+    .trim()
+    .replace(/[/\\]+$/, '')
+    .split(/[/:\\]/)
+    .pop();
+  return (last ?? '').replace(/\.git$/i, '');
+};
+
+/** Clone destination for a URL: `~/code/<repo>` (`C:\dev\<repo>` on Windows); the bare root when the URL has no name yet. */
+export const defaultCloneLocation = (url: string, platform: Platform): string => {
+  const name = repoNameOfUrl(url);
+  return platform === 'win32' ? `C:\\dev${name ? `\\${name}` : ''}` : `~/code${name ? `/${name}` : ''}`;
+};

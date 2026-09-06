@@ -1,16 +1,23 @@
 // @vitest-environment jsdom
 import { copy, fixtures, homeActivity, homeProjectRows } from '@styx/core';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
 import { Home } from './Home';
 
-const commandMock = vi.fn(async () => ({ ok: true as const, value: {} }));
+let picked: string | null = '/Users/me/C21';
+const commandMock = vi.fn(async (name: string, _input?: unknown) => {
+  if (name === 'dialog.pickFolder') return { ok: true as const, value: { path: picked } };
+  if (name === 'project.add') return { ok: true as const, value: { projectId: 'project-added' } };
+  return { ok: true as const, value: {} };
+});
+const calls = (name: string) => commandMock.mock.calls.filter((c) => c[0] === name);
 
 describe('Home', () => {
   beforeEach(() => {
     commandMock.mockClear();
+    picked = '/Users/me/C21';
     Object.assign(window, {
       styx: { platform: 'darwin', env: { now: fixtures.DEMO_NOW }, command: commandMock },
     });
@@ -135,5 +142,33 @@ describe('Home', () => {
       expect(screen.getByText(copy.counters.projects).previousElementSibling?.textContent).toBe('00');
       expect(screen.getByText(copy.counters.needsYou).previousElementSibling?.textContent).toBe('00');
     });
+  });
+  it('add row: + Open folder picks a folder via main, adds it and opens its Workspace; dismissed = no-op', async () => {
+    render(<Home />);
+    fireEvent.click(screen.getByRole('button', { name: copy.home.addRow.openFolder }));
+    await waitFor(() => expect(useUiStore.getState().screen).toBe('workspace'));
+    expect(calls('dialog.pickFolder')).toHaveLength(1);
+    expect(calls('project.add').map((c) => c[1])).toEqual([{ path: '/Users/me/C21' }]);
+    expect(calls('project.select').map((c) => c[1])).toEqual([{ projectId: 'project-added' }]);
+    expect(useUiStore.getState().projectId).toBe('project-added');
+
+    picked = null;
+    commandMock.mockClear();
+    useUiStore.setState({ screen: 'home', projectId: null });
+    fireEvent.click(screen.getByRole('button', { name: copy.home.addRow.openFolder }));
+    await waitFor(() => expect(calls('dialog.pickFolder')).toHaveLength(1));
+    expect(calls('project.add')).toHaveLength(0);
+    expect(useUiStore.getState().screen).toBe('home');
+  });
+
+  it('add row: + New project opens the default modal and + Clone URL opens it in clone mode', () => {
+    render(<Home />);
+    fireEvent.click(screen.getByRole('button', { name: copy.home.addRow.newProject }));
+    expect(useUiStore.getState().overlays).toMatchObject([{ kind: 'modal', modal: 'new-project' }]);
+    useUiStore.setState({ overlays: [] });
+    fireEvent.click(screen.getByRole('button', { name: copy.home.addRow.cloneUrl }));
+    expect(useUiStore.getState().overlays).toMatchObject([
+      { kind: 'modal', modal: 'new-project', mode: 'clone' },
+    ]);
   });
 });

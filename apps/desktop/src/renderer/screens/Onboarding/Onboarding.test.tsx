@@ -35,17 +35,19 @@ const scanned = [
   },
 ] as const;
 
-const commandMock = vi.fn(async (name: string, _input?: unknown) =>
-  name === 'project.scan'
-    ? { ok: true as const, value: { repos: scanned } }
-    : { ok: true as const, value: {} },
-);
+let picked: string | null = '/Users/me/PBX';
+const commandMock = vi.fn(async (name: string, _input?: unknown) => {
+  if (name === 'project.scan') return { ok: true as const, value: { repos: scanned } };
+  if (name === 'dialog.pickFolder') return { ok: true as const, value: { path: picked } };
+  return { ok: true as const, value: {} };
+});
 
 const calls = (name: string) => commandMock.mock.calls.filter((c) => c[0] === name);
 
 describe('Onboarding', () => {
   beforeEach(() => {
     commandMock.mockClear();
+    picked = '/Users/me/PBX';
     Object.assign(window, {
       styx: { platform: 'darwin', env: { now: fixtures.DEMO_NOW }, command: commandMock },
     });
@@ -155,11 +157,52 @@ describe('Onboarding', () => {
       false,
     ]);
     fireEvent.click(screen.getByRole('checkbox', { name: '~/work/client-x' }));
-    fireEvent.click(screen.getByRole('button', { name: copy.onboarding.projects.addRow }));
+    // The add row renders the §10 string as three actions.
+    const addRow = screen.getByText((_, el) => el?.hasAttribute('data-onboarding-add-row') === true);
+    expect(addRow.textContent).toBe(copy.onboarding.projects.addRow);
+    fireEvent.click(screen.getByRole('button', { name: copy.onboarding.projects.addRowNew }));
     expect(useUiStore.getState().overlays).toMatchObject([{ kind: 'modal', modal: 'new-project' }]);
+    expect(useUiStore.getState().overlays[0]).not.toHaveProperty('mode');
+    useUiStore.setState({ overlays: [] });
+    fireEvent.click(screen.getByRole('button', { name: copy.onboarding.projects.addRowClone }));
+    expect(useUiStore.getState().overlays).toMatchObject([
+      { kind: 'modal', modal: 'new-project', mode: 'clone' },
+    ]);
+    useUiStore.setState({ overlays: [] });
     fireEvent.click(screen.getByRole('button', { name: copy.onboarding.footer.continue }));
     await waitFor(() => expect(useUiStore.getState().onboardingStep).toBe(3));
     expect(calls('project.add').map((c) => c[1])).toEqual([{ path: '~/code/acme-shop' }]);
+  });
+
+  it('Projects: "add folder" picks a folder via main, lists it checked (meta —) and adds it on Continue; dismissed = nothing', async () => {
+    useUiStore.setState({ onboardingStep: 2 });
+    render(<Onboarding />);
+    await screen.findByText('Found 3 repos on this machine.');
+    fireEvent.click(screen.getByRole('button', { name: copy.onboarding.projects.addRowFolder }));
+    await screen.findByText('Found 4 repos on this machine.');
+    const row = screen.getByRole('table').querySelector('[data-repo-path="/Users/me/PBX"]');
+    if (row === null) throw new Error('picked row missing');
+    expect(
+      within(row as HTMLElement)
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['', '/Users/me/PBX', '—']);
+    expect((screen.getByRole('checkbox', { name: '/Users/me/PBX' }) as HTMLInputElement).checked).toBe(true);
+    // Picking the same folder again neither duplicates nor unchecks it.
+    fireEvent.click(screen.getByRole('button', { name: copy.onboarding.projects.addRowFolder }));
+    await waitFor(() => expect(calls('dialog.pickFolder')).toHaveLength(2));
+    expect(screen.getByRole('table').querySelectorAll('[data-repo-path="/Users/me/PBX"]')).toHaveLength(1);
+    picked = null;
+    fireEvent.click(screen.getByRole('button', { name: copy.onboarding.projects.addRowFolder }));
+    await waitFor(() => expect(calls('dialog.pickFolder')).toHaveLength(3));
+    expect(screen.getByText('Found 4 repos on this machine.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: copy.onboarding.footer.continue }));
+    await waitFor(() => expect(useUiStore.getState().onboardingStep).toBe(3));
+    expect(calls('project.add').map((c) => c[1])).toEqual([
+      { path: '/Users/me/PBX' },
+      { path: '~/code/acme-shop' },
+      { path: '~/work/client-x' },
+    ]);
   });
 
   it('Agents: rows show version, auth state and an accent dot only for missing CLIs; Continue just advances', async () => {
@@ -228,10 +271,12 @@ describe('Onboarding', () => {
     expect(repoMeta({ ...scanned[0], remote: 'https://github.com/acme/shop' }, fixtures.DEMO_NOW)).toBe(
       'github · main',
     );
-    expect(repoMeta({ ...scanned[0], remote: 'git@gitlab.com:x/y.git', branch: null }, fixtures.DEMO_NOW)).toBe(
-      'gitlab',
-    );
+    expect(
+      repoMeta({ ...scanned[0], remote: 'git@gitlab.com:x/y.git', branch: null }, fixtures.DEMO_NOW),
+    ).toBe('gitlab');
     expect(repoMeta(scanned[2], fixtures.DEMO_NOW)).toBe('no remote · 2y old');
-    expect(repoMeta({ ...scanned[2], lastModifiedAt: fixtures.DEMO_NOW }, fixtures.DEMO_NOW)).toBe('no remote');
+    expect(repoMeta({ ...scanned[2], lastModifiedAt: fixtures.DEMO_NOW }, fixtures.DEMO_NOW)).toBe(
+      'no remote',
+    );
   });
 });

@@ -44,6 +44,19 @@ export interface WindowsPort {
   focusMain(): void;
 }
 
+/** Native file/folder pickers (Electron `dialog`), parented to the main window; `null` when the user cancels. */
+export interface DialogsPort {
+  pickFolder(opts: { title?: string | undefined; defaultPath?: string | undefined }): Promise<string | null>;
+  pickFile(opts: {
+    title?: string | undefined;
+    defaultPath?: string | undefined;
+    filters?: { name: string; extensions: string[] }[] | undefined;
+  }): Promise<string | null>;
+}
+
+/** Headless default (tests, fixtures without a window): every picker is dismissed. */
+export const NO_DIALOGS: DialogsPort = { pickFolder: async () => null, pickFile: async () => null };
+
 export interface Runtime {
   userData: string;
   platform: NodeJS.Platform;
@@ -63,6 +76,8 @@ export interface ContainerOptions {
   mfaProvider: MfaProvider;
   runtime: Runtime;
   windows: WindowsPort;
+  /** Native pickers; omitted in tests (`NO_DIALOGS`). */
+  dialogs?: DialogsPort;
   notifications: NotificationService | null;
   openExternal: (url: string) => Promise<void>;
   openInIde: (launcher: string, path: string) => Promise<void>;
@@ -114,6 +129,7 @@ export interface Container {
   terminals: TerminalService;
   broker: BrokerHost;
   windows: WindowsPort;
+  dialogs: DialogsPort;
   runtime: Runtime;
   openExternal: (url: string) => Promise<void>;
   openInIde: (launcher: string, path: string) => Promise<void>;
@@ -199,10 +215,17 @@ export function buildContainer(opts: ContainerOptions): Container {
     audit,
     activity,
     github: githubAdapter instanceof GitHubAdapter ? githubAdapter : null,
-    ideRecents: () =>
-      ideImport.allRecentFolders(
-        repos.discovery.ides().map((i) => ({ kind: i.kind, configDir: i.configDir })),
-      ),
+    // IDE recents need no `ide.import`: state.vscdb / recentProjects.xml / shada are read directly for every
+    // detected editor. When nothing has been detected yet (fresh install, Home "Scan this machine"), detect first.
+    ideRecents: async () => {
+      let ides = repos.discovery.ides().map((i) => ({ kind: i.kind, configDir: i.configDir }));
+      if (ides.length === 0) {
+        ides = (await detect.detectIdes())
+          .filter((i) => i.found)
+          .map((i) => ({ kind: i.kind, configDir: i.configDir }));
+      }
+      return ideImport.allRecentFolders(ides);
+    },
   });
   const terminals = new TerminalService(repos, pty, () => ({
     STYX_SHIM_DIR: runtime.shimDir,
@@ -285,6 +308,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     terminals,
     broker,
     windows: opts.windows,
+    dialogs: opts.dialogs ?? NO_DIALOGS,
     runtime,
     openExternal: opts.openExternal,
     openInIde: opts.openInIde,

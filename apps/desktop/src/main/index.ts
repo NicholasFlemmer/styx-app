@@ -15,13 +15,13 @@ import {
 } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir, userInfo } from 'node:os';
+import { homedir, tmpdir, userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execa } from 'execa';
 import { brokerEndpoint } from '@styx/broker';
 import type { AppSettings } from '@styx/core';
 import { clockFromEnv } from './clock';
-import { buildContainer, type Container, type WindowsPort } from './container';
+import { buildContainer, type Container, type DialogsPort, type WindowsPort } from './container';
 import { openDatabase } from './db/open';
 import { Repos } from './db/repos';
 import { isFixtureName, loadFixture, seed, seedDefaults } from './db/seed';
@@ -273,6 +273,32 @@ async function boot(): Promise<void> {
     },
   };
 
+  /** Native pickers, parented to the main window so they sheet on macOS; new folders may be created inline. */
+  const openDialog = async (
+    properties: NonNullable<Electron.OpenDialogOptions['properties']>,
+    opts: {
+      title?: string | undefined;
+      defaultPath?: string | undefined;
+      filters?: Electron.FileFilter[] | undefined;
+    },
+  ): Promise<string | null> => {
+    const options: Electron.OpenDialogOptions = {
+      properties,
+      ...(opts.title !== undefined ? { title: opts.title } : {}),
+      ...(opts.defaultPath !== undefined
+        ? { defaultPath: opts.defaultPath.replace(/^~(?=$|[\\/])/, homedir()) }
+        : {}),
+      ...(opts.filters !== undefined ? { filters: opts.filters } : {}),
+    };
+    const win = windowService.mainWindow();
+    const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    return r.canceled ? null : (r.filePaths[0] ?? null);
+  };
+  const dialogsPort: DialogsPort = {
+    pickFolder: (opts) => openDialog(['openDirectory', 'createDirectory'], opts),
+    pickFile: (opts) => openDialog(['openFile', 'showHiddenFiles'], opts),
+  };
+
   const osNotifier = new ElectronOsNotifier(electronSurface(), resolvedTheme);
   osNotifierRef = osNotifier;
   const notifications = new NotificationService(
@@ -315,6 +341,7 @@ async function boot(): Promise<void> {
       rendererOrigins,
     },
     windows: windowsPort,
+    dialogs: dialogsPort,
     notifications,
     openExternal: (url) =>
       /^https:\/\//.test(url)

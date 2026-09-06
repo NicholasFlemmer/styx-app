@@ -32,6 +32,9 @@ export type PaletteAction =
   | { kind: 'review-ask'; sessionId: SessionId; askId: AskId }
   | { kind: 'spawn'; projectId: ProjectId }
   | { kind: 'new-project' }
+  /** Owner additions: an existing repo (folder picker) or a clone, from the palette like the rail menu. */
+  | { kind: 'open-folder' }
+  | { kind: 'clone-url' }
   | { kind: 'open-session'; sessionId: SessionId }
   | { kind: 'switch-project'; projectId: ProjectId };
 
@@ -130,6 +133,22 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
     meta: copy.palette.actions.newProjectMeta,
     first: false,
     action: { kind: 'new-project' },
+  });
+  items.push({
+    id: 'open-folder',
+    glyph: '■',
+    label: copy.palette.actions.openFolder,
+    meta: copy.palette.actions.openFolderMeta,
+    first: false,
+    action: { kind: 'open-folder' },
+  });
+  items.push({
+    id: 'clone-url',
+    glyph: '■',
+    label: copy.palette.actions.cloneUrl,
+    meta: copy.palette.actions.cloneUrlMeta,
+    first: false,
+    action: { kind: 'clone-url' },
   });
   return items;
 };

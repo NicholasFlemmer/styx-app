@@ -57,6 +57,8 @@ const commandMock = vi.fn(async (name: string, _input?: unknown) => {
       return { ok: true as const, value: { targetId: 'target-cli' } };
     case 'target.test':
       return { ok: true as const, value: { ok: true, message: null } };
+    case 'dialog.pickFile':
+      return { ok: true as const, value: { path: '/Users/me/.ssh/deploy_key' } };
     default:
       return { ok: true as const, value: {} };
   }
@@ -368,10 +370,21 @@ describe('ConnectModal', () => {
     expect(calls('target.connect.cliLogin')).toHaveLength(0);
   });
 
-  it('ssh step: Browse is disabled; Save sends target.connect.saveSsh named after the host', async () => {
+  it('ssh step: Browse picks the key file via main; Save sends target.connect.saveSsh named after the host', async () => {
     render(<ConnectModal id="modal-1" projectId={acme} provider="ssh" />);
     expect(screen.getByRole('dialog').textContent).toContain('Connect target · SSH');
-    expect(screen.getByRole('button', { name: copy.connect.ssh.browse }).hasAttribute('disabled')).toBe(true);
+    const browse = screen.getByRole('button', { name: copy.connect.ssh.browse });
+    expect(browse.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(browse);
+    await waitFor(() =>
+      expect((screen.getByLabelText(copy.connect.ssh.key) as HTMLInputElement).value).toBe(
+        '/Users/me/.ssh/deploy_key',
+      ),
+    );
+    expect(calls('dialog.pickFile')[0]?.[1]).toMatchObject({
+      title: copy.connect.ssh.key,
+      defaultPath: '~/.ssh',
+    });
     expect(screen.getByText(copy.connect.ssh.body)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Advanced/ })).toBeNull();
     const save = screen.getByRole('button', { name: copy.connect.ssh.save });

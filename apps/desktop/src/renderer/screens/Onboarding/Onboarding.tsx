@@ -28,13 +28,7 @@ import { useCopyPlatform, useModel, useNow, useUi } from '../../state/hooks';
 import type { OnboardingStep } from '../../state/ui-store';
 import { harnessReposEnabled, harnessScannedRepos } from './harness-repos';
 import s from './Onboarding.module.css';
-import {
-  DEFAULT_IDE_IMPORTS,
-  STEPS,
-  repoMeta,
-  type IdeImports,
-  type ScannedRepo,
-} from './onboarding-rows';
+import { DEFAULT_IDE_IMPORTS, STEPS, repoMeta, type IdeImports, type RepoRow } from './onboarding-rows';
 
 const selectIdes = (m: ReadModel) => m.discovery.ides;
 const selectClis = (m: ReadModel) => m.discovery.clis;
@@ -61,7 +55,7 @@ export function Onboarding() {
   const [chosenIde, setChosenIde] = useState<string | null>(null);
   const [imports, setImports] = useState<IdeImports>(DEFAULT_IDE_IMPORTS);
   // The visual harness seeds the prototype's scanned list instead of scanning the machine (harness-repos.ts).
-  const [repos, setRepos] = useState<ScannedRepo[] | null>(() =>
+  const [repos, setRepos] = useState<RepoRow[] | null>(() =>
     harnessReposEnabled() ? harnessScannedRepos(now) : null,
   );
   const [checked, setChecked] = useState<Set<string>>(
@@ -129,6 +123,29 @@ export function Onboarding() {
   };
   const back = () => {
     if (step > 1) setStep((step - 1) as OnboardingStep);
+  };
+  /** "add folder": OS picker → a checked row (added with the rest on Continue); an already listed path is just checked. */
+  const addFolder = async () => {
+    const r = await command('dialog.pickFolder', { title: copy.onboarding.projects.addRowFolder });
+    if (!r.ok || r.value.path === null) return;
+    const path = r.value.path;
+    setRepos((prev) =>
+      (prev ?? []).some((x) => x.path === path)
+        ? prev
+        : [
+            {
+              path,
+              remote: null,
+              branch: null,
+              source: 'scan',
+              lastModifiedAt: null,
+              suggested: true,
+              picked: true,
+            },
+            ...(prev ?? []),
+          ],
+    );
+    setChecked((prev) => new Set(prev).add(path));
   };
   const toggleRepo = (path: string, on: boolean) =>
     setChecked((prev) => {
@@ -249,18 +266,28 @@ export function Onboarding() {
                   </TableCell>
                   <TableCell className={s['monoCell']}>{r.path}</TableCell>
                   <TableCell muted className={s['monoCell']}>
-                    {repoMeta(r, now)}
+                    {r.picked === true ? copy.general.none : repoMeta(r, now)}
                   </TableCell>
                 </TableRow>
               ))}
             </Table>
-            <button
-              type="button"
-              className={s['addRow']}
-              onClick={() => pushOverlay({ kind: 'modal', modal: 'new-project' })}
-            >
-              {copy.onboarding.projects.addRow}
-            </button>
+            {/* One §10 string, three actions. Inline spans (not <button>s) keep the row a single shaped text run, so it
+                renders pixel-identical to the prototype's one button; role/tabIndex/keys make each segment a button. */}
+            <div className={s['addRow']} data-onboarding-add-row="true">
+              <AddRowAction onActivate={() => pushOverlay({ kind: 'modal', modal: 'new-project' })}>
+                {copy.onboarding.projects.addRowNew}
+              </AddRowAction>
+              {copy.onboarding.projects.addRowSep}
+              <AddRowAction onActivate={() => void addFolder()}>
+                {copy.onboarding.projects.addRowFolder}
+              </AddRowAction>
+              {copy.onboarding.projects.addRowSep}
+              <AddRowAction
+                onActivate={() => pushOverlay({ kind: 'modal', modal: 'new-project', mode: 'clone' })}
+              >
+                {copy.onboarding.projects.addRowClone}
+              </AddRowAction>
+            </div>
           </div>
         </section>
       ) : null}
@@ -343,5 +370,25 @@ export function Onboarding() {
         </Button>
       </div>
     </div>
+  );
+}
+
+/** A text segment of the add row that behaves as a button (Enter / Space activate) without becoming an atomic inline box. */
+function AddRowAction({ onActivate, children }: { onActivate: () => void; children: string }) {
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      className={s['addRowAction']}
+      onClick={onActivate}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onActivate();
+        }
+      }}
+    >
+      {children}
+    </span>
   );
 }

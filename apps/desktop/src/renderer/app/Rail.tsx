@@ -1,9 +1,14 @@
-import { rows, sessionsInProject, type Project, type ProjectId, type ReadModel } from '@styx/core';
+import { copy, rows, sessionsInProject, type Project, type ProjectId, type ReadModel } from '@styx/core';
 import { RailTile } from '@styx/ui';
-import { useCallback, useRef, type DragEvent, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import { command } from '../state/commands';
 import { useModel, useUi } from '../state/hooks';
+import { openFolderAsProject } from '../state/project-entry';
 import s from './Shell.module.css';
+
+/** Rail "+" menu rows (owner addition, docs/handoff-discrepancies #49). */
+const ADD_MENU = ['newProject', 'openFolder', 'cloneUrl'] as const;
+type AddMenuItem = (typeof ADD_MENU)[number];
 
 export const railProjects = (m: ReadModel): Project[] =>
   rows(m.projects)
@@ -23,6 +28,63 @@ export function Rail() {
   const screen = useUi((u) => u.screen);
   const pushOverlay = useUi((u) => u.pushOverlay);
   const dragId = useRef<ProjectId | null>(null);
+  const addRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState<{ top: number; left: number } | null>(null);
+
+  // The rail clips overflow, so the menu is fixed next to the + tile; outside clicks close it without focus return.
+  useEffect(() => {
+    if (menu === null) return;
+    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target) || addRef.current?.contains(target)) return;
+      setMenu(null);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [menu]);
+
+  const openMenu = () => {
+    if (menu !== null) {
+      setMenu(null);
+      return;
+    }
+    const r = addRef.current?.getBoundingClientRect();
+    setMenu({ top: r?.top ?? 0, left: (r?.right ?? 0) + 6 });
+  };
+  const closeMenu = (refocus: boolean) => {
+    setMenu(null);
+    if (refocus) addRef.current?.focus();
+  };
+  const choose = (item: AddMenuItem) => {
+    closeMenu(true);
+    if (item === 'newProject') pushOverlay({ kind: 'modal', modal: 'new-project' });
+    else if (item === 'cloneUrl') pushOverlay({ kind: 'modal', modal: 'new-project', mode: 'clone' });
+    else void openFolderAsProject();
+  };
+  const onMenuKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape' || e.key === 'Tab') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeMenu(true);
+      return;
+    }
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'Home' && e.key !== 'End') return;
+    e.preventDefault();
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+    if (items.length === 0) return;
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    const next =
+      e.key === 'Home'
+        ? 0
+        : e.key === 'End'
+          ? items.length - 1
+          : e.key === 'ArrowDown'
+            ? (i + 1) % items.length
+            : (i - 1 + items.length) % items.length;
+    items[next]?.focus();
+  };
 
   const pick = (id: ProjectId) => {
     setProject(id);
@@ -82,10 +144,43 @@ export function Rail() {
         />
       ))}
       <RailTile
+        ref={addRef}
         variant="add"
-        title="New project"
-        onClick={() => pushOverlay({ kind: 'modal', modal: 'new-project' })}
+        title={copy.rail.add}
+        aria-haspopup="menu"
+        aria-expanded={menu !== null}
+        onClick={openMenu}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' && menu === null) {
+            e.preventDefault();
+            openMenu();
+          }
+        }}
+        data-rail-add="true"
       />
+      {menu !== null ? (
+        <div
+          ref={menuRef}
+          role="menu"
+          aria-label={copy.rail.add}
+          className={s['addMenu']}
+          style={{ top: menu.top, left: menu.left }}
+          onKeyDown={onMenuKeyDown}
+          data-rail-add-menu="true"
+        >
+          {ADD_MENU.map((item) => (
+            <button
+              key={item}
+              type="button"
+              role="menuitem"
+              className={s['addMenuItem']}
+              onClick={() => choose(item)}
+            >
+              {copy.rail.menu[item]}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </nav>
   );
 }

@@ -22,6 +22,8 @@ export const DEFAULT_IDE_IMPORTS: IdeImports = {
 };
 
 export type ScannedRepo = CommandOutput<'project.scan'>['repos'][number];
+/** A scan row, or a folder the user picked on step 2 (`picked`: not described by main, meta shows `—`). */
+export type RepoRow = ScannedRepo & { picked?: boolean };
 
 const YEAR = 365 * 24 * 60 * 60 * 1000;
 

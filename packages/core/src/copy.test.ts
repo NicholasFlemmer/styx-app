@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { copy, defaultProjectLocation, fill, platformCopy } from './copy';
+import {
+  copy,
+  defaultCloneLocation,
+  defaultProjectLocation,
+  fill,
+  platformCopy,
+  repoNameOfUrl,
+} from './copy';
 
 describe('copy (spec §10 verbatim)', () => {
   it('key strings', () => {
@@ -27,9 +34,37 @@ describe('copy (spec §10 verbatim)', () => {
       "Uses the account you're signed into in {cli}. Styx never sees the password; each grant asks {cli} for a short-lived token. Anything running as you can also use {cli}, so prefer scoped roles for prod.",
     );
     expect(copy.connect.cli.waiting).toBe('Waiting for {command}…');
-    expect(fill(copy.connect.cli.via, { cli: 'gcloud', account: 'nic@acme.dev' })).toBe('via gcloud · nic@acme.dev');
+    expect(fill(copy.connect.cli.via, { cli: 'gcloud', account: 'nic@acme.dev' })).toBe(
+      'via gcloud · nic@acme.dev',
+    );
     expect(copy.targets.actions.refresh).toBe('Refresh');
     expect(copy.toast.title).toBe('{agent} wants {target} · {scope}');
+  });
+
+  it('owner additions (rail menu, clone mode, palette open/clone rows, onboarding add-row segments)', () => {
+    expect(copy.rail.menu).toEqual({
+      newProject: 'New project…',
+      openFolder: 'Open folder…',
+      cloneUrl: 'Clone URL…',
+    });
+    expect(copy.newProject.clone.title).toBe('Clone repository');
+    expect(fill(copy.newProject.clone.clone, { mod: '⌘' })).toBe('Clone · ⌘⏎');
+    expect(copy.palette.actions.openFolder).toBe('Open folder…');
+    expect(copy.palette.actions.cloneUrl).toBe('Clone URL…');
+    // The three segments concatenate to the §10 add-row string so the row renders unchanged.
+    const { addRowNew, addRowSep, addRowFolder, addRowClone, addRow } = copy.onboarding.projects;
+    expect(`${addRowNew}${addRowSep}${addRowFolder}${addRowSep}${addRowClone}`).toBe(addRow);
+  });
+
+  it('repoNameOfUrl / defaultCloneLocation derive the folder from the clone URL', () => {
+    expect(repoNameOfUrl('git@github.com:acme/shop.git')).toBe('shop');
+    expect(repoNameOfUrl('https://github.com/acme/shop/')).toBe('shop');
+    expect(repoNameOfUrl('https://gitlab.com/group/sub/app.GIT')).toBe('app');
+    expect(repoNameOfUrl('/srv/git/tools')).toBe('tools');
+    expect(repoNameOfUrl('  ')).toBe('');
+    expect(defaultCloneLocation('git@github.com:acme/shop.git', 'darwin')).toBe('~/code/shop');
+    expect(defaultCloneLocation('https://github.com/acme/shop', 'win32')).toBe('C:\\dev\\shop');
+    expect(defaultCloneLocation('', 'darwin')).toBe('~/code');
   });
 
   it('a11y-only strings (spec §9, not §10) keep the spec tone', () => {

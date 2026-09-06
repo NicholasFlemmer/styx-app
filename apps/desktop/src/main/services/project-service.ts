@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, type Dirent } from 'node:fs';
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { performance } from 'node:perf_hooks';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import {
@@ -50,7 +51,9 @@ export interface ProjectServiceDeps {
   /** GitHub repo creation / template discovery through a connected GitHub target. */
   github?: GitHubRepoApi | null;
   /** Recent project folders from detected IDEs (IdeImportService), most recent first. */
-  ideRecents?: () => string[];
+  ideRecents?: () => string[] | Promise<string[]>;
+  /** Walker budget override (tests). */
+  scanBudget?: Partial<WalkBudget>;
 }
 
 /** Built-in template names shipped in `resources/templates` (spec §4.12). */
@@ -65,10 +68,10 @@ export interface ScannedRepo {
   suggested: boolean;
 }
 
-const SCAN_DEPTH = 3;
 /** "Stale" for the onboarding default (spec §4.9): no commit activity in a year. */
 export const STALE_MS = 365 * 24 * 3_600_000;
-const SKIP_DIRS = new Set([
+/** Never descended into anywhere: build output, dependency trees, dot-dirs (checked separately) and the trash. */
+export const SKIP_DIRS: ReadonlySet<string> = new Set([
   'node_modules',
   '.git',
   '.styx',
@@ -80,6 +83,126 @@ const SKIP_DIRS = new Set([
   'Library',
   '.Trash',
 ]);
+/** Skipped directly under `$HOME`: system folders where repos never live but walks get expensive. */
+export const HOME_SKIP_DIRS: ReadonlySet<string> = new Set([
+  'Library',
+  'Applications',
+  'Movies',
+  'Music',
+  'Pictures',
+  'Public',
+]);
+/** Folders under `$HOME` walked at depth 3 (the classic code roots plus where downloads and desktops collect repos). */
+export const HOME_CODE_ROOTS = ['code', 'work', 'dev', 'src'] as const;
+export const HOME_EXTRA_ROOTS = [
+  'Desktop',
+  'Documents',
+  'Downloads',
+  'Projects',
+  'Repos',
+  'GitHub',
+  'Sites',
+] as const;
+export const HOME_DEPTH = 2;
+export const ROOT_DEPTH = 3;
+
+export interface WalkRoot {
+  path: string;
+  /** How many levels below `path` are inspected (`path` itself is never a candidate). */
+  depth: number;
+  /** Names skipped directly under this root (on top of SKIP_DIRS / dot-dirs). */
+  skip?: ReadonlySet<string>;
+}
+export interface WalkBudget {
+  /** Total directories visited across all roots before the walk stops. */
+  maxDirs: number;
+  /** Wall-clock cap for the whole walk. */
+  maxMs: number;
+}
+export const DEFAULT_WALK_BUDGET: WalkBudget = { maxDirs: 20_000, maxMs: 4_000 };
+export interface WalkResult {
+  repos: string[];
+  visited: number;
+  /** The budget ran out; results are whatever was found by then. */
+  truncated: boolean;
+}
+
+/**
+ * Finds git repositories (a `.git` directory, or a `.git` file for worktrees) under the given roots. Repos are not
+ * descended into; symlinks and other filesystems (mounted volumes) are not followed; dot-dirs, SKIP_DIRS and each
+ * root's own skip list are ignored. One shared budget (dirs + ms) covers every root; roots are walked in order and
+ * a directory reached by an earlier root is not walked again, so list the deeper roots first.
+ */
+export async function walkForRepos(
+  roots: readonly WalkRoot[],
+  budget: Partial<WalkBudget> = {},
+  nowMs: () => number = () => performance.now(),
+): Promise<WalkResult> {
+  const { maxDirs, maxMs } = { ...DEFAULT_WALK_BUDGET, ...budget };
+  const start = nowMs();
+  const repos = new Set<string>();
+  const seen = new Set<string>();
+  const state = { visited: 0, truncated: false };
+
+  const walk = async (dir: string, depth: number, root: WalkRoot, dev: number | null): Promise<void> => {
+    if (state.truncated) return;
+    if (seen.has(dir)) return;
+    seen.add(dir);
+    if (state.visited >= maxDirs || nowMs() - start > maxMs) {
+      state.truncated = true;
+      return;
+    }
+    state.visited += 1;
+    let entries: Dirent[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    if (depth > 0 && entries.some((e) => e.name === '.git')) {
+      repos.add(dir);
+      return;
+    }
+    if (depth >= root.depth) return;
+    for (const e of entries) {
+      if (state.truncated) return;
+      if (!e.isDirectory() || e.isSymbolicLink()) continue;
+      if (e.name.startsWith('.') || SKIP_DIRS.has(e.name)) continue;
+      if (depth === 0 && root.skip?.has(e.name)) continue;
+      const p = join(dir, e.name);
+      if (dev !== null) {
+        try {
+          if ((await stat(p)).dev !== dev) continue;
+        } catch {
+          continue;
+        }
+      }
+      await walk(p, depth + 1, root, dev);
+    }
+  };
+
+  for (const root of roots) {
+    if (state.truncated) break;
+    let dev: number | null = null;
+    try {
+      const st = await stat(root.path);
+      if (!st.isDirectory()) continue;
+      dev = st.dev;
+    } catch {
+      continue;
+    }
+    await walk(root.path, 0, root, dev);
+  }
+  return { repos: [...repos], visited: state.visited, truncated: state.truncated };
+}
+
+/** The roots `project.scan` walks on this machine (deeper, specific roots first; `$HOME` itself last at depth 2). */
+export const scanRoots = (home: string, platform: NodeJS.Platform): WalkRoot[] => [
+  ...HOME_CODE_ROOTS.map((d) => ({ path: join(home, d), depth: ROOT_DEPTH })),
+  ...HOME_EXTRA_ROOTS.map((d) => ({ path: join(home, d), depth: ROOT_DEPTH })),
+  ...(platform === 'win32' ? [{ path: 'C:\\dev', depth: ROOT_DEPTH }] : []),
+  { path: home, depth: HOME_DEPTH, skip: HOME_SKIP_DIRS },
+];
 
 export const initialsOf = (name: string): string => {
   const parts = name.split(/[^A-Za-z0-9]+/).filter(Boolean);
@@ -120,7 +243,12 @@ export const targetKey = (t: { provider: string; env: string; name: string }): s
   `${t.provider}/${t.env}/${t.name}`;
 
 export const policySummaryOf = (file: ProjectFileV1): ProjectPolicySummary => ({
-  rules: (file.policies?.extra ?? []).map((p) => ({ id: p.id, rule: p.rule, ruleText: p.ruleText, ...(p.enabled !== undefined ? { enabled: p.enabled } : {}) })),
+  rules: (file.policies?.extra ?? []).map((p) => ({
+    id: p.id,
+    rule: p.rule,
+    ruleText: p.ruleText,
+    ...(p.enabled !== undefined ? { enabled: p.enabled } : {}),
+  })),
   targets: (file.targets ?? [])
     .map((t) => ({ key: targetKey(t), policy: t.policy ?? null, config: t.config ?? {} }))
     .sort((a, b) => a.key.localeCompare(b.key)),
@@ -134,7 +262,10 @@ export const hasPolicyContent = (s: ProjectPolicySummary): boolean =>
   s.rules.length > 0 || s.targets.some((t) => t.policy !== null || Object.keys(t.config).length > 0);
 
 /** What accepting changes, for the `policy-changed` audit row and the Settings review row. */
-export const policyDiff = (before: ProjectPolicySummary | null, after: ProjectPolicySummary): ProjectPolicyDiff => {
+export const policyDiff = (
+  before: ProjectPolicySummary | null,
+  after: ProjectPolicySummary,
+): ProjectPolicyDiff => {
   const prevRules = new Map((before?.rules ?? []).map((r) => [r.id, JSON.stringify(r)]));
   const nextRules = new Map(after.rules.map((r) => [r.id, JSON.stringify(r)]));
   const rules = { added: [] as string[], removed: [] as string[], changed: [] as string[] };
@@ -152,7 +283,10 @@ export const policyDiff = (before: ProjectPolicySummary | null, after: ProjectPo
     const from = prevTargets.get(key)?.policy ?? null;
     const to = nextTargets.get(key)?.policy ?? null;
     if (from !== to) targets.push({ target: key, from, to });
-    if (JSON.stringify(prevTargets.get(key)?.config ?? {}) !== JSON.stringify(nextTargets.get(key)?.config ?? {}))
+    if (
+      JSON.stringify(prevTargets.get(key)?.config ?? {}) !==
+      JSON.stringify(nextTargets.get(key)?.config ?? {})
+    )
       configChanged.push(key);
   }
   return { rules, targets, configChanged };
@@ -165,7 +299,12 @@ export const policyDiff = (before: ProjectPolicySummary | null, after: ProjectPo
 export const advisoryRules = (rules: readonly Policy[]): Policy[] =>
   rules.flatMap((r) => {
     if (r.rule.kind === 'auto-approve')
-      return [{ ...r, rule: { kind: 'ask' as const, match: r.rule.match, scopes: r.rule.scopes, requireMfa: false } }];
+      return [
+        {
+          ...r,
+          rule: { kind: 'ask' as const, match: r.rule.match, scopes: r.rule.scopes, requireMfa: false },
+        },
+      ];
     if (r.rule.kind === 'idle-expiry') return [];
     return [r];
   });
@@ -196,7 +335,9 @@ export class ProjectService {
   projectRules(projectId: string): Policy[] {
     const cached = this.cachedFile(projectId);
     if (!cached) return [];
-    return this.isAccepted(projectId, cached.summary, cached.hash) ? cached.trustedRules : cached.untrustedRules;
+    return this.isAccepted(projectId, cached.summary, cached.hash)
+      ? cached.trustedRules
+      : cached.untrustedRules;
   }
 
   /** Whether the file's current grant policy is in force on this machine (no policy content counts as trusted). */
@@ -258,30 +399,34 @@ export class ProjectService {
 
   // --- scan ------------------------------------------------------------------
 
+  /** Repos on this machine (walker roots + IDE recents), known projects dropped, most recently active first. */
   async scan(includeIdeRecents: boolean): Promise<ScannedRepo[]> {
-    const roots = [
-      join(this.home, 'code'),
-      join(this.home, 'work'),
-      join(this.home, 'dev'),
-      join(this.home, 'src'),
-    ];
-    if (this.deps.platform === 'win32') roots.push('C:\\dev');
-    const found = new Set<string>();
-    for (const root of roots) if (existsSync(root)) await this.walk(root, 0, found);
+    const started = performance.now();
+    const walk = await walkForRepos(scanRoots(this.home, this.deps.platform), this.deps.scanBudget ?? {});
+    if (walk.truncated) {
+      logger.warn('project.scan: walk budget exhausted, results are partial', {
+        visited: walk.visited,
+        ms: Math.round(performance.now() - started),
+        found: walk.repos.length,
+      });
+    }
     let ideRecents: string[] = [];
     if (includeIdeRecents && this.deps.ideRecents) {
       try {
-        ideRecents = this.deps.ideRecents().filter((p) => existsSync(join(p, '.git')));
+        ideRecents = (await this.deps.ideRecents()).filter((p) => existsSync(join(p, '.git')));
       } catch (e) {
         logger.warn('project.scan: IDE recents unreadable', { error: (e as Error).message });
       }
     }
     const known = new Set(this.deps.repos.projects.all().map((p) => p.path));
-    return this.describeRepos(mergeCandidates([...found], ideRecents, known));
+    const described = await this.describeRepos(mergeCandidates(walk.repos, ideRecents, known));
+    return described.sort(byLastActivity);
   }
 
   /** Remote / branch / activity for candidate folders (known projects are dropped); `suggested` per spec §4.9. */
-  async describeRepos(candidates: readonly { path: string; source: 'scan' | 'ide-recent' }[]): Promise<ScannedRepo[]> {
+  async describeRepos(
+    candidates: readonly { path: string; source: 'scan' | 'ide-recent' }[],
+  ): Promise<ScannedRepo[]> {
     const known = new Set(this.deps.repos.projects.all().map((p) => p.path));
     const out: ScannedRepo[] = [];
     const now = this.deps.clock.now();
@@ -298,32 +443,16 @@ export class ProjectService {
       } catch {
         /* unreadable repo: still listed */
       }
-      out.push({ path: c.path, remote, branch, source: c.source, lastModifiedAt, suggested: isSuggested(remote, lastModifiedAt, now) });
+      out.push({
+        path: c.path,
+        remote,
+        branch,
+        source: c.source,
+        lastModifiedAt,
+        suggested: isSuggested(remote, lastModifiedAt, now),
+      });
     }
     return out;
-  }
-
-  private async walk(dir: string, depth: number, found: Set<string>): Promise<void> {
-    if (depth > SCAN_DEPTH) return;
-    let entries: string[];
-    try {
-      entries = await readdir(dir);
-    } catch {
-      return;
-    }
-    if (entries.includes('.git')) {
-      found.add(dir);
-      return;
-    }
-    for (const e of entries) {
-      if (e.startsWith('.') || SKIP_DIRS.has(e)) continue;
-      const p = join(dir, e);
-      try {
-        if ((await stat(p)).isDirectory()) await this.walk(p, depth + 1, found);
-      } catch {
-        /* skip */
-      }
-    }
   }
 
   // --- add / clone / create ---------------------------------------------------
@@ -393,11 +522,34 @@ export class ProjectService {
     return this.require(project.id);
   }
 
+  /** `git clone` into `into` (the full destination path), then add. Progress goes out as `project.cloneProgress`. */
   async clone(url: string, into: string): Promise<Project> {
     const target = resolve(into.replace(/^~(?=$|[\\/])/, this.home));
-    await mkdir(dirname(target), { recursive: true });
-    await this.deps.git.clone(url, target);
-    return this.add(target);
+    const progress = (
+      phase: 'cloning' | 'done' | 'error',
+      message: string | null,
+      projectId: ProjectId | null,
+    ) =>
+      this.deps.publisher.sendEvent('project.cloneProgress', {
+        url,
+        dest: target,
+        phase,
+        message,
+        projectId,
+      });
+    progress('cloning', null, null);
+    try {
+      if (existsSync(target) && (await readdir(target)).length > 0)
+        fail('invalid-input', `${target} already exists and is not empty`);
+      await mkdir(dirname(target), { recursive: true });
+      await this.deps.git.clone(url, target);
+      const project = await this.add(target);
+      progress('done', null, project.id);
+      return project;
+    } catch (e) {
+      progress('error', (e as Error).message, null);
+      throw e;
+    }
   }
 
   async create(input: {
@@ -437,12 +589,21 @@ export class ProjectService {
 
   /** The project's connected GitHub target, else any connected GitHub target (spec §4.12 "Create GitHub repo · private"). */
   githubTarget(projectId: string | null): Target | null {
-    const all = this.deps.repos.targets.all().filter((t) => t.provider === 'github' && t.credentialRef !== null);
+    const all = this.deps.repos.targets
+      .all()
+      .filter((t) => t.provider === 'github' && t.credentialRef !== null);
     return all.find((t) => t.projectId === projectId) ?? all[0] ?? null;
   }
 
   private targetInfo(t: Target): TargetInfo {
-    return { id: t.id, provider: t.provider, name: t.name, env: t.env, config: t.config, credentialRef: t.credentialRef };
+    return {
+      id: t.id,
+      provider: t.provider,
+      name: t.name,
+      env: t.env,
+      config: t.config,
+      credentialRef: t.credentialRef,
+    };
   }
 
   /**
@@ -463,7 +624,8 @@ export class ProjectService {
       fail('provider-error', (e as Error).message);
     }
     const existing = await git.remotes(project.path);
-    if (!existing.some((r) => r.name === 'origin')) await git.addRemote(project.path, 'origin', created.cloneUrl);
+    if (!existing.some((r) => r.name === 'origin'))
+      await git.addRemote(project.path, 'origin', created.cloneUrl);
     const repo = repos.repos.byProject(project.id);
     if (repo) {
       const remotes = repo.remotes.some((r) => r.name === 'origin')
@@ -477,7 +639,10 @@ export class ProjectService {
       try {
         await git.push(project.path, 'origin', branch, { token: await github.pushToken(info) });
       } catch (e) {
-        logger.warn('project.create: initial push failed', { project: project.name, error: (e as Error).message });
+        logger.warn('project.create: initial push failed', {
+          project: project.name,
+          error: (e as Error).message,
+        });
       }
     }
     if (this.deps.audit) {
@@ -500,7 +665,9 @@ export class ProjectService {
   async templates(): Promise<{ builtins: string[]; org: { name: string; fullName: string }[] }> {
     let builtins: string[] = [...BUILTIN_TEMPLATES];
     if (this.deps.templatesDir && existsSync(this.deps.templatesDir)) {
-      const dirs = (await readdir(this.deps.templatesDir, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
+      const dirs = (await readdir(this.deps.templatesDir, { withFileTypes: true }))
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name);
       if (dirs.length > 0) builtins = dirs.sort();
     }
     const target = this.githubTarget(this.deps.repos.uiState.get<string>('projectId') ?? null);
@@ -677,12 +844,19 @@ export class ProjectService {
   }
 
   /** The file's current grant policy, its hash and the diff against what this machine accepted (Settings review row). */
-  async pendingPolicy(projectId: string): Promise<{ hash: string; accepted: boolean; summary: ProjectPolicySummary; diff: ProjectPolicyDiff }> {
+  async pendingPolicy(
+    projectId: string,
+  ): Promise<{ hash: string; accepted: boolean; summary: ProjectPolicySummary; diff: ProjectPolicyDiff }> {
     const project = this.require(projectId);
     const summary = policySummaryOf(await this.readProjectFile(project));
     const hash = policyHashOf(summary);
     const before = this.acceptedPolicy(project.id);
-    return { hash, accepted: this.isAccepted(project.id, summary, hash), summary, diff: policyDiff(before?.summary ?? null, summary) };
+    return {
+      hash,
+      accepted: this.isAccepted(project.id, summary, hash),
+      summary,
+      diff: policyDiff(before?.summary ?? null, summary),
+    };
   }
 
   private async readProjectFile(project: Project): Promise<ProjectFileV1> {
@@ -705,9 +879,13 @@ export class ProjectService {
     const project = this.require(projectId);
     const summary = policySummaryOf(await this.readProjectFile(project));
     const current = policyHashOf(summary);
-    if (current !== hash) fail('invalid-input', `${PROJECT_FILE_PATH} changed since it was reviewed; review it again`);
+    if (current !== hash)
+      fail('invalid-input', `${PROJECT_FILE_PATH} changed since it was reviewed; review it again`);
     const before = this.acceptedPolicy(project.id);
-    repos.uiState.set(acceptedKey(project.id), { hash: current, summary: redact(summary) } satisfies AcceptedProjectPolicy);
+    repos.uiState.set(acceptedKey(project.id), {
+      hash: current,
+      summary: redact(summary),
+    } satisfies AcceptedProjectPolicy);
     await this.reconcileProjectFile(project.id);
     if (this.deps.audit) {
       const row = this.deps.audit.append({
@@ -860,9 +1038,13 @@ export const isSuggested = (remote: string | null, lastModifiedAt: number | null
   return !(remote === null && stale);
 };
 
+/** Most recent activity first; unknown activity last; path breaks ties so the list is stable. */
+export const byLastActivity = (a: ScannedRepo, b: ScannedRepo): number =>
+  (b.lastModifiedAt ?? -Infinity) - (a.lastModifiedAt ?? -Infinity) || a.path.localeCompare(b.path);
+
 /**
  * Filesystem hits and IDE recents merged into one candidate list: known projects drop out, a folder found by both
- * keeps `source: 'scan'`, and the result is sorted by path for a stable onboarding list.
+ * keeps `source: 'scan'`, and the result is sorted by path (scan re-sorts by activity once repos are described).
  */
 export const mergeCandidates = (
   fsPaths: readonly string[],
@@ -872,5 +1054,7 @@ export const mergeCandidates = (
   const byPath = new Map<string, 'scan' | 'ide-recent'>();
   for (const p of fsPaths) if (!known.has(p)) byPath.set(p, 'scan');
   for (const p of ideRecents) if (!known.has(p) && !byPath.has(p)) byPath.set(p, 'ide-recent');
-  return [...byPath.entries()].map(([path, source]) => ({ path, source })).sort((a, b) => a.path.localeCompare(b.path));
+  return [...byPath.entries()]
+    .map(([path, source]) => ({ path, source }))
+    .sort((a, b) => a.path.localeCompare(b.path));
 };

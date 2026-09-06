@@ -131,8 +131,13 @@ export const commands = {
     input: z.object({ path: z.string().min(1), name: z.string().min(1).optional() }),
     output: idOut('projectId', projectIdSchema),
   },
+  /** `into` is the full destination folder (`~/code/<repo>`); progress arrives as `project.cloneProgress`. */
   'project.clone': {
-    input: z.object({ url: z.string().min(1), into: z.string().min(1) }),
+    input: z.object({
+      url: z.string().min(1),
+      into: z.string().min(1),
+      openInIde: z.boolean().default(false),
+    }),
     output: idOut('projectId', projectIdSchema),
   },
   'project.create': {
@@ -190,6 +195,23 @@ export const commands = {
       builtins: z.array(z.string().min(1)),
       org: z.array(z.object({ name: z.string().min(1), fullName: z.string().min(1) })),
     }),
+  },
+
+  // --- native dialogs (main-owned; the renderer never touches the filesystem) ---
+  /** OS folder picker parented to the main window; `null` when dismissed. `STYX_E2E` answers with `STYX_E2E_PICK`. */
+  'dialog.pickFolder': {
+    input: z.object({ title: z.string().min(1).optional(), defaultPath: z.string().min(1).optional() }),
+    output: z.object({ path: z.string().nullable() }),
+  },
+  'dialog.pickFile': {
+    input: z.object({
+      title: z.string().min(1).optional(),
+      defaultPath: z.string().min(1).optional(),
+      filters: z
+        .array(z.object({ name: z.string().min(1), extensions: z.array(z.string().min(1)) }))
+        .optional(),
+    }),
+    output: z.object({ path: z.string().nullable() }),
   },
 
   // --- session ---
@@ -435,6 +457,11 @@ export const commands = {
   // --- detection & IDE ---
   'detect.ides': { input: z.object({}), output: z.object({ ides: z.array(ideInstallSchema) }) },
   'detect.clis': { input: z.object({}), output: z.object({ clis: z.array(cliInstallSchema) }) },
+  /** "Locate binary" (spec §4.11 CLI-missing row): a hand-picked CLI path, probed and remembered across re-detects. */
+  'detect.setBinary': {
+    input: z.object({ agent: agentSchema, path: z.string().min(1) }),
+    output: z.object({ cli: cliInstallSchema }),
+  },
   'ide.import': {
     input: z.object({
       ideId: z.string().min(1),
@@ -536,6 +563,14 @@ export const events = {
     provider: providerSchema,
     status: z.enum(['running', 'exited']),
     exitCode: z.number().int().nullable().optional(),
+  }),
+  /** `project.clone` progress: `cloning` on start, then `done` (with the project id) or `error`. */
+  'project.cloneProgress': z.object({
+    url: z.string(),
+    dest: z.string(),
+    phase: z.enum(['cloning', 'done', 'error']),
+    message: z.string().nullable(),
+    projectId: projectIdSchema.nullable(),
   }),
   'banner.set': z.object({
     bannerKey: z.string().min(1),

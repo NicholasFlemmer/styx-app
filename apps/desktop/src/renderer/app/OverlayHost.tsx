@@ -19,7 +19,7 @@ const render = (o: Overlay) => {
         case 'spawn':
           return <SpawnModal key={o.id} id={o.id} projectId={o.projectId} />;
         case 'new-project':
-          return <NewProjectModal key={o.id} id={o.id} />;
+          return <NewProjectModal key={o.id} id={o.id} {...(o.mode !== undefined ? { mode: o.mode } : {})} />;
         case 'connect':
           return (
             <ConnectModal
