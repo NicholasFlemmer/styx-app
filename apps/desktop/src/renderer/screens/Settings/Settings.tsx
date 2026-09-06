@@ -246,6 +246,9 @@ function Rows({
       case 'policy':
         void command('policy.toggle', { policyId: change.policyId, enabled: value === 'on' });
         return;
+      case 'cli-binary':
+        void command('detect.setBinary', { agent: change.agent, path: value });
+        return;
     }
   };
   const onReset = (row: SettingsRow) => {

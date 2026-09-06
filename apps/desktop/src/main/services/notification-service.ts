@@ -131,7 +131,8 @@ export class NotificationService {
 /**
  * Persistent banners still `shown` in `notifications` (keyed by `banner_key`), rebuilt as `banner.set` payloads so a
  * freshly connected window sees them again after a restart. Keys: `auth-expired:<targetId>` · `cli-missing:<agent>` ·
- * `conflict:<worktreeId>` (kind `error-banner`) · `project-policy:<projectId>` (kind `info`); unknown keys are skipped.
+ * `cli-outdated:<agent>` · `conflict:<worktreeId>` (kind `error-banner`) · `project-policy:<projectId>` (kind `info`);
+ * unknown keys are skipped.
  */
 export function bannersToReemit(repos: Repos): EventPayload<'banner.set'>[] {
   const out: EventPayload<'banner.set'>[] = [];
@@ -177,6 +178,18 @@ export function bannersToReemit(repos: Repos): EventPayload<'banner.set'>[] {
         action: { kind: 'install-guide', agent: agent.data },
         sessionId: n.sessionId,
         reason: 'cli-missing',
+      });
+    } else if (kind === 'cli-outdated') {
+      const agent = agentSchema.safeParse(id);
+      if (!agent.success) continue;
+      out.push({
+        bannerKey: n.bannerKey,
+        kind: 'cli-outdated',
+        text: n.title,
+        cta: copy.errors.cliOutdated.cta,
+        action: { kind: 'install-guide', agent: agent.data },
+        sessionId: n.sessionId,
+        reason: null,
       });
     } else if (kind === 'conflict') {
       const wt = repos.worktrees.get(id);

@@ -1,10 +1,16 @@
 import {
   BUILTIN_POLICY_IDS,
+  cliAlternatives,
+  cliCandidateLabel,
+  cliLocationLabel,
+  cliSourceOf,
   copy,
   DEFAULT_PROJECT_SETTINGS,
+  fill,
   formatChord,
   platformCopy,
   projectSettingsOf,
+  type Agent,
   type AppSettings,
   type Platform,
   type PolicyId,
@@ -20,7 +26,9 @@ export type RowChange =
   | { kind: 'fixed' }
   | { kind: 'app'; patch: (value: string) => Partial<AppSettings> }
   | { kind: 'project'; key: keyof ProjectSettings; patch: (value: string) => Partial<ProjectSettings> }
-  | { kind: 'policy'; policyId: PolicyId };
+  | { kind: 'policy'; policyId: PolicyId }
+  /** Pick among the binaries detected for one agent (`detect.setBinary`, value = binary path). */
+  | { kind: 'cli-binary'; agent: Agent };
 
 export interface RowOption {
   value: string;
@@ -198,7 +206,22 @@ const agentsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
   const app = model.settings.app;
   const r = copy.settings.rows;
   const v = copy.settings.values;
-  const clis = model.discovery.clis.filter((c) => c.found && c.agent !== 'shell').map((c) => c.agent);
+  const clis = model.discovery.clis.filter((c) => c.found && c.agent !== 'shell');
+  // One Select per CLI with more than one runnable binary (PATH vs an IDE extension bundle …); value = binary path.
+  const binaryRows: SettingsRow[] = clis.flatMap((c) => {
+    const alternatives = cliAlternatives(c);
+    if (alternatives.length < 2 || c.binary === null) return [];
+    return [
+      {
+        id: `cliBinary:${c.agent}`,
+        label: fill(r.cliBinary, { cli: copy.agentProducts[c.agent] }),
+        value: c.binary,
+        options: alternatives.map((a) => ({ value: a.binary, label: cliCandidateLabel(c.agent, a) })),
+        change: { kind: 'cli-binary', agent: c.agent },
+        overridden: false,
+      },
+    ];
+  });
   return [
     projectRow(
       model,
@@ -230,7 +253,16 @@ const agentsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
       optionsOf(v.shellWindows, ['powershell', 'wsl']),
       false,
     ),
-    fixed('detectedClis', r.detectedClis, clis.length === 0 ? copy.general.none : clis.join(', ')),
+    // "claude 2.1.261 · VS Code extension, codex" — detected rows carry version · source; rows without a recorded
+    // source (fixtures, rows written before sources existed) keep the prototype's bare agent name.
+    fixed(
+      'detectedClis',
+      r.detectedClis,
+      clis.length === 0
+        ? copy.general.none
+        : clis.map((c) => (cliSourceOf(c) === null ? c.agent : cliLocationLabel(c))).join(', '),
+    ),
+    ...binaryRows,
   ];
 };
 

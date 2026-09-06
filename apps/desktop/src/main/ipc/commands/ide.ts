@@ -2,18 +2,18 @@ import { chmodSync, existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { execa } from 'execa';
-import type { CliInstall, IdeInstall } from '@styx/core';
+import { cliAlternatives, type IdeInstall } from '@styx/core';
 import type { Container } from '../../container';
+import { toCliInstall } from '../../services/detect-service';
 import { installOpenIn, type OpenInInstallDeps } from '../../services/ide-import-service';
 import { logger } from '../../services/logger';
+import { cliBinaryKey } from '../../services/session-service';
 import { type CommandBus, fail } from '../bus';
 
 /** app_settings keys for imported editor preferences (read by the renderer's key registry / editor theme). */
 export const IMPORTED_KEYBINDINGS_KEY = 'editor.importedKeybindings';
 export const IMPORTED_THEME_KEY = 'editor.importedTheme';
-/** `cli.binary.<agent>`: a path picked with "Locate binary"; wins over PATH detection while the file exists. */
-export const CLI_BINARY_KEY_PREFIX = 'cli.binary.';
-export const cliBinaryKey = (agent: string): string => `${CLI_BINARY_KEY_PREFIX}${agent}`;
+export { CLI_BINARY_KEY_PREFIX, cliBinaryKey } from '../../services/session-service';
 
 /** Where each IDE keeps its recent folders (spec §4.9: VS Code/Cursor state.vscdb, JetBrains recentProjects.xml, Neovim shada). */
 const RECENTS_SOURCE = {
@@ -60,36 +60,8 @@ export function registerIdeCommands(bus: CommandBus, app: Container): void {
     return { ides };
   });
 
-  const toInstall = (c: Awaited<ReturnType<typeof detect.probe>>, checkedAt: number): CliInstall => ({
-    agent: c.agent,
-    binary: c.binary,
-    version: c.version,
-    found: c.found,
-    authState: c.authState,
-    capabilities: c.capabilities,
-    checkedAt,
-  });
-
-  bus.register('detect.clis', async () => {
-    const found = await detect.detectClis();
-    const now = clock.now();
-    const clis: CliInstall[] = [];
-    for (const c of found) {
-      // A located binary outranks the PATH hit; a vanished one is forgotten so detection is honest again.
-      const picked = c.agent === 'shell' ? undefined : repos.settings.kv.get<string>(cliBinaryKey(c.agent));
-      if (picked !== undefined && c.agent !== 'shell') {
-        if (existsSync(picked)) {
-          clis.push(toInstall(await detect.probe(c.agent, picked), now));
-          continue;
-        }
-        repos.settings.kv.delete(cliBinaryKey(c.agent));
-      }
-      clis.push(toInstall(c, now));
-    }
-    repos.discovery.replaceClis(clis);
-    publisher.discoverySet(repos.discovery.ides(), clis);
-    return { clis };
-  });
+  /** Every candidate (PATH, IDE extension bundles, manual pick) is probed; a located binary outranks the best one. */
+  bus.register('detect.clis', async () => ({ clis: await app.sessions.refreshClis() }));
 
   bus.register('detect.setBinary', async ({ agent, path }) => {
     if (agent === 'shell') fail('invalid-input', 'the shell agent has no binary to locate');
@@ -97,7 +69,13 @@ export function registerIdeCommands(bus: CommandBus, app: Container): void {
     const probed = await detect.probe(agent, path);
     if (!probed.found) fail('invalid-input', `${path} is not a runnable ${agent} CLI`);
     repos.settings.kv.set(cliBinaryKey(agent), path);
-    const cli = toInstall(probed, clock.now());
+    // The other candidates stay listed so the Settings Select can switch back to them.
+    const previous = repos.discovery.cli(agent);
+    const rest = (previous === null ? [] : cliAlternatives(previous)).filter((c) => c.binary !== path);
+    const cli = toCliInstall(
+      { ...probed, alternatives: [{ binary: path, version: probed.version, source: 'manual' }, ...rest] },
+      clock.now(),
+    );
     repos.discovery.saveCli(cli);
     publisher.discoverySet(repos.discovery.ides(), repos.discovery.clis());
     return { cli };

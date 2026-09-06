@@ -98,6 +98,8 @@ export interface ContainerOptions {
   refreshMs?: number;
   /** Fixture profiles carry fake credentials; probing them would only flag every target `expired`. */
   disableRefresh?: boolean;
+  /** Re-detect agent CLIs before every spawn / relaunch and on focus (default on; off for fixture rows and tests). */
+  redetectClis?: boolean;
 }
 
 export interface Container {
@@ -181,6 +183,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     transcript,
     activity,
     notifications: opts.notifications,
+    redetectClis: opts.redetectClis ?? true,
     runtime,
   });
   const grants = new GrantService({
@@ -215,8 +218,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     audit,
     activity,
     github: githubAdapter instanceof GitHubAdapter ? githubAdapter : null,
-    // IDE recents need no `ide.import`: state.vscdb / recentProjects.xml / shada are read directly for every
-    // detected editor. When nothing has been detected yet (fresh install, Home "Scan this machine"), detect first.
+    // IDE recents need no `ide.import`: state.vscdb + workspaceStorage / recentProjects.xml / shada are read directly
+    // for every detected editor. When nothing has been detected yet (fresh install, Home "Scan this machine"), detect first.
     ideRecents: async () => {
       let ides = repos.discovery.ides().map((i) => ({ kind: i.kind, configDir: i.configDir }));
       if (ides.length === 0) {
@@ -224,7 +227,7 @@ export function buildContainer(opts: ContainerOptions): Container {
           .filter((i) => i.found)
           .map((i) => ({ kind: i.kind, configDir: i.configDir }));
       }
-      return ideImport.allRecentFolders(ides);
+      return ideImport.allRecentFoldersWithTime(ides);
     },
   });
   const terminals = new TerminalService(repos, pty, () => ({
@@ -251,6 +254,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     repos,
     clock,
     checkHealth: (t, reason) => targets.checkHealth(t, reason),
+    ...((opts.redetectClis ?? true) ? { refreshClis: () => sessions.refreshClis() } : {}),
     ...(opts.refreshMs !== undefined ? { intervalMs: opts.refreshMs } : {}),
   });
   const broker = new BrokerHost({

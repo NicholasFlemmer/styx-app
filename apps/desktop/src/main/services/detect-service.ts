@@ -1,10 +1,21 @@
 import { execa } from 'execa';
-import { accessSync, constants, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import {
+  accessSync,
+  constants,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  type Dirent,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
+import type { CliCandidate, CliInstall, CliSource } from '@styx/core';
 
 export type AgentKind = 'claude' | 'codex' | 'gemini' | 'cursor' | 'shell';
 export type AuthState = 'signed-in' | 'signed-out' | 'unknown' | 'n/a';
+export type { CliCandidate, CliSource };
 
 export interface CliDetection {
   agent: AgentKind;
@@ -14,7 +25,14 @@ export interface CliDetection {
   found: boolean;
   authState: AuthState;
   capabilities: Record<string, boolean>;
+  /** Where `binary` came from; null when nothing was found (or for the shell). */
+  source: CliSource | null;
+  /** Every runnable binary found for the agent, the chosen one included (Settings "Detected CLIs" Select). */
+  alternatives: CliCandidate[];
 }
+
+/** Manual "Locate binary" picks per agent (`cli.binary.<agent>` in app_settings); a pick that vanished is ignored. */
+export type CliOverrides = Partial<Record<Exclude<AgentKind, 'shell'>, string>>;
 
 export interface IdeDetection {
   kind: 'vscode' | 'cursor' | 'jetbrains' | 'neovim';
@@ -33,6 +51,8 @@ export interface DetectDeps {
   pathEnv: string;
   env: NodeJS.ProcessEnv;
   exec: (bin: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>;
+  /** macOS `/Applications` (the Claude desktop app bundle is looked up there); injectable for tests. */
+  applicationsDir?: string;
 }
 
 const CLIS: { agent: AgentKind; label: string; bins: string[] }[] = [
@@ -42,6 +62,22 @@ const CLIS: { agent: AgentKind; label: string; bins: string[] }[] = [
   { agent: 'cursor', label: 'Cursor agent', bins: ['cursor-agent', 'agent'] },
   { agent: 'shell', label: 'Shell', bins: [] },
 ];
+
+/** IDE extension bundles that ship their own Claude Code binary (`resources/native-binary/claude`). */
+const CLAUDE_EXTENSION_BUNDLES: { dir: string[]; source: CliSource }[] = [
+  { dir: ['.vscode', 'extensions'], source: 'vscode-extension' },
+  { dir: ['.cursor', 'extensions'], source: 'cursor-extension' },
+];
+const CLAUDE_EXTENSION_PREFIX = 'anthropic.claude-code-';
+const BUNDLE_SEARCH_DEPTH = 4;
+
+const SOURCE_RANK: Record<CliSource, number> = {
+  manual: 0,
+  path: 1,
+  'vscode-extension': 2,
+  'cursor-extension': 3,
+  'desktop-app': 4,
+};
 
 export function defaultDeps(pathEnv: string = process.env['PATH'] ?? ''): DetectDeps {
   return {
@@ -60,75 +96,294 @@ export function defaultDeps(pathEnv: string = process.env['PATH'] ?? ''): Detect
   };
 }
 
-export function findOnPath(name: string, pathEnv: string, platform: NodeJS.Platform): string | null {
-  const exts = platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : [''];
+const isExecutableFile = (p: string): boolean => {
+  try {
+    if (!statSync(p).isFile()) return false;
+    accessSync(p, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const exeNames = (name: string, platform: NodeJS.Platform): string[] =>
+  (platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : ['']).map((ext) => name + ext);
+
+/** `which -a` semantics: every executable `name` on PATH, in PATH order (duplicates by resolved path removed). */
+export function findAllOnPath(name: string, pathEnv: string, platform: NodeJS.Platform): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
   for (const dir of pathEnv.split(delimiter)) {
     if (!dir) continue;
-    for (const ext of exts) {
-      const p = join(dir, name + ext);
-      try {
-        if (statSync(p).isFile()) {
-          accessSync(p, constants.X_OK);
-          return p;
-        }
-      } catch {
-        /* keep looking */
-      }
+    for (const file of exeNames(name, platform)) {
+      const p = join(dir, file);
+      if (!isExecutableFile(p)) continue;
+      const key = realKey(p);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
     }
   }
-  return null;
+  return out;
 }
 
-/** Detects agent CLIs on the (login-shell) PATH with version and auth state. Sign-in stays the CLI's own flow. */
+export function findOnPath(name: string, pathEnv: string, platform: NodeJS.Platform): string | null {
+  return findAllOnPath(name, pathEnv, platform)[0] ?? null;
+}
+
+const realKey = (p: string): string => {
+  try {
+    return realpathSync(p);
+  } catch {
+    return p;
+  }
+};
+
+/** Executable files called `name` under `root`, at most `depth` directories down (bounded walk, symlinks not followed). */
+function findExecutables(root: string, names: readonly string[], depth: number): string[] {
+  const out: string[] = [];
+  const walk = (dir: string, left: number): void => {
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) {
+        if (left > 0) walk(p, left - 1);
+      } else if (names.includes(e.name) && isExecutableFile(p)) out.push(p);
+    }
+  };
+  walk(root, depth);
+  return out;
+}
+
+/** Numeric semver compare on `major.minor.patch`; a missing version sorts lowest, a prerelease below its release. */
+export function compareVersions(a: string | null, b: string | null): number {
+  if (a === null || b === null) return a === b ? 0 : a === null ? -1 : 1;
+  const parse = (v: string) => {
+    const m = /^(\d+)\.(\d+)(?:\.(\d+))?(?:-([0-9A-Za-z.]+))?/.exec(v);
+    return m ? { nums: [Number(m[1]), Number(m[2]), Number(m[3] ?? 0)], pre: m[4] ?? null } : null;
+  };
+  const pa = parse(a);
+  const pb = parse(b);
+  if (pa === null || pb === null) return pa === pb ? 0 : pa === null ? -1 : 1;
+  for (let i = 0; i < 3; i += 1) {
+    const d = (pa.nums[i] ?? 0) - (pb.nums[i] ?? 0);
+    if (d !== 0) return d < 0 ? -1 : 1;
+  }
+  if (pa.pre === pb.pre) return 0;
+  if (pa.pre === null) return 1;
+  if (pb.pre === null) return -1;
+  return pa.pre < pb.pre ? -1 : 1;
+}
+
+/** `have` satisfies `need` when it is the same version or newer. */
+export const versionSatisfies = (have: string | null, need: string): boolean =>
+  have !== null && compareVersions(have, need) >= 0;
+
+/** Highest version wins; ties go to the earlier source (PATH before extension bundles, then discovery order). */
+export function pickBest(candidates: readonly CliCandidate[]): CliCandidate | null {
+  let best: CliCandidate | null = null;
+  for (const c of candidates) {
+    if (best === null) {
+      best = c;
+      continue;
+    }
+    const d = compareVersions(c.version, best.version);
+    if (d > 0 || (d === 0 && SOURCE_RANK[c.source] < SOURCE_RANK[best.source])) best = c;
+  }
+  return best;
+}
+
+const notFound = (agent: AgentKind, label: string): CliDetection => ({
+  agent,
+  label,
+  binary: null,
+  version: null,
+  found: false,
+  authState: 'unknown',
+  capabilities: {},
+  source: null,
+  alternatives: [],
+});
+
+/** The persisted row for a detection: `source` and `alternatives` ride along in `capabilities_json` (no migration). */
+export const toCliInstall = (c: CliDetection, checkedAt: number): CliInstall => ({
+  agent: c.agent,
+  binary: c.binary,
+  version: c.version,
+  found: c.found,
+  authState: c.authState,
+  capabilities: {
+    ...c.capabilities,
+    ...(c.source === null ? {} : { source: c.source }),
+    ...(c.alternatives.length === 0 ? {} : { alternatives: c.alternatives }),
+  },
+  checkedAt,
+});
+
+interface ProbeCache {
+  key: string;
+  version: string | null;
+  help: string | null;
+}
+
+/**
+ * Detects agent CLIs — every PATH hit (`which -a`), the VS Code / Cursor extension bundles and the Claude desktop app
+ * for `claude` — with version and auth state; the highest version wins. Sign-in stays the CLI's own flow.
+ * `--version` / `--help` results are cached per binary (mtime + size), so re-detecting before a spawn or on window
+ * focus is a handful of stats once the binaries have been probed.
+ */
 export class DetectService {
+  private readonly cache = new Map<string, ProbeCache>();
+
   constructor(private readonly deps: DetectDeps = defaultDeps()) {}
 
-  async detectClis(): Promise<CliDetection[]> {
+  async detectClis(overrides: CliOverrides = {}): Promise<CliDetection[]> {
     const out: CliDetection[] = [];
     for (const c of CLIS) {
       if (c.agent === 'shell') {
         out.push(await this.detectShell());
         continue;
       }
-      let binary: string | null = null;
-      for (const b of c.bins) if ((binary = findOnPath(b, this.deps.pathEnv, this.deps.platform))) break;
-      if (!binary) {
-        out.push({
-          agent: c.agent,
-          label: c.label,
-          binary: null,
-          version: null,
-          found: false,
-          authState: 'unknown',
-          capabilities: {},
-        });
-        continue;
-      }
-      out.push(await this.probe(c.agent, binary));
+      out.push(await this.detectAgent(c.agent, overrides[c.agent] ?? null));
     }
     return out;
   }
 
-  /**
-   * Version, capabilities and auth state of one agent binary — the PATH hit, or a path the user picked with
-   * "Locate binary". `found` follows whether the file exists; an unrunnable file still reports `found: false`.
-   */
-  async probe(agent: Exclude<AgentKind, 'shell'>, binary: string): Promise<CliDetection> {
-    const label = CLIS.find((c) => c.agent === agent)?.label ?? agent;
-    if (!existsSync(binary)) {
-      return { agent, label, binary, version: null, found: false, authState: 'unknown', capabilities: {} };
+  /** One agent: candidates → highest version, unless a still-existing manual pick overrides it. */
+  async detectAgent(
+    agent: Exclude<AgentKind, 'shell'>,
+    override: string | null = null,
+  ): Promise<CliDetection> {
+    const spec = CLIS.find((c) => c.agent === agent) ?? { agent, label: agent, bins: [agent] };
+    const candidates = await this.candidates(agent, spec.bins);
+    if (override !== null && existsSync(override)) {
+      const manual: CliCandidate = { binary: override, version: null, source: 'manual' };
+      const probed = await this.probe(agent, override, { source: 'manual', alternatives: [] });
+      if (probed.found) {
+        manual.version = probed.version;
+        const key = realKey(override);
+        const rest = candidates.filter((x) => realKey(x.binary) !== key);
+        return { ...probed, alternatives: [manual, ...rest] };
+      }
     }
+    const best = pickBest(candidates);
+    if (best === null) return notFound(agent, spec.label);
+    return this.probe(agent, best.binary, {
+      version: best.version,
+      source: best.source,
+      alternatives: candidates,
+    });
+  }
+
+  /** Every runnable binary for the agent with its `--version` (cached), in discovery order. */
+  async candidates(agent: Exclude<AgentKind, 'shell'>, bins: readonly string[]): Promise<CliCandidate[]> {
+    const found: { binary: string; source: CliSource }[] = [];
+    const seen = new Set<string>();
+    const add = (binary: string, source: CliSource) => {
+      const key = realKey(binary);
+      if (seen.has(key)) return;
+      seen.add(key);
+      found.push({ binary, source });
+    };
+    for (const b of bins)
+      for (const p of findAllOnPath(b, this.deps.pathEnv, this.deps.platform)) add(p, 'path');
+    if (agent === 'claude') {
+      const names = exeNames('claude', this.deps.platform);
+      for (const bundle of CLAUDE_EXTENSION_BUNDLES) {
+        const root = join(this.deps.home, ...bundle.dir);
+        let dirs: string[];
+        try {
+          dirs = readdirSync(root).filter((d) => d.startsWith(CLAUDE_EXTENSION_PREFIX));
+        } catch {
+          continue;
+        }
+        for (const d of dirs.sort())
+          for (const p of findExecutables(join(root, d), names, BUNDLE_SEARCH_DEPTH)) add(p, bundle.source);
+      }
+      if (this.deps.platform === 'darwin') {
+        const app = join(this.deps.applicationsDir ?? '/Applications', 'Claude.app');
+        if (existsSync(app))
+          for (const p of findExecutables(join(app, 'Contents'), names, BUNDLE_SEARCH_DEPTH))
+            add(p, 'desktop-app');
+      }
+    }
+    const out: CliCandidate[] = [];
+    for (const f of found) out.push({ ...f, version: await this.versionOf(f.binary) });
+    return out;
+  }
+
+  /**
+   * Version, capabilities and auth state of one agent binary — the winning candidate, or a path the user picked with
+   * "Locate binary" (`source: 'manual'` by default). `found` follows whether the file exists; an unrunnable file still
+   * reports `found: false`.
+   */
+  async probe(
+    agent: Exclude<AgentKind, 'shell'>,
+    binary: string,
+    opts: { version?: string | null; source?: CliSource; alternatives?: CliCandidate[] } = {},
+  ): Promise<CliDetection> {
+    const label = CLIS.find((c) => c.agent === agent)?.label ?? agent;
+    const source = opts.source ?? 'manual';
+    const alternatives = opts.alternatives ?? [];
+    if (!existsSync(binary)) return { ...notFound(agent, label), binary };
+    const version = opts.version === undefined ? await this.versionOf(binary) : opts.version;
+    const help = await this.helpOf(binary);
+    const capabilities: Record<string, boolean> = {
+      mcpConfigFlag: /--mcp-config/.test(help),
+      settingsFlag: /--settings/.test(help),
+      streamJson: /stream-json/.test(help),
+      printMode: /(^|\s)(-p|--print)\b/.test(help),
+      configOverride: /(^|\s)-c,? ?(--config)?\b/.test(help) || /--config/.test(help),
+    };
+    return {
+      agent,
+      label,
+      binary,
+      version,
+      found: true,
+      authState: this.authState(agent),
+      capabilities,
+      source,
+      alternatives: alternatives.length === 0 ? [{ binary, version, source }] : alternatives,
+    };
+  }
+
+  /** Forget cached `--version` / `--help` output (a binary that changed in place is re-probed anyway via mtime+size). */
+  invalidate(): void {
+    this.cache.clear();
+  }
+
+  private statKey(binary: string): string | null {
+    try {
+      const st = statSync(binary);
+      return `${st.mtimeMs}:${st.size}`;
+    } catch {
+      return null;
+    }
+  }
+
+  private async versionOf(binary: string): Promise<string | null> {
+    const key = this.statKey(binary);
+    const hit = this.cache.get(binary);
+    if (key !== null && hit !== undefined && hit.key === key) return hit.version;
     const v = await this.deps.exec(binary, ['--version']);
     const version = parseVersion(v.stdout);
-    const help = await this.deps.exec(binary, ['--help']);
-    const capabilities: Record<string, boolean> = {
-      mcpConfigFlag: /--mcp-config/.test(help.stdout),
-      settingsFlag: /--settings/.test(help.stdout),
-      streamJson: /stream-json/.test(help.stdout),
-      printMode: /(^|\s)(-p|--print)\b/.test(help.stdout),
-      configOverride: /(^|\s)-c,? ?(--config)?\b/.test(help.stdout) || /--config/.test(help.stdout),
-    };
-    return { agent, label, binary, version, found: true, authState: this.authState(agent), capabilities };
+    if (key !== null) this.cache.set(binary, { key, version, help: null });
+    return version;
+  }
+
+  private async helpOf(binary: string): Promise<string> {
+    const key = this.statKey(binary);
+    const hit = this.cache.get(binary);
+    if (key !== null && hit !== undefined && hit.key === key && hit.help !== null) return hit.help;
+    const help = (await this.deps.exec(binary, ['--help'])).stdout;
+    if (key !== null) this.cache.set(binary, { key, version: hit?.key === key ? hit.version : null, help });
+    return help;
   }
 
   private async detectShell(): Promise<CliDetection> {
@@ -151,6 +406,8 @@ export class DetectService {
         found: !!pwsh,
         authState: 'n/a',
         capabilities: { wsl: !!wsl },
+        source: null,
+        alternatives: [],
       };
     }
     const shell = this.deps.env['SHELL'] || '/bin/zsh';
@@ -164,6 +421,8 @@ export class DetectService {
       found: existsSync(shell),
       authState: 'n/a',
       capabilities: {},
+      source: null,
+      alternatives: [],
     };
   }
 
@@ -291,8 +550,11 @@ export class DetectService {
     } catch {
       /* none */
     }
-    const state = join(userDir, 'globalStorage', 'state.vscdb');
-    return { recents: existsSync(state) ? -1 : 0, keybindings, theme }; // -1 = present, count resolved lazily by ImportService
+    // -1 = present, count resolved lazily by IdeImportService (legacy state.vscdb key, or workspaceStorage on 1.10x+).
+    const hasRecents =
+      existsSync(join(userDir, 'globalStorage', 'state.vscdb')) ||
+      existsSync(join(userDir, 'workspaceStorage'));
+    return { recents: hasRecents ? -1 : 0, keybindings, theme };
   }
 }
 

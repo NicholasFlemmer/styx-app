@@ -59,6 +59,8 @@ export interface TestAppOptions {
   stream?: StreamRunnerLike;
   cli?: FakeCliRunner;
   detect?: DetectService;
+  /** Re-detect CLIs before spawns (default off: fixture rows name binaries this machine does not have). */
+  redetectClis?: boolean;
 }
 
 /** An in-memory app: SQLite `:memory:`, MemoryVault, FakeMfa, no Electron, one registered fake window. */
@@ -106,6 +108,7 @@ export function makeTestApp(opts: TestAppOptions = {}): TestApp {
     ...(opts.pty ? { pty: opts.pty } : {}),
     ...(opts.stream ? { stream: opts.stream } : {}),
     ...(opts.detect ? { detect: opts.detect } : {}),
+    redetectClis: opts.redetectClis ?? false,
     cli,
   });
   const fixture = opts.fixture === undefined ? 'demo' : opts.fixture;

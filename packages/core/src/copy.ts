@@ -250,6 +250,11 @@ export const copy = {
       text: "{project}'s .styx/project.json wants to change grant policies. Review in Settings.",
       cta: 'Review',
     },
+    /** The CLI runs but its default model needs a newer release (`cli-outdated:<agent>` banner). */
+    cliOutdated: {
+      text: "Claude Code {version} can't use your default model. Update it (claude update) or switch the model in Settings.",
+      cta: 'Install guide',
+    },
     spawnCliMissing: '{cli} CLI not found on PATH.',
     locateBinary: 'Locate binary',
   },
@@ -397,6 +402,8 @@ export const copy = {
     title: 'Spawn agent · {project}',
     worktree: 'Worktree',
     worktreeDefault: 'New from main',
+    /** Plain-folder projects (no git): the only worktree option; `New from main` is disabled. */
+    worktreeFolder: 'This folder (no worktree isolation)',
     branch: 'Branch',
     firstMessage: 'First message',
     firstMessagePlaceholder: 'What should {agent} do? Reference files with @.',
@@ -435,6 +442,15 @@ export const copy = {
     },
     pr: { none: '—', draft: '#{n} draft', open: '#{n} open', merged: '#{n} ✓', closed: '#{n} closed' },
     actions: { open: 'Open', diff: 'Diff', archive: 'Archive', resolve: 'Resolve' },
+    /**
+     * Plain-folder empty state (owner decision, not in §10; spec tone): any folder is a project, git is optional.
+     * Shown on Repo and Diff review; `Initialise git` runs `project.gitInit`.
+     */
+    noGit: {
+      label: 'Not a git repository',
+      body: 'Agents work in this folder directly. Initialise git to get isolated worktrees, diffs and reviews.',
+      cta: 'Initialise git',
+    },
   },
 
   diff: {
@@ -464,6 +480,8 @@ export const copy = {
     openIn: 'Open in {ide}',
     terminal: 'TERMINAL · {branch}',
     editorStatus: 'Monaco · {eol} · {lang}',
+    /** Status bar / scan meta in place of a branch when the folder is not a git repository. */
+    noGit: 'no git',
   },
 
   settings: {
@@ -493,6 +511,8 @@ export const copy = {
       autoWorktree: 'Auto-create worktree per agent',
       shellWindows: 'Shell (Windows)',
       detectedClis: 'Detected CLIs',
+      /** One row per CLI with more than one runnable binary (PATH vs an IDE extension bundle …). */
+      cliBinary: '{cli} binary',
       store: 'Store',
       mfaProdWrite: 'MFA for prod write',
       injectAs: 'Inject as',
@@ -530,6 +550,14 @@ export const copy = {
   },
 
   agents: { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', cursor: 'Cursor', shell: 'shell' },
+  /** Where a detected CLI binary lives (Settings › Agents & CLIs, onboarding step 3). */
+  cliSources: {
+    path: 'PATH',
+    'vscode-extension': 'VS Code extension',
+    'cursor-extension': 'Cursor extension',
+    'desktop-app': 'Claude app',
+    manual: 'located manually',
+  },
   agentProducts: {
     claude: 'Claude Code',
     codex: 'Codex',

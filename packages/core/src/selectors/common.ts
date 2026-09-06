@@ -1,7 +1,7 @@
 import type { ProjectId, SessionId } from '../ids';
 import { headAsk } from '../machines/session';
 import { AGENT_LABEL } from '../model/common';
-import type { Project, Worktree } from '../model/project';
+import { repoHasGit, type Project, type Repo, type Worktree } from '../model/project';
 import type { PendingAsk, Session } from '../model/session';
 import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
@@ -21,6 +21,16 @@ export const projectOf = (model: ReadModel, projectId: ProjectId): Project | nul
 
 export const branchOf = (model: ReadModel, session: Pick<Session, 'worktreeId'>): string =>
   worktreeOf(model, session)?.branch ?? '—';
+
+export const repoOf = (model: ReadModel, projectId: ProjectId): Repo | null =>
+  rows(model.repos).find((r) => r.projectId === projectId) ?? null;
+
+/** False for a folder added as-is (no `.git`): agents work in it directly, no worktrees / diffs / reviews. */
+export const projectHasGit = (model: ReadModel, projectId: ProjectId): boolean =>
+  repoHasGit(repoOf(model, projectId));
+
+export const mainWorktreeOf = (model: ReadModel, projectId: ProjectId): Worktree | null =>
+  rows(model.worktrees).find((w) => w.projectId === projectId && w.isMain) ?? null;
 
 export const projectNameOf = (model: ReadModel, projectId: ProjectId): string =>
   projectOf(model, projectId)?.name ?? '—';
@@ -46,11 +56,14 @@ export const byRecentActivity = (
 };
 
 /** The branch a project is "on": the worktree of its default (first, non-done) session tab, else the main worktree. */
-export const projectBranch = (model: ReadModel, projectId: ProjectId): string => {
+export const projectBranch = (model: ReadModel, projectId: ProjectId): string =>
+  projectBranchOrNull(model, projectId) ?? '—';
+
+/** Same, but null when the project is on no branch (plain folder, or no worktree yet); the titlebar shows blank. */
+export const projectBranchOrNull = (model: ReadModel, projectId: ProjectId): string | null => {
   const first = sessionsInProject(model, projectId)
     .filter((s) => s.state !== 'done')
     .sort((a, b) => a.startedAt - b.startedAt)[0];
-  if (first !== undefined) return branchOf(model, first);
-  const main = rows(model.worktrees).find((w) => w.projectId === projectId && w.isMain);
-  return main?.branch ?? '—';
+  if (first !== undefined) return worktreeOf(model, first)?.branch ?? null;
+  return mainWorktreeOf(model, projectId)?.branch ?? null;
 };

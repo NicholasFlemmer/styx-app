@@ -9,6 +9,8 @@ export interface RefreshSchedulerDeps {
   repos: Pick<Repos, 'targets'>;
   /** TargetService.checkHealth: runs the adapter probe and updates health / banner. */
   checkHealth: (target: Target, reason: RefreshReason) => Promise<void>;
+  /** SessionService.refreshClis: re-detect agent CLIs on focus / wake / manual runs (cheap: cached per binary). */
+  refreshClis?: () => Promise<unknown>;
   clock: Clock;
   /** Every 30 min by default. */
   intervalMs?: number;
@@ -65,6 +67,13 @@ export class RefreshScheduler {
   }
 
   private async run(reason: RefreshReason, targetId?: string): Promise<void> {
+    if (targetId === undefined && reason !== 'interval' && this.deps.refreshClis !== undefined) {
+      try {
+        await this.deps.refreshClis();
+      } catch (e) {
+        logger.warn('refresh: cli detection failed', { error: (e as Error).message });
+      }
+    }
     const now = this.deps.clock.now();
     const gap = this.deps.minGapMs ?? 5 * 60_000;
     const all =

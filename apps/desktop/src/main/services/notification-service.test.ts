@@ -76,12 +76,15 @@ describe('bannersToReemit', () => {
     t.app.repos.notifications.upsert({ ...base, id: 'b8', kind: 'info', title: 'gone project', state: 'shown', bannerKey: 'project-policy:missing', meta: hash });
     t.app.repos.notifications.upsert({ ...base, id: 'b10', kind: 'info', title: 'no hash', state: 'shown', bannerKey: `project-policy:${ids.project.infraTools}` });
     t.app.repos.notifications.upsert({ ...base, id: 'b9', title: 'wrong kind', state: 'shown', bannerKey: `project-policy:${ids.project.blogV2}` });
+    t.app.repos.notifications.upsert({ ...base, id: 'b11', title: "Claude Code 2.1.199 can't use your default model.", state: 'shown', bannerKey: 'cli-outdated:claude', meta: '2.1.251', sessionId: ids.session.claude });
+    t.app.repos.notifications.upsert({ ...base, id: 'b12', title: 'not an agent', state: 'shown', bannerKey: 'cli-outdated:vim' });
     const banners = bannersToReemit(t.app.repos);
     expect(banners.map((b) => [b.bannerKey, b.kind, b.cta, b.action, b.sessionId])).toEqual([
       [`auth-expired:${ids.target.vercelProd}`, 'auth-expired', 'Reconnect', { kind: 'reconnect', targetId: ids.target.vercelProd }, null],
       [`conflict:${ids.worktree.fixCheckout}`, 'conflict', 'Resolve', { kind: 'resolve', worktreeId: ids.worktree.fixCheckout }, ids.session.claude],
       ['cli-missing:codex', 'cli-missing', 'Install guide', { kind: 'install-guide', agent: 'codex' }, null],
       [`project-policy:${ids.project.acmeShop}`, 'project-policy', 'Review', { kind: 'review-project-policy', projectId: ids.project.acmeShop, hash }, null],
+      ['cli-outdated:claude', 'cli-outdated', 'Install guide', { kind: 'install-guide', agent: 'claude' }, ids.session.claude],
     ]);
     const r = await t.app.bus.dispatch(t.sender, 'store.snapshot', {});
     expect(r.ok).toBe(true);

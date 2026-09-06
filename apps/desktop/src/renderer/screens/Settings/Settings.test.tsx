@@ -54,6 +54,46 @@ describe('sectionRows', () => {
     expect(fallback?.options.map((o) => o.label)).toContain('VS Code');
   });
 
+  it('Detected CLIs shows version · source, and a per-CLI Select appears when alternatives exist', () => {
+    const ext =
+      '/Users/nic/.vscode/extensions/anthropic.claude-code-2.1.261-darwin-arm64/resources/native-binary/claude';
+    const local = '/Users/nic/.local/bin/claude';
+    const m = fixtures.demoReadModel();
+    const clis = m.discovery.clis.map((c) =>
+      c.agent === 'claude'
+        ? {
+            ...c,
+            binary: ext,
+            version: '2.1.261',
+            capabilities: {
+              streamJson: true,
+              source: 'vscode-extension',
+              alternatives: [
+                { binary: local, version: '2.1.199', source: 'path' },
+                { binary: ext, version: '2.1.261', source: 'vscode-extension' },
+              ],
+            },
+          }
+        : c,
+    );
+    const rows = sectionRows({ ...m, discovery: { ...m.discovery, clis } }, 'app:agents', ctx);
+    expect(rows.find((r) => r.id === 'detectedClis')?.value).toBe(
+      'claude 2.1.261 · VS Code extension, codex, gemini, cursor',
+    );
+    const pick = rows.find((r) => r.id === 'cliBinary:claude');
+    expect(pick).toMatchObject({
+      label: 'Claude Code binary',
+      value: ext,
+      change: { kind: 'cli-binary', agent: 'claude' },
+    });
+    expect(pick?.options.map((o) => o.label)).toEqual([
+      'claude 2.1.199 · PATH',
+      'claude 2.1.261 · VS Code extension',
+    ]);
+    // Only one candidate → no Select row.
+    expect(sectionRows(model, 'app:agents', ctx).some((r) => r.id.startsWith('cliBinary:'))).toBe(false);
+  });
+
   it('project rows mark `source === "project"` keys as overridden', () => {
     const rows = sectionRows(model, 'project:agent-defaults', ctx);
     expect(rows.map((r) => [r.id, r.overridden])).toEqual([
@@ -131,7 +171,10 @@ describe('<Settings />', () => {
     });
     expect(screen.getByRole('status').textContent).toContain(text);
     fireEvent.click(screen.getByRole('button', { name: copy.targets.acceptProjectPolicies }));
-    expect(commandMock).toHaveBeenCalledWith('project.policy.accept', { projectId: acme, hash: 'sha256:abc' });
+    expect(commandMock).toHaveBeenCalledWith('project.policy.accept', {
+      projectId: acme,
+      hash: 'sha256:abc',
+    });
   });
 
   it('policy select dispatches target.setPolicy', () => {
@@ -161,7 +204,13 @@ describe('<Settings />', () => {
     render(<Settings />);
     fireEvent.click(screen.getByRole('button', { name: /^Edit · AWS acme-prod/ }));
     expect(useUiStore.getState().overlays).toMatchObject([
-      { kind: 'modal', modal: 'connect', projectId: acme, provider: 'aws', targetId: fixtures.ids.target.awsProd },
+      {
+        kind: 'modal',
+        modal: 'connect',
+        projectId: acme,
+        provider: 'aws',
+        targetId: fixtures.ids.target.awsProd,
+      },
     ]);
   });
 
@@ -173,7 +222,10 @@ describe('<Settings />', () => {
       ...m,
       targets: {
         ...m.targets,
-        byId: { ...m.targets.byId, [aws.id]: { ...aws, authMethod: 'cli', config: { account: 'acme-prod' } } },
+        byId: {
+          ...m.targets.byId,
+          [aws.id]: { ...aws, authMethod: 'cli', config: { account: 'acme-prod' } },
+        },
       },
     });
     render(<Settings />);
@@ -213,6 +265,31 @@ describe('<Settings />', () => {
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Theme' }), { target: { value: 'dark' } });
     expect(commandMock).toHaveBeenCalledWith('settings.set', { patch: { theme: 'dark' } });
+  });
+
+  it('Agents · picking another detected binary dispatches detect.setBinary', () => {
+    const ext = '/ext/claude';
+    const m = fixtures.demoReadModel();
+    const clis = m.discovery.clis.map((c) =>
+      c.agent === 'claude'
+        ? {
+            ...c,
+            capabilities: {
+              streamJson: true,
+              source: 'path',
+              alternatives: [
+                { binary: c.binary ?? '', version: c.version, source: 'path' },
+                { binary: ext, version: '2.1.261', source: 'vscode-extension' },
+              ],
+            },
+          }
+        : c,
+    );
+    seed({ ...m, discovery: { ...m.discovery, clis } });
+    useUiStore.setState({ settingsSection: 'app:agents' });
+    render(<Settings />);
+    fireEvent.change(screen.getByLabelText('Claude Code binary'), { target: { value: ext } });
+    expect(commandMock).toHaveBeenCalledWith('detect.setBinary', { agent: 'claude', path: ext });
   });
 
   it('Editor · Screen reader mode dispatches settings.set { screenReader } (spec §9)', () => {

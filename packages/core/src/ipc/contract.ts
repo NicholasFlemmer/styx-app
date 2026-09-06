@@ -78,6 +78,8 @@ const scannedRepoSchema = z.object({
   path: z.string(),
   remote: z.string().nullable(),
   branch: z.string().nullable(),
+  /** False for a plain folder (IDE recents list those too); it is added as-is, meta reads `no git`. */
+  hasGit: z.boolean(),
   source: z.enum(['scan', 'ide-recent']),
   lastModifiedAt: z.number().int().nullable(),
   /** Unchecked by default when no remote and stale (spec §4.9). */
@@ -127,10 +129,13 @@ export const commands = {
     input: z.object({ includeIdeRecents: z.boolean().default(true) }),
     output: z.object({ repos: z.array(scannedRepoSchema) }),
   },
+  /** Any readable directory; a folder without `.git` becomes a plain-folder project (`Repo.defaultBranch: null`). */
   'project.add': {
     input: z.object({ path: z.string().min(1), name: z.string().min(1).optional() }),
     output: idOut('projectId', projectIdSchema),
   },
+  /** `git init -b main` (+ an empty first commit) in a plain-folder project; the main worktree lands on `main`. */
+  'project.gitInit': { input: z.object({ projectId: projectIdSchema }), output: ok },
   /** `into` is the full destination folder (`~/code/<repo>`); progress arrives as `project.cloneProgress`. */
   'project.clone': {
     input: z.object({
@@ -574,7 +579,7 @@ export const events = {
   }),
   'banner.set': z.object({
     bannerKey: z.string().min(1),
-    kind: z.enum(['auth-expired', 'cli-missing', 'conflict', 'project-policy']),
+    kind: z.enum(['auth-expired', 'cli-missing', 'cli-outdated', 'conflict', 'project-policy']),
     text: z.string(),
     cta: z.string(),
     action: z.discriminatedUnion('kind', [

@@ -326,6 +326,8 @@ async function boot(): Promise<void> {
 
   container = buildContainer({
     disableRefresh: fixtureName !== null && env['STYX_KEYCHAIN'] === 'memory',
+    // Fixture rows are fake binaries; re-detecting would swap them for whatever this machine has.
+    redetectClis: fixtureName === null,
     db,
     clock,
     vault,

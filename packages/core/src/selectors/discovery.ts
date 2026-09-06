@@ -1,5 +1,13 @@
+import { z } from 'zod';
 import { copy } from '../copy';
-import type { CliInstall, IdeInstall } from '../model/discovery';
+import {
+  cliCandidateSchema,
+  cliSourceSchema,
+  type CliCandidate,
+  type CliInstall,
+  type CliSource,
+  type IdeInstall,
+} from '../model/discovery';
 
 /** Onboarding step 1 "version · location" cell: "1.98 · /Applications", "1.4", "not found". */
 export const ideVersionLabel = (ide: Pick<IdeInstall, 'version' | 'location'>): string => {
@@ -40,4 +48,38 @@ export const cliVersionLabel = (cli: Pick<CliInstall, 'agent' | 'found' | 'versi
     .pop();
   const name = base === undefined ? cli.agent : base;
   return cli.version === null ? name : `${name} ${cli.version}`;
+};
+
+/** `capabilities.source` of a detected CLI, or null for rows written before sources were recorded. */
+export const cliSourceOf = (cli: Pick<CliInstall, 'capabilities'>): CliSource | null => {
+  const r = cliSourceSchema.safeParse(cli.capabilities['source']);
+  return r.success ? r.data : null;
+};
+
+/** Every runnable binary detection found for the agent (`capabilities.alternatives`), the chosen one included. */
+export const cliAlternatives = (cli: Pick<CliInstall, 'capabilities'>): CliCandidate[] => {
+  const r = z.array(cliCandidateSchema).safeParse(cli.capabilities['alternatives']);
+  return r.success ? r.data : [];
+};
+
+const binaryName = (binary: string | null, fallback: string): string => {
+  const base = binary
+    ?.split(/[\\/]/)
+    .filter((seg) => seg.length > 0)
+    .pop();
+  return base === undefined ? fallback : base;
+};
+
+/** "claude 2.1.261 · VS Code extension" — one candidate as a Select option. */
+export const cliCandidateLabel = (agent: string, c: CliCandidate): string =>
+  `${binaryName(c.binary, agent)}${c.version === null ? '' : ` ${c.version}`} · ${copy.cliSources[c.source]}`;
+
+/** Onboarding step 3 / Settings "Detected CLIs": `cliVersionLabel` plus the source ("claude 2.1.261 · VS Code extension"). */
+export const cliLocationLabel = (
+  cli: Pick<CliInstall, 'agent' | 'found' | 'version' | 'binary' | 'capabilities'>,
+): string => {
+  const base = cliVersionLabel(cli);
+  if (!cli.found) return base;
+  const source = cliSourceOf(cli);
+  return source === null ? base : `${base} · ${copy.cliSources[source]}`;
 };

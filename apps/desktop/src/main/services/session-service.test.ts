@@ -5,7 +5,7 @@ import { fixtures } from '@styx/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
 import { PtyService } from './pty-service';
-import { runnerFor } from './session-service';
+import { parseCliOutdated, runnerFor } from './session-service';
 import type { StreamEffect, StreamEvents, StreamRunnerLike, StreamSpawnOptions } from './stream-runner';
 
 const { ids, DEMO_NOW } = fixtures;
@@ -307,6 +307,197 @@ describe('SessionService spawn + stream runner', () => {
   });
 });
 
+const OUTDATED =
+  "API Error: 400 Claude Code 2.1.199 does not support this model; version 2.1.251 or newer is required. Run 'claude update' to update.";
+const OUTDATED_TEXT =
+  "Claude Code 2.1.199 can't use your default model. Update it (claude update) or switch the model in Settings.";
+
+describe('parseCliOutdated', () => {
+  it('reads the running and required versions out of the CLI message', () => {
+    expect(parseCliOutdated(OUTDATED)).toEqual({ have: '2.1.199', need: '2.1.251' });
+    expect(parseCliOutdated('does not support this model; version 3.0 or newer is required')).toEqual({
+      have: null,
+      need: '3.0',
+    });
+    expect(parseCliOutdated('API Error: 401 unauthorized')).toBeNull();
+  });
+});
+
+describe('SessionService CLI-outdated (model needs a newer CLI)', () => {
+  it('a stream error raises a persistent cli-outdated banner and a system line with the CLI message', async () => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'error', message: OUTDATED });
+    a.publisher.flush();
+    expect(win.events('banner.set')).toContainEqual({
+      bannerKey: 'cli-outdated:claude',
+      kind: 'cli-outdated',
+      text: OUTDATED_TEXT,
+      cta: 'Install guide',
+      action: { kind: 'install-guide', agent: 'claude' },
+      sessionId: session.id,
+      reason: null,
+    });
+    const n = a.repos.notifications.byBannerKey('cli-outdated:claude');
+    expect(n).toMatchObject({ kind: 'error-banner', state: 'shown', meta: '2.1.251', title: OUTDATED_TEXT });
+    const last = a.repos.transcripts.last(session.id).at(-1)!;
+    expect(last.payload.kind).toBe('system');
+    expect(last.body).toBe(OUTDATED);
+    // The same error also arrives as assistant text in the same turn: one banner, one line.
+    stream.effect(session.id, { type: 'transcript', body: OUTDATED, payload: { kind: 'agent' } });
+    expect(a.repos.transcripts.last(session.id).filter((m) => m.payload.kind === 'system')).toHaveLength(1);
+    // The session machine is untouched: no paused reason, no cli-missing banner.
+    expect(a.sessions.get(session.id)?.pausedReason).toBeNull();
+    expect(
+      win.events('banner.set').some((e) => (e as { bannerKey: string }).bannerKey === 'cli-missing:claude'),
+    ).toBe(false);
+  });
+
+  it('assistant text with the message (no error result) raises the banner too', async () => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'transcript', body: OUTDATED, payload: { kind: 'agent' } });
+    a.publisher.flush();
+    expect(win.events('banner.set')).toContainEqual(
+      expect.objectContaining({ bannerKey: 'cli-outdated:claude' }),
+    );
+    expect(a.repos.transcripts.last(session.id).map((m) => m.payload.kind)).toEqual([
+      'user',
+      'agent',
+      'system',
+    ]);
+  });
+
+  it('pty output (split across chunks, with ANSI) raises the banner for a pty-run claude', async () => {
+    const { app: a, win } = app();
+    a.repos.discovery.saveCli({
+      agent: 'claude',
+      binary: '/opt/homebrew/bin/claude',
+      version: '2.1.199',
+      found: true,
+      authState: 'signed-in',
+      capabilities: {}, // no stream-json → pty runner
+      checkedAt: DEMO_NOW,
+    });
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    expect(session.runner).toBe('pty');
+    pty.data(session.id, '\u001b[31mAPI Error: 400 Claude Code 2.1.199 does not support this mo');
+    pty.data(session.id, "del; version 2.1.251 or newer is required.\u001b[0m Run 'claude update'.\r\n");
+    a.publisher.flush();
+    expect(win.events('banner.set')).toContainEqual(
+      expect.objectContaining({ bannerKey: 'cli-outdated:claude', text: OUTDATED_TEXT }),
+    );
+    expect(a.repos.transcripts.last(session.id).at(-1)?.body).toContain('does not support this model');
+  });
+
+  it('refreshClis clears the banner once the detected claude satisfies the required version', async () => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'error', message: OUTDATED });
+    const detected = (version: string) => async () => [
+      {
+        agent: 'claude' as const,
+        label: 'Claude Code',
+        binary:
+          '/Users/nic/.vscode/extensions/anthropic.claude-code-2.1.261-darwin-arm64/resources/native-binary/claude',
+        version,
+        found: true,
+        authState: 'signed-in' as const,
+        capabilities: { streamJson: true },
+        source: 'vscode-extension' as const,
+        alternatives: [],
+      },
+    ];
+    a.detect.detectClis = detected('2.1.199');
+    await a.sessions.refreshClis();
+    expect(a.repos.notifications.byBannerKey('cli-outdated:claude')?.state).toBe('shown');
+    expect(win.events('banner.clear')).toEqual([]);
+    a.detect.detectClis = detected('2.1.261');
+    const clis = await a.sessions.refreshClis();
+    expect(clis.find((c) => c.agent === 'claude')).toMatchObject({
+      version: '2.1.261',
+      capabilities: { streamJson: true, source: 'vscode-extension' },
+    });
+    a.publisher.flush();
+    expect(a.repos.notifications.byBannerKey('cli-outdated:claude')?.state).toBe('resolved');
+    expect(win.events('banner.clear')).toContainEqual({ bannerKey: 'cli-outdated:claude' });
+  });
+});
+
+describe('SessionService relaunch + re-detect', () => {
+  it('sendMessage relaunches the CLI when its process is gone (nothing replayed), then delivers the message', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    expect(a.sessions.get(session.id)?.state).toBe('idle');
+    stream.live.delete(session.id); // the process exited on the API error without an exit event reaching us
+    expect(a.sessions.isRunning(session.id)).toBe(false);
+
+    await a.sessions.sendMessage(session.id, 'try again');
+    expect(stream.spawned).toHaveLength(2);
+    expect(stream.spawned[1]).toMatchObject({
+      id: session.id,
+      firstMessage: null,
+      cwd: stream.spawned[0]!.cwd,
+    });
+    expect(stream.sent).toEqual([{ id: session.id, text: 'try again' }]);
+    expect(a.sessions.get(session.id)).toMatchObject({ state: 'working', pid: 777 });
+    // The broker token was rotated for the new process.
+    expect(a.repos.transcripts.last(session.id).at(-1)).toMatchObject({
+      body: 'try again',
+      payload: { kind: 'user' },
+    });
+  });
+
+  it('a failed relaunch pauses the session with cli-missing and its banner; the message is not delivered', async () => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.live.delete(session.id);
+    stream.failNext = Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' });
+    await a.sessions.sendMessage(session.id, 'again');
+    expect(a.sessions.get(session.id)).toMatchObject({ state: 'paused', pausedReason: 'cli-missing' });
+    expect(stream.sent).toEqual([]);
+    a.publisher.flush();
+    expect(win.events('banner.set')).toContainEqual(
+      expect.objectContaining({ bannerKey: 'cli-missing:claude' }),
+    );
+  });
+
+  it('with redetectClis on, every spawn / relaunch uses the freshly detected binary', async () => {
+    pty = new FakePty();
+    stream = new FakeStream();
+    t = makeTestApp({ pty, stream, redetectClis: true });
+    const a = t.app;
+    let binary = '/Users/nic/.local/bin/claude';
+    let version = '2.1.199';
+    a.detect.detectClis = async () => [
+      {
+        agent: 'claude' as const,
+        label: 'Claude Code',
+        binary,
+        version,
+        found: true,
+        authState: 'signed-in' as const,
+        capabilities: { streamJson: true },
+        source: 'path' as const,
+        alternatives: [],
+      },
+    ];
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    expect(stream.spawned[0]?.command).toBe('/Users/nic/.local/bin/claude');
+    expect(a.repos.discovery.cli('claude')).toMatchObject({ version: '2.1.199' });
+
+    // `claude update` ran meanwhile: the relaunch picks up the new binary without a manual re-detect.
+    binary =
+      '/Users/nic/.vscode/extensions/anthropic.claude-code-2.1.263-darwin-arm64/resources/native-binary/claude';
+    version = '2.1.263';
+    stream.live.delete(session.id);
+    await a.sessions.sendMessage(session.id, 'retry');
+    expect(stream.spawned[1]?.command).toBe(binary);
+    expect(a.repos.discovery.cli('claude')).toMatchObject({ version: '2.1.263' });
+  });
+});
+
 describe('SessionService pty runner + CLI hooks', () => {
   it('spawns codex on a pty, typing routes to the pty, and hooks drive the state', async () => {
     const { app: a } = app();
@@ -446,6 +637,8 @@ describe('SessionService pty runner + CLI hooks', () => {
         found: true,
         authState: 'signed-in',
         capabilities: {},
+        source: 'path',
+        alternatives: [],
       },
     ];
     await a.sessions.resume(session.id);
@@ -484,10 +677,14 @@ describe('SessionService pty runner + CLI hooks', () => {
       ok: false,
       error: { code: 'invalid-transition' },
     });
-    expect(await a.bus.dispatch(sender, 'session.stop', { sessionId: session.id })).toMatchObject({ ok: true });
+    expect(await a.bus.dispatch(sender, 'session.stop', { sessionId: session.id })).toMatchObject({
+      ok: true,
+    });
     expect(a.sessions.get(session.id)).toMatchObject({ state: 'done', endedAt: DEMO_NOW });
     clock.advance(1000);
-    expect(await a.bus.dispatch(sender, 'session.archive', { sessionId: session.id })).toMatchObject({ ok: true });
+    expect(await a.bus.dispatch(sender, 'session.archive', { sessionId: session.id })).toMatchObject({
+      ok: true,
+    });
     expect(a.sessions.get(session.id)?.archivedAt).toBe(DEMO_NOW + 1000);
   });
 });

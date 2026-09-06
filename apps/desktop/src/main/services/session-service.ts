@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   AGENT_LABEL,
@@ -6,6 +7,7 @@ import {
   fill,
   headAsk,
   newId,
+  repoHasGit,
   openAskCount,
   sessionTransition,
   type Agent,
@@ -28,7 +30,7 @@ import type { Repos } from '../db/repos';
 import { fail } from '../ipc/bus';
 import { projectSettingsFor } from '../store/projection';
 import type { Publisher } from '../store/publisher';
-import type { DetectService } from './detect-service';
+import { toCliInstall, versionSatisfies, type DetectService } from './detect-service';
 import type { GitService } from './git';
 import { worktreeLocation } from './git';
 import { isPolicyFile } from './hunk-service';
@@ -57,6 +59,11 @@ export interface SessionServiceDeps {
   transcript: TranscriptService;
   activity: ActivityService;
   notifications: NotificationService | null;
+  /**
+   * Re-run CLI detection before every spawn / relaunch and on window focus so the launch uses the binary that is on
+   * the machine now (`claude update` mid-session). Off for fixture profiles and most tests, whose rows are fake.
+   */
+  redetectClis?: boolean;
   /** Broker endpoint + paths injected into every agent pty (plan §6). */
   runtime: {
     brokerEndpoint: string;
@@ -94,6 +101,26 @@ export const sha256 = (s: string): string => createHash('sha256').update(s).dige
 const EDIT_TOOL = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
 const PERMISSION_OPTIONS = ['Allow', 'Deny'] as const;
 
+/** `cli.binary.<agent>` in app_settings: a path picked with "Locate binary"; wins over detection while the file exists. */
+export const CLI_BINARY_KEY_PREFIX = 'cli.binary.';
+export const cliBinaryKey = (agent: string): string => `${CLI_BINARY_KEY_PREFIX}${agent}`;
+
+const OUTDATED_NEED =
+  /does not support this model;?\s*version\s+(\d+\.\d+(?:\.\d+)?)\s+or newer is required/i;
+const OUTDATED_HAVE = /Claude Code\s+(\d+\.\d+(?:\.\d+)?)/;
+const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
+const PTY_TAIL = 2000;
+
+/**
+ * Claude Code's "API Error: 400 Claude Code 2.1.199 does not support this model; version 2.1.251 or newer is required"
+ * (stream `result`/`assistant` text or pty output): the CLI runs but its default model needs a newer release.
+ */
+export function parseCliOutdated(text: string): { have: string | null; need: string } | null {
+  const need = OUTDATED_NEED.exec(text)?.[1];
+  if (need === undefined) return null;
+  return { have: OUTDATED_HAVE.exec(text)?.[1] ?? null, need };
+}
+
 /**
  * ADR-0010: Claude Code streams when its CLI advertises stream-json (print-only, so that implies `-p`); cursor-agent
  * additionally needs `--print` in its help. Everything else (codex, gemini, shell) is a TUI in xterm.
@@ -117,6 +144,10 @@ export class SessionService {
   private readonly hookAsks = new Map<string, AskId>();
   /** Stream `can_use_tool` requests waiting on a decision ask: askId → request id. */
   private readonly permissionAsks = new Map<string, { sessionId: string; requestId: string }>();
+  /** Last ANSI-stripped output per pty session, scanned for the CLI-outdated message across chunk boundaries. */
+  private readonly ptyTails = new Map<string, string>();
+  /** When the outdated banner was last raised per session (the error arrives as assistant text and as a result). */
+  private readonly outdatedAt = new Map<string, number>();
 
   constructor(private readonly deps: SessionServiceDeps) {
     deps.pty.on('data', (id, data) => this.onPtyData(id, data));
@@ -159,6 +190,9 @@ export class SessionService {
       worktree =
         repos.worktrees.get(input.worktree.worktreeId) ??
         fail('not-found', `worktree ${input.worktree.worktreeId} not found`);
+    } else if (!repoHasGit(repo)) {
+      // Plain folder: no worktree isolation exists; sessions run in the folder itself (the spawn modal offers only that).
+      fail('git-error', `${project.name} is not a git repository: agents work in the folder itself`);
     } else {
       const branch = input.worktree.branch;
       const path =
@@ -232,7 +266,10 @@ export class SessionService {
     if (input.firstMessage) this.deps.transcript.user(session.id, input.firstMessage);
     this.deps.activity.append({
       who: AGENT_LABEL[session.agent],
-      what: `${project.name} · spawned on ${worktree.branch}`,
+      what:
+        worktree.branch === null
+          ? `${project.name} · spawned in folder`
+          : `${project.name} · spawned on ${worktree.branch}`,
       projectId: project.id,
       sessionId: session.id,
     });
@@ -242,9 +279,18 @@ export class SessionService {
     return { session: this.require(session.id), worktree, token };
   }
 
-  private async launch(session: Session, worktree: Worktree, project: Project, token: string): Promise<void> {
+  private async launch(
+    session: Session,
+    worktree: Worktree,
+    project: Project,
+    token: string,
+    opts: { replayFirstMessage: boolean } = { replayFirstMessage: true },
+  ): Promise<void> {
     const { repos, runtime } = this.deps;
+    if (this.deps.redetectClis === true && session.agent !== 'shell') await this.refreshClis();
     const cli = repos.discovery.cli(session.agent);
+    // A relaunch (process gone, user sent another message) replays nothing: the CLI starts clean at the next turn.
+    const firstMessage = opts.replayFirstMessage ? session.firstMessage : null;
     const binary = session.agent === 'shell' ? this.deps.pty.defaultShell() : (cli?.binary ?? null);
     if (session.agent !== 'shell' && (binary === null || cli?.found === false)) {
       this.applyEvent(session.id, { type: 'error', reason: 'cli-missing' });
@@ -273,7 +319,7 @@ export class SessionService {
       binary: binary ?? '',
       sessionId: session.id,
       worktreePath: worktree.path,
-      firstMessage: session.firstMessage,
+      firstMessage,
       model: session.model,
       runner,
       autoApproveEdits: session.toggles.autoApproveEdits,
@@ -295,10 +341,10 @@ export class SessionService {
           env: { ...env, ...launch.env },
           input: launch.stream,
           worktreePath: worktree.path,
-          firstMessage: session.firstMessage,
+          firstMessage,
         });
         pid = r.pid;
-        if (session.firstMessage) this.render(session.id, `> ${session.firstMessage}\r\n`);
+        if (firstMessage) this.render(session.id, `> ${firstMessage}\r\n`);
       } else {
         const r = await this.deps.pty.spawn({
           id: session.id,
@@ -313,8 +359,8 @@ export class SessionService {
       repos.sessions.upsert({ ...s, pid });
       this.deps.publisher.upsert('sessions', [s.id]);
       this.applyEvent(session.id, { type: 'start' });
-      if (!launch.stream && launch.typeFirstMessage && session.firstMessage) {
-        setTimeout(() => this.deps.pty.write(session.id, `${session.firstMessage ?? ''}\r`), 400).unref?.();
+      if (!launch.stream && launch.typeFirstMessage && firstMessage) {
+        setTimeout(() => this.deps.pty.write(session.id, `${firstMessage}\r`), 400).unref?.();
       }
     } catch (e) {
       logger.error('session spawn failed', { sessionId: session.id, error: (e as Error).message });
@@ -326,15 +372,40 @@ export class SessionService {
 
   // --- input / control -----------------------------------------------------
 
-  sendMessage(sessionId: string, body: string): void {
+  /**
+   * Delivers a user turn. When the runner process is gone (the CLI exited on an API error, say) the CLI is relaunched
+   * first — fresh spawn with the currently detected binary, same session and worktree, nothing replayed — and the
+   * message goes to the new process; a failed relaunch pauses the session with `cli-missing` and its banner.
+   */
+  async sendMessage(sessionId: string, body: string): Promise<void> {
     const s = this.require(sessionId);
     if (s.state === 'done') fail('invalid-transition', 'session has finished');
     this.deps.transcript.user(s.id, body);
+    if (!this.isRunning(s.id) && s.state !== 'paused') {
+      const ok = await this.relaunch(s);
+      if (!ok) return;
+    }
     if (this.deps.stream.has(s.id)) {
       this.deps.stream.send(s.id, body);
       this.render(s.id, `> ${body}\r\n`);
     } else if (this.deps.pty.has(s.id)) this.deps.pty.write(s.id, `${body}\r`);
     this.applyEvent(s.id, { type: 'activity' });
+  }
+
+  /** Spawns the CLI again for a live session whose process is gone (replays nothing). True when a process is attached. */
+  private async relaunch(s: Session): Promise<boolean> {
+    const { repos } = this.deps;
+    const worktree = repos.worktrees.get(s.worktreeId) ?? fail('not-found', 'worktree missing');
+    const project = repos.projects.get(s.projectId) ?? fail('not-found', 'project missing');
+    const token = randomBytes(32).toString('hex');
+    repos.sessions.setBrokerTokenHash(s.id, sha256(token));
+    // Never started (paused at launch) → the first message is still owed; otherwise the transcript already has it.
+    await this.launch(this.require(s.id), worktree, project, token, {
+      replayFirstMessage: s.lastActivityAt === null,
+    });
+    if (!this.isRunning(s.id)) return false;
+    this.hooks?.watchWorktree(this.require(s.id), worktree);
+    return true;
   }
 
   /** Raw bytes from the terminal pane. Stream sessions have no TTY, so typed input is ignored there. */
@@ -386,9 +457,12 @@ export class SessionService {
         fail('cli-missing', fill(copy.errors.spawnCliMissing, { cli: s.agent }));
     } else if (s.pausedReason === 'conflict') {
       const repo = repos.repos.byProject(project.id);
-      const conflict = await this.deps.git
-        .detectConflict(project.path, worktree.branch, repo?.defaultBranch ?? 'main')
-        .catch(() => worktree.conflict);
+      const conflict =
+        worktree.branch === null
+          ? null
+          : await this.deps.git
+              .detectConflict(project.path, worktree.branch, repo?.defaultBranch ?? 'main')
+              .catch(() => worktree.conflict);
       if (conflict) {
         if ((conflict.file ?? null) !== (worktree.conflict?.file ?? null)) {
           repos.worktrees.upsert({ ...worktree, conflict });
@@ -397,7 +471,7 @@ export class SessionService {
         fail(
           'git-error',
           fill(copy.errors.conflict.text, {
-            branch: worktree.branch,
+            branch: worktree.branch ?? '',
             file: conflict.file,
             agent: AGENT_LABEL[s.agent],
           }),
@@ -413,28 +487,97 @@ export class SessionService {
     }
 
     this.applyEvent(s.id, { type: 'resolve' });
-    if (!this.isRunning(s.id)) {
-      const token = randomBytes(32).toString('hex');
-      repos.sessions.setBrokerTokenHash(s.id, sha256(token));
-      await this.launch(this.require(s.id), worktree, project, token);
-      this.hooks?.watchWorktree(this.require(s.id), worktree);
-    }
+    if (!this.isRunning(s.id)) await this.relaunch(this.require(s.id));
   }
 
-  private async refreshClis(): Promise<void> {
-    const clis = await this.deps.detect.detectClis();
+  /**
+   * Re-detects every agent CLI (PATH, IDE extension bundles, manual picks) and persists the rows; `discovery.set` goes
+   * out only when something other than `checkedAt` changed. A `cli-outdated:<agent>` banner clears once the detected
+   * version satisfies the release the CLI asked for. Cheap after the first run: DetectService caches per binary.
+   */
+  async refreshClis(): Promise<CliInstall[]> {
+    const { repos, publisher } = this.deps;
+    const overrides: Partial<Record<Exclude<Agent, 'shell'>, string>> = {};
+    for (const agent of ['claude', 'codex', 'gemini', 'cursor'] as const) {
+      const picked = repos.settings.kv.get<string>(cliBinaryKey(agent));
+      if (picked === undefined) continue;
+      if (existsSync(picked)) overrides[agent] = picked;
+      else repos.settings.kv.delete(cliBinaryKey(agent)); // a vanished pick is forgotten so detection is honest again
+    }
+    const found = await this.deps.detect.detectClis(overrides);
     const now = this.deps.clock.now();
-    for (const c of clis)
-      this.deps.repos.discovery.saveCli({
-        agent: c.agent,
-        binary: c.binary,
-        version: c.version,
-        found: c.found,
-        authState: c.authState,
-        capabilities: c.capabilities,
-        checkedAt: now,
-      });
-    this.deps.publisher.discoverySet(this.deps.repos.discovery.ides(), this.deps.repos.discovery.clis());
+    const before = repos.discovery.clis();
+    const clis = found.map((c) => toCliInstall(c, now));
+    repos.discovery.replaceClis(clis);
+    const strip = (list: CliInstall[]) => JSON.stringify(list.map(({ checkedAt: _c, ...rest }) => rest));
+    if (strip(before) !== strip(clis)) publisher.discoverySet(repos.discovery.ides(), clis);
+    for (const c of clis) this.clearOutdatedBanner(c);
+    return clis;
+  }
+
+  /** `cli-outdated:<agent>` goes away once the detected version is at least the one the CLI demanded (`meta`). */
+  private clearOutdatedBanner(cli: CliInstall): void {
+    const { repos, publisher } = this.deps;
+    const key = `cli-outdated:${cli.agent}`;
+    const n = repos.notifications.byBannerKey(key);
+    if (!n || n.state === 'resolved') return;
+    if (!cli.found || n.meta === null || !versionSatisfies(cli.version, n.meta)) return;
+    repos.notifications.upsert({ ...n, state: 'resolved', resolvedAt: this.deps.clock.now() });
+    publisher.upsert('notifications', [n.id]);
+    publisher.sendEvent('banner.clear', { bannerKey: key });
+  }
+
+  /**
+   * The CLI reported that its default model needs a newer release: a persistent `cli-outdated:<agent>` banner (the
+   * session itself stays where the machine put it) and a `system` line in the chat with the CLI's own message.
+   */
+  private raiseOutdatedBanner(
+    session: Session,
+    message: string,
+    info: { have: string | null; need: string },
+  ): void {
+    const { repos, publisher, clock } = this.deps;
+    if (session.agent !== 'claude') return; // the copy names Claude Code; no other CLI emits this message
+    const now = clock.now();
+    const last = this.outdatedAt.get(session.id);
+    if (last !== undefined && now - last < 5000) return;
+    this.outdatedAt.set(session.id, now);
+    const version = info.have ?? repos.discovery.cli(session.agent)?.version ?? '';
+    const text = fill(copy.errors.cliOutdated.text, { version }).replace(/\s{2,}/g, ' ');
+    const bannerKey = `cli-outdated:${session.agent}`;
+    const existing = repos.notifications.byBannerKey(bannerKey);
+    const id = existing?.id ?? `banner-${bannerKey}`;
+    repos.notifications.upsert({
+      id,
+      kind: 'error-banner',
+      sessionId: session.id,
+      askId: null,
+      projectId: session.projectId,
+      title: text,
+      body: '',
+      meta: info.need,
+      osDelivered: false,
+      state: 'shown',
+      bannerKey,
+      createdAt: existing?.createdAt ?? now,
+      resolvedAt: null,
+    });
+    publisher.upsert('notifications', [id]);
+    publisher.sendEvent('banner.set', {
+      bannerKey,
+      kind: 'cli-outdated',
+      text,
+      cta: copy.errors.cliOutdated.cta,
+      action: { kind: 'install-guide', agent: session.agent },
+      sessionId: session.id,
+      reason: null,
+    });
+    const line =
+      message
+        .split('\n')
+        .find((l) => l.trim().length > 0)
+        ?.trim() ?? message;
+    this.deps.transcript.system(session.id, redact(line.length > 300 ? `${line.slice(0, 299)}…` : line));
   }
 
   /** Kill every live process (shutdown). */
@@ -459,6 +602,11 @@ export class SessionService {
     const s = this.deps.repos.sessions.get(id);
     if (!s) return; // user terminals share the pty service
     this.deps.ptyLog.write(id, data);
+    const tail = `${this.ptyTails.get(id) ?? ''}${data.replace(ANSI, '')}`.slice(-PTY_TAIL);
+    const outdated = parseCliOutdated(tail);
+    if (outdated !== null)
+      this.raiseOutdatedBanner(s, tail.slice(Math.max(0, tail.search(OUTDATED_HAVE))), outdated);
+    this.ptyTails.set(id, outdated === null ? tail : '');
     this.applyEvent(id, { type: 'activity' });
     const prev = this.quietTimers.get(id);
     if (prev) clearTimeout(prev);
@@ -479,6 +627,7 @@ export class SessionService {
   }
 
   private onProcessExit(s: Session, exitCode: number | null): void {
+    this.ptyTails.delete(s.id);
     const launch = this.launches.get(s.id);
     if (launch) {
       void launch.cleanup().catch(() => undefined);
@@ -506,9 +655,12 @@ export class SessionService {
       case 'render':
         this.render(id, effect.text);
         return;
-      case 'transcript':
+      case 'transcript': {
         this.deps.transcript.append(s.id, effect.body, effect.payload);
+        const outdated = effect.payload.kind === 'agent' ? parseCliOutdated(effect.body) : null;
+        if (outdated !== null) this.raiseOutdatedBanner(s, effect.body, outdated);
         return;
+      }
       case 'note':
         this.setNote(s.id, effect.note);
         return;
@@ -518,9 +670,12 @@ export class SessionService {
       case 'rescan':
         this.hooks?.rescanHunks(s.id);
         return;
-      case 'error':
-        this.deps.transcript.system(s.id, `error: ${effect.message}`);
+      case 'error': {
+        const outdated = parseCliOutdated(effect.message);
+        if (outdated !== null) this.raiseOutdatedBanner(s, effect.message, outdated);
+        else this.deps.transcript.system(s.id, redact(`error: ${effect.message}`));
         return;
+      }
       case 'permission':
         this.onPermissionRequest(s, effect.requestId, effect.toolName, effect.input);
         return;

@@ -15,6 +15,8 @@ import {
   projectNameOf,
   projectSettingsOfOrDefault,
 } from './common-settings';
+import { mainWorktreeOf, projectBranchOrNull, projectHasGit } from './common';
+import { repoHasGit } from '../model/project';
 import { activeGrants, homeCounters, lockedCount, needsYouCount, projectCount, workingCount } from './counts';
 import { padCount } from './format';
 import { sessionTabs } from './tabs';
@@ -334,6 +336,26 @@ describe('common', () => {
     expect(projectBranch({ ...noSessions, worktrees: { byId: {}, ids: [] } }, ids.project.acmeShop)).toBe(
       '—',
     );
+  });
+  it('plain folder (repo.defaultBranch null, main worktree on no branch): not git, branch — / null', () => {
+    const repo = model.repos.byId[ids.repo.sideApi];
+    const main = model.worktrees.byId[ids.worktree.sideMain];
+    if (repo === undefined || main === undefined) throw new Error('fixture');
+    const plain = {
+      ...model,
+      repos: { ...model.repos, byId: { ...model.repos.byId, [repo.id]: { ...repo, defaultBranch: null, remotes: [] } } },
+      worktrees: { ...model.worktrees, byId: { ...model.worktrees.byId, [main.id]: { ...main, branch: null } } },
+    };
+    expect(projectHasGit(model, ids.project.sideApi)).toBe(true);
+    expect(projectHasGit(plain, ids.project.sideApi)).toBe(false);
+    expect(projectHasGit(plain, idFrom<'ProjectId'>('nope') as ProjectId)).toBe(false);
+    expect(mainWorktreeOf(plain, ids.project.sideApi)?.id).toBe(main.id);
+    expect(projectBranch(plain, ids.project.sideApi)).toBe('—');
+    expect(projectBranchOrNull(plain, ids.project.sideApi)).toBeNull();
+    expect(projectBranchOrNull(model, ids.project.sideApi)).toBe('main');
+    expect(projectBranchOrNull(model, ids.project.acmeShop)).toBe('fix/checkout');
+    expect(repoHasGit(null)).toBe(false);
+    expect(repoHasGit({ defaultBranch: 'main' })).toBe(true);
   });
   it('unknown ids render as —', () => {
     expect(branchOf(model, { worktreeId: idFrom<'WorktreeId'>('nope') as WorktreeId })).toBe('—');

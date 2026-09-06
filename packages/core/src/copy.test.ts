@@ -38,6 +38,14 @@ describe('copy (spec §10 verbatim)', () => {
       'via gcloud · nic@acme.dev',
     );
     expect(copy.targets.actions.refresh).toBe('Refresh');
+    // Plain-folder projects (owner decision; spec tone, not §10).
+    expect(copy.repo.noGit).toEqual({
+      label: 'Not a git repository',
+      body: 'Agents work in this folder directly. Initialise git to get isolated worktrees, diffs and reviews.',
+      cta: 'Initialise git',
+    });
+    expect(copy.spawn.worktreeFolder).toBe('This folder (no worktree isolation)');
+    expect(copy.workspace.noGit).toBe('no git');
     expect(copy.toast.title).toBe('{agent} wants {target} · {scope}');
   });
 
