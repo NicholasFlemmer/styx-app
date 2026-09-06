@@ -264,6 +264,10 @@ export interface StreamRunnerLike extends EventEmitter<StreamEvents> {
   spawn(opts: StreamSpawnOptions): Promise<{ pid: number }>;
   send(id: string, text: string): void;
   respondPermission(id: string, requestId: string, allow: boolean, message?: string): void;
+  /** Control requests on stdin (Claude Code): live model / permission-mode switches and turn interrupt. */
+  setModel(id: string, model: string | null): void;
+  setPermissionMode(id: string, mode: string): void;
+  interrupt(id: string): void;
   kill(id: string): void;
   has(id: string): boolean;
   killAll(): void;
@@ -405,6 +409,28 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
     const input = entry.permissions.get(requestId) ?? {};
     entry.permissions.delete(requestId);
     entry.proc?.stdin?.write(permissionResponseLine(requestId, allow, input, message));
+  }
+
+  /** `{type:'control_request', request_id, request:{subtype, ...}}` on stdin; the CLI answers with a control_response. */
+  private sendControl(id: string, request: Record<string, unknown>): void {
+    const entry = this.entries.get(id);
+    if (!entry?.proc?.stdin || entry.opts.input.kind !== 'stdin') return;
+    const requestId = `styx-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    entry.proc.stdin.write(
+      `${JSON.stringify({ type: 'control_request', request_id: requestId, request })}\n`,
+    );
+  }
+
+  setModel(id: string, model: string | null): void {
+    this.sendControl(id, { subtype: 'set_model', model });
+  }
+
+  setPermissionMode(id: string, mode: string): void {
+    this.sendControl(id, { subtype: 'set_permission_mode', mode });
+  }
+
+  interrupt(id: string): void {
+    this.sendControl(id, { subtype: 'interrupt' });
   }
 
   kill(id: string): void {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { effortSchema, permissionModeSchema } from './model/session';
 import {
   agentSchema,
   authMethodSchema,
@@ -40,6 +41,8 @@ export const projectFileAgentsSchema = z
   .object({
     default: agentSchema.optional(),
     model: z.string().nullable().optional(),
+    permissionMode: permissionModeSchema.optional(),
+    effort: effortSchema.nullable().optional(),
     autoApproveEdits: z.boolean().optional(),
     mayRequestTargets: z.boolean().optional(),
     notifyWhenNeedsMe: z.boolean().optional(),
@@ -202,6 +205,8 @@ export const projectSettingsFromFile = (file: ProjectFileV1): Partial<ProjectSet
   const a = file.agents;
   if (a?.default !== undefined) out.defaultAgent = a.default;
   if (a?.model !== undefined) out.model = a.model;
+  if (a?.permissionMode !== undefined) out.permissionMode = a.permissionMode;
+  if (a?.effort !== undefined) out.effort = a.effort;
   if (a?.autoApproveEdits !== undefined) out.autoApproveEdits = a.autoApproveEdits;
   if (a?.mayRequestTargets !== undefined) out.mayRequestTargets = a.mayRequestTargets;
   if (a?.notifyWhenNeedsMe !== undefined) out.notifyWhenNeedsMe = a.notifyWhenNeedsMe;

@@ -1,4 +1,4 @@
-import { copy, fill } from '@styx/core';
+import { copy, fill, type ProjectId } from '@styx/core';
 import { Button, Checkbox, Modal, Table, TableCell, TableRow, TABLE_COLUMNS } from '@styx/ui';
 import { useEffect, useState } from 'react';
 import { command } from '../../state/commands';
@@ -32,7 +32,11 @@ export function AddExistingModal({ id }: AddExistingModalProps) {
     void command('project.scan', { includeIdeRecents: true }).then((r) => {
       if (cancelled) return;
       if (!r.ok) {
-        setResult({ key: scanKey, repos: [], error: fill(copy.addExisting.failed, { message: r.error.message }) });
+        setResult({
+          key: scanKey,
+          repos: [],
+          error: fill(copy.addExisting.failed, { message: r.error.message }),
+        });
         return;
       }
       setResult({ key: scanKey, repos: r.value.repos, error: null });
@@ -58,12 +62,13 @@ export function AddExistingModal({ id }: AddExistingModalProps) {
   const add = async () => {
     if (busy || checked.size === 0) return;
     setBusy(true);
-    const added: string[] = [];
+    const added: ProjectId[] = [];
     try {
       for (const repo of repos ?? []) {
         if (!checked.has(repo.path)) continue;
         const r = await command('project.add', { path: repo.path });
-        if (r.ok && r.value.projectId !== null) added.push(r.value.projectId);
+        const id = r.ok ? (r.value.projectId ?? null) : null;
+        if (id !== null) added.push(id);
       }
     } finally {
       setBusy(false);

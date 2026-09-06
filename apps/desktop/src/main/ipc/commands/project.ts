@@ -56,6 +56,8 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
           notifyWhenNeedsMe: settings.notifyWhenNeedsMe.value,
         },
         model: settings.model.value,
+        permissionMode: settings.permissionMode.value,
+        effort: settings.effort.value,
       });
       sessionId = session.id;
     }

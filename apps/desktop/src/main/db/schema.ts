@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 /**
  * Drizzle mirror of `migrations/*.sql` (0000_init + 0001_activity + 0002_auth_method_cli + 0003_plain_folders) for `pnpm db:generate` diffs. The SQL file is authoritative:
@@ -59,6 +59,16 @@ export const sessions = sqliteTable(
     autoApproveEdits: integer('auto_approve_edits').notNull().default(0),
     mayRequestTargets: integer('may_request_targets').notNull().default(1),
     notifyWhenNeedsMe: integer('notify_when_needs_me').notNull().default(1),
+    /** 0004: Claude Code parity. */
+    permissionMode: text('permission_mode', {
+      enum: ['default', 'acceptEdits', 'plan', 'bypassPermissions', 'dontAsk', 'auto'],
+    })
+      .notNull()
+      .default('default'),
+    effort: text('effort', { enum: ['low', 'medium', 'high', 'xhigh', 'max'] }),
+    cliSessionId: text('cli_session_id'),
+    costUsd: real('cost_usd').notNull().default(0),
+    numTurns: integer('num_turns').notNull().default(0),
     brokerTokenHash: text('broker_token_hash').notNull().default(''),
     pid: integer('pid'),
     exitCode: integer('exit_code'),
@@ -227,7 +237,7 @@ export const transcriptMessages = sqliteTable(
       .references(() => sessions.id, { onDelete: 'cascade' }),
     seq: integer('seq').notNull(),
     kind: text('kind', {
-      enum: ['user', 'agent', 'file-list', 'decision', 'access-request', 'system'],
+      enum: ['user', 'agent', 'file-list', 'decision', 'access-request', 'system', 'tool'],
     }).notNull(),
     body: text('body').notNull(),
     payloadJson: text('payload_json'),

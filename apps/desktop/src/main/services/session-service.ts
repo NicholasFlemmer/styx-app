@@ -23,6 +23,8 @@ import {
   type SessionToggles,
   type Worktree,
   type WorktreeId,
+  type Effort,
+  type PermissionMode,
 } from '@styx/core';
 import { buildAgentLaunch, type AgentLaunch, type AgentLaunchContext } from '../agents';
 import type { Clock } from '../clock';
@@ -94,6 +96,8 @@ export interface SpawnInput {
   firstMessage: string;
   toggles: SessionToggles;
   model: string | null;
+  permissionMode?: PermissionMode;
+  effort?: Effort | null;
 }
 
 export const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
@@ -228,6 +232,11 @@ export class SessionService {
       agent: input.agent,
       runner: runnerFor(input.agent, repos.discovery.cli(input.agent)),
       model: input.model,
+      permissionMode: input.permissionMode ?? 'default',
+      effort: input.effort ?? null,
+      cliSessionId: null,
+      costUsd: 0,
+      numTurns: 0,
       state: 'idle',
       pausedReason: null,
       note: null,
@@ -406,6 +415,43 @@ export class SessionService {
     if (!this.isRunning(s.id)) return false;
     this.hooks?.watchWorktree(this.require(s.id), worktree);
     return true;
+  }
+
+  /**
+   * Live session settings (Claude Code parity): the row is updated and published; a running stream gets
+   * `set_model` / `set_permission_mode` immediately, effort applies at the next (re)launch.
+   */
+  configure(
+    sessionId: string,
+    changes: {
+      model?: string | null | undefined;
+      permissionMode?: PermissionMode | undefined;
+      effort?: Effort | null | undefined;
+    },
+  ): void {
+    const s = this.require(sessionId);
+    if (s.state === 'done') fail('invalid-transition', 'session has finished');
+    const next: Session = {
+      ...s,
+      ...(changes.model !== undefined ? { model: changes.model } : {}),
+      ...(changes.permissionMode !== undefined ? { permissionMode: changes.permissionMode } : {}),
+      ...(changes.effort !== undefined ? { effort: changes.effort } : {}),
+    };
+    this.deps.repos.sessions.upsert(next);
+    this.deps.publisher.upsert('sessions', [s.id]);
+    if (this.deps.stream.has(s.id)) {
+      if (changes.model !== undefined && changes.model !== s.model)
+        this.deps.stream.setModel(s.id, changes.model);
+      if (changes.permissionMode !== undefined && changes.permissionMode !== s.permissionMode)
+        this.deps.stream.setPermissionMode(s.id, changes.permissionMode);
+    }
+  }
+
+  /** Stops the current turn, not the session: stream `interrupt` control request; Ctrl+C on a pty. */
+  interrupt(sessionId: string): void {
+    const s = this.require(sessionId);
+    if (this.deps.stream.has(s.id)) this.deps.stream.interrupt(s.id);
+    else if (this.deps.pty.has(s.id)) this.deps.pty.write(s.id, '\x03');
   }
 
   /** Raw bytes from the terminal pane. Stream sessions have no TTY, so typed input is ignored there. */

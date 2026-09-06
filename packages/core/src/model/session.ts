@@ -19,6 +19,29 @@ export type SessionState = z.infer<typeof sessionStateSchema>;
 export const pausedReasonSchema = z.enum(['cli-missing', 'conflict', 'auth-expired']);
 export type PausedReason = z.infer<typeof pausedReasonSchema>;
 
+/**
+ * Claude Code permission modes (`claude --permission-mode`, switchable live over the stream with
+ * `set_permission_mode`). `default` = ask each time (the CLI's own default; no flag passed).
+ */
+export const permissionModeSchema = z.enum([
+  'default',
+  'acceptEdits',
+  'plan',
+  'bypassPermissions',
+  'dontAsk',
+  'auto',
+]);
+export type PermissionMode = z.infer<typeof permissionModeSchema>;
+export const PERMISSION_MODES: readonly PermissionMode[] = permissionModeSchema.options;
+
+/** Claude Code `--effort` levels. */
+export const effortSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
+export type Effort = z.infer<typeof effortSchema>;
+export const EFFORTS: readonly Effort[] = effortSchema.options;
+
+/** Model aliases the Claude CLI accepts (`--model`); `null` = the CLI's configured default. */
+export const MODEL_ALIASES = ['fable', 'opus', 'sonnet', 'haiku'] as const;
+
 export const sessionTogglesSchema = z.object({
   autoApproveEdits: z.boolean(),
   mayRequestTargets: z.boolean(),
@@ -34,6 +57,14 @@ export const sessionSchema = z
     agent: agentSchema,
     runner: runnerSchema,
     model: z.string().nullable(),
+    /** Claude Code only; other agents keep `default`. */
+    permissionMode: permissionModeSchema,
+    effort: effortSchema.nullable(),
+    /** The CLI's own session id (stream `system/init`), used for `--resume` when the process is relaunched. */
+    cliSessionId: z.string().nullable(),
+    /** Running totals from stream `result` events. */
+    costUsd: z.number().nonnegative(),
+    numTurns: z.number().int().nonnegative(),
     state: sessionStateSchema,
     pausedReason: pausedReasonSchema.nullable(),
     /** One-line status shown on board cards ("Requesting Supabase prod · read + write"). */
@@ -66,6 +97,7 @@ export const messageKindSchema = z.enum([
   'decision',
   'access-request',
   'system',
+  'tool',
 ]);
 export type MessageKind = z.infer<typeof messageKindSchema>;
 
@@ -94,6 +126,15 @@ export const messagePayloadSchema = z.discriminatedUnion('kind', [
     grantId: grantIdSchema,
   }),
   z.object({ kind: z.literal('system') }),
+  /** One tool call from the stream (Bash / Read / Edit / …): a compact mono line, patched when its result lands. */
+  z.object({
+    kind: z.literal('tool'),
+    tool: z.string().min(1),
+    hint: z.string(),
+    toolUseId: z.string().nullable(),
+    status: z.enum(['running', 'ok', 'error']),
+    detail: z.string().nullable(),
+  }),
 ]);
 export type MessagePayload = z.infer<typeof messagePayloadSchema>;
 

@@ -26,6 +26,8 @@ import { targetNameSchema } from '../project-file';
 import {
   askResolutionSchema,
   pausedReasonSchema,
+  effortSchema,
+  permissionModeSchema,
   sessionTogglesSchema,
   transcriptMessageSchema,
 } from '../model/session';
@@ -231,9 +233,26 @@ export const commands = {
       firstMessage: z.string(),
       toggles: sessionTogglesSchema,
       model: z.string().nullable().default(null),
+      permissionMode: permissionModeSchema.default('default'),
+      effort: effortSchema.nullable().default(null),
     }),
     output: z.object({ sessionId: sessionIdSchema, worktreeId: worktreeIdSchema }),
   },
+  /**
+   * Live session settings (Claude Code parity): model and permission mode switch immediately over the stream
+   * (`set_model` / `set_permission_mode`); effort applies at the next (re)launch. Stored on the session.
+   */
+  'session.configure': {
+    input: z.object({
+      sessionId: sessionIdSchema,
+      model: z.string().nullable().optional(),
+      permissionMode: permissionModeSchema.optional(),
+      effort: effortSchema.nullable().optional(),
+    }),
+    output: ok,
+  },
+  /** Stops the current turn without ending the session (stream `interrupt`; Ctrl+C on a pty). */
+  'session.interrupt': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   'session.sendMessage': {
     input: z.object({ sessionId: sessionIdSchema, body: z.string().min(1) }),
     output: ok,

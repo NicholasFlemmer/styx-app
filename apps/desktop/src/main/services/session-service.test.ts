@@ -90,6 +90,16 @@ class FakeStream extends EventEmitter<StreamEvents> implements StreamRunnerLike 
   send(id: string, text: string): void {
     this.sent.push({ id, text });
   }
+  readonly controls: { id: string; request: Record<string, unknown> }[] = [];
+  setModel(id: string, model: string | null): void {
+    this.controls.push({ id, request: { subtype: 'set_model', model } });
+  }
+  setPermissionMode(id: string, mode: string): void {
+    this.controls.push({ id, request: { subtype: 'set_permission_mode', mode } });
+  }
+  interrupt(id: string): void {
+    this.controls.push({ id, request: { subtype: 'interrupt' } });
+  }
   respondPermission(id: string, requestId: string, allow: boolean): void {
     this.permissions.push({ id, requestId, allow });
   }

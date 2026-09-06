@@ -87,6 +87,58 @@ export const copy = {
     composer: { file: '@file', command: '/command', model: 'Model ▾', send: '⏎ send' },
     poppedOut: 'Popped out',
     dock: 'Dock',
+    /** Claude Code parity controls (owner addition, docs/handoff-discrepancies #54; not in §10). */
+    controls: {
+      permissions: 'Permissions',
+      model: 'Model',
+      effort: 'Effort',
+      stop: 'Stop · esc',
+      cycleMode: '⇧⇥ mode',
+      interrupted: 'interrupted',
+      compacted: 'context compacted',
+      modeChanged: 'permissions: {mode}',
+      modelChanged: 'model: {model}',
+      /** Chat meta suffix once a stream session has reported usage. */
+      usage: '{cost} · {turns} turns',
+    },
+  },
+
+  /** Claude Code session settings (owner addition, docs/handoff-discrepancies #54; not in §10). */
+  session: {
+    permissionModes: {
+      default: 'Ask each time',
+      acceptEdits: 'Accept edits',
+      plan: 'Plan mode',
+      bypassPermissions: 'Bypass permissions',
+      dontAsk: "Don't ask",
+      auto: 'Auto',
+    },
+    permissionModeHints: {
+      default: 'Every tool call outside the allowlist asks you here.',
+      acceptEdits: 'File edits run without asking; commands still ask.',
+      plan: 'Read-only until you approve the plan.',
+      bypassPermissions: 'Nothing asks. Only for sandboxes you trust.',
+      dontAsk: 'Anything that would ask is denied instead.',
+      auto: 'Claude decides what needs your approval.',
+    },
+    models: { default: 'Default model', fable: 'Fable', opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' },
+    efforts: {
+      default: 'Default effort',
+      low: 'Low',
+      medium: 'Medium',
+      high: 'High',
+      xhigh: 'Extra high',
+      max: 'Max',
+    },
+    /** Plan-approval decision (ExitPlanMode) and clarifying questions (AskUserQuestion) from the CLI. */
+    plan: {
+      header: 'Plan ready for review',
+      approve: 'Approve',
+      reject: 'Reject',
+      rejectedNote: 'Plan rejected in Styx',
+    },
+    question: { other: 'Other…' },
+    tool: { running: '…', ok: '✓', error: '×' },
   },
 
   accessRequest: {

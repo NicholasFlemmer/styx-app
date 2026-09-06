@@ -3,7 +3,7 @@ import type { Db } from '../open';
 import { asBool, asNum, asStr, asTime, placeholders, toBit, toTime, type Raw } from './mappers';
 
 const COLS = `id, project_id, worktree_id, agent, runner, model, state, paused_reason, note, first_message, auto_approve_edits, may_request_targets,
-  notify_when_needs_me, pid, exit_code, started_at, last_activity_at, ended_at, archived_at`;
+  notify_when_needs_me, pid, exit_code, started_at, last_activity_at, ended_at, archived_at, permission_mode, effort, cli_session_id, cost_usd, num_turns`;
 
 export const sessionFromRow = (r: Raw): Session =>
   sessionSchema.parse({
@@ -13,6 +13,11 @@ export const sessionFromRow = (r: Raw): Session =>
     agent: String(r['agent']),
     runner: String(r['runner']),
     model: asStr(r['model']),
+    permissionMode: String(r['permission_mode'] ?? 'default'),
+    effort: asStr(r['effort']),
+    cliSessionId: asStr(r['cli_session_id']),
+    costUsd: Number(r['cost_usd'] ?? 0),
+    numTurns: Number(r['num_turns'] ?? 0),
     state: String(r['state']),
     pausedReason: asStr(r['paused_reason']),
     note: r['note'] === '' ? null : asStr(r['note']),
@@ -43,17 +48,16 @@ export class SessionsRepo {
 
   constructor(private readonly db: Db) {
     this.upsertStmt = db.prepare(
-      `INSERT INTO sessions (${COLS}) VALUES (${placeholders(19)})
+      `INSERT INTO sessions (${COLS}) VALUES (${placeholders(24)})
        ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, worktree_id = excluded.worktree_id, agent = excluded.agent, runner = excluded.runner, model = excluded.model,
          state = excluded.state, paused_reason = excluded.paused_reason, note = excluded.note, first_message = excluded.first_message, auto_approve_edits = excluded.auto_approve_edits,
          may_request_targets = excluded.may_request_targets, notify_when_needs_me = excluded.notify_when_needs_me, pid = excluded.pid, exit_code = excluded.exit_code,
-         started_at = excluded.started_at, last_activity_at = excluded.last_activity_at, ended_at = excluded.ended_at, archived_at = excluded.archived_at`,
+         started_at = excluded.started_at, last_activity_at = excluded.last_activity_at, ended_at = excluded.ended_at, archived_at = excluded.archived_at,
+         permission_mode = excluded.permission_mode, effort = excluded.effort, cli_session_id = excluded.cli_session_id, cost_usd = excluded.cost_usd, num_turns = excluded.num_turns`,
     );
     this.getStmt = db.prepare(`SELECT ${COLS} FROM sessions WHERE id = ?`);
     this.allStmt = db.prepare(`SELECT ${COLS} FROM sessions ORDER BY rowid ASC`);
-    this.byProjectStmt = db.prepare(
-      `SELECT ${COLS} FROM sessions WHERE project_id = ? ORDER BY rowid ASC`,
-    );
+    this.byProjectStmt = db.prepare(`SELECT ${COLS} FROM sessions WHERE project_id = ? ORDER BY rowid ASC`);
     this.delStmt = db.prepare('DELETE FROM sessions WHERE id = ?');
     this.tokenHashStmt = db.prepare('SELECT broker_token_hash FROM sessions WHERE id = ?');
     this.setTokenHashStmt = db.prepare('UPDATE sessions SET broker_token_hash = ? WHERE id = ?');
@@ -81,6 +85,11 @@ export class SessionsRepo {
       toTime(s.lastActivityAt),
       s.endedAt,
       s.archivedAt,
+      s.permissionMode,
+      s.effort,
+      s.cliSessionId,
+      s.costUsd,
+      s.numTurns,
     );
   }
 

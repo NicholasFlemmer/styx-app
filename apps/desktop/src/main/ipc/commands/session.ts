@@ -25,6 +25,16 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
     return {};
   });
 
+  bus.register('session.configure', ({ sessionId, ...changes }) => {
+    sessions.configure(sessionId, changes);
+    return {};
+  });
+
+  bus.register('session.interrupt', ({ sessionId }) => {
+    sessions.interrupt(sessionId);
+    return {};
+  });
+
   bus.register('session.stop', ({ sessionId }) => {
     app.broker.notifyStopping(sessionId);
     sessions.stop(sessionId);

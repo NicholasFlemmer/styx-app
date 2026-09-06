@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { effortSchema, permissionModeSchema } from './session';
 import { agentSchema } from './common';
 import { ideKindSchema } from './discovery';
 import { lineEndingsSchema } from './project';
@@ -53,6 +54,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
 export const projectSettingsSchema = z.object({
   defaultAgent: agentSchema,
   model: z.string().nullable(),
+  permissionMode: permissionModeSchema,
+  effort: effortSchema.nullable(),
   autoApproveEdits: z.boolean(),
   mayRequestTargets: z.boolean(),
   notifyWhenNeedsMe: z.boolean(),
@@ -69,6 +72,8 @@ export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   defaultAgent: 'claude',
   model: null,
+  permissionMode: 'default',
+  effort: null,
   autoApproveEdits: false,
   mayRequestTargets: true,
   notifyWhenNeedsMe: true,
