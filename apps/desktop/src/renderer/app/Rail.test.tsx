@@ -34,7 +34,7 @@ describe('Rail "+" menu', () => {
     Object.assign(window, { styx: undefined });
   });
 
-  it('opens a three-row menu from the + tile with the first row focused; ↑/↓ wrap, Esc closes and refocuses the tile', () => {
+  it('opens a four-row menu from the + tile with the first row focused; ↑/↓ wrap, Esc closes and refocuses the tile', () => {
     render(<Rail />);
     const tile = screen.getByRole('button', { name: copy.rail.add });
     expect(tile.getAttribute('aria-haspopup')).toBe('menu');
@@ -44,6 +44,7 @@ describe('Rail "+" menu', () => {
     const items = within(menu).getAllByRole('menuitem');
     expect(items.map((i) => i.textContent)).toEqual([
       copy.rail.menu.newProject,
+      copy.rail.menu.addExisting,
       copy.rail.menu.openFolder,
       copy.rail.menu.cloneUrl,
     ]);
@@ -52,9 +53,10 @@ describe('Rail "+" menu', () => {
     expect(document.activeElement).toBe(items[1]);
     fireEvent.keyDown(menu, { key: 'ArrowDown' });
     fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(items[0]);
     fireEvent.keyDown(menu, { key: 'ArrowUp' });
-    expect(document.activeElement).toBe(items[2]);
+    expect(document.activeElement).toBe(items[3]);
     fireEvent.keyDown(menu, { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();
     expect(document.activeElement).toBe(tile);

@@ -24,6 +24,8 @@ export const copy = {
       newProject: 'New project…',
       newProjectMeta: 'empty · template · agent',
       /** Owner additions (not in §10, spec tone): existing repos reachable from the palette too. */
+      addExisting: 'Add existing projects…',
+      addExistingMeta: 'recents · scan this machine',
       openFolder: 'Open folder…',
       openFolderMeta: 'existing repo',
       cloneUrl: 'Clone URL…',
@@ -583,14 +585,40 @@ export const copy = {
       targets: 'Targets',
       last: 'Last activity',
     },
-    addRow: { newProject: '+ New project', openFolder: '+ Open folder', cloneUrl: '+ Clone URL' },
+    addRow: {
+      newProject: '+ New project',
+      addExisting: '+ Add existing',
+      openFolder: '+ Open folder',
+      cloneUrl: '+ Clone URL',
+    },
     activity: 'Activity',
   },
 
   /** Rail "+" menu (owner addition, not in §10): the three ways a project enters Styx. */
   rail: {
     add: 'Add project',
-    menu: { newProject: 'New project…', openFolder: 'Open folder…', cloneUrl: 'Clone URL…' },
+    menu: {
+      newProject: 'New project…',
+      addExisting: 'Add existing…',
+      openFolder: 'Open folder…',
+      cloneUrl: 'Clone URL…',
+    },
+  },
+
+  /**
+   * "Add existing projects" modal (owner addition, docs/handoff-discrepancies #53): the onboarding step-2 list
+   * (editor recents + repos found on this machine) reachable any time after onboarding.
+   */
+  addExisting: {
+    title: 'Add existing projects',
+    lead: 'Recent folders from your editor and repos found on this machine. Projects already in Styx are hidden.',
+    scanning: 'Scanning this machine…',
+    empty: 'Nothing new to add. Every recent folder and repo found here is already a project.',
+    failed: 'Scan failed: {message}',
+    rescan: 'Rescan',
+    openFolder: 'Open folder…',
+    add: 'Add {n}',
+    addNone: 'Add',
   },
 
   window: { popout: '⤢', dock: 'Dock', minimize: '─', maximize: '☐', close: '✕' },

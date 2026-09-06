@@ -45,7 +45,8 @@ export function Home() {
   const openClone = () => pushOverlay({ kind: 'modal', modal: 'new-project', mode: 'clone' });
   /** OS folder picker → `project.add` → the new project's Workspace (nothing happens when dismissed). */
   const openFolder = () => openFolderAsProject();
-  const scan = () => void command('project.scan', { includeIdeRecents: true });
+  /** Recents + scanned repos with checkboxes (the onboarding step-2 list, any time). */
+  const addExisting = () => pushOverlay({ kind: 'modal', modal: 'add-existing' });
 
   const empty = rows.length === 0;
 
@@ -66,7 +67,7 @@ export function Home() {
           body={copy.empty.projects.bodyPrototype}
           actions={
             <>
-              <Button variant="primary" onClick={scan}>
+              <Button variant="primary" onClick={addExisting}>
                 {copy.empty.projects.scan}
               </Button>
               <Button onClick={openNewProject}>{copy.empty.projects.newProject}</Button>
@@ -80,6 +81,9 @@ export function Home() {
       <div className={s['addRow']}>
         <Button variant="dashed" size="regular" onClick={openNewProject}>
           {copy.home.addRow.newProject}
+        </Button>
+        <Button variant="dashed" size="regular" onClick={addExisting}>
+          {copy.home.addRow.addExisting}
         </Button>
         <Button variant="dashed" size="regular" onClick={() => void openFolder()}>
           {copy.home.addRow.openFolder}

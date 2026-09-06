@@ -52,11 +52,15 @@ describe('copy (spec §10 verbatim)', () => {
   it('owner additions (rail menu, clone mode, palette open/clone rows, onboarding add-row segments)', () => {
     expect(copy.rail.menu).toEqual({
       newProject: 'New project…',
+      addExisting: 'Add existing…',
       openFolder: 'Open folder…',
       cloneUrl: 'Clone URL…',
     });
+    expect(copy.addExisting.title).toBe('Add existing projects');
+    expect(fill(copy.addExisting.add, { n: '3' })).toBe('Add 3');
     expect(copy.newProject.clone.title).toBe('Clone repository');
     expect(fill(copy.newProject.clone.clone, { mod: '⌘' })).toBe('Clone · ⌘⏎');
+    expect(copy.palette.actions.addExisting).toBe('Add existing projects…');
     expect(copy.palette.actions.openFolder).toBe('Open folder…');
     expect(copy.palette.actions.cloneUrl).toBe('Clone URL…');
     // The three segments concatenate to the §10 add-row string so the row renders unchanged.

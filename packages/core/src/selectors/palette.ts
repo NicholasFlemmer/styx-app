@@ -32,7 +32,8 @@ export type PaletteAction =
   | { kind: 'review-ask'; sessionId: SessionId; askId: AskId }
   | { kind: 'spawn'; projectId: ProjectId }
   | { kind: 'new-project' }
-  /** Owner additions: an existing repo (folder picker) or a clone, from the palette like the rail menu. */
+  /** Owner additions: the recents/scan list, an existing repo (folder picker) or a clone, like the rail menu. */
+  | { kind: 'add-existing' }
   | { kind: 'open-folder' }
   | { kind: 'clone-url' }
   | { kind: 'open-session'; sessionId: SessionId }
@@ -133,6 +134,14 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
     meta: copy.palette.actions.newProjectMeta,
     first: false,
     action: { kind: 'new-project' },
+  });
+  items.push({
+    id: 'add-existing',
+    glyph: '■',
+    label: copy.palette.actions.addExisting,
+    meta: copy.palette.actions.addExistingMeta,
+    first: false,
+    action: { kind: 'add-existing' },
   });
   items.push({
     id: 'open-folder',

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AuditDrawer } from '../features/audit-drawer/AuditDrawer';
 import { GrantSheet } from '../features/grant-sheet/GrantSheet';
+import { AddExistingModal } from '../features/modals/AddExistingModal';
 import { ConnectModal } from '../features/modals/ConnectModal';
 import { NewProjectModal } from '../features/modals/NewProjectModal';
 import { SpawnModal } from '../features/modals/SpawnModal';
@@ -20,6 +21,8 @@ const render = (o: Overlay) => {
           return <SpawnModal key={o.id} id={o.id} projectId={o.projectId} />;
         case 'new-project':
           return <NewProjectModal key={o.id} id={o.id} {...(o.mode !== undefined ? { mode: o.mode } : {})} />;
+        case 'add-existing':
+          return <AddExistingModal key={o.id} id={o.id} />;
         case 'connect':
           return (
             <ConnectModal

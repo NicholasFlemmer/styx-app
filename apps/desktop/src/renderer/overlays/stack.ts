@@ -11,6 +11,8 @@ export type ModalPayload =
   | { modal: 'spawn'; projectId: ProjectId }
   /** `clone` shows URL / Location / Open in IDE and runs `project.clone` (rail menu, Home, palette, onboarding). */
   | { modal: 'new-project'; mode?: 'new' | 'clone' }
+  /** Recents + scanned repos with checkboxes → `project.add` each (rail menu, Home, palette; discrepancies #53). */
+  | { modal: 'add-existing' }
   /** projectId is null during onboarding (no project yet); provider/targetId preselect the flow (Reconnect, step 4). */
   | { modal: 'connect'; projectId: ProjectId | null; provider?: Provider; targetId?: TargetId };
 

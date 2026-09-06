@@ -7,7 +7,7 @@ import { openFolderAsProject } from '../state/project-entry';
 import s from './Shell.module.css';
 
 /** Rail "+" menu rows (owner addition, docs/handoff-discrepancies #49). */
-const ADD_MENU = ['newProject', 'openFolder', 'cloneUrl'] as const;
+const ADD_MENU = ['newProject', 'addExisting', 'openFolder', 'cloneUrl'] as const;
 type AddMenuItem = (typeof ADD_MENU)[number];
 
 export const railProjects = (m: ReadModel): Project[] =>
@@ -60,6 +60,7 @@ export function Rail() {
   const choose = (item: AddMenuItem) => {
     closeMenu(true);
     if (item === 'newProject') pushOverlay({ kind: 'modal', modal: 'new-project' });
+    else if (item === 'addExisting') pushOverlay({ kind: 'modal', modal: 'add-existing' });
     else if (item === 'cloneUrl') pushOverlay({ kind: 'modal', modal: 'new-project', mode: 'clone' });
     else void openFolderAsProject();
   };

@@ -129,10 +129,11 @@ describe('Home', () => {
       ).toHaveLength(0);
     });
 
-    it('Scan this machine dispatches project.scan; New project opens the modal', () => {
+    it('Scan this machine opens the Add existing modal; New project opens its modal', () => {
       render(<Home />);
       fireEvent.click(screen.getByRole('button', { name: copy.empty.projects.scan }));
-      expect(commandMock).toHaveBeenCalledWith('project.scan', { includeIdeRecents: true });
+      expect(useUiStore.getState().overlays).toMatchObject([{ kind: 'modal', modal: 'add-existing' }]);
+      useUiStore.setState({ overlays: [] });
       fireEvent.click(screen.getByRole('button', { name: copy.empty.projects.newProject }));
       expect(useUiStore.getState().overlays).toMatchObject([{ kind: 'modal', modal: 'new-project' }]);
     });

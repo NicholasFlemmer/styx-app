@@ -36,6 +36,9 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
     case 'new-project':
       open({ kind: 'modal', modal: 'new-project' });
       return;
+    case 'add-existing':
+      open({ kind: 'modal', modal: 'add-existing' });
+      return;
     case 'open-folder':
       void openFolderAsProject();
       return;
