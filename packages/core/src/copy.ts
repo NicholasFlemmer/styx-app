@@ -579,6 +579,9 @@ export const copy = {
       approveDeny: 'Approve / deny',
       model: 'Model',
       autoApproveEdits: 'Auto-approve edits',
+      /** Claude Code session defaults (owner addition, docs/handoff-discrepancies #54; not in §10). */
+      permissionMode: 'Permission mode',
+      effort: 'Effort',
       envSource: '.env source',
       shareWithAgents: 'Share with agents',
       committedFile: 'Committed file',

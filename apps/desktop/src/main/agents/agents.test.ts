@@ -3,11 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
+import { claudeLaunch } from './claude';
 import { cursorLaunch } from './cursor';
 import { geminiLaunch } from './gemini';
 import type { AgentLaunchContext } from './types';
 
-const ctx = (agent: 'gemini' | 'cursor', worktreePath: string): AgentLaunchContext => ({
+const ctx = (agent: 'gemini' | 'cursor' | 'claude', worktreePath: string): AgentLaunchContext => ({
   agent,
   binary: agent,
   sessionId: 'sess-1',
@@ -16,6 +17,9 @@ const ctx = (agent: 'gemini' | 'cursor', worktreePath: string): AgentLaunchConte
   model: null,
   runner: 'pty',
   autoApproveEdits: false,
+  permissionMode: 'default',
+  effort: null,
+  resumeSessionId: null,
   configDir: join(worktreePath, '..', 'cfg'),
   shimDir: '/shims',
   platform: 'darwin',
@@ -55,5 +59,60 @@ describe('worktree MCP config (L5)', () => {
     expect(Object.keys(merged.mcpServers).sort()).toEqual(['other', 'styx']);
     await l.cleanup();
     expect(readFileSync(join(dir, 'settings.json'), 'utf8')).toBe(original);
+  });
+});
+
+describe('claude launch flags (verified against claude 2.1.263)', () => {
+  const launch = async (over: Partial<AgentLaunchContext>) => {
+    const wt = mkdtempSync(join(tmpdir(), 'styx-wt-'));
+    const l = await claudeLaunch({ ...ctx('claude', wt), ...over });
+    await l.cleanup();
+    return l.args;
+  };
+  const pair = (args: string[], flag: string): string | undefined => args[args.indexOf(flag) + 1];
+
+  it.each([
+    ['default', false, null],
+    ['default', true, 'acceptEdits'],
+    ['acceptEdits', false, 'acceptEdits'],
+    ['plan', true, 'plan'],
+    ['bypassPermissions', false, 'bypassPermissions'],
+    ['dontAsk', true, 'dontAsk'],
+    ['auto', false, 'auto'],
+  ] as const)(
+    'permissionMode=%s autoApproveEdits=%s → --permission-mode %s (explicit mode wins over the toggle)',
+    async (permissionMode, autoApproveEdits, expected) => {
+      const args = await launch({ permissionMode, autoApproveEdits });
+      if (expected === null) expect(args).not.toContain('--permission-mode');
+      else expect(pair(args, '--permission-mode')).toBe(expected);
+      expect(args.includes('--dangerously-skip-permissions')).toBe(expected === 'bypassPermissions');
+    },
+  );
+
+  it.each([
+    ['stream', true],
+    ['pty', false],
+  ] as const)('%s launch: --allow-dangerously-skip-permissions present = %s', async (runner, present) => {
+    const args = await launch({ runner });
+    expect(args.includes('--allow-dangerously-skip-permissions')).toBe(present);
+    expect(args.includes('-p')).toBe(runner === 'stream');
+  });
+
+  it.each([
+    [null, null, [] as string[]],
+    ['high', null, ['--effort', 'high']],
+    [null, 'sess-abc', ['--resume', 'sess-abc']],
+    ['max', 'sess-abc', ['--effort', 'max', '--resume', 'sess-abc']],
+  ] as const)('effort=%s resume=%s → %j', async (effort, resumeSessionId, expected) => {
+    const args = await launch({ effort, resumeSessionId, model: 'opus' });
+    const tail = args.slice(args.indexOf('--model'), args.indexOf('--model') + 2 + expected.length);
+    expect(tail).toEqual(['--model', 'opus', ...expected]);
+    if (effort === null) expect(args).not.toContain('--effort');
+    if (resumeSessionId === null) expect(args).not.toContain('--resume');
+  });
+
+  it('pty launch keeps the first message as the last argument; stream launch never puts it in argv', async () => {
+    expect((await launch({ runner: 'pty', firstMessage: 'Fix it' })).at(-1)).toBe('Fix it');
+    expect(await launch({ runner: 'stream', firstMessage: 'Fix it' })).not.toContain('Fix it');
   });
 });

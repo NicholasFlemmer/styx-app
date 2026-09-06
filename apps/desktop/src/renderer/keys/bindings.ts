@@ -15,6 +15,7 @@ import { escapeTarget, findOverlay } from '../overlays/stack';
 import { command } from '../state/commands';
 import { useReadModel } from '../state/read-model';
 import { selectSessionId, useUiStore } from '../state/ui-store';
+import { nextPermissionMode, sessionControls } from '../features/chat/session-controls';
 import type { KeyBinding } from './registry';
 
 const THEME_CYCLE: Record<ThemePreference, ThemePreference> = {
@@ -113,6 +114,44 @@ const cycleTheme = (): boolean => {
   return true;
 };
 
+const activeSessionId = (): SessionId | null => selectSessionId(useUiStore.getState());
+
+/**
+ * Composer-scoped Claude Code parity keys (discrepancy #54): Esc interrupts the current turn while the session
+ * is working (overlays still close first: `overlay` resolves before `composer`), ⇧⇥ cycles the permission mode
+ * default → acceptEdits → plan. Both decline (`false`) when the session has no such control, so the key falls
+ * through to the textarea.
+ */
+export const composerBindings = (sessionOf: () => SessionId | null): KeyBinding[] => [
+  {
+    id: 'interrupt',
+    chord: 'Escape',
+    scope: 'composer',
+    run: () => {
+      const sessionId = sessionOf();
+      const session = sessionId === null ? undefined : model().sessions.byId[sessionId];
+      if (session === undefined || !sessionControls(session).stop) return false;
+      void command('session.interrupt', { sessionId: session.id });
+      return true;
+    },
+  },
+  {
+    id: 'cycleMode',
+    chord: 'Shift+Tab',
+    scope: 'composer',
+    run: () => {
+      const sessionId = sessionOf();
+      const session = sessionId === null ? undefined : model().sessions.byId[sessionId];
+      if (session === undefined || !sessionControls(session).mode) return false;
+      void command('session.configure', {
+        sessionId: session.id,
+        permissionMode: nextPermissionMode(session.permissionMode),
+      });
+      return true;
+    },
+  },
+];
+
 /** Spec §6 bindings; diff keys are registered by the Diff screen in scope `diff` (see `diffBindings`). */
 export const shellBindings = (): KeyBinding[] => [
   {
@@ -194,6 +233,7 @@ export const shellBindings = (): KeyBinding[] => [
     when: () => escapeTarget(useUiStore.getState().overlays) !== null,
     run: closeTopmost,
   },
+  ...composerBindings(activeSessionId),
 ];
 
 /**
@@ -210,6 +250,7 @@ export const popoutBindings = (sessionId: SessionId): KeyBinding[] => [
     },
   },
   { id: 'toggleTheme', chord: shortcuts.toggleTheme, scope: 'global', run: cycleTheme },
+  ...composerBindings(() => sessionId),
 ];
 
 export interface DiffActions {

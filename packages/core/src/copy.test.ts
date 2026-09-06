@@ -68,6 +68,30 @@ describe('copy (spec §10 verbatim)', () => {
     expect(`${addRowNew}${addRowSep}${addRowFolder}${addRowSep}${addRowClone}`).toBe(addRow);
   });
 
+  it('owner additions (Claude Code parity, discrepancy #54): session controls, settings rows, tool glyphs', () => {
+    expect(copy.chat.controls).toMatchObject({
+      permissions: 'Permissions',
+      model: 'Model',
+      effort: 'Effort',
+      stop: 'Stop · esc',
+    });
+    expect(fill(copy.chat.controls.usage, { cost: '$0.12', turns: '3' })).toBe('$0.12 · 3 turns');
+    expect(copy.settings.rows.permissionMode).toBe('Permission mode');
+    expect(copy.settings.rows.effort).toBe('Effort');
+    expect(Object.keys(copy.session.permissionModes)).toEqual([
+      'default',
+      'acceptEdits',
+      'plan',
+      'bypassPermissions',
+      'dontAsk',
+      'auto',
+    ]);
+    expect(Object.keys(copy.session.permissionModeHints)).toEqual(Object.keys(copy.session.permissionModes));
+    expect(Object.keys(copy.session.efforts)).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max']);
+    expect(Object.keys(copy.session.models)).toEqual(['default', 'fable', 'opus', 'sonnet', 'haiku']);
+    expect(copy.session.tool).toEqual({ running: '…', ok: '✓', error: '×' });
+  });
+
   it('repoNameOfUrl / defaultCloneLocation derive the folder from the clone URL', () => {
     expect(repoNameOfUrl('git@github.com:acme/shop.git')).toBe('shop');
     expect(repoNameOfUrl('https://github.com/acme/shop/')).toBe('shop');

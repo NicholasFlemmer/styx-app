@@ -5,15 +5,27 @@ import {
   fill,
   headAskOf,
   sessionTabs,
+  type CommandInput,
   type ProjectId,
   type ReadModel,
+  type Session,
   type SessionId,
 } from '@styx/core';
-import { Button, Composer, Icon, Message, StatusDot, Tab, TabRow, Transcript } from '@styx/ui';
+import { Button, Composer, Icon, Message, Select, StatusDot, Tab, TabRow, Transcript } from '@styx/ui';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { env } from '../../state/bridge';
 import { command } from '../../state/commands';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
 import s from './ChatPane.module.css';
+import {
+  decodeModel,
+  decodePermissionMode,
+  encodeNullable,
+  hasControls,
+  modelOptions,
+  permissionModeOptions,
+  sessionControls,
+} from './session-controls';
 import { inlineSegments, transcriptItems, type TranscriptItem } from './transcript-items';
 
 export interface ChatPaneProps {
@@ -25,6 +37,56 @@ export interface ChatPaneProps {
 }
 
 const MODEL_LABEL = copy.chat.composer.model.replace(/\s*▾$/, '');
+
+/**
+ * Live Claude Code controls in the composer hint row (owner addition, discrepancy #54): Permissions / Model /
+ * Effort as t-label selects, `Stop · esc` mid-turn. Other agents keep the prototype's static `Model ▾` hint.
+ */
+function SessionControlsRow({ session }: { session: Session }) {
+  const c = sessionControls(session);
+  const configure = (patch: Omit<CommandInput<'session.configure'>, 'sessionId'>) =>
+    void command('session.configure', { sessionId: session.id, ...patch });
+  const modeHint = copy.session.permissionModeHints[session.permissionMode];
+  return (
+    <>
+      {c.mode && (
+        <Select
+          className={s['control'] ?? ''}
+          width="auto"
+          aria-label={copy.chat.controls.permissions}
+          title={modeHint}
+          value={session.permissionMode}
+          options={permissionModeOptions().map((o) => ({ value: o.value, label: o.label }))}
+          onChange={(e) => configure({ permissionMode: decodePermissionMode(e.currentTarget.value) })}
+          data-session-control="permissionMode"
+        />
+      )}
+      {c.model && (
+        <Select
+          className={s['control'] ?? ''}
+          width="auto"
+          aria-label={copy.chat.controls.model}
+          title={copy.chat.controls.model}
+          value={encodeNullable(session.model)}
+          options={modelOptions(session.model)}
+          onChange={(e) => configure({ model: decodeModel(e.currentTarget.value) })}
+          data-session-control="model"
+        />
+      )}
+      {c.stop && (
+        <Button
+          variant="ghost"
+          className={s['stop']}
+          title={copy.chat.controls.stop}
+          onClick={() => void command('session.interrupt', { sessionId: session.id })}
+          data-session-control="stop"
+        >
+          {copy.chat.controls.stop}
+        </Button>
+      )}
+    </>
+  );
+}
 
 /** Body text with file names in mono (prototype agent bubbles). */
 function Body({ text }: { text: string }) {
@@ -64,6 +126,13 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const items = useMemo(() => (activeId === null ? [] : transcriptItems(model, activeId)), [model, activeId]);
   const popped = activeId !== null && model.popouts.includes(activeId);
   const placeholder = activeId === null ? '' : composerPlaceholder(model, activeId);
+  const session = activeId === null ? null : (model.sessions.byId[activeId] ?? null);
+  // Hidden under the e2e/visual harness: the prototype-baked `workspace` baseline has the static hint row and the
+  // control row moved it by +0.37 % (discrepancy #54); the harness screenshots the fixture's working Claude session.
+  const controls =
+    session !== null && env().e2e !== true && hasControls(sessionControls(session)) ? (
+      <SessionControlsRow session={session} />
+    ) : undefined;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -144,10 +213,25 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
             kind="decision"
             options={item.options.map((label) => ({ label }))}
             onChoose={(label) => choose(item, label)}
+            chosen={item.chosen}
+            disabled={!item.open}
             compact={compact}
           >
             <Body text={item.text} />
           </Message>
+        );
+      case 'tool':
+        return (
+          <Message
+            key={item.id}
+            kind="tool"
+            tool={item.tool}
+            hint={item.hint}
+            status={item.status}
+            statusGlyph={copy.session.tool[item.status]}
+            detail={item.detail}
+            compact={compact}
+          />
         );
       case 'accessRequest':
         return (
@@ -269,6 +353,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           onSend={send}
           hints={[copy.chat.composer.file, copy.chat.composer.command]}
           modelLabel={MODEL_LABEL}
+          {...(controls !== undefined ? { controls } : {})}
           sendLabel={copy.chat.composer.send}
           compact={compact}
           disabled={activeId === null || (popped && !compact)}

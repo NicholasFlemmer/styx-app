@@ -100,7 +100,58 @@ describe('sectionRows', () => {
       ['defaultAgent', true],
       ['model', false],
       ['autoApproveEdits', false],
+      ['permissionMode', false],
+      ['effort', false],
     ]);
+  });
+
+  it('Agent defaults: Model lists the CLI aliases; Permission mode / Effort rows patch project settings (discrepancy #54)', () => {
+    const rows = sectionRows(model, 'project:agent-defaults', ctx);
+    const modelRow = rows.find((r) => r.id === 'model');
+    expect(modelRow?.options.map((o) => [o.value, o.label])).toEqual([
+      ['default', 'Default'],
+      ['fable', 'Fable'],
+      ['opus', 'Opus'],
+      ['sonnet', 'Sonnet'],
+      ['haiku', 'Haiku'],
+    ]);
+    const mode = rows.find((r) => r.id === 'permissionMode');
+    expect(mode?.value).toBe('default');
+    expect(mode?.options.map((o) => o.label)).toEqual([
+      'Ask each time',
+      'Accept edits',
+      'Plan mode',
+      'Bypass permissions',
+      "Don't ask",
+      'Auto',
+    ]);
+    expect(mode?.change.kind === 'project' && mode.change.patch('plan')).toEqual({ permissionMode: 'plan' });
+    expect(mode?.change.kind === 'project' && mode.change.patch('bogus')).toEqual({
+      permissionMode: 'default',
+    });
+    const effort = rows.find((r) => r.id === 'effort');
+    expect(effort?.value).toBe('default');
+    expect(effort?.options.map((o) => o.value)).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max']);
+    expect(effort?.change.kind === 'project' && effort.change.patch('xhigh')).toEqual({ effort: 'xhigh' });
+    expect(effort?.change.kind === 'project' && effort.change.patch('default')).toEqual({ effort: null });
+    expect(modelRow?.change.kind === 'project' && modelRow.change.patch('opus')).toEqual({ model: 'opus' });
+    // A full model name from project.json stays selectable as an extra option.
+    const eff = model.settings.project[acme];
+    if (eff === undefined) throw new Error('fixture');
+    const custom = {
+      ...model,
+      settings: {
+        ...model.settings,
+        project: {
+          ...model.settings.project,
+          [acme]: { ...eff, model: { value: 'claude-opus-4-1', source: 'project' as const } },
+        },
+      },
+    };
+    const customRow = sectionRows(custom, 'project:agent-defaults', ctx).find((r) => r.id === 'model');
+    expect(customRow?.value).toBe('claude-opus-4-1');
+    expect(customRow?.options.at(-1)).toEqual({ value: 'claude-opus-4-1', label: 'claude-opus-4-1' });
+    expect(customRow?.overridden).toBe(true);
   });
 
   it('prototype values match settingsRowsMap', () => {
@@ -117,7 +168,13 @@ describe('sectionRows', () => {
     expect(values('app:keychain')).toEqual(['macOS Keychain', 'Touch ID', 'Scoped token, else env']);
     // Demo fixture mirrors the prototype policies strip (`[false, true, true]`): staging reads are off.
     expect(values('app:policies')).toEqual(['Off', '1 hour', 'JSON']);
-    expect(values('project:agent-defaults')).toEqual(['Claude Code', 'Default', 'Off']);
+    expect(values('project:agent-defaults')).toEqual([
+      'Claude Code',
+      'Default',
+      'Off',
+      'Ask each time',
+      'Default effort',
+    ]);
     expect(values('project:env')).toEqual(['Keychain', 'Per grant', '.styx/project.json']);
   });
 });
@@ -310,6 +367,18 @@ describe('<Settings />', () => {
     expect(commandMock).toHaveBeenCalledWith('project.settings.set', {
       projectId: acme,
       patch: { autoApproveEdits: true },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Permission mode' }), {
+      target: { value: 'acceptEdits' },
+    });
+    expect(commandMock).toHaveBeenCalledWith('project.settings.set', {
+      projectId: acme,
+      patch: { permissionMode: 'acceptEdits' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Effort' }), { target: { value: 'high' } });
+    expect(commandMock).toHaveBeenCalledWith('project.settings.set', {
+      projectId: acme,
+      patch: { effort: 'high' },
     });
     const resets = screen.getAllByRole('button', { name: 'Reset' });
     expect(resets).toHaveLength(1);

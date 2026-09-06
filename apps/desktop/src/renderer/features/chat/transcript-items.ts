@@ -13,7 +13,25 @@ export type TranscriptItem =
   | { id: string; kind: 'user'; text: string }
   | { id: string; kind: 'agent'; text: string }
   | { id: string; kind: 'fileList'; files: { path: string; added: number; removed?: number }[] }
-  | { id: string; kind: 'decision'; text: string; options: string[]; askId: AskId | null }
+  | {
+      id: string;
+      kind: 'decision';
+      text: string;
+      options: string[];
+      askId: AskId | null;
+      /** The option already taken (payload `chosen`), once the ask was answered here or in the CLI. */
+      chosen: string | null;
+      /** The ask is still open (or the row has no ask): options stay clickable. */
+      open: boolean;
+    }
+  | {
+      id: string;
+      kind: 'tool';
+      tool: string;
+      hint: string;
+      status: 'running' | 'ok' | 'error';
+      detail: string | null;
+    }
   | {
       id: string;
       kind: 'accessRequest';
@@ -35,6 +53,10 @@ const preExisting = (model: ReadModel, sessionId: SessionId, path: string): bool
       hunkMatchesFile(h, path) &&
       (h.oldLines > 0 || hunkBody(h.patch).some((l) => !l.startsWith('+') && l.trim() !== '')),
   );
+
+/** A decision row without an ask (prototype transcript) is always answerable; with one, only while it is open. */
+export const askOpen = (model: ReadModel, askId: AskId | null): boolean =>
+  askId === null ? true : model.pendingAsks.byId[askId]?.state === 'open';
 
 /**
  * Transcript rows → Message props (spec §8 Message kinds). Access-request cards disappear once the grant is
@@ -67,7 +89,18 @@ export const transcriptItems = (model: ReadModel, sessionId: SessionId): Transcr
         });
         break;
       case 'decision':
-        out.push({ id: m.id, kind: 'decision', text: m.body, options: [...p.options], askId: m.askId });
+        out.push({
+          id: m.id,
+          kind: 'decision',
+          text: m.body,
+          options: [...p.options],
+          askId: m.askId,
+          chosen: p.chosen,
+          open: askOpen(model, m.askId),
+        });
+        break;
+      case 'tool':
+        out.push({ id: m.id, kind: 'tool', tool: p.tool, hint: p.hint, status: p.status, detail: p.detail });
         break;
       case 'access-request': {
         const grant = model.grants.byId[p.grantId];

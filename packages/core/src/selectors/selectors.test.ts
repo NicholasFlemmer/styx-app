@@ -7,7 +7,7 @@ import type { Session } from '../model/session';
 import type { ReadModel } from '../read-model';
 import { rows, upsertRows } from '../read-model';
 import { boardCard, boardColumns } from './board';
-import { chatMeta, composerPlaceholder, queuedLabel } from './chat';
+import { chatMeta, composerPlaceholder, formatCost, queuedLabel, usageLabel } from './chat';
 import {
   branchOf,
   byRecentActivity,
@@ -310,6 +310,19 @@ describe('chat', () => {
     expect(chatMeta(model, ids.session.gemini, NOW)).toBe('gemini · main · —');
     expect(chatMeta(model, idFrom<'SessionId'>('nope') as SessionId, NOW)).toBe('');
   });
+  it('chat meta appends "$cost · n turns" once a stream session reports usage (discrepancy #54)', () => {
+    expect(usageLabel({ costUsd: 0, numTurns: 0 })).toBeNull();
+    expect(usageLabel({ costUsd: 0.1234, numTurns: 3 })).toBe('$0.12 · 3 turns');
+    expect(usageLabel({ costUsd: 0, numTurns: 1 })).toBe('$0.00 · 1 turns');
+    expect(usageLabel({ costUsd: 0.005, numTurns: 0 })).toBe('$0.01 · 0 turns');
+    expect(formatCost(2)).toBe('$2.00');
+    const used = withSession(model, { id: ids.session.claude, costUsd: 0.1234, numTurns: 3 });
+    expect(chatMeta(used, ids.session.claude, NOW)).toBe('claude · fix/checkout · 14m · $0.12 · 3 turns');
+    const waiting = withSession(model, { id: ids.session.codex, costUsd: 1, numTurns: 12 });
+    expect(chatMeta(waiting, ids.session.codex, NOW)).toBe(
+      'codex · test/flaky · 3m · waiting on you · $1.00 · 12 turns',
+    );
+  });
   it('queued label and composer placeholder', () => {
     expect(queuedLabel(model, ids.session.codex)).toBeNull();
     const ask = model.pendingAsks.byId[ids.ask.codexGrant] as NonNullable<
@@ -343,8 +356,14 @@ describe('common', () => {
     if (repo === undefined || main === undefined) throw new Error('fixture');
     const plain = {
       ...model,
-      repos: { ...model.repos, byId: { ...model.repos.byId, [repo.id]: { ...repo, defaultBranch: null, remotes: [] } } },
-      worktrees: { ...model.worktrees, byId: { ...model.worktrees.byId, [main.id]: { ...main, branch: null } } },
+      repos: {
+        ...model.repos,
+        byId: { ...model.repos.byId, [repo.id]: { ...repo, defaultBranch: null, remotes: [] } },
+      },
+      worktrees: {
+        ...model.worktrees,
+        byId: { ...model.worktrees.byId, [main.id]: { ...main, branch: null } },
+      },
     };
     expect(projectHasGit(model, ids.project.sideApi)).toBe(true);
     expect(projectHasGit(plain, ids.project.sideApi)).toBe(false);

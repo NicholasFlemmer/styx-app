@@ -36,7 +36,9 @@ export interface KeyRegistryOptions {
  *
  * Pass-through rules: inside `editor`/`terminal`/`composer` only RESERVED chords are dispatched (Monaco/xterm
  * own plain keys, Enter, Mod+Enter/Backspace); in the composer Mod+Enter/Mod+Backspace still bubble to `chat`.
- * Plain keys never fire while an editable element is focused.
+ * Plain keys never fire while an editable element is focused. Two exceptions: bindings registered in the
+ * host-owned scope itself (the composer's own Esc / ⇧⇥) and `overlay` bindings, which sit above every host in
+ * the chain so Esc closes the sheet before it reaches the composer.
  */
 export class KeyRegistry {
   private readonly bindings: Registered[] = [];
@@ -82,11 +84,12 @@ export class KeyRegistry {
       for (const b of this.bindings) {
         if (b.scope !== scope) continue;
         if (!matchesEvent(b.parsed, event, platform)) continue;
-        if (hostOwned && !b.reserved) {
+        const ownsHost = hostOwned && b.scope === innermost;
+        if (hostOwned && !b.reserved && !ownsHost && b.scope !== 'overlay') {
           const chatChordFromComposer = innermost === 'composer' && b.scope !== 'composer' && b.parsed.mod;
           if (!chatChordFromComposer) continue;
         }
-        if (editable && isPlain(b.parsed) && b.parsed.key !== 'Escape') continue;
+        if (editable && isPlain(b.parsed) && b.parsed.key !== 'Escape' && !ownsHost) continue;
         if (b.when !== undefined && !b.when(ctx)) continue;
         const handled = b.run(ctx);
         if (handled === false) continue;

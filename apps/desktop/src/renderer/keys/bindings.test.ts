@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtures, sessionTabs, type ProjectId } from '@styx/core';
+import { fixtures, sessionTabs, upsertRows, type ProjectId } from '@styx/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../state/read-model';
 import { selectSessionId, useUiStore } from '../state/ui-store';
@@ -82,10 +82,14 @@ describe('shell bindings', () => {
     });
     expect(useUiStore.getState().overlays.map((o) => o.id)).toEqual([sheet, toast]);
     // From `body` (no scoped ancestor): the registry prepends `overlay` while any overlay is open.
-    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
     expect(useUiStore.getState().overlays.map((o) => o.id)).toEqual([toast]);
     // Nothing traps any more: Esc now dismisses the toast.
-    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
     expect(useUiStore.getState().overlays).toHaveLength(0);
   });
 
@@ -174,7 +178,9 @@ describe('board bindings (spec §6 "board card")', () => {
 
   it('Mod+⏎ / Mod+⌫ fire only inside the board scope', () => {
     const card = document.querySelector('[data-keyscope="board"]') as HTMLElement;
-    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true, cancelable: true }));
+    card.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true, cancelable: true }),
+    );
     card.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, bubbles: true, cancelable: true }),
     );
@@ -240,13 +246,132 @@ describe('popout bindings (spec §4.13)', () => {
     expect(commands).toEqual([{ name: 'window.dock', input: { sessionId: claude } }]);
   });
 
-  it('has no palette: Mod+K and Mod+P do nothing, Escape does nothing', () => {
+  it('has no palette or overlay close: Mod+K and Mod+P do nothing, Escape only reaches the composer', () => {
     pressInComposer({ key: 'k', metaKey: true });
     pressInComposer({ key: 'p', metaKey: true });
     pressInComposer({ key: 'Escape' });
     expect(useUiStore.getState().overlays).toHaveLength(0);
-    expect(commands).toEqual([]);
-    expect(reg.list().map((b) => b.scope)).toEqual(['global', 'global']);
+    // The pinned Claude session is mid-turn, so Esc interrupts it (composer scope); nothing else fires.
+    expect(commands.map((c) => c.name)).toEqual(['session.interrupt']);
+    expect(reg.list().map((b) => b.scope)).toEqual(['global', 'global', 'composer', 'composer']);
+  });
+
+  it('Escape in the pop-out composer interrupts its pinned session while it is working', () => {
+    pressInComposer({ key: 'Escape' });
+    expect(commands).toEqual([{ name: 'session.interrupt', input: { sessionId: claude } }]);
   });
 });
 
+describe('composer bindings (Claude Code parity, discrepancy #54)', () => {
+  let reg: KeyRegistry;
+  let off: () => void;
+  const commands: { name: string; input: unknown }[] = [];
+  const acme = fixtures.ids.project.acmeShop as ProjectId;
+  const claude = fixtures.ids.session.claude;
+
+  const composerBox = (): HTMLTextAreaElement => {
+    let box = document.querySelector<HTMLTextAreaElement>('[data-keyscope="composer"] textarea');
+    if (box === null) {
+      const ws = document.createElement('div');
+      ws.setAttribute('data-keyscope', 'workspace');
+      const chat = document.createElement('div');
+      chat.setAttribute('data-keyscope', 'chat');
+      const composer = document.createElement('div');
+      composer.setAttribute('data-keyscope', 'composer');
+      box = document.createElement('textarea');
+      composer.append(box);
+      chat.append(composer);
+      ws.append(chat);
+      document.body.append(ws);
+    }
+    return box;
+  };
+  const pressInComposer = (init: KeyboardEventInit): boolean =>
+    composerBox().dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+
+  beforeEach(() => {
+    commands.length = 0;
+    Object.assign(window, {
+      styx: {
+        platform: 'darwin',
+        env: {},
+        command: vi.fn(async (name: string, input: unknown) => {
+          commands.push({ name, input });
+          return { ok: true, value: {} };
+        }),
+      },
+    });
+    useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
+    useUiStore.setState({ overlays: [], screen: 'workspace', projectId: acme, projectSession: {} });
+    useUiStore.getState().openSession(acme, claude);
+    reg = new KeyRegistry({
+      platform: () => 'darwin',
+      overlayOpen: () => useUiStore.getState().overlays.length > 0,
+    });
+    reg.registerAll(shellBindings());
+    off = reg.install(window);
+  });
+  afterEach(() => {
+    off();
+    document.body.innerHTML = '';
+    Object.assign(window, { styx: undefined });
+  });
+
+  it('Escape interrupts the working Claude session (default prevented)', () => {
+    const notHandled = pressInComposer({ key: 'Escape' });
+    expect(notHandled).toBe(false);
+    expect(commands).toEqual([{ name: 'session.interrupt', input: { sessionId: claude } }]);
+  });
+
+  it('Escape closes an open overlay first and leaves the session running', () => {
+    useUiStore.getState().pushOverlay({
+      kind: 'sheet',
+      sheet: 'grant',
+      sessionId: fixtures.ids.session.codex,
+      askId: fixtures.ids.ask.codexGrant,
+    });
+    pressInComposer({ key: 'Escape' });
+    expect(useUiStore.getState().overlays).toHaveLength(0);
+    expect(commands).toEqual([]);
+    pressInComposer({ key: 'Escape' });
+    expect(commands).toEqual([{ name: 'session.interrupt', input: { sessionId: claude } }]);
+  });
+
+  it('Escape falls through when the session is not working (idle Gemini, pty Codex)', () => {
+    useUiStore.getState().openSession(acme, fixtures.ids.session.gemini);
+    expect(pressInComposer({ key: 'Escape' })).toBe(true);
+    useUiStore.getState().openSession(acme, fixtures.ids.session.codex);
+    expect(pressInComposer({ key: 'Escape' })).toBe(true);
+    expect(commands).toEqual([]);
+  });
+
+  it('⇧⇥ cycles the permission mode default → acceptEdits → plan → default via session.configure', () => {
+    pressInComposer({ key: 'Tab', shiftKey: true });
+    expect(commands).toEqual([
+      { name: 'session.configure', input: { sessionId: claude, permissionMode: 'acceptEdits' } },
+    ]);
+    const model = useReadModel.getState().model;
+    const s = model.sessions.byId[claude];
+    if (s === undefined) throw new Error('fixture');
+    useReadModel
+      .getState()
+      .replaceModel(
+        { ...model, sessions: upsertRows(model.sessions, [{ ...s, permissionMode: 'plan' }]) },
+        'connected',
+      );
+    pressInComposer({ key: 'Tab', shiftKey: true });
+    expect(commands[1]).toEqual({
+      name: 'session.configure',
+      input: { sessionId: claude, permissionMode: 'default' },
+    });
+    // Plain ⇥ is the textarea's own.
+    expect(pressInComposer({ key: 'Tab' })).toBe(true);
+    expect(commands).toHaveLength(2);
+  });
+
+  it('⇧⇥ does nothing for agents without a permission mode', () => {
+    useUiStore.getState().openSession(acme, fixtures.ids.session.codex);
+    expect(pressInComposer({ key: 'Tab', shiftKey: true })).toBe(true);
+    expect(commands).toEqual([]);
+  });
+});

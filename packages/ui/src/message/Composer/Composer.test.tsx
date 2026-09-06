@@ -47,6 +47,24 @@ describe('Composer', () => {
     expect(onSend).toHaveBeenCalledWith('go');
   });
 
+  it('controls slot replaces the model control and sits before the send button', () => {
+    const onModel = vi.fn();
+    render(
+      <Composer
+        {...strings}
+        onSend={() => {}}
+        onModel={onModel}
+        modelLabel="Model"
+        controls={<button type="button">Stop · esc</button>}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Model' })).not.toBeInTheDocument();
+    const stop = screen.getByRole('button', { name: 'Stop · esc' });
+    const send = screen.getByRole('button', { name: '⏎ send' });
+    expect(stop.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(stop.closest('[data-composer-controls="true"]')).not.toBeNull();
+  });
+
   it('compact hides the hint row', () => {
     render(<Composer {...strings} onSend={() => {}} compact />);
     expect(screen.queryByText('@file')).not.toBeInTheDocument();

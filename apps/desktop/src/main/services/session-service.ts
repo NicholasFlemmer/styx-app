@@ -1,8 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { z } from 'zod';
 import {
   AGENT_LABEL,
+  MODEL_ALIASES,
   copy,
   fill,
   headAsk,
@@ -105,6 +107,46 @@ export const sha256 = (s: string): string => createHash('sha256').update(s).dige
 const EDIT_TOOL = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
 const PERMISSION_OPTIONS = ['Allow', 'Deny'] as const;
 
+/**
+ * `can_use_tool` for Claude Code's AskUserQuestion (claude 2.1.263): one or more questions with labelled options.
+ * The answer is an *allow* whose `updatedInput` carries `{questions, answers: {[question]: label}}`.
+ */
+const askUserQuestionInput = z.object({
+  questions: z
+    .array(
+      z.object({
+        question: z.string().min(1),
+        header: z.string().optional(),
+        options: z.array(z.object({ label: z.string().min(1) })).default([]),
+        multiSelect: z.boolean().optional(),
+      }),
+    )
+    .min(1),
+});
+
+/** `can_use_tool` for ExitPlanMode: the plan markdown; allow = leave plan mode, deny (with a note) = keep planning. */
+const exitPlanModeInput = z.object({ plan: z.string().default('') });
+
+/** A stream `can_use_tool` request waiting on an ask, by ask id. */
+type PermissionAsk =
+  | { kind: 'tool'; sessionId: string; requestId: string }
+  | { kind: 'plan'; sessionId: string; requestId: string }
+  | { kind: 'question'; sessionId: string; requestId: string; question: string };
+
+/** One AskUserQuestion request: answers collected across its questions until every ask has resolved. */
+interface QuestionRequest {
+  sessionId: string;
+  questions: unknown;
+  remaining: number;
+  answers: Record<string, string>;
+}
+
+const modelLabel = (model: string | null): string => {
+  if (model === null) return copy.session.models.default;
+  const alias = MODEL_ALIASES.find((a) => a === model);
+  return alias ? copy.session.models[alias] : model;
+};
+
 /** `cli.binary.<agent>` in app_settings: a path picked with "Locate binary"; wins over detection while the file exists. */
 export const CLI_BINARY_KEY_PREFIX = 'cli.binary.';
 export const cliBinaryKey = (agent: string): string => `${CLI_BINARY_KEY_PREFIX}${agent}`;
@@ -146,8 +188,10 @@ export class SessionService {
   private readonly launches = new Map<string, AgentLaunch>();
   /** Asks opened from a CLI hook (`permission_prompt` / `agent_needs_input`), cancelled once the agent moves on. */
   private readonly hookAsks = new Map<string, AskId>();
-  /** Stream `can_use_tool` requests waiting on a decision ask: askId → request id. */
-  private readonly permissionAsks = new Map<string, { sessionId: string; requestId: string }>();
+  /** Stream `can_use_tool` requests waiting on an ask (tool decision, plan approval, clarifying question). */
+  private readonly permissionAsks = new Map<string, PermissionAsk>();
+  /** AskUserQuestion requests by request id; removed once answered or denied (so a request is answered once). */
+  private readonly questionRequests = new Map<string, QuestionRequest>();
   /** Last ANSI-stripped output per pty session, scanned for the CLI-outdated message across chunk boundaries. */
   private readonly ptyTails = new Map<string, string>();
   /** When the outdated banner was last raised per session (the error arrives as assistant text and as a result). */
@@ -332,6 +376,10 @@ export class SessionService {
       model: session.model,
       runner,
       autoApproveEdits: session.toggles.autoApproveEdits,
+      permissionMode: session.permissionMode,
+      effort: session.effort,
+      // A relaunch resumes the CLI's own conversation (`--resume`); the first launch has no id yet.
+      resumeSessionId: session.cliSessionId,
       configDir: join(runtime.userData, 'agents', session.id),
       shimDir: runtime.shimDir,
       platform: runtime.platform,
@@ -419,7 +467,8 @@ export class SessionService {
 
   /**
    * Live session settings (Claude Code parity): the row is updated and published; a running stream gets
-   * `set_model` / `set_permission_mode` immediately, effort applies at the next (re)launch.
+   * `set_model` / `set_permission_mode` immediately, effort applies at the next (re)launch (no restart). A model or
+   * mode that actually changed leaves a `system` line in the chat.
    */
   configure(
     sessionId: string,
@@ -439,19 +488,36 @@ export class SessionService {
     };
     this.deps.repos.sessions.upsert(next);
     this.deps.publisher.upsert('sessions', [s.id]);
+    const modelChanged = next.model !== s.model;
+    const modeChanged = next.permissionMode !== s.permissionMode;
     if (this.deps.stream.has(s.id)) {
-      if (changes.model !== undefined && changes.model !== s.model)
-        this.deps.stream.setModel(s.id, changes.model);
-      if (changes.permissionMode !== undefined && changes.permissionMode !== s.permissionMode)
-        this.deps.stream.setPermissionMode(s.id, changes.permissionMode);
+      if (modelChanged) this.deps.stream.setModel(s.id, next.model);
+      if (modeChanged) this.deps.stream.setPermissionMode(s.id, next.permissionMode);
     }
+    if (modelChanged)
+      this.deps.transcript.system(
+        s.id,
+        fill(copy.chat.controls.modelChanged, { model: modelLabel(next.model) }),
+      );
+    if (modeChanged)
+      this.deps.transcript.system(
+        s.id,
+        fill(copy.chat.controls.modeChanged, { mode: copy.session.permissionModes[next.permissionMode] }),
+      );
   }
 
-  /** Stops the current turn, not the session: stream `interrupt` control request; Ctrl+C on a pty. */
+  /**
+   * Stops the current turn, not the session: stream `interrupt` control request (then a `system` line and `quiet`,
+   * since the CLI ends the turn without a further result the machine could wait on); Ctrl+C on a pty, whose own
+   * Stop hook ends the turn.
+   */
   interrupt(sessionId: string): void {
     const s = this.require(sessionId);
-    if (this.deps.stream.has(s.id)) this.deps.stream.interrupt(s.id);
-    else if (this.deps.pty.has(s.id)) this.deps.pty.write(s.id, '\x03');
+    if (this.deps.stream.has(s.id)) {
+      this.deps.stream.interrupt(s.id);
+      this.deps.transcript.system(s.id, copy.chat.controls.interrupted);
+      this.applyEvent(s.id, { type: 'quiet' });
+    } else if (this.deps.pty.has(s.id)) this.deps.pty.write(s.id, '\x03');
   }
 
   /** Raw bytes from the terminal pane. Stream sessions have no TTY, so typed input is ignored there. */
@@ -696,7 +762,35 @@ export class SessionService {
     const s = this.deps.repos.sessions.get(id);
     if (!s) return;
     switch (effect.type) {
-      case 'init':
+      case 'init': {
+        // The CLI's own session id makes a later relaunch `--resume`; a default model becomes the reported one.
+        const next: Session = {
+          ...s,
+          cliSessionId: effect.chatId ?? s.cliSessionId,
+          model: s.model ?? effect.model,
+        };
+        if (next.cliSessionId !== s.cliSessionId || next.model !== s.model) {
+          this.deps.repos.sessions.upsert(next);
+          this.deps.publisher.upsert('sessions', [s.id]);
+        }
+        return;
+      }
+      case 'usage': {
+        // `total_cost_usd` / `num_turns` are running totals for the CLI session; after `--resume` they carry on, so
+        // the stored value only ever grows.
+        const next: Session = {
+          ...s,
+          costUsd: effect.costUsd === null ? s.costUsd : Math.max(s.costUsd, effect.costUsd),
+          numTurns: effect.numTurns === null ? s.numTurns : Math.max(s.numTurns, effect.numTurns),
+        };
+        if (next.costUsd !== s.costUsd || next.numTurns !== s.numTurns) {
+          this.deps.repos.sessions.upsert(next);
+          this.deps.publisher.upsert('sessions', [s.id]);
+        }
+        return;
+      }
+      case 'toolResult':
+        this.patchToolLine(s.id, effect.toolUseId, effect.ok, effect.detail);
         return;
       case 'render':
         this.render(id, effect.text);
@@ -737,13 +831,53 @@ export class SessionService {
     this.onProcessExit(s, exitCode);
   }
 
-  /** `can_use_tool` from the stream: edits pass when the toggle says so, everything else is an Allow/Deny decision. */
+  /** A `tool_result` landed: the matching `tool` line gets its status (and the error's first line). */
+  private patchToolLine(sessionId: SessionId, toolUseId: string, ok: boolean, detail: string | null): void {
+    const { repos, publisher } = this.deps;
+    const msg = repos.transcripts
+      .last(sessionId, 200)
+      .find((m) => m.payload.kind === 'tool' && m.payload.toolUseId === toolUseId);
+    if (!msg || msg.payload.kind !== 'tool') return;
+    repos.transcripts.upsert({
+      ...msg,
+      payload: {
+        ...msg.payload,
+        status: ok ? 'ok' : 'error',
+        detail: detail === null ? null : redact(detail),
+      },
+    });
+    publisher.emit({ op: 'transcript.replace', sessionId, messages: repos.transcripts.last(sessionId, 200) });
+  }
+
+  /**
+   * `can_use_tool` from the stream: edits pass when the toggle says so; AskUserQuestion becomes one decision ask per
+   * question (answered together as the request's `updatedInput`); ExitPlanMode becomes a plan ask; everything else
+   * is an Allow/Deny decision. In `bypassPermissions` / `dontAsk` the CLI should not ask at all — if it does, the
+   * request is handled like any other.
+   */
   private onPermissionRequest(
     s: Session,
     requestId: string,
     toolName: string,
     input: Record<string, unknown>,
   ): void {
+    if (toolName === 'AskUserQuestion') {
+      const parsed = askUserQuestionInput.safeParse(input);
+      if (parsed.success) {
+        this.openQuestionAsks(s, requestId, input['questions'], parsed.data.questions);
+        return;
+      }
+    } else if (toolName === 'ExitPlanMode') {
+      const parsed = exitPlanModeInput.safeParse(input);
+      const ask = this.openAsk(
+        s.id,
+        { kind: 'plan', summary: parsed.success ? parsed.data.plan : '', files: [] },
+        null,
+      );
+      this.setNote(s.id, copy.session.plan.header);
+      this.permissionAsks.set(ask.id, { kind: 'plan', sessionId: s.id, requestId });
+      return;
+    }
     const editPath =
       typeof input['file_path'] === 'string'
         ? input['file_path']
@@ -763,7 +897,91 @@ export class SessionService {
           : '';
     const prompt = `${toolName}${hint ? `: ${hint.split('\n')[0]?.slice(0, 160) ?? ''}` : ''}`;
     const ask = this.openAsk(s.id, { kind: 'decision', prompt, options: [...PERMISSION_OPTIONS] }, null);
-    this.permissionAsks.set(ask.id, { sessionId: s.id, requestId });
+    this.permissionAsks.set(ask.id, { kind: 'tool', sessionId: s.id, requestId });
+  }
+
+  /** One ask per AskUserQuestion question: a decision over its labels (+ "Other…"), or free text when it has none. */
+  private openQuestionAsks(
+    s: Session,
+    requestId: string,
+    rawQuestions: unknown,
+    questions: z.infer<typeof askUserQuestionInput>['questions'],
+  ): void {
+    this.questionRequests.set(requestId, {
+      sessionId: s.id,
+      questions: rawQuestions,
+      remaining: questions.length,
+      answers: {},
+    });
+    for (const q of questions) {
+      const prompt = q.header ? `${q.header} — ${q.question}` : q.question;
+      const labels = q.options.map((o) => o.label);
+      const ask =
+        labels.length > 0
+          ? this.openAsk(
+              s.id,
+              { kind: 'decision', prompt, options: [...labels, copy.session.question.other] },
+              null,
+            )
+          : this.openAsk(s.id, { kind: 'question', prompt }, null);
+      this.permissionAsks.set(ask.id, { kind: 'question', sessionId: s.id, requestId, question: q.question });
+    }
+  }
+
+  /** Answers the stream request an ask was holding, once the ask resolved. */
+  private answerPermission(perm: PermissionAsk, resolution: PendingAsk['resolution']): void {
+    const { stream } = this.deps;
+    switch (perm.kind) {
+      case 'tool': {
+        const allow = resolution?.kind === 'decision' && resolution.chosen === PERMISSION_OPTIONS[0];
+        stream.respondPermission(perm.sessionId, perm.requestId, allow);
+        return;
+      }
+      case 'plan': {
+        if (resolution?.kind === 'plan' && resolution.outcome === 'approved') {
+          stream.respondPermission(perm.sessionId, perm.requestId, true);
+          // The CLI leaves plan mode on approval; mirror that so the controls agree with it.
+          const s = this.deps.repos.sessions.get(perm.sessionId);
+          if (s && s.state !== 'done' && s.permissionMode === 'plan')
+            this.configure(s.id, { permissionMode: 'default' });
+          return;
+        }
+        const note = resolution?.kind === 'plan' ? (resolution.note?.trim() ?? '') : '';
+        stream.respondPermission(perm.sessionId, perm.requestId, false, note || copy.session.plan.rejectedNote);
+        return;
+      }
+      case 'question': {
+        const req = this.questionRequests.get(perm.requestId);
+        if (!req) return; // already denied (session stopped) — nothing left to answer
+        let answer: string;
+        if (resolution?.kind === 'decision') {
+          if (resolution.chosen === copy.session.question.other) {
+            // "Other…": the same question again as free text; its answer is the value.
+            const ask = this.openAsk(perm.sessionId, { kind: 'question', prompt: perm.question }, null);
+            this.permissionAsks.set(ask.id, perm);
+            return;
+          }
+          answer = resolution.chosen;
+        } else answer = resolution?.kind === 'question' ? resolution.answer.trim() : '';
+        req.answers[perm.question] = answer;
+        req.remaining -= 1;
+        if (req.remaining > 0) return;
+        this.questionRequests.delete(perm.requestId);
+        stream.respondPermission(perm.sessionId, perm.requestId, true, undefined, {
+          questions: req.questions,
+          answers: req.answers,
+        });
+        return;
+      }
+    }
+  }
+
+  /** Denies the request behind a cancelled ask; an AskUserQuestion request is denied once, whatever its asks. */
+  private denyPermission(perm: PermissionAsk, message: string): void {
+    if (perm.kind === 'question') {
+      if (!this.questionRequests.delete(perm.requestId)) return;
+    }
+    this.deps.stream.respondPermission(perm.sessionId, perm.requestId, false, message);
   }
 
   // --- CLI hooks (`styx hook <agent>`) --------------------------------------
@@ -947,7 +1165,7 @@ export class SessionService {
           const perm = this.permissionAsks.get(a.id);
           if (perm) {
             this.permissionAsks.delete(a.id);
-            this.deps.stream.respondPermission(perm.sessionId, perm.requestId, false, 'Session stopped');
+            this.denyPermission(perm, 'Session stopped');
           }
           for (const n of repos.notifications.byAsk(a.id)) {
             repos.notifications.upsert({ ...n, state: 'resolved', resolvedAt: now });
@@ -1137,11 +1355,13 @@ export class SessionService {
   /**
    * Marks the head ask resolved and moves the session on (used by ask.respond and GrantService). Asks that did not
    * come from the broker are answered into the process: stream permission decisions reply to the `can_use_tool`
-   * request, hook questions are typed/sent as the next user turn.
+   * request, hook questions are typed/sent as the next user turn. Answering an ask that already resolved (a double
+   * click) is a no-op that returns the row; only a cancelled ask is an error.
    */
   resolveAsk(askId: string, resolution: PendingAsk['resolution']): PendingAsk {
     const { repos, publisher, clock } = this.deps;
     const ask = repos.pendingAsks.get(askId) ?? fail('not-found', `ask ${askId} not found`);
+    if (ask.state === 'resolved') return ask;
     if (ask.state !== 'open') fail('invalid-transition', 'ask is not open');
     const now = clock.now();
     const next: PendingAsk = { ...ask, state: 'resolved', resolution, resolvedAt: now };
@@ -1157,8 +1377,7 @@ export class SessionService {
     const perm = this.permissionAsks.get(ask.id);
     if (perm) {
       this.permissionAsks.delete(ask.id);
-      const allow = resolution?.kind === 'decision' && resolution.chosen === PERMISSION_OPTIONS[0];
-      this.deps.stream.respondPermission(perm.sessionId, perm.requestId, allow);
+      this.answerPermission(perm, resolution);
     } else if (this.hookAsks.get(ask.sessionId) === ask.id) {
       this.hookAsks.delete(ask.sessionId);
       const answer = resolution?.kind === 'question' ? resolution.answer.trim() : '';

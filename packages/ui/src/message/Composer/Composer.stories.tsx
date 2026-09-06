@@ -26,6 +26,31 @@ export const Default: Story = {};
 export const Compact: Story = { args: { compact: true } };
 export const Disabled: Story = { args: { disabled: true } };
 export const NoModel: Story = { args: { modelLabel: undefined, hints: ['@file'] } };
+/** `controls` replaces the Model ▾ hint: the app renders its permission / model / effort selects and Stop here. */
+export const Controls: Story = {
+  args: {
+    controls: (
+      <>
+        <span>Permissions · Ask each time ▾</span>
+        <span>Model · Default ▾</span>
+        <button
+          type="button"
+          style={{
+            font: 'inherit',
+            letterSpacing: 'inherit',
+            textTransform: 'inherit',
+            color: 'inherit',
+            background: 'transparent',
+            border: 0,
+            padding: 0,
+          }}
+        >
+          Stop · esc
+        </button>
+      </>
+    ),
+  },
+};
 
 export const Matrix: Story = {
   render: (args) => (

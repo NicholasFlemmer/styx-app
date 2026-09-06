@@ -51,6 +51,69 @@ describe('Message', () => {
     expect(onChoose).toHaveBeenCalledWith('No');
   });
 
+  it('settled decision: options disabled, the chosen one inverted, nothing fires', async () => {
+    const user = userEvent.setup();
+    const onChoose = vi.fn();
+    render(
+      <Message
+        kind="decision"
+        options={[{ label: 'Allow' }, { label: 'Deny' }]}
+        onChoose={onChoose}
+        chosen="Deny"
+      >
+        Run pnpm test?
+      </Message>,
+    );
+    const allow = screen.getByRole('button', { name: 'Allow' });
+    const deny = screen.getByRole('button', { name: 'Deny' });
+    expect(allow).toBeDisabled();
+    expect(deny).toBeDisabled();
+    expect(deny.getAttribute('data-inv')).toBe('true');
+    expect(allow.getAttribute('data-inv')).toBeNull();
+    expect(
+      screen.getByText('Run pnpm test?').closest('[data-kind="decision"]')?.getAttribute('data-settled'),
+    ).toBe('true');
+    await user.click(allow);
+    expect(onChoose).not.toHaveBeenCalled();
+  });
+
+  it('closed decision (disabled, no choice): options disabled, none inverted', () => {
+    render(
+      <Message kind="decision" options={[{ label: 'Allow' }, { label: 'Deny' }]} onChoose={() => {}} disabled>
+        Run pnpm test?
+      </Message>,
+    );
+    for (const b of screen.getAllByRole('button')) {
+      expect(b).toBeDisabled();
+      expect(b.getAttribute('data-inv')).toBeNull();
+    }
+  });
+
+  it('tool row: glyph (hidden from AT), tool name, hint with title, optional detail; error status flagged', () => {
+    const { container, rerender } = render(
+      <Message kind="tool" tool="Bash" hint="pnpm test -F @styx/core" status="running" statusGlyph="…" />,
+    );
+    const row = container.querySelector('[data-kind="tool"]');
+    expect(row?.getAttribute('data-status')).toBe('running');
+    expect(row?.querySelector('[aria-hidden="true"]')?.textContent).toBe('…');
+    expect(screen.getByText('Bash')).toBeInTheDocument();
+    expect(screen.getByText('pnpm test -F @styx/core').getAttribute('title')).toBe('pnpm test -F @styx/core');
+    expect(row?.childElementCount).toBe(1);
+    rerender(
+      <Message
+        kind="tool"
+        tool="Bash"
+        hint="pnpm typecheck"
+        status="error"
+        statusGlyph="×"
+        detail="TS2322: no"
+      />,
+    );
+    expect(container.querySelector('[data-kind="tool"]')?.getAttribute('data-status')).toBe('error');
+    expect(screen.getByText('TS2322: no')).toBeInTheDocument();
+    expect(container.querySelector('[data-kind="tool"]')?.childElementCount).toBe(2);
+  });
+
   it('access request header and body copy; actions call back', async () => {
     const user = userEvent.setup();
     const onReview = vi.fn();

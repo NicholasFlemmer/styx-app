@@ -1,5 +1,8 @@
 import {
   BUILTIN_POLICY_IDS,
+  EFFORTS,
+  MODEL_ALIASES,
+  PERMISSION_MODES,
   cliAlternatives,
   cliCandidateLabel,
   cliLocationLabel,
@@ -326,13 +329,29 @@ const shortcutsRows = (ctx: RowContext): SettingsRow[] => {
   ];
 };
 
+/** Permission mode / Model / Effort option lists (Claude Code parity, discrepancy #54). */
+const PERMISSION_MODE_OPTIONS: readonly RowOption[] = optionsOf(
+  copy.session.permissionModes,
+  PERMISSION_MODES,
+);
+const EFFORT_OPTIONS: readonly RowOption[] = [
+  { value: MODEL_DEFAULT, label: copy.session.efforts.default },
+  ...optionsOf(copy.session.efforts, EFFORTS),
+];
+
 const agentDefaultsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
   const r = copy.settings.rows;
   const v = copy.settings.values;
   const eff = ctx.projectId === null ? null : projectSettingsOf(model, ctx.projectId);
   const currentModel = eff?.model.value ?? DEFAULT_PROJECT_SETTINGS.model;
-  const modelOptions: RowOption[] = [{ value: MODEL_DEFAULT, label: v.modelDefault }];
-  if (currentModel !== null) modelOptions.push({ value: currentModel, label: currentModel });
+  // `Default` (prototype) + the CLI aliases; a full model name already in project.json stays selectable.
+  const modelOptions: RowOption[] = [
+    { value: MODEL_DEFAULT, label: v.modelDefault },
+    ...optionsOf(copy.session.models, MODEL_ALIASES),
+  ];
+  if (currentModel !== null && !modelOptions.some((o) => o.value === currentModel)) {
+    modelOptions.push({ value: currentModel, label: currentModel });
+  }
   return [
     projectRow(
       model,
@@ -365,6 +384,34 @@ const agentDefaultsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => 
       onOff,
       isOn,
       ON_OFF,
+      true,
+    ),
+    projectRow(
+      model,
+      ctx,
+      'permissionMode',
+      r.permissionMode,
+      'permissionMode',
+      (m) => m,
+      (m) =>
+        (PERMISSION_MODES.includes(m as ProjectSettings['permissionMode'])
+          ? m
+          : 'default') as ProjectSettings['permissionMode'],
+      PERMISSION_MODE_OPTIONS,
+      true,
+    ),
+    projectRow(
+      model,
+      ctx,
+      'effort',
+      r.effort,
+      'effort',
+      (e) => e ?? MODEL_DEFAULT,
+      (e) =>
+        EFFORTS.includes(e as NonNullable<ProjectSettings['effort']>)
+          ? (e as ProjectSettings['effort'])
+          : null,
+      EFFORT_OPTIONS,
       true,
     ),
   ];

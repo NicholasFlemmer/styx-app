@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  copy,
   fixtures,
   upsertRows,
   type ProjectId,
@@ -48,6 +49,65 @@ describe('transcript items', () => {
       { path: 'checkout.ts', added: 2, removed: 0 },
       { path: 'checkout.test.ts', added: 44 },
     ]);
+  });
+
+  it('maps tool payloads to tool rows and decision rows carry chosen/open', () => {
+    const model = fixtures.demoReadModel();
+    const base = model.transcripts[claude]?.[0];
+    if (base === undefined) throw new Error('fixture');
+    const ask = model.pendingAsks.byId[fixtures.ids.ask.codexGrant];
+    if (ask === undefined) throw new Error('fixture');
+    const resolvedAsk = {
+      ...ask,
+      id: 'ask-res' as typeof ask.id,
+      state: 'resolved' as const,
+      sessionId: claude,
+    };
+    const withRows: ReadModel = {
+      ...model,
+      pendingAsks: upsertRows(model.pendingAsks, [resolvedAsk]),
+      transcripts: {
+        ...model.transcripts,
+        [claude]: [
+          {
+            ...base,
+            id: 'm-tool' as typeof base.id,
+            seq: 100,
+            body: '',
+            askId: null,
+            payload: {
+              kind: 'tool',
+              tool: 'Bash',
+              hint: 'pnpm test',
+              toolUseId: 't1',
+              status: 'error',
+              detail: 'exit 1',
+            },
+          },
+          {
+            ...base,
+            id: 'm-dec' as typeof base.id,
+            seq: 101,
+            body: 'Run it?',
+            askId: resolvedAsk.id,
+            payload: { kind: 'decision', options: ['Allow', 'Deny'], chosen: 'Deny' },
+          },
+        ],
+      },
+    };
+    const items = transcriptItems(withRows, claude);
+    expect(items[0]).toEqual({
+      id: 'm-tool',
+      kind: 'tool',
+      tool: 'Bash',
+      hint: 'pnpm test',
+      status: 'error',
+      detail: 'exit 1',
+    });
+    expect(items[1]).toMatchObject({ kind: 'decision', chosen: 'Deny', open: false, askId: resolvedAsk.id });
+    // Prototype rows have no ask: always answerable.
+    const demo = transcriptItems(model, claude).find((i) => i.kind === 'decision');
+    expect(demo).toMatchObject({ chosen: null, open: true, askId: null });
   });
 
   it('splits file names out of body text', () => {
@@ -155,6 +215,164 @@ describe('ChatPane', () => {
     expect(commands).toEqual([
       { name: 'session.sendMessage', input: { sessionId: claude, body: 'ship it' } },
     ]);
+  });
+
+  it('Claude session: permission / model selects and Stop replace the hints (effort lives in spawn/Settings; discrepancy #54)', async () => {
+    render(<ChatPane projectId={acme} />);
+    expect(screen.queryByRole('button', { name: 'Model' })).toBeNull();
+    const mode = screen.getByRole('combobox', { name: 'Permissions' }) as HTMLSelectElement;
+    expect(mode.value).toBe('default');
+    expect(mode.title).toBe(copy.session.permissionModeHints.default);
+    expect([...mode.options].map((o) => o.textContent)).toEqual([
+      'Ask each time',
+      'Accept edits',
+      'Plan mode',
+      'Bypass permissions',
+      "Don't ask",
+      'Auto',
+    ]);
+    fireEvent.change(mode, { target: { value: 'plan' } });
+    const model = screen.getByRole('combobox', { name: 'Model' }) as HTMLSelectElement;
+    expect(model.value).toBe('default');
+    fireEvent.change(model, { target: { value: 'opus' } });
+    expect(screen.queryByRole('combobox', { name: 'Effort' })).toBeNull();
+    expect(screen.queryByText(copy.chat.composer.file)).toBeNull();
+    fireEvent.change(model, { target: { value: 'default' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Stop · esc' }));
+    await flush();
+    expect(commands).toEqual([
+      { name: 'session.configure', input: { sessionId: claude, permissionMode: 'plan' } },
+      { name: 'session.configure', input: { sessionId: claude, model: 'opus' } },
+      { name: 'session.configure', input: { sessionId: claude, model: null } },
+      { name: 'session.interrupt', input: { sessionId: claude } },
+    ]);
+  });
+
+  it('under the e2e/visual harness (env.e2e) the static Model ▾ hint stays so the baked baseline holds', () => {
+    Object.assign(window, {
+      styx: {
+        platform: 'darwin',
+        env: { now: fixtures.DEMO_NOW, e2e: true },
+        command: vi.fn(async () => ({ ok: true, value: {} })),
+      },
+    });
+    render(<ChatPane projectId={acme} />);
+    expect(screen.getByRole('button', { name: 'Model' })).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: 'Permissions' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Stop · esc' })).toBeNull();
+  });
+
+  it('other agents keep the static Model ▾ hint; a done Claude session shows no controls', () => {
+    useUiStore.getState().setSession(acme, codex);
+    const { unmount } = render(<ChatPane projectId={acme} />);
+    expect(screen.getByRole('button', { name: 'Model' })).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: 'Permissions' })).toBeNull();
+    unmount();
+    const model = fixtures.demoReadModel();
+    const s = model.sessions.byId[claude];
+    if (s === undefined) throw new Error('fixture');
+    useReadModel.getState().replaceModel(
+      {
+        ...model,
+        sessions: upsertRows(model.sessions, [
+          { ...s, state: 'done', pid: null, exitCode: 0, endedAt: fixtures.DEMO_NOW },
+        ]),
+      },
+      'connected',
+    );
+    useUiStore.getState().setSession(acme, claude);
+    render(<ChatPane projectId={acme} />);
+    expect(screen.queryByRole('combobox', { name: 'Permissions' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Stop · esc' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Model' })).toBeTruthy();
+  });
+
+  it('renders a full model name on the session as an extra option; Stop hides once the turn ends', () => {
+    const model = fixtures.demoReadModel();
+    const s = model.sessions.byId[claude];
+    if (s === undefined) throw new Error('fixture');
+    useReadModel.getState().replaceModel(
+      {
+        ...model,
+        sessions: upsertRows(model.sessions, [{ ...s, state: 'idle', model: 'claude-opus-4-1' }]),
+      },
+      'connected',
+    );
+    render(<ChatPane projectId={acme} />);
+    const select = screen.getByRole('combobox', { name: 'Model' }) as HTMLSelectElement;
+    expect(select.value).toBe('claude-opus-4-1');
+    expect([...select.options].map((o) => o.value)).toEqual([
+      'default',
+      'fable',
+      'opus',
+      'sonnet',
+      'haiku',
+      'claude-opus-4-1',
+    ]);
+    expect(screen.queryByRole('button', { name: 'Stop · esc' })).toBeNull();
+  });
+
+  it('answered decision rows are settled: options disabled and the choice inverted', () => {
+    const model = fixtures.demoReadModel();
+    const rows = model.transcripts[claude] ?? [];
+    const decision = rows.find((m) => m.payload.kind === 'decision');
+    if (decision === undefined) throw new Error('fixture');
+    useReadModel.getState().replaceModel(
+      {
+        ...model,
+        transcripts: {
+          ...model.transcripts,
+          [claude]: rows.map((m) =>
+            m.id === decision.id
+              ? { ...m, payload: { kind: 'decision', options: ['Yes', 'No', 'Edit plan'], chosen: 'No' } }
+              : m,
+          ),
+        },
+      },
+      'connected',
+    );
+    render(<ChatPane projectId={acme} />);
+    const no = screen.getByRole('button', { name: 'No' });
+    expect(no.hasAttribute('disabled')).toBe(true);
+    expect(no.getAttribute('data-inv')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Yes' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('renders tool rows from the stream with the status glyph', () => {
+    const model = fixtures.demoReadModel();
+    const base = model.transcripts[claude]?.[0];
+    if (base === undefined) throw new Error('fixture');
+    useReadModel.getState().replaceModel(
+      {
+        ...model,
+        transcripts: {
+          ...model.transcripts,
+          [claude]: [
+            ...(model.transcripts[claude] ?? []),
+            {
+              ...base,
+              id: 'm-tool' as typeof base.id,
+              seq: 100,
+              body: '',
+              askId: null,
+              payload: {
+                kind: 'tool',
+                tool: 'Bash',
+                hint: 'pnpm test',
+                toolUseId: 't1',
+                status: 'ok',
+                detail: null,
+              },
+            },
+          ],
+        },
+      },
+      'connected',
+    );
+    const { container } = render(<ChatPane projectId={acme} />);
+    const row = container.querySelector('[data-kind="tool"]');
+    expect(row?.getAttribute('data-status')).toBe('ok');
+    expect(row?.textContent).toBe('✓Bashpnpm test');
   });
 
   it('+ opens the spawn modal and ⤢ pops the chat out', async () => {

@@ -21,6 +21,8 @@ import {
   newProjectValid,
   primaryStepOf,
   providerCli,
+  defaultSessionSettings,
+  sessionSettingsFor,
   spawnPayload,
   spawnValid,
   sshFormValid,
@@ -72,9 +74,9 @@ describe('connect helpers', () => {
     expect(cliStatusLine('gh', { ...gcloud, installed: false })).toBe('gh · not found on PATH');
     expect(cliStatusLine('gh', null)).toBe('gh · not found on PATH');
     expect(defaultAccount(gcloud)).toBe('ops@acme.dev');
-    expect(defaultAccount({ ...gcloud, accounts: gcloud.accounts.map((a) => ({ ...a, active: false })) })).toBe(
-      'nic@acme.dev',
-    );
+    expect(
+      defaultAccount({ ...gcloud, accounts: gcloud.accounts.map((a) => ({ ...a, active: false })) }),
+    ).toBe('nic@acme.dev');
     expect(defaultAccount({ ...gcloud, accounts: [] })).toBeNull();
     expect(defaultAccount(null)).toBeNull();
     expect(cliTargetName('gcp', gcloud.accounts[0], '')).toBe('GCP nic@acme.dev');
@@ -143,6 +145,7 @@ describe('spawn helpers', () => {
       branch: ' agent/claude-1 ',
       firstMessage: 'Add tests',
       toggles: { autoApproveEdits: false, mayRequestTargets: true, notifyWhenNeedsMe: true },
+      ...defaultSessionSettings(model, acme),
     };
     expect(spawnPayload(model, acme, form)).toEqual({
       projectId: acme,
@@ -151,12 +154,48 @@ describe('spawn helpers', () => {
       firstMessage: 'Add tests',
       toggles: form.toggles,
       model: null,
+      permissionMode: 'default',
+      effort: null,
     });
     expect(spawnValid(model, form)).toBe(true);
     expect(spawnValid(model, { ...form, branch: '  ' })).toBe(false);
     expect(spawnValid(fixtures.errorReadModel(), { ...form, agent: 'codex' })).toBe(false);
     const existing = spawnPayload(model, acme, { ...form, worktree: fixtures.ids.worktree.fixCheckout });
     expect(existing.worktree).toEqual({ kind: 'existing', worktreeId: fixtures.ids.worktree.fixCheckout });
+  });
+
+  it('Claude session settings ride along; other agents fall back to the CLI defaults (discrepancy #54)', () => {
+    expect(defaultSessionSettings(model, acme)).toEqual({
+      permissionMode: 'default',
+      model: null,
+      effort: null,
+    });
+    const chosen = { permissionMode: 'plan' as const, model: 'opus', effort: 'high' as const };
+    expect(sessionSettingsFor('claude', chosen)).toEqual(chosen);
+    expect(sessionSettingsFor('cursor', chosen)).toEqual({
+      permissionMode: 'default',
+      model: 'opus',
+      effort: null,
+    });
+    expect(sessionSettingsFor('codex', chosen)).toEqual({
+      permissionMode: 'default',
+      model: null,
+      effort: null,
+    });
+    const form = {
+      agent: 'claude' as const,
+      worktree: 'new',
+      branch: 'agent/claude-1',
+      firstMessage: '',
+      toggles: { autoApproveEdits: false, mayRequestTargets: true, notifyWhenNeedsMe: true },
+      ...chosen,
+    };
+    expect(spawnPayload(model, acme, form)).toMatchObject(chosen);
+    expect(spawnPayload(model, acme, { ...form, agent: 'shell' })).toMatchObject({
+      permissionMode: 'default',
+      model: null,
+      effort: null,
+    });
   });
 });
 

@@ -53,6 +53,8 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
 
   bus.register('ask.respond', async ({ askId, resolution }) => {
     const ask = repos.pendingAsks.get(askId) ?? fail('not-found', `ask ${askId} not found`);
+    // A repeat answer (double click, two windows) is a no-op; only a cancelled ask is really gone.
+    if (ask.state === 'resolved') return {};
     if (ask.state !== 'open') fail('invalid-transition', 'ask is not open');
     if (ask.kind !== resolution.kind)
       fail('invalid-input', `ask is a ${ask.kind}, resolution is a ${resolution.kind}`);

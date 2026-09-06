@@ -13,6 +13,11 @@ export interface ComposerProps {
   /** Send hint label (app: `copy.chat.composer.send`, "⏎ send"). */
   sendLabel: string;
   onModel?: () => void;
+  /**
+   * Live session controls rendered in the hint row instead of `modelLabel` (t-label selects, Stop): the app's
+   * Claude Code parity row (owner addition, discrepancy #54). Same line height as the hint row.
+   */
+  controls?: ReactNode;
   /** Pop-out chat: 10px 12px padding, 44px min-height, 12.5px type, no hint row. */
   compact?: boolean;
   disabled?: boolean;
@@ -29,6 +34,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
     modelLabel,
     sendLabel,
     onModel,
+    controls,
     compact,
     disabled,
     ariaLabel = placeholder,
@@ -72,13 +78,21 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
       />
       {!compact && (
         <div className={s['hints']}>
-          {hints.map((h) => (
-            <span key={h}>{h}</span>
-          ))}
-          {modelLabel !== undefined && modelLabel !== null && (
-            <button type="button" className={s['hint']} onClick={onModel} aria-haspopup="menu">
-              {modelLabel} <Icon name="chevron" size={8} />
-            </button>
+          {(controls === undefined || controls === null) &&
+            hints.map((h) => (
+              <span key={h}>{h}</span>
+            ))}
+          {controls !== undefined && controls !== null ? (
+            <span className={s['controls']} data-composer-controls="true">
+              {controls}
+            </span>
+          ) : (
+            modelLabel !== undefined &&
+            modelLabel !== null && (
+              <button type="button" className={s['hint']} onClick={onModel} aria-haspopup="menu">
+                {modelLabel} <Icon name="chevron" size={8} />
+              </button>
+            )
           )}
           <span className={s['spacer']} />
           <button

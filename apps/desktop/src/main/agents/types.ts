@@ -1,4 +1,4 @@
-import type { Agent, Runner } from '@styx/core';
+import type { Agent, Effort, PermissionMode, Runner } from '@styx/core';
 
 export interface AgentLaunchContext {
   agent: Agent;
@@ -12,6 +12,18 @@ export interface AgentLaunchContext {
   runner: Runner;
   /** Session toggle: edits are allowed without a permission prompt. */
   autoApproveEdits: boolean;
+  /**
+   * Claude Code only (`--permission-mode`); `default` passes no flag and lets `autoApproveEdits` pick `acceptEdits`.
+   * Other adapters ignore it.
+   */
+  permissionMode: PermissionMode;
+  /** Claude Code only (`--effort`); null = the CLI's default. Other adapters ignore it. */
+  effort: Effort | null;
+  /**
+   * The CLI's own session id from an earlier process (`Session.cliSessionId`) when this is a relaunch: Claude Code
+   * gets `--resume <id>` so the conversation context survives a dead process. Null on the first launch.
+   */
+  resumeSessionId: string | null;
   /** Per-session scratch dir for temp config files (`<userData>/agents/<sessionId>`). */
   configDir: string;
   shimDir: string;

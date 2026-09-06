@@ -62,6 +62,13 @@
     grid-template-columns: 1fr 1fr;
     gap: 12px;
   }
+  /* Permissions / Model / Effort (discrepancy #54): same recipe as the worktree row, three-up; the hint spans. */
+  .three {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    align-items: start;
+  }
   /* Worktree select matches the input recipe: --bg fill, 8px 10px, 12.5px. */
   .worktree select {
     /* Prototype box: 31px content + borders (Archivo 12.5px, normal line box). */

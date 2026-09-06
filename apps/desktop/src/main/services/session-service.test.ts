@@ -74,7 +74,13 @@ class FakePty extends PtyService {
 class FakeStream extends EventEmitter<StreamEvents> implements StreamRunnerLike {
   readonly spawned: StreamSpawnOptions[] = [];
   readonly sent: { id: string; text: string }[] = [];
-  readonly permissions: { id: string; requestId: string; allow: boolean }[] = [];
+  readonly permissions: {
+    id: string;
+    requestId: string;
+    allow: boolean;
+    message?: string;
+    updatedInput?: Record<string, unknown>;
+  }[] = [];
   readonly live = new Set<string>();
   failNext: NodeJS.ErrnoException | null = null;
   async spawn(opts: StreamSpawnOptions): Promise<{ pid: number }> {
@@ -100,8 +106,20 @@ class FakeStream extends EventEmitter<StreamEvents> implements StreamRunnerLike 
   interrupt(id: string): void {
     this.controls.push({ id, request: { subtype: 'interrupt' } });
   }
-  respondPermission(id: string, requestId: string, allow: boolean): void {
-    this.permissions.push({ id, requestId, allow });
+  respondPermission(
+    id: string,
+    requestId: string,
+    allow: boolean,
+    message?: string,
+    updatedInput?: Record<string, unknown>,
+  ): void {
+    this.permissions.push({
+      id,
+      requestId,
+      allow,
+      ...(message !== undefined ? { message } : {}),
+      ...(updatedInput !== undefined ? { updatedInput } : {}),
+    });
   }
   kill(id: string): void {
     if (!this.live.delete(id)) return;
@@ -280,7 +298,12 @@ describe('SessionService spawn + stream runner', () => {
     stream.effect(session.id, { type: 'permission', requestId: 'b1', toolName: 'Bash', input: {} });
     expect(a.sessions.get(session.id)?.state).toBe('needs-you');
     a.sessions.stop(session.id);
-    expect(stream.permissions.at(-1)).toEqual({ id: session.id, requestId: 'b1', allow: false });
+    expect(stream.permissions.at(-1)).toEqual({
+      id: session.id,
+      requestId: 'b1',
+      allow: false,
+      message: 'Session stopped',
+    });
     expect(a.repos.pendingAsks.openBySession(session.id)).toEqual([]);
     expect(a.sessions.get(session.id)?.state).toBe('done');
   });
@@ -696,5 +719,349 @@ describe('SessionService pty runner + CLI hooks', () => {
       ok: true,
     });
     expect(a.sessions.get(session.id)?.archivedAt).toBe(DEMO_NOW + 1000);
+  });
+});
+
+describe('SessionService Claude Code parity (stream)', () => {
+  const systemLines = (a: TestApp['app'], id: string) =>
+    a.repos.transcripts
+      .last(id)
+      .filter((m) => m.payload.kind === 'system')
+      .map((m) => m.body);
+  const flag = (args: string[], f: string): string | undefined => args[args.indexOf(f) + 1];
+
+  it('launch flags follow the session row: default mode passes no --permission-mode; plan + effort do; bypass adds the skip flag', async () => {
+    const { app: a } = app();
+    await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    const first = stream.spawned[0]!.args;
+    expect(first).not.toContain('--permission-mode');
+    expect(first).not.toContain('--effort');
+    expect(first).not.toContain('--resume');
+    expect(first).toContain('--allow-dangerously-skip-permissions');
+    expect(first).not.toContain('--dangerously-skip-permissions');
+
+    const cursor = a.repos.sessions.get(ids.session.cursor)!;
+    a.repos.sessions.upsert({ ...cursor, state: 'done', endedAt: DEMO_NOW, pid: null, exitCode: 0 });
+    const { session } = await a.sessions.spawn({
+      ...spawnInput('claude', ids.worktree.testFlaky),
+      permissionMode: 'plan',
+      effort: 'high',
+    });
+    expect(session).toMatchObject({ permissionMode: 'plan', effort: 'high' });
+    const second = stream.spawned[1]!.args;
+    expect(flag(second, '--permission-mode')).toBe('plan');
+    expect(flag(second, '--effort')).toBe('high');
+
+    a.sessions.configure(session.id, { permissionMode: 'bypassPermissions' });
+    stream.live.delete(session.id);
+    await a.sessions.sendMessage(session.id, 'again');
+    const third = stream.spawned[2]!.args;
+    expect(flag(third, '--permission-mode')).toBe('bypassPermissions');
+    expect(third).toContain('--dangerously-skip-permissions');
+  });
+
+  it('init stores the CLI session id (and a default model); a relaunch resumes it with --resume', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    expect(session.cliSessionId).toBeNull();
+    stream.effect(session.id, { type: 'init', chatId: 'cli-sess-9', model: 'claude-opus-4-1', permissionMode: 'default' });
+    expect(a.sessions.get(session.id)).toMatchObject({ cliSessionId: 'cli-sess-9', model: 'claude-opus-4-1' });
+    // a second init (the CLI restarted) keeps an explicit model; a null chat id keeps the stored one
+    a.sessions.configure(session.id, { model: 'sonnet' });
+    stream.effect(session.id, { type: 'init', chatId: null, model: 'claude-x', permissionMode: null });
+    expect(a.sessions.get(session.id)).toMatchObject({ cliSessionId: 'cli-sess-9', model: 'sonnet' });
+
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    stream.live.delete(session.id);
+    await a.sessions.sendMessage(session.id, 'continue');
+    const args = stream.spawned[1]!.args;
+    expect(flag(args, '--resume')).toBe('cli-sess-9');
+    expect(flag(args, '--model')).toBe('sonnet');
+    expect(stream.spawned[0]!.args).not.toContain('--resume');
+  });
+
+  it.each([
+    ['first result', 0, 0, { costUsd: 0.02, numTurns: 2 }, { costUsd: 0.02, numTurns: 2 }],
+    ['running total grows', 0.02, 2, { costUsd: 0.05, numTurns: 5 }, { costUsd: 0.05, numTurns: 5 }],
+    ['a restarted CLI reports less: keep the max', 0.05, 5, { costUsd: 0.01, numTurns: 1 }, { costUsd: 0.05, numTurns: 5 }],
+    ['nulls leave the row alone', 0.05, 5, { costUsd: null, numTurns: null }, { costUsd: 0.05, numTurns: 5 }],
+  ])('usage: %s', async (_label, costUsd, numTurns, reported, expected) => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    a.repos.sessions.upsert({ ...a.sessions.get(session.id)!, costUsd, numTurns });
+    stream.effect(session.id, { type: 'usage', ...reported, durationMs: 100 });
+    expect(a.sessions.get(session.id)).toMatchObject(expected);
+  });
+
+  it('tool lines: the running line is patched by its tool_result (ok / error + detail) and republished', async () => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    const tool = (id: string, tool: string, hint: string) =>
+      stream.effect(session.id, {
+        type: 'transcript',
+        body: `${tool} ${hint}`,
+        payload: { kind: 'tool', tool, hint, toolUseId: id, status: 'running', detail: null },
+      });
+    tool('t1', 'Bash', 'pnpm test');
+    tool('t2', 'Read', 'a.ts');
+    stream.effect(session.id, { type: 'toolResult', toolUseId: 't2', ok: true, detail: null });
+    stream.effect(session.id, { type: 'toolResult', toolUseId: 't1', ok: false, detail: 'exit 1: 3 failed' });
+    stream.effect(session.id, { type: 'toolResult', toolUseId: 'unknown', ok: true, detail: null }); // ignored
+    const tools = a.repos.transcripts.last(session.id).filter((m) => m.payload.kind === 'tool');
+    expect(tools.map((m) => m.payload)).toEqual([
+      { kind: 'tool', tool: 'Bash', hint: 'pnpm test', toolUseId: 't1', status: 'error', detail: 'exit 1: 3 failed' },
+      { kind: 'tool', tool: 'Read', hint: 'a.ts', toolUseId: 't2', status: 'ok', detail: null },
+    ]);
+    a.publisher.flush();
+    const replaces = win.batches().flatMap((b) => b.deltas).filter((d) => d.op === 'transcript.replace');
+    expect(replaces).toHaveLength(2);
+    expect(a.sessions.get(session.id)?.state).toBe('working');
+  });
+
+  it('AskUserQuestion: one decision ask per question; the answers go back together as updatedInput', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    const questions = [
+      { question: 'Which database?', header: 'Storage', options: [{ label: 'Postgres', description: 'p' }, { label: 'SQLite' }], multiSelect: false },
+      { question: 'Add tests?', options: [{ label: 'Yes' }, { label: 'No' }] },
+    ];
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'q-1',
+      toolName: 'AskUserQuestion',
+      input: { questions },
+    });
+    expect(a.sessions.get(session.id)?.state).toBe('needs-you');
+    const asks = a.repos.pendingAsks.openBySession(session.id);
+    expect(asks.map((x) => x.payload)).toEqual([
+      { kind: 'decision', prompt: 'Storage — Which database?', options: ['Postgres', 'SQLite', 'Other…'] },
+      { kind: 'decision', prompt: 'Add tests?', options: ['Yes', 'No', 'Other…'] },
+    ]);
+    await a.bus.dispatch(sender, 'ask.respond', {
+      askId: asks[0]!.id,
+      resolution: { kind: 'decision', chosen: 'Postgres' },
+    });
+    expect(stream.permissions).toEqual([]); // waits for the second question
+    expect(a.sessions.get(session.id)?.state).toBe('needs-you');
+    await a.bus.dispatch(sender, 'ask.respond', {
+      askId: asks[1]!.id,
+      resolution: { kind: 'decision', chosen: 'No' },
+    });
+    expect(stream.permissions).toEqual([
+      {
+        id: session.id,
+        requestId: 'q-1',
+        allow: true,
+        updatedInput: { questions, answers: { 'Which database?': 'Postgres', 'Add tests?': 'No' } },
+      },
+    ]);
+    expect(a.sessions.get(session.id)?.state).toBe('working');
+    // the decision lines in the chat show what was chosen
+    expect(
+      a.repos.transcripts
+        .last(session.id)
+        .filter((m) => m.payload.kind === 'decision')
+        .map((m) => (m.payload as { chosen: string | null }).chosen),
+    ).toEqual(['Postgres', 'No']);
+  });
+
+  it('AskUserQuestion "Other…" → a free-text question ask whose answer is the value; no options → free text directly', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    const questions = [
+      { question: 'Framework?', options: [{ label: 'React' }] },
+      { question: 'Anything else?', options: [] },
+    ];
+    stream.effect(session.id, { type: 'permission', requestId: 'q-2', toolName: 'AskUserQuestion', input: { questions } });
+    const [first, second] = a.repos.pendingAsks.openBySession(session.id);
+    expect(second?.payload).toEqual({ kind: 'question', prompt: 'Anything else?' });
+    await a.bus.dispatch(sender, 'ask.respond', {
+      askId: first!.id,
+      resolution: { kind: 'decision', chosen: 'Other…' },
+    });
+    const followUp = a.repos.pendingAsks.openBySession(session.id).find((x) => x.kind === 'question' && x.payload.kind === 'question' && x.payload.prompt === 'Framework?');
+    expect(followUp).toBeDefined();
+    expect(stream.permissions).toEqual([]);
+    await a.bus.dispatch(sender, 'ask.respond', {
+      askId: followUp!.id,
+      resolution: { kind: 'question', answer: '  Svelte ' },
+    });
+    await a.bus.dispatch(sender, 'ask.respond', {
+      askId: second!.id,
+      resolution: { kind: 'question', answer: 'no' },
+    });
+    expect(stream.permissions).toEqual([
+      {
+        id: session.id,
+        requestId: 'q-2',
+        allow: true,
+        updatedInput: { questions, answers: { 'Framework?': 'Svelte', 'Anything else?': 'no' } },
+      },
+    ]);
+    expect(a.repos.pendingAsks.openBySession(session.id)).toEqual([]);
+    expect(a.sessions.get(session.id)?.state).toBe('working');
+  });
+
+  it('AskUserQuestion with an unparseable input falls back to a plain Allow/Deny decision', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'permission', requestId: 'q-3', toolName: 'AskUserQuestion', input: {} });
+    const ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
+    expect(ask.payload).toEqual({ kind: 'decision', prompt: 'AskUserQuestion', options: ['Allow', 'Deny'] });
+    await a.bus.dispatch(sender, 'ask.respond', { askId: ask.id, resolution: { kind: 'decision', chosen: 'Deny' } });
+    expect(stream.permissions).toEqual([{ id: session.id, requestId: 'q-3', allow: false }]);
+  });
+
+  it('stopping a session with an open AskUserQuestion denies the request exactly once', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'q-4',
+      toolName: 'AskUserQuestion',
+      input: { questions: [{ question: 'A?', options: [{ label: 'x' }] }, { question: 'B?', options: [{ label: 'y' }] }] },
+    });
+    expect(a.repos.pendingAsks.openBySession(session.id)).toHaveLength(2);
+    a.sessions.stop(session.id);
+    expect(stream.permissions).toEqual([{ id: session.id, requestId: 'q-4', allow: false, message: 'Session stopped' }]);
+    expect(a.repos.pendingAsks.openBySession(session.id)).toEqual([]);
+  });
+
+  it('ExitPlanMode: a plan ask; approve → allow + the session leaves plan mode; reject → deny with the note', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn({ ...spawnInput('claude', ids.worktree.featPromo), permissionMode: 'plan' });
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'p-1',
+      toolName: 'ExitPlanMode',
+      input: { plan: '# Plan\n1. add validate.ts\n2. wire it up' },
+    });
+    expect(a.sessions.get(session.id)).toMatchObject({ state: 'needs-you', note: 'Plan ready for review' });
+    let ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
+    expect(ask.payload).toEqual({ kind: 'plan', summary: '# Plan\n1. add validate.ts\n2. wire it up', files: [] });
+    expect(a.repos.transcripts.last(session.id).at(-1)).toMatchObject({ askId: ask.id, payload: { kind: 'agent' } });
+
+    await a.bus.dispatch(sender, 'ask.respond', {
+      askId: ask.id,
+      resolution: { kind: 'plan', outcome: 'rejected', note: 'Use the existing validator' },
+    });
+    expect(stream.permissions).toEqual([
+      { id: session.id, requestId: 'p-1', allow: false, message: 'Use the existing validator' },
+    ]);
+    expect(a.sessions.get(session.id)).toMatchObject({ state: 'working', permissionMode: 'plan' });
+
+    stream.effect(session.id, { type: 'permission', requestId: 'p-2', toolName: 'ExitPlanMode', input: { plan: 'v2' } });
+    ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
+    await a.bus.dispatch(sender, 'ask.respond', {
+      askId: ask.id,
+      resolution: { kind: 'plan', outcome: 'rejected', note: null },
+    });
+    expect(stream.permissions.at(-1)).toEqual({
+      id: session.id,
+      requestId: 'p-2',
+      allow: false,
+      message: 'Plan rejected in Styx',
+    });
+
+    stream.effect(session.id, { type: 'permission', requestId: 'p-3', toolName: 'ExitPlanMode', input: { plan: 'v3' } });
+    ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
+    await a.bus.dispatch(sender, 'ask.respond', {
+      askId: ask.id,
+      resolution: { kind: 'plan', outcome: 'approved', note: null },
+    });
+    expect(stream.permissions.at(-1)).toEqual({ id: session.id, requestId: 'p-3', allow: true });
+    expect(a.sessions.get(session.id)).toMatchObject({ state: 'working', permissionMode: 'default' });
+    expect(stream.controls.at(-1)).toEqual({ id: session.id, request: { subtype: 'set_permission_mode', mode: 'default' } });
+    expect(systemLines(a, session.id).at(-1)).toBe('permissions: Ask each time');
+  });
+
+  it('ExitPlanMode approval in a non-plan mode (the agent entered plan mode itself) keeps the stored mode', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn({ ...spawnInput('claude', ids.worktree.featPromo), permissionMode: 'acceptEdits' });
+    stream.effect(session.id, { type: 'permission', requestId: 'p-9', toolName: 'ExitPlanMode', input: { plan: 'x' } });
+    const ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
+    await a.bus.dispatch(sender, 'ask.respond', { askId: ask.id, resolution: { kind: 'plan', outcome: 'approved', note: null } });
+    expect(stream.permissions).toEqual([{ id: session.id, requestId: 'p-9', allow: true }]);
+    expect(a.sessions.get(session.id)?.permissionMode).toBe('acceptEdits');
+    expect(stream.controls).toEqual([]);
+  });
+
+  it('configure: a changed model / mode sends the control and a system line; unchanged values and effort are silent', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    a.sessions.configure(session.id, { model: 'opus', permissionMode: 'acceptEdits', effort: 'max' });
+    expect(a.sessions.get(session.id)).toMatchObject({ model: 'opus', permissionMode: 'acceptEdits', effort: 'max' });
+    expect(stream.controls).toEqual([
+      { id: session.id, request: { subtype: 'set_model', model: 'opus' } },
+      { id: session.id, request: { subtype: 'set_permission_mode', mode: 'acceptEdits' } },
+    ]);
+    expect(systemLines(a, session.id)).toEqual(['model: Opus', 'permissions: Accept edits']);
+    a.sessions.configure(session.id, { model: 'opus', permissionMode: 'acceptEdits', effort: 'low' });
+    expect(stream.controls).toHaveLength(2);
+    expect(systemLines(a, session.id)).toHaveLength(2);
+    expect(a.sessions.get(session.id)?.effort).toBe('low');
+    a.sessions.configure(session.id, { model: null });
+    expect(stream.controls.at(-1)).toEqual({ id: session.id, request: { subtype: 'set_model', model: null } });
+    expect(systemLines(a, session.id).at(-1)).toBe('model: Default model');
+    a.sessions.configure(session.id, { model: 'claude-opus-4-1-20250805' });
+    expect(systemLines(a, session.id).at(-1)).toBe('model: claude-opus-4-1-20250805');
+    // effort lands on the next relaunch
+    stream.live.delete(session.id);
+    await a.sessions.sendMessage(session.id, 'go');
+    expect(flag(stream.spawned[1]!.args, '--effort')).toBe('low');
+  });
+
+  it('interrupt: stream → interrupt control + "interrupted" system line + idle; pty → Ctrl+C only', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    expect(a.sessions.get(session.id)?.state).toBe('working');
+    a.sessions.interrupt(session.id);
+    expect(stream.controls).toEqual([{ id: session.id, request: { subtype: 'interrupt' } }]);
+    expect(systemLines(a, session.id)).toEqual(['interrupted']);
+    expect(a.sessions.get(session.id)?.state).toBe('idle');
+    await a.bus.dispatch(sender, 'session.interrupt', { sessionId: session.id });
+    expect(stream.controls).toHaveLength(2);
+
+    const { session: codex } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
+    a.sessions.interrupt(codex.id);
+    expect(pty.writes.at(-1)).toEqual({ id: codex.id, data: '\x03' });
+    expect(systemLines(a, codex.id)).toEqual([]);
+    expect(a.sessions.get(codex.id)?.state).toBe('working');
+  });
+
+  it('compact_boundary arrives as a system transcript line', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'transcript', body: 'context compacted', payload: { kind: 'system' } });
+    expect(systemLines(a, session.id)).toEqual(['context compacted']);
+  });
+
+  it('ask.respond is idempotent: a repeat answer to a resolved ask is ok and sends nothing; a cancelled ask is an error', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'permission', requestId: 'r-1', toolName: 'Bash', input: { command: 'ls' } });
+    const ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
+    const respond = () =>
+      a.bus.dispatch(sender, 'ask.respond', { askId: ask.id, resolution: { kind: 'decision', chosen: 'Allow' } });
+    expect(await respond()).toEqual({ ok: true, value: {} });
+    expect(await respond()).toEqual({ ok: true, value: {} });
+    expect(
+      await a.bus.dispatch(sender, 'ask.respond', { askId: ask.id, resolution: { kind: 'decision', chosen: 'Deny' } }),
+    ).toEqual({ ok: true, value: {} });
+    expect(stream.permissions).toEqual([{ id: session.id, requestId: 'r-1', allow: true }]);
+    expect(a.repos.pendingAsks.get(ask.id)?.resolution).toEqual({ kind: 'decision', chosen: 'Allow' });
+    expect(a.sessions.resolveAsk(ask.id, { kind: 'decision', chosen: 'Deny' })).toMatchObject({
+      state: 'resolved',
+      resolution: { kind: 'decision', chosen: 'Allow' },
+    });
+
+    stream.effect(session.id, { type: 'permission', requestId: 'r-2', toolName: 'Bash', input: { command: 'rm' } });
+    const second = a.repos.pendingAsks.openBySession(session.id)[0]!;
+    a.sessions.stop(session.id);
+    expect(a.repos.pendingAsks.get(second.id)?.state).toBe('cancelled');
+    expect(
+      await a.bus.dispatch(sender, 'ask.respond', { askId: second.id, resolution: { kind: 'decision', chosen: 'Allow' } }),
+    ).toMatchObject({ ok: false, error: { code: 'invalid-transition' } });
+    expect(() => a.sessions.resolveAsk(second.id, { kind: 'decision', chosen: 'Allow' })).toThrow();
   });
 });

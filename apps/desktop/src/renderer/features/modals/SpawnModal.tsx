@@ -13,11 +13,22 @@ import { useCallback, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { command } from '../../state/commands';
 import { useCopyPlatform, useModel, useUi } from '../../state/hooks';
 import {
+  decodeEffort,
+  decodeModel,
+  decodePermissionMode,
+  effortOptions,
+  encodeNullable,
+  modelOptions,
+  permissionModeOptions,
+  spawnControlsFor,
+} from '../chat/session-controls';
+import {
   SPAWN_AGENTS,
   autoBranchFor,
   cliMissing,
   cliOf,
   cliVersionLabel,
+  defaultSessionSettings,
   defaultToggles,
   projectWorktrees,
   spawnPayload,
@@ -58,6 +69,7 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
       branch: autoBranchFor(model, projectId, agent),
       firstMessage: '',
       toggles: defaultToggles(model, projectId),
+      ...defaultSessionSettings(model, projectId),
     };
   });
   const [branchTouched, setBranchTouched] = useState(false);
@@ -65,6 +77,9 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
   const worktreeId = useId();
   const branchId = useId();
   const messageId = useId();
+  const modeId = useId();
+  const modelId = useId();
+  const effortId = useId();
   const chosenTile = useRef<HTMLButtonElement>(null);
 
   const close = () => popOverlay(id);
@@ -110,6 +125,7 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
   const worktrees = projectWorktrees(model, projectId);
   const choices = worktreeChoices(model, projectId);
   const agentName = copy.agentProducts[form.agent];
+  const settings = spawnControlsFor(form.agent);
 
   return (
     <Modal
@@ -195,6 +211,54 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
             />
           </Field>
         </div>
+
+        {(settings.mode || settings.model || settings.effort) && (
+          // Claude Code session settings (owner addition, discrepancy #54): seeded from the project defaults.
+          <div className={s['three']} data-spawn-settings="true">
+            {settings.mode && (
+              <Field
+                label={copy.chat.controls.permissions}
+                htmlFor={modeId}
+                hint={copy.session.permissionModeHints[form.permissionMode]}
+              >
+                <Select
+                  id={modeId}
+                  className={s['worktree'] ?? ''}
+                  width="100%"
+                  value={form.permissionMode}
+                  onChange={(e) =>
+                    setForm({ ...form, permissionMode: decodePermissionMode(e.currentTarget.value) })
+                  }
+                  options={permissionModeOptions().map((o) => ({ value: o.value, label: o.label }))}
+                />
+              </Field>
+            )}
+            {settings.model && (
+              <Field label={copy.chat.controls.model} htmlFor={modelId}>
+                <Select
+                  id={modelId}
+                  className={s['worktree'] ?? ''}
+                  width="100%"
+                  value={encodeNullable(form.model)}
+                  onChange={(e) => setForm({ ...form, model: decodeModel(e.currentTarget.value) })}
+                  options={modelOptions(form.model)}
+                />
+              </Field>
+            )}
+            {settings.effort && (
+              <Field label={copy.chat.controls.effort} htmlFor={effortId}>
+                <Select
+                  id={effortId}
+                  className={s['worktree'] ?? ''}
+                  width="100%"
+                  value={encodeNullable(form.effort)}
+                  onChange={(e) => setForm({ ...form, effort: decodeEffort(e.currentTarget.value) })}
+                  options={effortOptions()}
+                />
+              </Field>
+            )}
+          </div>
+        )}
 
         <Field label={copy.spawn.firstMessage} htmlFor={messageId}>
           <Textarea

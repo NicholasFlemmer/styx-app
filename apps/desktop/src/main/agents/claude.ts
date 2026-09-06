@@ -6,15 +6,25 @@ import { styxBin, styxMcpServer, type AgentLaunch, type AgentLaunchContext } fro
  * Claude Code: temp `--mcp-config` (styx MCP server) + `--settings` with hooks that forward lifecycle events
  * through `styx hook claude`.
  *
- * VERIFIED 2026-09-04 against `claude` 2.1.199 (`claude --help`, plus `strings` of the native binary for hidden flags):
- * - `--mcp-config <configs...>`, `--settings <file-or-json>`, `--model`, `--permission-mode <mode>`: listed in --help.
+ * VERIFIED 2026-09-06 against `claude` 2.1.263 (`claude --help`, plus `strings` of the native binary for hidden flags
+ * and wire shapes):
+ * - `--mcp-config <configs...>`, `--settings <file-or-json>`, `--model <alias|full>`, `--effort <low|medium|high|xhigh|max>`,
+ *   `--permission-mode <acceptEdits|auto|bypassPermissions|manual|dontAsk|plan>`, `--resume <session-id>`,
+ *   `--dangerously-skip-permissions`, `--allow-dangerously-skip-permissions` (only *allows* a later live switch to
+ *   bypass without enabling it), `--include-partial-messages`: listed in --help. Styx's `default` mode passes no
+ *   `--permission-mode` (the CLI's own default; `manual` is not a Styx mode).
  * - `-p/--print`, `--input-format stream-json`, `--output-format stream-json`, `--verbose`,
  *   `--replay-user-messages`, `--include-hook-events`: listed in --help (stream-json input is print-only).
  * - `--permission-prompt-tool`: NOT in --help but present in the binary (hidden flag used by the Agent SDK). The
  *   `stdio` value routes permission prompts as `control_request{subtype:'can_use_tool'}` lines on stdout and expects
- *   a `control_response` on stdin (see stream-runner.ts). Not exercised against a live account (no
- *   `~/.claude/.credentials.json` on the verifying machine), so the runner tolerates its absence: without it, print
- *   mode simply denies un-allowlisted tools.
+ *   a `control_response` on stdin (see stream-runner.ts).
+ * - control_request subtypes: `set_permission_mode`, `set_model`, `interrupt` (client→CLI, stdin) and `can_use_tool`
+ *   (CLI→client, stdout). `AskUserQuestion` and `ExitPlanMode` arrive as `can_use_tool` too: the answer / approval is
+ *   an allow with `updatedInput` (questions + answers) or a deny with a message (keep planning).
+ * - stream events: `system` subtypes `init` (`session_id`, `model`, `permissionMode`, `tools`, `cwd`) and
+ *   `compact_boundary` (`compact_metadata: {trigger, pre_tokens, post_tokens}`), `stream_event` (partial deltas),
+ *   `rate_limit_event` (`rate_limit_info: {status, rateLimitType, resetsAt}`), `result` (`total_cost_usd`,
+ *   `num_turns`, `duration_ms`, `session_id`, `usage`).
  * - Hook event names (Stop, SessionEnd, SessionStart, Notification, UserPromptSubmit, PostToolUse) and the
  *   Notification `notification_type` values permission_prompt | idle_prompt | agent_needs_input | agent_completed are
  *   present in the binary.
@@ -47,7 +57,17 @@ export async function claudeLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch
   );
   const args = ['--mcp-config', mcpPath, '--settings', settingsPath];
   if (ctx.model) args.push('--model', ctx.model);
-  if (ctx.autoApproveEdits) args.push('--permission-mode', 'acceptEdits');
+  // The explicit mode wins; `default` falls back to the session toggle (edits without a prompt = acceptEdits).
+  const mode =
+    ctx.permissionMode !== 'default'
+      ? ctx.permissionMode
+      : ctx.autoApproveEdits
+        ? 'acceptEdits'
+        : null;
+  if (mode !== null) args.push('--permission-mode', mode);
+  if (mode === 'bypassPermissions') args.push('--dangerously-skip-permissions');
+  if (ctx.effort) args.push('--effort', ctx.effort);
+  if (ctx.resumeSessionId) args.push('--resume', ctx.resumeSessionId);
   const cleanup = () => rm(ctx.configDir, { recursive: true, force: true });
   if (ctx.runner === 'stream') {
     args.push(
@@ -59,6 +79,8 @@ export async function claudeLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch
       '--verbose',
       '--permission-prompt-tool',
       'stdio',
+      // Lets a live `set_permission_mode bypassPermissions` succeed later without starting in bypass.
+      '--allow-dangerously-skip-permissions',
     );
     // The first message goes down stdin as the first user turn (StreamRunner), never as argv.
     return {

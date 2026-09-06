@@ -124,6 +124,37 @@ describe.each<Platform>(['darwin', 'win32'])('KeyRegistry on %s', (platform) => 
     expect(enter).not.toHaveBeenCalled();
   });
 
+  it("dispatches bindings registered in the composer's own scope, plain or not, from its textarea", () => {
+    const reg = make(platform);
+    const cycle = vi.fn();
+    const stop = vi.fn();
+    const chatEsc = vi.fn();
+    reg.register({ id: 'cycleMode', chord: 'Shift+Tab', scope: 'composer', run: cycle });
+    reg.register({ id: 'interrupt', chord: 'Escape', scope: 'composer', run: stop });
+    reg.register({ id: 'chatEsc', chord: 'Escape', scope: 'chat', run: chatEsc });
+    const body = mount('<div data-keyscope="chat"><textarea data-keyscope="composer"></textarea></div>');
+    const ta = body.querySelector('textarea') as Element;
+    expect(reg.dispatch(press(ta, { key: 'Tab', shift: true }))).toBe(true);
+    expect(reg.dispatch(press(ta, { key: 'Tab' }))).toBe(false);
+    expect(reg.dispatch(press(ta, { key: 'Escape' }))).toBe(true);
+    expect(cycle).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalledTimes(1);
+    // A non-reserved chat binding still never fires from inside the host-owned composer.
+    expect(chatEsc).not.toHaveBeenCalled();
+  });
+
+  it("overlay Escape beats the composer's own Escape while an overlay is open", () => {
+    const reg = make(platform, true);
+    const close = vi.fn();
+    const stop = vi.fn();
+    reg.register({ id: 'close', chord: 'Escape', scope: 'overlay', run: close });
+    reg.register({ id: 'interrupt', chord: 'Escape', scope: 'composer', run: stop });
+    const body = mount('<div data-keyscope="chat"><textarea data-keyscope="composer"></textarea></div>');
+    expect(reg.dispatch(press(body.querySelector('textarea') as Element, { key: 'Escape' }))).toBe(true);
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(stop).not.toHaveBeenCalled();
+  });
+
   it('never fires plain keys while an input is focused', () => {
     const reg = make(platform);
     const accept = vi.fn();

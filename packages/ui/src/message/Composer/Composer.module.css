@@ -68,6 +68,13 @@
     cursor: default;
     color: var(--mu);
   }
+  /* Controls slot: inline t-label items on the hint line (selects/buttons keep the row one line tall). */
+  .controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
   .spacer {
     flex: 1;
   }

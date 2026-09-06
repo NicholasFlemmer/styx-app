@@ -58,6 +58,48 @@ export const Decision: Story = {
     onChoose: () => {},
   },
 };
+/** Answered ask: options disabled, the taken one inverted (fixes stale Allow/Deny after the CLI moved on). */
+export const DecisionSettled: Story = {
+  args: {
+    kind: 'decision',
+    children: 'Ran vitest, 42 passed. Open a PR against main?',
+    options: [{ label: 'Yes' }, { label: 'No' }, { label: 'Edit plan' }],
+    onChoose: () => {},
+    chosen: 'Yes',
+  },
+};
+/** Ask closed elsewhere (cancelled / answered in the CLI) with no recorded choice. */
+export const DecisionClosed: Story = {
+  args: {
+    kind: 'decision',
+    children: 'Ran vitest, 42 passed. Open a PR against main?',
+    options: [{ label: 'Yes' }, { label: 'No' }],
+    onChoose: () => {},
+    disabled: true,
+  },
+};
+export const ToolRunning: Story = {
+  args: { kind: 'tool', tool: 'Bash', hint: 'pnpm test -F @styx/core', status: 'running', statusGlyph: '…' },
+};
+export const ToolOk: Story = {
+  args: {
+    kind: 'tool',
+    tool: 'Edit',
+    hint: 'apps/desktop/src/renderer/features/chat/ChatPane.tsx',
+    status: 'ok',
+    statusGlyph: '✓',
+  },
+};
+export const ToolError: Story = {
+  args: {
+    kind: 'tool',
+    tool: 'Bash',
+    hint: 'pnpm typecheck',
+    status: 'error',
+    statusGlyph: '×',
+    detail: "error TS2322: Type 'string' is not assignable to type 'number'.",
+  },
+};
 export const AccessRequest: Story = {
   args: {
     kind: 'accessRequest',
@@ -106,6 +148,40 @@ export const Matrix: Story = {
           >
             Open a PR against main?
           </Message>
+          <Message
+            kind="decision"
+            options={[{ label: 'Yes' }, { label: 'No' }]}
+            onChoose={() => {}}
+            chosen="Yes"
+            compact={compact}
+          >
+            Open a PR against main?
+          </Message>
+          <Message
+            kind="tool"
+            tool="Bash"
+            hint="pnpm test -F @styx/core"
+            status="running"
+            statusGlyph="…"
+            compact={compact}
+          />
+          <Message
+            kind="tool"
+            tool="Read"
+            hint="packages/core/src/copy.ts"
+            status="ok"
+            statusGlyph="✓"
+            compact={compact}
+          />
+          <Message
+            kind="tool"
+            tool="Bash"
+            hint="pnpm typecheck"
+            status="error"
+            statusGlyph="×"
+            detail="error TS2322: Type 'string' is not assignable to type 'number'."
+            compact={compact}
+          />
           <Message
             kind="accessRequest"
             header="Access request · Supabase prod"

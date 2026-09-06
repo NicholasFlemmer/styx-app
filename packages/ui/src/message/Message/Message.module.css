@@ -47,6 +47,45 @@
     gap: 6px;
     margin-top: 8px;
   }
+  /* Tool call (stream): one mono line, no bubble; error glyph and tool name in --tx. */
+  .tool {
+    max-width: 100%;
+    padding: 4px 0;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--mu);
+  }
+  .toolLine {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+  .toolGlyph {
+    flex: none;
+    width: 1ch;
+    text-align: center;
+  }
+  .tool[data-status='error'] .toolGlyph {
+    color: var(--tx);
+  }
+  .toolName {
+    flex: none;
+    color: var(--tx);
+  }
+  .toolHint {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .toolDetail {
+    padding-left: calc(1ch + 8px);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
   .request {
     border: 1px solid var(--ac);
   }
@@ -77,5 +116,8 @@
   .compact.user,
   .compact.agent {
     font-size: 12.5px;
+  }
+  .compact.tool {
+    font-size: 12px;
   }
 }

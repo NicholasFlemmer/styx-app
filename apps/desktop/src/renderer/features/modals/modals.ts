@@ -11,8 +11,10 @@ import {
   type CliInstall,
   type CommandInput,
   type CommandOutput,
+  type Effort,
   type Env,
   type IdeInstall,
+  type PermissionMode,
   type Platform,
   type ProjectId,
   type Provider,
@@ -66,9 +68,7 @@ export const cliStatusLine = (cli: string, status: CliStatus | null): string => 
 
 /** The account the modal preselects: the CLI's active one, else the first. */
 export const defaultAccount = (status: CliStatus | null): string | null =>
-  status === null
-    ? null
-    : (status.accounts.find((a) => a.active)?.id ?? status.accounts[0]?.id ?? null);
+  status === null ? null : (status.accounts.find((a) => a.active)?.id ?? status.accounts[0]?.id ?? null);
 
 /** `AWS acme-prod` · `GCP nic@acme.dev`: provider + account label when no name is typed. */
 export const cliTargetName = (provider: Provider, account: CliAccount | undefined, name: string): string => {
@@ -89,7 +89,11 @@ export const cliSavePayload = (
   projectId,
   provider,
   env,
-  name: cliTargetName(provider, status.accounts.find((a) => a.id === accountId), name),
+  name: cliTargetName(
+    provider,
+    status.accounts.find((a) => a.id === accountId),
+    name,
+  ),
   account: accountId,
   config: {},
 });
@@ -184,7 +188,11 @@ export const autoBranchFor = (model: ReadModel, projectId: ProjectId, agent: Age
 export const worktreeChoices = (
   model: ReadModel,
   projectId: ProjectId,
-): { options: { value: string; label: string; disabled?: boolean }[]; initial: string; plainFolder: boolean } => {
+): {
+  options: { value: string; label: string; disabled?: boolean }[];
+  initial: string;
+  plainFolder: boolean;
+} => {
   if (projectHasGit(model, projectId)) {
     const worktrees = projectWorktrees(model, projectId).filter((w) => !w.isMain);
     return {
@@ -217,7 +225,20 @@ export const defaultToggles = (model: ReadModel, projectId: ProjectId): SessionT
   };
 };
 
-export interface SpawnForm {
+/** Claude Code session settings on the spawn form (owner addition, discrepancy #54); `null` = the CLI's default. */
+export interface SpawnSessionSettings {
+  permissionMode: PermissionMode;
+  model: string | null;
+  effort: Effort | null;
+}
+
+/** Project defaults (`.styx/project.json` `agents.*`, else app defaults) seed the spawn selects. */
+export const defaultSessionSettings = (model: ReadModel, projectId: ProjectId): SpawnSessionSettings => {
+  const s = projectSettingsOfOrDefault(model, projectId);
+  return { permissionMode: s.permissionMode, model: s.model, effort: s.effort };
+};
+
+export interface SpawnForm extends SpawnSessionSettings {
   agent: Agent;
   /** 'new' = New from main; otherwise an existing worktree id. */
   worktree: string;
@@ -225,6 +246,13 @@ export interface SpawnForm {
   firstMessage: string;
   toggles: SessionToggles;
 }
+
+/** Settings an agent cannot take fall back to the CLI defaults (only Claude has modes/effort; Cursor takes a model). */
+export const sessionSettingsFor = (agent: Agent, s: SpawnSessionSettings): SpawnSessionSettings => ({
+  permissionMode: agent === 'claude' ? s.permissionMode : 'default',
+  model: agent === 'claude' || agent === 'cursor' ? s.model : null,
+  effort: agent === 'claude' ? s.effort : null,
+});
 
 export const spawnPayload = (
   model: ReadModel,
@@ -235,8 +263,22 @@ export const spawnPayload = (
   const worktree: CommandInput<'session.spawn'>['worktree'] =
     f.worktree !== 'new' && existing !== undefined
       ? { kind: 'existing', worktreeId: existing.id }
-      : { kind: 'new', base: projectSettingsOfOrDefault(model, projectId).baseBranch, branch: f.branch.trim() };
-  return { projectId, agent: f.agent, worktree, firstMessage: f.firstMessage, toggles: f.toggles, model: null };
+      : {
+          kind: 'new',
+          base: projectSettingsOfOrDefault(model, projectId).baseBranch,
+          branch: f.branch.trim(),
+        };
+  const settings = sessionSettingsFor(f.agent, f);
+  return {
+    projectId,
+    agent: f.agent,
+    worktree,
+    firstMessage: f.firstMessage,
+    toggles: f.toggles,
+    model: settings.model,
+    permissionMode: settings.permissionMode,
+    effort: settings.effort,
+  };
 };
 
 export const spawnValid = (model: ReadModel, f: SpawnForm): boolean =>

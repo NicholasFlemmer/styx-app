@@ -18,7 +18,27 @@ export type MessageKind =
   | { kind: 'user'; text: string }
   | { kind: 'agent'; children: ReactNode }
   | { kind: 'fileList'; files: MessageFile[] }
-  | { kind: 'decision'; children: ReactNode; options: DecisionOption[]; onChoose: (label: string) => void }
+  | {
+      kind: 'decision';
+      children: ReactNode;
+      options: DecisionOption[];
+      onChoose: (label: string) => void;
+      /** The option already taken: options render disabled and the chosen one inverted (`data-inv`). */
+      chosen?: string | null;
+      /** The ask is no longer open (resolved / cancelled elsewhere): options render disabled. */
+      disabled?: boolean;
+    }
+  | {
+      /** One tool call from the agent's stream: compact mono row, no bubble (owner addition, discrepancy #54). */
+      kind: 'tool';
+      tool: string;
+      hint: string;
+      status: 'running' | 'ok' | 'error';
+      /** Glyph for `status` (app: `copy.session.tool.*`). */
+      statusGlyph: string;
+      /** Second line, e.g. the error text. */
+      detail?: string | null;
+    }
   | {
       kind: 'accessRequest';
       /** Filled header, e.g. "Access request · Supabase prod" (app: `copy.accessRequest.header`). */
@@ -80,9 +100,16 @@ export const Message = forwardRef<HTMLDivElement, MessageProps>(function Message
           ))}
         </div>
       );
-    case 'decision':
+    case 'decision': {
+      const chosen = props.chosen ?? null;
+      const settled = props.disabled === true || chosen !== null;
       return (
-        <div ref={ref} data-kind="decision" className={cls(s['agent'])}>
+        <div
+          ref={ref}
+          data-kind="decision"
+          data-settled={settled ? 'true' : undefined}
+          className={cls(s['agent'])}
+        >
           {props.children}
           <div className={s['options']}>
             {props.options.map((o, i) => (
@@ -90,12 +117,32 @@ export const Message = forwardRef<HTMLDivElement, MessageProps>(function Message
                 key={o.label}
                 size="compact"
                 variant={(o.primary ?? i === 0) ? 'primary' : 'secondary'}
+                inv={chosen === o.label}
+                disabled={settled}
                 onClick={() => props.onChoose(o.label)}
               >
                 {o.label}
               </Button>
             ))}
           </div>
+        </div>
+      );
+    }
+    case 'tool':
+      return (
+        <div ref={ref} data-kind="tool" data-status={props.status} className={cls(s['tool'])}>
+          <div className={s['toolLine']}>
+            <span className={s['toolGlyph']} aria-hidden="true">
+              {props.statusGlyph}
+            </span>
+            <span className={s['toolName']}>{props.tool}</span>
+            <span className={s['toolHint']} title={props.hint}>
+              {props.hint}
+            </span>
+          </div>
+          {props.detail !== undefined && props.detail !== null && props.detail !== '' && (
+            <div className={s['toolDetail']}>{props.detail}</div>
+          )}
         </div>
       );
     case 'accessRequest':

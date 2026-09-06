@@ -129,10 +129,49 @@ describe('SpawnModal', () => {
       firstMessage: 'Add validation',
       toggles: { autoApproveEdits: true, mayRequestTargets: true, notifyWhenNeedsMe: true },
       model: null,
+      permissionMode: 'default',
+      effort: null,
     });
     const ui = useUiStore.getState();
     expect(ui.screen).toBe('workspace');
     expect(ui.projectSession[acme]).toBe('session-new');
+  });
+
+  it('Claude tile shows Permissions / Model / Effort selects seeded from project defaults; picks ride along (discrepancy #54)', async () => {
+    render(<SpawnModal id="modal-1" projectId={acme} />);
+    const mode = screen.getByLabelText(copy.chat.controls.permissions) as HTMLSelectElement;
+    expect(mode.value).toBe('default');
+    expect(screen.getByText(copy.session.permissionModeHints.default)).toBeTruthy();
+    fireEvent.change(mode, { target: { value: 'plan' } });
+    expect(screen.getByText(copy.session.permissionModeHints.plan)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(copy.chat.controls.model), { target: { value: 'sonnet' } });
+    fireEvent.change(screen.getByLabelText(copy.chat.controls.effort), { target: { value: 'max' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Spawn · ⌘⏎' }));
+    await waitFor(() => expect(calls('session.spawn')).toHaveLength(1));
+    expect(calls('session.spawn')[0]?.[1]).toMatchObject({
+      permissionMode: 'plan',
+      model: 'sonnet',
+      effort: 'max',
+    });
+  });
+
+  it('Cursor shows only Model; Codex shows no session settings and spawns with CLI defaults', async () => {
+    render(<SpawnModal id="modal-1" projectId={acme} />);
+    fireEvent.change(screen.getByLabelText(copy.chat.controls.model), { target: { value: 'opus' } });
+    fireEvent.click(screen.getByRole('radio', { name: /^Cursor/ }));
+    expect(screen.queryByLabelText(copy.chat.controls.permissions)).toBeNull();
+    expect(screen.queryByLabelText(copy.chat.controls.effort)).toBeNull();
+    expect((screen.getByLabelText(copy.chat.controls.model) as HTMLSelectElement).value).toBe('opus');
+    fireEvent.click(screen.getByRole('radio', { name: /^Codex/ }));
+    expect(document.querySelector('[data-spawn-settings]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Spawn · ⌘⏎' }));
+    await waitFor(() => expect(calls('session.spawn')).toHaveLength(1));
+    expect(calls('session.spawn')[0]?.[1]).toMatchObject({
+      agent: 'codex',
+      model: null,
+      permissionMode: 'default',
+      effort: null,
+    });
   });
 
   it('an existing worktree sends its id and locks the branch field', async () => {
