@@ -1,6 +1,6 @@
 import {
   cliAuthLabel,
-  cliVersionLabel,
+  cliLocationLabel,
   copy,
   fill,
   ideImportsLabel,
@@ -137,6 +137,7 @@ export function Onboarding() {
               path,
               remote: null,
               branch: null,
+              hasGit: true,
               source: 'scan',
               lastModifiedAt: null,
               suggested: true,
@@ -309,7 +310,7 @@ export function Onboarding() {
                 <TableRow key={c.agent} data-agent={c.agent}>
                   <TableCell strong>{copy.agentProducts[c.agent]}</TableCell>
                   <TableCell mono muted>
-                    {cliVersionLabel(c)}
+                    {cliLocationLabel(c)}
                   </TableCell>
                   <TableCell mono>{cliAuthLabel(c)}</TableCell>
                   <TableCell align="end">

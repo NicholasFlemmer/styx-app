@@ -26,7 +26,8 @@ export const clampTerminalHeight = (h: number, columnHeight: number): number =>
   Math.max(TERMINAL_MIN, Math.min(h, Math.max(TERMINAL_MIN, Math.floor(columnHeight * TERMINAL_MAX_RATIO))));
 
 export interface TerminalPaneProps {
-  sessionId: SessionId;
+  /** The chat's active session; null before the first spawn (the terminal then belongs to the worktree). */
+  sessionId: SessionId | null;
   worktreeId: WorktreeId;
   branch: string;
   screenReader: boolean;
@@ -55,7 +56,7 @@ export function TerminalPane({
   useEffect(() => {
     const el = host.current;
     if (el === null) return;
-    const e = getTerminal(sessionId, worktreeId, { screenReader });
+    const e = getTerminal(sessionId ?? worktreeId, worktreeId, { screenReader });
     entry.current = e;
     attachTerminal(e, el);
     return () => {

@@ -144,8 +144,11 @@ export function Workspace() {
     );
   }
 
+  // Plain folder (no git): the main worktree is the folder itself, no branch, no hunks; status bar reads `no git`.
+  const branchLabel = worktree.branch ?? copy.workspace.noGit;
+
   return (
-    <div className={s['root']} data-workspace={worktree.branch}>
+    <div className={s['root']} data-workspace={worktree.branch ?? 'no-git'}>
       <FilesPane
         nodes={tree.nodes}
         activePath={activePath}
@@ -182,16 +185,15 @@ export function Workspace() {
             }}
           />
         )}
-        {activeSessionId !== null && (
-          <TerminalPane
-            sessionId={activeSessionId}
-            worktreeId={worktreeId}
-            branch={worktree.branch}
-            screenReader={screenReader}
-            columnHeight={() => column.current?.clientHeight ?? 0}
-          />
-        )}
-        <StatusBar branch={worktree.branch} targets={targets} editor={editorStatus} />
+        {/* Before the first spawn the terminal belongs to the worktree itself (a shell in the project folder). */}
+        <TerminalPane
+          sessionId={activeSessionId}
+          worktreeId={worktreeId}
+          branch={branchLabel}
+          screenReader={screenReader}
+          columnHeight={() => column.current?.clientHeight ?? 0}
+        />
+        <StatusBar branch={branchLabel} targets={targets} editor={editorStatus} />
       </div>
       <ChatPane projectId={projectId} />
     </div>

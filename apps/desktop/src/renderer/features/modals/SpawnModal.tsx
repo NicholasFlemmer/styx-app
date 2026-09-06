@@ -22,6 +22,7 @@ import {
   projectWorktrees,
   spawnPayload,
   spawnValid,
+  worktreeChoices,
   type SpawnForm,
 } from './modals';
 import s from './SpawnModal.module.css';
@@ -53,7 +54,7 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
     const agent = projectSettingsOfOrDefault(model, projectId).defaultAgent;
     return {
       agent,
-      worktree: 'new',
+      worktree: worktreeChoices(model, projectId).initial,
       branch: autoBranchFor(model, projectId, agent),
       firstMessage: '',
       toggles: defaultToggles(model, projectId),
@@ -106,7 +107,8 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
     setScreen('onboarding');
   };
 
-  const worktrees = projectWorktrees(model, projectId).filter((w) => !w.isMain);
+  const worktrees = projectWorktrees(model, projectId);
+  const choices = worktreeChoices(model, projectId);
   const agentName = copy.agentProducts[form.agent];
 
   return (
@@ -127,7 +129,12 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
         </>
       }
     >
-      <div className={s['root']} onKeyDown={onKeyDown} data-spawn-modal="true">
+      <div
+        className={s['root']}
+        onKeyDown={onKeyDown}
+        data-spawn-modal="true"
+        data-plain-folder={choices.plainFolder ? 'true' : undefined}
+      >
         <div className={s['bleed']}>
           <div className={s['tiles']} role="radiogroup" aria-label={copy.spawn.title.split(' ·')[0]}>
             {SPAWN_AGENTS.map((a) => (
@@ -167,10 +174,7 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
               width="100%"
               value={form.worktree}
               onChange={(e) => setForm({ ...form, worktree: e.currentTarget.value })}
-              options={[
-                { value: 'new', label: copy.spawn.worktreeDefault },
-                ...worktrees.map((w) => ({ value: w.id, label: w.branch })),
-              ]}
+              options={choices.options}
             />
           </Field>
           <Field label={copy.spawn.branch} htmlFor={branchId}>

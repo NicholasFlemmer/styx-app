@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
+import { plainFolderReadModel } from '../../test-support/plain-folder';
 import { SpawnModal } from './SpawnModal';
 
 const acme = fixtures.ids.project.acmeShop;
@@ -54,6 +55,34 @@ describe('SpawnModal', () => {
     const boxes = screen.getAllByRole('checkbox').map((c) => (c as HTMLInputElement).checked);
     expect(boxes).toEqual([false, true, true]);
     expect(screen.getByRole('button', { name: 'Spawn · ⌘⏎' })).toBeTruthy();
+  });
+
+  it('plain folder (no git): the only worktree is the folder itself, New from main is disabled, Spawn sends the main worktree', async () => {
+    const side = fixtures.ids.project.sideApi;
+    useReadModel.getState().replaceModel(plainFolderReadModel(), 'connected');
+    useUiStore.setState({
+      projectId: side,
+      overlays: [{ id: 'modal-1', kind: 'modal', modal: 'spawn', projectId: side }],
+    });
+    render(<SpawnModal id="modal-1" projectId={side} />);
+    expect(document.querySelector('[data-spawn-modal]')?.getAttribute('data-plain-folder')).toBe('true');
+    const select = screen.getByLabelText(copy.spawn.worktree) as HTMLSelectElement;
+    expect(select.value).toBe(fixtures.ids.worktree.sideMain);
+    const options = [...select.options].map((o) => [o.textContent, o.disabled]);
+    expect(options).toEqual([
+      [copy.spawn.worktreeFolder, false],
+      [copy.spawn.worktreeDefault, true],
+    ]);
+    const branch = screen.getByLabelText(copy.spawn.branch) as HTMLInputElement;
+    expect(branch.disabled).toBe(true);
+    expect(branch.value).toBe('');
+    expect(screen.getByRole('button', { name: 'Spawn · ⌘⏎' }).hasAttribute('disabled')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Spawn · ⌘⏎' }));
+    await waitFor(() => expect(calls('session.spawn')).toHaveLength(1));
+    expect(calls('session.spawn')[0]?.[1]).toMatchObject({
+      projectId: side,
+      worktree: { kind: 'existing', worktreeId: fixtures.ids.worktree.sideMain },
+    });
   });
 
   it('re-derives the branch when the agent changes unless the user edited it', () => {

@@ -13,7 +13,7 @@ export const worktreeFromRow = (r: Raw): Worktree => {
     id: String(r['id']),
     repoId: String(r['repo_id']),
     projectId: String(r['project_id']),
-    branch: String(r['branch']),
+    branch: asStr(r['branch']),
     path: String(r['path']),
     isMain: asBool(r['is_main']),
     owner:

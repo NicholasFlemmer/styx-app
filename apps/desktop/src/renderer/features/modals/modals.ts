@@ -2,6 +2,8 @@ import {
   cliVersionLabel as coreCliVersionLabel,
   copy,
   fill,
+  mainWorktreeOf,
+  projectHasGit,
   projectSettingsOfOrDefault,
   rows,
   type Agent,
@@ -171,8 +173,40 @@ export const autoBranchFor = (model: ReadModel, projectId: ProjectId, agent: Age
   autoBranch(
     agent,
     projectSettingsOfOrDefault(model, projectId).branchPrefix,
-    projectWorktrees(model, projectId).map((w) => w.branch),
+    projectWorktrees(model, projectId).flatMap((w) => (w.branch === null ? [] : [w.branch])),
   );
+
+/**
+ * Worktree select rows and the default pick. Git repos: `New from main` (default) plus the agent worktrees. A plain
+ * folder has no worktree isolation: its main worktree is the only pick (`This folder (no worktree isolation)`) and
+ * `New from main` is listed disabled until `git init`.
+ */
+export const worktreeChoices = (
+  model: ReadModel,
+  projectId: ProjectId,
+): { options: { value: string; label: string; disabled?: boolean }[]; initial: string; plainFolder: boolean } => {
+  if (projectHasGit(model, projectId)) {
+    const worktrees = projectWorktrees(model, projectId).filter((w) => !w.isMain);
+    return {
+      options: [
+        { value: 'new', label: copy.spawn.worktreeDefault },
+        ...worktrees.map((w) => ({ value: w.id, label: w.branch ?? copy.general.none })),
+      ],
+      initial: 'new',
+      plainFolder: false,
+    };
+  }
+  const main = mainWorktreeOf(model, projectId);
+  const folder = main === null ? 'new' : main.id;
+  return {
+    options: [
+      ...(main === null ? [] : [{ value: main.id, label: copy.spawn.worktreeFolder }]),
+      { value: 'new', label: copy.spawn.worktreeDefault, disabled: true },
+    ],
+    initial: folder,
+    plainFolder: true,
+  };
+};
 
 export const defaultToggles = (model: ReadModel, projectId: ProjectId): SessionToggles => {
   const s = projectSettingsOfOrDefault(model, projectId);

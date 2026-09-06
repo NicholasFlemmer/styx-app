@@ -34,6 +34,7 @@ import type { Publisher } from '../store/publisher';
 import type { ActivityService } from './activity-service';
 import type { AuditService } from './audit-service';
 import type { GitService } from './git';
+import type { RecentFolder } from './ide-import-service';
 import { auditContext } from './labels';
 import { logger, redact } from './logger';
 
@@ -50,8 +51,8 @@ export interface ProjectServiceDeps {
   activity?: ActivityService;
   /** GitHub repo creation / template discovery through a connected GitHub target. */
   github?: GitHubRepoApi | null;
-  /** Recent project folders from detected IDEs (IdeImportService), most recent first. */
-  ideRecents?: () => string[] | Promise<string[]>;
+  /** Recent project folders from detected IDEs (IdeImportService), most recent first; git or not. */
+  ideRecents?: () => RecentFolder[] | Promise<RecentFolder[]>;
   /** Walker budget override (tests). */
   scanBudget?: Partial<WalkBudget>;
 }
@@ -63,6 +64,8 @@ export interface ScannedRepo {
   path: string;
   remote: string | null;
   branch: string | null;
+  /** False for a plain folder (only IDE recents surface those; the walker looks for `.git`). */
+  hasGit: boolean;
   source: 'scan' | 'ide-recent';
   lastModifiedAt: number | null;
   suggested: boolean;
@@ -399,7 +402,10 @@ export class ProjectService {
 
   // --- scan ------------------------------------------------------------------
 
-  /** Repos on this machine (walker roots + IDE recents), known projects dropped, most recently active first. */
+  /**
+   * Repos on this machine (walker roots) plus every existing folder the detected IDEs opened recently — git or not —
+   * known projects dropped, most recently active first.
+   */
   async scan(includeIdeRecents: boolean): Promise<ScannedRepo[]> {
     const started = performance.now();
     const walk = await walkForRepos(scanRoots(this.home, this.deps.platform), this.deps.scanBudget ?? {});
@@ -410,22 +416,32 @@ export class ProjectService {
         found: walk.repos.length,
       });
     }
-    let ideRecents: string[] = [];
+    let ideRecents: RecentFolder[] = [];
     if (includeIdeRecents && this.deps.ideRecents) {
       try {
-        ideRecents = (await this.deps.ideRecents()).filter((p) => existsSync(join(p, '.git')));
+        ideRecents = (await this.deps.ideRecents()).filter((r) => isDirectory(r.path));
       } catch (e) {
         logger.warn('project.scan: IDE recents unreadable', { error: (e as Error).message });
       }
     }
     const known = new Set(this.deps.repos.projects.all().map((p) => p.path));
-    const described = await this.describeRepos(mergeCandidates(walk.repos, ideRecents, known));
+    const openedAt = new Map(ideRecents.map((r) => [r.path, r.openedAt]));
+    const candidates = mergeCandidates(
+      walk.repos,
+      ideRecents.map((r) => r.path),
+      known,
+    ).map((c) => ({ ...c, openedAt: openedAt.get(c.path) ?? null }));
+    const described = await this.describeRepos(candidates);
     return described.sort(byLastActivity);
   }
 
-  /** Remote / branch / activity for candidate folders (known projects are dropped); `suggested` per spec §4.9. */
+  /**
+   * Remote / branch / activity for candidate folders (known projects are dropped); `suggested` per spec §4.9. A folder
+   * without git is listed as-is (`hasGit: false`, meta `no git`): its activity is when the IDE last opened it
+   * (`openedAt`), else the folder's mtime, and it is suggested when that is within the staleness window.
+   */
   async describeRepos(
-    candidates: readonly { path: string; source: 'scan' | 'ide-recent' }[],
+    candidates: readonly { path: string; source: 'scan' | 'ide-recent'; openedAt?: number | null }[],
   ): Promise<ScannedRepo[]> {
     const known = new Set(this.deps.repos.projects.all().map((p) => p.path));
     const out: ScannedRepo[] = [];
@@ -435,21 +451,32 @@ export class ProjectService {
       let remote: string | null = null;
       let branch: string | null = null;
       let lastModifiedAt: number | null = null;
-      try {
-        const rs = await this.deps.git.remotes(c.path);
-        remote = rs.find((r) => r.name === 'origin')?.url ?? rs[0]?.url ?? null;
-        branch = await this.deps.git.currentBranch(c.path);
-        lastModifiedAt = Math.round((await stat(join(c.path, '.git'))).mtimeMs);
-      } catch {
-        /* unreadable repo: still listed */
+      // Same test as the walker (a `.git` entry): no git process per candidate; an unreadable repo is still listed.
+      const hasGit = existsSync(join(c.path, '.git'));
+      if (hasGit) {
+        try {
+          const rs = await this.deps.git.remotes(c.path);
+          remote = rs.find((r) => r.name === 'origin')?.url ?? rs[0]?.url ?? null;
+          branch = await this.deps.git.currentBranch(c.path);
+          lastModifiedAt = Math.round((await stat(join(c.path, '.git'))).mtimeMs);
+        } catch {
+          /* unreadable repo: still listed */
+        }
+      } else {
+        lastModifiedAt =
+          c.openedAt ??
+          (await stat(c.path)
+            .then((s) => Math.round(s.mtimeMs))
+            .catch(() => null));
       }
       out.push({
         path: c.path,
         remote,
         branch,
+        hasGit,
         source: c.source,
         lastModifiedAt,
-        suggested: isSuggested(remote, lastModifiedAt, now),
+        suggested: hasGit ? isSuggested(remote, lastModifiedAt, now) : isRecent(lastModifiedAt, now),
       });
     }
     return out;
@@ -457,13 +484,19 @@ export class ProjectService {
 
   // --- add / clone / create ---------------------------------------------------
 
+  /**
+   * Any readable directory becomes a project (spec §4.9 "Add folder"; git is not an admission rule). A git repo gets
+   * its remotes / default branch / main worktree; a plain folder gets a repo row with `defaultBranch: null` and one
+   * main worktree pointing at the folder itself with `branch: null` — agents run in it directly until `gitInit`.
+   */
   async add(rawPath: string, name?: string): Promise<Project> {
     const { repos, git, clock, publisher } = this.deps;
     const path = resolve(rawPath.replace(/^~(?=$|[\\/])/, this.home));
     const existing = repos.projects.byPath(path);
     if (existing) return existing;
     if (!existsSync(path)) fail('not-found', `${path} does not exist`);
-    if (!(await git.isRepo(path))) fail('git-error', `${path} is not a git repository`);
+    if (!isDirectory(path))
+      fail('invalid-input', `${path} is not a directory`, { reason: 'not-a-directory' });
     const now = clock.now();
     const projectName = name ?? basename(path);
     const project: Project = {
@@ -477,18 +510,15 @@ export class ProjectService {
       lastActivityAt: now,
       removedAt: null,
     };
-    const remotes = await git.remotes(path);
-    const defaultBranch = await git.defaultBranch(path);
-    const branch = (await git.currentBranch(path)) ?? defaultBranch;
-    const head = await git.headCommit(path);
-    const status = await git.status(path).catch(() => null);
+    const hasGit = await git.isRepo(path);
+    const gitInfo = hasGit ? await this.describeGit(path) : null;
     const repo: Repo = {
       id: newId<'RepoId'>(),
       projectId: project.id,
-      defaultBranch,
-      remotes: remotes.map((r) => ({ name: r.name, url: r.url })),
-      ahead: status?.ahead ?? 0,
-      behind: status?.behind ?? 0,
+      defaultBranch: gitInfo?.defaultBranch ?? null,
+      remotes: gitInfo?.remotes ?? [],
+      ahead: gitInfo?.ahead ?? 0,
+      behind: gitInfo?.behind ?? 0,
       fetchedAt: null,
       lineEndings: 'auto',
       longPaths: this.deps.platform === 'win32',
@@ -497,12 +527,12 @@ export class ProjectService {
       id: newId<'WorktreeId'>(),
       repoId: repo.id,
       projectId: project.id,
-      branch,
+      branch: gitInfo?.branch ?? null,
       path,
       isMain: true,
       owner: { kind: 'user' },
-      baseCommit: head,
-      headCommit: head,
+      baseCommit: gitInfo?.head ?? null,
+      headCommit: gitInfo?.head ?? null,
       changes: { added: 0, removed: 0, files: 0 },
       pr: null,
       conflict: null,
@@ -520,6 +550,73 @@ export class ProjectService {
     publisher.upsert('worktrees', [main.id]);
     await this.reconcileProjectFile(project.id);
     return this.require(project.id);
+  }
+
+  /** What a git repo contributes to its repo row and main worktree. */
+  private async describeGit(path: string): Promise<{
+    defaultBranch: string;
+    branch: string;
+    head: string | null;
+    remotes: Repo['remotes'];
+    ahead: number;
+    behind: number;
+  }> {
+    const { git } = this.deps;
+    const remotes = await git.remotes(path);
+    const defaultBranch = await git.defaultBranch(path);
+    const branch = (await git.currentBranch(path)) ?? defaultBranch;
+    const head = await git.headCommit(path);
+    const status = await git.status(path).catch(() => null);
+    return {
+      defaultBranch,
+      branch,
+      head,
+      remotes: remotes.map((r) => ({ name: r.name, url: r.url })),
+      ahead: status?.ahead ?? 0,
+      behind: status?.behind ?? 0,
+    };
+  }
+
+  /**
+   * `project.gitInit`: `git init -b main` plus an empty first commit (so `main` is a real ref: worktrees, diffs and
+   * reviews work at once; nothing in the folder is committed) in a plain-folder project, then the repo row and main
+   * worktree are reconciled onto `main`. Sessions already running in the folder are unaffected. No-op on a git repo.
+   */
+  async gitInit(projectId: string): Promise<void> {
+    const { repos, git, publisher } = this.deps;
+    const project = this.require(projectId);
+    const repo = repos.repos.byProject(project.id) ?? fail('not-found', `${project.name} has no repo row`);
+    const main = repos.worktrees.mainOf(project.id) ?? fail('internal', 'main worktree missing');
+    if (!(await git.isRepo(project.path))) {
+      await git.init(project.path);
+      await git.commit(project.path, 'Initial commit', { allowEmpty: true });
+    }
+    const info = await this.describeGit(project.path);
+    const nextRepo: Repo = {
+      ...repo,
+      defaultBranch: info.defaultBranch,
+      remotes: info.remotes,
+      ahead: info.ahead,
+      behind: info.behind,
+    };
+    const nextMain: Worktree = {
+      ...main,
+      branch: info.branch,
+      baseCommit: info.head,
+      headCommit: info.head,
+    };
+    repos.transaction(() => {
+      repos.repos.upsert(nextRepo);
+      repos.worktrees.upsert(nextMain);
+    });
+    publisher.upsert('repos', [repo.id]);
+    publisher.upsert('worktrees', [main.id]);
+    this.deps.activity?.append({
+      who: 'you',
+      what: `${project.name} · git initialised on ${info.branch}`,
+      projectId: project.id,
+      sessionId: null,
+    });
   }
 
   /** `git clone` into `into` (the full destination path), then add. Progress goes out as `project.cloneProgress`. */
@@ -1036,6 +1133,17 @@ export const projectFileRules = (file: ProjectFileV1, now: number): Policy[] =>
 export const isSuggested = (remote: string | null, lastModifiedAt: number | null, now: number): boolean => {
   const stale = lastModifiedAt === null || now - lastModifiedAt > STALE_MS;
   return !(remote === null && stale);
+};
+
+/** Plain folders (no remote to go by): suggested when opened within the staleness window. */
+export const isRecent = (at: number | null, now: number): boolean => at !== null && now - at <= STALE_MS;
+
+const isDirectory = (p: string): boolean => {
+  try {
+    return statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
 };
 
 /** Most recent activity first; unknown activity last; path breaks ties so the list is stable. */

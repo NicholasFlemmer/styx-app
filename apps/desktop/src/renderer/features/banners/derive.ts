@@ -57,7 +57,11 @@ export const deriveBanners = (model: ReadModel, now: number): BannerRow[] => {
     out.push({
       key: `conflict:${w.id}`,
       kind: 'conflict',
-      text: fill(copy.errors.conflict.text, { branch: w.branch, file: w.conflict.file, agent }),
+      text: fill(copy.errors.conflict.text, {
+        branch: w.branch ?? copy.general.none,
+        file: w.conflict.file,
+        agent,
+      }),
       cta: copy.errors.conflict.cta,
       action: { kind: 'resolve', worktreeId: w.id },
     });

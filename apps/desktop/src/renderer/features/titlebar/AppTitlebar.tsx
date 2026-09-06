@@ -1,4 +1,4 @@
-import { copy, fill, formatChord, lockedCount, needsYouCount, projectBranch, projectNameOf } from '@styx/core';
+import { copy, fill, formatChord, lockedCount, needsYouCount, projectBranchOrNull, projectNameOf } from '@styx/core';
 import { shortcuts } from '@styx/tokens';
 import { Titlebar, TitlebarCounter, TitlebarField, Wordmark } from '@styx/ui';
 import { useCallback } from 'react';
@@ -14,12 +14,13 @@ export function AppTitlebar() {
   const projectId = useUi((u) => u.projectId);
   const openPalette = useUi((u) => u.openPalette);
   const now = useNow();
-  // Prototype: `projectName: 'No project'`, `branchName: ''` when nothing is selected (the branch span stays for its gap).
+  // Prototype: `projectName: 'No project'`, `branchName: ''` when nothing is selected (the branch span stays for its gap);
+  // a plain-folder project (no git) is on no branch and reads blank too.
   const projectName = useModel(
     useCallback((m) => (projectId === null ? copy.empty.noProject : projectNameOf(m, projectId)), [projectId]),
   );
   const branch = useModel(
-    useCallback((m) => (projectId === null ? '' : projectBranch(m, projectId)), [projectId]),
+    useCallback((m) => (projectId === null ? '' : (projectBranchOrNull(m, projectId) ?? '')), [projectId]),
   );
   const needs = useModel(needsYouCount);
   const locked = useModel(

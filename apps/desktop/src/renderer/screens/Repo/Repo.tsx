@@ -1,19 +1,20 @@
 import {
   copy,
   fixtures,
+  repoHasGit,
   type CommandResult,
   type ReadModel,
   type UnifiedDiff,
   type WorktreeId,
 } from '@styx/core';
-import { Button, Label, StatusDot, Table, TABLE_COLUMNS, TableCell, TableRow } from '@styx/ui';
+import { Button, EmptyState, Label, StatusDot, Table, TABLE_COLUMNS, TableCell, TableRow } from '@styx/ui';
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { LaneDiff, parsePatch } from '../../features/diff';
 import { bridge, env } from '../../state/bridge';
 import { command } from '../../state/commands';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
 import { useReadModel } from '../../state/read-model';
-import { defaultLane, laneDiffHeader, laneRows, nextWorktreeBranch, remoteLine, repoOfProject, type Lane } from './repo-data';
+import { defaultLane, laneDiffHeader, laneRows, nextWorktreeBranch, noGitLine, remoteLine, repoOfProject, type Lane } from './repo-data';
 import s from './Repo.module.css';
 
 const identity = (m: ReadModel) => m;
@@ -85,11 +86,12 @@ export function Repo() {
     [model, projectId, now],
   );
   const repo = projectId === null ? null : repoOfProject(model, projectId);
+  const hasGit = repoHasGit(repo);
   const [pickedId, setPickedId] = useState<WorktreeId | null>(null);
   const selected =
     (pickedId === null ? undefined : lanes.find((l) => l.worktreeId === pickedId)) ??
     defaultLane(lanes, activeSessionId);
-  const diff = useLaneDiff(selected?.worktreeId ?? null);
+  const diff = useLaneDiff(hasGit ? (selected?.worktreeId ?? null) : null);
 
   const fetch = useCallback(() => {
     if (projectId !== null) void command('worktree.fetch', { projectId });
@@ -106,6 +108,29 @@ export function Repo() {
     if (lane.action === 'diff' || lane.action === 'resolve') setPickedId(lane.worktreeId);
     runAction(lane);
   };
+
+  // Plain folder (owner decision: any folder is a project): no lanes, no diff — the empty state offers `git init`.
+  if (projectId !== null && !hasGit) {
+    return (
+      <div className={s['screen']} data-repo="true" data-repo-empty="no-git">
+        <div className={s['head']}>
+          <span className={s['title']}>{copy.repo.title}</span>
+          <span className={s['meta']} data-repo-remote="true">
+            {noGitLine()}
+          </span>
+        </div>
+        <EmptyState
+          headline={copy.repo.noGit.label}
+          body={copy.repo.noGit.body}
+          actions={
+            <Button variant="primary" onClick={() => void command('project.gitInit', { projectId })}>
+              {copy.repo.noGit.cta}
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={s['screen']} data-repo="true">

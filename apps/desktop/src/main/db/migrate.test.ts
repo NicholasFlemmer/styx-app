@@ -34,7 +34,7 @@ describe('migrations', () => {
   it('0002 widens targets.auth_method to cli, keeps rows, grants and the unique key (forward from a DB seeded at 0001)', () => {
     const db = new Database(':memory:');
     const all = listMigrations();
-    expect(all.map((m) => m.name)).toEqual(['0000_init', '0001_activity', '0002_auth_method_cli']);
+    expect(all.map((m) => m.name)).toEqual(['0000_init', '0001_activity', '0002_auth_method_cli', '0003_plain_folders']);
     // Seed at 0001: a project, two targets and an active grant that cascades on the target.
     migrate(db, all.slice(0, 2));
     db.prepare("INSERT INTO projects (id, name, path, initials, created_at, last_activity_at) VALUES ('p', 'x', '/x', 'X', 0, 0)").run();
@@ -48,7 +48,7 @@ describe('migrations', () => {
       "INSERT INTO grants (id, target_id, scope_json, scope_mask, duration, reason, state, requested_at, issued_at) VALUES ('g1', 't1', '[\"read\"]', 1, '1h', 'r', 'active', 1, 1)",
     ).run();
 
-    const res = migrate(db);
+    const res = migrate(db, all.slice(0, 3));
     expect(res).toEqual({ applied: ['0002_auth_method_cli'], version: 3 });
     expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
     expect(db.pragma('foreign_key_check')).toEqual([]);
@@ -65,6 +65,46 @@ describe('migrations', () => {
     db.prepare("DELETE FROM targets WHERE id = 't1'").run();
     expect(db.prepare("SELECT count(*) AS n FROM grants").get()).toEqual({ n: 0 });
     expect(db.prepare("SELECT sql FROM sqlite_master WHERE name = 'targets'").get()).toMatchObject({ sql: expect.stringContaining("'cli'") });
+  });
+
+  it('0003 makes repos.default_branch and worktrees.branch nullable, keeping rows, FKs and UNIQUE (forward from a DB seeded at 0002)', () => {
+    const db = new Database(':memory:');
+    const all = listMigrations();
+    migrate(db, all.slice(0, 3));
+    db.prepare("INSERT INTO projects (id, name, path, initials, created_at, last_activity_at) VALUES ('p', 'x', '/x', 'X', 0, 0)").run();
+    db.prepare("INSERT INTO repos (id, project_id, default_branch, remotes_json) VALUES ('r', 'p', 'main', '[{\"name\":\"origin\",\"url\":\"u\"}]')").run();
+    const insertWt = db.prepare(
+      "INSERT INTO worktrees (id, repo_id, branch, path, is_main, created_at) VALUES (?, 'r', ?, ?, ?, 1)",
+    );
+    insertWt.run('w1', 'main', '/x', 1);
+    insertWt.run('w2', 'agent/claude-1', '/x-wt', 0);
+    expect(() => insertWt.run('w3', null, '/y', 1)).toThrow(/NOT NULL/);
+    db.prepare("INSERT INTO sessions (id, project_id, worktree_id, agent, state, started_at, last_activity_at) VALUES ('s', 'p', 'w2', 'claude', 'idle', 0, 0)").run();
+    db.prepare(
+      "INSERT INTO agent_changes (id, session_id, worktree_id, file, hunk_hash, old_start, old_lines, new_start, new_lines, patch, status, first_seen_at, last_seen_at) VALUES ('c', 's', 'w2', 'a.ts', 'h', 1, 1, 1, 1, '', 'pending', 1, 1)",
+    ).run();
+
+    const res = migrate(db);
+    expect(res).toEqual({ applied: ['0003_plain_folders'], version: 4 });
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    expect(db.prepare('SELECT id, project_id, default_branch, remotes_json FROM repos').all()).toEqual([
+      { id: 'r', project_id: 'p', default_branch: 'main', remotes_json: '[{"name":"origin","url":"u"}]' },
+    ]);
+    expect(db.prepare('SELECT id, branch, path, is_main FROM worktrees ORDER BY rowid').all()).toEqual([
+      { id: 'w1', branch: 'main', path: '/x', is_main: 1 },
+      { id: 'w2', branch: 'agent/claude-1', path: '/x-wt', is_main: 0 },
+    ]);
+    expect(db.prepare("SELECT count(*) AS n FROM agent_changes WHERE worktree_id = 'w2'").get()).toEqual({ n: 1 }); // no cascade
+    // Nullable now: a plain folder's repo row and main worktree; NULL branches never collide on UNIQUE (repo_id, branch).
+    db.prepare("INSERT INTO projects (id, name, path, initials, created_at, last_activity_at) VALUES ('p2', 'notes', '/notes', 'N', 0, 0)").run();
+    db.prepare("INSERT INTO repos (id, project_id, default_branch) VALUES ('r2', 'p2', NULL)").run();
+    db.prepare("INSERT INTO worktrees (id, repo_id, branch, path, is_main, created_at) VALUES ('w3', 'r2', NULL, '/notes', 1, 1)").run();
+    expect(() => insertWt.run('w4', 'main', '/x', 0)).toThrow(/UNIQUE/); // path stays unique
+    expect(() => insertWt.run('w5', 'main', '/z', 0)).toThrow(/UNIQUE/); // (repo_id, branch) survives
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'worktrees_repo'").get()).toEqual({ name: 'worktrees_repo' });
+    // FK actions are live again: deleting the repo cascades into its worktrees.
+    db.prepare("DELETE FROM repos WHERE id = 'r2'").run();
+    expect(db.prepare("SELECT count(*) AS n FROM worktrees WHERE id = 'w3'").get()).toEqual({ n: 0 });
   });
 
   it('enforces state invariants with CHECK constraints', () => {

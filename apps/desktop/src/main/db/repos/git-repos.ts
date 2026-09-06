@@ -1,6 +1,6 @@
 import { repoSchema, type Repo } from '@styx/core';
 import type { Db } from '../open';
-import { asBool, asJson, asNum, placeholders, toBit, toJson, type Raw } from './mappers';
+import { asBool, asJson, asNum, asStr, placeholders, toBit, toJson, type Raw } from './mappers';
 
 const COLS =
   'id, project_id, default_branch, remotes_json, ahead, behind, fetched_at, line_endings, long_paths';
@@ -9,7 +9,7 @@ export const repoFromRow = (r: Raw): Repo =>
   repoSchema.parse({
     id: String(r['id']),
     projectId: String(r['project_id']),
-    defaultBranch: String(r['default_branch']),
+    defaultBranch: asStr(r['default_branch']),
     remotes: asJson<unknown[]>(r['remotes_json'], []),
     ahead: Number(r['ahead']),
     behind: Number(r['behind']),
@@ -18,7 +18,7 @@ export const repoFromRow = (r: Raw): Repo =>
     longPaths: asBool(r['long_paths']),
   });
 
-/** `repos` table (one git repo per project). */
+/** `repos` table (one row per project; `default_branch` is NULL for a plain folder without git). */
 export class GitReposRepo {
   private readonly upsertStmt;
   private readonly getStmt;

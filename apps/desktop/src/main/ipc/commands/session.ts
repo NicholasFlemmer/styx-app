@@ -10,8 +10,8 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
     return { sessionId: session.id, worktreeId: worktree.id };
   });
 
-  bus.register('session.sendMessage', ({ sessionId, body }) => {
-    sessions.sendMessage(sessionId, body);
+  bus.register('session.sendMessage', async ({ sessionId, body }) => {
+    await sessions.sendMessage(sessionId, body);
     return {};
   });
 

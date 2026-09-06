@@ -281,8 +281,11 @@ export class GitService {
     await this.git.run(['add', '--', ...files], path);
   }
 
-  async commit(path: string, message: string): Promise<void> {
-    await this.git.run(['-c', 'user.name=Styx', '-c', 'user.email=styx@localhost', 'commit', '-q', '-m', message], path);
+  async commit(path: string, message: string, opts: { allowEmpty?: boolean } = {}): Promise<void> {
+    await this.git.run(
+      ['-c', 'user.name=Styx', '-c', 'user.email=styx@localhost', 'commit', '-q', ...(opts.allowEmpty ? ['--allow-empty'] : []), '-m', message],
+      path,
+    );
   }
 
   async addRemote(path: string, name: string, url: string): Promise<void> {

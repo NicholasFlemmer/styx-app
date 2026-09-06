@@ -1,6 +1,7 @@
 import {
   newId,
   parseUnifiedDiff,
+  repoHasGit,
   type AgentChange,
   type Session,
   type SessionId,
@@ -115,6 +116,7 @@ export class HunkService {
       const { repos, publisher, git, clock } = this.deps;
       const worktree = repos.worktrees.get(worktreeId);
       if (!worktree) return;
+      if (!repoHasGit(repos.repos.get(worktree.repoId))) return; // plain folder: no diffs, no hunks
       const sessionId = (sessionIdHint ??
         (worktree.owner.kind === 'session'
           ? worktree.owner.sessionId

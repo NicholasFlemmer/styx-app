@@ -13,6 +13,7 @@ const scanned = [
     path: '~/code/acme-shop',
     remote: 'git@github.com:acme/shop.git',
     branch: 'main',
+    hasGit: true,
     source: 'scan',
     lastModifiedAt: fixtures.DEMO_NOW,
     suggested: true,
@@ -21,6 +22,7 @@ const scanned = [
     path: '~/work/client-x',
     remote: 'https://gitlab.com/client-x/app',
     branch: 'main',
+    hasGit: true,
     source: 'ide-recent',
     lastModifiedAt: fixtures.DEMO_NOW,
     suggested: true,
@@ -29,6 +31,7 @@ const scanned = [
     path: '~/Downloads/tmp-fork',
     remote: null,
     branch: null,
+    hasGit: true,
     source: 'scan',
     lastModifiedAt: fixtures.DEMO_NOW - 2 * YEAR,
     suggested: false,
@@ -275,6 +278,9 @@ describe('Onboarding', () => {
       repoMeta({ ...scanned[0], remote: 'git@gitlab.com:x/y.git', branch: null }, fixtures.DEMO_NOW),
     ).toBe('gitlab');
     expect(repoMeta(scanned[2], fixtures.DEMO_NOW)).toBe('no remote · 2y old');
+    expect(
+      repoMeta({ ...scanned[2], hasGit: false, lastModifiedAt: fixtures.DEMO_NOW }, fixtures.DEMO_NOW),
+    ).toBe('no git');
     expect(repoMeta({ ...scanned[2], lastModifiedAt: fixtures.DEMO_NOW }, fixtures.DEMO_NOW)).toBe(
       'no remote',
     );

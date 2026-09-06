@@ -31,6 +31,12 @@ export interface IdeImportResult {
   theme: ImportedTheme | null;
 }
 
+/** A recently opened folder; `openedAt` is known only where the editor leaves a timestamp (workspaceStorage mtime). */
+export interface RecentFolder {
+  path: string;
+  openedAt: number | null;
+}
+
 // --- VS Code / Cursor --------------------------------------------------------
 
 /** `file:///Users/me/code/x` / `file:///c%3A/dev/x` → local path; non-file URIs (vscode-remote://…) are dropped. */
@@ -48,7 +54,28 @@ export function fileUriToPath(uri: string, platform: NodeJS.Platform): string | 
   }
 }
 
-/** The JSON stored under `ItemTable.history.recentlyOpenedPathsList`: `{ entries: [{ folderUri | fileUri | workspace }] }`. */
+/**
+ * A multi-root `.code-workspace` file stands for the folder that holds it; VS Code's untitled workspaces
+ * (`…/Code/Workspaces/<n>/workspace.json`) stand for nothing. Files (`fileUri`) are never project folders.
+ */
+export function workspaceFileToFolder(uri: string, platform: NodeJS.Platform): string | null {
+  const p = fileUriToPath(uri, platform);
+  if (p === null || !/\.code-workspace$/i.test(p)) return null;
+  return dirname(p);
+}
+
+const asFolder = (rec: unknown, platform: NodeJS.Platform): string | null => {
+  if (!rec || typeof rec !== 'object') return null;
+  const r = rec as { folderUri?: unknown; workspace?: { configPath?: unknown } };
+  if (typeof r.folderUri === 'string') return fileUriToPath(r.folderUri, platform);
+  const cfg = r.workspace?.configPath;
+  return typeof cfg === 'string' ? workspaceFileToFolder(cfg, platform) : null;
+};
+
+/**
+ * The JSON stored under `ItemTable.history.recentlyOpenedPathsList` (VS Code ≤ 1.9x, Cursor):
+ * `{ entries: [{ folderUri | fileUri | workspace: { configPath } }] }`, most recent first.
+ */
 export function parseVscodeRecents(json: string, platform: NodeJS.Platform): string[] {
   let doc: unknown;
   try {
@@ -60,14 +87,77 @@ export function parseVscodeRecents(json: string, platform: NodeJS.Platform): str
   if (!Array.isArray(entries)) return [];
   const out: string[] = [];
   for (const e of entries) {
-    if (!e || typeof e !== 'object') continue;
-    const rec = e as { folderUri?: unknown; workspace?: { configPath?: unknown } };
-    const uri = typeof rec.folderUri === 'string' ? rec.folderUri : null;
-    if (!uri) continue; // files and .code-workspace entries are not project folders
-    const p = fileUriToPath(uri, platform);
+    const p = asFolder(e, platform);
     if (p && !out.includes(p)) out.push(p);
   }
   return out;
+}
+
+/**
+ * `User/workspaceStorage/<hash>/workspace.json` (every VS Code / Cursor build; the only recents record VS Code 1.10x+
+ * leaves): `{ "folder": "file:///…" }` or `{ "workspace": "file:///….code-workspace" }`; `{}` for untitled ones.
+ */
+export function parseWorkspaceJson(json: string, platform: NodeJS.Platform): string | null {
+  let doc: unknown;
+  try {
+    doc = JSON.parse(json);
+  } catch {
+    return null;
+  }
+  if (!doc || typeof doc !== 'object') return null;
+  const r = doc as { folder?: unknown; workspace?: unknown };
+  if (typeof r.folder === 'string') return fileUriToPath(r.folder, platform);
+  if (typeof r.workspace === 'string') return workspaceFileToFolder(r.workspace, platform);
+  return null;
+}
+
+/** `<Code>/Backups/workspaces.json`: `{ folderWorkspaceInfos: [{ folderUri }], rootURIWorkspaces: [{ configURIPath }] }`. */
+export function parseBackupsWorkspaces(json: string, platform: NodeJS.Platform): string[] {
+  let doc: unknown;
+  try {
+    doc = JSON.parse(json);
+  } catch {
+    return [];
+  }
+  if (!doc || typeof doc !== 'object') return [];
+  const r = doc as { folderWorkspaceInfos?: unknown; rootURIWorkspaces?: unknown };
+  const out: string[] = [];
+  const add = (p: string | null) => {
+    if (p && !out.includes(p)) out.push(p);
+  };
+  if (Array.isArray(r.folderWorkspaceInfos))
+    for (const e of r.folderWorkspaceInfos) {
+      const uri = (e as { folderUri?: unknown } | null)?.folderUri;
+      if (typeof uri === 'string') add(fileUriToPath(uri, platform));
+    }
+  if (Array.isArray(r.rootURIWorkspaces))
+    for (const e of r.rootURIWorkspaces) {
+      const uri = (e as { configURIPath?: unknown } | null)?.configURIPath;
+      if (typeof uri === 'string') add(workspaceFileToFolder(uri, platform));
+    }
+  return out;
+}
+
+/**
+ * Newest first, de-duplicated. Rows without a timestamp are the editor's own MRU list (the legacy key), which is
+ * more recent than anything it has forgotten: they keep their order ahead of the timestamped rows, but borrow the
+ * timestamp of a duplicate when one exists.
+ */
+export function mergeRecents(...lists: readonly (readonly RecentFolder[])[]): RecentFolder[] {
+  const known = new Map<string, number>();
+  for (const list of lists) for (const r of list) if (r.openedAt !== null) known.set(r.path, Math.max(known.get(r.path) ?? 0, r.openedAt));
+  const seen = new Set<string>();
+  const mru: RecentFolder[] = [];
+  const dated: RecentFolder[] = [];
+  for (const list of lists)
+    for (const r of list) {
+      if (seen.has(r.path)) continue;
+      seen.add(r.path);
+      const openedAt = known.get(r.path) ?? null;
+      (r.openedAt === null ? mru : dated).push({ path: r.path, openedAt });
+    }
+  dated.sort((a, b) => (b.openedAt ?? 0) - (a.openedAt ?? 0));
+  return [...mru, ...dated];
 }
 
 /** Reads `User/globalStorage/state.vscdb` (SQLite) read-only; only the recents key is touched. */
@@ -249,6 +339,10 @@ export interface IdeImportDeps {
   readFile?: (p: string) => string;
   readBytes?: (p: string) => Uint8Array;
   readVscdb?: (file: string, platform: NodeJS.Platform) => string[];
+  /** Directory entry names (`[]` when unreadable); tests inject a map. */
+  listDir?: (p: string) => string[];
+  /** mtime in epoch ms, null when unreadable. */
+  mtimeMs?: (p: string) => number | null;
 }
 
 export interface IdeImportSource {
@@ -262,26 +356,98 @@ export class IdeImportService {
   private readonly readFile: (p: string) => string;
   private readonly readBytes: (p: string) => Uint8Array;
   private readonly readVscdb: (file: string, platform: NodeJS.Platform) => string[];
+  private readonly listDir: (p: string) => string[];
+  private readonly mtimeMs: (p: string) => number | null;
 
   constructor(private readonly deps: IdeImportDeps) {
     this.exists = deps.exists ?? existsSync;
     this.readFile = deps.readFile ?? ((p) => readFileSync(p, 'utf8'));
     this.readBytes = deps.readBytes ?? ((p) => new Uint8Array(readFileSync(p)));
     this.readVscdb = deps.readVscdb ?? readVscdbRecents;
+    this.listDir =
+      deps.listDir ??
+      ((p) => {
+        try {
+          return readdirSync(p);
+        } catch {
+          return [];
+        }
+      });
+    this.mtimeMs =
+      deps.mtimeMs ??
+      ((p) => {
+        try {
+          return Math.round(statSync(p).mtimeMs);
+        } catch {
+          return null;
+        }
+      });
   }
 
-  /** Recent project folders of one editor (existing directories only). */
+  /** Recent project folders of one editor (existing directories only), most recent first. */
   recentFolders(src: IdeImportSource): string[] {
+    return this.recentFoldersWithTime(src).map((r) => r.path);
+  }
+
+  /**
+   * VS Code / Cursor keep recents in up to three places, unioned here (newest first):
+   * - `User/globalStorage/state.vscdb` `history.recentlyOpenedPathsList` (older builds, Cursor) and the same key in
+   *   every `User/profiles/<id>/globalStorage/state.vscdb`;
+   * - `User/workspaceStorage/<hash>/workspace.json`, one per folder ever opened (VS Code 1.10x+ writes nothing
+   *   else); the directory's mtime is when it was last opened;
+   * - `<Code>/Backups/workspaces.json` (hot-exit backups), when present.
+   */
+  private vscodeRecents(configDir: string): RecentFolder[] {
+    const { platform } = this.deps;
+    const mru = (db: string): RecentFolder[] =>
+      this.exists(db) ? this.readVscdb(db, platform).map((path) => ({ path, openedAt: null })) : [];
+    const legacy = [
+      ...mru(join(configDir, 'globalStorage', 'state.vscdb')),
+      ...this.listDir(join(configDir, 'profiles')).flatMap((id) =>
+        mru(join(configDir, 'profiles', id, 'globalStorage', 'state.vscdb')),
+      ),
+    ];
+    const storage = join(configDir, 'workspaceStorage');
+    const stored: RecentFolder[] = [];
+    for (const hash of this.listDir(storage)) {
+      const file = join(storage, hash, 'workspace.json');
+      if (!this.exists(file)) continue;
+      let path: string | null = null;
+      try {
+        path = parseWorkspaceJson(this.readFile(file), platform);
+      } catch {
+        continue;
+      }
+      if (path === null) continue;
+      stored.push({ path, openedAt: this.mtimeMs(join(storage, hash)) ?? this.mtimeMs(file) ?? 0 });
+    }
+    const backups = join(dirname(configDir), 'Backups', 'workspaces.json');
+    let backedUp: RecentFolder[] = [];
+    if (this.exists(backups)) {
+      try {
+        backedUp = parseBackupsWorkspaces(this.readFile(backups), platform).map((path) => ({ path, openedAt: null }));
+      } catch {
+        /* unreadable */
+      }
+    }
+    return mergeRecents(legacy, stored, backedUp);
+  }
+
+  /** Recent project folders of one editor with their last-opened time where the editor records one. */
+  recentFoldersWithTime(src: IdeImportSource): RecentFolder[] {
     const { platform, home } = this.deps;
-    let folders: string[] = [];
+    let folders: RecentFolder[] = [];
     if (src.kind === 'vscode' || src.kind === 'cursor') {
-      const db = src.configDir ? join(src.configDir, 'globalStorage', 'state.vscdb') : null;
-      if (db && this.exists(db)) folders = this.readVscdb(db, platform);
+      if (src.configDir) folders = this.vscodeRecents(src.configDir);
     } else if (src.kind === 'jetbrains') {
+      const seen = new Set<string>();
       for (const f of this.jetbrainsRecentFiles()) {
         try {
           for (const p of parseJetbrainsRecents(this.readFile(f), home, platform))
-            if (!folders.includes(p)) folders.push(p);
+            if (!seen.has(p)) {
+              seen.add(p);
+              folders.push({ path: p, openedAt: null });
+            }
         } catch {
           /* unreadable */
         }
@@ -298,16 +464,20 @@ export class IdeImportService {
           : join(home, '.local', 'share', 'nvim', 'shada', 'main.shada');
       if (this.exists(shada)) {
         try {
+          const seen = new Set<string>();
           for (const f of parseShadaOldfiles(this.readBytes(shada))) {
             const root = repoRootOf(f, this.exists);
-            if (root && !folders.includes(root)) folders.push(root);
+            if (root && !seen.has(root)) {
+              seen.add(root);
+              folders.push({ path: root, openedAt: null });
+            }
           }
         } catch {
           /* unreadable */
         }
       }
     }
-    return folders.filter((p) => this.isDir(p));
+    return folders.filter((r) => this.isDir(r.path));
   }
 
   /** Everything the onboarding toggles can import for one editor. */
@@ -332,9 +502,12 @@ export class IdeImportService {
 
   /** All recent folders across the editors detected on this machine, most recent first per editor. */
   allRecentFolders(sources: IdeImportSource[]): string[] {
-    const out: string[] = [];
-    for (const s of sources) for (const p of this.recentFolders(s)) if (!out.includes(p)) out.push(p);
-    return out;
+    return this.allRecentFoldersWithTime(sources).map((r) => r.path);
+  }
+
+  /** Union across editors (`mergeRecents` order): each editor's MRU rows first, then by last-opened time. */
+  allRecentFoldersWithTime(sources: IdeImportSource[]): RecentFolder[] {
+    return mergeRecents(...sources.map((s) => this.recentFoldersWithTime(s)));
   }
 
   private jetbrainsRecentFiles(): string[] {

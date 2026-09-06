@@ -7,14 +7,18 @@ import {
   IdeImportService,
   fileUriToPath,
   installOpenIn,
+  mergeRecents,
+  parseBackupsWorkspaces,
   parseJetbrainsRecents,
   parseJsonc,
   parseKeybindings,
   parseShadaOldfiles,
   parseVscodeRecents,
   parseVscodeTheme,
+  parseWorkspaceJson,
   readVscdbRecents,
   repoRootOf,
+  workspaceFileToFolder,
   type OpenInInstallDeps,
 } from './ide-import-service';
 
@@ -29,10 +33,11 @@ describe('VS Code / Cursor readers', () => {
     expect(fileUriToPath('vscode-remote://ssh-remote%2Bbox/home/me', 'darwin')).toBeNull();
   });
 
-  it('parses recentlyOpenedPathsList folders only, de-duplicated and in order', () => {
+  it('parses recentlyOpenedPathsList folders (+ .code-workspace parents), de-duplicated and in order', () => {
     expect(parseVscodeRecents(read('vscode/recentlyOpened.json'), 'darwin')).toEqual([
       '/Users/me/code/acme-shop',
       '/Users/me/work/blog v2',
+      '/Users/me/work/teko',
     ]);
     expect(parseVscodeRecents('not json', 'darwin')).toEqual([]);
     expect(parseVscodeRecents('{"entries": 3}', 'darwin')).toEqual([]);
@@ -49,8 +54,60 @@ describe('VS Code / Cursor readers', () => {
     );
     db.prepare('INSERT INTO ItemTable VALUES (?, ?)').run('secret.lookalike', 'never read');
     db.close();
-    expect(readVscdbRecents(file, 'darwin')).toEqual(['/Users/me/code/acme-shop', '/Users/me/work/blog v2']);
+    expect(readVscdbRecents(file, 'darwin')).toEqual([
+      '/Users/me/code/acme-shop',
+      '/Users/me/work/blog v2',
+      '/Users/me/work/teko',
+    ]);
     expect(readVscdbRecents(join(dir, 'missing.vscdb'), 'darwin')).toEqual([]);
+  });
+
+  it('workspaceStorage/<hash>/workspace.json: folder, .code-workspace parent, nothing for untitled workspaces', () => {
+    expect(parseWorkspaceJson(read('vscode/User/workspaceStorage/aaa/workspace.json'), 'darwin')).toBe(
+      '/Users/me/STYX',
+    );
+    expect(parseWorkspaceJson(read('vscode/User/workspaceStorage/bbb/workspace.json'), 'darwin')).toBe(
+      '/Users/me/Documents/Teko/backend',
+    );
+    expect(parseWorkspaceJson(read('vscode/User/workspaceStorage/ccc/workspace.json'), 'darwin')).toBeNull();
+    expect(parseWorkspaceJson('{}', 'darwin')).toBeNull();
+    expect(parseWorkspaceJson('nope', 'darwin')).toBeNull();
+    expect(parseWorkspaceJson('{"folder":"file:///c%3A/dev/app"}', 'win32')).toBe('C:\\dev\\app');
+    expect(workspaceFileToFolder('file:///Users/me/x/y.code-workspace', 'darwin')).toBe('/Users/me/x');
+    expect(workspaceFileToFolder('file:///Users/me/x/notes.md', 'darwin')).toBeNull();
+  });
+
+  it('Backups/workspaces.json: folder infos and root-URI workspaces', () => {
+    expect(parseBackupsWorkspaces(read('vscode/Backups/workspaces.json'), 'darwin')).toEqual([
+      '/Users/me/gmaps-scraper',
+      '/Users/me/work/infra',
+    ]);
+    expect(parseBackupsWorkspaces('[]', 'darwin')).toEqual([]);
+    expect(parseBackupsWorkspaces('{', 'darwin')).toEqual([]);
+  });
+
+  it('mergeRecents: MRU rows first (borrowing a known timestamp), then by time desc, de-duplicated', () => {
+    expect(
+      mergeRecents(
+        [
+          { path: '/a', openedAt: null },
+          { path: '/b', openedAt: null },
+        ],
+        [
+          { path: '/c', openedAt: 10 },
+          { path: '/b', openedAt: 30 },
+          { path: '/d', openedAt: 20 },
+          { path: '/c', openedAt: 5 },
+        ],
+        [{ path: '/e', openedAt: null }],
+      ),
+    ).toEqual([
+      { path: '/a', openedAt: null },
+      { path: '/b', openedAt: 30 },
+      { path: '/e', openedAt: null },
+      { path: '/d', openedAt: 20 },
+      { path: '/c', openedAt: 10 },
+    ]);
   });
 
   it('parses JSONC keybindings and skips malformed rows', () => {
@@ -115,6 +172,83 @@ describe('JetBrains / Neovim readers', () => {
 });
 
 describe('IdeImportService', () => {
+  it('VS Code 1.10x+ (no recents key): recents come from workspaceStorage, newest dir first; Cursor reads the same layout', () => {
+    const storage = '/cfg/User/workspaceStorage';
+    const mtimes: Record<string, number> = {
+      [`${storage}/aaa`]: 300,
+      [`${storage}/bbb`]: 100,
+      [`${storage}/ddd`]: 200,
+    };
+    const existing = new Set([
+      '/Users/me/STYX',
+      '/Users/me/Documents/Teko/backend',
+      '/Users/me/code/acme-shop',
+      `${storage}/aaa/workspace.json`,
+      `${storage}/bbb/workspace.json`,
+      `${storage}/ccc/workspace.json`,
+      `${storage}/ddd/workspace.json`,
+    ]);
+    const svc = new IdeImportService({
+      platform: 'darwin',
+      home: '/Users/me',
+      env: {},
+      exists: (p) => existing.has(p),
+      readFile: (p) => read(p.replace('/cfg/', 'vscode/')),
+      listDir: (p) => (p === storage ? ['bbb', 'aaa', 'ccc', 'ddd', 'ext-dev'] : []),
+      mtimeMs: (p) => mtimes[p] ?? null,
+      readVscdb: () => {
+        throw new Error('state.vscdb must not be opened when it does not exist');
+      },
+    });
+    for (const kind of ['vscode', 'cursor'] as const)
+      expect(svc.recentFoldersWithTime({ kind, configDir: '/cfg/User' })).toEqual([
+        { path: '/Users/me/STYX', openedAt: 300 },
+        { path: '/Users/me/code/acme-shop', openedAt: 200 },
+        { path: '/Users/me/Documents/Teko/backend', openedAt: 100 },
+      ]);
+    expect(svc.recentFolders({ kind: 'vscode', configDir: '/cfg/User' })).toEqual([
+      '/Users/me/STYX',
+      '/Users/me/code/acme-shop',
+      '/Users/me/Documents/Teko/backend',
+    ]);
+  });
+
+  it('unions the legacy key (global + profile state.vscdb), workspaceStorage and Backups; legacy MRU order leads', () => {
+    const storage = '/cfg/User/workspaceStorage';
+    const existing = new Set([
+      '/Users/me/STYX',
+      '/Users/me/code/acme-shop',
+      '/Users/me/work/blog v2',
+      '/Users/me/gmaps-scraper',
+      '/Users/me/work/infra',
+      '/cfg/User/globalStorage/state.vscdb',
+      '/cfg/User/profiles/p1/globalStorage/state.vscdb',
+      `${storage}/aaa/workspace.json`,
+      `${storage}/ddd/workspace.json`,
+      '/cfg/Backups/workspaces.json',
+    ]);
+    const svc = new IdeImportService({
+      platform: 'darwin',
+      home: '/Users/me',
+      env: {},
+      exists: (p) => existing.has(p),
+      readFile: (p) => read(p.replace('/cfg/', 'vscode/')),
+      listDir: (p) => (p === storage ? ['aaa', 'ddd'] : p === '/cfg/User/profiles' ? ['p1'] : []),
+      mtimeMs: (p) => (p === `${storage}/aaa` ? 300 : p === `${storage}/ddd` ? 200 : null),
+      readVscdb: (file) =>
+        file.includes('/profiles/')
+          ? ['/Users/me/work/blog v2']
+          : ['/Users/me/code/acme-shop', '/Users/me/missing'],
+    });
+    expect(svc.recentFoldersWithTime({ kind: 'vscode', configDir: '/cfg/User' })).toEqual([
+      { path: '/Users/me/code/acme-shop', openedAt: 200 },
+      { path: '/Users/me/work/blog v2', openedAt: null },
+      { path: '/Users/me/gmaps-scraper', openedAt: null },
+      { path: '/Users/me/work/infra', openedAt: null },
+      { path: '/Users/me/STYX', openedAt: 300 },
+    ]);
+  });
+
   it('imports recents, keybindings and theme from a VS Code User dir; Neovim recents map to repo roots', () => {
     const existing = new Set([
       '/Users/me/code/acme-shop',

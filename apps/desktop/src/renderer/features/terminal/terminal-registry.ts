@@ -129,12 +129,13 @@ export interface TerminalOptions {
  * One `Terminal` per session, created on first use and kept alive across tab switches (the host element is
  * re-parented, never disposed). JetBrains Mono 12/1.6, tokens theme, WebGL with DOM fallback.
  */
+/** `ownerKey`: the session id, or the worktree id for the sessionless terminal of a freshly added project. */
 export const getTerminal = (
-  sessionId: SessionId,
+  ownerKey: SessionId | WorktreeId,
   worktreeId: WorktreeId,
   opts: TerminalOptions,
 ): TerminalEntry => {
-  const existing = entries.get(sessionId);
+  const existing = entries.get(ownerKey);
   if (existing !== undefined) return existing;
   watchTheme();
   const host = document.createElement('div');
@@ -169,7 +170,7 @@ export const getTerminal = (
     resizeTimer: null,
     attached: false,
   };
-  entries.set(sessionId, entry);
+  entries.set(ownerKey, entry);
   term.open(host);
   tryWebgl(entry);
   void attachPty(entry, worktreeId);
@@ -193,15 +194,15 @@ export const setTerminalScreenReader = (entry: TerminalEntry, on: boolean): void
 };
 
 /** Disposes a session's terminal (session archived / app teardown). */
-export const disposeTerminal = (sessionId: SessionId): void => {
-  const e = entries.get(sessionId);
+export const disposeTerminal = (ownerKey: SessionId | WorktreeId): void => {
+  const e = entries.get(ownerKey);
   if (e === undefined) return;
   e.offData();
   e.offExit();
   e.webgl?.dispose();
   e.term.dispose();
   e.host.remove();
-  entries.delete(sessionId);
+  entries.delete(ownerKey);
   const api = bridge();
   if (e.terminalId !== null && api?.command !== undefined) {
     void api.command('terminal.kill', { terminalId: e.terminalId });

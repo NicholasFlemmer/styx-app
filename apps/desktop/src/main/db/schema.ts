@@ -1,7 +1,7 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 /**
- * Drizzle mirror of `migrations/*.sql` (0000_init + 0001_activity + 0002_auth_method_cli) for `pnpm db:generate` diffs. The SQL file is authoritative:
+ * Drizzle mirror of `migrations/*.sql` (0000_init + 0001_activity + 0002_auth_method_cli + 0003_plain_folders) for `pnpm db:generate` diffs. The SQL file is authoritative:
  * CHECK constraints and the audit triggers are hand-maintained there (drizzle-kit does not emit them for SQLite).
  * Queries use prepared statements in `repos/`, not this schema.
  */
@@ -27,7 +27,8 @@ export const repos = sqliteTable('repos', {
     .notNull()
     .unique()
     .references(() => projects.id, { onDelete: 'cascade' }),
-  defaultBranch: text('default_branch').notNull().default('main'),
+  /** NULL = plain folder (no git) until `project.gitInit` (0003). */
+  defaultBranch: text('default_branch'),
   remotesJson: text('remotes_json').notNull().default('[]'),
   ahead: integer('ahead').notNull().default(0),
   behind: integer('behind').notNull().default(0),
@@ -76,7 +77,8 @@ export const worktrees = sqliteTable(
     repoId: text('repo_id')
       .notNull()
       .references(() => repos.id, { onDelete: 'cascade' }),
-    branch: text('branch').notNull(),
+    /** NULL only on the main worktree of a plain folder (0003). */
+    branch: text('branch'),
     path: text('path').notNull().unique(),
     isMain: integer('is_main').notNull().default(0),
     ownerKind: text('owner_kind', { enum: ['user', 'session'] })

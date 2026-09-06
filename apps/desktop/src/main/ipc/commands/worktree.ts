@@ -1,7 +1,7 @@
 import { realpathSync } from 'node:fs';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { newId, type Worktree } from '@styx/core';
+import { newId, repoHasGit, type Worktree } from '@styx/core';
 import type { Container } from '../../container';
 import { worktreeLocation } from '../../services/git';
 import { type CommandBus, fail } from '../bus';
@@ -47,6 +47,7 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
   bus.register('worktree.create', async ({ projectId, branch, base }) => {
     const project = repos.projects.get(projectId) ?? fail('not-found', `project ${projectId} not found`);
     const repo = repos.repos.byProject(project.id) ?? fail('not-found', 'project has no repo');
+    if (!repoHasGit(repo)) fail('git-error', `${project.name} is not a git repository`);
     const path = worktreeLocation(project.path, branch);
     await git.worktreeAdd(project.path, { branch, base, path });
     const head = await git.headCommit(path);
@@ -88,6 +89,7 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
   bus.register('worktree.fetch', async ({ projectId }) => {
     const project = repos.projects.get(projectId) ?? fail('not-found', `project ${projectId} not found`);
     const repo = repos.repos.byProject(project.id) ?? fail('not-found', 'project has no repo');
+    if (!repoHasGit(repo)) return { ahead: 0, behind: 0 }; // plain folder: nothing to fetch
     await git.fetch(project.path);
     const status = await git.status(project.path);
     const ab = status.upstream
@@ -97,9 +99,9 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
     publisher.upsert('repos', [repo.id]);
     const ids: string[] = [];
     for (const wt of repos.worktrees.byProject(project.id)) {
-      if (wt.isMain || wt.archivedAt !== null) continue;
+      if (wt.isMain || wt.archivedAt !== null || wt.branch === null) continue;
       const conflict = await git
-        .detectConflict(project.path, wt.branch, repo.defaultBranch)
+        .detectConflict(project.path, wt.branch, repo.defaultBranch ?? 'main')
         .catch(() => null);
       if ((conflict?.file ?? null) !== (wt.conflict?.file ?? null)) {
         repos.worktrees.upsert({ ...wt, conflict });
@@ -117,6 +119,7 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
 
   bus.register('worktree.diff', async ({ worktreeId, file }) => {
     const wt = requireWorktree(worktreeId);
+    if (!repoHasGit(repos.repos.get(wt.repoId))) return { diff: '' }; // plain folder: no diffs
     const base = wt.isMain ? 'HEAD' : (wt.baseCommit ?? 'HEAD');
     return { diff: await git.diff(wt.path, base, file ? [file] : undefined) };
   });

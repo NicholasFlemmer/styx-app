@@ -53,6 +53,9 @@ export const mergedWhen = (mergedAt: number, now: number): string => {
 export const repoOfProject = (model: ReadModel, projectId: ProjectId): Repo | null =>
   rows(model.repos).find((r) => r.projectId === projectId) ?? null;
 
+/** Header meta when the folder has no git: `no git`. */
+export const noGitLine = (): string => copy.workspace.noGit;
+
 /** "github.com/acme/shop" from a remote url (scheme, `.git`, and `git@` prefixes dropped). */
 export const remoteLabel = (repo: Pick<Repo, 'remotes'> | null): string => {
   const url = repo?.remotes[0]?.url ?? null;
@@ -120,7 +123,7 @@ export const laneRows = (model: ReadModel, projectId: ProjectId, now: number): L
 
     return {
       worktreeId: w.id,
-      branch: w.branch,
+      branch: w.branch ?? copy.general.none,
       owner,
       dot,
       changes,

@@ -13,6 +13,11 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
 
   bus.register('project.add', async ({ path, name }) => ({ projectId: (await projects.add(path, name)).id }));
 
+  bus.register('project.gitInit', async ({ projectId }) => {
+    await projects.gitInit(projectId);
+    return {};
+  });
+
   /** "Open in {IDE} too": the fallback IDE, else the app setting's kind; nothing when neither is detected. */
   const openInFallbackIde = (path: string): void => {
     const ide =

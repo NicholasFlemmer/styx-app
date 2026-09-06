@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { keys } from '../../keys';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
+import { plainFolderReadModel } from '../../test-support/plain-folder';
 import { Diff } from './Diff';
 
 const acme = fixtures.ids.project.acmeShop as ProjectId;
@@ -128,5 +129,23 @@ describe('Diff review screen', () => {
     render(<Diff />);
     act(() => hunk(3).focus());
     expect(useUiStore.getState().diffFocusIndex).toBe(2);
+  });
+
+  it('a plain folder (no git) shows the empty state with `Initialise git` → project.gitInit; Done returns to Workspace', () => {
+    const side = fixtures.ids.project.sideApi as ProjectId;
+    useReadModel.getState().replaceModel(plainFolderReadModel(), 'connected');
+    useUiStore.setState({ projectId: side });
+    render(<Diff />);
+    expect(document.querySelector('[data-diff-empty]')?.getAttribute('data-diff-empty')).toBe('no-git');
+    expect(screen.getByText(copy.diff.title)).toBeTruthy();
+    expect(document.querySelector('[data-diff-meta]')?.textContent).toBe(copy.workspace.noGit);
+    expect(screen.getByText(copy.repo.noGit.label)).toBeTruthy();
+    expect(screen.getByText(copy.repo.noGit.body)).toBeTruthy();
+    expect(screen.queryByRole('list', { name: copy.diff.title })).toBeNull();
+    expect(screen.queryByRole('button', { name: copy.diff.acceptAll })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: copy.repo.noGit.cta }));
+    expect(commandMock).toHaveBeenCalledWith('project.gitInit', { projectId: side });
+    fireEvent.click(screen.getByRole('button', { name: copy.diff.done }));
+    expect(useUiStore.getState().screen).toBe('workspace');
   });
 });

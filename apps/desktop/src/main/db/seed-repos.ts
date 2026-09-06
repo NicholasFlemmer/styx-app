@@ -248,15 +248,17 @@ export async function seedDemoRepos(opts: SeedReposOptions): Promise<SeedReposRe
     for (const wt of opts.repos.worktrees.byProject(spec.projectId)) {
       const branch = spec.branches.find((b) => b.branch === wt.branch);
       let next: Worktree;
-      if (wt.isMain) next = { ...wt, path: repoPath, baseCommit: mainHead, headCommit: mainHead };
+      const wtBranch = wt.branch;
+      if (wt.isMain || wtBranch === null)
+        next = { ...wt, path: repoPath, baseCommit: mainHead, headCommit: mainHead };
       else if (branch) {
-        const wtPath = worktreeLocation(repoPath, wt.branch);
+        const wtPath = worktreeLocation(repoPath, wtBranch);
         const head = await git.headCommit(wtPath);
         const base =
-          (await runner.run(['merge-base', 'main', wt.branch], repoPath, { reject: false })).stdout.trim() ||
+          (await runner.run(['merge-base', 'main', wtBranch], repoPath, { reject: false })).stdout.trim() ||
           mainHead;
         next = { ...wt, path: wtPath, baseCommit: base, headCommit: head };
-      } else next = { ...wt, path: worktreeLocation(repoPath, wt.branch) };
+      } else next = { ...wt, path: worktreeLocation(repoPath, wtBranch) };
       opts.repos.worktrees.upsert(next);
     }
   }

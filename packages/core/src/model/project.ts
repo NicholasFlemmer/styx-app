@@ -21,10 +21,15 @@ export type LineEndings = z.infer<typeof lineEndingsSchema>;
 export const repoRemoteSchema = z.object({ name: z.string(), url: z.string() });
 export type RepoRemote = z.infer<typeof repoRemoteSchema>;
 
+/**
+ * One repo row per project, git or not. A folder added as-is (no `.git`) keeps `defaultBranch: null`, no remotes and
+ * a single main worktree whose `branch` is null; that null is the whole "has git" flag (see `repoHasGit`), so no extra
+ * column exists. `project.gitInit` fills both in.
+ */
 export const repoSchema = z.object({
   id: repoIdSchema,
   projectId: projectIdSchema,
-  defaultBranch: z.string().min(1),
+  defaultBranch: z.string().min(1).nullable(),
   remotes: z.array(repoRemoteSchema),
   ahead: z.number().int().nonnegative(),
   behind: z.number().int().nonnegative(),
@@ -33,6 +38,10 @@ export const repoSchema = z.object({
   longPaths: z.boolean(),
 });
 export type Repo = z.infer<typeof repoSchema>;
+
+/** Whether the project's folder is a git repository (worktrees, diffs and reviews need it). */
+export const repoHasGit = (repo: Pick<Repo, 'defaultBranch'> | null | undefined): boolean =>
+  repo !== null && repo !== undefined && repo.defaultBranch !== null;
 
 export const prStateSchema = z.enum(['draft', 'open', 'merged', 'closed']);
 export type PrState = z.infer<typeof prStateSchema>;
@@ -57,7 +66,8 @@ export const worktreeSchema = z.object({
   id: worktreeIdSchema,
   repoId: repoIdSchema,
   projectId: projectIdSchema,
-  branch: z.string().min(1),
+  /** Null only on the main worktree of a plain (non-git) folder. */
+  branch: z.string().min(1).nullable(),
   path: z.string().min(1),
   isMain: z.boolean(),
   owner: worktreeOwnerSchema,

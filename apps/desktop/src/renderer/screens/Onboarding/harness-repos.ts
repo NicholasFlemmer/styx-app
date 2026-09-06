@@ -20,6 +20,7 @@ const repo = (path: string, remote: string | null, branch: string | null, lastMo
   path,
   remote,
   branch,
+  hasGit: true,
   source: 'scan',
   lastModifiedAt,
   suggested: true,

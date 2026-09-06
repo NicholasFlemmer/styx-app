@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
+import { plainFolderReadModel } from '../../test-support/plain-folder';
 import { Repo } from './Repo';
 
 const acme = fixtures.ids.project.acmeShop as ProjectId;
@@ -39,6 +40,24 @@ describe('Repo screen', () => {
   afterEach(() => {
     cleanup();
     Object.assign(window, { styx: undefined });
+  });
+
+  it('a plain folder (no git) shows the empty state with `Initialise git` → project.gitInit; no lanes, no Fetch / + Worktree', () => {
+    const side = fixtures.ids.project.sideApi as ProjectId;
+    useReadModel.getState().replaceModel(plainFolderReadModel(), 'connected');
+    useUiStore.setState({ projectId: side });
+    render(<Repo />);
+    expect(document.querySelector('[data-repo-empty]')?.getAttribute('data-repo-empty')).toBe('no-git');
+    expect(screen.getByText(copy.repo.title)).toBeTruthy();
+    expect(screen.getByText(copy.workspace.noGit)).toBeTruthy();
+    expect(screen.getByText(copy.repo.noGit.label)).toBeTruthy();
+    expect(screen.getByText(copy.repo.noGit.body)).toBeTruthy();
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.queryByRole('button', { name: copy.repo.fetch })).toBeNull();
+    expect(screen.queryByRole('button', { name: copy.repo.addWorktree })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: copy.repo.noGit.cta }));
+    expect(commandMock).toHaveBeenCalledWith('project.gitInit', { projectId: side });
+    expect(commandMock).not.toHaveBeenCalledWith('worktree.diff', expect.anything());
   });
 
   it('renders the header, the prototype lanes, and selects fix/checkout with its diff below', async () => {

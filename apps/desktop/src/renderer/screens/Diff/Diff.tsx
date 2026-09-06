@@ -1,6 +1,6 @@
-import { copy, fill, type ReadModel } from '@styx/core';
+import { copy, fill, projectHasGit, type ReadModel } from '@styx/core';
 import { sizes } from '@styx/tokens';
-import { Button, Label, Tag } from '@styx/ui';
+import { Button, EmptyState, Label, Tag } from '@styx/ui';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { DiffBlock } from '../../features/diff';
 import { diffBindings, keys } from '../../keys';
@@ -138,6 +138,33 @@ export function Diff() {
     const sessionId = currentReview().sessionId;
     if (sessionId !== null) void command(verdict, { sessionId });
   };
+
+  // Plain folder (no git): nothing to review until `git init`; Done still returns to the Workspace.
+  if (projectId !== null && !projectHasGit(model, projectId)) {
+    return (
+      <div ref={root} className={s['screen']} tabIndex={-1} data-keyscope="diff" data-diff-review="true" data-diff-empty="no-git">
+        <div className={s['head']}>
+          <span className={s['title']}>{copy.diff.title}</span>
+          <span className={s['meta']} data-diff-meta="true">
+            {copy.workspace.noGit}
+          </span>
+          <span className={s['spacer']} />
+          <Button size="regular" variant="primary" onClick={done}>
+            {copy.diff.done}
+          </Button>
+        </div>
+        <EmptyState
+          headline={copy.repo.noGit.label}
+          body={copy.repo.noGit.body}
+          actions={
+            <Button variant="primary" onClick={() => void command('project.gitInit', { projectId })}>
+              {copy.repo.noGit.cta}
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
 
   return (
     <div ref={root} className={s['screen']} tabIndex={-1} data-keyscope="diff" data-diff-review="true">

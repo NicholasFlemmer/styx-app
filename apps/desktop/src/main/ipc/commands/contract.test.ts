@@ -141,6 +141,41 @@ describe('command contract', () => {
     expect(popouts).toEqual([]);
   });
 
+  it('project.add takes a plain folder; project.gitInit upgrades it and the deltas carry the new branch', async () => {
+    const { app, sender, win } = makeTestApp({ fixture: 'empty' });
+    const dir = mkdtempSync(join(tmpdir(), 'styx-plain-'));
+    writeFileSync(join(dir, 'notes.md'), 'hi\n');
+    const added = await app.bus.dispatch(sender, 'project.add', { path: dir });
+    if (!added.ok) throw new Error(added.error.message);
+    const { projectId } = added.value;
+    app.publisher.flush();
+    const snap = await app.bus.dispatch(sender, 'store.snapshot', {});
+    if (!snap.ok) throw new Error('snapshot');
+    expect(snap.value.repos.find((r) => r.projectId === projectId)).toMatchObject({ defaultBranch: null });
+    expect(snap.value.worktrees.filter((w) => w.projectId === projectId)).toMatchObject([
+      { branch: null, isMain: true, path: dir },
+    ]);
+    // A spawn asking for a fresh worktree is refused on a plain folder (the modal only offers the folder itself).
+    const spawn = await app.bus.dispatch(sender, 'session.spawn', {
+      projectId,
+      agent: 'shell',
+      worktree: { kind: 'new', base: 'main', branch: 'agent/shell-1' },
+      firstMessage: '',
+      toggles: { autoApproveEdits: false, mayRequestTargets: true, notifyWhenNeedsMe: true },
+      model: null,
+    });
+    expect(spawn).toMatchObject({ ok: false, error: { code: 'git-error' } });
+    expect(await app.bus.dispatch(sender, 'project.gitInit', { projectId })).toEqual({ ok: true, value: {} });
+    app.publisher.flush();
+    const after = await app.bus.dispatch(sender, 'store.snapshot', {});
+    if (!after.ok) throw new Error('snapshot');
+    expect(after.value.repos.find((r) => r.projectId === projectId)).toMatchObject({ defaultBranch: 'main' });
+    expect(after.value.worktrees.find((w) => w.projectId === projectId)).toMatchObject({ branch: 'main', isMain: true });
+    expect(
+      win.batches().flatMap((b) => b.deltas).some((d) => d.op === 'upsert' && (d as { table?: string }).table === 'worktrees'),
+    ).toBe(true);
+  });
+
   describe('fs.* confinement', () => {
     const setup = () => {
       const t = makeTestApp();

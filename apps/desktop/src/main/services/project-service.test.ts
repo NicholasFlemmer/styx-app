@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { fixtures, type ProjectFileV1 } from '@styx/core';
 import { describe, expect, it } from 'vitest';
 import { makeTestApp } from '../test-support';
+import type { RecentFolder } from './ide-import-service';
 import {
   HOME_DEPTH,
   HOME_SKIP_DIRS,
@@ -141,7 +142,7 @@ describe('walkForRepos (project.scan roots, skips, budget)', () => {
 });
 
 describe('ProjectService.scan / clone', () => {
-  const service = (t: ReturnType<typeof makeTestApp>, home: string, ideRecents: string[] = []) =>
+  const service = (t: ReturnType<typeof makeTestApp>, home: string, ideRecents: RecentFolder[] = []) =>
     new ProjectService({
       repos: t.app.repos,
       publisher: t.app.publisher,
@@ -171,14 +172,29 @@ describe('ProjectService.scan / clone', () => {
       id: 'known' as never,
       path: known,
     });
-    const svc = service(t, home, [ideOnly, join(home, 'not-a-repo')]);
-    const rows = await svc.scan(true);
-    expect(rows.map((r) => [r.path, r.source])).toEqual([
-      [newer, 'scan'],
-      [ideOnly, 'ide-recent'],
-      [recent, 'scan'],
-      [older, 'scan'],
+    // A folder the IDE opened (no `.git`) is listed as-is with `hasGit: false`, dated by when it was opened; a path
+    // that does not exist is dropped.
+    const plain = join(home, 'notes');
+    mkdirSync(plain);
+    const svc = service(t, home, [
+      { path: ideOnly, openedAt: null },
+      { path: plain, openedAt: NOW - 5 * DAY },
+      { path: join(home, 'gone'), openedAt: NOW },
     ]);
+    const rows = await svc.scan(true);
+    expect(rows.map((r) => [r.path, r.source, r.hasGit])).toEqual([
+      [newer, 'scan', true],
+      [ideOnly, 'ide-recent', true],
+      [recent, 'scan', true],
+      [plain, 'ide-recent', false],
+      [older, 'scan', true],
+    ]);
+    expect(rows.find((r) => r.path === plain)).toMatchObject({
+      remote: null,
+      branch: null,
+      lastModifiedAt: NOW - 5 * DAY,
+      suggested: true,
+    });
     expect((await svc.scan(false)).map((r) => r.path)).toEqual([newer, recent, older]);
     expect(
       [
@@ -187,7 +203,14 @@ describe('ProjectService.scan / clone', () => {
         { path: 'c', lastModifiedAt: 2 },
         { path: 'a2', lastModifiedAt: null },
       ]
-        .map((x) => ({ ...x, remote: null, branch: null, source: 'scan' as const, suggested: true }))
+        .map((x) => ({
+          ...x,
+          remote: null,
+          branch: null,
+          hasGit: true,
+          source: 'scan' as const,
+          suggested: true,
+        }))
         .sort(byLastActivity)
         .map((x) => x.path),
     ).toEqual(['c', 'a', 'a2', 'b']);
@@ -217,6 +240,97 @@ describe('ProjectService.scan / clone', () => {
     t.app.publisher.flush();
     const phases = t.win.events('project.cloneProgress').map((e) => (e as { phase: string }).phase);
     expect(phases).toEqual(['cloning', 'done', 'cloning', 'error', 'cloning', 'error']);
+    rmSync(home, { recursive: true, force: true });
+  });
+});
+
+describe('plain folders: add without git, gitInit upgrades', () => {
+  const service = (t: ReturnType<typeof makeTestApp>, home: string) =>
+    new ProjectService({
+      repos: t.app.repos,
+      publisher: t.app.publisher,
+      clock: t.clock,
+      git: t.app.git,
+      platform: 'darwin',
+      home,
+      templatesDir: null,
+      activity: t.app.activity,
+    });
+
+  it('add accepts any directory: a folder without .git gets a repo row with defaultBranch null and one main worktree on no branch', async () => {
+    const t = makeTestApp({ fixture: 'empty' });
+    const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+    const folder = join(home, 'notes');
+    mkdirSync(folder);
+    writeFileSync(join(folder, 'todo.md'), '- ship\n');
+    const svc = service(t, home);
+    const project = await svc.add(folder);
+    expect(project).toMatchObject({ name: 'notes', path: folder, hasProjectFile: false });
+    const repo = t.app.repos.repos.byProject(project.id);
+    expect(repo).toMatchObject({ defaultBranch: null, remotes: [], ahead: 0, behind: 0 });
+    const main = t.app.repos.worktrees.mainOf(project.id);
+    expect(main).toMatchObject({
+      branch: null,
+      path: folder,
+      isMain: true,
+      owner: { kind: 'user' },
+      baseCommit: null,
+      headCommit: null,
+    });
+    expect(t.app.repos.worktrees.byProject(project.id)).toHaveLength(1);
+    // Adding the same folder again returns the existing project; a file is refused, a missing path is not found.
+    expect((await svc.add(folder)).id).toBe(project.id);
+    await expect(svc.add(join(folder, 'todo.md'))).rejects.toMatchObject({
+      code: 'invalid-input',
+      message: expect.stringContaining('is not a directory'),
+    });
+    await expect(svc.add(join(home, 'nope'))).rejects.toMatchObject({ code: 'not-found' });
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('gitInit runs git init -b main + an empty commit and reconciles the repo row and main worktree onto main', async () => {
+    const t = makeTestApp({ fixture: 'empty' });
+    const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+    const folder = join(home, 'notes');
+    mkdirSync(folder);
+    writeFileSync(join(folder, 'todo.md'), '- ship\n');
+    const svc = service(t, home);
+    const project = await svc.add(folder);
+    await svc.gitInit(project.id);
+    expect(await t.app.git.isRepo(folder)).toBe(true);
+    expect(await t.app.git.currentBranch(folder)).toBe('main');
+    const head = await t.app.git.headCommit(folder);
+    expect(head).not.toBeNull();
+    expect(await t.app.git.untrackedFiles(folder)).toEqual(['todo.md']); // nothing in the folder was committed
+    expect(t.app.repos.repos.byProject(project.id)).toMatchObject({ defaultBranch: 'main', remotes: [] });
+    expect(t.app.repos.worktrees.mainOf(project.id)).toMatchObject({
+      branch: 'main',
+      path: folder,
+      baseCommit: head,
+      headCommit: head,
+    });
+    expect(t.app.repos.activity.recent(5).map((a) => a.what)).toContain('notes · git initialised on main');
+    // Idempotent on a git repo: no new commit, rows unchanged.
+    await svc.gitInit(project.id);
+    expect(await t.app.git.headCommit(folder)).toBe(head);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('describeRepos does not throw on non-git folders and marks them hasGit: false', async () => {
+    const t = makeTestApp({ fixture: 'empty' });
+    const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+    const plain = join(home, 'plain');
+    mkdirSync(plain);
+    const repo = repoAt(home, 'code/repo');
+    const svc = service(t, home);
+    const rows = await svc.describeRepos([
+      { path: plain, source: 'ide-recent', openedAt: NOW - STALE_MS - DAY },
+      { path: repo, source: 'scan' },
+    ]);
+    expect(rows.map((r) => [r.path, r.hasGit, r.suggested])).toEqual([
+      [plain, false, false], // opened over a year ago → unchecked by default
+      [repo, true, true], // no remote, but the `.git` entry is fresh (unreadable repo: still listed)
+    ]);
     rmSync(home, { recursive: true, force: true });
   });
 });
