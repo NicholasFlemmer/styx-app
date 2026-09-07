@@ -14,8 +14,19 @@ export interface DecisionOption {
   primary?: boolean;
 }
 
+export interface MessageAttachment {
+  /** Image name or file path. */
+  label: string;
+  kind: 'image' | 'file';
+}
+
 export type MessageKind =
-  | { kind: 'user'; text: string }
+  | {
+      kind: 'user';
+      text: string;
+      /** Images / files sent with the message (owner addition, discrepancy #57): small inverted mono chips. */
+      attachments?: readonly MessageAttachment[];
+    }
   | {
       kind: 'agent';
       children: ReactNode;
@@ -146,6 +157,15 @@ export const Message = forwardRef<HTMLDivElement, MessageProps>(function Message
       return (
         <div ref={ref} data-kind="user" className={cls(s['user'])}>
           {props.text}
+          {props.attachments !== undefined && props.attachments.length > 0 && (
+            <span className={s['attachments']} data-message-attachments="true">
+              {props.attachments.map((a, i) => (
+                <span key={`${a.label}-${i}`} className={s['attachment']} data-kind={a.kind} title={a.label}>
+                  {a.label}
+                </span>
+              ))}
+            </span>
+          )}
         </div>
       );
     case 'agent':

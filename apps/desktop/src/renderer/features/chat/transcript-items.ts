@@ -1,5 +1,6 @@
 import {
   copy,
+  type Attachment,
   type AskId,
   type GrantId,
   type ReadModel,
@@ -10,7 +11,7 @@ import {
 import { hunkMatchesFile, hunkBody } from '../editor/hunk-decorations';
 
 export type TranscriptItem =
-  | { id: string; kind: 'user'; text: string }
+  | { id: string; kind: 'user'; text: string; attachments: readonly Attachment[] }
   | {
       id: string;
       kind: 'agent';
@@ -82,7 +83,7 @@ export const transcriptItems = (model: ReadModel, sessionId: SessionId): Transcr
     const p = m.payload;
     switch (p.kind) {
       case 'user':
-        out.push({ id: m.id, kind: 'user', text: m.body });
+        out.push({ id: m.id, kind: 'user', text: m.body, attachments: p.attachments ?? [] });
         break;
       case 'agent':
         out.push({ id: m.id, kind: 'agent', text: m.body, streaming: p.streaming === true });

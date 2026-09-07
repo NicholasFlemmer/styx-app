@@ -15,6 +15,7 @@ import {
   Button,
   Composer,
   Icon,
+  Markdown,
   Message,
   Select,
   StatusDot,
@@ -37,6 +38,16 @@ import {
   permissionModeOptions,
   sessionControls,
 } from './session-controls';
+import {
+  composerChips,
+  isImageError,
+  messageChips,
+  readImage,
+  sendAttachments,
+  withMention,
+  type Pending,
+} from './chat-attachments';
+import { mentionItems as toMentionItems, slashItems } from './slash-commands';
 import { thinkingLabel, wholeSeconds, workingLine } from './stream-state';
 import { inlineSegments, transcriptItems, type TranscriptItem } from './transcript-items';
 
@@ -100,7 +111,7 @@ function SessionControlsRow({ session }: { session: Session }) {
   );
 }
 
-/** Body text with file names in mono (prototype agent bubbles). */
+/** Plain text with file names in mono (prototype agent bubbles); used for text runs inside markdown too. */
 function Body({ text }: { text: string }) {
   return (
     <>
@@ -118,6 +129,20 @@ function Body({ text }: { text: string }) {
 }
 
 /**
+ * Agent replies render as markdown (owner addition, discrepancy #57): headings, lists, code fences and tables
+ * instead of one wall of text. Plain runs keep the prototype's mono file names; links open in the browser.
+ */
+function AgentBody({ text }: { text: string }) {
+  return (
+    <Markdown
+      text={text}
+      renderText={(run) => <Body text={run} />}
+      onLink={(url) => void command('link.open', { url })}
+    />
+  );
+}
+
+/**
  * Chat pane (spec §4.1, 360px): session tabs (3 visible + ▾, accent `!` when needs-you, `+` spawns, ⤢ pops
  * out), meta line, transcript of the six Message kinds, composer. `data-keyscope="chat"` / `"composer"`.
  */
@@ -128,6 +153,11 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const setSession = useUi((u) => u.setSession);
   const pushOverlay = useUi((u) => u.pushOverlay);
   const [menuOpen, setMenuOpen] = useState(false);
+  /** Attachments waiting to go with the next message (images read to base64, `@`-mentioned worktree files). */
+  const [pending, setPending] = useState<Pending[]>([]);
+  const [mentionPaths, setMentionPaths] = useState<readonly string[]>([]);
+  const [slashQuery, setSlashQuery] = useState('');
+  const mentionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menu = useRef<HTMLDivElement>(null);
   const overflowTab = useRef<HTMLButtonElement>(null);
 
@@ -206,17 +236,67 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   };
 
   const send = (text: string) => {
-    if (activeId !== null) void command('session.sendMessage', { sessionId: activeId, body: text });
+    if (activeId === null) return;
+    void command('session.sendMessage', {
+      sessionId: activeId,
+      body: text,
+      attachments: sendAttachments(pending),
+    });
+    setPending([]);
+  };
+
+  /** `@…` in the composer searches the session's worktree (debounced 80 ms); the picker inserts `@path`. */
+  const onMentionQuery = useCallback(
+    (query: string) => {
+      const worktreeId = session?.worktreeId ?? null;
+      if (worktreeId === null) return;
+      if (mentionTimer.current !== null) clearTimeout(mentionTimer.current);
+      mentionTimer.current = setTimeout(() => {
+        void command('fs.find', { worktreeId, query, limit: 30 }).then((r) => {
+          setMentionPaths(r.ok ? r.value.paths : []);
+        });
+      }, 80);
+    },
+    [session?.worktreeId],
+  );
+
+  useEffect(
+    () => () => {
+      if (mentionTimer.current !== null) clearTimeout(mentionTimer.current);
+    },
+    [],
+  );
+
+  /** Pasted / dropped images are read here and sent as base64 blocks; anything else is refused with §57 copy. */
+  const addImages = (files: readonly File[]) => {
+    for (const file of files) {
+      const id = `img:${file.name}:${file.size}:${Date.now()}`;
+      void readImage(file, id).then((r) => {
+        if (isImageError(r)) {
+          pushOverlay({ kind: 'toast', toast: { kind: 'error', code: 'attachment', message: r.message } });
+          return;
+        }
+        setPending((prev) => (prev.some((p) => p.id === r.id) ? prev : [...prev, r]));
+      });
+    }
   };
 
   const renderItem = (item: TranscriptItem) => {
     switch (item.kind) {
       case 'user':
-        return <Message key={item.id} kind="user" text={item.text} compact={compact} />;
+        return (
+          <Message
+            key={item.id}
+            kind="user"
+            text={item.text}
+            attachments={messageChips(item.attachments)}
+            compact={compact}
+          />
+        );
       case 'agent':
         return (
           <Message key={item.id} kind="agent" streaming={item.streaming} compact={compact}>
-            <Body text={item.text} />
+            <AgentBody text={item.text} />
           </Message>
         );
       case 'thinking':
@@ -396,6 +476,25 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           sendLabel={copy.chat.composer.send}
           compact={compact}
           disabled={activeId === null || (popped && !compact)}
+          attachments={composerChips(pending)}
+          onRemoveAttachment={(id) => setPending((prev) => prev.filter((p) => p.id !== id))}
+          canSend={pending.length > 0}
+          onPaste={addImages}
+          onDrop={addImages}
+          dropHint={copy.chat.attach.dropHint}
+          onMentionQuery={onMentionQuery}
+          mentionItems={toMentionItems(mentionPaths)}
+          onMentionInsert={(path) => setPending((prev) => withMention(prev, path))}
+          mentionHint={copy.chat.mention.hint}
+          mentionEmpty={copy.chat.mention.none}
+          {...(session !== null && session.slashCommands.length > 0
+            ? {
+                slashItems: slashItems(session, slashQuery),
+                onSlashQuery: setSlashQuery,
+                slashHint: copy.chat.slash.hint,
+                slashEmpty: copy.chat.slash.none,
+              }
+            : {})}
         />
       </div>
     </section>

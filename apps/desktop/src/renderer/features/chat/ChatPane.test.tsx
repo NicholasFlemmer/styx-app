@@ -256,7 +256,7 @@ describe('ChatPane', () => {
     fireEvent.keyDown(box, { key: 'Enter' });
     await flush();
     expect(commands).toEqual([
-      { name: 'session.sendMessage', input: { sessionId: claude, body: 'ship it' } },
+      { name: 'session.sendMessage', input: { sessionId: claude, body: 'ship it', attachments: [] } },
     ]);
   });
 
@@ -574,6 +574,8 @@ describe('ChatPane', () => {
     fireEvent.change(box, { target: { value: 'go' } });
     fireEvent.keyDown(box, { key: 'Enter' });
     await flush();
-    expect(commands).toEqual([{ name: 'session.sendMessage', input: { sessionId: codex, body: 'go' } }]);
+    expect(commands).toEqual([
+      { name: 'session.sendMessage', input: { sessionId: codex, body: 'go', attachments: [] } },
+    ]);
   });
 });

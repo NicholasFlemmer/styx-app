@@ -1,12 +1,19 @@
 import { EventEmitter } from 'node:events';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fixtures } from '@styx/core';
+import { fixtures, MAX_FILE_ATTACHMENT_BYTES, MAX_IMAGE_BYTES } from '@styx/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
 import { PtyService } from './pty-service';
 import { parseCliOutdated, runnerFor, STREAM_ACTIVITY_MS, STREAM_FLUSH_MS } from './session-service';
-import type { StreamEffect, StreamEvents, StreamRunnerLike, StreamSpawnOptions } from './stream-runner';
+import type {
+  ImageBlock,
+  StreamEffect,
+  StreamEvents,
+  StreamRunnerLike,
+  StreamSpawnOptions,
+} from './stream-runner';
 
 const { ids, DEMO_NOW } = fixtures;
 
@@ -73,7 +80,7 @@ class FakePty extends PtyService {
 
 class FakeStream extends EventEmitter<StreamEvents> implements StreamRunnerLike {
   readonly spawned: StreamSpawnOptions[] = [];
-  readonly sent: { id: string; text: string }[] = [];
+  readonly sent: { id: string; text: string; blocks?: ImageBlock[] }[] = [];
   readonly permissions: {
     id: string;
     requestId: string;
@@ -93,8 +100,8 @@ class FakeStream extends EventEmitter<StreamEvents> implements StreamRunnerLike 
     this.live.add(opts.id);
     return { pid: 777 };
   }
-  send(id: string, text: string): void {
-    this.sent.push({ id, text });
+  send(id: string, text: string, blocks: readonly ImageBlock[] = []): void {
+    this.sent.push({ id, text, ...(blocks.length > 0 ? { blocks: [...blocks] } : {}) });
   }
   readonly controls: { id: string; request: Record<string, unknown> }[] = [];
   setModel(id: string, model: string | null): void {
@@ -764,11 +771,17 @@ describe('SessionService Claude Code parity (stream)', () => {
     const { app: a } = app();
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
     expect(session.cliSessionId).toBeNull();
-    stream.effect(session.id, { type: 'init', chatId: 'cli-sess-9', model: 'claude-opus-4-1', permissionMode: 'default' });
+    stream.effect(session.id, {
+      type: 'init',
+      chatId: 'cli-sess-9',
+      model: 'claude-opus-4-1',
+      permissionMode: 'default',
+      slashCommands: [],
+    });
     expect(a.sessions.get(session.id)).toMatchObject({ cliSessionId: 'cli-sess-9', model: 'claude-opus-4-1' });
     // a second init (the CLI restarted) keeps an explicit model; a null chat id keeps the stored one
     a.sessions.configure(session.id, { model: 'sonnet' });
-    stream.effect(session.id, { type: 'init', chatId: null, model: 'claude-x', permissionMode: null });
+    stream.effect(session.id, { type: 'init', chatId: null, model: 'claude-x', permissionMode: null, slashCommands: [] });
     expect(a.sessions.get(session.id)).toMatchObject({ cliSessionId: 'cli-sess-9', model: 'sonnet' });
 
     stream.effect(session.id, { type: 'session', event: 'quiet' });
@@ -1322,5 +1335,129 @@ describe('SessionService partial messages (stream rows patched live)', () => {
     stream.effect(id, { type: 'streamStop', key: 'm:0' });
     stream.effect(id, { type: 'streamFinal', key: 'm:0', body: 'abc' });
     expect(rows(a, id).at(-1)).toMatchObject({ body: 'abc', payload: { kind: 'agent' } });
+  });
+});
+
+describe('SessionService attachments + slash commands', () => {
+  const worktreeDir = (a: TestApp['app'], worktreeId: string): string => {
+    const base = mkdtempSync(join(tmpdir(), 'styx-attach-'));
+    const root = join(base, 'wt');
+    const outside = join(base, 'outside');
+    mkdirSync(join(root, 'src'), { recursive: true });
+    mkdirSync(outside);
+    writeFileSync(join(root, 'src', 'a.ts'), 'export const a = 1;\n');
+    writeFileSync(join(root, 'big.txt'), 'x'.repeat(MAX_FILE_ATTACHMENT_BYTES + 1));
+    writeFileSync(join(outside, 'secret.txt'), 'nope');
+    symlinkSync(join(outside, 'secret.txt'), join(root, 'escape.txt'));
+    const wt = a.repos.worktrees.get(worktreeId)!;
+    a.repos.worktrees.upsert({ ...wt, path: root });
+    return root;
+  };
+  const png = { kind: 'image' as const, name: 'shot.png', mediaType: 'image/png' as const, data: 'iVBORw0KGgo=' };
+  const userRows = (a: TestApp['app'], id: string) =>
+    a.repos.transcripts.last(id).filter((m) => m.payload.kind === 'user');
+
+  it('images go to a stream session as base64 blocks; the transcript row keeps metadata only', async () => {
+    const { app: a } = app();
+    worktreeDir(a, ids.worktree.featPromo);
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    await a.sessions.sendMessage(session.id, 'what is this?', [png]);
+    expect(stream.sent.at(-1)).toEqual({
+      id: session.id,
+      text: 'what is this?',
+      blocks: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: png.data } }],
+    });
+    expect(userRows(a, session.id).at(-1)).toMatchObject({
+      body: 'what is this?',
+      payload: { kind: 'user', attachments: [{ kind: 'image', name: 'shot.png', mediaType: 'image/png', bytes: 8 }] },
+    });
+    expect(JSON.stringify(userRows(a, session.id).at(-1))).not.toContain(png.data);
+  });
+
+  it('files are read inside the worktree and inlined after the text; an attachment-only message is named after them', async () => {
+    const { app: a } = app();
+    worktreeDir(a, ids.worktree.featPromo);
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    await a.sessions.sendMessage(session.id, 'review', [{ kind: 'file', path: 'src/a.ts' }, png]);
+    expect(stream.sent.at(-1)).toMatchObject({
+      text: 'review\n\n<file path="src/a.ts">\nexport const a = 1;\n\n</file>',
+    });
+    expect(stream.sent.at(-1)!.blocks).toHaveLength(1);
+    expect(userRows(a, session.id).at(-1)).toMatchObject({
+      body: 'review',
+      payload: {
+        kind: 'user',
+        attachments: [
+          { kind: 'file', path: 'src/a.ts', bytes: 20 },
+          { kind: 'image', name: 'shot.png' },
+        ],
+      },
+    });
+    // nothing typed: the bubble shows the attachment names; the CLI still gets the file
+    await a.sessions.sendMessage(session.id, '', [{ kind: 'file', path: './src/../src/a.ts' }, png]);
+    expect(userRows(a, session.id).at(-1)).toMatchObject({ body: 'src/a.ts, shot.png' });
+    expect(stream.sent.at(-1)!.text).toBe('\n\n<file path="src/a.ts">\nexport const a = 1;\n\n</file>');
+    // the terminal log shows the typed text / names, never file contents
+    const log = readFileSync(join(t!.userData, 'logs', 'pty', `${session.id}.log`), 'utf8');
+    expect(log).toContain('> src/a.ts, shot.png');
+    expect(log).not.toContain('export const a = 1');
+  });
+
+  it.each([
+    ['empty body and no attachments', '', [], 'invalid-input', /empty/],
+    ['image over 5 MB', 'x', [{ ...png, data: Buffer.alloc(MAX_IMAGE_BYTES + 1).toString('base64') }], 'invalid-input', /shot\.png is larger than 5 MB/],
+    ['file over 200 KB', 'x', [{ kind: 'file' as const, path: 'big.txt' }], 'invalid-input', /big\.txt is larger than 200 KB/],
+    ['relative escape', 'x', [{ kind: 'file' as const, path: '../outside/secret.txt' }], 'fs-denied', /outside the worktree/],
+    ['absolute path outside', 'x', [{ kind: 'file' as const, path: '/etc/passwd' }], 'fs-denied', /outside the worktree/],
+    ['symlink escape', 'x', [{ kind: 'file' as const, path: 'escape.txt' }], 'fs-denied', /outside the worktree/],
+    ['a directory', 'x', [{ kind: 'file' as const, path: 'src' }], 'invalid-input', /not a file/],
+    ['a missing file', 'x', [{ kind: 'file' as const, path: 'src/nope.ts' }], 'invalid-input', /not a file/],
+  ])('rejects %s and records nothing', async (_label, body, attachments, code, message) => {
+    const { app: a } = app();
+    worktreeDir(a, ids.worktree.featPromo);
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    const before = userRows(a, session.id).length;
+    await expect(a.sessions.sendMessage(session.id, body, attachments)).rejects.toMatchObject({ code, message });
+    expect(userRows(a, session.id)).toHaveLength(before);
+    expect(stream.sent).toEqual([]);
+  });
+
+  it('pty sessions get files inlined too; images are dropped with a system line', async () => {
+    const { app: a } = app();
+    worktreeDir(a, ids.worktree.testFlaky);
+    const { session } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
+    await a.sessions.sendMessage(session.id, 'look', [png, { kind: 'file', path: 'src/a.ts' }]);
+    expect(pty.writes.at(-1)).toEqual({
+      id: session.id,
+      data: 'look\n\n<file path="src/a.ts">\nexport const a = 1;\n\n</file>\r',
+    });
+    const last = a.repos.transcripts.last(session.id).slice(-2);
+    expect(last.map((m) => m.payload.kind)).toEqual(['user', 'system']);
+    expect(last[1]!.body).toMatch(/Image dropped: Codex .* images need a stream session/);
+    expect(last[0]!.payload).toMatchObject({ attachments: [{ kind: 'image' }, { kind: 'file', path: 'src/a.ts' }] });
+  });
+
+  it('init stores the slash command list on the session and publishes it; an empty report keeps the last list', async () => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    expect(session.slashCommands).toEqual([]);
+    stream.effect(session.id, {
+      type: 'init',
+      chatId: 'c1',
+      model: null,
+      permissionMode: null,
+      slashCommands: ['compact', 'model'],
+    });
+    expect(a.sessions.get(session.id)?.slashCommands).toEqual(['compact', 'model']);
+    a.publisher.flush();
+    const upserts = win
+      .batches()
+      .flatMap((b) => b.deltas)
+      .filter((d): d is { op: string; table: string; rows: { id: string; slashCommands: string[] }[] } =>
+        d.op === 'upsert' && (d as { table?: string }).table === 'sessions',
+      );
+    expect(upserts.at(-1)?.rows.find((r) => r.id === session.id)?.slashCommands).toEqual(['compact', 'model']);
+    stream.effect(session.id, { type: 'init', chatId: 'c1', model: null, permissionMode: null, slashCommands: [] });
+    expect(a.sessions.get(session.id)?.slashCommands).toEqual(['compact', 'model']);
   });
 });

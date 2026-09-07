@@ -1,0 +1,73 @@
+@layer components {
+  /* Floating surface anchored above the textarea: --s1, 1px --tx border, no shadow. */
+  .popup {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    margin-bottom: 4px;
+    z-index: 3;
+    background: var(--s1);
+    border: 1px solid var(--tx);
+    display: flex;
+    flex-direction: column;
+  }
+  .head {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--ln);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mu);
+    line-height: normal;
+  }
+  .empty {
+    padding: 0 10px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--mu);
+  }
+  /* 8 rows × 26px; more scroll. */
+  .list {
+    max-height: 208px;
+    overflow-y: auto;
+  }
+  .row {
+    height: 26px;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--tx);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .row:hover {
+    background: var(--s2);
+  }
+  .row[data-inv='true']:hover {
+    background: var(--tx);
+  }
+  .label {
+    flex: none;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .hint {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: var(--mu);
+  }
+}

@@ -40,6 +40,12 @@ import type { GitService } from './git';
 import { worktreeLocation } from './git';
 import { isPolicyFile } from './hunk-service';
 import { logger, redact } from './logger';
+import {
+  attachmentName,
+  inlineFiles,
+  prepareAttachments,
+  type AttachmentInput,
+} from './message-attachments';
 import type { NotificationService } from './notification-service';
 import type { PtyLog } from './pty-log';
 import type { PtyService } from './pty-service';
@@ -488,19 +494,49 @@ export class SessionService {
    * Delivers a user turn. When the runner process is gone (the CLI exited on an API error, say) the CLI is relaunched
    * first — fresh spawn with the currently detected binary, same session and worktree, nothing replayed — and the
    * message goes to the new process; a failed relaunch pauses the session with `cli-missing` and its banner.
+   *
+   * Attachments: images become base64 image blocks of the stream turn (a pty session cannot take them: they are
+   * dropped with a `system` line); files are read inside the worktree and inlined after the text as
+   * `<file path="…">` sections for either runner. The transcript row keeps metadata only — never bytes or contents
+   * — and its body is the typed text, or the attachment names when nothing was typed.
    */
-  async sendMessage(sessionId: string, body: string): Promise<void> {
+  async sendMessage(
+    sessionId: string,
+    body: string,
+    attachments: readonly AttachmentInput[] = [],
+  ): Promise<void> {
     const s = this.require(sessionId);
     if (s.state === 'done') fail('invalid-transition', 'session has finished');
-    this.deps.transcript.user(s.id, body);
+    if (body === '' && attachments.length === 0) fail('invalid-input', 'message is empty');
+    // Plain text stays synchronous up to the write (callers and the pty tests rely on it); only attachments await I/O.
+    const prepared =
+      attachments.length === 0
+        ? { meta: [], images: [], files: [] }
+        : await prepareAttachments(
+            (this.deps.repos.worktrees.get(s.worktreeId) ?? fail('not-found', 'worktree missing')).path,
+            attachments,
+          );
+    const shown = body !== '' ? body : prepared.meta.map(attachmentName).join(', ');
+    this.deps.transcript.append(s.id, shown, {
+      kind: 'user',
+      ...(prepared.meta.length > 0 ? { attachments: prepared.meta } : {}),
+    });
     if (!this.isRunning(s.id) && s.state !== 'paused') {
       const ok = await this.relaunch(s);
       if (!ok) return;
     }
+    const text = inlineFiles(body, prepared.files);
     if (this.deps.stream.has(s.id)) {
-      this.deps.stream.send(s.id, body);
-      this.render(s.id, `> ${body}\r\n`);
-    } else if (this.deps.pty.has(s.id)) this.deps.pty.write(s.id, `${body}\r`);
+      this.deps.stream.send(s.id, text, prepared.images);
+      this.render(s.id, `> ${shown}\r\n`); // the terminal (and its log) never sees file contents
+    } else if (this.deps.pty.has(s.id)) {
+      if (prepared.images.length > 0)
+        this.deps.transcript.system(
+          s.id,
+          `${prepared.images.length === 1 ? 'Image' : 'Images'} dropped: ${AGENT_LABEL[s.agent]} runs in a terminal here; images need a stream session (Claude Code).`,
+        );
+      this.deps.pty.write(s.id, `${text}\r`);
+    }
     this.applyEvent(s.id, { type: 'activity' });
   }
 
@@ -825,8 +861,14 @@ export class SessionService {
           ...s,
           cliSessionId: effect.chatId ?? s.cliSessionId,
           model: s.model ?? effect.model,
+          // The `/` picker's list; a CLI that reports none keeps what an earlier launch said.
+          slashCommands: effect.slashCommands.length > 0 ? effect.slashCommands : s.slashCommands,
         };
-        if (next.cliSessionId !== s.cliSessionId || next.model !== s.model) {
+        if (
+          next.cliSessionId !== s.cliSessionId ||
+          next.model !== s.model ||
+          JSON.stringify(next.slashCommands) !== JSON.stringify(s.slashCommands)
+        ) {
           this.deps.repos.sessions.upsert(next);
           this.deps.publisher.upsert('sessions', [s.id]);
         }

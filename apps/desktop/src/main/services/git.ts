@@ -1,4 +1,5 @@
 import { execa, type Options as ExecaOptions } from 'execa';
+import type { Dirent } from 'node:fs';
 import { join, sep } from 'node:path';
 
 export interface GitStatus {
@@ -313,7 +314,7 @@ export class GitService {
     const out: string[] = [];
     const walk = async (dir: string, rel: string): Promise<void> => {
       if (out.length >= max) return;
-      let entries: import('node:fs').Dirent[] = [];
+      let entries: Dirent[] = [];
       try {
         entries = await readdir(dir, { withFileTypes: true });
       } catch {

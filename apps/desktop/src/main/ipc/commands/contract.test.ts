@@ -222,5 +222,62 @@ describe('command contract', () => {
         error: { code: 'fs-denied' },
       });
     });
+
+    it('fs.find lists worktree files ranked by match quality, trims the query and reports truncation', async () => {
+      const { app, sender, worktreeId, root } = setup();
+      mkdirSync(join(root, 'src', 'components'));
+      writeFileSync(join(root, 'src', 'components', 'a.tsx'), '');
+      writeFileSync(join(root, 'src', 'components', 'a.test.tsx'), '');
+      writeFileSync(join(root, 'README.md'), '');
+      writeFileSync(join(root, 'src', 'ab.ts'), '');
+      const all = await app.bus.dispatch(sender, 'fs.find', { worktreeId });
+      if (!all.ok) throw new Error(all.error.message);
+      expect([...all.value.paths].sort()).toEqual([
+        'README.md',
+        'src/a.ts',
+        'src/ab.ts',
+        'src/components/a.test.tsx',
+        'src/components/a.tsx',
+      ]);
+      expect(all.value.truncated).toBe(false);
+      expect(await app.bus.dispatch(sender, 'fs.find', { worktreeId, query: '  a.ts ' })).toEqual({
+        ok: true,
+        // exact basename, then the basename prefix (a.tsx), then subsequence hits in ls-files order
+        value: { paths: ['src/a.ts', 'src/components/a.tsx', 'src/ab.ts', 'src/components/a.test.tsx'], truncated: false },
+      });
+      expect(await app.bus.dispatch(sender, 'fs.find', { worktreeId, query: 'a.ts', limit: 2 })).toEqual({
+        ok: true,
+        value: { paths: ['src/a.ts', 'src/components/a.tsx'], truncated: true },
+      });
+      expect(await app.bus.dispatch(sender, 'fs.find', { worktreeId, query: 'zzz' })).toEqual({
+        ok: true,
+        value: { paths: [], truncated: false },
+      });
+      expect(await app.bus.dispatch(sender, 'fs.find', { worktreeId: 'nope', query: '' })).toMatchObject({
+        ok: false,
+      });
+    });
+  });
+
+  describe('link.open', () => {
+    it.each(['http://example.com/x', 'file:///etc/passwd', 'javascript:alert(1)', 'ftp://host/f'])(
+      'refuses %s before the shell sees it',
+      async (url) => {
+        const opened: string[] = [];
+        const { app, sender } = makeTestApp({ openExternal: async (u) => void opened.push(u) });
+        expect(await app.bus.dispatch(sender, 'link.open', { url })).toMatchObject({ ok: false });
+        expect(opened).toEqual([]);
+      },
+    );
+
+    it('opens an https url in the default browser', async () => {
+      const opened: string[] = [];
+      const { app, sender } = makeTestApp({ openExternal: async (u) => void opened.push(u) });
+      expect(await app.bus.dispatch(sender, 'link.open', { url: 'https://example.com/docs?x=1' })).toEqual({
+        ok: true,
+        value: {},
+      });
+      expect(opened).toEqual(['https://example.com/docs?x=1']);
+    });
   });
 });

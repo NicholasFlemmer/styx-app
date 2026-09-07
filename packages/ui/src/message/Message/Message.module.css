@@ -14,6 +14,30 @@
     line-height: 1.45;
     white-space: pre-wrap;
   }
+  /* Attachment chips inside the user bubble: inverted against the bubble (--bg on --tx → --tx on --bg), mono 11px. */
+  .attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .user:empty + .attachments,
+  .attachments:first-child {
+    margin-top: 0;
+  }
+  .attachment {
+    display: inline-block;
+    max-width: 100%;
+    padding: 1px 6px;
+    background: var(--bg);
+    color: var(--tx);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .agent {
     padding: 8px 10px;
     border: 1px solid var(--ln);

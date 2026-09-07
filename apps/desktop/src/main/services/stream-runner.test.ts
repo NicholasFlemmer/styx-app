@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  chatSlashCommands,
   permissionResponseLine,
   relPath,
   StreamParser,
@@ -91,12 +92,14 @@ describe('StreamParser', () => {
       chatId: 'abc-123',
       model: 'claude-fable-5',
       permissionMode: 'plan',
+      slashCommands: [],
     });
     expect(parseAll([JSON.stringify({ type: 'system', subtype: 'init', session_id: 'x' })])[0]).toEqual({
       type: 'init',
       chatId: 'x',
       model: null,
       permissionMode: null,
+      slashCommands: [],
     });
     expect(fx).toContainEqual({ type: 'session', event: 'activity' });
     expect(p.chatId).toBe('abc-123');
@@ -294,12 +297,39 @@ describe('StreamParser', () => {
     expect(relPath(WT, '/etc/hosts')).toBe('/etc/hosts');
   });
 
+  it.each([
+    ['claude 2.1.263 init: terminal-only commands are dropped, the rest sorted',
+      ['compact', 'model', 'doctor', 'context', 'my-skill', 'color'],
+      ['doctor', 'color', 'reload-plugins'],
+      ['compact', 'context', 'model', 'my-skill']],
+    ['duplicates collapse', ['b', 'a', 'b', 'a'], [], ['a', 'b']],
+    ['absent lists → empty', undefined, undefined, []],
+    ['non-string entries are ignored', ['ok', 1, null, ''], 'not-a-list', ['ok']],
+  ] as const)('init slash commands: %s', (_label, all, terminal, expected) => {
+    expect(chatSlashCommands(all, terminal)).toEqual(expected);
+    const line = JSON.stringify({
+      type: 'system',
+      subtype: 'init',
+      session_id: 'x',
+      ...(all !== undefined ? { slash_commands: all } : {}),
+      ...(terminal !== undefined ? { terminal_slash_commands: terminal } : {}),
+    });
+    expect(parseAll([line])[0]).toMatchObject({ type: 'init', slashCommands: expected });
+  });
+
   it('stdin lines are single-line JSON', () => {
     expect(JSON.parse(userTurnLine('hi\nthere'))).toEqual({
       type: 'user',
       message: { role: 'user', content: [{ type: 'text', text: 'hi\nthere' }] },
     });
     expect(userTurnLine('x').endsWith('\n')).toBe(true);
+    // image blocks go before the text block (Messages API user content)
+    const img = { type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/png', data: 'AAAA' } };
+    expect(JSON.parse(userTurnLine('what is this?', [img]))).toEqual({
+      type: 'user',
+      message: { role: 'user', content: [img, { type: 'text', text: 'what is this?' }] },
+    });
+    expect(userTurnLine('a', [img]).split('\n')).toHaveLength(2);
     expect(JSON.parse(permissionResponseLine('r1', true, { a: 1 }))).toEqual({
       type: 'control_response',
       response: {
@@ -322,8 +352,11 @@ out({ type: 'system', subtype: 'init', session_id: 'sess-1', model: 'fake' });
 rl.on('line', (line) => {
   const m = JSON.parse(line);
   if (m.type === 'user') {
-    const text = m.message.content[0].text;
-    out({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'echo: ' + text }] } });
+    const blocks = m.message.content;
+    const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('');
+    const images = blocks.filter((b) => b.type === 'image' && b.source.type === 'base64').length;
+    const tag = images ? ' +' + images + 'img' : '';
+    out({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'echo: ' + text + tag }] } });
     if (text === 'danger') out({ type: 'control_request', request_id: 'req-9', request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'rm' } } });
     else out({ type: 'result', subtype: 'success', is_error: false, result: 'echo: ' + text, duration_ms: 5 });
   } else if (m.type === 'control_response') {
@@ -692,6 +725,12 @@ describe('StreamRunner (child_process pipes)', () => {
     await until(() => ctl().length === 2);
     expect(ctl().at(-1)).toBe('ctl:{"behavior":"deny","message":"nope"}');
 
+    // image blocks travel down stdin ahead of the text (the fake CLI counts base64 image blocks)
+    runner.send('s1', 'look', [
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' } },
+    ]);
+    await until(() => effects.some((e) => e.type === 'transcript' && e.body === 'echo: look +1img'));
+
     runner.kill('s1');
     expect(await exited).not.toBeUndefined();
     expect(runner.has('s1')).toBe(false);
@@ -749,7 +788,10 @@ describe('StreamRunner (child_process pipes)', () => {
     await wait(2); // result + process close both end the turn
     expect(runner.has('s3')).toBe(true);
     expect(effects.find((e) => e.type === 'transcript')).toMatchObject({ body: 'argv:--print|first' });
-    runner.send('s3', 'second');
+    // an argv runner is text-only: image blocks are dropped (warned), the text still goes as the next turn
+    runner.send('s3', 'second', [
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } },
+    ]);
     await wait(4);
     expect(effects.filter((e) => e.type === 'transcript').at(-1)).toMatchObject({
       body: 'argv:--print|--resume|chat-7|second',

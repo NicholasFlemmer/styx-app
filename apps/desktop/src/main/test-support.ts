@@ -61,6 +61,8 @@ export interface TestAppOptions {
   detect?: DetectService;
   /** Re-detect CLIs before spawns (default off: fixture rows name binaries this machine does not have). */
   redetectClis?: boolean;
+  /** What `link.open` hands to the OS (default: a no-op). */
+  openExternal?: (url: string) => Promise<void>;
 }
 
 /** An in-memory app: SQLite `:memory:`, MemoryVault, FakeMfa, no Electron, one registered fake window. */
@@ -101,7 +103,7 @@ export function makeTestApp(opts: TestAppOptions = {}): TestApp {
     },
     windows,
     notifications: null,
-    openExternal: async () => undefined,
+    openExternal: opts.openExternal ?? (async () => undefined),
     openInIde: async () => undefined,
     ...(opts.fetch ? { fetch: opts.fetch } : {}),
     ...(opts.tickMs !== undefined ? { tickMs: opts.tickMs } : {}),

@@ -1,0 +1,149 @@
+@layer components {
+  /* Body-sized markdown inside an agent bubble: 13px / 1.5 inherited from the message. */
+  .md {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .md > * + * {
+    margin-top: 6px;
+  }
+  .p {
+    margin: 0;
+  }
+  /* Headings never grow past body size: bold 13px, 4px extra top margin for levels 1–2. */
+  .h {
+    margin: 0;
+    font-size: inherit;
+    font-weight: 700;
+    line-height: inherit;
+  }
+  .md > * + .hTop {
+    margin-top: 10px;
+  }
+  .strong {
+    font-weight: 700;
+  }
+  .em {
+    font-style: italic;
+  }
+  .code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 1px 4px;
+    background: var(--s2);
+  }
+  .pre {
+    position: relative;
+    margin: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--ln);
+    background: var(--s1);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-x: auto;
+    white-space: pre;
+    user-select: text;
+  }
+  .preCode {
+    font: inherit;
+  }
+  .lang {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mu);
+  }
+  .pre[data-lang] {
+    padding-top: 16px;
+  }
+  .ul,
+  .ol {
+    margin: 0;
+    padding: 0 0 0 18px;
+  }
+  .ul {
+    list-style: none;
+  }
+  .ol {
+    list-style: decimal;
+    font-variant-numeric: tabular-nums;
+  }
+  .li {
+    position: relative;
+    margin: 0;
+  }
+  .li + .li {
+    margin-top: 2px;
+  }
+  .li > * + * {
+    margin-top: 4px;
+  }
+  .li > .p {
+    display: block;
+  }
+  .ol .li::marker {
+    color: var(--mu);
+    font-variant-numeric: tabular-nums;
+  }
+  /* Square 5px --mu bullet, vertically centred on the first line (13px × 1.5 = 19.5px). */
+  .ul > .li::before {
+    content: '';
+    position: absolute;
+    left: -13px;
+    top: 7px;
+    width: 5px;
+    height: 5px;
+    background: var(--mu);
+  }
+  .quote {
+    margin: 0;
+    padding: 0 0 0 10px;
+    border-left: 1px solid var(--ln);
+    color: var(--mu);
+  }
+  .quote > * + * {
+    margin-top: 4px;
+  }
+  .hr {
+    margin: 8px 0;
+    border: 0;
+    border-top: 1px solid var(--ln);
+  }
+  .link {
+    color: var(--tx);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  .link:hover {
+    color: var(--act);
+  }
+  .tableWrap {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .table {
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .th,
+  .td {
+    padding: 4px 8px;
+    border: 1px solid var(--ln);
+    text-align: left;
+    vertical-align: top;
+    white-space: nowrap;
+  }
+  .th {
+    background: var(--s1);
+    font-weight: 500;
+  }
+}

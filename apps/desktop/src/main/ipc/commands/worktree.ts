@@ -1,8 +1,8 @@
-import { realpathSync } from 'node:fs';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import { newId, repoHasGit, type Worktree } from '@styx/core';
 import type { Container } from '../../container';
+import { confine } from '../../services/confine';
 import { worktreeLocation } from '../../services/git';
 import { type CommandBus, fail } from '../bus';
 
@@ -16,36 +16,28 @@ export const fuzzyMatch = (text: string, query: string): boolean => {
   return i === query.length;
 };
 
-/** Real path of `p`; when it does not exist yet, the real path of its nearest existing ancestor plus the rest. */
-function realpathLenient(p: string): string {
-  const missing: string[] = [];
-  let cur = p;
-  for (;;) {
-    try {
-      return missing.length ? join(realpathSync(cur), ...missing) : realpathSync(cur);
-    } catch {
-      const parent = dirname(cur);
-      if (parent === cur) return p;
-      missing.unshift(basename(cur));
-      cur = parent;
-    }
-  }
-}
-
 /**
- * `path.resolve(root, p)` must stay inside `root` (rules/ipc.md), checked on real paths so a symlink inside the
- * worktree cannot point outside it (L6; not-yet-existing files resolve through their parent). Returns the logical
- * absolute path so callers can still `relative()` it against the worktree path.
+ * `fs.find` ranking for the `@` picker: exact basename matches first, then paths (or basenames) that start with the
+ * query, then paths containing it, then subsequence hits; original (ls-files) order within a tier. Case-insensitive
+ * on a trimmed query; an empty query keeps every path in order.
  */
-export function confine(root: string, p: string): string {
-  const base = resolve(root);
-  const full = resolve(base, p);
-  const realBase = realpathLenient(base);
-  const realFull = realpathLenient(full);
-  if (realFull === realBase) return full;
-  if (!realFull.startsWith(realBase + sep)) fail('fs-denied', `${p} is outside the worktree`);
-  return full;
-}
+export const rankFiles = (paths: readonly string[], query: string): string[] => {
+  const q = query.trim().toLowerCase();
+  if (q === '') return [...paths];
+  const exact: string[] = [];
+  const prefix: string[] = [];
+  const substring: string[] = [];
+  const subsequence: string[] = [];
+  for (const p of paths) {
+    const lower = p.toLowerCase();
+    const base = basename(lower);
+    if (base === q) exact.push(p);
+    else if (lower.startsWith(q) || base.startsWith(q)) prefix.push(p);
+    else if (lower.includes(q)) substring.push(p);
+    else if (fuzzyMatch(lower, q)) subsequence.push(p);
+  }
+  return [...exact, ...prefix, ...substring, ...subsequence];
+};
 
 /** worktree.* · hunk.* · fs.* */
 export function registerWorktreeCommands(bus: CommandBus, app: Container): void {
@@ -182,13 +174,13 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
 
   bus.register('fs.find', async ({ worktreeId, query, limit }) => {
     const wt = requireWorktree(worktreeId);
-    const paths = await git.listFiles(wt.path);
-    const q = query.trim().toLowerCase();
-    const hits = q === '' ? paths : paths.filter((p) => fuzzyMatch(p.toLowerCase(), q));
+    const hits = rankFiles(await git.listFiles(wt.path), query);
     return { paths: hits.slice(0, limit), truncated: hits.length > limit };
   });
 
+  // Transcript links only: https, never file:, http: or custom schemes (index.ts checks again at the shell edge).
   bus.register('link.open', async ({ url }) => {
+    if (!/^https:\/\//i.test(url)) fail('invalid-input', 'only https links open in the browser');
     await app.openExternal(url);
     return {};
   });

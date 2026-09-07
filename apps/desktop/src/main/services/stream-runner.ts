@@ -19,7 +19,14 @@ import { logger } from './logger';
 // --- Parser -----------------------------------------------------------------
 
 export type StreamEffect =
-  | { type: 'init'; chatId: string | null; model: string | null; permissionMode: string | null }
+  | {
+      type: 'init';
+      chatId: string | null;
+      model: string | null;
+      permissionMode: string | null;
+      /** `slash_commands` minus `terminal_slash_commands` (sorted, deduped): what the composer's `/` picker offers. */
+      slashCommands: string[];
+    }
   | { type: 'transcript'; body: string; payload: MessagePayload }
   /** A `tool_result` for an earlier `tool_use`: patches the matching `tool` transcript line. */
   | { type: 'toolResult'; toolUseId: string; ok: boolean; detail: string | null }
@@ -73,6 +80,19 @@ const obj = (v: unknown): Json | null =>
   v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Json) : null;
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+const strList = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.length > 0) : [];
+
+/**
+ * The slash commands a chat turn may run (claude 2.1.263 `system/init`): `slash_commands` (skills, plugins and
+ * built-ins such as compact, model, context) without the `terminal_slash_commands` that only the interactive TUI
+ * understands (doctor, color, reload-plugins…). Sorted and deduped; empty when the CLI reports none.
+ */
+export const chatSlashCommands = (all: unknown, terminalOnly: unknown): string[] => {
+  const terminal = new Set(strList(terminalOnly));
+  return [...new Set(strList(all).filter((c) => !terminal.has(c)))].sort();
+};
 
 const firstLine = (s: string, max = 200): string => {
   const line = s.split('\n').find((l) => l.trim().length > 0) ?? '';
@@ -185,9 +205,10 @@ export class StreamParser {
     const chatId = str(e['session_id']) ?? str(e['chat_id']) ?? str(e['chatId']);
     const model = str(e['model']);
     const permissionMode = str(e['permissionMode']) ?? str(e['permission_mode']);
+    const slashCommands = chatSlashCommands(e['slash_commands'], e['terminal_slash_commands']);
     this.chatId = chatId;
     return [
-      { type: 'init', chatId, model, permissionMode },
+      { type: 'init', chatId, model, permissionMode, slashCommands },
       { type: 'session', event: 'activity' },
       { type: 'render', text: crlf(`· session started${model ? ` · ${model}` : ''}`) },
     ];
@@ -462,9 +483,18 @@ export class StreamParser {
   }
 }
 
-/** The stdin line for one user turn (Claude Code stream-json input). */
-export const userTurnLine = (text: string): string =>
-  `${JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] } })}\n`;
+/** A base64 image block placed before the text of a user turn (Messages API shape). */
+export interface ImageBlock {
+  type: 'image';
+  source: { type: 'base64'; media_type: string; data: string };
+}
+
+/** The stdin line for one user turn (Claude Code stream-json input): image blocks first, then the text. */
+export const userTurnLine = (text: string, blocks: readonly ImageBlock[] = []): string =>
+  `${JSON.stringify({
+    type: 'user',
+    message: { role: 'user', content: [...blocks, { type: 'text', text }] },
+  })}\n`;
 
 /** The stdin line answering a `can_use_tool` control request. */
 export const permissionResponseLine = (
@@ -504,7 +534,8 @@ export interface StreamEvents {
 
 export interface StreamRunnerLike extends EventEmitter<StreamEvents> {
   spawn(opts: StreamSpawnOptions): Promise<{ pid: number }>;
-  send(id: string, text: string): void;
+  /** One user turn; `blocks` (images) only reach a stdin runner — an argv runner is text-only and drops them. */
+  send(id: string, text: string, blocks?: readonly ImageBlock[]): void;
   /**
    * Answers a `can_use_tool` request. `updatedInput` replaces the echoed tool input on allow (AskUserQuestion answers
    * travel that way); `message` is the deny reason.
@@ -632,13 +663,15 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
     this.emit('exit', entry.opts.id, code);
   }
 
-  send(id: string, text: string): void {
+  send(id: string, text: string, blocks: readonly ImageBlock[] = []): void {
     const entry = this.entries.get(id);
     if (!entry) return;
     if (entry.opts.input.kind === 'stdin') {
-      entry.proc?.stdin?.write(userTurnLine(text));
+      entry.proc?.stdin?.write(userTurnLine(text, blocks));
       return;
     }
+    if (blocks.length > 0)
+      logger.warn('stream runner: argv input is text-only, image blocks dropped', { id, count: blocks.length });
     if (entry.proc) {
       // A turn is still running: cursor-agent has no stdin protocol, so the message waits for the next turn.
       logger.warn('stream runner: turn in progress, message dropped', { id });

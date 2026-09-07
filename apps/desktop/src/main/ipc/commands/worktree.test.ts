@@ -1,42 +1,62 @@
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { confine } from './worktree';
+import { fuzzyMatch, rankFiles } from './worktree';
 
-describe('confine (L6)', () => {
-  const setup = () => {
-    const base = mkdtempSync(join(tmpdir(), 'styx-confine-'));
-    const root = join(base, 'wt');
-    const outside = join(base, 'outside');
-    mkdirSync(root);
-    mkdirSync(outside);
-    writeFileSync(join(outside, 'secret.txt'), 'nope');
-    writeFileSync(join(root, 'inside.txt'), 'ok');
-    symlinkSync(outside, join(root, 'escape'));
-    symlinkSync(join(outside, 'secret.txt'), join(root, 'escape.txt'));
-    return { root, outside };
-  };
+const FILES = [
+  'README.md',
+  'package.json',
+  'src/app.ts',
+  'src/checkout.ts',
+  'src/components/checkout.tsx',
+  'src/components/checkout.test.tsx',
+  'src/pay.ts',
+  'test/checkout.spec.ts',
+];
 
-  it('resolves symlinks on both sides before the prefix check', () => {
-    const { root } = setup();
-    expect(() => confine(root, 'escape/secret.txt')).toThrow(/outside the worktree/);
-    expect(() => confine(root, 'escape.txt')).toThrow(/outside the worktree/);
-    expect(() => confine(root, 'escape/new-file.txt')).toThrow(/outside the worktree/);
-    expect(() => confine(root, '../outside/secret.txt')).toThrow(/outside the worktree/);
-    expect(() => confine(root, '/etc/passwd')).toThrow(/outside the worktree/);
+describe('fuzzyMatch', () => {
+  it.each([
+    ['src/components/checkout.ts', 'srcchk', true],
+    ['src/components/checkout.ts', 'checkout', true],
+    ['src/components/checkout.ts', 'xyz', false],
+    ['abc', '', true],
+    ['', 'a', false],
+  ])('%s ~ %s → %s', (text, query, expected) => {
+    expect(fuzzyMatch(text, query)).toBe(expected);
   });
+});
 
-  it('keeps logical paths for files inside the worktree, including ones that do not exist yet', () => {
-    const { root } = setup();
-    expect(confine(root, 'inside.txt')).toBe(resolve(root, 'inside.txt'));
-    expect(confine(root, 'new/dir/file.txt')).toBe(resolve(root, 'new/dir/file.txt'));
-    expect(confine(root, '.')).toBe(resolve(root));
-    expect(confine(root, '')).toBe(resolve(root));
-    // A symlinked *root* (e.g. /tmp → /private/tmp on macOS) is fine when the target stays inside it.
-    const link = join(root, '..', 'wt-link');
-    symlinkSync(root, link);
-    expect(confine(link, 'inside.txt')).toBe(resolve(link, 'inside.txt'));
-    expect(() => confine(link, 'escape/secret.txt')).toThrow(/outside the worktree/);
+describe('rankFiles (fs.find)', () => {
+  it.each([
+    ['empty / blank query keeps every path in order', '   ', FILES],
+    [
+      'exact basename first, then prefix matches, then substrings, then subsequences',
+      'checkout.ts',
+      [
+        'src/checkout.ts',
+        'src/components/checkout.tsx',
+        // subsequence hits (c-h-e-c-k-o-u-t-.-t-s) keep their ls-files order
+        'src/components/checkout.test.tsx',
+        'test/checkout.spec.ts',
+      ],
+    ],
+    [
+      'a path prefix ranks with basename prefixes, before substrings',
+      'src/c',
+      ['src/checkout.ts', 'src/components/checkout.tsx', 'src/components/checkout.test.tsx'],
+    ],
+    ['basename prefix', 'pay', ['src/pay.ts']],
+    ['case-insensitive, query trimmed', ' readme.MD ', ['README.md']],
+    [
+      'substring before subsequence',
+      'out',
+      [
+        'src/checkout.ts',
+        'src/components/checkout.tsx',
+        'src/components/checkout.test.tsx',
+        'test/checkout.spec.ts',
+      ],
+    ],
+    ['no hit → empty', 'zzz', []],
+  ])('%s', (_label, query, expected) => {
+    expect(rankFiles(FILES, query)).toEqual(expected);
   });
 });
