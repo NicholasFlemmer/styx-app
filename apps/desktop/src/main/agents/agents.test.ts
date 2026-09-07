@@ -98,6 +98,8 @@ describe('claude launch flags (verified against claude 2.1.263)', () => {
       const args = await launch({ runner });
       expect(args.includes('--allow-dangerously-skip-permissions')).toBe(present);
       expect(args.includes('--include-partial-messages')).toBe(present);
+      const display = args.indexOf('--thinking-display');
+      expect(display >= 0 && args[display + 1] === 'summarized').toBe(present);
       expect(args.includes('-p')).toBe(runner === 'stream');
     },
   );

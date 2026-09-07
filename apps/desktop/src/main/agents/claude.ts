@@ -64,11 +64,7 @@ export async function claudeLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch
   if (ctx.model) args.push('--model', ctx.model);
   // The explicit mode wins; `default` falls back to the session toggle (edits without a prompt = acceptEdits).
   const mode =
-    ctx.permissionMode !== 'default'
-      ? ctx.permissionMode
-      : ctx.autoApproveEdits
-        ? 'acceptEdits'
-        : null;
+    ctx.permissionMode !== 'default' ? ctx.permissionMode : ctx.autoApproveEdits ? 'acceptEdits' : null;
   if (mode !== null) args.push('--permission-mode', mode);
   if (mode === 'bypassPermissions') args.push('--dangerously-skip-permissions');
   if (ctx.effort) args.push('--effort', ctx.effort);
@@ -88,6 +84,11 @@ export async function claudeLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch
       '--allow-dangerously-skip-permissions',
       // Text and thinking blocks arrive as deltas (live transcript rows) ahead of the complete `assistant` event.
       '--include-partial-messages',
+      // VERIFIED 2026-09-07 on 2.1.263 / claude-fable-5-1: without this the CLI's default display is `omitted` —
+      // thinking blocks stream with empty text (signature only). `summarized` = API-side summaries, what Claude Code's
+      // own UI shows; also settable live via `set_max_thinking_tokens { thinking_display }`.
+      '--thinking-display',
+      'summarized',
     );
     // The first message goes down stdin as the first user turn (StreamRunner), never as argv.
     return {
