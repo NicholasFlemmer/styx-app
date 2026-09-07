@@ -11,7 +11,20 @@ import { hunkMatchesFile, hunkBody } from '../editor/hunk-decorations';
 
 export type TranscriptItem =
   | { id: string; kind: 'user'; text: string }
-  | { id: string; kind: 'agent'; text: string }
+  | {
+      id: string;
+      kind: 'agent';
+      text: string;
+      /** The body is still being patched from the stream: renders a cursor (discrepancy #55). */
+      streaming: boolean;
+    }
+  | {
+      id: string;
+      kind: 'thinking';
+      text: string;
+      status: 'streaming' | 'done';
+      durationMs: number | null;
+    }
   | { id: string; kind: 'fileList'; files: { path: string; added: number; removed?: number }[] }
   | {
       id: string;
@@ -72,7 +85,10 @@ export const transcriptItems = (model: ReadModel, sessionId: SessionId): Transcr
         out.push({ id: m.id, kind: 'user', text: m.body });
         break;
       case 'agent':
-        out.push({ id: m.id, kind: 'agent', text: m.body });
+        out.push({ id: m.id, kind: 'agent', text: m.body, streaming: p.streaming === true });
+        break;
+      case 'thinking':
+        out.push({ id: m.id, kind: 'thinking', text: m.body, status: p.status, durationMs: p.durationMs });
         break;
       case 'system':
         out.push({ id: m.id, kind: 'system', text: m.body });

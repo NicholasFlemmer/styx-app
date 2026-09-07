@@ -26,6 +26,17 @@ export type StreamEffect =
   /** From `result`: running totals for the CLI session (null when the CLI did not report them). */
   | { type: 'usage'; costUsd: number | null; numTurns: number | null; durationMs: number | null }
   | { type: 'session'; event: 'activity' | 'quiet' }
+  /**
+   * `--include-partial-messages`: one text / thinking block streaming live. `key` is `<messageId>:<index>`; the block
+   * starts empty, grows by deltas, stops, and is reconciled by `streamFinal` (the complete block from the `assistant`
+   * event that follows) so a dropped delta never leaves a truncated row.
+   */
+  | { type: 'streamStart'; key: string; kind: StreamBlockKind }
+  | { type: 'streamDelta'; key: string; text: string }
+  | { type: 'streamStop'; key: string }
+  | { type: 'streamFinal'; key: string; body: string }
+  /** `message_delta.usage.output_tokens` for the message in flight (a running total, not a delta). */
+  | { type: 'streamUsage'; outputTokens: number }
   | { type: 'note'; note: string }
   | { type: 'rescan' }
   | {
@@ -36,6 +47,14 @@ export type StreamEffect =
     }
   | { type: 'render'; text: string }
   | { type: 'error'; message: string };
+
+export type StreamBlockKind = 'text' | 'thinking';
+
+/** Which live blocks of one streamed message have been announced, per kind and in block order (see `assistant`). */
+interface StreamedMessage {
+  keys: Record<StreamBlockKind, string[]>;
+  used: Record<StreamBlockKind, number>;
+}
 
 const EDIT_TOOLS = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
 const FILE_TOOLS = /^(Read|Edit|Write|MultiEdit|NotebookEdit|NotebookRead)$/;
@@ -90,11 +109,19 @@ const resultText = (content: unknown): string => {
 
 /**
  * Turns one stream-json event into transcript messages, session-machine events and xterm text. Stateless apart
- * from the tool_use ids of pending edits (so the matching tool_result triggers a hunk rescan) and the chat id.
+ * from the tool_use ids of pending edits (so the matching tool_result triggers a hunk rescan), the chat id, and the
+ * live blocks of the message currently streaming (`--include-partial-messages`).
  */
 export class StreamParser {
   private readonly pendingEdits = new Set<string>();
   chatId: string | null = null;
+  /** `message_start`'s message id (or a counter when the CLI omits it); every block key is prefixed with it. */
+  private currentMessageId: string | null = null;
+  private messageCounter = 0;
+  /** Blocks between `content_block_start` and `content_block_stop`, by key. */
+  private readonly liveBlocks = new Map<string, StreamBlockKind>();
+  /** Streamed text / thinking keys per message id, consumed by the complete `assistant` event(s) of that message. */
+  private readonly streamed = new Map<string, StreamedMessage>();
 
   constructor(private readonly worktreePath: string) {}
 
@@ -127,8 +154,10 @@ export class StreamParser {
         return this.controlRequest(e);
       case 'rate_limit_event':
         return this.rateLimit(e);
+      case 'stream_event':
+        return this.streamEvent(e);
       default:
-        // `stream_event` (partial deltas), `control_response`, `tool_progress`… carry nothing the transcript needs.
+        // `control_response`, `tool_progress`… carry nothing the transcript needs.
         return [];
     }
   }
@@ -156,20 +185,45 @@ export class StreamParser {
     ];
   }
 
+  /**
+   * The complete message. Text and thinking blocks that streamed live (same message id, consumed per kind in block
+   * order — the CLI may split one message into one `assistant` event per block) become `streamFinal` instead of new
+   * transcript rows; the note and the terminal rendering still come from the final text.
+   */
   private assistant(e: Json): StreamEffect[] {
     const message = obj(e['message']);
     const content = message ? message['content'] : e['content'];
     const out: StreamEffect[] = [{ type: 'session', event: 'activity' }];
+    const rec = this.streamedRecordFor(e, message);
+    const nextKey = (kind: StreamBlockKind): string | undefined =>
+      rec ? rec.keys[kind][rec.used[kind]++] : undefined;
+    /** Every final text (note + render) vs the texts that still need a transcript row. */
     const texts: string[] = [];
+    const unstreamed: string[] = [];
     const edits: string[] = [];
-    if (typeof content === 'string') texts.push(content);
-    else if (Array.isArray(content)) {
+    if (typeof content === 'string') {
+      texts.push(content);
+      unstreamed.push(content);
+    } else if (Array.isArray(content)) {
       for (const block of content) {
         const b = obj(block);
         if (!b) continue;
         if (b['type'] === 'text') {
-          const t = str(b['text']);
-          if (t && t.trim()) texts.push(t.trim());
+          const t = (str(b['text']) ?? '').trim();
+          const key = nextKey('text');
+          if (key !== undefined) out.push({ type: 'streamFinal', key, body: t });
+          else if (t) unstreamed.push(t);
+          if (t) texts.push(t);
+        } else if (b['type'] === 'thinking') {
+          const t = str(b['thinking']) ?? '';
+          const key = nextKey('thinking');
+          if (key !== undefined) out.push({ type: 'streamFinal', key, body: t });
+          else if (t.trim())
+            out.push({
+              type: 'transcript',
+              body: t,
+              payload: { kind: 'thinking', status: 'done', durationMs: null },
+            });
         } else if (b['type'] === 'tool_use') {
           const name = str(b['name']) ?? 'tool';
           const input = obj(b['input']) ?? {};
@@ -190,9 +244,10 @@ export class StreamParser {
         }
       }
     }
+    if (unstreamed.length > 0)
+      out.push({ type: 'transcript', body: unstreamed.join('\n\n'), payload: { kind: 'agent' } });
     if (texts.length > 0) {
       const body = texts.join('\n\n');
-      out.push({ type: 'transcript', body, payload: { kind: 'agent' } });
       out.push({ type: 'note', note: firstLine(body) });
       out.push({ type: 'render', text: crlf(body) });
     }
@@ -254,8 +309,112 @@ export class StreamParser {
       this.pendingEdits.clear();
       out.push({ type: 'rescan' });
     }
+    // The turn is over: any block still open is stopped (main finalises its row) and the streamed records go.
+    for (const key of this.liveBlocks.keys()) out.push({ type: 'streamStop', key });
+    this.liveBlocks.clear();
+    this.streamed.clear();
+    this.currentMessageId = null;
     out.push({ type: 'session', event: 'quiet' });
     return out;
+  }
+
+  // --- partial messages (`--include-partial-messages`) ---------------------
+
+  /**
+   * `{type:'stream_event', event, parent_tool_use_id}`: the Messages API streaming events of the message in flight.
+   * Subagent output (`parent_tool_use_id` set) is not streamed — its complete `assistant` events still land as today.
+   */
+  private streamEvent(e: Json): StreamEffect[] {
+    if (typeof e['parent_tool_use_id'] === 'string') return [];
+    const ev = obj(e['event']);
+    if (!ev) return [];
+    switch (ev['type']) {
+      case 'message_start': {
+        const id = str(obj(ev['message'])?.['id']) ?? this.nextMessageId();
+        this.currentMessageId = id;
+        this.record(id);
+        return [];
+      }
+      case 'content_block_start': {
+        const index = num(ev['index']);
+        const block = obj(ev['content_block']);
+        const kind = block?.['type'];
+        if (index === null || !block || (kind !== 'text' && kind !== 'thinking')) return [];
+        const id = this.currentMessageId ?? this.nextMessageId();
+        this.currentMessageId = id;
+        const key = `${id}:${index}`;
+        this.liveBlocks.set(key, kind);
+        this.record(id).keys[kind].push(key);
+        const out: StreamEffect[] = [{ type: 'streamStart', key, kind }];
+        // The API starts blocks empty; any text already there is treated as the first delta.
+        const initial = str(block[kind]);
+        if (initial) out.push({ type: 'streamDelta', key, text: initial });
+        return out;
+      }
+      case 'content_block_delta': {
+        const key = this.liveKey(ev);
+        const delta = obj(ev['delta']);
+        if (key === null || !delta) return [];
+        const text =
+          delta['type'] === 'text_delta'
+            ? str(delta['text'])
+            : delta['type'] === 'thinking_delta'
+              ? str(delta['thinking'])
+              : null; // signature_delta / input_json_delta carry nothing the transcript shows
+        return text ? [{ type: 'streamDelta', key, text }] : [];
+      }
+      case 'content_block_stop': {
+        const key = this.liveKey(ev);
+        if (key === null) return [];
+        this.liveBlocks.delete(key);
+        return [{ type: 'streamStop', key }];
+      }
+      case 'message_delta': {
+        const tokens = num(obj(ev['usage'])?.['output_tokens']);
+        return tokens === null ? [] : [{ type: 'streamUsage', outputTokens: tokens }];
+      }
+      case 'message_stop': {
+        // Every block should have stopped already; stragglers are stopped here so no row streams forever.
+        const out: StreamEffect[] = [...this.liveBlocks.keys()].map((key) => ({ type: 'streamStop', key }));
+        this.liveBlocks.clear();
+        return out;
+      }
+      default:
+        return [];
+    }
+  }
+
+  private nextMessageId(): string {
+    this.messageCounter += 1;
+    return `msg-${this.messageCounter}`;
+  }
+
+  private record(id: string): StreamedMessage {
+    let rec = this.streamed.get(id);
+    if (!rec) {
+      rec = { keys: { text: [], thinking: [] }, used: { text: 0, thinking: 0 } };
+      this.streamed.set(id, rec);
+    }
+    return rec;
+  }
+
+  /** The key of a live block addressed by `event.index` within the current message; null when not streaming. */
+  private liveKey(ev: Json): string | null {
+    const index = num(ev['index']);
+    if (index === null || this.currentMessageId === null) return null;
+    const key = `${this.currentMessageId}:${index}`;
+    return this.liveBlocks.has(key) ? key : null;
+  }
+
+  /**
+   * The streamed record an `assistant` event reconciles: matched by `message.id`; a message without an id (never
+   * a subagent's) falls back to the message currently streaming. Unknown ids were not streamed.
+   */
+  private streamedRecordFor(e: Json, message: Json | null): StreamedMessage | undefined {
+    const id = str(message?.['id']);
+    if (id !== null) return this.streamed.get(id);
+    if (typeof e['parent_tool_use_id'] === 'string' || this.currentMessageId === null) return undefined;
+    return this.streamed.get(this.currentMessageId);
   }
 
   private controlRequest(e: Json): StreamEffect[] {

@@ -1,4 +1,4 @@
-import { forwardRef, type ReactNode } from 'react';
+import { forwardRef, useId, useState, type ReactNode, type Ref } from 'react';
 import { Button } from '../../primitives';
 import s from './Message.module.css';
 
@@ -16,7 +16,27 @@ export interface DecisionOption {
 
 export type MessageKind =
   | { kind: 'user'; text: string }
-  | { kind: 'agent'; children: ReactNode }
+  | {
+      kind: 'agent';
+      children: ReactNode;
+      /** The body is still being streamed: a blinking `▌` cursor follows the text. */
+      streaming?: boolean;
+    }
+  | {
+      /**
+       * A thinking block from the stream (owner addition, discrepancy #55): a muted t-label header (`label`, e.g.
+       * "Thinking…" / "Thought for 4s") over a quiet quote-like body. Streaming: body always open, cursor at the
+       * end. Done: collapsed by default, Show/Hide ghost toggle in the header.
+       */
+      kind: 'thinking';
+      text: string;
+      status: 'streaming' | 'done';
+      label: string;
+      showLabel: string;
+      hideLabel: string;
+      /** Done blocks start collapsed unless set. */
+      defaultOpen?: boolean;
+    }
   | { kind: 'fileList'; files: MessageFile[] }
   | {
       kind: 'decision';
@@ -58,6 +78,60 @@ export type MessageProps = MessageKind & {
   className?: string;
 };
 
+const Cursor = () => (
+  <span className={s['cursor']} aria-hidden="true">
+    ▌
+  </span>
+);
+
+type ThinkingProps = Extract<MessageKind, { kind: 'thinking' }> & { className: string };
+
+function ThinkingMessage({
+  text,
+  status,
+  label,
+  showLabel,
+  hideLabel,
+  defaultOpen = false,
+  className,
+  ref,
+}: ThinkingProps & { ref: Ref<HTMLDivElement> }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const bodyId = useId();
+  const streaming = status === 'streaming';
+  const shown = streaming || open;
+  return (
+    <div
+      ref={ref}
+      data-kind="thinking"
+      data-status={status}
+      data-open={shown ? 'true' : undefined}
+      className={className}
+    >
+      <div className={s['thinkingHead']}>
+        <span className={s['thinkingLabel']}>{label}</span>
+        {!streaming && (
+          <Button
+            variant="ghost"
+            className={s['thinkingToggle']}
+            aria-expanded={open}
+            aria-controls={bodyId}
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? hideLabel : showLabel}
+          </Button>
+        )}
+      </div>
+      {shown && (
+        <div id={bodyId} className={s['thinkingBody']}>
+          {text}
+          {streaming && <Cursor />}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Chat message (spec §8): user (filled) · agent (bordered) · file list · decision (buttons) ·
  * access request (accent border + header) · system (mono muted). Max width 88–92% of pane.
@@ -76,10 +150,20 @@ export const Message = forwardRef<HTMLDivElement, MessageProps>(function Message
       );
     case 'agent':
       return (
-        <div ref={ref} data-kind="agent" className={cls(s['agent'])}>
+        <div
+          ref={ref}
+          data-kind="agent"
+          data-streaming={props.streaming === true ? 'true' : undefined}
+          className={cls(s['agent'])}
+        >
           {props.children}
+          {props.streaming === true && <Cursor />}
         </div>
       );
+    case 'thinking': {
+      const { compact: _c, className: _n, ...thinking } = props;
+      return <ThinkingMessage {...thinking} className={cls(s['thinking'])} ref={ref} />;
+    }
     case 'system':
       return (
         <div ref={ref} data-kind="system" className={cls(s['system'])}>

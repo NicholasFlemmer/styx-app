@@ -2,10 +2,10 @@ import { EventEmitter } from 'node:events';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fixtures } from '@styx/core';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
 import { PtyService } from './pty-service';
-import { parseCliOutdated, runnerFor } from './session-service';
+import { parseCliOutdated, runnerFor, STREAM_ACTIVITY_MS, STREAM_FLUSH_MS } from './session-service';
 import type { StreamEffect, StreamEvents, StreamRunnerLike, StreamSpawnOptions } from './stream-runner';
 
 const { ids, DEMO_NOW } = fixtures;
@@ -1063,5 +1063,264 @@ describe('SessionService Claude Code parity (stream)', () => {
       await a.bus.dispatch(sender, 'ask.respond', { askId: second.id, resolution: { kind: 'decision', chosen: 'Allow' } }),
     ).toMatchObject({ ok: false, error: { code: 'invalid-transition' } });
     expect(() => a.sessions.resolveAsk(second.id, { kind: 'decision', chosen: 'Allow' })).toThrow();
+  });
+});
+
+describe('SessionService partial messages (stream rows patched live)', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const rows = (a: TestApp['app'], id: string) => a.repos.transcripts.last(id);
+  const deltas = (win: TestApp['win'], op: string) =>
+    win
+      .batches()
+      .flatMap((b) => b.deltas)
+      .filter((d) => d.op === op) as unknown as { op: string; body?: string; messageId?: string }[];
+  const streaming = (a: TestApp['app'], id: string) =>
+    rows(a, id).filter(
+      (m) =>
+        (m.payload.kind === 'agent' && m.payload.streaming === true) ||
+        (m.payload.kind === 'thinking' && m.payload.status === 'streaming'),
+    );
+
+  it('text: a streaming row from the first delta, patched at most every 33 ms with a trailing flush, settled on stop, reconciled by the final', async () => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    const id = session.id;
+    stream.effect(id, { type: 'streamStart', key: 'm:0', kind: 'text' });
+    expect(rows(a, id).map((m) => m.payload.kind)).toEqual(['user']); // no row until there is text to show
+    stream.effect(id, { type: 'streamDelta', key: 'm:0', text: 'Hel' });
+    const row = rows(a, id).at(-1)!;
+    expect(row).toMatchObject({ body: 'Hel', payload: { kind: 'agent', streaming: true } }); // lands right away
+    const body = () => a.repos.transcripts.get(row.id)?.body;
+    stream.effect(id, { type: 'streamDelta', key: 'm:0', text: 'lo' });
+    stream.effect(id, { type: 'streamDelta', key: 'm:0', text: ' wo' });
+    expect(body()).toBe('Hel'); // within the flush window: buffered
+    vi.advanceTimersByTime(STREAM_FLUSH_MS - 1);
+    expect(body()).toBe('Hel');
+    vi.advanceTimersByTime(1);
+    expect(body()).toBe('Hello wo');
+    a.publisher.flush();
+    expect(deltas(win, 'transcript.patch').map((d) => d.body)).toEqual(['Hello wo']);
+    expect(deltas(win, 'transcript.replace')).toHaveLength(0);
+
+    stream.effect(id, { type: 'streamDelta', key: 'm:0', text: 'rld' });
+    stream.effect(id, { type: 'streamStop', key: 'm:0' }); // flushes the pending text, then settles the payload
+    expect(a.repos.transcripts.get(row.id)).toMatchObject({ body: 'Hello world', payload: { kind: 'agent' } });
+    a.publisher.flush();
+    expect(deltas(win, 'transcript.patch').map((d) => d.body)).toEqual(['Hello wo', 'Hello world']);
+    expect(deltas(win, 'transcript.replace')).toHaveLength(1);
+
+    // The complete block differs (a dropped delta, or the trim): one more patch. Same body: nothing.
+    stream.effect(id, { type: 'streamFinal', key: 'm:0', body: 'Hello world!' });
+    expect(body()).toBe('Hello world!');
+    stream.effect(id, { type: 'streamFinal', key: 'm:0', body: 'ignored: the block is gone' });
+    stream.effect(id, { type: 'streamDelta', key: 'm:0', text: 'ignored too' });
+    expect(body()).toBe('Hello world!');
+    a.publisher.flush();
+    expect(deltas(win, 'transcript.patch')).toHaveLength(3);
+    expect(deltas(win, 'transcript.replace')).toHaveLength(1);
+    expect(streaming(a, id)).toEqual([]);
+    expect(rows(a, id).map((m) => m.payload.kind)).toEqual(['user', 'agent']);
+  });
+
+  it('the CLI sends the complete block before content_block_stop: the final settles the row, the stop is a no-op', async () => {
+    const { app: a, win, clock } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    const id = session.id;
+    stream.effect(id, { type: 'streamStart', key: 'm:0', kind: 'thinking' });
+    stream.effect(id, { type: 'streamDelta', key: 'm:0', text: 'Consider' });
+    clock.advance(1200);
+    stream.effect(id, { type: 'streamFinal', key: 'm:0', body: 'Consider the tests.' });
+    expect(rows(a, id).at(-1)).toMatchObject({
+      body: 'Consider the tests.',
+      payload: { kind: 'thinking', status: 'done', durationMs: 1200 },
+    });
+    clock.advance(500);
+    stream.effect(id, { type: 'streamStop', key: 'm:0' });
+    a.publisher.flush();
+    expect(deltas(win, 'transcript.replace')).toHaveLength(1);
+    expect(rows(a, id).at(-1)?.payload).toEqual({ kind: 'thinking', status: 'done', durationMs: 1200 });
+  });
+
+  it.each<[string, () => void]>([
+    ['a thinking block that only ever carries a signature', () => {}],
+    ['a text block whose only text is blank', () => stream.effect(ids.session.cursor, { type: 'streamDelta', key: 'm:0', text: ' \n' })],
+  ])('%s never gets a row', async (_name, during) => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    const id = session.id;
+    stream.effect(id, { type: 'streamStart', key: 'm:0', kind: 'thinking' });
+    during();
+    stream.effect(id, { type: 'streamFinal', key: 'm:0', body: '' });
+    stream.effect(id, { type: 'streamStop', key: 'm:0' });
+    stream.effect(id, { type: 'streamStart', key: 'm:1', kind: 'text' });
+    stream.effect(id, { type: 'streamDelta', key: 'm:1', text: '\n' });
+    vi.advanceTimersByTime(STREAM_FLUSH_MS);
+    stream.effect(id, { type: 'streamStart', key: 'm:2', kind: 'text' }); // never gets anything before the exit
+    stream.emit('exit', id, 0);
+    expect(rows(a, id).map((m) => m.payload.kind)).toEqual(['user']);
+    a.publisher.flush();
+    expect(deltas(win, 'transcript.patch')).toHaveLength(0);
+    expect(deltas(win, 'transcript.replace')).toHaveLength(0);
+  });
+
+  it('thinking: streamed live, then "done" with the elapsed duration; agent text is redacted on the way in', async () => {
+    const { app: a, win, clock } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    const id = session.id;
+    stream.effect(id, { type: 'streamStart', key: 'm:0', kind: 'thinking' });
+    stream.effect(id, { type: 'streamDelta', key: 'm:0', text: 'The key is AKIAABCDEFGHIJKLMNOP, ' });
+    const row = rows(a, id).at(-1)!;
+    expect(row).toMatchObject({
+      body: 'The key is [redacted], ',
+      payload: { kind: 'thinking', status: 'streaming', durationMs: null },
+    });
+    clock.advance(2500);
+    stream.effect(id, { type: 'streamDelta', key: 'm:0', text: 'so deploy.' });
+    stream.effect(id, { type: 'streamStop', key: 'm:0' });
+    expect(a.repos.transcripts.get(row.id)).toMatchObject({
+      body: 'The key is [redacted], so deploy.',
+      payload: { kind: 'thinking', status: 'done', durationMs: 2500 },
+    });
+    a.publisher.flush();
+    const before = deltas(win, 'transcript.patch').length;
+    // The final block equals what was streamed (post-redaction it is compared raw, so a secret means one more patch).
+    stream.effect(id, { type: 'streamFinal', key: 'm:0', body: 'The key is AKIAABCDEFGHIJKLMNOP, so deploy.' });
+    a.publisher.flush();
+    expect(deltas(win, 'transcript.patch').length).toBe(before);
+    expect(a.repos.transcripts.get(row.id)?.body).toBe('The key is [redacted], so deploy.');
+    // Then the text block of the same message; its final is longer than what streamed (a dropped delta).
+    stream.effect(id, { type: 'streamStart', key: 'm:1', kind: 'text' });
+    stream.effect(id, { type: 'streamDelta', key: 'm:1', text: 'Deploying' });
+    stream.effect(id, { type: 'streamStop', key: 'm:1' });
+    stream.effect(id, { type: 'streamFinal', key: 'm:1', body: 'Deploying now.' });
+    expect(rows(a, id).map((m) => [m.payload.kind, m.body])).toEqual([
+      ['user', 'Fix it'],
+      ['thinking', 'The key is [redacted], so deploy.'],
+      ['agent', 'Deploying now.'],
+    ]);
+    expect(streaming(a, id)).toEqual([]);
+  });
+
+  it('a streamed final that carries the CLI-outdated message raises the banner like a plain agent row', async () => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    const msg = 'API Error: 400 Claude Code 2.1.199 does not support this model; version 2.1.251 or newer is required';
+    stream.effect(session.id, { type: 'streamStart', key: 'm:0', kind: 'text' });
+    stream.effect(session.id, { type: 'streamDelta', key: 'm:0', text: msg });
+    stream.effect(session.id, { type: 'streamStop', key: 'm:0' });
+    a.publisher.flush();
+    expect(win.events('banner.set')).toEqual([]); // only the complete text is trusted
+    stream.effect(session.id, { type: 'streamFinal', key: 'm:0', body: msg });
+    a.publisher.flush();
+    expect(win.events('banner.set')).toContainEqual(expect.objectContaining({ bannerKey: 'cli-outdated:claude' }));
+    expect(rows(a, session.id).map((m) => m.payload.kind)).toEqual(['user', 'agent', 'system']);
+  });
+
+  it.each<['exit' | 'interrupt' | 'killAll' | 'stop']>([['exit'], ['interrupt'], ['killAll'], ['stop']])(
+    'live rows settle on %s so nothing streams forever; later effects for those keys are ignored',
+    async (how) => {
+      const { app: a, win, clock } = app();
+      const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+      const id = session.id;
+      stream.effect(id, { type: 'streamStart', key: 'm:0', kind: 'thinking' });
+      stream.effect(id, { type: 'streamDelta', key: 'm:0', text: 'Plan' });
+      clock.advance(800);
+      stream.effect(id, { type: 'streamStart', key: 'm:1', kind: 'text' });
+      stream.effect(id, { type: 'streamDelta', key: 'm:1', text: 'Partial ' });
+      stream.effect(id, { type: 'streamDelta', key: 'm:1', text: 'answer' }); // still buffered
+      expect(streaming(a, id)).toHaveLength(2);
+      a.publisher.flush();
+      const patchesBefore = deltas(win, 'transcript.patch').length;
+      if (how === 'exit') stream.emit('exit', id, 1);
+      else if (how === 'interrupt') a.sessions.interrupt(id);
+      else if (how === 'stop') a.sessions.stop(id);
+      else a.sessions.killAll();
+      const after = rows(a, id).filter((m) => m.payload.kind !== 'user' && m.payload.kind !== 'system');
+      expect(after.map((m) => [m.body, m.payload])).toEqual([
+        ['Plan', { kind: 'thinking', status: 'done', durationMs: 800 }],
+        ['Partial answer', { kind: 'agent' }],
+      ]);
+      a.publisher.flush();
+      expect(deltas(win, 'transcript.patch').length).toBe(patchesBefore + 1); // the trailing text flushed once
+      expect(deltas(win, 'transcript.replace')).toHaveLength(1);
+      expect(a.sessions.get(id)?.state).toBe(how === 'interrupt' ? 'idle' : 'done');
+      stream.effect(id, { type: 'streamDelta', key: 'm:1', text: '…more' });
+      stream.effect(id, { type: 'streamStop', key: 'm:1' });
+      stream.effect(id, { type: 'streamFinal', key: 'm:1', body: 'Partial answer…more' });
+      expect(after.map((m) => a.repos.transcripts.get(m.id)?.body)).toEqual(['Plan', 'Partial answer']);
+      // No flush timer survives the finalisation (the hunk watcher's own timer may, while the session lives on).
+      vi.advanceTimersByTime(STREAM_FLUSH_MS * 2);
+      a.publisher.flush();
+      expect(deltas(win, 'transcript.patch').length).toBe(patchesBefore + 1);
+    },
+  );
+
+  it('sweepStreaming settles rows a previous process left streaming (thinking duration unknown)', () => {
+    const { app: a, win } = app();
+    const sid = ids.session.cursor;
+    const base = { sessionId: sid, askId: null, createdAt: DEMO_NOW };
+    const seq = a.repos.transcripts.nextSeq(sid);
+    a.repos.transcripts.upsert({
+      ...base,
+      id: '01STALE0000000000000000001' as never,
+      seq,
+      body: 'half a thought',
+      payload: { kind: 'thinking', status: 'streaming', durationMs: null },
+    });
+    a.repos.transcripts.upsert({
+      ...base,
+      id: '01STALE0000000000000000002' as never,
+      seq: seq + 1,
+      body: 'half an answer',
+      payload: { kind: 'agent', streaming: true },
+    });
+    a.repos.transcripts.upsert({
+      ...base,
+      id: '01STALE0000000000000000003' as never,
+      seq: seq + 2,
+      body: 'finished',
+      payload: { kind: 'agent' },
+    });
+    expect(streaming(a, sid)).toHaveLength(2);
+    a.sessions.sweepStreaming();
+    expect(streaming(a, sid)).toEqual([]);
+    expect(rows(a, sid).slice(-3)).toMatchObject([
+      { body: 'half a thought', payload: { kind: 'thinking', status: 'done', durationMs: null } },
+      { body: 'half an answer', payload: { kind: 'agent' } },
+      { body: 'finished', payload: { kind: 'agent' } },
+    ]);
+    a.publisher.flush();
+    expect(deltas(win, 'transcript.replace')).toHaveLength(1);
+    a.sessions.sweepStreaming(); // idempotent: nothing to settle, nothing published
+    a.publisher.flush();
+    expect(deltas(win, 'transcript.replace')).toHaveLength(1);
+  });
+
+  it('partial deltas are activity at most once per second; streamUsage is accepted and ignored', async () => {
+    const { app: a, clock } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    const id = session.id;
+    const state = () => a.sessions.get(id)?.state;
+    stream.effect(id, { type: 'session', event: 'quiet' });
+    expect(state()).toBe('idle');
+    stream.effect(id, { type: 'streamStart', key: 'm:0', kind: 'text' });
+    expect(state()).toBe('working');
+    stream.effect(id, { type: 'session', event: 'quiet' });
+    stream.effect(id, { type: 'streamDelta', key: 'm:0', text: 'a' }); // throttled: same second
+    expect(state()).toBe('idle');
+    clock.advance(STREAM_ACTIVITY_MS - 1);
+    stream.effect(id, { type: 'streamDelta', key: 'm:0', text: 'b' });
+    expect(state()).toBe('idle');
+    clock.advance(1);
+    stream.effect(id, { type: 'streamDelta', key: 'm:0', text: 'c' });
+    expect(state()).toBe('working');
+    expect(a.sessions.get(id)?.lastActivityAt).toBe(clock.now());
+    stream.effect(id, { type: 'streamUsage', outputTokens: 12 });
+    expect(state()).toBe('working');
+    stream.effect(id, { type: 'streamStop', key: 'm:0' });
+    stream.effect(id, { type: 'streamFinal', key: 'm:0', body: 'abc' });
+    expect(rows(a, id).at(-1)).toMatchObject({ body: 'abc', payload: { kind: 'agent' } });
   });
 });

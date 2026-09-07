@@ -11,8 +11,13 @@ import { styxBin, styxMcpServer, type AgentLaunch, type AgentLaunchContext } fro
  * - `--mcp-config <configs...>`, `--settings <file-or-json>`, `--model <alias|full>`, `--effort <low|medium|high|xhigh|max>`,
  *   `--permission-mode <acceptEdits|auto|bypassPermissions|manual|dontAsk|plan>`, `--resume <session-id>`,
  *   `--dangerously-skip-permissions`, `--allow-dangerously-skip-permissions` (only *allows* a later live switch to
- *   bypass without enabling it), `--include-partial-messages`: listed in --help. Styx's `default` mode passes no
- *   `--permission-mode` (the CLI's own default; `manual` is not a Styx mode).
+ *   bypass without enabling it): listed in --help. Styx's `default` mode passes no `--permission-mode` (the CLI's
+ *   own default; `manual` is not a Styx mode).
+ * - `--include-partial-messages` (print + stream-json only): emits `{type:'stream_event', event, session_id,
+ *   parent_tool_use_id}` lines wrapping the Messages API streaming events (`message_start`, `content_block_start`,
+ *   `content_block_delta` with text_delta / thinking_delta / signature_delta / input_json_delta,
+ *   `content_block_stop`, `message_delta` with usage, `message_stop`) *before* the complete `assistant` event that
+ *   carries the same blocks. Subagent output has a non-null `parent_tool_use_id`. Parsed in stream-runner.ts.
  * - `-p/--print`, `--input-format stream-json`, `--output-format stream-json`, `--verbose`,
  *   `--replay-user-messages`, `--include-hook-events`: listed in --help (stream-json input is print-only).
  * - `--permission-prompt-tool`: NOT in --help but present in the binary (hidden flag used by the Agent SDK). The
@@ -81,6 +86,8 @@ export async function claudeLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch
       'stdio',
       // Lets a live `set_permission_mode bypassPermissions` succeed later without starting in bypass.
       '--allow-dangerously-skip-permissions',
+      // Text and thinking blocks arrive as deltas (live transcript rows) ahead of the complete `assistant` event.
+      '--include-partial-messages',
     );
     // The first message goes down stdin as the first user turn (StreamRunner), never as argv.
     return {

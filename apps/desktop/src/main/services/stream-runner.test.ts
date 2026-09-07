@@ -261,17 +261,6 @@ describe('StreamParser', () => {
     );
   });
 
-  it('stream_event partial deltas are ignored', () => {
-    expect(
-      parseAll([
-        JSON.stringify({
-          type: 'stream_event',
-          event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'partial' } },
-        }),
-      ]),
-    ).toEqual([]);
-  });
-
   it('result after unresolved edits still rescans', () => {
     const fx = parseAll([ASSISTANT_EDIT, RESULT]);
     expect(fx.filter((f) => f.type === 'rescan')).toHaveLength(1);
@@ -344,6 +333,322 @@ rl.on('line', (line) => {
 });
 rl.on('close', () => process.exit(0));
 `;
+
+/**
+ * `--include-partial-messages` (claude 2.1.263): `{type:'stream_event', event, session_id, parent_tool_use_id}` lines
+ * wrapping Messages API streaming events, followed by the complete `assistant` event with the same blocks.
+ */
+const se = (event: Record<string, unknown>, parent: string | null = null): string =>
+  JSON.stringify({ type: 'stream_event', event, session_id: 'abc-123', parent_tool_use_id: parent });
+const msgStart = (id: string | null = 'msg_1', parent: string | null = null): string =>
+  se({ type: 'message_start', message: { ...(id ? { id } : {}), role: 'assistant', content: [] } }, parent);
+const blockStart = (index: number, type: string, initial = '', parent: string | null = null): string =>
+  se(
+    {
+      type: 'content_block_start',
+      index,
+      content_block:
+        type === 'text'
+          ? { type, text: initial }
+          : type === 'thinking'
+            ? { type, thinking: initial, signature: '' }
+            : type === 'redacted_thinking'
+              ? { type, data: 'xxx' }
+              : { type: 'tool_use', id: 'toolu_9', name: 'Bash', input: {} },
+    },
+    parent,
+  );
+const textDelta = (index: number, text: string, parent: string | null = null): string =>
+  se({ type: 'content_block_delta', index, delta: { type: 'text_delta', text } }, parent);
+const thinkDelta = (index: number, thinking: string): string =>
+  se({ type: 'content_block_delta', index, delta: { type: 'thinking_delta', thinking } });
+const sigDelta = (index: number): string =>
+  se({ type: 'content_block_delta', index, delta: { type: 'signature_delta', signature: 'sig' } });
+const jsonDelta = (index: number): string =>
+  se({ type: 'content_block_delta', index, delta: { type: 'input_json_delta', partial_json: '{"co' } });
+const blockStop = (index: number, parent: string | null = null): string =>
+  se({ type: 'content_block_stop', index }, parent);
+const MSG_DELTA = se({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 42 } });
+const MSG_STOP = se({ type: 'message_stop' });
+const final = (content: unknown[], id: string | null = 'msg_1', parent: string | null = null): string =>
+  JSON.stringify({
+    type: 'assistant',
+    message: { ...(id ? { id } : {}), role: 'assistant', content },
+    session_id: 'abc-123',
+    parent_tool_use_id: parent,
+  });
+const ACTIVITY: StreamEffect = { type: 'session', event: 'activity' };
+
+describe('StreamParser partial messages (--include-partial-messages)', () => {
+  it('streams a thinking block then a text block live, and the complete assistant event reconciles both', () => {
+    const p = new StreamParser(WT);
+    const fx = (line: string) => p.parseLine(line);
+    expect(fx(msgStart())).toEqual([]);
+    expect(fx(blockStart(0, 'thinking'))).toEqual([{ type: 'streamStart', key: 'msg_1:0', kind: 'thinking' }]);
+    expect(fx(thinkDelta(0, 'Let me '))).toEqual([{ type: 'streamDelta', key: 'msg_1:0', text: 'Let me ' }]);
+    expect(fx(thinkDelta(0, 'think'))).toEqual([{ type: 'streamDelta', key: 'msg_1:0', text: 'think' }]);
+    expect(fx(sigDelta(0))).toEqual([]);
+    expect(fx(blockStop(0))).toEqual([{ type: 'streamStop', key: 'msg_1:0' }]);
+    expect(fx(blockStart(1, 'text'))).toEqual([{ type: 'streamStart', key: 'msg_1:1', kind: 'text' }]);
+    expect(fx(textDelta(1, 'Hel'))).toEqual([{ type: 'streamDelta', key: 'msg_1:1', text: 'Hel' }]);
+    expect(fx(textDelta(1, 'lo '))).toEqual([{ type: 'streamDelta', key: 'msg_1:1', text: 'lo ' }]);
+    expect(fx(blockStop(1))).toEqual([{ type: 'streamStop', key: 'msg_1:1' }]);
+    expect(fx(MSG_DELTA)).toEqual([{ type: 'streamUsage', outputTokens: 42 }]);
+    expect(fx(MSG_STOP)).toEqual([]);
+    // The complete message: no new transcript rows, the final bodies reconcile the live rows; note + render as before.
+    expect(
+      fx(
+        final([
+          { type: 'thinking', thinking: 'Let me think', signature: 'sig' },
+          { type: 'text', text: 'Hello ' },
+        ]),
+      ),
+    ).toEqual([
+      ACTIVITY,
+      { type: 'streamFinal', key: 'msg_1:0', body: 'Let me think' },
+      { type: 'streamFinal', key: 'msg_1:1', body: 'Hello' },
+      { type: 'note', note: 'Hello' },
+      { type: 'render', text: 'Hello\r\n' },
+    ]);
+  });
+
+  it('tool_use blocks in a streamed message still become tool lines; their input deltas are ignored', () => {
+    const p = new StreamParser(WT);
+    const lines = [msgStart(), blockStart(0, 'text'), textDelta(0, 'Running'), blockStop(0), blockStart(1, 'tool_use')];
+    const fx = lines.flatMap((l) => p.parseLine(l));
+    expect(fx.filter((f) => f.type === 'streamStart')).toHaveLength(1);
+    expect(p.parseLine(jsonDelta(1))).toEqual([]);
+    expect(p.parseLine(blockStop(1))).toEqual([]);
+    expect(p.parseLine(MSG_STOP)).toEqual([]);
+    const done = p.parseLine(
+      final([
+        { type: 'text', text: 'Running' },
+        { type: 'tool_use', id: 'toolu_9', name: 'Bash', input: { command: 'pnpm test' } },
+      ]),
+    );
+    expect(done).toEqual([
+      ACTIVITY,
+      { type: 'streamFinal', key: 'msg_1:0', body: 'Running' },
+      {
+        type: 'transcript',
+        body: 'Bash pnpm test',
+        payload: { kind: 'tool', tool: 'Bash', hint: 'pnpm test', toolUseId: 'toolu_9', status: 'running', detail: null },
+      },
+      { type: 'render', text: '▸ Bash pnpm test\r\n' },
+      { type: 'note', note: 'Running' },
+      { type: 'render', text: 'Running\r\n' },
+    ]);
+  });
+
+  it('the CLI may split one message into one assistant event per block: keys are consumed per kind in order', () => {
+    const p = new StreamParser(WT);
+    for (const l of [
+      msgStart(),
+      blockStart(0, 'thinking'),
+      blockStop(0),
+      blockStart(1, 'text'),
+      blockStop(1),
+      blockStart(2, 'text'),
+      blockStop(2),
+      MSG_STOP,
+    ])
+      p.parseLine(l);
+    expect(p.parseLine(final([{ type: 'thinking', thinking: 'hmm', signature: 's' }]))).toEqual([
+      ACTIVITY,
+      { type: 'streamFinal', key: 'msg_1:0', body: 'hmm' },
+    ]);
+    expect(p.parseLine(final([{ type: 'text', text: 'one' }]))).toEqual([
+      ACTIVITY,
+      { type: 'streamFinal', key: 'msg_1:1', body: 'one' },
+      { type: 'note', note: 'one' },
+      { type: 'render', text: 'one\r\n' },
+    ]);
+    expect(p.parseLine(final([{ type: 'text', text: 'two' }]))).toContainEqual({
+      type: 'streamFinal',
+      key: 'msg_1:2',
+      body: 'two',
+    });
+    // A fourth text block that never streamed (keys exhausted) is a plain transcript row.
+    expect(p.parseLine(final([{ type: 'text', text: 'three' }]))).toContainEqual({
+      type: 'transcript',
+      body: 'three',
+      payload: { kind: 'agent' },
+    });
+  });
+
+  it('thinking that was not streamed (partials off) lands as a done thinking row before the text', () => {
+    expect(
+      parseAll([
+        final([
+          { type: 'thinking', thinking: 'Consider the tests.', signature: 's' },
+          { type: 'text', text: 'Adding tests.' },
+        ]),
+      ]),
+    ).toEqual([
+      ACTIVITY,
+      {
+        type: 'transcript',
+        body: 'Consider the tests.',
+        payload: { kind: 'thinking', status: 'done', durationMs: null },
+      },
+      { type: 'transcript', body: 'Adding tests.', payload: { kind: 'agent' } },
+      { type: 'note', note: 'Adding tests.' },
+      { type: 'render', text: 'Adding tests.\r\n' },
+    ]);
+  });
+
+  it.each<[string, string[], StreamEffect[]]>([
+    [
+      'a delta with no message / block open',
+      [textDelta(0, 'partial')],
+      [],
+    ],
+    [
+      'a delta for an index that never started',
+      [msgStart(), blockStart(0, 'text'), textDelta(3, 'x')],
+      [{ type: 'streamStart', key: 'msg_1:0', kind: 'text' }],
+    ],
+    [
+      'a stop for an index that never started',
+      [msgStart(), blockStop(4)],
+      [],
+    ],
+    [
+      'redacted_thinking and tool_use blocks',
+      [msgStart(), blockStart(0, 'redacted_thinking'), blockStart(1, 'tool_use'), blockStop(0), blockStop(1)],
+      [],
+    ],
+    [
+      'subagent output (parent_tool_use_id set)',
+      [msgStart('msg_sub', 'toolu_task'), blockStart(0, 'text', '', 'toolu_task'), textDelta(0, 'sub', 'toolu_task'), blockStop(0, 'toolu_task')],
+      [],
+    ],
+    [
+      'message_delta without usage, unknown event types, a malformed event',
+      [
+        msgStart(),
+        se({ type: 'message_delta', delta: { stop_reason: 'end_turn' } }),
+        se({ type: 'ping' }),
+        JSON.stringify({ type: 'stream_event', event: 'nope' }),
+      ],
+      [],
+    ],
+  ])('ignores %s', (_name, lines, expected) => {
+    expect(parseAll(lines)).toEqual(expected);
+  });
+
+  it("a subagent's complete assistant event is a plain transcript row, never a streamFinal", () => {
+    const p = new StreamParser(WT);
+    for (const l of [msgStart(), blockStart(0, 'text'), textDelta(0, 'parent'), blockStop(0)]) p.parseLine(l);
+    expect(p.parseLine(final([{ type: 'text', text: 'from the subagent' }], 'msg_sub', 'toolu_task'))).toEqual([
+      ACTIVITY,
+      { type: 'transcript', body: 'from the subagent', payload: { kind: 'agent' } },
+      { type: 'note', note: 'from the subagent' },
+      { type: 'render', text: 'from the subagent\r\n' },
+    ]);
+    // An id-less subagent event does not fall back to the parent's streamed message either.
+    expect(p.parseLine(final([{ type: 'text', text: 'again' }], null, 'toolu_task'))).toContainEqual({
+      type: 'transcript',
+      body: 'again',
+      payload: { kind: 'agent' },
+    });
+    expect(p.parseLine(final([{ type: 'text', text: 'parent' }]))).toContainEqual({
+      type: 'streamFinal',
+      key: 'msg_1:0',
+      body: 'parent',
+    });
+  });
+
+  it('falls back to a counter when message_start carries no id, and an id-less final uses the current message', () => {
+    const p = new StreamParser(WT);
+    expect([msgStart(null), blockStart(0, 'text')].flatMap((l) => p.parseLine(l))).toEqual([
+      { type: 'streamStart', key: 'msg-1:0', kind: 'text' },
+    ]);
+    p.parseLine(blockStop(0));
+    expect(p.parseLine(final([{ type: 'text', text: 'a' }], null))).toContainEqual({
+      type: 'streamFinal',
+      key: 'msg-1:0',
+      body: 'a',
+    });
+    // A block without any message_start opens a message of its own; a later block joins the current message.
+    const q = new StreamParser(WT);
+    expect(q.parseLine(blockStart(0, 'text'))).toEqual([{ type: 'streamStart', key: 'msg-1:0', kind: 'text' }]);
+    expect(q.parseLine(blockStart(1, 'text'))).toEqual([{ type: 'streamStart', key: 'msg-1:1', kind: 'text' }]);
+  });
+
+  it('a final assistant event whose id was never streamed is a plain transcript row', () => {
+    const p = new StreamParser(WT);
+    for (const l of [msgStart(), blockStart(0, 'text'), textDelta(0, 'x'), blockStop(0)]) p.parseLine(l);
+    expect(p.parseLine(final([{ type: 'text', text: 'other' }], 'msg_other'))).toContainEqual({
+      type: 'transcript',
+      body: 'other',
+      payload: { kind: 'agent' },
+    });
+  });
+
+  it('a block that starts with text already in it treats that text as its first delta', () => {
+    expect(parseAll([msgStart(), blockStart(0, 'text', 'Hi')])).toEqual([
+      { type: 'streamStart', key: 'msg_1:0', kind: 'text' },
+      { type: 'streamDelta', key: 'msg_1:0', text: 'Hi' },
+    ]);
+  });
+
+  it('message_stop and result stop straggling blocks; result forgets the streamed message', () => {
+    const p = new StreamParser(WT);
+    for (const l of [msgStart(), blockStart(0, 'text'), textDelta(0, 'a')]) p.parseLine(l);
+    expect(p.parseLine(MSG_STOP)).toEqual([{ type: 'streamStop', key: 'msg_1:0' }]);
+    expect(p.parseLine(blockStop(0))).toEqual([]); // already stopped
+    p.parseLine(msgStart('msg_2'));
+    p.parseLine(blockStart(0, 'thinking'));
+    const res = p.parseLine(RESULT);
+    expect(res).toContainEqual({ type: 'streamStop', key: 'msg_2:0' });
+    expect(res.indexOf(res.find((f) => f.type === 'streamStop')!)).toBeLessThan(
+      res.indexOf(res.find((f) => f.type === 'session')!),
+    );
+    // After the result the ids are gone: a late final for msg_1 is a plain row.
+    expect(p.parseLine(final([{ type: 'text', text: 'late' }]))).toContainEqual({
+      type: 'transcript',
+      body: 'late',
+      payload: { kind: 'agent' },
+    });
+  });
+
+  it('the observed claude 2.1.263 order: each block\'s complete assistant event precedes its content_block_stop', () => {
+    // Recorded with `claude -p --output-format stream-json --verbose --include-partial-messages` (haiku, thinking on).
+    const p = new StreamParser(WT);
+    const fx = (line: string) => p.parseLine(line);
+    expect(fx(msgStart('msg_011'))).toEqual([]);
+    expect(fx(blockStart(0, 'thinking'))).toEqual([{ type: 'streamStart', key: 'msg_011:0', kind: 'thinking' }]);
+    expect(fx(thinkDelta(0, ''))).toEqual([]); // an empty thinking delta carries nothing
+    expect(fx(sigDelta(0))).toEqual([]);
+    expect(fx(final([{ type: 'thinking', thinking: '', signature: 'sig' }], 'msg_011'))).toEqual([
+      ACTIVITY,
+      { type: 'streamFinal', key: 'msg_011:0', body: '' },
+    ]);
+    expect(fx(blockStop(0))).toEqual([{ type: 'streamStop', key: 'msg_011:0' }]);
+    expect(fx(blockStart(1, 'text'))).toEqual([{ type: 'streamStart', key: 'msg_011:1', kind: 'text' }]);
+    expect(fx(textDelta(1, 'hello there'))).toEqual([{ type: 'streamDelta', key: 'msg_011:1', text: 'hello there' }]);
+    expect(fx(final([{ type: 'text', text: 'hello there' }], 'msg_011'))).toEqual([
+      ACTIVITY,
+      { type: 'streamFinal', key: 'msg_011:1', body: 'hello there' },
+      { type: 'note', note: 'hello there' },
+      { type: 'render', text: 'hello there\r\n' },
+    ]);
+    expect(fx(blockStop(1))).toEqual([{ type: 'streamStop', key: 'msg_011:1' }]);
+    expect(fx(MSG_DELTA)).toEqual([{ type: 'streamUsage', outputTokens: 42 }]);
+    expect(fx(MSG_STOP)).toEqual([]);
+    expect(fx(RESULT).filter((f) => f.type === 'streamStop')).toEqual([]);
+  });
+
+  it('an empty final text block still reconciles (to "") but adds no note or render', () => {
+    const p = new StreamParser(WT);
+    for (const l of [msgStart(), blockStart(0, 'text'), blockStop(0), MSG_STOP]) p.parseLine(l);
+    expect(p.parseLine(final([{ type: 'text', text: ' \n' }]))).toEqual([
+      ACTIVITY,
+      { type: 'streamFinal', key: 'msg_1:0', body: '' },
+    ]);
+  });
+});
 
 describe('StreamRunner (child_process pipes)', () => {
   it('round-trips NDJSON: first message, a second turn, a permission reply, then exit on kill', async () => {

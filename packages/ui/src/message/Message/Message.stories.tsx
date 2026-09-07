@@ -40,6 +40,50 @@ export const Agent: Story = {
     ),
   },
 };
+/** Agent reply still streaming from the CLI: blinking `▌` after the text (discrepancy #55). */
+export const AgentStreaming: Story = {
+  args: {
+    kind: 'agent',
+    streaming: true,
+    children: 'Reading checkout.ts and pay.ts. The validation should live in',
+  },
+};
+const thinkingText =
+  'The failing test asserts the total before tax, but checkout.ts sums after applying the discount. I should check whether pay.ts expects the pre-tax figure before changing the order of operations.';
+/** Thinking block mid-stream: muted quote-like body, always open, cursor at the end. */
+export const ThinkingStreaming: Story = {
+  args: {
+    kind: 'thinking',
+    status: 'streaming',
+    text: thinkingText,
+    label: 'Thinking…',
+    showLabel: 'Show',
+    hideLabel: 'Hide',
+  },
+};
+/** Finished thinking block: collapsed to its header with a Show toggle. */
+export const ThinkingDone: Story = {
+  args: {
+    kind: 'thinking',
+    status: 'done',
+    text: thinkingText,
+    label: 'Thought for 4s',
+    showLabel: 'Show',
+    hideLabel: 'Hide',
+  },
+};
+/** Finished thinking block expanded (`defaultOpen`): header reads Hide, body shows without a cursor. */
+export const ThinkingDoneOpen: Story = {
+  args: {
+    kind: 'thinking',
+    status: 'done',
+    text: thinkingText,
+    label: 'Thought for 4s',
+    showLabel: 'Show',
+    hideLabel: 'Hide',
+    defaultOpen: true,
+  },
+};
 export const FileList: Story = {
   args: {
     kind: 'fileList',
@@ -132,6 +176,37 @@ export const Matrix: Story = {
           <Message kind="agent" compact={compact}>
             The test fails because migration 0042 was never applied to prod.
           </Message>
+          <Message kind="agent" streaming compact={compact}>
+            Reading checkout.ts and pay.ts. The validation should live in
+          </Message>
+          <Message
+            kind="thinking"
+            status="streaming"
+            text={thinkingText}
+            label="Thinking…"
+            showLabel="Show"
+            hideLabel="Hide"
+            compact={compact}
+          />
+          <Message
+            kind="thinking"
+            status="done"
+            text={thinkingText}
+            label="Thought for 4s"
+            showLabel="Show"
+            hideLabel="Hide"
+            compact={compact}
+          />
+          <Message
+            kind="thinking"
+            status="done"
+            text={thinkingText}
+            label="Thought for 4s"
+            showLabel="Show"
+            hideLabel="Hide"
+            defaultOpen
+            compact={compact}
+          />
           <Message
             kind="fileList"
             files={[

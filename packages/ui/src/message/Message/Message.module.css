@@ -86,6 +86,53 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
+  /* Streaming cursor (agent bubble / thinking body): blinks with the shared keyframes; reduced motion keeps it solid. */
+  .cursor {
+    display: inline-block;
+    margin-left: 1px;
+    color: var(--tx);
+    animation: styx-blink 1s steps(1) infinite;
+  }
+  /* Thinking block: t-label header + a quiet quote-like body (1px --ln left rule), no bubble. */
+  .thinking {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .thinkingHead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 16px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mu);
+  }
+  .thinkingLabel {
+    font-variant-numeric: tabular-nums;
+  }
+  .thinkingToggle {
+    padding: 0;
+    border: 0;
+    min-height: 0;
+    line-height: normal;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .thinkingBody {
+    padding-left: 10px;
+    border-left: 1px solid var(--ln);
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--mu);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
   .request {
     border: 1px solid var(--ac);
   }
@@ -118,6 +165,9 @@
     font-size: 12.5px;
   }
   .compact.tool {
+    font-size: 12px;
+  }
+  .compact .thinkingBody {
     font-size: 12px;
   }
 }

@@ -1,0 +1,28 @@
+@layer components {
+  /* One t-label row, no bubble; the dot blinks with the shared keyframes (reduced motion keeps it solid). */
+  .line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    padding: 4px 0;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mu);
+  }
+  .dot {
+    animation: styx-blink 1s steps(1) infinite;
+  }
+  .label {
+    white-space: nowrap;
+  }
+  .elapsed {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .compact {
+    padding: 2px 0;
+  }
+}

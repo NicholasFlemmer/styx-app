@@ -110,6 +110,49 @@ describe('transcript items', () => {
     expect(demo).toMatchObject({ chosen: null, open: true, askId: null });
   });
 
+  it('agent rows carry streaming; thinking rows map status and duration', () => {
+    const model = fixtures.demoReadModel();
+    const base = model.transcripts[claude]?.[0];
+    if (base === undefined) throw new Error('fixture');
+    const withRows: ReadModel = {
+      ...model,
+      transcripts: {
+        ...model.transcripts,
+        [claude]: [
+          {
+            ...base,
+            id: 'm-th' as typeof base.id,
+            seq: 100,
+            body: 'hmm',
+            askId: null,
+            payload: { kind: 'thinking', status: 'done', durationMs: 4200 },
+          },
+          {
+            ...base,
+            id: 'm-ag' as typeof base.id,
+            seq: 101,
+            body: 'Rea',
+            askId: null,
+            payload: { kind: 'agent', streaming: true },
+          },
+          {
+            ...base,
+            id: 'm-ag2' as typeof base.id,
+            seq: 102,
+            body: 'Done.',
+            askId: null,
+            payload: { kind: 'agent' },
+          },
+        ],
+      },
+    };
+    expect(transcriptItems(withRows, claude)).toEqual([
+      { id: 'm-th', kind: 'thinking', text: 'hmm', status: 'done', durationMs: 4200 },
+      { id: 'm-ag', kind: 'agent', text: 'Rea', streaming: true },
+      { id: 'm-ag2', kind: 'agent', text: 'Done.', streaming: false },
+    ]);
+  });
+
   it('splits file names out of body text', () => {
     expect(inlineSegments('Read checkout.ts and pay.ts.')).toEqual([
       { text: 'Read ', code: false },
@@ -373,6 +416,126 @@ describe('ChatPane', () => {
     const row = container.querySelector('[data-kind="tool"]');
     expect(row?.getAttribute('data-status')).toBe('ok');
     expect(row?.textContent).toBe('✓Bashpnpm test');
+  });
+
+  const claudeRows = (
+    rows: Array<{ id: string; body: string; payload: ReadModel['transcripts'][string][number]['payload'] }>,
+  ) => {
+    const model = fixtures.demoReadModel();
+    const base = model.transcripts[claude]?.[0];
+    if (base === undefined) throw new Error('fixture');
+    useReadModel.getState().replaceModel(
+      {
+        ...model,
+        transcripts: {
+          ...model.transcripts,
+          [claude]: [
+            ...(model.transcripts[claude] ?? []),
+            ...rows.map((r, i) => ({ ...base, ...r, id: r.id as typeof base.id, seq: 100 + i, askId: null })),
+          ],
+        },
+      },
+      'connected',
+    );
+    return model;
+  };
+
+  it('working line: the demo Claude session is working and its last row is a decision → "Working…" + seconds since the user message (discrepancy #55)', () => {
+    const model = fixtures.demoReadModel();
+    const userRow = (model.transcripts[claude] ?? []).find((m) => m.payload.kind === 'user');
+    if (userRow === undefined) throw new Error('fixture');
+    const { container } = render(<ChatPane projectId={acme} />);
+    const line = screen.getByRole('status');
+    expect(line.getAttribute('aria-live')).toBe('off');
+    expect(line.textContent).toBe(`Working…${Math.round((fixtures.DEMO_NOW - userRow.createdAt) / 1000)}s`);
+    // Last child of the transcript log.
+    expect(container.querySelector('[role="log"]')?.lastElementChild).toBe(line);
+  });
+
+  it('working line is hidden under the e2e/visual harness so the baked workspace baseline holds', () => {
+    Object.assign(window, {
+      styx: {
+        platform: 'darwin',
+        env: { now: fixtures.DEMO_NOW, e2e: true },
+        command: vi.fn(async () => ({ ok: true, value: {} })),
+      },
+    });
+    render(<ChatPane projectId={acme} />);
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('working line names the running tool, and disappears for a non-working session', () => {
+    claudeRows([
+      {
+        id: 'm-tool',
+        body: '',
+        payload: {
+          kind: 'tool',
+          tool: 'Bash',
+          hint: 'pnpm test',
+          toolUseId: 't1',
+          status: 'running',
+          detail: null,
+        },
+      },
+    ]);
+    const { unmount } = render(<ChatPane projectId={acme} />);
+    expect(screen.getByRole('status').textContent).toMatch(/^Running Bash…\d+s$/);
+    unmount();
+    useUiStore.getState().setSession(acme, codex);
+    render(<ChatPane projectId={acme} />);
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('streaming agent reply: cursor in the bubble, no working line', () => {
+    claudeRows([
+      { id: 'm-ag', body: 'Reading checkout.ts and', payload: { kind: 'agent', streaming: true } },
+    ]);
+    const { container } = render(<ChatPane projectId={acme} />);
+    const bubble = container.querySelector('[data-kind="agent"][data-streaming="true"]');
+    expect(bubble?.textContent).toBe('Reading checkout.ts and▌');
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('thinking rows: streaming shows "Thinking…" with the open body and cursor; done collapses to "Thought for 4s" with Show', () => {
+    claudeRows([
+      {
+        id: 'm-th1',
+        body: 'Check pay.ts first',
+        payload: { kind: 'thinking', status: 'done', durationMs: 4200 },
+      },
+      {
+        id: 'm-th2',
+        body: 'Then the total',
+        payload: { kind: 'thinking', status: 'streaming', durationMs: null },
+      },
+    ]);
+    const { container } = render(<ChatPane projectId={acme} />);
+    expect(screen.getByText('Thought for 4s')).toBeTruthy();
+    expect(screen.queryByText('Check pay.ts first')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show' }));
+    expect(screen.getByText('Check pay.ts first')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Hide' })).toBeTruthy();
+    expect(screen.getByText('Thinking…')).toBeTruthy();
+    const streaming = container.querySelector('[data-kind="thinking"][data-status="streaming"]');
+    expect(streaming?.textContent).toBe('Thinking…Then the total▌');
+    // The streaming block is the last row: no working line.
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('after a finished thinking block the working line reads "Thinking…"; a done block without a duration reads "Thinking"', () => {
+    claudeRows([
+      { id: 'm-th', body: 'hmm', payload: { kind: 'thinking', status: 'done', durationMs: null } },
+    ]);
+    render(<ChatPane projectId={acme} />);
+    expect(screen.getByText('Thinking')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toMatch(/^Thinking…\d+s$/);
+  });
+
+  it('compact (pop-out) pane shows the working line too', () => {
+    const { container } = render(<ChatPane projectId={acme} sessionId={claude} compact />);
+    expect(container.querySelector('[data-chat-compact="true"] [data-working-line]')).not.toBeNull();
+    expect(screen.getByRole('status').className).toMatch(/compact/);
   });
 
   it('+ opens the spawn modal and ⤢ pops the chat out', async () => {

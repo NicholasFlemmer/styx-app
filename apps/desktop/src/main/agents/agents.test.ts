@@ -92,11 +92,15 @@ describe('claude launch flags (verified against claude 2.1.263)', () => {
   it.each([
     ['stream', true],
     ['pty', false],
-  ] as const)('%s launch: --allow-dangerously-skip-permissions present = %s', async (runner, present) => {
-    const args = await launch({ runner });
-    expect(args.includes('--allow-dangerously-skip-permissions')).toBe(present);
-    expect(args.includes('-p')).toBe(runner === 'stream');
-  });
+  ] as const)(
+    '%s launch: --allow-dangerously-skip-permissions and --include-partial-messages present = %s',
+    async (runner, present) => {
+      const args = await launch({ runner });
+      expect(args.includes('--allow-dangerously-skip-permissions')).toBe(present);
+      expect(args.includes('--include-partial-messages')).toBe(present);
+      expect(args.includes('-p')).toBe(runner === 'stream');
+    },
+  );
 
   it.each([
     [null, null, [] as string[]],

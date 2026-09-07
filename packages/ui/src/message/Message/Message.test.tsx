@@ -139,6 +139,88 @@ describe('Message', () => {
     expect(onDeny).toHaveBeenCalledTimes(1);
   });
 
+  it('agent: streaming appends a hidden blinking cursor; settled bubbles have none', () => {
+    const { container, rerender } = render(
+      <Message kind="agent" streaming>
+        Reading
+      </Message>,
+    );
+    const bubble = container.querySelector('[data-kind="agent"]');
+    expect(bubble?.getAttribute('data-streaming')).toBe('true');
+    const cursor = bubble?.querySelector('[aria-hidden="true"]');
+    expect(cursor?.textContent).toBe('▌');
+    expect(cursor?.className).toMatch(/cursor/);
+    rerender(<Message kind="agent">Reading</Message>);
+    expect(container.querySelector('[data-kind="agent"]')?.getAttribute('data-streaming')).toBeNull();
+    expect(container.querySelector('[aria-hidden="true"]')).toBeNull();
+  });
+
+  it('thinking (streaming): label, open body with a cursor, no toggle', () => {
+    const { container } = render(
+      <Message
+        kind="thinking"
+        status="streaming"
+        text="Checking pay.ts"
+        label="Thinking…"
+        showLabel="Show"
+        hideLabel="Hide"
+      />,
+    );
+    const block = container.querySelector('[data-kind="thinking"]');
+    expect(block?.getAttribute('data-status')).toBe('streaming');
+    expect(block?.getAttribute('data-open')).toBe('true');
+    expect(screen.getByText('Thinking…')).toBeInTheDocument();
+    expect(screen.getByText('Checking pay.ts')).toBeInTheDocument();
+    expect(block?.querySelector('[aria-hidden="true"]')?.textContent).toBe('▌');
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('thinking (done): collapsed by default; Show/Hide toggles the body with aria-expanded/controls; no cursor', async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <Message
+        kind="thinking"
+        status="done"
+        text="Checking pay.ts"
+        label="Thought for 4s"
+        showLabel="Show"
+        hideLabel="Hide"
+      />,
+    );
+    const block = container.querySelector('[data-kind="thinking"]');
+    expect(block?.getAttribute('data-open')).toBeNull();
+    expect(screen.getByText('Thought for 4s')).toBeInTheDocument();
+    expect(screen.queryByText('Checking pay.ts')).toBeNull();
+    const toggle = screen.getByRole('button', { name: 'Show' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    await user.click(toggle);
+    const body = screen.getByText('Checking pay.ts');
+    expect(body.id).toBe(toggle.getAttribute('aria-controls'));
+    expect(screen.getByRole('button', { name: 'Hide' }).getAttribute('aria-expanded')).toBe('true');
+    expect(block?.getAttribute('data-open')).toBe('true');
+    expect(block?.querySelector('[aria-hidden="true"]')).toBeNull();
+    toggle.focus();
+    await user.keyboard('{Enter}');
+    expect(screen.queryByText('Checking pay.ts')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Show' })).toHaveFocus();
+  });
+
+  it('thinking (done, defaultOpen): starts expanded with Hide', () => {
+    render(
+      <Message
+        kind="thinking"
+        status="done"
+        text="Checking pay.ts"
+        label="Thought for 4s"
+        showLabel="Show"
+        hideLabel="Hide"
+        defaultOpen
+      />,
+    );
+    expect(screen.getByText('Checking pay.ts')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hide' }).getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('compact adds the compact class', () => {
     render(<Message kind="user" text="x" compact />);
     expect(screen.getByText('x').className).toMatch(/compact/);

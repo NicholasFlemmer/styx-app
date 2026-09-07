@@ -78,10 +78,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
       />
       {!compact && (
         <div className={s['hints']}>
-          {(controls === undefined || controls === null) &&
-            hints.map((h) => (
-              <span key={h}>{h}</span>
-            ))}
+          {(controls === undefined || controls === null) && hints.map((h) => <span key={h}>{h}</span>)}
           {controls !== undefined && controls !== null ? (
             <span className={s['controls']} data-composer-controls="true">
               {controls}

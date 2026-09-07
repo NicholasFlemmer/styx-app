@@ -15,6 +15,7 @@ import {
   type Agent,
   type AskId,
   type CliInstall,
+  type MessagePayload,
   type PendingAsk,
   type Project,
   type Runner,
@@ -43,10 +44,14 @@ import type { NotificationService } from './notification-service';
 import type { PtyLog } from './pty-log';
 import type { PtyService } from './pty-service';
 import type { ActivityService } from './activity-service';
-import type { StreamEffect, StreamRunnerLike } from './stream-runner';
+import type { StreamBlockKind, StreamEffect, StreamRunnerLike } from './stream-runner';
 import type { TranscriptService } from './transcript-service';
 
 export const QUIET_MS = 3000;
+/** A live stream row is patched at most once per this interval (≈30 fps), with a trailing flush. */
+export const STREAM_FLUSH_MS = 33;
+/** Partial deltas are session activity, but the machine hears about it at most once per this interval. */
+export const STREAM_ACTIVITY_MS = 1000;
 
 /** Hook payloads (`styx hook <agent>` → broker `hook`) are untyped JSON from the CLI. */
 export type HookAgent = 'claude' | 'codex' | 'gemini' | 'cursor' | 'shell';
@@ -141,6 +146,32 @@ interface QuestionRequest {
   answers: Record<string, string>;
 }
 
+/**
+ * One text / thinking block streaming into a transcript row (`streamStart` … `streamStop` / `streamFinal`). The row
+ * is created by the first flush that has something to show: the CLI emits thinking blocks that stay empty (a
+ * signature only), and those must not leave a "Thought for 0s" row behind.
+ */
+interface LiveStream {
+  messageId: string | null;
+  kind: StreamBlockKind;
+  startedAt: number;
+  /** Everything received so far; the row body lags it by at most one flush. */
+  buffer: string;
+  dirty: boolean;
+  lastFlushAt: number;
+  timer: NodeJS.Timeout | null;
+  /** The row's payload has been settled (`streaming` dropped / thinking `done`). */
+  settled: boolean;
+}
+
+/** The settled payload for a row still marked as streaming; null when the row is not streaming. */
+const settledPayload = (payload: MessagePayload, durationMs: number | null): MessagePayload | null => {
+  if (payload.kind === 'agent' && payload.streaming === true) return { kind: 'agent' };
+  if (payload.kind === 'thinking' && payload.status === 'streaming')
+    return { kind: 'thinking', status: 'done', durationMs };
+  return null;
+};
+
 const modelLabel = (model: string | null): string => {
   if (model === null) return copy.session.models.default;
   const alias = MODEL_ALIASES.find((a) => a === model);
@@ -196,12 +227,35 @@ export class SessionService {
   private readonly ptyTails = new Map<string, string>();
   /** When the outdated banner was last raised per session (the error arrives as assistant text and as a result). */
   private readonly outdatedAt = new Map<string, number>();
+  /** Live stream rows per session, by block key (`<messageId>:<index>` from the parser). */
+  private readonly liveStreams = new Map<SessionId, Map<string, LiveStream>>();
+  /** Last time a partial delta was reported as `activity`, per session. */
+  private readonly streamActivityAt = new Map<string, number>();
 
   constructor(private readonly deps: SessionServiceDeps) {
     deps.pty.on('data', (id, data) => this.onPtyData(id, data));
     deps.pty.on('exit', (id, exitCode) => this.onPtyExit(id, exitCode));
     deps.stream.on('effect', (id, effect) => this.onStreamEffect(id, effect));
     deps.stream.on('exit', (id, exitCode) => this.onStreamExit(id, exitCode));
+    this.sweepStreaming();
+  }
+
+  /**
+   * Rows left `streaming` by a previous process (crash, force quit) settle at startup: an agent row is just done, a
+   * thinking row is done with an unknown duration. Nothing is live yet, so this only touches the DB.
+   */
+  sweepStreaming(): void {
+    const { repos } = this.deps;
+    for (const sessionId of repos.transcripts.sessionIds()) {
+      let changed: SessionId | null = null;
+      for (const m of repos.transcripts.last(sessionId, 200)) {
+        const payload = settledPayload(m.payload, null);
+        if (payload === null) continue;
+        repos.transcripts.upsert({ ...m, payload });
+        changed = m.sessionId;
+      }
+      if (changed !== null) this.republishTranscript(changed);
+    }
   }
 
   bind(hooks: SessionHooks): void {
@@ -515,6 +569,7 @@ export class SessionService {
     const s = this.require(sessionId);
     if (this.deps.stream.has(s.id)) {
       this.deps.stream.interrupt(s.id);
+      this.finaliseStreams(s.id);
       this.deps.transcript.system(s.id, copy.chat.controls.interrupted);
       this.applyEvent(s.id, { type: 'quiet' });
     } else if (this.deps.pty.has(s.id)) this.deps.pty.write(s.id, '\x03');
@@ -696,6 +751,7 @@ export class SessionService {
   killAll(): void {
     for (const t of this.quietTimers.values()) clearTimeout(t);
     this.quietTimers.clear();
+    for (const sessionId of [...this.liveStreams.keys()]) this.finaliseStreams(sessionId);
     this.deps.stream.killAll();
     this.deps.pty.killAll();
     this.deps.ptyLog.closeAll();
@@ -819,6 +875,20 @@ export class SessionService {
       case 'permission':
         this.onPermissionRequest(s, effect.requestId, effect.toolName, effect.input);
         return;
+      case 'streamStart':
+        this.onStreamStart(s, effect.key, effect.kind);
+        return;
+      case 'streamDelta':
+        this.onStreamDelta(s.id, effect.key, effect.text);
+        return;
+      case 'streamStop':
+        this.onStreamStop(s.id, effect.key);
+        return;
+      case 'streamFinal':
+        this.onStreamFinal(s, effect.key, effect.body);
+        return;
+      case 'streamUsage':
+        return; // output tokens of the message in flight: nothing shows them yet
     }
   }
 
@@ -827,13 +897,146 @@ export class SessionService {
     this.deps.publisher.ptyExit(id, exitCode);
     const s = this.deps.repos.sessions.get(id);
     if (!s) return;
+    this.finaliseStreams(s.id);
     this.deps.ptyLog.close(id);
     this.onProcessExit(s, exitCode);
   }
 
+  // --- partial messages ----------------------------------------------------
+
+  /** A text / thinking block begins; its row (marked as streaming) appears with the first non-blank text. */
+  private onStreamStart(s: Session, key: string, kind: StreamBlockKind): void {
+    let live = this.liveStreams.get(s.id);
+    if (!live) {
+      live = new Map();
+      this.liveStreams.set(s.id, live);
+    }
+    live.set(key, {
+      messageId: null,
+      kind,
+      startedAt: this.deps.clock.now(),
+      buffer: '',
+      dirty: false,
+      lastFlushAt: Number.NEGATIVE_INFINITY,
+      timer: null,
+      settled: false,
+    });
+    this.streamActivity(s.id);
+  }
+
+  /** Text lands in the buffer; the row is patched now if the last flush is old enough, else on a trailing timer. */
+  private onStreamDelta(sessionId: SessionId, key: string, text: string): void {
+    const entry = this.liveStreams.get(sessionId)?.get(key);
+    if (!entry) return;
+    entry.buffer += text;
+    entry.dirty = true;
+    this.streamActivity(sessionId);
+    const elapsed = this.deps.clock.now() - entry.lastFlushAt;
+    if (elapsed >= STREAM_FLUSH_MS) {
+      this.flushStream(sessionId, entry);
+      return;
+    }
+    if (entry.timer !== null) return;
+    const t = setTimeout(() => {
+      entry.timer = null;
+      this.flushStream(sessionId, entry);
+    }, STREAM_FLUSH_MS - elapsed);
+    t.unref?.();
+    entry.timer = t;
+  }
+
+  /** The block ended: the row settles (`streaming` dropped / thinking done with its duration) and is republished. */
+  private onStreamStop(sessionId: SessionId, key: string): void {
+    const entry = this.liveStreams.get(sessionId)?.get(key);
+    if (!entry) return;
+    this.flushStream(sessionId, entry);
+    if (this.settleStream(entry)) this.republishTranscript(sessionId);
+  }
+
+  /**
+   * The complete block from the `assistant` event (the CLI sends it *before* the block's `content_block_stop`): the
+   * row body is reconciled to it, the row settles, and the block is forgotten — the stop that follows is a no-op.
+   */
+  private onStreamFinal(s: Session, key: string, body: string): void {
+    const live = this.liveStreams.get(s.id);
+    const entry = live?.get(key);
+    if (!live || !entry) return;
+    if (body !== entry.buffer) {
+      entry.buffer = body;
+      entry.dirty = true;
+    }
+    this.flushStream(s.id, entry);
+    if (this.settleStream(entry)) this.republishTranscript(s.id);
+    live.delete(key);
+    if (live.size === 0) this.liveStreams.delete(s.id);
+    const outdated = entry.kind === 'text' ? parseCliOutdated(body) : null;
+    if (outdated !== null) this.raiseOutdatedBanner(s, body, outdated);
+  }
+
+  /** Process exit, interrupt, session end: every live block flushes and settles so no row streams forever. */
+  private finaliseStreams(sessionId: SessionId): void {
+    const live = this.liveStreams.get(sessionId);
+    if (!live) return;
+    this.liveStreams.delete(sessionId);
+    let changed = false;
+    for (const entry of live.values()) {
+      this.flushStream(sessionId, entry);
+      if (this.settleStream(entry)) changed = true;
+    }
+    if (changed) this.republishTranscript(sessionId);
+  }
+
+  private flushStream(sessionId: SessionId, entry: LiveStream): void {
+    if (entry.timer !== null) {
+      clearTimeout(entry.timer);
+      entry.timer = null;
+    }
+    if (!entry.dirty) return;
+    if (entry.messageId === null) {
+      if (entry.buffer.trim() === '') return; // nothing to show yet: no row (an empty block never gets one)
+      const payload: MessagePayload =
+        entry.kind === 'text'
+          ? { kind: 'agent', streaming: true }
+          : { kind: 'thinking', status: 'streaming', durationMs: null };
+      entry.messageId = this.deps.transcript.append(sessionId, entry.buffer, payload).id; // redacts
+    } else {
+      this.deps.transcript.patch(sessionId, entry.messageId, entry.buffer); // redacts
+    }
+    entry.dirty = false;
+    entry.lastFlushAt = this.deps.clock.now();
+  }
+
+  /** Writes the settled payload (once); the caller republishes. Returns whether the row changed. */
+  private settleStream(entry: LiveStream): boolean {
+    if (entry.settled) return false;
+    entry.settled = true;
+    if (entry.messageId === null) return false;
+    const row = this.deps.repos.transcripts.get(entry.messageId);
+    if (!row) return false;
+    const payload = settledPayload(row.payload, Math.max(0, this.deps.clock.now() - entry.startedAt));
+    if (payload === null) return false;
+    this.deps.repos.transcripts.upsert({ ...row, payload });
+    return true;
+  }
+
+  /** Payload changes have no delta of their own: the session's recent transcript is re-sent whole. */
+  private republishTranscript(sessionId: SessionId): void {
+    const { repos, publisher } = this.deps;
+    publisher.emit({ op: 'transcript.replace', sessionId, messages: repos.transcripts.last(sessionId, 200) });
+  }
+
+  /** Partial output is activity, reported to the machine at most once per STREAM_ACTIVITY_MS. */
+  private streamActivity(sessionId: SessionId): void {
+    const now = this.deps.clock.now();
+    const last = this.streamActivityAt.get(sessionId);
+    if (last !== undefined && now - last < STREAM_ACTIVITY_MS) return;
+    this.streamActivityAt.set(sessionId, now);
+    this.applyEvent(sessionId, { type: 'activity' });
+  }
+
   /** A `tool_result` landed: the matching `tool` line gets its status (and the error's first line). */
   private patchToolLine(sessionId: SessionId, toolUseId: string, ok: boolean, detail: string | null): void {
-    const { repos, publisher } = this.deps;
+    const { repos } = this.deps;
     const msg = repos.transcripts
       .last(sessionId, 200)
       .find((m) => m.payload.kind === 'tool' && m.payload.toolUseId === toolUseId);
@@ -846,7 +1049,7 @@ export class SessionService {
         detail: detail === null ? null : redact(detail),
       },
     });
-    publisher.emit({ op: 'transcript.replace', sessionId, messages: repos.transcripts.last(sessionId, 200) });
+    this.republishTranscript(sessionId);
   }
 
   /**
@@ -1180,6 +1383,8 @@ export class SessionService {
         const t = this.quietTimers.get(session.id);
         if (t) clearTimeout(t);
         this.quietTimers.delete(session.id);
+        this.finaliseStreams(session.id);
+        this.streamActivityAt.delete(session.id);
         this.hooks?.unwatchWorktree(session.worktreeId);
         return;
       }

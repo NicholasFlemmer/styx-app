@@ -11,7 +11,18 @@ import {
   type Session,
   type SessionId,
 } from '@styx/core';
-import { Button, Composer, Icon, Message, Select, StatusDot, Tab, TabRow, Transcript } from '@styx/ui';
+import {
+  Button,
+  Composer,
+  Icon,
+  Message,
+  Select,
+  StatusDot,
+  Tab,
+  TabRow,
+  Transcript,
+  WorkingLine,
+} from '@styx/ui';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { env } from '../../state/bridge';
 import { command } from '../../state/commands';
@@ -26,6 +37,7 @@ import {
   permissionModeOptions,
   sessionControls,
 } from './session-controls';
+import { thinkingLabel, wholeSeconds, workingLine } from './stream-state';
 import { inlineSegments, transcriptItems, type TranscriptItem } from './transcript-items';
 
 export interface ChatPaneProps {
@@ -113,7 +125,6 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const model = useModel(useCallback((m: ReadModel) => m, []));
   const activeSessionId = useSessionId();
   const sessionId = pinnedId ?? activeSessionId;
-  const now = useNow();
   const setSession = useUi((u) => u.setSession);
   const pushOverlay = useUi((u) => u.pushOverlay);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -122,6 +133,12 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
 
   const tabs = useMemo(() => sessionTabs(model, projectId, sessionId), [model, projectId, sessionId]);
   const activeId: SessionId | null = tabs.activeId;
+  // Working line (discrepancy #55): hidden under the e2e/visual harness like the session controls — the demo
+  // Claude session is `working`, so the line would otherwise land on the baked `workspace` baseline. Whether it
+  // shows does not depend on the clock; the clock only feeds its elapsed seconds, ticking 1s while it is up.
+  const workingActive = activeId !== null && env().e2e !== true && workingLine(model, activeId, 0) !== null;
+  const now = useNow(workingActive ? 1000 : undefined);
+  const working = workingActive && activeId !== null ? workingLine(model, activeId, now) : null;
   const meta = activeId === null ? '' : chatMeta(model, activeId, now);
   const items = useMemo(() => (activeId === null ? [] : transcriptItems(model, activeId)), [model, activeId]);
   const popped = activeId !== null && model.popouts.includes(activeId);
@@ -198,9 +215,22 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
         return <Message key={item.id} kind="user" text={item.text} compact={compact} />;
       case 'agent':
         return (
-          <Message key={item.id} kind="agent" compact={compact}>
+          <Message key={item.id} kind="agent" streaming={item.streaming} compact={compact}>
             <Body text={item.text} />
           </Message>
+        );
+      case 'thinking':
+        return (
+          <Message
+            key={item.id}
+            kind="thinking"
+            text={item.text}
+            status={item.status}
+            label={thinkingLabel(item.status, item.durationMs)}
+            showLabel={copy.chat.thinking.show}
+            hideLabel={copy.chat.thinking.hide}
+            compact={compact}
+          />
         );
       case 'system':
         return <Message key={item.id} kind="system" text={item.text} compact={compact} />;
@@ -345,7 +375,16 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           </Button>
         </div>
       ) : (
-        <Transcript compact={compact}>{items.map(renderItem)}</Transcript>
+        <Transcript compact={compact}>
+          {items.map(renderItem)}
+          {working !== null && (
+            <WorkingLine
+              label={working.label}
+              elapsedLabel={fill(copy.chat.working.elapsed, { s: wholeSeconds(working.elapsedMs) })}
+              compact={compact}
+            />
+          )}
+        </Transcript>
       )}
       <div data-keyscope="composer">
         <Composer
