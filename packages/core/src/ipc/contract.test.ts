@@ -25,6 +25,7 @@ describe('ipc contract', () => {
         'grant',
         'hunk',
         'ide',
+        'link',
         'notify',
         'onboarding',
         'policy',
