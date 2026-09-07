@@ -95,6 +95,9 @@ export const copy = {
       stop: 'Stop · esc',
       cycleMode: '⇧⇥ mode',
       interrupted: 'interrupted',
+      /** A Bash tool call reached a cloud CLI by absolute path, skipping the shim (owner decision: warn, do not block). */
+      bypassWarning:
+        'warning: {cli} called by full path — this skips the Styx shim, so no grant was asked and nothing was audited',
       compacted: 'context compacted',
       modeChanged: 'permissions: {mode}',
       modelChanged: 'model: {model}',
@@ -114,6 +117,12 @@ export const copy = {
     /** Thinking blocks and the live working line (owner addition, docs/handoff-discrepancies #55; not in §10). */
     thinking: { streaming: 'Thinking…', done: 'Thought for {s}s', show: 'Show', hide: 'Hide' },
     working: { thinking: 'Thinking…', working: 'Working…', tool: 'Running {tool}…', elapsed: '{s}s' },
+  },
+
+  /** Appended to every Claude Code session's system prompt (owner decision: steer to the shims instead of isolating). */
+  agentPrompt: {
+    shims:
+      'Cloud and deploy commands (gcloud, aws, gh, vercel, supabase, ssh) must run through the shims already on PATH so Styx can ask the user for a scoped grant and audit the call. Never invoke a cloud CLI by its full path, and never read its credential store directly. If a shim fails, report the error and stop instead of going around it.',
   },
 
   /** Claude Code session settings (owner addition, docs/handoff-discrepancies #54; not in §10). */

@@ -1,3 +1,4 @@
+import { copy } from '@styx/core';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -98,6 +99,8 @@ describe('claude launch flags (verified against claude 2.1.263)', () => {
       const args = await launch({ runner });
       expect(args.includes('--allow-dangerously-skip-permissions')).toBe(present);
       expect(args.includes('--include-partial-messages')).toBe(present);
+      const prompt = args.indexOf('--append-system-prompt');
+      expect(prompt >= 0 && args[prompt + 1] === copy.agentPrompt.shims).toBe(true);
       const display = args.indexOf('--thinking-display');
       expect(display >= 0 && args[display + 1] === 'summarized').toBe(present);
       expect(args.includes('-p')).toBe(runner === 'stream');

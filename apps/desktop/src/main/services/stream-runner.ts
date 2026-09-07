@@ -1,7 +1,7 @@
 import { spawn as spawnChild, type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { isAbsolute, relative, sep } from 'node:path';
-import { copy, type MessagePayload } from '@styx/core';
+import { fill, copy, type MessagePayload } from '@styx/core';
 import type { StreamInput } from '../agents/types';
 import { logger } from './logger';
 
@@ -57,6 +57,14 @@ interface StreamedMessage {
 }
 
 const EDIT_TOOLS = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
+
+/** `/Users/me/sdk/bin/gcloud …` or `~/.local/bin/gh …`: a shimmed cloud CLI reached by path, so the shim was skipped. */
+const CLOUD_CLI_BY_PATH =
+  /(?:^|[\s;&|(`])(?:\/|~\/|\.\/)[^\s'"`]*\/(gcloud|aws|gh|vercel|supabase|ssh)(?=[\s;&|)`]|$)/;
+export const cloudCliByFullPath = (command: string): string | null => {
+  const m = CLOUD_CLI_BY_PATH.exec(command);
+  return m?.[1] ?? null;
+};
 const FILE_TOOLS = /^(Read|Edit|Write|MultiEdit|NotebookEdit|NotebookRead)$/;
 const HINT_MAX = 100;
 
@@ -241,6 +249,12 @@ export class StreamParser {
             payload: { kind: 'tool', tool: name, hint, toolUseId: id, status: 'running', detail: null },
           });
           out.push({ type: 'render', text: crlf(`▸ ${line}`) });
+          const bypassed = name === 'Bash' ? cloudCliByFullPath(str(input['command']) ?? '') : null;
+          if (bypassed !== null) {
+            const warning = fill(copy.chat.controls.bypassWarning, { cli: bypassed });
+            out.push({ type: 'transcript', body: warning, payload: { kind: 'system' } });
+            out.push({ type: 'render', text: crlf(`! ${warning}`) });
+          }
         }
       }
     }
@@ -440,7 +454,9 @@ export class StreamParser {
     return [
       {
         type: 'render',
-        text: crlf(`· rate limit: ${status}${kind ? ` (${kind})` : ''}${resets ? ` · resets ${resets}` : ''}`),
+        text: crlf(
+          `· rate limit: ${status}${kind ? ` (${kind})` : ''}${resets ? ` · resets ${resets}` : ''}`,
+        ),
       },
     ];
   }
