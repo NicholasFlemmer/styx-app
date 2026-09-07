@@ -11,9 +11,14 @@ asarUnpack:
   - "**/*.node"
   - "node_modules/node-pty/**"
   - "resources/**"
+# Notarization runs in the afterSign hook (build/notarize.cjs) with the `styx-notary` keychain profile, so no
+# Apple password is ever an env var. electron-builder's own integration is off to avoid a second submission.
+afterSign: build/notarize.cjs
 mac:
   category: public.app-category.developer-tools
   hardenedRuntime: true
+  gatekeeperAssess: false
+  notarize: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   target: [dmg, zip]
