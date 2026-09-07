@@ -226,10 +226,17 @@ async function boot(): Promise<void> {
   }
 
   const shims = writeShims(userData, platform);
+  // Packaged: `resources/**` is asarUnpack'd (electron-builder.yml) so the CLI and templates are real files the shims,
+  // MCP server and `fs.cp` can reach: <Resources>/app.asar.unpacked/resources/…, never <Resources>/cli (that path was
+  // wrong until 2026-09-07 and every shim exec'd a missing file).
+  const resourcesDir = app.isPackaged
+    ? join(app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked'), 'resources')
+    : resolve(app.getAppPath(), 'resources');
   const cliPath = app.isPackaged
-    ? join(process.resourcesPath, 'cli', 'styx.js')
+    ? join(resourcesDir, 'cli', 'styx.js')
     : resolve(app.getAppPath(), '../../packages/cli/dist/styx.js');
-  const resourcesDir = app.isPackaged ? process.resourcesPath : resolve(app.getAppPath(), 'resources');
+  if (!existsSync(cliPath)) logger.error('styx cli not found: agent shims and MCP will fail', { cliPath });
+  else logger.info('runtime paths', { cliPath, resourcesDir });
   const endpoint = brokerEndpoint({
     platform,
     uid: process.getuid?.() ?? 0,

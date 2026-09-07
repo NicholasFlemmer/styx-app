@@ -10,7 +10,7 @@ files:
 asarUnpack:
   - "**/*.node"
   - "node_modules/node-pty/**"
-  - "resources/cli/**"
+  - "resources/**"
 mac:
   category: public.app-category.developer-tools
   hardenedRuntime: true
