@@ -6,10 +6,12 @@ export interface StatusBarProps {
   targets: readonly string[];
   /** "Monaco · LF · TS" */
   editor: string;
+  /** Appended after `editor`: caret, wrap, read-only notice (owner addition, discrepancies #58). */
+  extras?: readonly string[];
 }
 
 /** Editor status bar (26px, `--s1`): branch · targets in play · spacer · engine/eol/language. */
-export function StatusBar({ branch, targets, editor }: StatusBarProps) {
+export function StatusBar({ branch, targets, editor, extras = [] }: StatusBarProps) {
   return (
     <div className={s['bar']} data-status-bar="true">
       <span>{branch}</span>
@@ -18,6 +20,9 @@ export function StatusBar({ branch, targets, editor }: StatusBarProps) {
       ))}
       <span className={s['spacer']} />
       <span>{editor}</span>
+      {extras.map((x) => (
+        <span key={x}>{x}</span>
+      ))}
     </div>
   );
 }

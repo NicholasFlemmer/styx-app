@@ -18,8 +18,13 @@ import { FIXTURE_DEFAULT_FILE, type FileNode, type GitStatus } from '../../featu
 import { loadWorktreeTree } from '../../features/editor/fs-source';
 import { HunkBar } from '../../features/editor/HunkBar';
 import { hunkBarLabel, hunkMatchesFile, pendingHunksOf } from '../../features/editor/hunk-decorations';
-import { MonacoEditor, type FileState } from '../../features/editor/MonacoEditor';
-import { editorStatusLabel, statusBarTargets } from '../../features/editor/status-bar';
+import {
+  MonacoEditor,
+  WORD_WRAP_KEY,
+  applyWordWrap,
+  type FileState,
+} from '../../features/editor/MonacoEditor';
+import { editorReadoutItems, editorStatusLabel, statusBarTargets } from '../../features/editor/status-bar';
 import { StatusBar } from '../../features/editor/StatusBar';
 import { TerminalPane } from '../../features/terminal/TerminalPane';
 import { command } from '../../state/commands';
@@ -133,7 +138,17 @@ export function Workspace() {
 
   const targets = projectId === null ? [] : statusBarTargets(model, projectId, now);
   const editorStatus = editorStatusLabel(fileState?.eol ?? 'lf', fileState?.lang ?? 'TS');
+  // Right of the prototype's `Monaco · LF · TS`: caret, wrap and any read-only notice (discrepancies #58).
+  const editorExtras =
+    fileState === null
+      ? []
+      : editorReadoutItems({ cursor: fileState.cursor, wrap: fileState.wrap, readOnly: fileState.readOnly });
   const screenReader = model.settings.app.screenReader;
+  const setPaneSize = useUi((u) => u.setPaneSize);
+  const wrapPref = useUi((u) => u.paneSizes[WORD_WRAP_KEY] ?? 0);
+  useEffect(() => {
+    applyWordWrap(wrapPref === 1);
+  }, [wrapPref]);
   const ide = fallbackIde(model);
 
   if (projectId === null || worktree === null || worktreeId === null) {
@@ -172,6 +187,7 @@ export function Workspace() {
           now={now}
           screenReader={screenReader}
           onFileState={setFileState}
+          onWordWrap={(on) => setPaneSize(WORD_WRAP_KEY, on ? 1 : 0)}
         />
         {changes.length > 0 && hunkAgent !== null && (
           <HunkBar
@@ -193,7 +209,7 @@ export function Workspace() {
           screenReader={screenReader}
           columnHeight={() => column.current?.clientHeight ?? 0}
         />
-        <StatusBar branch={branchLabel} targets={targets} editor={editorStatus} />
+        <StatusBar branch={branchLabel} targets={targets} editor={editorStatus} extras={editorExtras} />
       </div>
       <ChatPane projectId={projectId} />
     </div>

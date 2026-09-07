@@ -33,11 +33,28 @@ export interface LoadedFile {
   text: string;
   eol: 'lf' | 'crlf';
   source: FileSource;
+  /** Binary or over the size cap: the model is opened read-only. */
+  readOnly?: boolean;
+  notice?: 'binary' | 'large';
 }
+
+/** Over this size a file opens read-only: Monaco tokenises the whole buffer, so a huge file freezes the pane. */
+export const MAX_EDITABLE_BYTES = 1024 * 1024;
+/** A NUL in the first 8 KB means binary; Monaco would render mojibake and a save would corrupt the file. */
+const BINARY_PROBE = 8 * 1024;
+
+export const isBinaryText = (text: string): boolean => text.slice(0, BINARY_PROBE).includes('\u0000');
 
 export const readWorktreeFile = async (worktreeId: WorktreeId, path: string): Promise<LoadedFile> => {
   const r = await query('fs.readFile', { worktreeId, path });
-  if (r !== null) return { text: r.text, eol: r.eol, source: 'fs' };
+  if (r !== null) {
+    if (isBinaryText(r.text)) return { text: '', eol: r.eol, source: 'fs', readOnly: true, notice: 'binary' };
+    // A JS string is UTF-16; byte length is what the cap is about, so measure it.
+    const bytes = new TextEncoder().encode(r.text).length;
+    if (bytes > MAX_EDITABLE_BYTES)
+      return { text: r.text, eol: r.eol, source: 'fs', readOnly: true, notice: 'large' };
+    return { text: r.text, eol: r.eol, source: 'fs' };
+  }
   return { text: fixtureFileText(path), eol: 'lf', source: 'fixture' };
 };
 

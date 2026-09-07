@@ -568,6 +568,10 @@ export const copy = {
     openIn: 'Open in {ide}',
     terminal: 'TERMINAL · {branch}',
     editorStatus: 'Monaco · {eol} · {lang}',
+    /** Editor readout appended to the prototype's status text (owner addition, discrepancies #58; not in §10). */
+    editorCursor: 'Ln {line}, Col {col}',
+    editorWrap: 'Wrap',
+    editorReadOnly: { binary: 'Binary file', large: 'Large file · read-only' },
     /** Status bar / scan meta in place of a branch when the folder is not a git repository. */
     noGit: 'no git',
   },

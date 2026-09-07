@@ -1,6 +1,7 @@
 import type { AgentChange, WorktreeId } from '@styx/core';
 import type { Theme } from '@styx/tokens';
 import { useCallback, useEffect, useRef, useState, type FocusEvent } from 'react';
+import { command } from '../../state/commands';
 import { languageLabelOf, languageOf, monacoThemeName } from './editor-theme';
 import { readWorktreeFile, writeWorktreeFile, type FileSource } from './fs-source';
 import { buildHunkDecorations } from './hunk-decorations';
@@ -14,6 +15,8 @@ interface ModelEntry {
   source: FileSource;
   eol: 'lf' | 'crlf';
   writeTimer: number | null;
+  /** Binary or over the size cap: the editor is read-only and never writes back (discrepancies #58). */
+  readOnly: 'binary' | 'large' | null;
 }
 
 /** One editor per worktree (plan §8): the DOM host survives unmounts so view state and models persist. */
@@ -62,9 +65,11 @@ const OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
   lineNumbersMinChars: 4,
   lineDecorationsWidth: 14,
   glyphMargin: false,
-  folding: false,
+  folding: true,
+  showFoldingControls: 'mouseover',
+  foldingHighlight: false,
   minimap: { enabled: false },
-  renderLineHighlight: 'none',
+  renderLineHighlight: 'line',
   scrollBeyondLastLine: false,
   overviewRulerLanes: 0,
   overviewRulerBorder: false,
@@ -76,28 +81,60 @@ const OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
   cursorSmoothCaretAnimation: 'off',
   smoothScrolling: false,
   renderWhitespace: 'none',
-  guides: { indentation: false, bracketPairs: false },
+  guides: { indentation: true, bracketPairs: false, highlightActiveIndentation: false },
   bracketPairColorization: { enabled: false },
-  matchBrackets: 'never',
-  occurrencesHighlight: 'off',
+  matchBrackets: 'always',
+  occurrencesHighlight: 'singleFile',
   selectionHighlight: false,
-  quickSuggestions: false,
-  suggestOnTriggerCharacters: false,
-  wordBasedSuggestions: 'off',
+  quickSuggestions: { other: true, comments: false, strings: false },
+  suggestOnTriggerCharacters: true,
+  wordBasedSuggestions: 'currentDocument',
+  suggest: { showWords: true, showIcons: false, insertMode: 'insert' },
+  acceptSuggestionOnEnter: 'off',
   parameterHints: { enabled: false },
-  hover: { enabled: 'off' },
+  hover: { enabled: 'on', delay: 250 },
   codeLens: false,
   lightbulb: { enabled: monaco.editor.ShowLightbulbIconMode.Off },
-  links: false,
+  links: true,
   colorDecorators: false,
   renderValidationDecorations: 'off',
   stickyScroll: { enabled: false },
   unicodeHighlight: { ambiguousCharacters: false, invisibleCharacters: false },
   fixedOverflowWidgets: true,
-  contextmenu: false,
+  contextmenu: true,
 };
 
 const accessibility = (screenReader: boolean): 'on' | 'auto' => (screenReader ? 'on' : 'auto');
+
+/** Word wrap is a per-machine preference (`paneSizes['editor.wordWrap']`, 0 / 1), applied to every editor. */
+export const WORD_WRAP_KEY = 'editor.wordWrap';
+let wordWrapOn = false;
+/** Set by the mounted component so a toggle inside Monaco reaches the ui store. */
+let onWordWrapChange: ((on: boolean) => void) | null = null;
+export const setWordWrapListener = (fn: ((on: boolean) => void) | null): void => {
+  onWordWrapChange = fn;
+};
+
+/** Links in code open in the browser through main (https only); Monaco must never navigate the renderer. */
+let linkOpenerRegistered = false;
+const registerLinkOpener = (): void => {
+  if (linkOpenerRegistered) return;
+  linkOpenerRegistered = true;
+  monaco.editor.registerLinkOpener({
+    open: (resource) => {
+      const url = resource.toString();
+      if (/^https:\/\//.test(url)) void command('link.open', { url });
+      return Promise.resolve(true);
+    },
+  });
+};
+
+/** Alt+Z on every editor; the caller persists the new value. */
+export const applyWordWrap = (on: boolean): void => {
+  wordWrapOn = on;
+  for (const e of editors.values()) e.editor.updateOptions({ wordWrap: on ? 'on' : 'off' });
+};
+export const isWordWrapOn = (): boolean => wordWrapOn;
 
 const getEntry = (worktreeId: WorktreeId, screenReader: boolean): EditorEntry => {
   const existing = editors.get(worktreeId);
@@ -106,11 +143,22 @@ const getEntry = (worktreeId: WorktreeId, screenReader: boolean): EditorEntry =>
   watchTheme();
   const host = document.createElement('div');
   host.className = s['host'] ?? '';
+  registerLinkOpener();
   const editor = monaco.editor.create(host, {
     ...OPTIONS,
     theme: monacoThemeName(currentTheme()),
     accessibilitySupport: accessibility(screenReader),
+    wordWrap: wordWrapOn ? 'on' : 'off',
     model: null,
+  });
+  editor.addAction({
+    id: 'styx.toggleWordWrap',
+    label: 'Toggle Word Wrap',
+    keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.KeyZ],
+    run: () => {
+      applyWordWrap(!wordWrapOn);
+      onWordWrapChange?.(wordWrapOn);
+    },
   });
   const entry: EditorEntry = {
     editor,
@@ -139,13 +187,21 @@ const getModel = async (entry: EditorEntry, worktreeId: WorktreeId, path: string
   if (again !== undefined) return again;
   const model = monaco.editor.createModel(loaded.text, languageOf(path), uriFor(worktreeId, path));
   // Monochrome: bracket pair colours are a model option, not an editor one.
-  model.updateOptions({ bracketColorizationOptions: { enabled: false, independentColorPoolPerBracketType: false } });
+  model.updateOptions({
+    bracketColorizationOptions: { enabled: false, independentColorPoolPerBracketType: false },
+  });
   model.setEOL(
     loaded.eol === 'crlf' ? monaco.editor.EndOfLineSequence.CRLF : monaco.editor.EndOfLineSequence.LF,
   );
-  const me: ModelEntry = { model, source: loaded.source, eol: loaded.eol, writeTimer: null };
+  const me: ModelEntry = {
+    model,
+    source: loaded.source,
+    eol: loaded.eol,
+    writeTimer: null,
+    readOnly: loaded.notice ?? null,
+  };
   model.onDidChangeContent(() => {
-    if (me.source !== 'fs') return;
+    if (me.source !== 'fs' || me.readOnly !== null) return;
     if (me.writeTimer !== null) window.clearTimeout(me.writeTimer);
     me.writeTimer = window.setTimeout(() => {
       me.writeTimer = null;
@@ -159,6 +215,10 @@ const getModel = async (entry: EditorEntry, worktreeId: WorktreeId, path: string
 export interface FileState {
   eol: 'lf' | 'crlf';
   lang: string;
+  /** 1-based caret position, tracked live (owner addition, discrepancies #58). */
+  cursor: { line: number; col: number } | null;
+  wrap: boolean;
+  readOnly: 'binary' | 'large' | null;
 }
 
 export interface MonacoEditorProps {
@@ -173,6 +233,8 @@ export interface MonacoEditorProps {
   /** settings.app.screenReader → Monaco `accessibilitySupport: 'on'`. */
   screenReader: boolean;
   onFileState?: (state: FileState | null) => void;
+  /** Alt+Z inside Monaco: the host persists the preference. */
+  onWordWrap?: (on: boolean) => void;
 }
 
 const toDecorations = (
@@ -235,6 +297,7 @@ export function MonacoEditor({
   now,
   screenReader,
   onFileState,
+  onWordWrap,
 }: MonacoEditorProps) {
   const container = useRef<HTMLDivElement>(null);
   const entryRef = useRef<EditorEntry | null>(null);
@@ -242,6 +305,11 @@ export function MonacoEditor({
   const [loaded, setLoaded] = useState<{ worktreeId: WorktreeId; path: string } | null>(null);
   const [contentVersion, setContentVersion] = useState(0);
   const fileStateCb = useRef(onFileState);
+  const stateRef = useRef<FileState | null>(null);
+  const wordWrapCb = useRef(onWordWrap);
+  useEffect(() => {
+    wordWrapCb.current = onWordWrap;
+  }, [onWordWrap]);
   useEffect(() => {
     fileStateCb.current = onFileState;
   }, [onFileState]);
@@ -267,6 +335,30 @@ export function MonacoEditor({
     entryRef.current?.editor.updateOptions({ accessibilitySupport: accessibility(screenReader) });
   }, [attached, screenReader]);
 
+  // Live caret position and the word-wrap toggle feed the status bar (discrepancies #58).
+  useEffect(() => {
+    const editor = entryRef.current?.editor;
+    if (editor === undefined || attached === null) return;
+    const patch = (next: Partial<FileState>): void => {
+      const current = stateRef.current;
+      if (current === null) return;
+      const merged = { ...current, ...next };
+      stateRef.current = merged;
+      fileStateCb.current?.(merged);
+    };
+    const cursor = editor.onDidChangeCursorPosition((e) =>
+      patch({ cursor: { line: e.position.lineNumber, col: e.position.column } }),
+    );
+    setWordWrapListener((on) => {
+      wordWrapCb.current?.(on);
+      patch({ wrap: on });
+    });
+    return () => {
+      cursor.dispose();
+      setWordWrapListener(null);
+    };
+  }, [attached]);
+
   // Open file → model (cached per path) + restored view state.
   useEffect(() => {
     const entry = entryRef.current;
@@ -277,6 +369,7 @@ export function MonacoEditor({
       if (path === null) {
         entry.editor.setModel(null);
         entry.path = null;
+        stateRef.current = null;
         fileStateCb.current?.(null);
         return null;
       }
@@ -286,9 +379,21 @@ export function MonacoEditor({
       const view = entry.viewStates.get(path);
       if (view !== undefined && view !== null) entry.editor.restoreViewState(view);
       entry.path = path;
+      entry.editor.updateOptions({ readOnly: me.readOnly !== null });
+      const pos = entry.editor.getPosition();
+      stateRef.current = {
+        eol: me.model.getEOL() === '\r\n' ? 'crlf' : 'lf',
+        lang: languageLabelOf(path),
+        cursor: pos === null ? null : { line: pos.lineNumber, col: pos.column },
+        wrap: isWordWrapOn(),
+        readOnly: me.readOnly,
+      };
       fileStateCb.current?.({
         eol: me.model.getEOL() === '\r\n' ? 'crlf' : 'lf',
         lang: languageLabelOf(path),
+        cursor: pos === null ? null : { line: pos.lineNumber, col: pos.column },
+        wrap: isWordWrapOn(),
+        readOnly: me.readOnly,
       });
       return { worktreeId, path };
     };

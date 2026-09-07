@@ -43,3 +43,23 @@ export const statusBarTargets = (model: ReadModel, projectId: ProjectId, now: nu
 
 export const editorStatusLabel = (eol: 'lf' | 'crlf', lang: string): string =>
   fill(copy.workspace.editorStatus, { eol: eol.toUpperCase(), lang });
+
+export interface EditorReadout {
+  cursor: { line: number; col: number } | null;
+  wrap: boolean;
+  readOnly: 'binary' | 'large' | null;
+}
+
+/**
+ * Extra status-bar items to the RIGHT of the prototype's `Monaco · LF · TS` (owner addition, discrepancies #58):
+ * `Ln 12, Col 4` · `Wrap` · a read-only notice. Nothing is shown without an open file, so the baked baseline
+ * (fixture workspace, no cursor reported yet) is unchanged.
+ */
+export const editorReadoutItems = (r: EditorReadout): string[] => {
+  const out: string[] = [];
+  if (r.cursor !== null)
+    out.push(fill(copy.workspace.editorCursor, { line: String(r.cursor.line), col: String(r.cursor.col) }));
+  if (r.wrap) out.push(copy.workspace.editorWrap);
+  if (r.readOnly !== null) out.push(copy.workspace.editorReadOnly[r.readOnly]);
+  return out;
+};

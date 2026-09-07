@@ -96,6 +96,7 @@ describe('readImage', () => {
     expect(isImageError(r)).toBe(false);
     if (isImageError(r)) return;
     expect(r).toMatchObject({ id: 'id-1', kind: 'image', name: 'ok.png', mediaType: 'image/png' });
+    if (r.kind !== 'image') throw new Error('expected an image');
     expect(r.data).not.toContain('data:');
     expect(r.data.length).toBeGreaterThan(0);
   });

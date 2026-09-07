@@ -7,13 +7,11 @@
  * monaco-editor ≥ 0.53 maps `monaco-editor/<path>` onto `esm/vs/<path>.js` through its exports map.
  */
 import * as monaco from 'monaco-editor/editor/editor.api';
-import 'monaco-editor/languages/definitions/typescript/register';
-import 'monaco-editor/languages/definitions/javascript/register';
-import 'monaco-editor/languages/definitions/css/register';
-import 'monaco-editor/languages/definitions/html/register';
-import 'monaco-editor/languages/definitions/markdown/register';
-import 'monaco-editor/languages/definitions/shell/register';
-import 'monaco-editor/languages/definitions/yaml/register';
+// Every monarch tokenizer monaco ships (84 languages): highlighting only — ADR-0002 keeps the language services
+// off, so no diagnostics worker ever starts. One import instead of a hand-kept list that silently rots.
+// JSON has no monarch tokenizer (only a full language service, 1.2 MB + a worker), so `.json` uses the
+// JavaScript tokenizer: strings, numbers and punctuation highlight correctly without any service.
+import 'monaco-editor/languages/definitions/register.all';
 import 'monaco-editor/features/find/register';
 import 'monaco-editor/features/clipboard/register';
 import 'monaco-editor/features/comment/register';
@@ -23,6 +21,14 @@ import 'monaco-editor/features/wordOperations/register';
 import 'monaco-editor/features/multicursor/register';
 import 'monaco-editor/features/cursorUndo/register';
 import 'monaco-editor/features/bracketMatching/register';
+import 'monaco-editor/features/folding/register';
+import 'monaco-editor/features/gotoLine/register';
+import 'monaco-editor/features/format/register';
+import 'monaco-editor/features/suggest/register';
+import 'monaco-editor/features/hover/register';
+import 'monaco-editor/features/wordHighlighter/register';
+import 'monaco-editor/features/contextmenu/register';
+import 'monaco-editor/features/links/register';
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/language/typescript/ts.worker?worker';
 import JsonWorker from 'monaco-editor/language/json/json.worker?worker';

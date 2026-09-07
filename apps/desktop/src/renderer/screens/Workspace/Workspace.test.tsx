@@ -12,6 +12,8 @@ vi.mock('../../features/editor/MonacoEditor', () => ({
   MonacoEditor: ({ path, worktreeId }: { path: string | null; worktreeId: string }) => (
     <div data-testid="monaco" data-path={path ?? ''} data-worktree={worktreeId} />
   ),
+  WORD_WRAP_KEY: 'editor.wordWrap',
+  applyWordWrap: () => undefined,
 }));
 vi.mock('../../features/terminal/TerminalPane', () => ({
   TerminalPane: ({
