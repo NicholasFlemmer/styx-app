@@ -98,6 +98,7 @@ export const messageKindSchema = z.enum([
   'access-request',
   'system',
   'tool',
+  'thinking',
 ]);
 export type MessageKind = z.infer<typeof messageKindSchema>;
 
@@ -110,7 +111,8 @@ export type FileListEntry = z.infer<typeof fileListEntrySchema>;
 
 export const messagePayloadSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('user') }),
-  z.object({ kind: z.literal('agent') }),
+  /** `streaming`: the body is still being patched from partial stream events (renders a cursor). */
+  z.object({ kind: z.literal('agent'), streaming: z.boolean().optional() }),
   z.object({ kind: z.literal('file-list'), files: z.array(fileListEntrySchema) }),
   z.object({
     kind: z.literal('decision'),
@@ -126,6 +128,12 @@ export const messagePayloadSchema = z.discriminatedUnion('kind', [
     grantId: grantIdSchema,
   }),
   z.object({ kind: z.literal('system') }),
+  /** A thinking block from the stream: streamed live, then collapsed to "Thought for Ns" (body = the thinking text). */
+  z.object({
+    kind: z.literal('thinking'),
+    status: z.enum(['streaming', 'done']),
+    durationMs: z.number().int().nonnegative().nullable(),
+  }),
   /** One tool call from the stream (Bash / Read / Edit / …): a compact mono line, patched when its result lands. */
   z.object({
     kind: z.literal('tool'),

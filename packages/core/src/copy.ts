@@ -111,6 +111,9 @@ export const copy = {
       },
       modelShort: { default: 'Default', fable: 'Fable', opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' },
     },
+    /** Thinking blocks and the live working line (owner addition, docs/handoff-discrepancies #55; not in §10). */
+    thinking: { streaming: 'Thinking…', done: 'Thought for {s}s', show: 'Show', hide: 'Hide' },
+    working: { thinking: 'Thinking…', working: 'Working…', tool: 'Running {tool}…', elapsed: '{s}s' },
   },
 
   /** Claude Code session settings (owner addition, docs/handoff-discrepancies #54; not in §10). */

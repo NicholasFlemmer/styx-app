@@ -237,7 +237,7 @@ export const transcriptMessages = sqliteTable(
       .references(() => sessions.id, { onDelete: 'cascade' }),
     seq: integer('seq').notNull(),
     kind: text('kind', {
-      enum: ['user', 'agent', 'file-list', 'decision', 'access-request', 'system', 'tool'],
+      enum: ['user', 'agent', 'file-list', 'decision', 'access-request', 'system', 'tool', 'thinking'],
     }).notNull(),
     body: text('body').notNull(),
     payloadJson: text('payload_json'),
