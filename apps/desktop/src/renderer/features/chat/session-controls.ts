@@ -39,9 +39,15 @@ export const modelOptions = (current: string | null, short = false): ControlOpti
     ...MODEL_ALIASES.map((alias) => ({ value: alias, label: labels[alias] })),
   ];
   if (current !== null && current !== '' && !out.some((o) => o.value === current)) {
-    out.push({ value: current, label: current });
+    out.push({ value: current, label: short ? shortModelLabel(current) : current });
   }
   return out;
+};
+
+/** `claude-fable-5-1` → "Fable" on the composer line (the CLI reports the full id at init); unknown ids stay as-is. */
+export const shortModelLabel = (model: string): string => {
+  const alias = MODEL_ALIASES.find((a) => model.toLowerCase().includes(a));
+  return alias === undefined ? model : copy.chat.controls.modelShort[alias];
 };
 
 export const effortOptions = (): ControlOption[] => [

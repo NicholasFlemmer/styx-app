@@ -48,6 +48,12 @@ describe('session controls (Claude Code parity, discrepancy #54)', () => {
     expect(modelOptions('').map((o) => o.value)).toHaveLength(5);
     expect(modelOptions(null)[0]?.label).toBe('Default model');
     expect(modelOptions(null, true)[0]?.label).toBe('Default');
+    expect(modelOptions('claude-fable-5-1', true).at(-1)).toEqual({
+      value: 'claude-fable-5-1',
+      label: 'Fable',
+    });
+    expect(modelOptions('claude-fable-5-1').at(-1)?.label).toBe('claude-fable-5-1');
+    expect(modelOptions('custom-x', true).at(-1)?.label).toBe('custom-x');
     expect(permissionModeOptions(true).map((o) => o.label)).toEqual([
       'Ask',
       'Accept edits',
