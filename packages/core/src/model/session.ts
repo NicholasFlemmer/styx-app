@@ -65,6 +65,8 @@ export const sessionSchema = z
     /** Running totals from stream `result` events. */
     costUsd: z.number().nonnegative(),
     numTurns: z.number().int().nonnegative(),
+    /** Slash commands the CLI advertised at init (skills, plugins, built-ins); the composer's `/` popup lists them. */
+    slashCommands: z.array(z.string()),
     state: sessionStateSchema,
     pausedReason: pausedReasonSchema.nullable(),
     /** One-line status shown on board cards ("Requesting Supabase prod · read + write"). */
@@ -109,8 +111,27 @@ export const fileListEntrySchema = z.object({
 });
 export type FileListEntry = z.infer<typeof fileListEntrySchema>;
 
+/** What a user message carried besides text (shown as chips; the bytes themselves are never stored in the transcript). */
+export const attachmentSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('image'),
+    name: z.string(),
+    mediaType: z.string(),
+    bytes: z.number().int().nonnegative(),
+  }),
+  z.object({ kind: z.literal('file'), path: z.string().min(1), bytes: z.number().int().nonnegative() }),
+]);
+export type Attachment = z.infer<typeof attachmentSchema>;
+
+/** Image types the Anthropic API accepts as base64 image blocks. */
+export const IMAGE_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const;
+export const imageMediaTypeSchema = z.enum(IMAGE_MEDIA_TYPES);
+/** Caps: 5 MB per image (API limit), 200 KB per attached text file (inlined into the turn). */
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+export const MAX_FILE_ATTACHMENT_BYTES = 200 * 1024;
+
 export const messagePayloadSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('user') }),
+  z.object({ kind: z.literal('user'), attachments: z.array(attachmentSchema).optional() }),
   /** `streaming`: the body is still being patched from partial stream events (renders a cursor). */
   z.object({ kind: z.literal('agent'), streaming: z.boolean().optional() }),
   z.object({ kind: z.literal('file-list'), files: z.array(fileListEntrySchema) }),

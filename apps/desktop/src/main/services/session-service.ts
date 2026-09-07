@@ -335,6 +335,7 @@ export class SessionService {
       cliSessionId: null,
       costUsd: 0,
       numTurns: 0,
+      slashCommands: [],
       state: 'idle',
       pausedReason: null,
       note: null,

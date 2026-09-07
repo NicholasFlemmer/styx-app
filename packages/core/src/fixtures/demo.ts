@@ -260,6 +260,7 @@ const session = (
   cliSessionId: null,
   costUsd: 0,
   numTurns: 0,
+  slashCommands: [],
   state,
   pausedReason: null,
   note,

@@ -69,6 +69,7 @@ export const sessions = sqliteTable(
     cliSessionId: text('cli_session_id'),
     costUsd: real('cost_usd').notNull().default(0),
     numTurns: integer('num_turns').notNull().default(0),
+    slashCommandsJson: text('slash_commands_json').notNull().default('[]'),
     brokerTokenHash: text('broker_token_hash').notNull().default(''),
     pid: integer('pid'),
     exitCode: integer('exit_code'),

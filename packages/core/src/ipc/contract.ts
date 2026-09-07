@@ -27,6 +27,7 @@ import {
   askResolutionSchema,
   pausedReasonSchema,
   effortSchema,
+  imageMediaTypeSchema,
   permissionModeSchema,
   sessionTogglesSchema,
   transcriptMessageSchema,
@@ -254,7 +255,26 @@ export const commands = {
   /** Stops the current turn without ending the session (stream `interrupt`; Ctrl+C on a pty). */
   'session.interrupt': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   'session.sendMessage': {
-    input: z.object({ sessionId: sessionIdSchema, body: z.string().min(1) }),
+    input: z.object({
+      sessionId: sessionIdSchema,
+      body: z.string(),
+      /** Images go to the CLI as base64 image blocks; files are read by main (inside the worktree) and inlined. */
+      attachments: z
+        .array(
+          z.discriminatedUnion('kind', [
+            z.object({
+              kind: z.literal('image'),
+              name: z.string().min(1),
+              mediaType: imageMediaTypeSchema,
+              /** base64 without a data: prefix. */
+              data: z.string().min(1),
+            }),
+            z.object({ kind: z.literal('file'), path: z.string().min(1) }),
+          ]),
+        )
+        .max(20)
+        .default([]),
+    }),
     output: ok,
   },
   'session.ptyInput': { input: z.object({ sessionId: sessionIdSchema, data: z.string() }), output: ok },
@@ -429,6 +449,17 @@ export const commands = {
     input: z.object({ worktreeId: worktreeIdSchema, path: z.string().min(1), text: z.string() }),
     output: ok,
   },
+  /** Fuzzy file search inside a worktree for the composer's `@` picker (tracked + untracked, ignores honoured). */
+  'fs.find': {
+    input: z.object({
+      worktreeId: worktreeIdSchema,
+      query: z.string().default(''),
+      limit: z.number().int().min(1).max(200).default(50),
+    }),
+    output: z.object({ paths: z.array(z.string()), truncated: z.boolean() }),
+  },
+  /** Opens an https link from a transcript in the default browser (main validates the scheme). */
+  'link.open': { input: z.object({ url: z.string().url() }), output: ok },
   'fs.listDir': {
     input: z.object({ worktreeId: worktreeIdSchema, path: z.string().default('') }),
     output: z.object({

@@ -39,7 +39,11 @@ export interface GitRunOptions {
 }
 
 export interface GitRunner {
-  run(args: string[], cwd: string, opts?: GitRunOptions): Promise<{ stdout: string; stderr: string; exitCode: number }>;
+  run(
+    args: string[],
+    cwd: string,
+    opts?: GitRunOptions,
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }>;
 }
 
 export class ExecaGitRunner implements GitRunner {
@@ -86,17 +90,25 @@ export class GitService {
   }
 
   async defaultBranch(path: string): Promise<string> {
-    const r = await this.git.run(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], path, { reject: false });
+    const r = await this.git.run(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], path, {
+      reject: false,
+    });
     if (r.exitCode === 0) return r.stdout.trim().replace(/^origin\//, '');
     for (const b of ['main', 'master']) {
-      const has = await this.git.run(['show-ref', '--verify', '--quiet', `refs/heads/${b}`], path, { reject: false });
+      const has = await this.git.run(['show-ref', '--verify', '--quiet', `refs/heads/${b}`], path, {
+        reject: false,
+      });
       if (has.exitCode === 0) return b;
     }
     const cur = await this.git.run(['branch', '--show-current'], path, { reject: false });
     return cur.stdout.trim() || 'main';
   }
 
-  async remotes(path: string): Promise<{ name: string; url: string; host: 'github' | 'gitlab' | 'other'; owner?: string; repo?: string }[]> {
+  async remotes(
+    path: string,
+  ): Promise<
+    { name: string; url: string; host: 'github' | 'gitlab' | 'other'; owner?: string; repo?: string }[]
+  > {
     const r = await this.git.run(['remote', '-v'], path, { reject: false });
     const seen = new Map<string, string>();
     for (const line of r.stdout.split('\n')) {
@@ -112,13 +124,23 @@ export class GitService {
 
   async status(path: string): Promise<GitStatus> {
     const { stdout } = await this.git.run(['status', '--porcelain=v2', '--branch', '-z'], path);
-    const status: GitStatus = { branch: '', head: null, upstream: null, ahead: 0, behind: 0, changed: [], clean: true };
+    const status: GitStatus = {
+      branch: '',
+      head: null,
+      upstream: null,
+      ahead: 0,
+      behind: 0,
+      changed: [],
+      clean: true,
+    };
     const entries = stdout.split('\0');
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
       if (!e) continue;
       if (e.startsWith('# branch.head ')) status.branch = e.slice('# branch.head '.length);
-      else if (e.startsWith('# branch.oid ')) status.head = e.slice('# branch.oid '.length) === '(initial)' ? null : e.slice('# branch.oid '.length);
+      else if (e.startsWith('# branch.oid '))
+        status.head =
+          e.slice('# branch.oid '.length) === '(initial)' ? null : e.slice('# branch.oid '.length);
       else if (e.startsWith('# branch.upstream ')) status.upstream = e.slice('# branch.upstream '.length);
       else if (e.startsWith('# branch.ab ')) {
         const m = /\+(\d+) -(\d+)/.exec(e);
@@ -131,7 +153,13 @@ export class GitService {
         const xy = parts[1] ?? '..';
         const file = e.startsWith('2 ') ? (parts.slice(9).join(' ') ?? '') : parts.slice(8).join(' ');
         if (e.startsWith('2 ')) i++; // rename: next entry is the original path
-        const kind = xy.includes('A') ? 'added' : xy.includes('D') ? 'deleted' : xy.includes('R') ? 'renamed' : 'modified';
+        const kind = xy.includes('A')
+          ? 'added'
+          : xy.includes('D')
+            ? 'deleted'
+            : xy.includes('R')
+              ? 'renamed'
+              : 'modified';
         status.changed.push({ path: file, kind });
       } else if (e.startsWith('u ')) {
         const parts = e.split(' ');
@@ -159,7 +187,9 @@ export class GitService {
     const untracked = await this.git.run(['ls-files', '--others', '--exclude-standard'], path);
     for (const f of untracked.stdout.split('\n').filter(Boolean)) {
       files++;
-      const c = await this.git.run(['diff', '--numstat', '--no-index', '--', '/dev/null', f], path, { reject: false });
+      const c = await this.git.run(['diff', '--numstat', '--no-index', '--', '/dev/null', f], path, {
+        reject: false,
+      });
       const m = /^(\d+)\t/.exec(c.stdout);
       if (m) added += Number(m[1]);
     }
@@ -171,8 +201,14 @@ export class GitService {
     return stdout;
   }
 
-  async aheadBehind(path: string, branch: string, upstream: string): Promise<{ ahead: number; behind: number }> {
-    const r = await this.git.run(['rev-list', '--left-right', '--count', `${branch}...${upstream}`], path, { reject: false });
+  async aheadBehind(
+    path: string,
+    branch: string,
+    upstream: string,
+  ): Promise<{ ahead: number; behind: number }> {
+    const r = await this.git.run(['rev-list', '--left-right', '--count', `${branch}...${upstream}`], path, {
+      reject: false,
+    });
     const m = /^(\d+)\s+(\d+)/.exec(r.stdout.trim());
     return m ? { ahead: Number(m[1]), behind: Number(m[2]) } : { ahead: 0, behind: 0 };
   }
@@ -215,7 +251,10 @@ export class GitService {
     return out;
   }
 
-  async worktreeAdd(repoPath: string, opts: { branch: string; base: string; path: string; createBranch?: boolean }): Promise<void> {
+  async worktreeAdd(
+    repoPath: string,
+    opts: { branch: string; base: string; path: string; createBranch?: boolean },
+  ): Promise<void> {
     const args = ['worktree', 'add', '--quiet'];
     if (opts.createBranch ?? true) args.push('-b', opts.branch, opts.path, opts.base);
     else args.push(opts.path, opts.branch);
@@ -229,7 +268,9 @@ export class GitService {
 
   /** Dry-run merge via `git merge-tree --write-tree`; returns the first conflicting file or null. */
   async detectConflict(repoPath: string, branch: string, against: string): Promise<ConflictInfo | null> {
-    const r = await this.git.run(['merge-tree', '--write-tree', '--name-only', against, branch], repoPath, { reject: false });
+    const r = await this.git.run(['merge-tree', '--write-tree', '--name-only', against, branch], repoPath, {
+      reject: false,
+    });
     if (r.exitCode === 0) return null;
     if (r.exitCode !== 1) throw new Error(`merge-tree failed: ${r.stderr}`);
     const lines = r.stdout.split('\n').filter(Boolean);
@@ -237,7 +278,11 @@ export class GitService {
     return { file, against };
   }
 
-  async applyPatch(path: string, patch: string, opts: { cached?: boolean; reverse?: boolean }): Promise<void> {
+  async applyPatch(
+    path: string,
+    patch: string,
+    opts: { cached?: boolean; reverse?: boolean },
+  ): Promise<void> {
     const args = ['apply', '--unidiff-zero', '--whitespace=nowarn'];
     if (opts.cached) args.push('--cached');
     if (opts.reverse) args.push('-R');
@@ -254,6 +299,38 @@ export class GitService {
     return r.exitCode === 0 && r.stdout.trim() ? r.stdout.trim() : null;
   }
 
+  /**
+   * Every file the `@` picker may offer: tracked + untracked with ignores honoured (`.git` never). A plain folder
+   * (no git) falls back to a bounded walk that skips dot-dirs and node_modules.
+   */
+  async listFiles(path: string, max = 20_000): Promise<string[]> {
+    const r = await this.git.run(['ls-files', '--cached', '--others', '--exclude-standard', '-z'], path, {
+      reject: false,
+    });
+    if (r.exitCode === 0) return r.stdout.split('\0').filter(Boolean).slice(0, max);
+    const { readdir } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const out: string[] = [];
+    const walk = async (dir: string, rel: string): Promise<void> => {
+      if (out.length >= max) return;
+      let entries: import('node:fs').Dirent[] = [];
+      try {
+        entries = await readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const e of entries) {
+        if (e.name.startsWith('.') || e.name === 'node_modules') continue;
+        const relPath = rel ? `${rel}/${e.name}` : e.name;
+        if (e.isDirectory()) await walk(join(dir, e.name), relPath);
+        else if (e.isFile()) out.push(relPath);
+        if (out.length >= max) return;
+      }
+    };
+    await walk(path, '');
+    return out;
+  }
+
   async untrackedFiles(path: string): Promise<string[]> {
     const r = await this.git.run(['ls-files', '--others', '--exclude-standard'], path, { reject: false });
     return r.stdout.split('\n').filter(Boolean);
@@ -263,7 +340,9 @@ export class GitService {
   async diffWithUntracked(path: string, base: string): Promise<string> {
     let out = await this.diff(path, base);
     for (const f of await this.untrackedFiles(path)) {
-      const r = await this.git.run(['diff', '--no-color', '-U3', '--no-index', '--', '/dev/null', f], path, { reject: false });
+      const r = await this.git.run(['diff', '--no-color', '-U3', '--no-index', '--', '/dev/null', f], path, {
+        reject: false,
+      });
       if (r.stdout) out += (out.endsWith('\n') || out === '' ? '' : '\n') + r.stdout;
     }
     return out;
@@ -273,7 +352,11 @@ export class GitService {
   async statusMap(path: string): Promise<Map<string, 'M' | 'A' | 'D' | '?'>> {
     const st = await this.status(path);
     const m = new Map<string, 'M' | 'A' | 'D' | '?'>();
-    for (const c of st.changed) m.set(c.path, c.kind === 'untracked' ? '?' : c.kind === 'added' ? 'A' : c.kind === 'deleted' ? 'D' : 'M');
+    for (const c of st.changed)
+      m.set(
+        c.path,
+        c.kind === 'untracked' ? '?' : c.kind === 'added' ? 'A' : c.kind === 'deleted' ? 'D' : 'M',
+      );
     return m;
   }
 
@@ -283,7 +366,17 @@ export class GitService {
 
   async commit(path: string, message: string, opts: { allowEmpty?: boolean } = {}): Promise<void> {
     await this.git.run(
-      ['-c', 'user.name=Styx', '-c', 'user.email=styx@localhost', 'commit', '-q', ...(opts.allowEmpty ? ['--allow-empty'] : []), '-m', message],
+      [
+        '-c',
+        'user.name=Styx',
+        '-c',
+        'user.email=styx@localhost',
+        'commit',
+        '-q',
+        ...(opts.allowEmpty ? ['--allow-empty'] : []),
+        '-m',
+        message,
+      ],
       path,
     );
   }
@@ -307,7 +400,10 @@ export class GitService {
     await this.git.run(['push', '-q', '-u', remote, branch], path, env ? { env } : {});
   }
 
-  async configureRepo(path: string, opts: { longPaths?: boolean; lineEndings?: 'auto' | 'lf' | 'crlf' }): Promise<void> {
+  async configureRepo(
+    path: string,
+    opts: { longPaths?: boolean; lineEndings?: 'auto' | 'lf' | 'crlf' },
+  ): Promise<void> {
     if (opts.longPaths) await this.git.run(['config', 'core.longpaths', 'true'], path);
     if (opts.lineEndings && opts.lineEndings !== 'auto') {
       await this.git.run(['config', 'core.autocrlf', opts.lineEndings === 'crlf' ? 'true' : 'false'], path);
@@ -324,7 +420,14 @@ export function worktreeLocation(repoPath: string, branch: string): string {
 }
 
 function finish(w: Partial<WorktreeInfo>, main: boolean): WorktreeInfo {
-  return { path: w.path ?? '', head: w.head ?? null, branch: w.branch ?? null, bare: w.bare ?? false, detached: w.detached ?? false, main };
+  return {
+    path: w.path ?? '',
+    head: w.head ?? null,
+    branch: w.branch ?? null,
+    bare: w.bare ?? false,
+    detached: w.detached ?? false,
+    main,
+  };
 }
 
 function escapeRe(s: string): string {

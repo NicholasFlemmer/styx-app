@@ -6,6 +6,16 @@ import type { Container } from '../../container';
 import { worktreeLocation } from '../../services/git';
 import { type CommandBus, fail } from '../bus';
 
+/** Subsequence match (`srcchk` hits `src/components/checkout.ts`), the `@` picker's cheap fuzzy filter. */
+export const fuzzyMatch = (text: string, query: string): boolean => {
+  let i = 0;
+  for (const ch of text) {
+    if (ch === query[i]) i += 1;
+    if (i === query.length) return true;
+  }
+  return i === query.length;
+};
+
 /** Real path of `p`; when it does not exist yet, the real path of its nearest existing ancestor plus the rest. */
 function realpathLenient(p: string): string {
   const missing: string[] = [];
@@ -167,6 +177,19 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
     const full = confine(wt.path, path);
     await mkdir(dirname(full), { recursive: true });
     await writeFile(full, text);
+    return {};
+  });
+
+  bus.register('fs.find', async ({ worktreeId, query, limit }) => {
+    const wt = requireWorktree(worktreeId);
+    const paths = await git.listFiles(wt.path);
+    const q = query.trim().toLowerCase();
+    const hits = q === '' ? paths : paths.filter((p) => fuzzyMatch(p.toLowerCase(), q));
+    return { paths: hits.slice(0, limit), truncated: hits.length > limit };
+  });
+
+  bus.register('link.open', async ({ url }) => {
+    await app.openExternal(url);
     return {};
   });
 

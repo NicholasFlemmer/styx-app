@@ -114,6 +114,18 @@ export const copy = {
       },
       modelShort: { default: 'Default', fable: 'Fable', opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' },
     },
+    /** Attachments, `@` file mentions and `/` commands in the composer (owner addition, discrepancies #57; not in §10). */
+    attach: {
+      image: 'image',
+      file: 'file',
+      remove: 'Remove {name}',
+      tooLarge: '{name} is larger than {max}',
+      unsupported: '{name} is not a supported image (png, jpeg, gif, webp)',
+      dropHint: 'Drop images or files to attach',
+      pickFile: 'Attach file…',
+    },
+    mention: { hint: 'Files in this worktree', none: 'No matching file' },
+    slash: { hint: 'Claude Code commands', none: 'No matching command' },
     /** Thinking blocks and the live working line (owner addition, docs/handoff-discrepancies #55; not in §10). */
     thinking: { streaming: 'Thinking…', done: 'Thought for {s}s', show: 'Show', hide: 'Hide' },
     working: { thinking: 'Thinking…', working: 'Working…', tool: 'Running {tool}…', elapsed: '{s}s' },
