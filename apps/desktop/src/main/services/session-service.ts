@@ -652,6 +652,23 @@ export class SessionService {
   }
 
   /**
+   * Close chat: ends the session and archives it in one step, whatever state it was in. `archive` alone only
+   * accepts a finished session (it is the 7-day retention step), and `stop` finishes asynchronously off the
+   * process exit — so closing a running chat has to end it here rather than wait for that round trip.
+   */
+  close(sessionId: string): void {
+    const s = this.require(sessionId);
+    if (this.deps.stream.has(s.id)) this.deps.stream.kill(s.id);
+    else if (this.deps.pty.has(s.id)) this.deps.pty.kill(s.id);
+    // `finish` cancels any ask still open and denies the request behind it, so nothing keeps waiting on input.
+    const cur = this.require(sessionId);
+    if (cur.state !== 'done') this.applyEvent(cur.id, { type: 'finish', exitCode: null });
+    const done = this.require(sessionId);
+    this.deps.repos.sessions.upsert({ ...done, archivedAt: this.deps.clock.now() });
+    this.deps.publisher.upsert('sessions', [done.id]);
+  }
+
+  /**
    * Leaves `paused` once its reason is gone: cli-missing → re-detect and respawn; conflict → the worktree merges
    * cleanly again; auth-expired → no expired target remains in the project. The process is relaunched when none is
    * attached any more.

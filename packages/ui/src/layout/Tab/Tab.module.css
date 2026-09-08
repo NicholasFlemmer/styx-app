@@ -98,42 +98,29 @@
 }
 
 @layer components {
-  /* A closable tab: the ✕ is a sibling button, so the pair carries the divider instead of the tab itself. */
-  .wrap {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: stretch;
-    border-right: 1px solid var(--ln);
-  }
-  .wrap .closable {
-    border-right: 0;
-    padding-right: 4px;
-  }
+  /* The ✕ marker inside a closable tab: hit target is padded, and it only shows on hover or on the current tab
+     so a full row of tabs is not a row of crosses. */
   .close {
-    display: flex;
-    align-items: center;
-    padding: 0 8px 0 2px;
-    border: 0;
-    background: transparent;
+    flex: 0 0 auto;
+    margin-left: 2px;
+    padding: 0 2px;
     color: var(--mu);
-    font-family: var(--font-ui);
     font-size: 11px;
     line-height: 1;
-    cursor: pointer;
-    border-radius: 0;
+    visibility: hidden;
+  }
+  .tab:hover .close,
+  .tab[data-inv='true'] .close,
+  .tab:focus-visible .close {
+    visibility: visible;
   }
   .close:hover {
     color: var(--tx);
   }
-  .close:focus-visible {
-    outline: 1px solid var(--tx);
-    outline-offset: -2px;
-  }
-  /* On the current tab the ✕ inherits the inverted ground. */
-  .wrap[data-inv='true'] {
-    background: var(--tx);
-  }
-  .wrap[data-inv='true'] .close {
+  .tab[data-inv='true'] .close {
     color: var(--bg);
+  }
+  .closable {
+    padding-right: 8px;
   }
 }

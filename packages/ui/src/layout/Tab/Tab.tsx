@@ -24,7 +24,7 @@ export interface TabProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
   on?: boolean;
   /** Renders a trailing ✕ that closes the tab. The ✕ is a sibling button, never nested (axe nested-interactive). */
   onClose?: () => void;
-  /** aria-label for the ✕ (app: `copy.workspace.closeFile`). */
+  /** Tooltip for the ✕ (app: `copy.workspace.closeFile` / `copy.chat.closeSessionNamed`). */
   closeLabel?: string;
 }
 
@@ -43,6 +43,8 @@ export const Tab = forwardRef<HTMLButtonElement, TabProps>(function Tab(
     closeLabel,
     className,
     type = 'button',
+    onClick,
+    onKeyDown,
     ...rest
   },
   ref,
@@ -57,7 +59,7 @@ export const Tab = forwardRef<HTMLButtonElement, TabProps>(function Tab(
   ]
     .filter(Boolean)
     .join(' ');
-  const tab = (
+  return (
     <button
       ref={ref}
       type={type}
@@ -66,6 +68,25 @@ export const Tab = forwardRef<HTMLButtonElement, TabProps>(function Tab(
       className={cls}
       data-inv={inv ? 'true' : undefined}
       data-on={on ? 'true' : undefined}
+      // A `tablist` may only own `tab` children, and a widget role may not contain a focusable descendant, so the
+      // ✕ is a marker inside the tab rather than a button of its own: the click is routed by target, and Delete /
+      // Backspace on the focused tab closes it, which also beats tabbing onto an 8px glyph.
+      onClick={(e) => {
+        if (onClose !== undefined && (e.target as HTMLElement).dataset['tabClose'] === 'true') {
+          e.stopPropagation();
+          onClose();
+          return;
+        }
+        onClick?.(e);
+      }}
+      onKeyDown={(e) => {
+        if (onClose !== undefined && (e.key === 'Delete' || e.key === 'Backspace')) {
+          e.preventDefault();
+          onClose();
+          return;
+        }
+        onKeyDown?.(e);
+      }}
       {...rest}
     >
       {dot ? <StatusDot tone={dot} size={7} /> : null}
@@ -77,24 +98,12 @@ export const Tab = forwardRef<HTMLButtonElement, TabProps>(function Tab(
       ) : null}
       {meta !== undefined && meta !== null ? <span className={s['meta']}>{meta}</span> : null}
       {overflow ? <Icon name="chevron" className={s['chevron']} /> : null}
+      {onClose ? (
+        <span className={s['close']} data-tab-close="true" title={closeLabel} aria-hidden="true">
+          ✕
+        </span>
+      ) : null}
     </button>
-  );
-  if (onClose === undefined) return tab;
-  return (
-    <span className={s['wrap']} data-inv={inv ? 'true' : undefined} role="presentation">
-      {tab}
-      <button
-        type="button"
-        className={s['close']}
-        aria-label={closeLabel}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-      >
-        ✕
-      </button>
-    </span>
   );
 });
 
@@ -110,10 +119,22 @@ export const TabRow = forwardRef<HTMLDivElement, TabRowProps>(function TabRow(
   { variant = 'session', inv, on, className, ...rest },
   ref,
 ) {
-  const cls = [s['row'], variant === 'approvals' ? s['rowAuto'] : s['rowFixed'], variant === 'file' && s['rowMono'], className]
+  const cls = [
+    s['row'],
+    variant === 'approvals' ? s['rowAuto'] : s['rowFixed'],
+    variant === 'file' && s['rowMono'],
+    className,
+  ]
     .filter(Boolean)
     .join(' ');
   return (
-    <div ref={ref} role="tablist" className={cls} data-inv={inv ? 'true' : undefined} data-on={on ? 'true' : undefined} {...rest} />
+    <div
+      ref={ref}
+      role="tablist"
+      className={cls}
+      data-inv={inv ? 'true' : undefined}
+      data-on={on ? 'true' : undefined}
+      {...rest}
+    />
   );
 });

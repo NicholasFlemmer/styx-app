@@ -288,6 +288,8 @@ export const commands = {
   },
   'session.stop': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   'session.archive': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
+  /** Close chat: ends the session if it is running and archives it, whatever state it was in. */
+  'session.close': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   'session.resume': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
 
   // --- asks & grants ---

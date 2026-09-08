@@ -107,3 +107,36 @@ describe('Rail "+" menu', () => {
     expect(menu.isConnected).toBe(false);
   });
 });
+
+describe('Rail project context menu', () => {
+  beforeEach(() => {
+    commandMock.mockClear();
+    Object.assign(window, {
+      styx: { platform: 'darwin', env: { now: fixtures.DEMO_NOW }, command: commandMock },
+    });
+    useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
+    useUiStore.setState({ overlays: [], screen: 'home', platform: 'darwin', projectId: null });
+  });
+  afterEach(() => {
+    cleanup();
+    Object.assign(window, { styx: undefined });
+  });
+
+  it('right-clicking a project tile removes it from the rail, leaving its files on disk', () => {
+    render(<Rail />);
+    const tile = document.querySelector('[data-project-id]') as HTMLElement;
+    const projectId = tile.getAttribute('data-project-id');
+    fireEvent.contextMenu(tile);
+    const menu = screen.getByRole('menu', { name: copy.rail.projectMenu });
+    const remove = within(menu).getByRole('menuitem', { name: copy.rail.remove });
+    fireEvent.click(remove);
+    expect(calls('project.remove')).toEqual([['project.remove', { projectId, deleteFiles: false }]]);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('the + tile still opens the add menu, not the project menu', () => {
+    render(<Rail />);
+    openMenu();
+    expect(screen.queryByRole('menuitem', { name: copy.rail.remove })).toBeNull();
+  });
+});

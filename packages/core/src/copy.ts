@@ -86,8 +86,7 @@ export const copy = {
     composerPlaceholder: 'Message {agent}…',
     composer: { file: '@file', command: '/command', model: 'Model ▾', send: '⏎ send' },
     /** Session menu actions (owner addition: §10 has no session-close copy). */
-    sessionMenu: 'Session',
-    closeSession: 'Close chat',
+    closeSessionNamed: (agent: string): string => `Close ${agent} chat`,
     poppedOut: 'Popped out',
     dock: 'Dock',
     /** Claude Code parity controls (owner addition, docs/handoff-discrepancies #54; not in §10). */

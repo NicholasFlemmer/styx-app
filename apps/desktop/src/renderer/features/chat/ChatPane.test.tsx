@@ -196,12 +196,25 @@ describe('ChatPane', () => {
   it('renders the project tabs with the first session current and the meta line', () => {
     render(<ChatPane projectId={acme} />);
     const tabs = screen.getAllByRole('tab');
-    // The trailing ▾ is always present (it hosts Close chat) but carries no count with nothing overflowing.
-    expect(tabs.map((t) => t.textContent)).toEqual(['Claude', 'Codex!', 'Gemini', '']);
+    // Each tab carries its ✕ marker (shown on hover / when current).
+    expect(tabs.map((t) => t.textContent)).toEqual(['Claude✕', 'Codex!✕', 'Gemini✕']);
     expect(tabs[0]?.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByText('claude · fix/checkout · 14m')).toBeTruthy();
     expect(screen.getByPlaceholderText('Message Claude…')).toBeTruthy();
     expect(screen.queryByRole('tab', { name: /^\+/ })).toBeNull();
+  });
+
+  it('✕ on a session tab closes that chat', () => {
+    render(<ChatPane projectId={acme} />);
+    const tab = document.querySelector(`[data-session-tab="${fixtures.ids.session.claude}"]`) as HTMLElement;
+    fireEvent.click(tab.querySelector('[data-tab-close]') as HTMLElement);
+    expect(commands.filter((c) => c.name === 'session.close')).toEqual([
+      { name: 'session.close', input: { sessionId: fixtures.ids.session.claude } },
+    ]);
+    // Delete on the focused tab closes it too (the ✕ is not focusable: a tablist owns only tabs).
+    commands.length = 0;
+    fireEvent.keyDown(tab, { key: 'Delete' });
+    expect(commands.filter((c) => c.name === 'session.close')).toHaveLength(1);
   });
 
   it('folds sessions beyond three into the ▾ tab; picking one switches the session', () => {
@@ -218,23 +231,21 @@ describe('ChatPane', () => {
       .replaceModel({ ...model, sessions: upsertRows(model.sessions, extra) }, 'connected');
     render(<ChatPane projectId={acme} />);
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
-      'Claude',
-      'Codex!',
-      'Gemini',
+      'Claude✕',
+      'Codex!✕',
+      'Gemini✕',
       '+2',
     ]);
     fireEvent.click(screen.getByRole('tab', { name: '+2' }));
-    // Two overflow sessions plus the Close chat action.
     const items = screen.getAllByRole('menuitem');
-    expect(items).toHaveLength(3);
-    expect(items[2]?.textContent).toBe('Close chat');
+    expect(items).toHaveLength(2);
     fireEvent.click(items[1] as HTMLElement);
     expect(useUiStore.getState().projectSession[acme]).toBe('extra-2');
     // The picked overflow session takes slot 3.
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
-      'Claude',
-      'Codex!',
-      'Gemini',
+      'Claude✕',
+      'Codex!✕',
+      'Gemini✕',
       '+2',
     ]);
   });

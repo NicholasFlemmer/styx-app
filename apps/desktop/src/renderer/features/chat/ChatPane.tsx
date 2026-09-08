@@ -216,11 +216,9 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
     items[next]?.focus();
   };
 
-  /** Archives the open session: it leaves the tab row and lands in the board's Done column. */
-  const closeSession = () => {
-    if (activeId === null) return;
-    void command('session.archive', { sessionId: activeId });
-    closeMenu(true);
+  /** ✕ on a tab: ends the session if it is still running and archives it, so the tab goes away either way. */
+  const closeSession = (id: SessionId) => {
+    void command('session.close', { sessionId: id });
   };
 
   const pick = (id: SessionId) => {
@@ -444,49 +442,41 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
                 badge={t.needs}
                 inv={t.active}
                 onClick={() => pick(t.sessionId)}
+                onClose={() => closeSession(t.sessionId)}
+                closeLabel={copy.chat.closeSessionNamed(t.label)}
                 data-session-tab={t.sessionId}
               />
             ))}
-            {/* The ▾ renders even with nothing overflowing: it is also where a session is closed. */}
-            <div ref={menu} className={s['overflow']}>
-              <Tab
-                ref={overflowTab}
-                overflow
-                label={tabs.overflow.length > 0 ? `+${tabs.overflow.length}` : ''}
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                aria-label={tabs.overflow.length > 0 ? undefined : copy.chat.sessionMenu}
-                onClick={() => setMenuOpen((v) => !v)}
-                data-session-overflow="true"
-              />
-              {menuOpen && (
-                <div role="menu" aria-label="Sessions" className={s['menu']} onKeyDown={onMenuKeyDown}>
-                  {tabs.overflow.map((t) => (
-                    <button
-                      key={t.sessionId}
-                      type="button"
-                      role="menuitem"
-                      className={s['menuItem']}
-                      onClick={() => pick(t.sessionId)}
-                    >
-                      <StatusDot tone={t.dot} size={7} />
-                      {t.label}
-                      {t.needs && <span className={s['badge']}>!</span>}
-                    </button>
-                  ))}
-                  {tabs.overflow.length > 0 && <div className={s['menuSep']} role="separator" />}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={s['menuItem']}
-                    disabled={activeId === null}
-                    onClick={closeSession}
-                  >
-                    {copy.chat.closeSession}
-                  </button>
-                </div>
-              )}
-            </div>
+            {tabs.overflow.length > 0 && (
+              <div ref={menu} className={s['overflow']}>
+                <Tab
+                  ref={overflowTab}
+                  overflow
+                  label={`+${tabs.overflow.length}`}
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((v) => !v)}
+                  data-session-overflow="true"
+                />
+                {menuOpen && (
+                  <div role="menu" aria-label="Sessions" className={s['menu']} onKeyDown={onMenuKeyDown}>
+                    {tabs.overflow.map((t) => (
+                      <button
+                        key={t.sessionId}
+                        type="button"
+                        role="menuitem"
+                        className={s['menuItem']}
+                        onClick={() => pick(t.sessionId)}
+                      >
+                        <StatusDot tone={t.dot} size={7} />
+                        {t.label}
+                        {t.needs && <span className={s['badge']}>!</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </TabRow>
           <button
             type="button"

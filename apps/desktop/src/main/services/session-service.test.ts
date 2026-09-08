@@ -967,6 +967,29 @@ describe('SessionService Claude Code parity (stream)', () => {
     expect(stream.permissions).toEqual([{ id: session.id, requestId: 'q-3', allow: false }]);
   });
 
+  it('close: a running session ends, archives and cancels its open ask (archive alone refuses a live session)', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'c-1',
+      toolName: 'AskUserQuestion',
+      input: { questions: [{ question: 'A?', options: [{ label: 'x' }] }] },
+    });
+    expect(a.sessions.get(session.id)?.state).toBe('needs-you');
+    // Archiving a live session is the 7-day retention step and refuses; closing it is what a ✕ does.
+    await expect(a.bus.dispatch(sender, 'session.archive', { sessionId: session.id })).resolves.toMatchObject({
+      ok: false,
+    });
+    await a.bus.dispatch(sender, 'session.close', { sessionId: session.id });
+    expect(a.sessions.get(session.id)).toMatchObject({ state: 'done' });
+    expect(a.sessions.get(session.id)?.archivedAt).not.toBeNull();
+    expect(a.repos.pendingAsks.openBySession(session.id)).toEqual([]);
+    expect(stream.permissions).toEqual([
+      { id: session.id, requestId: 'c-1', allow: false, message: 'Session stopped' },
+    ]);
+  });
+
   it('stopping a session with an open AskUserQuestion denies the request exactly once', async () => {
     const { app: a } = app();
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
