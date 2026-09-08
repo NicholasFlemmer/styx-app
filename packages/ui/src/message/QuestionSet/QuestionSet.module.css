@@ -1,0 +1,144 @@
+@layer components {
+  /* The set is one bordered block in the transcript; accent border marks it as the thing blocking the session. */
+  .card {
+    max-width: 92%;
+    border: 1px solid var(--ac);
+    background: var(--s1);
+    font-size: 13px;
+    line-height: 1.5;
+    border-radius: 0;
+  }
+  .compact .q {
+    padding: 8px 10px;
+  }
+  .head {
+    padding: 6px 10px;
+    background: var(--ac);
+    color: var(--acx);
+    font: var(--label);
+    letter-spacing: var(--label-tracking);
+    text-transform: uppercase;
+  }
+  .q {
+    padding: 10px;
+    border-top: 1px solid var(--ln);
+  }
+  .q:first-of-type {
+    border-top: 0;
+  }
+  .qHeader {
+    margin-bottom: 4px;
+    color: var(--mu);
+    font: var(--label);
+    letter-spacing: var(--label-tracking);
+    text-transform: uppercase;
+  }
+  .prompt {
+    color: var(--tx);
+  }
+  .options {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-top: 8px;
+  }
+  /* One option row: square marker + label, description under it. Hover is instant (no transition). */
+  .option {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+    color: var(--tx);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .option:hover {
+    background: var(--s2);
+  }
+  .option:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: -2px;
+  }
+  .option[data-on='true'] {
+    border-color: var(--ac);
+    background: var(--add);
+  }
+  /* Square marker: a dot for single-choice, a checkbox for multi (spec §8 square dots and checkboxes). */
+  .box {
+    flex: 0 0 auto;
+    width: 10px;
+    height: 10px;
+    margin-top: 4px;
+    border: 1px solid var(--ln);
+    background: transparent;
+  }
+  .option[data-on='true'] .box {
+    border-color: var(--ac);
+    background: var(--ac);
+  }
+  .optionText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .optionLabel {
+    color: var(--tx);
+  }
+  .optionDesc {
+    color: var(--mu);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  /* Free text is always available, so the reader is never forced into the agent's list. */
+  .free {
+    display: block;
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px 8px;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    line-height: 1.5;
+    border-radius: 0;
+    resize: vertical;
+  }
+  .free::placeholder {
+    color: var(--mu);
+  }
+  .free:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: -2px;
+  }
+  /* The answer, once the set is resolved: mono so it reads as recorded input, not prose. */
+  .given {
+    margin-top: 6px;
+    padding: 6px 8px;
+    border-left: 1px solid var(--ac);
+    background: var(--bg);
+    color: var(--mu);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    white-space: pre-wrap;
+  }
+  .foot {
+    display: flex;
+    justify-content: flex-end;
+    padding: 8px 10px;
+    border-top: 1px solid var(--ln);
+  }
+  /* A resolved set keeps its shape but drops the accent: it is history, not a demand. */
+  .card[data-settled='true'] {
+    border-color: var(--ln);
+  }
+  .card[data-settled='true'] .head {
+    background: var(--s2);
+    color: var(--mu);
+  }
+}

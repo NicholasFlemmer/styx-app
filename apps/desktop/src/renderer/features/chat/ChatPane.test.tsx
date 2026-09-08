@@ -196,7 +196,8 @@ describe('ChatPane', () => {
   it('renders the project tabs with the first session current and the meta line', () => {
     render(<ChatPane projectId={acme} />);
     const tabs = screen.getAllByRole('tab');
-    expect(tabs.map((t) => t.textContent)).toEqual(['Claude', 'Codex!', 'Gemini']);
+    // The trailing ▾ is always present (it hosts Close chat) but carries no count with nothing overflowing.
+    expect(tabs.map((t) => t.textContent)).toEqual(['Claude', 'Codex!', 'Gemini', '']);
     expect(tabs[0]?.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByText('claude · fix/checkout · 14m')).toBeTruthy();
     expect(screen.getByPlaceholderText('Message Claude…')).toBeTruthy();
@@ -223,8 +224,10 @@ describe('ChatPane', () => {
       '+2',
     ]);
     fireEvent.click(screen.getByRole('tab', { name: '+2' }));
+    // Two overflow sessions plus the Close chat action.
     const items = screen.getAllByRole('menuitem');
-    expect(items).toHaveLength(2);
+    expect(items).toHaveLength(3);
+    expect(items[2]?.textContent).toBe('Close chat');
     fireEvent.click(items[1] as HTMLElement);
     expect(useUiStore.getState().projectSession[acme]).toBe('extra-2');
     // The picked overflow session takes slot 3.

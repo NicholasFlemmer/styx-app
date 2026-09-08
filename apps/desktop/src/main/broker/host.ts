@@ -55,6 +55,15 @@ const toBrokerResolution = (ask: PendingAsk, r: AskResolution): Result<'ask_user
     };
   if (r.kind === 'decision') return { kind: 'decision', answer: r.chosen };
   if (r.kind === 'question') return { kind: 'question', answer: r.answer };
+  // A question set answers the broker's `ask_user` with one line per question (free text wins over labels).
+  if (r.kind === 'questions')
+    return {
+      kind: 'question',
+      answer: r.answers
+        .map((a) => a.freeText?.trim() || a.chosen.join(', '))
+        .filter((t) => t !== '')
+        .join('\n'),
+    };
   return {
     kind: ask.kind === 'plan' ? 'plan' : 'question',
     answer: r.outcome === 'granted' ? 'approve' : 'reject',

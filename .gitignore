@@ -2,6 +2,9 @@ node_modules/
 dist/
 out/
 build/
+# electron-builder's `build/` is packaging *input*, not output: entitlements, the icon and the notarize hook
+# must be committed or a fresh clone signs without them (an unsigned-JIT build breaks every credential shim).
+!apps/desktop/build/
 apps/desktop/release/
 coverage/
 .dev/

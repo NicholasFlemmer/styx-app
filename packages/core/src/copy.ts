@@ -85,6 +85,9 @@ export const copy = {
     waitingOnYou: 'waiting on you',
     composerPlaceholder: 'Message {agent}…',
     composer: { file: '@file', command: '/command', model: 'Model ▾', send: '⏎ send' },
+    /** Session menu actions (owner addition: §10 has no session-close copy). */
+    sessionMenu: 'Session',
+    closeSession: 'Close chat',
     poppedOut: 'Popped out',
     dock: 'Dock',
     /** Claude Code parity controls (owner addition, docs/handoff-discrepancies #54; not in §10). */
@@ -172,6 +175,13 @@ export const copy = {
       rejectedNote: 'Plan rejected in Styx',
     },
     question: { other: 'Other…' },
+    /** An AskUserQuestion set, answered as one card (owner addition: §10 has no question copy). */
+    questions: {
+      header: (n: number): string => (n === 1 ? '1 question' : `${n} questions`),
+      submit: 'Send answers',
+      freeText: 'Or answer in your own words…',
+      files: (n: number): string => (n === 1 ? '1 file' : `${n} files`),
+    },
     tool: { running: '…', ok: '✓', error: '×' },
   },
 
@@ -565,6 +575,8 @@ export const copy = {
 
   workspace: {
     files: 'Files',
+    /** ✕ on an editor file tab (owner addition: §10 has no close affordance). */
+    closeFile: (name: string): string => `Close ${name}`,
     openIn: 'Open in {ide}',
     terminal: 'TERMINAL · {branch}',
     editorStatus: 'Monaco · {eol} · {lang}',
@@ -690,6 +702,9 @@ export const copy = {
   /** Rail "+" menu (owner addition, not in §10): the three ways a project enters Styx. */
   rail: {
     add: 'Add project',
+    /** Right-click menu on a project tile (owner addition: §10 has no rail context menu). */
+    projectMenu: 'Project',
+    remove: 'Remove from sidebar',
     menu: {
       newProject: 'New project…',
       addExisting: 'Add existing…',

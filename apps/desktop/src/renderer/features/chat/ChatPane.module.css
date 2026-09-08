@@ -55,6 +55,17 @@
   .menuItem:hover {
     background: var(--s2);
   }
+  .menuItem:disabled {
+    color: var(--mu);
+    cursor: default;
+  }
+  .menuItem:disabled:hover {
+    background: transparent;
+  }
+  .menuSep {
+    height: 1px;
+    background: var(--ln);
+  }
   .badge {
     background: var(--ac);
     color: var(--acx);

@@ -30,7 +30,10 @@ export function Rail() {
   const dragId = useRef<ProjectId | null>(null);
   const addRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [menu, setMenu] = useState<{ top: number; left: number } | null>(null);
+  // One fixed menu serves both the + tile (projectId null) and a project tile's right-click menu.
+  const [menu, setMenu] = useState<{ top: number; left: number; projectId: ProjectId | null } | null>(
+    null,
+  );
 
   // The rail clips overflow, so the menu is fixed next to the + tile; outside clicks close it without focus return.
   useEffect(() => {
@@ -51,7 +54,7 @@ export function Rail() {
       return;
     }
     const r = addRef.current?.getBoundingClientRect();
-    setMenu({ top: r?.top ?? 0, left: (r?.right ?? 0) + 6 });
+    setMenu({ top: r?.top ?? 0, left: (r?.right ?? 0) + 6, projectId: null });
   };
   const closeMenu = (refocus: boolean) => {
     setMenu(null);
@@ -85,6 +88,12 @@ export function Rail() {
             ? (i + 1) % items.length
             : (i - 1 + items.length) % items.length;
     items[next]?.focus();
+  };
+
+  /** Soft-removes the project (files are left on disk) and stops anything it was running. */
+  const removeProject = (id: ProjectId) => {
+    setMenu(null);
+    void command('project.remove', { projectId: id, deleteFiles: false });
   };
 
   const pick = (id: ProjectId) => {
@@ -141,6 +150,10 @@ export function Rail() {
             dragId.current = null;
           }}
           onKeyDown={(e) => onKeyDown(e, p.id)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setMenu({ top: e.clientY, left: e.clientX, projectId: p.id });
+          }}
           data-project-id={p.id}
         />
       ))}
@@ -163,23 +176,35 @@ export function Rail() {
         <div
           ref={menuRef}
           role="menu"
-          aria-label={copy.rail.add}
+          aria-label={menu.projectId !== null ? copy.rail.projectMenu : copy.rail.add}
           className={s['addMenu']}
           style={{ top: menu.top, left: menu.left }}
           onKeyDown={onMenuKeyDown}
           data-rail-add-menu="true"
         >
-          {ADD_MENU.map((item) => (
+          {menu.projectId !== null ? (
             <button
-              key={item}
               type="button"
               role="menuitem"
               className={s['addMenuItem']}
-              onClick={() => choose(item)}
+              onClick={() => removeProject(menu.projectId as ProjectId)}
+              data-rail-remove="true"
             >
-              {copy.rail.menu[item]}
+              {copy.rail.remove}
             </button>
-          ))}
+          ) : (
+            ADD_MENU.map((item) => (
+              <button
+                key={item}
+                type="button"
+                role="menuitem"
+                className={s['addMenuItem']}
+                onClick={() => choose(item)}
+              >
+                {copy.rail.menu[item]}
+              </button>
+            ))
+          )}
         </div>
       ) : null}
     </nav>

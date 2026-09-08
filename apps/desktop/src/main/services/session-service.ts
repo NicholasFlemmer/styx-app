@@ -14,6 +14,7 @@ import {
   sessionTransition,
   type Agent,
   type AskId,
+  type AskQuestion,
   type CliInstall,
   type MessagePayload,
   type PendingAsk,
@@ -40,12 +41,7 @@ import type { GitService } from './git';
 import { worktreeLocation } from './git';
 import { isPolicyFile } from './hunk-service';
 import { logger, redact } from './logger';
-import {
-  attachmentName,
-  inlineFiles,
-  prepareAttachments,
-  type AttachmentInput,
-} from './message-attachments';
+import { attachmentName, inlineFiles, prepareAttachments, type AttachmentInput } from './message-attachments';
 import type { NotificationService } from './notification-service';
 import type { PtyLog } from './pty-log';
 import type { PtyService } from './pty-service';
@@ -119,6 +115,17 @@ const EDIT_TOOL = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
 const PERMISSION_OPTIONS = ['Allow', 'Deny'] as const;
 
 /**
+ * The transcript body / session note for a question set: the first question stands for the set, with a count
+ * when there are more, so the board card and notification say something specific rather than "questions".
+ */
+const questionSetBody = (questions: readonly AskQuestion[]): string => {
+  const first = questions[0];
+  if (first === undefined) return '';
+  const head = first.header ? `${first.header} — ${first.prompt}` : first.prompt;
+  return questions.length > 1 ? `${head} (+${questions.length - 1} more)` : head;
+};
+
+/**
  * `can_use_tool` for Claude Code's AskUserQuestion (claude 2.1.263): one or more questions with labelled options.
  * The answer is an *allow* whose `updatedInput` carries `{questions, answers: {[question]: label}}`.
  */
@@ -128,7 +135,9 @@ const askUserQuestionInput = z.object({
       z.object({
         question: z.string().min(1),
         header: z.string().optional(),
-        options: z.array(z.object({ label: z.string().min(1) })).default([]),
+        options: z
+          .array(z.object({ label: z.string().min(1), description: z.string().optional() }))
+          .default([]),
         multiSelect: z.boolean().optional(),
       }),
     )
@@ -142,7 +151,7 @@ const exitPlanModeInput = z.object({ plan: z.string().default('') });
 type PermissionAsk =
   | { kind: 'tool'; sessionId: string; requestId: string }
   | { kind: 'plan'; sessionId: string; requestId: string }
-  | { kind: 'question'; sessionId: string; requestId: string; question: string };
+  | { kind: 'question'; sessionId: string; requestId: string };
 
 /** One AskUserQuestion request: answers collected across its questions until every ask has resolved. */
 interface QuestionRequest {
@@ -1146,7 +1155,11 @@ export class SessionService {
     this.permissionAsks.set(ask.id, { kind: 'tool', sessionId: s.id, requestId });
   }
 
-  /** One ask per AskUserQuestion question: a decision over its labels (+ "Other…"), or free text when it has none. */
+  /**
+   * One ask for the whole AskUserQuestion set. The agent sends up to 4 related questions in a single call and
+   * expects them answered together, so they render as one card rather than a queue of separate interruptions
+   * (which surfaced one at a time via `headAsk` and read as unrelated prompts arriving out of order).
+   */
   private openQuestionAsks(
     s: Session,
     requestId: string,
@@ -1156,22 +1169,19 @@ export class SessionService {
     this.questionRequests.set(requestId, {
       sessionId: s.id,
       questions: rawQuestions,
-      remaining: questions.length,
+      remaining: 1,
       answers: {},
     });
-    for (const q of questions) {
-      const prompt = q.header ? `${q.header} — ${q.question}` : q.question;
-      const labels = q.options.map((o) => o.label);
-      const ask =
-        labels.length > 0
-          ? this.openAsk(
-              s.id,
-              { kind: 'decision', prompt, options: [...labels, copy.session.question.other] },
-              null,
-            )
-          : this.openAsk(s.id, { kind: 'question', prompt }, null);
-      this.permissionAsks.set(ask.id, { kind: 'question', sessionId: s.id, requestId, question: q.question });
-    }
+    const set: AskQuestion[] = questions.map((q) => ({
+      // The question text keys the answer map the CLI expects back, so it is the key we carry through.
+      key: q.question,
+      header: q.header ?? null,
+      prompt: q.question,
+      multiSelect: q.multiSelect === true,
+      options: q.options.map((o) => ({ label: o.label, description: o.description ?? null })),
+    }));
+    const ask = this.openAsk(s.id, { kind: 'questions', questions: set }, null);
+    this.permissionAsks.set(ask.id, { kind: 'question', sessionId: s.id, requestId });
   }
 
   /** Answers the stream request an ask was holding, once the ask resolved. */
@@ -1193,25 +1203,25 @@ export class SessionService {
           return;
         }
         const note = resolution?.kind === 'plan' ? (resolution.note?.trim() ?? '') : '';
-        stream.respondPermission(perm.sessionId, perm.requestId, false, note || copy.session.plan.rejectedNote);
+        stream.respondPermission(
+          perm.sessionId,
+          perm.requestId,
+          false,
+          note || copy.session.plan.rejectedNote,
+        );
         return;
       }
       case 'question': {
         const req = this.questionRequests.get(perm.requestId);
         if (!req) return; // already denied (session stopped) — nothing left to answer
-        let answer: string;
-        if (resolution?.kind === 'decision') {
-          if (resolution.chosen === copy.session.question.other) {
-            // "Other…": the same question again as free text; its answer is the value.
-            const ask = this.openAsk(perm.sessionId, { kind: 'question', prompt: perm.question }, null);
-            this.permissionAsks.set(ask.id, perm);
-            return;
+        // The card answers every question at once; free text wins over ticked labels when both are present,
+        // and a multi-select answer joins its labels so the CLI still receives one string per question.
+        if (resolution?.kind === 'questions')
+          for (const a of resolution.answers) {
+            const free = a.freeText?.trim() ?? '';
+            req.answers[a.key] = free !== '' ? free : a.chosen.join(', ');
           }
-          answer = resolution.chosen;
-        } else answer = resolution?.kind === 'question' ? resolution.answer.trim() : '';
-        req.answers[perm.question] = answer;
-        req.remaining -= 1;
-        if (req.remaining > 0) return;
+        else if (resolution?.kind === 'question') req.answers[''] = resolution.answer.trim();
         this.questionRequests.delete(perm.requestId);
         stream.respondPermission(perm.sessionId, perm.requestId, true, undefined, {
           questions: req.questions,
@@ -1472,6 +1482,8 @@ export class SessionService {
       }
     } else if (ask.payload.kind === 'plan') {
       title = `${agentLabel} · ${ask.payload.summary}`;
+    } else if (ask.payload.kind === 'questions') {
+      title = `${agentLabel} · ${questionSetBody(ask.payload.questions)}`;
     } else {
       title = `${agentLabel} · ${ask.payload.prompt}`;
     }
@@ -1628,7 +1640,14 @@ export class SessionService {
       this.answerPermission(perm, resolution);
     } else if (this.hookAsks.get(ask.sessionId) === ask.id) {
       this.hookAsks.delete(ask.sessionId);
-      const answer = resolution?.kind === 'question' ? resolution.answer.trim() : '';
+      // A hook question renders as a one-question set, so its answer arrives as `questions` (free text or a
+      // ticked label); the legacy `question` shape still resolves for broker `ask_user`.
+      const answer =
+        resolution?.kind === 'questions'
+          ? (resolution.answers[0]?.freeText?.trim() || (resolution.answers[0]?.chosen ?? []).join(', '))
+          : resolution?.kind === 'question'
+            ? resolution.answer.trim()
+            : '';
       if (answer) {
         if (this.deps.stream.has(ask.sessionId)) this.deps.stream.send(ask.sessionId, answer);
         else if (this.deps.pty.has(ask.sessionId)) this.deps.pty.write(ask.sessionId, `${answer}\r`);
@@ -1664,7 +1683,12 @@ export class SessionService {
     publisher.upsert('pendingAsks', [ask.id]);
     if (!opts.silent) {
       if (payload.kind === 'plan')
-        this.deps.transcript.append(s.id, payload.summary, { kind: 'agent' }, ask.id);
+        this.deps.transcript.append(
+          s.id,
+          payload.summary,
+          { kind: 'plan', files: payload.files, outcome: null },
+          ask.id,
+        );
       else if (payload.kind === 'decision')
         this.deps.transcript.append(
           s.id,
@@ -1672,9 +1696,37 @@ export class SessionService {
           { kind: 'decision', options: payload.options, chosen: null },
           ask.id,
         );
-      else this.deps.transcript.append(s.id, payload.prompt, { kind: 'agent' }, ask.id);
+      else if (payload.kind === 'questions')
+        this.deps.transcript.append(
+          s.id,
+          questionSetBody(payload.questions),
+          { kind: 'questions', questions: payload.questions, answers: null },
+          ask.id,
+        );
+      // A lone free-text question (broker `ask_user`, agent-needs-input hook) is a one-question set, so it
+      // renders with an answer box like any other question instead of as unanswerable agent prose.
+      else
+        this.deps.transcript.append(
+          s.id,
+          payload.prompt,
+          {
+            kind: 'questions',
+            questions: [
+              { key: payload.prompt, header: null, prompt: payload.prompt, multiSelect: false, options: [] },
+            ],
+            answers: null,
+          },
+          ask.id,
+        );
     }
-    this.setNote(s.id, payload.kind === 'plan' ? payload.summary : payload.prompt);
+    this.setNote(
+      s.id,
+      payload.kind === 'plan'
+        ? payload.summary
+        : payload.kind === 'questions'
+          ? questionSetBody(payload.questions)
+          : payload.prompt,
+    );
     this.applyEvent(s.id, { type: 'ask', askId: ask.id });
     return ask;
   }

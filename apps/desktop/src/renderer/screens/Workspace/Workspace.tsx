@@ -125,6 +125,18 @@ export function Workspace() {
     setEditorFile(path);
   };
 
+  /** Closing the current file falls back to its neighbour, so the editor never lands on nothing while tabs remain. */
+  const closeFile = (path: string) => {
+    setOpen((prev) => {
+      const next = prev.filter((p) => p !== path);
+      if (editorFile === path) {
+        const at = prev.indexOf(path);
+        setEditorFile(next[Math.min(at, next.length - 1)] ?? null);
+      }
+      return next;
+    });
+  };
+
   const tabs = useMemo(
     () => fileTabs(open, tree.nodes, changes, agentOf),
     [open, tree.nodes, changes, agentOf],
@@ -178,7 +190,7 @@ export function Workspace() {
         }
       />
       <div ref={column} className={s['column']}>
-        <FileTabs tabs={tabs} activePath={activePath} onSelect={openFile} />
+        <FileTabs tabs={tabs} activePath={activePath} onSelect={openFile} onClose={closeFile} />
         <MonacoEditor
           worktreeId={worktreeId}
           path={activePath}

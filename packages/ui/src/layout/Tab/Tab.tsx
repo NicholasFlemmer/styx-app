@@ -22,15 +22,42 @@ export interface TabProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
   /** Current tab. */
   inv?: boolean;
   on?: boolean;
+  /** Renders a trailing ✕ that closes the tab. The ✕ is a sibling button, never nested (axe nested-interactive). */
+  onClose?: () => void;
+  /** aria-label for the ✕ (app: `copy.workspace.closeFile`). */
+  closeLabel?: string;
 }
 
 export const Tab = forwardRef<HTMLButtonElement, TabProps>(function Tab(
-  { label, variant = 'session', dot, badge, meta, mono, overflow, inv, on, className, type = 'button', ...rest },
+  {
+    label,
+    variant = 'session',
+    dot,
+    badge,
+    meta,
+    mono,
+    overflow,
+    inv,
+    on,
+    onClose,
+    closeLabel,
+    className,
+    type = 'button',
+    ...rest
+  },
   ref,
 ) {
   const isFile = variant === 'file';
-  const cls = [s['tab'], s[variant], (mono ?? isFile) && s['mono'], className].filter(Boolean).join(' ');
-  return (
+  const cls = [
+    s['tab'],
+    s[variant],
+    (mono ?? isFile) && s['mono'],
+    onClose ? s['closable'] : undefined,
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const tab = (
     <button
       ref={ref}
       type={type}
@@ -51,6 +78,23 @@ export const Tab = forwardRef<HTMLButtonElement, TabProps>(function Tab(
       {meta !== undefined && meta !== null ? <span className={s['meta']}>{meta}</span> : null}
       {overflow ? <Icon name="chevron" className={s['chevron']} /> : null}
     </button>
+  );
+  if (onClose === undefined) return tab;
+  return (
+    <span className={s['wrap']} data-inv={inv ? 'true' : undefined} role="presentation">
+      {tab}
+      <button
+        type="button"
+        className={s['close']}
+        aria-label={closeLabel}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+      >
+        ✕
+      </button>
+    </span>
   );
 });
 

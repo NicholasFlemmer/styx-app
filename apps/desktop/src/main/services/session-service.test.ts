@@ -831,12 +831,12 @@ describe('SessionService Claude Code parity (stream)', () => {
     expect(a.sessions.get(session.id)?.state).toBe('working');
   });
 
-  it('AskUserQuestion: one decision ask per question; the answers go back together as updatedInput', async () => {
+  it('AskUserQuestion: one ask holds the whole set; the answers go back together as updatedInput', async () => {
     const { app: a } = app();
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
     const questions = [
       { question: 'Which database?', header: 'Storage', options: [{ label: 'Postgres', description: 'p' }, { label: 'SQLite' }], multiSelect: false },
-      { question: 'Add tests?', options: [{ label: 'Yes' }, { label: 'No' }] },
+      { question: 'Add tests?', options: [{ label: 'Yes' }, { label: 'No' }], multiSelect: true },
     ];
     stream.effect(session.id, {
       type: 'permission',
@@ -845,70 +845,112 @@ describe('SessionService Claude Code parity (stream)', () => {
       input: { questions },
     });
     expect(a.sessions.get(session.id)?.state).toBe('needs-you');
+    // One ask for the set, not one per question: the whole thing renders as a single card.
     const asks = a.repos.pendingAsks.openBySession(session.id);
-    expect(asks.map((x) => x.payload)).toEqual([
-      { kind: 'decision', prompt: 'Storage — Which database?', options: ['Postgres', 'SQLite', 'Other…'] },
-      { kind: 'decision', prompt: 'Add tests?', options: ['Yes', 'No', 'Other…'] },
-    ]);
+    expect(asks).toHaveLength(1);
+    expect(asks[0]!.payload).toEqual({
+      kind: 'questions',
+      questions: [
+        {
+          key: 'Which database?',
+          header: 'Storage',
+          prompt: 'Which database?',
+          multiSelect: false,
+          options: [
+            { label: 'Postgres', description: 'p' },
+            { label: 'SQLite', description: null },
+          ],
+        },
+        {
+          key: 'Add tests?',
+          header: null,
+          prompt: 'Add tests?',
+          multiSelect: true,
+          options: [
+            { label: 'Yes', description: null },
+            { label: 'No', description: null },
+          ],
+        },
+      ],
+    });
+    // Multi-select joins its labels; free text wins over ticked labels on the question that has both.
     await a.bus.dispatch(sender, 'ask.respond', {
       askId: asks[0]!.id,
-      resolution: { kind: 'decision', chosen: 'Postgres' },
-    });
-    expect(stream.permissions).toEqual([]); // waits for the second question
-    expect(a.sessions.get(session.id)?.state).toBe('needs-you');
-    await a.bus.dispatch(sender, 'ask.respond', {
-      askId: asks[1]!.id,
-      resolution: { kind: 'decision', chosen: 'No' },
+      resolution: {
+        kind: 'questions',
+        answers: [
+          { key: 'Which database?', chosen: ['Postgres'], freeText: null },
+          { key: 'Add tests?', chosen: ['Yes', 'No'], freeText: null },
+        ],
+      },
     });
     expect(stream.permissions).toEqual([
       {
         id: session.id,
         requestId: 'q-1',
         allow: true,
-        updatedInput: { questions, answers: { 'Which database?': 'Postgres', 'Add tests?': 'No' } },
+        updatedInput: { questions, answers: { 'Which database?': 'Postgres', 'Add tests?': 'Yes, No' } },
       },
     ]);
     expect(a.sessions.get(session.id)?.state).toBe('working');
-    // the decision lines in the chat show what was chosen
-    expect(
-      a.repos.transcripts
-        .last(session.id)
-        .filter((m) => m.payload.kind === 'decision')
-        .map((m) => (m.payload as { chosen: string | null }).chosen),
-    ).toEqual(['Postgres', 'No']);
+    // The set renders as one questions row carrying every question.
+    const row = a.repos.transcripts.last(session.id).find((m) => m.payload.kind === 'questions');
+    expect((row?.payload as { questions: unknown[] }).questions).toHaveLength(2);
   });
 
-  it('AskUserQuestion "Other…" → a free-text question ask whose answer is the value; no options → free text directly', async () => {
+  it('AskUserQuestion: free text answers a question instead of its labels', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'q-2',
+      toolName: 'AskUserQuestion',
+      input: { questions: [{ question: 'Which database?', options: [{ label: 'Postgres' }] }] },
+    });
+    const ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
+    await a.bus.dispatch(sender, 'ask.respond', {
+      askId: ask.id,
+      resolution: {
+        kind: 'questions',
+        answers: [{ key: 'Which database?', chosen: ['Postgres'], freeText: 'DuckDB, actually' }],
+      },
+    });
+    expect(stream.permissions[0]?.updatedInput).toMatchObject({
+      answers: { 'Which database?': 'DuckDB, actually' },
+    });
+  });
+
+  it('AskUserQuestion: a question with no options carries an empty option list (free text only)', async () => {
     const { app: a } = app();
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
     const questions = [
       { question: 'Framework?', options: [{ label: 'React' }] },
       { question: 'Anything else?', options: [] },
     ];
-    stream.effect(session.id, { type: 'permission', requestId: 'q-2', toolName: 'AskUserQuestion', input: { questions } });
-    const [first, second] = a.repos.pendingAsks.openBySession(session.id);
-    expect(second?.payload).toEqual({ kind: 'question', prompt: 'Anything else?' });
+    stream.effect(session.id, { type: 'permission', requestId: 'q-3', toolName: 'AskUserQuestion', input: { questions } });
+    const asks = a.repos.pendingAsks.openBySession(session.id);
+    expect(asks).toHaveLength(1);
+    const set = (asks[0]!.payload as { questions: { prompt: string; options: unknown[] }[] }).questions;
+    expect(set.map((q) => [q.prompt, q.options.length])).toEqual([
+      ['Framework?', 1],
+      ['Anything else?', 0],
+    ]);
     await a.bus.dispatch(sender, 'ask.respond', {
-      askId: first!.id,
-      resolution: { kind: 'decision', chosen: 'Other…' },
-    });
-    const followUp = a.repos.pendingAsks.openBySession(session.id).find((x) => x.kind === 'question' && x.payload.kind === 'question' && x.payload.prompt === 'Framework?');
-    expect(followUp).toBeDefined();
-    expect(stream.permissions).toEqual([]);
-    await a.bus.dispatch(sender, 'ask.respond', {
-      askId: followUp!.id,
-      resolution: { kind: 'question', answer: '  Svelte ' },
-    });
-    await a.bus.dispatch(sender, 'ask.respond', {
-      askId: second!.id,
-      resolution: { kind: 'question', answer: 'no' },
+      askId: asks[0]!.id,
+      resolution: {
+        kind: 'questions',
+        answers: [
+          { key: 'Framework?', chosen: ['React'], freeText: null },
+          { key: 'Anything else?', chosen: [], freeText: '  no  ' },
+        ],
+      },
     });
     expect(stream.permissions).toEqual([
       {
         id: session.id,
-        requestId: 'q-2',
+        requestId: 'q-3',
         allow: true,
-        updatedInput: { questions, answers: { 'Framework?': 'Svelte', 'Anything else?': 'no' } },
+        updatedInput: { questions, answers: { 'Framework?': 'React', 'Anything else?': 'no' } },
       },
     ]);
     expect(a.repos.pendingAsks.openBySession(session.id)).toEqual([]);
@@ -934,7 +976,8 @@ describe('SessionService Claude Code parity (stream)', () => {
       toolName: 'AskUserQuestion',
       input: { questions: [{ question: 'A?', options: [{ label: 'x' }] }, { question: 'B?', options: [{ label: 'y' }] }] },
     });
-    expect(a.repos.pendingAsks.openBySession(session.id)).toHaveLength(2);
+    // One ask holds both questions, so there is a single thing to cancel.
+    expect(a.repos.pendingAsks.openBySession(session.id)).toHaveLength(1);
     a.sessions.stop(session.id);
     expect(stream.permissions).toEqual([{ id: session.id, requestId: 'q-4', allow: false, message: 'Session stopped' }]);
     expect(a.repos.pendingAsks.openBySession(session.id)).toEqual([]);
@@ -952,7 +995,8 @@ describe('SessionService Claude Code parity (stream)', () => {
     expect(a.sessions.get(session.id)).toMatchObject({ state: 'needs-you', note: 'Plan ready for review' });
     let ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
     expect(ask.payload).toEqual({ kind: 'plan', summary: '# Plan\n1. add validate.ts\n2. wire it up', files: [] });
-    expect(a.repos.transcripts.last(session.id).at(-1)).toMatchObject({ askId: ask.id, payload: { kind: 'agent' } });
+    // The plan gets its own transcript kind, so it renders as an approvable card instead of agent prose.
+    expect(a.repos.transcripts.last(session.id).at(-1)).toMatchObject({ askId: ask.id, payload: { kind: 'plan' } });
 
     await a.bus.dispatch(sender, 'ask.respond', {
       askId: ask.id,

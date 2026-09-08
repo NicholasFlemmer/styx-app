@@ -23,6 +23,7 @@ import {
   TabRow,
   Transcript,
   WorkingLine,
+  QuestionSet,
 } from '@styx/ui';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { env } from '../../state/bridge';
@@ -215,6 +216,13 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
     items[next]?.focus();
   };
 
+  /** Archives the open session: it leaves the tab row and lands in the board's Done column. */
+  const closeSession = () => {
+    if (activeId === null) return;
+    void command('session.archive', { sessionId: activeId });
+    closeMenu(true);
+  };
+
   const pick = (id: SessionId) => {
     setSession(projectId, id);
     closeMenu(true);
@@ -233,6 +241,22 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
     } else if (activeId !== null) {
       void command('session.sendMessage', { sessionId: activeId, body: label });
     }
+  };
+
+  const answerQuestions = (
+    item: Extract<TranscriptItem, { kind: 'questions' }>,
+    answers: { key: string; chosen: string[]; freeText: string | null }[],
+  ) => {
+    if (item.askId === null) return;
+    void command('ask.respond', { askId: item.askId, resolution: { kind: 'questions', answers } });
+  };
+
+  const decidePlan = (
+    item: Extract<TranscriptItem, { kind: 'plan' }>,
+    outcome: 'approved' | 'rejected',
+  ) => {
+    if (item.askId === null) return;
+    void command('ask.respond', { askId: item.askId, resolution: { kind: 'plan', outcome, note: null } });
   };
 
   const send = (text: string) => {
@@ -330,6 +354,45 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
             <Body text={item.text} />
           </Message>
         );
+      case 'questions':
+        return (
+          <QuestionSet
+            key={item.id}
+            questions={item.questions}
+            answers={item.answers}
+            disabled={!item.open}
+            onSubmit={(answers) => answerQuestions(item, answers)}
+            header={copy.session.questions.header(item.questions.length)}
+            submitLabel={copy.session.questions.submit}
+            freeTextPlaceholder={copy.session.questions.freeText}
+            compact={compact}
+          />
+        );
+      case 'plan':
+        return (
+          <Message
+            key={item.id}
+            kind="decision"
+            options={[
+              { label: copy.session.plan.approve },
+              { label: copy.session.plan.reject, primary: false },
+            ]}
+            onChoose={(label) =>
+              decidePlan(item, label === copy.session.plan.approve ? 'approved' : 'rejected')
+            }
+            chosen={
+              item.outcome === null
+                ? null
+                : item.outcome === 'approved'
+                  ? copy.session.plan.approve
+                  : copy.session.plan.reject
+            }
+            disabled={!item.open}
+            compact={compact}
+          >
+            <Body text={item.text} />
+          </Message>
+        );
       case 'tool':
         return (
           <Message
@@ -384,36 +447,46 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
                 data-session-tab={t.sessionId}
               />
             ))}
-            {tabs.overflow.length > 0 && (
-              <div ref={menu} className={s['overflow']}>
-                <Tab
-                  ref={overflowTab}
-                  overflow
-                  label={`+${tabs.overflow.length}`}
-                  aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                  onClick={() => setMenuOpen((v) => !v)}
-                  data-session-overflow="true"
-                />
-                {menuOpen && (
-                  <div role="menu" aria-label="Sessions" className={s['menu']} onKeyDown={onMenuKeyDown}>
-                    {tabs.overflow.map((t) => (
-                      <button
-                        key={t.sessionId}
-                        type="button"
-                        role="menuitem"
-                        className={s['menuItem']}
-                        onClick={() => pick(t.sessionId)}
-                      >
-                        <StatusDot tone={t.dot} size={7} />
-                        {t.label}
-                        {t.needs && <span className={s['badge']}>!</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* The ▾ renders even with nothing overflowing: it is also where a session is closed. */}
+            <div ref={menu} className={s['overflow']}>
+              <Tab
+                ref={overflowTab}
+                overflow
+                label={tabs.overflow.length > 0 ? `+${tabs.overflow.length}` : ''}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                aria-label={tabs.overflow.length > 0 ? undefined : copy.chat.sessionMenu}
+                onClick={() => setMenuOpen((v) => !v)}
+                data-session-overflow="true"
+              />
+              {menuOpen && (
+                <div role="menu" aria-label="Sessions" className={s['menu']} onKeyDown={onMenuKeyDown}>
+                  {tabs.overflow.map((t) => (
+                    <button
+                      key={t.sessionId}
+                      type="button"
+                      role="menuitem"
+                      className={s['menuItem']}
+                      onClick={() => pick(t.sessionId)}
+                    >
+                      <StatusDot tone={t.dot} size={7} />
+                      {t.label}
+                      {t.needs && <span className={s['badge']}>!</span>}
+                    </button>
+                  ))}
+                  {tabs.overflow.length > 0 && <div className={s['menuSep']} role="separator" />}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={s['menuItem']}
+                    disabled={activeId === null}
+                    onClick={closeSession}
+                  >
+                    {copy.chat.closeSession}
+                  </button>
+                </div>
+              )}
+            </div>
           </TabRow>
           <button
             type="button"

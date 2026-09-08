@@ -130,6 +130,28 @@ export const imageMediaTypeSchema = z.enum(IMAGE_MEDIA_TYPES);
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_FILE_ATTACHMENT_BYTES = 200 * 1024;
 
+/**
+ * One question inside an `AskUserQuestion` set. `options` may be empty (a pure free-text ask); `multiSelect`
+ * lets several labels be chosen. Every question also accepts free text, so `options` is never a closed list.
+ */
+export const askQuestionSchema = z.object({
+  /** Stable within its set: answers are keyed by this, so order changes never mis-assign an answer. */
+  key: z.string().min(1),
+  header: z.string().nullable(),
+  prompt: z.string().min(1),
+  multiSelect: z.boolean(),
+  options: z.array(z.object({ label: z.string().min(1), description: z.string().nullable() })),
+});
+export type AskQuestion = z.infer<typeof askQuestionSchema>;
+
+/** One question's answer: the labels ticked, plus free text when the reader typed their own. */
+export const askAnswerSchema = z.object({
+  key: z.string().min(1),
+  chosen: z.array(z.string()),
+  freeText: z.string().nullable(),
+});
+export type AskAnswer = z.infer<typeof askAnswerSchema>;
+
 export const messagePayloadSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('user'), attachments: z.array(attachmentSchema).optional() }),
   /** `streaming`: the body is still being patched from partial stream events (renders a cursor). */
@@ -139,6 +161,21 @@ export const messagePayloadSchema = z.discriminatedUnion('kind', [
     kind: z.literal('decision'),
     options: z.array(z.string().min(1)).min(1),
     chosen: z.string().nullable(),
+  }),
+  /**
+   * A whole `AskUserQuestion` set as one card: the agent sends up to 4 related questions meant to be answered
+   * together, so they are never drip-fed one at a time. `answers` is null while the card is still open.
+   */
+  z.object({
+    kind: z.literal('questions'),
+    questions: z.array(askQuestionSchema).min(1),
+    answers: z.array(askAnswerSchema).nullable(),
+  }),
+  /** An `ExitPlanMode` plan awaiting approval: the plan markdown is the body; `outcome` null while open. */
+  z.object({
+    kind: z.literal('plan'),
+    files: z.array(z.string()),
+    outcome: z.enum(['approved', 'rejected']).nullable(),
   }),
   z.object({
     kind: z.literal('access-request'),
@@ -180,7 +217,7 @@ export type TranscriptMessage = z.infer<typeof transcriptMessageSchema>;
 
 // --- Pending asks ---------------------------------------------------------
 
-export const askKindSchema = z.enum(['grant', 'plan', 'decision', 'question']);
+export const askKindSchema = z.enum(['grant', 'plan', 'decision', 'question', 'questions']);
 export type AskKind = z.infer<typeof askKindSchema>;
 
 export const askStateSchema = z.enum(['open', 'resolved', 'cancelled']);
@@ -191,6 +228,8 @@ export const askPayloadSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('plan'), summary: z.string(), files: z.array(z.string()) }),
   z.object({ kind: z.literal('decision'), prompt: z.string(), options: z.array(z.string().min(1)).min(1) }),
   z.object({ kind: z.literal('question'), prompt: z.string() }),
+  /** A whole `AskUserQuestion` set held by one ask, so the set resolves in one go. */
+  z.object({ kind: z.literal('questions'), questions: z.array(askQuestionSchema).min(1) }),
 ]);
 export type AskPayload = z.infer<typeof askPayloadSchema>;
 
@@ -202,6 +241,8 @@ export const askResolutionSchema = z.discriminatedUnion('kind', [
     note: z.string().nullable(),
   }),
   z.object({ kind: z.literal('decision'), chosen: z.string() }),
+  /** Every question in the set answers at once: one entry per question, keyed to it. */
+  z.object({ kind: z.literal('questions'), answers: z.array(askAnswerSchema).min(1) }),
   z.object({ kind: z.literal('question'), answer: z.string() }),
 ]);
 export type AskResolution = z.infer<typeof askResolutionSchema>;

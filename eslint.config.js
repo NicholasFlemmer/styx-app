@@ -25,6 +25,11 @@ export default tseslint.config(
     rules: { 'no-restricted-syntax': 'off' },
   },
   {
+    // electron-builder hooks are CommonJS by contract: it `require()`s them from its own process.
+    files: ['**/build/*.cjs'],
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
     files: ['packages/core/**/*.ts'],
     rules: { '@typescript-eslint/no-non-null-assertion': 'error' },
   },

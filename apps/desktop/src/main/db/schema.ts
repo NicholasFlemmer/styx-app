@@ -216,7 +216,7 @@ export const pendingAsks = sqliteTable(
     sessionId: text('session_id')
       .notNull()
       .references(() => sessions.id, { onDelete: 'cascade' }),
-    kind: text('kind', { enum: ['grant', 'plan', 'decision', 'question'] }).notNull(),
+    kind: text('kind', { enum: ['grant', 'plan', 'decision', 'question', 'questions'] }).notNull(),
     grantId: text('grant_id').references(() => grants.id, { onDelete: 'cascade' }),
     payloadJson: text('payload_json').notNull().default('{}'),
     state: text('state', { enum: ['open', 'resolved', 'cancelled'] }).notNull(),
@@ -238,7 +238,18 @@ export const transcriptMessages = sqliteTable(
       .references(() => sessions.id, { onDelete: 'cascade' }),
     seq: integer('seq').notNull(),
     kind: text('kind', {
-      enum: ['user', 'agent', 'file-list', 'decision', 'access-request', 'system', 'tool', 'thinking'],
+      enum: [
+        'user',
+        'agent',
+        'file-list',
+        'decision',
+        'access-request',
+        'system',
+        'tool',
+        'thinking',
+        'questions',
+        'plan',
+      ],
     }).notNull(),
     body: text('body').notNull(),
     payloadJson: text('payload_json'),

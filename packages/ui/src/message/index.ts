@@ -1,4 +1,5 @@
 export * from './Message';
+export * from './QuestionSet';
 export * from './Transcript';
 export * from './Composer';
 export * from './WorkingLine';

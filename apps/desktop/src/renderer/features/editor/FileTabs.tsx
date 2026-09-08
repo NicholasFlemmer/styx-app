@@ -1,3 +1,4 @@
+import { copy } from '@styx/core';
 import { Tab, TabRow, Tag } from '@styx/ui';
 
 export interface FileTab {
@@ -10,12 +11,13 @@ export interface FileTabsProps {
   tabs: readonly FileTab[];
   activePath: string | null;
   onSelect: (path: string) => void;
+  onClose: (path: string) => void;
 }
 
 const basename = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
 
 /** Editor tab row (34px): mono file tabs, current inverted, agent Tag on agent-authored files. */
-export function FileTabs({ tabs, activePath, onSelect }: FileTabsProps) {
+export function FileTabs({ tabs, activePath, onSelect, onClose }: FileTabsProps) {
   return (
     <TabRow variant="file" aria-label="Files" data-file-tabs="true">
       {tabs.map((t) => (
@@ -26,6 +28,8 @@ export function FileTabs({ tabs, activePath, onSelect }: FileTabsProps) {
           inv={t.path === activePath}
           meta={t.agent === null ? undefined : <Tag tone="agent">{t.agent}</Tag>}
           onClick={() => onSelect(t.path)}
+          onClose={() => onClose(t.path)}
+          closeLabel={copy.workspace.closeFile(basename(t.path))}
           data-path={t.path}
         />
       ))}

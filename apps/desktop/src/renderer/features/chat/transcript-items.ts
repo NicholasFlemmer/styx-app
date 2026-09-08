@@ -1,7 +1,9 @@
 import {
   copy,
   type Attachment,
+  type AskAnswer,
   type AskId,
+  type AskQuestion,
   type GrantId,
   type ReadModel,
   type Scope,
@@ -36,6 +38,25 @@ export type TranscriptItem =
       /** The option already taken (payload `chosen`), once the ask was answered here or in the CLI. */
       chosen: string | null;
       /** The ask is still open (or the row has no ask): options stay clickable. */
+      open: boolean;
+    }
+  | {
+      id: string;
+      kind: 'questions';
+      /** The whole AskUserQuestion set, answered together in one card. */
+      questions: readonly AskQuestion[];
+      askId: AskId | null;
+      /** Answers from the resolved ask; null while the card is still open. */
+      answers: readonly AskAnswer[] | null;
+      open: boolean;
+    }
+  | {
+      id: string;
+      kind: 'plan';
+      text: string;
+      files: string[];
+      askId: AskId | null;
+      outcome: 'approved' | 'rejected' | null;
       open: boolean;
     }
   | {
@@ -85,9 +106,27 @@ export const transcriptItems = (model: ReadModel, sessionId: SessionId): Transcr
       case 'user':
         out.push({ id: m.id, kind: 'user', text: m.body, attachments: p.attachments ?? [] });
         break;
-      case 'agent':
+      case 'agent': {
+        // Rows written before question sets existed carry an ask but render as prose, which left the session
+        // stuck in needs-you with nothing to answer. Any agent row still holding an open question ask gets the
+        // card instead.
+        const ask = m.askId === null ? null : (model.pendingAsks.byId[m.askId] ?? null);
+        if (ask !== null && ask.state === 'open' && ask.payload.kind === 'question') {
+          out.push({
+            id: m.id,
+            kind: 'questions',
+            questions: [
+              { key: ask.payload.prompt, header: null, prompt: m.body, multiSelect: false, options: [] },
+            ],
+            askId: m.askId,
+            answers: null,
+            open: true,
+          });
+          break;
+        }
         out.push({ id: m.id, kind: 'agent', text: m.body, streaming: p.streaming === true });
         break;
+      }
       case 'thinking':
         out.push({ id: m.id, kind: 'thinking', text: m.body, status: p.status, durationMs: p.durationMs });
         break;
@@ -116,6 +155,33 @@ export const transcriptItems = (model: ReadModel, sessionId: SessionId): Transcr
           open: askOpen(model, m.askId),
         });
         break;
+      case 'questions': {
+        // Answers live on the resolved ask (transcript payloads are append-only), so a set answered here or in
+        // the CLI both render as answered.
+        const res = m.askId === null ? null : (model.pendingAsks.byId[m.askId]?.resolution ?? null);
+        out.push({
+          id: m.id,
+          kind: 'questions',
+          questions: p.questions,
+          askId: m.askId,
+          answers: res?.kind === 'questions' ? res.answers : p.answers,
+          open: askOpen(model, m.askId),
+        });
+        break;
+      }
+      case 'plan': {
+        const res = m.askId === null ? null : (model.pendingAsks.byId[m.askId]?.resolution ?? null);
+        out.push({
+          id: m.id,
+          kind: 'plan',
+          text: m.body,
+          files: [...p.files],
+          askId: m.askId,
+          outcome: res?.kind === 'plan' ? res.outcome : p.outcome,
+          open: askOpen(model, m.askId),
+        });
+        break;
+      }
       case 'tool':
         out.push({ id: m.id, kind: 'tool', tool: p.tool, hint: p.hint, status: p.status, detail: p.detail });
         break;

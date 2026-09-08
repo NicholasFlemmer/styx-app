@@ -5,6 +5,13 @@
     flex: none;
     border-bottom: 1px solid var(--ln);
     min-width: 0;
+    /* Tabs scroll inside the row instead of spilling over the pane beside it once too many are open. */
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .row::-webkit-scrollbar {
+    display: none;
   }
   .rowFixed {
     height: var(--h-tabrow);
@@ -18,6 +25,7 @@
   }
   .tab {
     position: relative;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -86,5 +94,46 @@
   .tab:disabled {
     opacity: 0.5;
     pointer-events: none;
+  }
+}
+
+@layer components {
+  /* A closable tab: the ✕ is a sibling button, so the pair carries the divider instead of the tab itself. */
+  .wrap {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: stretch;
+    border-right: 1px solid var(--ln);
+  }
+  .wrap .closable {
+    border-right: 0;
+    padding-right: 4px;
+  }
+  .close {
+    display: flex;
+    align-items: center;
+    padding: 0 8px 0 2px;
+    border: 0;
+    background: transparent;
+    color: var(--mu);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: 0;
+  }
+  .close:hover {
+    color: var(--tx);
+  }
+  .close:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: -2px;
+  }
+  /* On the current tab the ✕ inherits the inverted ground. */
+  .wrap[data-inv='true'] {
+    background: var(--tx);
+  }
+  .wrap[data-inv='true'] .close {
+    color: var(--bg);
   }
 }
