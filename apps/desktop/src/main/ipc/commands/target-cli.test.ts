@@ -381,6 +381,10 @@ describe('target.connect.cli* (connect with the provider CLI)', () => {
     });
     if (!saved.ok) throw new Error(saved.error.message);
     cli.on('gcloud', ['auth', 'print-access-token'], GCLOUD_REAUTH);
+    // A single auth failure is no longer proof: gcloud's reauth prompt fails non-interactively and a
+    // wake-from-sleep race fails everything at once, so the row expires on the second consecutive failure.
+    await app.refresh.runNow('interval');
+    expect(app.repos.targets.get(saved.value.targetId ?? '')?.health).not.toBe('expired');
     await app.refresh.runNow('interval');
     expect(app.repos.targets.get(saved.value.targetId ?? '')?.health).toBe('expired');
   });

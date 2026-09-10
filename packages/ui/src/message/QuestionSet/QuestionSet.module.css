@@ -35,6 +35,7 @@
   }
   .prompt {
     color: var(--tx);
+    user-select: text;
   }
   .options {
     display: flex;
@@ -118,6 +119,7 @@
   }
   /* The answer, once the set is resolved: mono so it reads as recorded input, not prose. */
   .given {
+    user-select: text;
     margin-top: 6px;
     padding: 6px 8px;
     border-left: 1px solid var(--ac);

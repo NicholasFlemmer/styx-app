@@ -4,6 +4,9 @@
     font-size: 13px;
     line-height: 1.5;
     border-radius: 0;
+    /* The reset turns selection off app-wide (chrome should not select). Transcript content is the exception:
+       without this there is nothing to select, so ⌘C copies nothing out of the chat. */
+    user-select: text;
   }
   .user {
     align-self: flex-end;

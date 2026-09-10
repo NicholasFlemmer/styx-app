@@ -41,7 +41,7 @@ export interface TargetServiceDeps {
   audit: AuditService;
   providers: ProviderRegistry;
   vault: CredentialVault;
-  grants: Pick<GrantService, 'cancelTargetGrants'>;
+  grants: Pick<GrantService, 'cancelTargetGrants' | 'invalidate'>;
   activity: ActivityService;
   openExternal: (url: string) => Promise<void>;
   /** CLI login terminals (`target.connect.cliLogin`) run through the user-terminal path. */
@@ -70,6 +70,15 @@ const AUTH_METHOD: Record<Provider, AuthMethod> = {
 };
 
 /** Targets + connect flows (plan §5 ProviderAdapters). Secrets go straight to the vault inside `adapter.connect`. */
+/** The CLI account a target authenticates as: aws stores it as `profile`, gcp/others as `account`. */
+const accountOf = (t: Target): string | null => {
+  const profile = t.config['profile'];
+  if (typeof profile === 'string' && profile !== '') return profile;
+  const account = t.config['account'];
+  if (typeof account === 'string' && account !== '') return account;
+  return null;
+};
+
 export class TargetService {
   constructor(private readonly deps: TargetServiceDeps) {}
 
@@ -226,6 +235,9 @@ export class TargetService {
       expiredAt: null,
     };
     this.upsertRow(next);
+    // The point of reconnecting is to replace a credential that went stale. Live grants cache their minted
+    // bundle, so without this the next shim call still serves the dead one and only an app restart clears it.
+    this.deps.grants.invalidate(next.id);
     this.audit('connected', next, 'connect flow', { authMethod: next.authMethod });
     return next;
   }
@@ -356,6 +368,9 @@ export class TargetService {
       'cli',
     );
     await this.checkHealth(saved, 'manual');
+    // One `gcloud auth login` fixes every row bound to that account, not just the one being connected: the same
+    // account is typically attached to a target per project, and they all expired together on the same lapse.
+    await this.healSiblings(saved);
     return this.require(saved.id);
   }
 
@@ -390,6 +405,7 @@ export class TargetService {
     }
     const now = this.deps.clock.now();
     if (r.ok) {
+      this.authStrikes.delete(target.id);
       this.upsertRow({ ...target, health: 'ok', healthCheckedAt: now, expiredAt: null });
       this.clearExpiredBanner(target);
       if (target.health === 'expired')
@@ -405,10 +421,34 @@ export class TargetService {
       this.upsertRow({ ...target, healthCheckedAt: now });
       return;
     }
+    // Confirm before expiring. A single failed probe is not proof a credential is gone: gcloud's reauth prompt
+    // fails non-interactively, and a wake-from-sleep race fails everything at once. Expiring on the first failure
+    // is what made one lapse drop several targets within seconds. A `manual` probe is the user asking directly,
+    // so it answers immediately rather than making them wait out a backoff.
+    const strikes = (this.authStrikes.get(target.id) ?? 0) + 1;
+    if (reason !== 'manual' && strikes < TargetService.AUTH_STRIKES) {
+      this.authStrikes.set(target.id, strikes);
+      logger.info('refresh: auth failure, awaiting confirmation', {
+        targetId: target.id,
+        provider: target.provider,
+        strike: strikes,
+        of: TargetService.AUTH_STRIKES,
+      });
+      this.upsertRow({ ...target, healthCheckedAt: now });
+      return;
+    }
+    this.authStrikes.delete(target.id);
     if (target.health !== 'expired')
       this.audit('tested', target, `refresh (${reason})`, { ok: false, error: r.error });
     this.markExpired(target, r.error);
   }
+
+  /**
+   * Consecutive auth failures per target, cleared by any success. Two strikes: the scheduler's own cadence is the
+   * backoff, so a target expires on the second consecutive confirmation rather than the first blip.
+   */
+  private readonly authStrikes = new Map<string, number>();
+  private static readonly AUTH_STRIKES = 2;
 
   /** GrantService could not mint through the adapter: an auth failure from the CLI expires the target right away. */
   noteIssueFailure(targetId: string, error: Error): void {
@@ -490,6 +530,34 @@ export class TargetService {
     return next;
   }
 
+  /**
+   * Re-probes every other target that shares this one's provider and CLI account, so a single re-login clears all
+   * of their banners instead of leaving the user to walk the Connect modal once per project.
+   */
+  private async healSiblings(target: Target): Promise<void> {
+    const account = accountOf(target);
+    if (account === null) return;
+    const siblings = this.deps.repos.targets
+      .all()
+      .filter(
+        (t) =>
+          t.id !== target.id &&
+          t.provider === target.provider &&
+          t.health === 'expired' &&
+          t.credentialRef !== null &&
+          accountOf(t) === account,
+      );
+    for (const t of siblings) {
+      this.authStrikes.delete(t.id);
+      await this.checkHealth(t, 'manual').catch(() => undefined);
+    }
+    if (siblings.length > 0)
+      logger.info('refresh: healed siblings after re-login', {
+        provider: target.provider,
+        count: siblings.length,
+      });
+  }
+
   async remove(targetId: string): Promise<void> {
     const target = this.require(targetId);
     this.deps.grants.cancelTargetGrants(target.id);
@@ -509,13 +577,7 @@ export class TargetService {
   async reconnect(targetId: string): Promise<{ flowId: string; authMethod: AuthMethod }> {
     const target = this.require(targetId);
     if (target.authMethod === 'cli') {
-      const account =
-        typeof target.config['profile'] === 'string'
-          ? target.config['profile']
-          : typeof target.config['account'] === 'string'
-            ? target.config['account']
-            : undefined;
-      const r = await this.cliLogin(target.projectId, target.provider, account);
+      const r = await this.cliLogin(target.projectId, target.provider, accountOf(target) ?? undefined);
       return { flowId: r.terminalId, authMethod: 'cli' };
     }
     const r = this.connectStart(target.projectId, target.provider, target.env, target.name);

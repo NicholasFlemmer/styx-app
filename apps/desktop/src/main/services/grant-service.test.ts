@@ -388,4 +388,89 @@ describe('GrantService project-file trust gate (H-1)', () => {
     );
     expect(t.app.projects.projectPolicyTrusted(project.id)).toBe(false);
   });
+
+  describe('credential freshness (re-auth without a restart)', () => {
+    /** Stubs the supabase adapter so the test controls expiry and can count mints. */
+    const stubIssue = (t: TestApp, expiresAt: () => number | null) => {
+      const adapter = t.app.providers.get('supabase');
+      let n = 0;
+      const issue = vi.spyOn(adapter, 'issue').mockImplementation(async () => {
+        n += 1;
+        return { kind: 'env', env: { TOKEN: `mint-${n}` }, expiresAt: expiresAt(), scoped: true };
+      });
+      const revoke = vi.spyOn(adapter, 'revoke').mockResolvedValue(undefined);
+      return { issue, revoke, mints: () => n };
+    };
+
+    it('re-mints a bundle that is past expiry and releases the superseded one', async () => {
+      const t = makeTestApp();
+      const stub = stubIssue(t, () => t.clock.now() + 10 * 60_000);
+      const outcome = await requestSupabase(t);
+      const grant = await t.app.grants.approve(outcome.grant.id, '1h');
+      const first = await t.app.grants.credentialFor(grant.id);
+      expect(first.env['TOKEN']).toBe('mint-1');
+      // Still fresh: served from cache, no second mint.
+      expect((await t.app.grants.credentialFor(grant.id)).env['TOKEN']).toBe('mint-1');
+      expect(stub.mints()).toBe(1);
+      // Past expiry: the cached bundle is spent, so the next use mints again and hands the old one back.
+      t.clock.advance(11 * 60_000);
+      expect((await t.app.grants.credentialFor(grant.id)).env['TOKEN']).toBe('mint-2');
+      expect(stub.revoke).toHaveBeenCalledWith(expect.objectContaining({ env: { TOKEN: 'mint-1' } }));
+    });
+
+    it('treats a bundle inside the skew margin as spent (never hands a CLI a token about to die)', async () => {
+      const t = makeTestApp();
+      stubIssue(t, () => t.clock.now() + 90_000);
+      const grant = await t.app.grants.approve((await requestSupabase(t)).grant.id, '1h');
+      expect((await t.app.grants.credentialFor(grant.id)).env['TOKEN']).toBe('mint-1');
+      t.clock.advance(45_000); // 45s left — inside the 60s margin
+      expect((await t.app.grants.credentialFor(grant.id)).env['TOKEN']).toBe('mint-2');
+    });
+
+    it('a null expiry (a PAT) never goes stale', async () => {
+      const t = makeTestApp();
+      const stub = stubIssue(t, () => null);
+      const grant = await t.app.grants.approve((await requestSupabase(t)).grant.id, '1h');
+      await t.app.grants.credentialFor(grant.id);
+      t.clock.advance(30 * 24 * 3_600_000);
+      await t.app.grants.credentialFor(grant.id);
+      expect(stub.mints()).toBe(1);
+    });
+
+    it('concurrent callers share one re-mint', async () => {
+      const t = makeTestApp();
+      const stub = stubIssue(t, () => t.clock.now() + 60 * 60_000);
+      const grant = await t.app.grants.approve((await requestSupabase(t)).grant.id, '1h');
+      await t.app.grants.credentialFor(grant.id);
+      t.clock.advance(61 * 60_000);
+      const all = await Promise.all([
+        t.app.grants.credentialFor(grant.id),
+        t.app.grants.credentialFor(grant.id),
+        t.app.grants.credentialFor(grant.id),
+      ]);
+      expect(stub.mints()).toBe(2); // the first mint plus exactly one re-mint
+      expect(new Set(all.map((c) => c.env['TOKEN']))).toEqual(new Set(['mint-2']));
+    });
+
+    it('invalidate drops the cached bundle so a reconnect takes effect in place', async () => {
+      const t = makeTestApp();
+      const stub = stubIssue(t, () => null);
+      const grant = await t.app.grants.approve((await requestSupabase(t)).grant.id, '1h');
+      expect((await t.app.grants.credentialFor(grant.id)).env['TOKEN']).toBe('mint-1');
+      t.app.grants.invalidate(grant.targetId);
+      expect((await t.app.grants.credentialFor(grant.id)).env['TOKEN']).toBe('mint-2');
+      expect(stub.revoke).toHaveBeenCalled();
+    });
+
+    it('a revoked grant still refuses, stale bundle or not', async () => {
+      const t = makeTestApp();
+      stubIssue(t, () => t.clock.now() + 1000);
+      const grant = await t.app.grants.approve((await requestSupabase(t)).grant.id, '1h');
+      await t.app.grants.credentialFor(grant.id);
+      t.app.grants.revoke(grant.id, 'user');
+      t.clock.advance(60_000);
+      await expect(t.app.grants.credentialFor(grant.id)).rejects.toThrow();
+    });
+  });
+
 });

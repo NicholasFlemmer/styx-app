@@ -24,6 +24,7 @@ import {
   type PendingAsk,
   type Policy,
   type PolicyDecision,
+  type Provider,
   type Scope,
   type Session,
   type SessionId,
@@ -92,6 +93,8 @@ const SCOPE_SEP = '+';
  */
 export class GrantService {
   private readonly issued = new Map<string, IssuedCredential>();
+  /** In-flight re-mints by grant id, so parallel callers share one provider round trip. */
+  private readonly minting = new Map<string, Promise<IssuedCredential>>();
   private readonly timers = new Map<string, { expiry?: NodeJS.Timeout; idle?: NodeJS.Timeout }>();
   private readonly idleMs = new Map<string, number | null>();
   private readonly listeners = new Set<DecisionListener>();
@@ -163,8 +166,12 @@ export class GrantService {
       if (target.projectId !== caller.projectId) fail('forbidden', 'grant belongs to another project');
     }
     const cached = this.issued.get(grantId);
-    if (cached) return cached;
+    if (cached && this.fresh(cached)) return cached;
     if (grant.state !== 'active') fail('invalid-transition', `grant is ${grant.state}`);
+    // A stale bundle is replaced, not reused. Concurrent shim execs are normal, so one re-mint is shared:
+    // without this every parallel `styx wrap` would run its own `gcloud`/STS round trip.
+    const inFlight = this.minting.get(grantId);
+    if (inFlight) return inFlight;
     const info: GrantInfo = {
       id: grant.id,
       scope: [...grant.scope],
@@ -179,15 +186,62 @@ export class GrantService {
       config: target.config,
       credentialRef: target.credentialRef,
     };
-    const cred = await this.deps.providers
+    const mint = this.deps.providers
       .get(target.provider)
       .issue(info, tinfo)
+      .then(async (cred) => {
+        // Hand the superseded bundle back to the adapter before dropping it: an SSH grant's agent socket is a
+        // real resource, and leaking one per re-mint would outlive the grant it belonged to.
+        if (cached) await this.release(target.provider, cached);
+        this.issued.set(grant.id, cred);
+        return cred;
+      })
       .catch((e: Error) => {
         this.deps.onIssueFailure?.(target.id, e);
         return fail('provider-error', e.message);
+      })
+      .finally(() => {
+        this.minting.delete(grantId);
       });
-    this.issued.set(grant.id, cred);
-    return cred;
+    this.minting.set(grantId, mint);
+    return mint;
+  }
+
+  /** Skew margin: a bundle within a minute of expiry is treated as spent rather than handed to a CLI about to use it. */
+  private static readonly FRESH_SKEW_MS = 60_000;
+
+  /** `expiresAt: null` means the adapter minted something without a deadline (e.g. a PAT): always fresh. */
+  private fresh(cred: IssuedCredential): boolean {
+    if (cred.expiresAt === null) return true;
+    return cred.expiresAt - GrantService.FRESH_SKEW_MS > this.deps.clock.now();
+  }
+
+  private async release(provider: Provider, cred: IssuedCredential): Promise<void> {
+    await this.deps.providers
+      .get(provider)
+      .revoke(cred)
+      .catch((err: Error) =>
+        logger.warn('grant: releasing superseded credential failed', { provider, error: err.message }),
+      );
+  }
+
+  /**
+   * Drops cached bundles for a target's live grants without touching the grants themselves: after a re-login the
+   * next use mints against the new credential instead of serving the one that went stale (which is what made
+   * re-auth need an app restart).
+   */
+  invalidate(targetId: string): void {
+    for (const grant of this.deps.repos.grants.byTarget(targetId)) {
+      const cred = this.issued.get(grant.id);
+      if (cred === undefined) continue;
+      this.issued.delete(grant.id);
+      void this.release(this.targetProvider(grant.targetId), cred);
+    }
+  }
+
+  private targetProvider(targetId: string): Provider {
+    const t = this.deps.repos.targets.get(targetId);
+    return t?.provider ?? 'ssh';
   }
 
   // --- request -------------------------------------------------------------

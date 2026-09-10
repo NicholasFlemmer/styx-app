@@ -265,7 +265,7 @@ export class BrokerHost {
         reason: command,
         triggeredBy: command,
       });
-      if (outcome.kind === 'active') return this.authorizeUse(outcome.grant, command, scopes, ctx);
+      if (outcome.kind === 'active') return await this.authorizeUse(outcome.grant, command, scopes, ctx);
       if (outcome.kind === 'denied') throw new BrokerError(ErrorCode.notAllowed, 'access denied');
       const key = this.holdKey('exec', outcome.grant.id, req, ctx);
       req.hold(key);
@@ -374,14 +374,26 @@ export class BrokerHost {
     return ask ? Math.max(0, this.deps.grants.queuePosition(ask.id)) : 0;
   }
 
-  private authorizeUse(
+  /**
+   * Async because the credential must come through `credentialFor`: reading the raw cache would hand a shim a
+   * bundle that has already expired, which is what made re-auth need an app restart.
+   */
+  private async authorizeUse(
     grant: Grant,
     command: string,
     scopes: Scope[],
     ctx: ConnectionContext,
     issued?: IssuedCredential,
-  ): Result<'exec_authorize'> {
-    const cred = issued ?? this.deps.grants.issuedCredential(grant.id);
+  ): Promise<Result<'exec_authorize'>> {
+    const target = this.deps.repos.targets.get(grant.targetId) ?? null;
+    const cred =
+      issued ??
+      (await this.deps.grants
+        .credentialFor(grant.id, {
+          sessionId: ctx.session.sessionId,
+          projectId: target?.projectId ?? ctx.session.projectId,
+        })
+        .catch(() => this.deps.grants.issuedCredential(grant.id)));
     const { useId } = this.deps.grants.use(grant.id, {
       command,
       scopeUsed: scopes[0] ?? 'read',
@@ -457,11 +469,10 @@ export class BrokerHost {
       } as ConnectionContext;
       const command = grant.reason;
       const scopes = [...grant.scope];
-      try {
-        this.server.resolveHeld(key, this.authorizeUse(grant, command, scopes, ctx));
-      } catch (e) {
-        this.server.rejectHeld(key, { code: ErrorCode.internal, message: (e as Error).message });
-      }
+      void this.authorizeUse(grant, command, scopes, ctx).then(
+        (result) => this.server.resolveHeld(key, result),
+        (e: Error) => this.server.rejectHeld(key, { code: ErrorCode.internal, message: e.message }),
+      );
     }
   }
 

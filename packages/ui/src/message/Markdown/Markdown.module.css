@@ -1,6 +1,8 @@
 @layer components {
   /* Body-sized markdown inside an agent bubble: 13px / 1.5 inherited from the message. */
+  /* Selectable for the same reason as `.msg`: this is agent output the reader needs to copy. */
   .md {
+    user-select: text;
     min-width: 0;
     overflow-wrap: anywhere;
   }
