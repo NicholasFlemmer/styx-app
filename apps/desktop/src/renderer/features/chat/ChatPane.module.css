@@ -191,3 +191,27 @@
     outline-offset: -1px;
   }
 }
+
+@layer components {
+  /* A message from another agent. Bordered and labelled with its sender, never a user bubble: the reader must
+     be able to tell at a glance that these words are not theirs and not this agent's. */
+  .peer {
+    max-width: 92%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border: 1px dashed var(--ln);
+    background: var(--s1);
+    font-size: 13px;
+    line-height: 1.5;
+    user-select: text;
+  }
+  .peer[data-peer='out'] {
+    align-self: flex-end;
+    opacity: 0.75;
+  }
+  .peerHead {
+    color: var(--mu);
+  }
+}

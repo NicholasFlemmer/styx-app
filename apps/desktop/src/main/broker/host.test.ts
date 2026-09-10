@@ -309,3 +309,69 @@ describe('BrokerHost security regressions', () => {
     client.close();
   });
 });
+
+describe('BrokerHost agent-to-agent messaging', () => {
+  it('lists only this project\'s sessions, flagging the caller', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const peers = await client.call('list_sessions', {});
+    const projectIds = new Set(
+      peers.map((p) => app.app.repos.sessions.get(p.sessionId)?.projectId),
+    );
+    expect(projectIds).toEqual(new Set([ids.project.acmeShop]));
+    expect(peers.filter((p) => p.self).map((p) => p.sessionId)).toEqual([ids.session.gemini]);
+    expect(peers.length).toBeGreaterThan(1);
+  });
+
+  it('delivers to a peer as a `peer` row in both chats, never as a user message', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    await client.call('send_message', { to: ids.session.claude, body: 'checkout.ts is mine right now' });
+
+    const inbox = app.app.repos.transcripts.last(ids.session.claude).at(-1);
+    expect(inbox?.payload).toMatchObject({
+      kind: 'peer',
+      fromSessionId: ids.session.gemini,
+      inbound: true,
+    });
+    expect(inbox?.body).toBe('checkout.ts is mine right now');
+    // A `user` row would render as if the operator typed it — the whole point of the separate kind.
+    expect(inbox?.payload.kind).not.toBe('user');
+
+    const outbox = app.app.repos.transcripts.last(ids.session.gemini).at(-1);
+    expect(outbox?.payload).toMatchObject({ kind: 'peer', inbound: false });
+  });
+
+  it('refuses a session in another project — the one guard that keeps this from being cross-project reach', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const blog = app.app.repos.sessions.get(ids.session.blog);
+    expect(blog?.projectId).not.toBe(ids.project.acmeShop);
+    await expect(
+      client.call('send_message', { to: ids.session.blog, body: 'hello from another project' }),
+    ).rejects.toThrow();
+    expect(app.app.repos.transcripts.last(ids.session.blog).at(-1)?.payload.kind).not.toBe('peer');
+  });
+
+  it('refuses an unknown session, itself, and a finished one rather than silently swallowing', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    await expect(client.call('send_message', { to: 'nope', body: 'x' })).rejects.toThrow();
+    await expect(
+      client.call('send_message', { to: ids.session.gemini, body: 'x' }),
+    ).rejects.toThrow(/yourself/);
+    const claude = app.app.repos.sessions.get(ids.session.claude);
+    if (claude) app.app.repos.sessions.upsert({ ...claude, state: 'done', endedAt: 1, pausedReason: null });
+    await expect(
+      client.call('send_message', { to: ids.session.claude, body: 'x' }),
+    ).rejects.toThrow(/ended/);
+  });
+
+  it('is rate limited in its own bucket, so two agents cannot flood each other', async () => {
+    const { client } = await connectedClient(ids.session.gemini);
+    let refused = 0;
+    for (let i = 0; i < 25; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await client.call('send_message', { to: ids.session.claude, body: `m${i}` }).catch(() => {
+        refused += 1;
+      });
+    }
+    expect(refused).toBeGreaterThan(0);
+  });
+});

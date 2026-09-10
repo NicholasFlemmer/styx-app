@@ -104,6 +104,7 @@ export const messageKindSchema = z.enum([
   'thinking',
   'questions',
   'plan',
+  'peer',
 ]);
 export type MessageKind = z.infer<typeof messageKindSchema>;
 
@@ -187,6 +188,19 @@ export const messagePayloadSchema = z.discriminatedUnion('kind', [
     scope: z.array(scopeSchema).min(1),
     reason: z.string(),
     grantId: grantIdSchema,
+  }),
+  /**
+   * A message from another agent in the same project. It is deliberately NOT a `user` row: rendering a peer's
+   * text as if the human typed it would be both a lie and a prompt-injection primitive, since the receiving
+   * agent weights its operator's words differently from a peer's.
+   */
+  z.object({
+    kind: z.literal('peer'),
+    fromSessionId: sessionIdSchema,
+    fromAgent: agentSchema,
+    fromBranch: z.string().nullable(),
+    /** False on the sender's own copy of the row (its outbox echo). */
+    inbound: z.boolean(),
   }),
   z.object({ kind: z.literal('system') }),
   /** A thinking block from the stream: streamed live, then collapsed to "Thought for Ns" (body = the thinking text). */

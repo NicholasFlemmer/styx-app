@@ -29,8 +29,19 @@ export type HoldHandle = (key: string) => void;
  * `exec_authorize` to it when a shim call opens a request) and agent questions (`ask`, larger: plan/decision
  * prompts are a normal part of a session but still must not flood the inbox).
  */
-export type RateBucket = 'request' | 'ask';
-export const RATE_LIMITED_METHODS: Readonly<Partial<Record<MethodName, RateBucket>>> = { request_access: 'request', ask_user: 'ask' };
+export type RateBucket = 'request' | 'ask' | 'peer';
+
+const RATE_LIMIT_MESSAGE: Record<RateBucket, string> = {
+  request: 'too many access requests; try again in a minute',
+  ask: 'too many questions; try again in a minute',
+  peer: 'too many messages to other agents; try again in a minute',
+};
+export const RATE_LIMITED_METHODS: Readonly<Partial<Record<MethodName, RateBucket>>> = {
+  request_access: 'request',
+  ask_user: 'ask',
+  // Its own bucket: without one, two agents can fill each other's context windows for free.
+  send_message: 'peer',
+};
 
 /**
  * The socket directory must be a real directory (not a symlink) owned by this user with mode 0700, or another local
@@ -54,6 +65,7 @@ export interface BrokerServerOptions {
   askRateLimitPerMinute?: number;
   /** Override which methods the server meters itself (and in which bucket). */
   rateLimitedMethods?: Readonly<Partial<Record<MethodName, RateBucket>>>;
+  peerRateLimitPerMinute?: number;
   now?: () => number;
   onLog?: (level: 'info' | 'warn', msg: string, meta?: Record<string, unknown>) => void;
 }
@@ -215,7 +227,8 @@ export class BrokerServer {
 
     if (!conn.ctx) return fail(ErrorCode.unauthenticated, 'hello first');
     const bucket = (this.opts.rateLimitedMethods ?? RATE_LIMITED_METHODS)[m];
-    if (bucket && !this.allow(conn.ctx.session.sessionId, bucket)) return fail(ErrorCode.rateLimited, bucket === 'ask' ? 'too many questions; try again in a minute' : 'too many access requests; try again in a minute');
+    if (bucket && !this.allow(conn.ctx.session.sessionId, bucket))
+      return fail(ErrorCode.rateLimited, RATE_LIMIT_MESSAGE[bucket]);
 
     const handler = this.handlers.get(m);
     if (!handler) return fail(ErrorCode.methodNotFound, `no handler for ${m}`);
@@ -241,7 +254,12 @@ export class BrokerServer {
 
   /** Consumes one slot of the session's per-minute bucket; false when exhausted. Public so the host can meter other grant-creating paths. */
   allow(sessionId: string, bucket: RateBucket = 'request'): boolean {
-    const limit = bucket === 'ask' ? (this.opts.askRateLimitPerMinute ?? 30) : (this.opts.rateLimitPerMinute ?? 5);
+    const limit =
+      bucket === 'ask'
+        ? (this.opts.askRateLimitPerMinute ?? 30)
+        : bucket === 'peer'
+          ? (this.opts.peerRateLimitPerMinute ?? 20)
+          : (this.opts.rateLimitPerMinute ?? 5);
     const key = `${bucket}:${sessionId}`;
     const t = this.now();
     const arr = (this.buckets.get(key) ?? []).filter((x) => t - x < 60_000);

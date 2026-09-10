@@ -1,4 +1,5 @@
 import {
+  AGENT_LABEL,
   copy,
   type Attachment,
   type AskAnswer,
@@ -76,6 +77,15 @@ export type TranscriptItem =
       grantId: GrantId;
       askId: AskId | null;
     }
+  | {
+      id: string;
+      kind: 'peer';
+      text: string;
+      /** The other agent in the exchange (the sender when inbound, the recipient when not). */
+      agent: string;
+      branch: string | null;
+      inbound: boolean;
+    }
   | { id: string; kind: 'system'; text: string };
 
 /** "read schema" · "write" · "delete / drop" · "deploy" (spec §10 access-request card, lowercase). */
@@ -132,6 +142,16 @@ export const transcriptItems = (model: ReadModel, sessionId: SessionId): Transcr
         break;
       case 'system':
         out.push({ id: m.id, kind: 'system', text: m.body });
+        break;
+      case 'peer':
+        out.push({
+          id: m.id,
+          kind: 'peer',
+          text: m.body,
+          agent: AGENT_LABEL[p.fromAgent],
+          branch: p.fromBranch,
+          inbound: p.inbound,
+        });
         break;
       case 'file-list':
         out.push({

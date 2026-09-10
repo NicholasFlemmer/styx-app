@@ -13,7 +13,7 @@ let server: BrokerServer;
 afterEach(async () => server?.close());
 
 describe('styx MCP server', () => {
-  it('exposes the six tools and proxies calls to the broker', async () => {
+  it('exposes the eight tools and proxies calls to the broker', async () => {
     const path = join(mkdtempSync(join(tmpdir(), 'styx-mcp-')), 'b.sock');
     server = new BrokerServer({
       authenticate: async () => ({ sessionId: 's1', projectId: 'p', projectName: 'acme-shop', worktreePath: null, branch: null, agent: 'claude' }),
@@ -31,7 +31,16 @@ describe('styx MCP server', () => {
     await client.connect(ct);
 
     const tools = (await client.listTools()).tools.map((t) => t.name).sort();
-    expect(tools).toEqual(['ask_user', 'check_grant', 'get_credential', 'list_targets', 'report_status', 'request_access']);
+    expect(tools).toEqual([
+      'ask_user',
+      'check_grant',
+      'get_credential',
+      'list_sessions',
+      'list_targets',
+      'report_status',
+      'request_access',
+      'send_message',
+    ]);
 
     const lt = await client.callTool({ name: 'list_targets', arguments: {} });
     expect(JSON.parse((lt.content as { text: string }[])[0]?.text ?? '')).toEqual([{ name: 'Supabase', provider: 'supabase', env: 'prod', lockState: 'locked', scopes: ['read', 'write'] }]);

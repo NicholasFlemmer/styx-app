@@ -251,6 +251,7 @@ export const transcriptMessages = sqliteTable(
         'thinking',
         'questions',
         'plan',
+        'peer',
       ],
     }).notNull(),
     body: text('body').notNull(),

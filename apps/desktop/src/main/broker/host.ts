@@ -325,6 +325,43 @@ export class BrokerHost {
       return { ok: true };
     });
 
+    /** Peers in the caller's project. Discovery must exist before messaging: ids are ULIDs, never names. */
+    server.on('list_sessions', async (_p, ctx) => {
+      return deps.repos.sessions
+        .byProject(ctx.session.projectId)
+        .filter((x) => x.archivedAt === null)
+        .map((x) => ({
+          sessionId: x.id,
+          agent: x.agent,
+          branch: deps.repos.worktrees.get(x.worktreeId)?.branch ?? null,
+          state: x.state,
+          note: x.note ?? '',
+          self: x.id === ctx.session.sessionId,
+        }));
+    });
+
+    /**
+     * Agent-to-agent messaging. This is a deliberate, narrow exception to an invariant enforced everywhere else
+     * in this file: `to` is the first client-supplied session id the broker trusts after `hello`. Both guards
+     * below are load-bearing — without the project check it becomes cross-project reach, and without the `done`
+     * check it becomes a silent black hole that reports success into nothing.
+     */
+    server.on('send_message', async (p, ctx) => {
+      if (p.to === ctx.session.sessionId)
+        throw new BrokerError(ErrorCode.invalidParams, 'cannot message yourself');
+      const target = deps.repos.sessions.get(p.to);
+      if (!target || target.archivedAt !== null)
+        throw new BrokerError(ErrorCode.targetNotFound, 'no such session');
+      if (target.projectId !== ctx.session.projectId)
+        throw new BrokerError(ErrorCode.notAllowed, 'session belongs to another project');
+      if (target.state === 'done')
+        throw new BrokerError(ErrorCode.notAllowed, 'that session has ended');
+      const from = deps.repos.sessions.get(ctx.session.sessionId);
+      if (!from) throw new BrokerError(ErrorCode.unauthenticated, 'unknown session');
+      deps.sessions.deliverPeerMessage(from, target, p.body);
+      return { delivered: true as const };
+    });
+
     server.on('list_targets', async (_p, ctx) => {
       const now = deps.clock.now();
       return deps.repos.targets.byProject(ctx.session.projectId).map((t) => {

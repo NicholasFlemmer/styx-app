@@ -412,6 +412,19 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
         );
       case 'system':
         return <Message key={item.id} kind="system" text={item.text} compact={compact} />;
+      case 'peer':
+        // Deliberately not a user bubble: a peer's words must never read as the operator's.
+        return (
+          <div key={item.id} className={s['peer']} data-peer={item.inbound ? 'in' : 'out'}>
+            <span className={['t-label', s['peerHead']].join(' ')}>
+              {fill(item.inbound ? copy.chat.peer.from : copy.chat.peer.to, {
+                agent: item.agent,
+                branch: item.branch ?? copy.chat.peer.noBranch,
+              })}
+            </span>
+            <Body text={item.text} />
+          </div>
+        );
       case 'fileList':
         return <Message key={item.id} kind="fileList" files={item.files} compact={compact} />;
       case 'decision':

@@ -89,6 +89,31 @@ export const methods = {
     params: z.object({ agent: z.enum(['claude', 'codex', 'gemini', 'cursor', 'shell']), event: z.string(), payload: z.unknown() }),
     result: z.object({ ok: z.literal(true) }),
   },
+  /**
+   * Agents in the same project. Discovery has to exist before messaging can: an agent otherwise has no way to
+   * learn a peer's id, and ids are ULIDs because joining by name is forbidden.
+   */
+  list_sessions: {
+    params: z.object({}),
+    result: z.array(
+      z.object({
+        sessionId: z.string(),
+        agent: z.string(),
+        branch: z.string().nullable(),
+        state: z.string(),
+        note: z.string(),
+        self: z.boolean(),
+      }),
+    ),
+  },
+  /**
+   * Send a message to another agent in the same project. It lands in that session's chat as a peer message —
+   * never as if the human typed it — and is framed to the receiving agent as untrusted data.
+   */
+  send_message: {
+    params: z.object({ to: z.string().min(1), body: z.string().min(1).max(4000) }),
+    result: z.object({ delivered: z.literal(true) }),
+  },
   list_targets: {
     params: z.object({}),
     result: z.array(

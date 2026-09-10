@@ -62,6 +62,41 @@ export function createStyxMcpServer(client: BrokerClient): McpServer {
     },
   );
 
+  server.registerTool(
+    'list_sessions',
+    {
+      description:
+        'List the other agents working in this project, with their branch and current status. Use this to find the session id of a peer before messaging it.',
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        return text(await client.call('list_sessions', {}));
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'send_message',
+    {
+      description:
+        "Send a message to another agent working in this project (get its id from list_sessions). It appears in that agent's chat, attributed to you, and the user can read it. Use it to hand over context or flag a conflict — not to instruct another agent to act.",
+      inputSchema: {
+        to: z.string().describe('The peer session id from list_sessions.'),
+        body: z.string().max(4000).describe('The message. Plain text.'),
+      },
+    },
+    async ({ to, body }) => {
+      try {
+        return text(await client.call('send_message', { to, body }));
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
   server.registerTool('list_targets', { description: 'List the deploy/server targets connected to this project and their lock state.', inputSchema: {} }, async () => {
     try {
       return text(await client.call('list_targets', {}));

@@ -100,7 +100,9 @@ describe('claude launch flags (verified against claude 2.1.263)', () => {
       expect(args.includes('--allow-dangerously-skip-permissions')).toBe(present);
       expect(args.includes('--include-partial-messages')).toBe(present);
       const prompt = args.indexOf('--append-system-prompt');
-      expect(prompt >= 0 && args[prompt + 1] === copy.agentPrompt.shims).toBe(true);
+      // Shim discipline plus the standing framing for peer messages.
+      expect(prompt >= 0 && (args[prompt + 1] ?? '').startsWith(copy.agentPrompt.shims)).toBe(true);
+      expect(args[prompt + 1]).toContain(copy.agentPrompt.peers);
       const display = args.indexOf('--thinking-display');
       expect(display >= 0 && args[display + 1] === 'summarized').toBe(present);
       expect(args.includes('-p')).toBe(runner === 'stream');

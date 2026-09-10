@@ -34,7 +34,7 @@ describe('migrations', () => {
   it('0002 widens targets.auth_method to cli, keeps rows, grants and the unique key (forward from a DB seeded at 0001)', () => {
     const db = new Database(':memory:');
     const all = listMigrations();
-    expect(all.map((m) => m.name)).toEqual(['0000_init', '0001_activity', '0002_auth_method_cli', '0003_plain_folders', '0004_claude_parity', '0005_thinking', '0006_slash_commands', '0007_question_sets', '0008_user_pause']);
+    expect(all.map((m) => m.name)).toEqual(['0000_init', '0001_activity', '0002_auth_method_cli', '0003_plain_folders', '0004_claude_parity', '0005_thinking', '0006_slash_commands', '0007_question_sets', '0008_user_pause', '0009_peer_messages']);
     // Seed at 0001: a project, two targets and an active grant that cascades on the target.
     migrate(db, all.slice(0, 2));
     db.prepare("INSERT INTO projects (id, name, path, initials, created_at, last_activity_at) VALUES ('p', 'x', '/x', 'X', 0, 0)").run();
@@ -85,7 +85,7 @@ describe('migrations', () => {
     ).run();
 
     const res = migrate(db);
-    expect(res).toEqual({ applied: ['0003_plain_folders', '0004_claude_parity', '0005_thinking', '0006_slash_commands', '0007_question_sets', '0008_user_pause'], version: 9 });
+    expect(res).toEqual({ applied: ['0003_plain_folders', '0004_claude_parity', '0005_thinking', '0006_slash_commands', '0007_question_sets', '0008_user_pause', '0009_peer_messages'], version: 10 });
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT id, project_id, default_branch, remotes_json FROM repos').all()).toEqual([
       { id: 'r', project_id: 'p', default_branch: 'main', remotes_json: '[{"name":"origin","url":"u"}]' },
