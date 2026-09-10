@@ -11,8 +11,13 @@ import { logger } from './logger';
  * follow while holding this project's grants, so the source is not user-configurable in this version.
  */
 const CATALOGUE_REPO = 'anthropics/skills';
-const CATALOGUE_API = `https://api.github.com/repos/${CATALOGUE_REPO}/contents`;
-const CATALOGUE_RAW = `https://raw.githubusercontent.com/${CATALOGUE_REPO}/main`;
+/**
+ * The skills live under `skills/`, not at the repo root — the root holds `.claude-plugin`, `spec` and
+ * `template`, none of which are installable. Scanning the root found one bogus entry and nothing useful.
+ */
+const CATALOGUE_PATH = 'skills';
+const CATALOGUE_API = `https://api.github.com/repos/${CATALOGUE_REPO}/contents/${CATALOGUE_PATH}`;
+const CATALOGUE_RAW = `https://raw.githubusercontent.com/${CATALOGUE_REPO}/main/${CATALOGUE_PATH}`;
 
 /** Directory name rules: a skill directory is created from this, so it must not escape the skills root. */
 const SAFE_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
