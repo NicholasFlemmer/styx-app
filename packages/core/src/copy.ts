@@ -31,6 +31,7 @@ export const copy = {
       cloneUrl: 'Clone URL…',
       cloneUrlMeta: 'git clone',
       agentDockMeta: 'all projects · always on top',
+      debtAuditMeta: 'spawns an agent to review this repo',
       switchProject: 'Switch to {project}',
     },
     meta: {
@@ -227,6 +228,74 @@ export const copy = {
     cancel: 'Cancel',
     close: 'Close',
     exitCode: 'exit {code}',
+  },
+
+  /**
+   * The tech-debt audit (owner addition: the handoff has no such surface). The prompt IS the feature — it is
+   * sent verbatim as the first message of a real agent session in the project's main worktree.
+   */
+  debtAudit: {
+    action: 'Audit debt',
+    /**
+     * Sent verbatim as the session's first message. Written to survive contact with a real repo: it bounds its
+     * own tool budget (an unbounded audit spends the user's tokens and then guesses to fill its template),
+     * separates findings that name a concrete accident from ones that only cost reading time, and forbids
+     * fixing, installing and formatting — this is a report, and the worktree is the user's.
+     */
+    prompt: `Audit this repository for tech debt and report back. Do not fix anything. Don't ask me questions first — start.
+
+The frame: a capable engineer joins this codebase on Monday. They're good, they're new, and they're expected to ship by Friday. What in here would slow them down, mislead them, or let them break something without realising? That's the debt I care about — comprehension cost, in the places where work actually happens. Not style, not coverage numbers, not your preferred architecture.
+
+## How to work
+
+Budget: about 40 tool calls, spent roughly 8 on orientation, 4 on history, 6 on greps, 15 on deep reads, the rest on the project's own checks. Sample, don't crawl. Batch aggressively — several greps in one bash call, \`head\`/\`tail\` on every output. Read whole files only where step 4 sends you. If you run out, report what you actually traced: three proven accidents beat a full template of guesses.
+
+1. **Front door first.** README, CONTRIBUTING, docs/, the manifest (package.json, go.mod, pyproject.toml, Cargo.toml, Makefile — whatever this is), and any agent-instructions file. Detect the stack from what you find, and judge this repo against its own stated conventions, not another ecosystem's.
+2. **Check the written path against reality.** Every command, script, env var, config file, port and path the setup docs mention: does it still exist? Is there something the code requires at startup that no document mentions? Documentation that lies is the most expensive debt here and the cheapest to verify — \`ls\` it and grep the manifest's scripts, don't reason about it.
+3. **Find where the work actually is.**
+   \`git log --since='6 months ago' --name-only --pretty=format: | grep . | sort | uniq -c | sort -rn | head -30\`
+   The \`grep .\` matters — without it the blank separator lines rank first. If that returns almost nothing, widen to 12 months; if this is a shallow clone or barely has history, say so and skip the weighting. Some top paths will be renamed or deleted — check them against disk.
+4. **Read deeply only where hot meets confusing.** The entry point(s), the top ~5 churn files and the modules they import most, the largest source file. This is where the budget goes.
+5. **Grep for the specific traps**, in one or two batched calls: two implementations of the same thing (two HTTP clients, two config loaders, two date helpers), names carrying old/new/v2/legacy/deprecated/tmp/final, exported symbols with no callers, large commented-out blocks, TODO/FIXME/HACK. \`git blame\` two or three of the TODOs for age — a four-year-old TODO is a record of a decision, not a task.
+6. **Run the project's own checks**, only ones already declared in its manifest, at most three. Prefer typecheck and lint (cheap, read-only) over test and build (slow, and they write into the worktree). One attempt each, wrap in \`timeout 120\`, pipe to \`tail -40\`. Do not install dependencies, do not pass \`--fix\` or \`--write\`, do not chase a failure into a repair. If a check needs credentials, network or a running service, skip it and name it. Their output is evidence, not the report.
+
+## How to rank
+
+Two tiers, and the line between them is strict.
+
+**Will bite you** — you can name the accident. Someone does a specific, plausible thing and gets a broken build, a wrong result, silent data damage, or an hour lost. Write that accident down. If the worst you can write is "this is confusing" or "this is harder to maintain", it isn't this tier.
+
+**Untidy** — real, but it only costs reading time. One line each, no argument.
+
+Order *Will bite you* by expected cost: blast radius × how often that code actually changes, using step 3's counts. A horror show nobody has touched in two years ranks below a mediocre module that changes every week. When two findings are close, the one higher on the churn list wins. Not how much it offends you.
+
+## Output
+
+Reply in chat. Don't write a file, open a PR, or produce a plan document. Use exactly this shape:
+
+**First hour** — one sentence: can a new engineer get this running from what's written down? Then up to three bullets naming exactly where the documented path breaks, with the command or file.
+
+**Will bite you** — worst first, six maximum. Six is a ceiling, not a quota: include only what you traced. Each one:
+- headline stating the wrong belief, not the code smell
+- \`path/file.ext:line\` · touched N times in the window, or "cold"
+- Reads as: what a careful newcomer would conclude here
+- Actually: what's true
+- Accident: the specific thing that goes wrong, and to whom
+- Fix: one line, plus S / M / L
+
+**Untidy** — at most six one-liners: \`path\` — what's off.
+
+**Not checked** — one line naming what you deliberately left unopened, plus any project check you skipped and why, so I know the edges of this report.
+
+## Rules
+
+- Every \`path:line\` must be in a file you opened this session. If you believe something but didn't verify it, verify it or demote it to Untidy marked "unverified". Never invent a location, never dress a guess as an accident.
+- No preamble, no summary of what the project does, no praise, no "overall this is well structured". Start at **First hour**.
+- No generic advice. "Add tests", "adopt CI", "consider types", "extract a service layer" are not findings. A finding is anchored to something you read.
+- Don't propose an architecture. If the shape is wrong, that's one finding with one accident — not a redesign.
+- Don't edit, stage, commit, branch, install, or format.
+- If a tier is empty, print the heading and "none". Short is a valid answer; padding isn't.
+- Keep it readable in a narrow chat pane: short lines, no tables, no code block over three lines.`,
   },
 
   /** Skills (owner addition: the handoff has no skills surface). */

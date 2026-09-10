@@ -1,6 +1,7 @@
-import type { PaletteAction } from '@styx/core';
+import type { PaletteAction, SessionId } from '@styx/core';
 import { invokerOf, rememberInvoker } from '../../overlays/stack';
 import { command } from '../../state/commands';
+import { startDebtAudit } from '../audit';
 import { openFolderAsProject } from '../../state/project-entry';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
@@ -48,6 +49,13 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
     case 'agent-dock':
       void command('window.agentDock', { open: true });
       return;
+    case 'debt-audit': {
+      const projectId = action.projectId;
+      void startDebtAudit(model, projectId).then((r) => {
+        if (r !== null) ui.openSession(projectId, r.sessionId as SessionId);
+      });
+      return;
+    }
     case 'open-session': {
       const session = model.sessions.byId[action.sessionId];
       if (session === undefined) return;

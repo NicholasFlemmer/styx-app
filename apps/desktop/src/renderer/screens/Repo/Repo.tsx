@@ -1,4 +1,5 @@
 import {
+  type SessionId,
   copy,
   fixtures,
   repoHasGit,
@@ -11,9 +12,11 @@ import { Button, EmptyState, Label, StatusDot, Table, TABLE_COLUMNS, TableCell, 
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { LaneDiff, parsePatch } from '../../features/diff';
 import { bridge, env } from '../../state/bridge';
+import { startDebtAudit } from '../../features/audit';
 import { command } from '../../state/commands';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
 import { useReadModel } from '../../state/read-model';
+import { useUiStore } from '../../state/ui-store';
 import { defaultLane, laneDiffHeader, laneRows, nextWorktreeBranch, noGitLine, remoteLine, repoOfProject, type Lane } from './repo-data';
 import s from './Repo.module.css';
 
@@ -96,6 +99,15 @@ export function Repo() {
   const fetch = useCallback(() => {
     if (projectId !== null) void command('worktree.fetch', { projectId });
   }, [projectId]);
+  /** Spawns the debt audit against this project and opens its chat, like any other agent session. */
+  const audit = useCallback(() => {
+    if (projectId === null) return;
+    const m = useReadModel.getState().model;
+    void startDebtAudit(m, projectId).then((r) => {
+      if (r !== null) useUiStore.getState().openSession(projectId, r.sessionId as SessionId);
+    });
+  }, [projectId]);
+
   const create = useCallback(() => {
     if (projectId === null) return;
     const m = useReadModel.getState().model;
@@ -140,6 +152,9 @@ export function Repo() {
           {remoteLine(repo)}
         </span>
         <span className={s['spacer']} />
+        <Button size="regular" onClick={audit} data-repo-audit="true">
+          {copy.debtAudit.action}
+        </Button>
         <Button size="regular" onClick={fetch}>
           {copy.repo.fetch}
         </Button>

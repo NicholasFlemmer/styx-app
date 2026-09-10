@@ -37,6 +37,7 @@ export type PaletteAction =
   | { kind: 'open-folder' }
   | { kind: 'clone-url' }
   | { kind: 'agent-dock' }
+  | { kind: 'debt-audit'; projectId: ProjectId }
   | { kind: 'open-session'; sessionId: SessionId }
   | { kind: 'switch-project'; projectId: ProjectId };
 
@@ -160,6 +161,15 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
     first: false,
     action: { kind: 'clone-url' },
   });
+  if (projectId !== null)
+    items.push({
+      id: 'debt-audit',
+      glyph: '▲',
+      label: copy.debtAudit.action,
+      meta: copy.palette.actions.debtAuditMeta,
+      first: false,
+      action: { kind: 'debt-audit', projectId },
+    });
   items.push({
     id: 'agent-dock',
     glyph: '■',
