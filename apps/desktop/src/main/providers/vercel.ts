@@ -144,6 +144,11 @@ export class VercelAdapter implements ProviderAdapter {
     return { bin: 'vercel', args: ['login'] };
   }
 
+  /** `--prod` only for a prod target; every other environment is a preview deployment. */
+  deployCommand(target: TargetInfo): CliCommand {
+    return { bin: 'vercel', args: target.env === 'prod' ? ['deploy', '--prod'] : ['deploy'] };
+  }
+
   async health(target: TargetInfo): Promise<HealthResult> {
     const entry = await readCliEntry(this.deps.vault, target).catch((e: Error) => {
       throw new CliAuthError(e.message, false);

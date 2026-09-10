@@ -208,6 +208,27 @@ export const copy = {
     tool: { running: '…', ok: '✓', error: '×' },
   },
 
+  /** Deploy (owner addition: §5 names the palette verb but the handoff has no deploy flow). */
+  deploy: {
+    reason: 'Deploy from Styx',
+    notDeployable: '{provider} has no deploy command',
+    notConnected: 'Connect the target before deploying',
+    denied: 'Deploy denied',
+    needsApproval: 'Waiting for you to approve access',
+    cliMissing: '{bin} not found on PATH',
+    title: 'Deploy · {target}',
+    phases: {
+      'requesting-grant': 'Requesting access…',
+      running: 'Deploying…',
+      succeeded: 'Deployed',
+      failed: 'Deploy failed',
+      cancelled: 'Deploy cancelled',
+    },
+    cancel: 'Cancel',
+    close: 'Close',
+    exitCode: 'exit {code}',
+  },
+
   accessRequest: {
     title: 'Access request',
     header: 'Access request · {target}',

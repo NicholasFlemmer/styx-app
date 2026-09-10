@@ -111,6 +111,11 @@ export interface ProviderAdapter {
   cliStatus?(): Promise<CliStatus>;
   /** The CLI's own login flow for `account` (or a fresh login when omitted); runs in a visible terminal. */
   cliLoginCommand?(account?: string): CliCommand;
+  /**
+   * The argv that deploys this target. Named by the adapter rather than hard-coded in a service, since only the
+   * provider knows how its own environments map onto flags (`--prod` vs a preview build).
+   */
+  deployCommand?(target: TargetInfo): CliCommand;
   /** Health probe that distinguishes auth expiry from transient failure; falls back to `test()` when absent. */
   health?(target: TargetInfo): Promise<HealthResult>;
 }

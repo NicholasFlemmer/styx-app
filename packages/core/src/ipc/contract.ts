@@ -206,6 +206,15 @@ export const commands = {
    * would run inside the renderer). The renderer reports where the hole in its layout is and main keeps the view
    * over it; `visible: false` detaches it so it cannot cover a modal, the palette, a sheet or a toast.
    */
+  /**
+   * Runs the provider's deploy command for a target. It requests a `deploy`-scoped grant first, so a prod deploy
+   * hits the same MFA gate and audit trail as any other prod access — a deploy is not a privileged side door.
+   */
+  'deploy.start': {
+    input: z.object({ targetId: targetIdSchema }),
+    output: z.object({ deployId: z.string(), terminalId: z.string() }),
+  },
+  'deploy.cancel': { input: z.object({ deployId: z.string() }), output: ok },
   'preview.set': {
     input: z.object({
       projectId: projectIdSchema,
@@ -649,6 +658,15 @@ export const events = {
   'ask.opened': z.object({ askId: askIdSchema, sessionId: sessionIdSchema, projectId: projectIdSchema }),
   /** A dock card was clicked: the main window brings that session forward. */
   'session.focus': z.object({ sessionId: sessionIdSchema }),
+  /** Deploy lifecycle; the output itself streams over the pty channel like any other terminal. */
+  'deploy.progress': z.object({
+    deployId: z.string(),
+    targetId: targetIdSchema,
+    phase: z.enum(['requesting-grant', 'running', 'succeeded', 'failed', 'cancelled']),
+    exitCode: z.number().int().nullable(),
+    error: z.string().nullable(),
+    terminalId: z.string().nullable(),
+  }),
   'grant.result': z.object({
     grantId: grantIdSchema,
     sessionId: sessionIdSchema.nullable(),

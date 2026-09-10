@@ -51,7 +51,8 @@ export const grantSchema = z.object({
 });
 export type Grant = z.infer<typeof grantSchema>;
 
-export const grantUseViaSchema = z.enum(['shim', 'get_credential', 'ssh-agent-sign', 'styx-cli']);
+/** `app` is Styx itself running a privileged command on the user's behalf (a deploy from the palette). */
+export const grantUseViaSchema = z.enum(['shim', 'get_credential', 'ssh-agent-sign', 'styx-cli', 'app']);
 export type GrantUseVia = z.infer<typeof grantUseViaSchema>;
 
 export const grantUseSchema = z.object({

@@ -26,6 +26,7 @@ import { RefreshScheduler } from './services/refresh-scheduler';
 import { RetentionJob } from './services/retention-job';
 import { SessionService } from './services/session-service';
 import { StreamRunner, type StreamRunnerLike } from './services/stream-runner';
+import { DeployService } from './services/deploy-service';
 import { TargetService } from './services/target-service';
 import { TerminalService } from './services/terminal-service';
 import { TranscriptService } from './services/transcript-service';
@@ -156,6 +157,7 @@ export interface Container {
   projects: ProjectService;
   hunks: HunkService;
   targets: TargetService;
+  deploys: DeployService;
   terminals: TerminalService;
   broker: BrokerHost;
   windows: WindowsPort;
@@ -279,6 +281,15 @@ export function buildContainer(opts: ContainerOptions): Container {
     pty,
     cli,
   });
+  const deploys = new DeployService({
+    repos,
+    publisher,
+    providers,
+    grants,
+    terminals,
+    pty,
+    cli,
+  });
   const refresh = new RefreshScheduler({
     repos,
     clock,
@@ -338,6 +349,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     projects,
     hunks,
     targets,
+    deploys,
     terminals,
     broker,
     windows: opts.windows,

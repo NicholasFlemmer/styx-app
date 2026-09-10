@@ -1,0 +1,34 @@
+@layer components {
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+  /* The accent marks the phases that are still moving; a failure goes muted-with-detail, not red-on-red. */
+  .status[data-phase='requesting-grant'] .t-label,
+  .status[data-phase='running'] .t-label {
+    color: var(--act);
+  }
+  .exit {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--mu);
+  }
+  .error {
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    border-left: 1px solid var(--ac);
+    background: var(--s1);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--tx);
+    user-select: text;
+  }
+  /* The CLI's own output: a build failure is invisible without it. */
+  .term {
+    height: 260px;
+    background: var(--term);
+    border: 1px solid var(--ln);
+  }
+}

@@ -14,7 +14,9 @@ export type ModalPayload =
   /** Recents + scanned repos with checkboxes → `project.add` each (rail menu, Home, palette; discrepancies #53). */
   | { modal: 'add-existing' }
   /** projectId is null during onboarding (no project yet); provider/targetId preselect the flow (Reconnect, step 4). */
-  | { modal: 'connect'; projectId: ProjectId | null; provider?: Provider; targetId?: TargetId };
+  | { modal: 'connect'; projectId: ProjectId | null; provider?: Provider; targetId?: TargetId }
+  /** Deploy progress: phases plus the CLI's own output, from `deploy.start` to its exit. */
+  | { modal: 'deploy'; targetId: TargetId };
 
 export type Overlay =
   | { id: string; kind: 'palette' }

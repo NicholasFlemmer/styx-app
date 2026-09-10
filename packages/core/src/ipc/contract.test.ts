@@ -19,6 +19,7 @@ describe('ipc contract', () => {
       [
         'ask',
         'audit',
+        'deploy',
         'detect',
         'dialog',
         'fs',

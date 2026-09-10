@@ -70,9 +70,9 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
       return;
     }
     case 'deploy': {
-      // Deploy flow lands with the grant sheet (Phase 6); route to the project's workspace for now.
+      // This row is the palette's default selection, so ⌘K then Enter used to run a no-op.
       ui.setProject(action.projectId);
-      ui.setScreen('workspace');
+      open({ kind: 'modal', modal: 'deploy', targetId: action.targetId });
       return;
     }
   }

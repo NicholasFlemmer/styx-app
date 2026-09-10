@@ -3,6 +3,7 @@ import { AuditDrawer } from '../features/audit-drawer/AuditDrawer';
 import { GrantSheet } from '../features/grant-sheet/GrantSheet';
 import { AddExistingModal } from '../features/modals/AddExistingModal';
 import { ConnectModal } from '../features/modals/ConnectModal';
+import { DeployModal } from '../features/modals/DeployModal';
 import { NewProjectModal } from '../features/modals/NewProjectModal';
 import { SpawnModal } from '../features/modals/SpawnModal';
 import { Palette } from '../features/palette/Palette';
@@ -23,6 +24,8 @@ const render = (o: Overlay) => {
           return <NewProjectModal key={o.id} id={o.id} {...(o.mode !== undefined ? { mode: o.mode } : {})} />;
         case 'add-existing':
           return <AddExistingModal key={o.id} id={o.id} />;
+        case 'deploy':
+          return <DeployModal key={o.id} id={o.id} targetId={o.targetId} />;
         case 'connect':
           return (
             <ConnectModal

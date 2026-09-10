@@ -203,7 +203,7 @@ export const grantUses = sqliteTable('grant_uses', {
     .notNull()
     .references(() => grants.id, { onDelete: 'cascade' }),
   sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
-  via: text('via', { enum: ['shim', 'get_credential', 'ssh-agent-sign', 'styx-cli'] }).notNull(),
+  via: text('via', { enum: ['shim', 'get_credential', 'ssh-agent-sign', 'styx-cli', 'app'] }).notNull(),
   command: text('command'),
   scopeUsed: text('scope_used'),
   exitCode: integer('exit_code'),
