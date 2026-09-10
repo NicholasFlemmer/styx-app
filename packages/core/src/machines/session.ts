@@ -7,7 +7,9 @@ export type SessionEvent =
   | { type: 'ask'; askId: AskId }
   | { type: 'ask-resolved'; askId: AskId }
   | { type: 'finish'; exitCode: number | null }
-  | { type: 'error'; reason: PausedReason }
+  | { type: 'error'; reason: Exclude<PausedReason, 'user'> }
+  /** The user held the agent from the chat (distinct from `error`, which is a fault the app detected). */
+  | { type: 'pause' }
   | { type: 'resolve' }
   | { type: 'activity' }
   | { type: 'quiet' };
@@ -20,7 +22,8 @@ export type SessionEffect =
   | { type: 'cancelOpenAsks'; sessionId: SessionId }
   | { type: 'cancelTimers'; sessionId: SessionId }
   | { type: 'revokeSessionGrants'; sessionId: SessionId }
-  | { type: 'setBanner'; sessionId: SessionId; reason: PausedReason }
+  /** Only a fault banners; a user hold has nothing to report, so `user` is excluded here by construction. */
+  | { type: 'setBanner'; sessionId: SessionId; reason: Exclude<PausedReason, 'user'> }
   | { type: 'clearBanner'; sessionId: SessionId }
   | { type: 'postSystemMessage'; sessionId: SessionId; body: string };
 
@@ -74,6 +77,12 @@ const finish: Cell<Extract<SessionEvent, { type: 'finish' }>> = (_event, ctx) =>
 const pause: Cell<Extract<SessionEvent, { type: 'error' }>> = (event, ctx) =>
   ok('paused', [{ type: 'setBanner', sessionId: ctx.sessionId, reason: event.reason }], event.reason);
 
+/**
+ * User-initiated hold. Unlike `error` it raises no banner: nothing is wrong, the agent is simply held at its
+ * next tool boundary until the user resumes, and `resolve` releases it exactly as it releases an error pause.
+ */
+const holdByUser: Cell<SessionEvent> = () => ok('paused', [], 'user');
+
 const stay =
   (state: SessionState): Cell<SessionEvent> =>
   () =>
@@ -86,6 +95,7 @@ const TABLE: Record<SessionState, Row> = {
     'ask-resolved': invalid,
     finish,
     error: pause,
+    pause: holdByUser,
     resolve: invalid,
     activity: () => ok('working'),
     quiet: invalid,
@@ -96,6 +106,7 @@ const TABLE: Record<SessionState, Row> = {
     'ask-resolved': invalid,
     finish,
     error: pause,
+    pause: holdByUser,
     resolve: invalid,
     activity: stay('working'),
     quiet: () => ok('idle'),
@@ -107,6 +118,8 @@ const TABLE: Record<SessionState, Row> = {
     'ask-resolved': (_event, ctx) => afterAskResolved(ctx),
     finish,
     error: pause,
+    /** Pausing with an ask open is allowed: the ask stays open and answering it later still works. */
+    pause: holdByUser,
     resolve: invalid,
     /** needs-you never times out (spec §1). */
     activity: stay('needs-you'),
@@ -118,6 +131,7 @@ const TABLE: Record<SessionState, Row> = {
     'ask-resolved': invalid,
     finish: invalid,
     error: invalid,
+    pause: invalid,
     resolve: invalid,
     activity: invalid,
     quiet: invalid,
@@ -129,6 +143,8 @@ const TABLE: Record<SessionState, Row> = {
     'ask-resolved': (_event, ctx) => ok('paused', [], ctx.pausedReason),
     finish,
     error: pause,
+    /** Already held: pausing again is a no-op rather than an error, so a double click is harmless. */
+    pause: (_event, ctx) => ok('paused', [], ctx.pausedReason),
     resolve: (_event, ctx) => {
       const next = afterAskResolved(ctx);
       return { ...next, effects: [{ type: 'clearBanner', sessionId: ctx.sessionId }, ...next.effects] };
@@ -154,6 +170,7 @@ export const SESSION_EVENT_TYPES: readonly SessionEventType[] = [
   'ask-resolved',
   'finish',
   'error',
+  'pause',
   'resolve',
   'activity',
   'quiet',

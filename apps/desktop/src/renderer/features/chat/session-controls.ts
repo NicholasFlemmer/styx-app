@@ -86,31 +86,49 @@ export interface SessionControls {
   model: boolean;
   /** Effort select (Claude Code only; applies at the next relaunch). */
   effort: boolean;
-  /** `Stop · esc` while a stream session is mid-turn. */
+  /** `Stop · esc` while a session is mid-turn. Every runner can be interrupted; the pty branch writes ^C. */
   stop: boolean;
+  /** Hold the agent at its next tool boundary. Only the stream runner has a tool boundary to hold at. */
+  pause: boolean;
+  /** The session is already held: the control reads Resume. */
+  paused: boolean;
 }
 
-const NO_CONTROLS: SessionControls = { mode: false, model: false, effort: false, stop: false };
+const NO_CONTROLS: SessionControls = {
+  mode: false,
+  model: false,
+  effort: false,
+  stop: false,
+  pause: false,
+  paused: false,
+};
 
 /** A process is attached and the session has not ended: live settings can reach it. */
 export const isLive = (session: Pick<Session, 'pid' | 'state'>): boolean =>
   session.pid !== null && session.state !== 'done';
 
 export const sessionControls = (
-  session: Pick<Session, 'agent' | 'runner' | 'pid' | 'state'> | null | undefined,
+  session: Pick<Session, 'agent' | 'runner' | 'pid' | 'state' | 'pausedReason'> | null | undefined,
 ): SessionControls => {
   if (session === null || session === undefined || !isLive(session)) return NO_CONTROLS;
   const claude = session.agent === 'claude';
   const streaming = session.runner === 'stream';
+  const heldByUser = session.state === 'paused' && session.pausedReason === 'user';
   return {
     mode: claude,
     model: claude || session.agent === 'cursor',
     effort: claude,
-    stop: streaming && session.state === 'working',
+    // Stop was gated on `streaming`, so codex / gemini / shell had no stop control at all even though the pty
+    // branch has always written ^C. Every live runner mid-turn can be stopped.
+    stop: session.state === 'working',
+    // Pausing means parking a `can_use_tool` request, which only the stream runner produces.
+    pause: streaming && (session.state === 'working' || heldByUser),
+    paused: heldByUser,
   };
 };
 
-export const hasControls = (c: SessionControls): boolean => c.mode || c.model || c.effort || c.stop;
+export const hasControls = (c: SessionControls): boolean =>
+  c.mode || c.model || c.effort || c.stop || c.pause;
 
 /** Which spawn-time selects an agent tile exposes (same rule as the live controls, minus the process gate). */
 export const spawnControlsFor = (

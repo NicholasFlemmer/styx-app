@@ -107,6 +107,20 @@ function SessionControlsRow({ session }: { session: Session }) {
           data-session-control="model"
         />
       )}
+      {c.pause && (
+        <Button
+          variant="ghost"
+          className={s['stop']}
+          on={c.paused}
+          title={c.paused ? copy.chat.controls.resume : copy.chat.controls.paused}
+          onClick={() =>
+            void command(c.paused ? 'session.resume' : 'session.pause', { sessionId: session.id })
+          }
+          data-session-control="pause"
+        >
+          {c.paused ? copy.chat.controls.resume : copy.chat.controls.pause}
+        </Button>
+      )}
       {c.stop && (
         <Button
           variant="ghost"

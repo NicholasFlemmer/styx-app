@@ -53,7 +53,9 @@ export const sessions = sqliteTable(
       .default('pty'),
     model: text('model'),
     state: text('state', { enum: ['idle', 'working', 'needs-you', 'done', 'paused'] }).notNull(),
-    pausedReason: text('paused_reason', { enum: ['cli-missing', 'conflict', 'auth-expired'] }),
+    pausedReason: text('paused_reason', {
+      enum: ['cli-missing', 'conflict', 'auth-expired', 'user'],
+    }),
     note: text('note').notNull().default(''),
     firstMessage: text('first_message'),
     autoApproveEdits: integer('auto_approve_edits').notNull().default(0),

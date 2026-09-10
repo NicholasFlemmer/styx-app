@@ -51,6 +51,11 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
     return {};
   });
 
+  bus.register('session.pause', ({ sessionId }) => {
+    sessions.pause(sessionId);
+    return {};
+  });
+
   bus.register('session.resume', async ({ sessionId }) => {
     await sessions.resume(sessionId);
     return {};

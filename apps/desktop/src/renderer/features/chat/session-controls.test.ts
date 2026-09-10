@@ -96,35 +96,61 @@ describe('session controls (Claude Code parity, discrepancy #54)', () => {
     expect(isLive({ pid: 4001, state: 'done' })).toBe(false);
   });
 
-  it('claude shows mode/model/effort (+ stop while working); cursor shows model only; others nothing', () => {
+  it('claude shows mode/model/effort (+ stop and pause while working); cursor shows model; every runner can stop', () => {
     const s = claude();
     expect(s.state).toBe('working');
-    expect(sessionControls(s)).toEqual({ mode: true, model: true, effort: true, stop: true });
+    expect(sessionControls(s)).toEqual({
+      mode: true,
+      model: true,
+      effort: true,
+      stop: true,
+      pause: true,
+      paused: false,
+    });
     expect(sessionControls({ ...s, state: 'idle' })).toEqual({
       mode: true,
       model: true,
       effort: true,
       stop: false,
+      pause: false,
+      paused: false,
     });
     expect(sessionControls({ ...s, agent: 'cursor' })).toEqual({
       mode: false,
       model: true,
       effort: false,
       stop: true,
+      pause: true,
+      paused: false,
     });
+    // A pty runner has no tool boundary to hold at, but ^C has always worked: it now gets the Stop control too.
     expect(sessionControls({ ...s, agent: 'codex', runner: 'pty' })).toEqual({
       mode: false,
       model: false,
       effort: false,
+      stop: true,
+      pause: false,
+      paused: false,
+    });
+    // Held by the user: the control reads Resume, and Stop is gone because the turn is not running.
+    expect(sessionControls({ ...s, state: 'paused', pausedReason: 'user' })).toMatchObject({
       stop: false,
+      pause: true,
+      paused: true,
+    });
+    // An error pause is a different thing: the banner owns it, not the chat control.
+    expect(sessionControls({ ...s, state: 'paused', pausedReason: 'cli-missing' })).toMatchObject({
+      pause: false,
+      paused: false,
     });
     expect(sessionControls({ ...s, pid: null })).toEqual({
       mode: false,
       model: false,
       effort: false,
       stop: false,
+      pause: false,
+      paused: false,
     });
-    expect(sessionControls(null)).toEqual({ mode: false, model: false, effort: false, stop: false });
     expect(hasControls(sessionControls(s))).toBe(true);
     expect(hasControls(sessionControls(null))).toBe(false);
   });

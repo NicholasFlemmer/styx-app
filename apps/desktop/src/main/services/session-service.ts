@@ -618,7 +618,13 @@ export class SessionService {
       this.finaliseStreams(s.id);
       this.deps.transcript.system(s.id, copy.chat.controls.interrupted);
       this.applyEvent(s.id, { type: 'quiet' });
-    } else if (this.deps.pty.has(s.id)) this.deps.pty.write(s.id, '\x03');
+    } else if (this.deps.pty.has(s.id)) {
+      // A pty session got ^C but no system line and no state event, so the chat showed nothing and the session
+      // stayed 'working' until the CLI's own hook happened to fire. Say what happened, like the stream branch.
+      this.deps.pty.write(s.id, '\x03');
+      this.deps.transcript.system(s.id, copy.chat.controls.interrupted);
+      this.applyEvent(s.id, { type: 'quiet' });
+    }
   }
 
   /** Raw bytes from the terminal pane. Stream sessions have no TTY, so typed input is ignored there. */
@@ -673,9 +679,37 @@ export class SessionService {
    * cleanly again; auth-expired → no expired target remains in the project. The process is relaunched when none is
    * attached any more.
    */
+  /**
+   * Holds the agent from the chat. Nothing is killed and nothing is discarded: the next `can_use_tool` request
+   * is parked instead of answered, so the CLI blocks mid-turn and `resume` continues the same run. Under
+   * `bypassPermissions` / `dontAsk` / `acceptEdits` the CLI asks for less (or nothing), so the hold takes effect
+   * at the next request that would have asked — the chat says as much rather than pretending it is instant.
+   */
+  pause(sessionId: string): void {
+    const s = this.require(sessionId);
+    if (s.state === 'paused') return; // already held; a double click is harmless
+    if (s.state === 'done') fail('invalid-transition', 'session has ended');
+    this.applyEvent(s.id, { type: 'pause' });
+    this.deps.transcript.system(s.id, copy.chat.controls.paused);
+  }
+
+  /** Requests parked by `pause`, released in arrival order on resume. */
+  private readonly heldPermissions = new Map<string, { requestId: string; toolName: string; input: Record<string, unknown> }[]>();
+
   async resume(sessionId: string): Promise<void> {
     const s = this.require(sessionId);
     if (s.state !== 'paused') fail('invalid-transition', 'session is not paused');
+    // A user hold has nothing to re-check and no banner to clear: release what was parked and carry on.
+    if (s.pausedReason === 'user') {
+      this.applyEvent(s.id, { type: 'resolve' });
+      this.deps.transcript.system(s.id, copy.chat.controls.resumed);
+      const held = this.heldPermissions.get(s.id) ?? [];
+      this.heldPermissions.delete(s.id);
+      const live = this.require(s.id);
+      for (const h of held) this.onPermissionRequest(live, h.requestId, h.toolName, h.input);
+      if (!this.isRunning(s.id)) await this.relaunch(this.require(s.id));
+      return;
+    }
     const { repos } = this.deps;
     const worktree = repos.worktrees.get(s.worktreeId) ?? fail('not-found', 'worktree missing');
     const project = repos.projects.get(s.projectId) ?? fail('not-found', 'project missing');
@@ -1133,6 +1167,14 @@ export class SessionService {
     toolName: string,
     input: Record<string, unknown>,
   ): void {
+    // Held by the user: park the request rather than answering it. The CLI blocks here, which is what makes a
+    // pause resumable — the turn is never torn down, so resume picks up exactly where it stopped.
+    if (s.state === 'paused' && s.pausedReason === 'user') {
+      const queue = this.heldPermissions.get(s.id) ?? [];
+      queue.push({ requestId, toolName, input });
+      this.heldPermissions.set(s.id, queue);
+      return;
+    }
     if (toolName === 'AskUserQuestion') {
       const parsed = askUserQuestionInput.safeParse(input);
       if (parsed.success) {

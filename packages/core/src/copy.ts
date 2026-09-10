@@ -95,6 +95,11 @@ export const copy = {
       model: 'Model',
       effort: 'Effort',
       stop: 'Stop · esc',
+      /** User-initiated hold (owner addition: §1's `paused` is the error branch only). */
+      pause: 'Pause',
+      resume: 'Resume',
+      paused: 'paused — the agent stops at its next tool call',
+      resumed: 'resumed',
       cycleMode: '⇧⇥ mode',
       interrupted: 'interrupted',
       /** A Bash tool call reached a cloud CLI by absolute path, skipping the shim (owner decision: warn, do not block). */

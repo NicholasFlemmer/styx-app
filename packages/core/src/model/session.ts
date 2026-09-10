@@ -16,7 +16,8 @@ import {
 export const sessionStateSchema = z.enum(['idle', 'working', 'needs-you', 'done', 'paused']);
 export type SessionState = z.infer<typeof sessionStateSchema>;
 
-export const pausedReasonSchema = z.enum(['cli-missing', 'conflict', 'auth-expired']);
+/** The first three are faults Styx detected; `user` is the owner holding the agent from the chat. */
+export const pausedReasonSchema = z.enum(['cli-missing', 'conflict', 'auth-expired', 'user']);
 export type PausedReason = z.infer<typeof pausedReasonSchema>;
 
 /**
@@ -101,6 +102,8 @@ export const messageKindSchema = z.enum([
   'system',
   'tool',
   'thinking',
+  'questions',
+  'plan',
 ]);
 export type MessageKind = z.infer<typeof messageKindSchema>;
 

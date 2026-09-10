@@ -1091,7 +1091,57 @@ describe('SessionService Claude Code parity (stream)', () => {
     expect(flag(stream.spawned[1]!.args, '--effort')).toBe('low');
   });
 
-  it('interrupt: stream → interrupt control + "interrupted" system line + idle; pty → Ctrl+C only', async () => {
+  it('pause holds the next tool request and resume releases it into the same run', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    a.sessions.applyEvent(session.id, { type: 'activity' });
+    expect(a.sessions.get(session.id)?.state).toBe('working');
+
+    await a.bus.dispatch(sender, 'session.pause', { sessionId: session.id });
+    expect(a.sessions.get(session.id)).toMatchObject({ state: 'paused', pausedReason: 'user' });
+
+    // A tool request arriving while held is parked, not answered: no ask, no needs-you, nothing sent to the CLI.
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'p-held',
+      toolName: 'Bash',
+      input: { command: 'rm -rf build' },
+    });
+    expect(a.repos.pendingAsks.openBySession(session.id)).toEqual([]);
+    expect(stream.permissions).toEqual([]);
+    expect(a.sessions.get(session.id)?.state).toBe('paused');
+
+    // Resuming releases it: the request becomes the ask it would have been, and the turn was never torn down.
+    await a.bus.dispatch(sender, 'session.resume', { sessionId: session.id });
+    const asks = a.repos.pendingAsks.openBySession(session.id);
+    expect(asks).toHaveLength(1);
+    expect(asks[0]?.payload).toMatchObject({ kind: 'decision' });
+    expect(a.sessions.get(session.id)?.state).toBe('needs-you');
+    expect(systemLines(a, session.id)).toContain('resumed');
+  });
+
+  it('pause raises no banner: it is a hold, not a fault', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    await a.bus.dispatch(sender, 'session.pause', { sessionId: session.id });
+    expect(a.repos.sessions.get(session.id)?.pausedReason).toBe('user');
+    expect(a.repos.notifications.all().filter((n) => n.bannerKey !== null)).toEqual([]);
+  });
+
+  it('pausing twice is harmless; a finished session cannot be paused', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    await a.bus.dispatch(sender, 'session.pause', { sessionId: session.id });
+    const r = await a.bus.dispatch(sender, 'session.pause', { sessionId: session.id });
+    expect(r).toMatchObject({ ok: true });
+    expect(a.sessions.get(session.id)?.pausedReason).toBe('user');
+    a.sessions.close(session.id);
+    await expect(
+      a.bus.dispatch(sender, 'session.pause', { sessionId: session.id }),
+    ).resolves.toMatchObject({ ok: false });
+  });
+
+  it('interrupt: stream → interrupt control + "interrupted" system line + idle; pty → Ctrl+C, line and idle', async () => {
     const { app: a } = app();
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
     expect(a.sessions.get(session.id)?.state).toBe('working');
@@ -1105,8 +1155,11 @@ describe('SessionService Claude Code parity (stream)', () => {
     const { session: codex } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
     a.sessions.interrupt(codex.id);
     expect(pty.writes.at(-1)).toEqual({ id: codex.id, data: '\x03' });
-    expect(systemLines(a, codex.id)).toEqual([]);
-    expect(a.sessions.get(codex.id)?.state).toBe('working');
+    // A pty session used to get ^C silently: no line in the chat and no state change, so nothing looked to have
+    // happened. It now reports itself like the stream branch does.
+    expect(systemLines(a, codex.id)).toEqual(['interrupted']);
+    // ...and ends the turn, rather than sitting in 'working' until the CLI's own hook happens to fire.
+    expect(a.sessions.get(codex.id)?.state).toBe('idle');
   });
 
   it('compact_boundary arrives as a system transcript line', async () => {
