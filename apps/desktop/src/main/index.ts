@@ -39,6 +39,7 @@ import {
 import { NotificationService, type AskSummary } from './services/notification-service';
 import { ElectronOsNotifier, type ElectronLike } from './services/os-notifier';
 import { writeShims } from './services/shim-service';
+import { PreviewService } from './services/preview-service';
 import { rendererPaths, WindowService } from './services/window-service';
 
 const env = process.env;
@@ -350,6 +351,7 @@ async function boot(): Promise<void> {
       rendererOrigins,
     },
     windows: windowsPort,
+    preview: new PreviewService({ mainWindow: () => windowService.mainWindow() ?? null }),
     dialogs: dialogsPort,
     notifications,
     openExternal: (url) =>

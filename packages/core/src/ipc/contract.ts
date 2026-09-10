@@ -32,7 +32,7 @@ import {
   sessionTogglesSchema,
   transcriptMessageSchema,
 } from '../model/session';
-import { appSettingsSchema, projectSettingsSchema } from '../model/settings';
+import { appSettingsSchema, previewDeviceSchema, projectSettingsSchema } from '../model/settings';
 import { pendingAskSchema } from '../model/session';
 import { notificationSchema } from '../model/notification';
 import { projectSchema, repoSchema, worktreeSchema } from '../model/project';
@@ -197,6 +197,30 @@ export const commands = {
     output: ok,
   },
   /** Template tile (spec §4.12): built-ins from `resources/templates` plus repos tagged `styx-template` in the GitHub org. */
+  /**
+   * The design window: a live view of the running app beside the code. It is a native WebContentsView owned by
+   * main, not an iframe (the renderer CSP is `default-src 'self'`) and not a `<webview>` (deprecated, and it
+   * would run inside the renderer). The renderer reports where the hole in its layout is and main keeps the view
+   * over it; `visible: false` detaches it so it cannot cover a modal, the palette, a sheet or a toast.
+   */
+  'preview.set': {
+    input: z.object({
+      projectId: projectIdSchema,
+      visible: z.boolean(),
+      bounds: z.object({
+        x: z.number().int(),
+        y: z.number().int(),
+        width: z.number().int().nonnegative(),
+        height: z.number().int().nonnegative(),
+      }),
+      url: z.string(),
+      device: previewDeviceSchema,
+    }),
+    output: ok,
+  },
+  'preview.reload': { input: z.object({}), output: ok },
+  /** Hands the current URL to the OS browser. */
+  'preview.openExternal': { input: z.object({ url: z.string() }), output: ok },
   'project.templates': {
     input: z.object({}),
     output: z.object({

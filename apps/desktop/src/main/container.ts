@@ -44,6 +44,29 @@ export interface WindowsPort {
   focusMain(): void;
 }
 
+/**
+ * The design window's native view (Electron `WebContentsView`). A port so the container stays Electron-free and
+ * buildable in tests; `main/index.ts` supplies the real one.
+ */
+export interface PreviewPort {
+  set(input: {
+    visible: boolean;
+    bounds: { x: number; y: number; width: number; height: number };
+    url: string;
+    device: 'desktop' | 'tablet' | 'phone';
+  }): void;
+  reload(): void;
+  openExternal(url: string): Promise<void>;
+  detach(): void;
+}
+
+const NO_PREVIEW: PreviewPort = {
+  set: () => undefined,
+  reload: () => undefined,
+  openExternal: async () => undefined,
+  detach: () => undefined,
+};
+
 /** Native file/folder pickers (Electron `dialog`), parented to the main window; `null` when the user cancels. */
 export interface DialogsPort {
   pickFolder(opts: { title?: string | undefined; defaultPath?: string | undefined }): Promise<string | null>;
@@ -76,6 +99,7 @@ export interface ContainerOptions {
   mfaProvider: MfaProvider;
   runtime: Runtime;
   windows: WindowsPort;
+  preview?: PreviewPort;
   /** Native pickers; omitted in tests (`NO_DIALOGS`). */
   dialogs?: DialogsPort;
   notifications: NotificationService | null;
@@ -131,6 +155,7 @@ export interface Container {
   terminals: TerminalService;
   broker: BrokerHost;
   windows: WindowsPort;
+  preview: PreviewPort;
   dialogs: DialogsPort;
   runtime: Runtime;
   openExternal: (url: string) => Promise<void>;
@@ -312,6 +337,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     terminals,
     broker,
     windows: opts.windows,
+    preview: opts.preview ?? NO_PREVIEW,
     dialogs: opts.dialogs ?? NO_DIALOGS,
     runtime,
     openExternal: opts.openExternal,

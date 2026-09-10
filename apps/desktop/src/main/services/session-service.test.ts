@@ -666,8 +666,23 @@ describe('SessionService pty runner + CLI hooks', () => {
     const { session } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
     expect(session).toMatchObject({ state: 'paused', pausedReason: 'cli-missing' });
     expect(pty.spawned).toHaveLength(0);
+    // `resume` re-detects, so the first attempt must be stubbed too: left unstubbed it scanned the real PATH,
+    // which made the assertion depend on whether this machine happens to have codex (and cost ~2s).
+    a.detect.detectClis = async () => [
+      {
+        agent: 'codex',
+        label: 'Codex',
+        binary: null,
+        version: null,
+        found: false,
+        authState: 'unknown',
+        capabilities: {},
+        source: 'path',
+        alternatives: [],
+      },
+    ];
     await expect(a.sessions.resume(session.id)).rejects.toMatchObject({ code: 'cli-missing' });
-    // detection now finds it (fake detect: whatever the real machine has, so seed the row and stub detect)
+    // ...and now detection finds it.
     a.detect.detectClis = async () => [
       {
         agent: 'codex',

@@ -29,6 +29,7 @@ describe('ipc contract', () => {
         'notify',
         'onboarding',
         'policy',
+        'preview',
         'project',
         'session',
         'settings',

@@ -10,9 +10,11 @@ import {
   type SessionId,
   type Worktree,
 } from '@styx/core';
+import { Tab } from '@styx/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChatPane } from '../../features/chat/ChatPane';
 import { FilesPane } from '../../features/editor/FilesPane';
+import { DesignPane } from '../../features/preview';
 import { FileTabs, type FileTab } from '../../features/editor/FileTabs';
 import { FIXTURE_DEFAULT_FILE, type FileNode, type GitStatus } from '../../features/editor/fixture-files';
 import { loadWorktreeTree } from '../../features/editor/fs-source';
@@ -31,6 +33,9 @@ import { command } from '../../state/commands';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
 import { useUiStore } from '../../state/ui-store';
 import s from './Workspace.module.css';
+
+/** Which half of the editor column is showing; persisted alongside the pane sizes. */
+const WORKSPACE_MODE_KEY = 'workspace-mode';
 
 /**
  * The worktree the editor column shows: the project's default session tab's worktree (what the titlebar branch
@@ -162,6 +167,14 @@ export function Workspace() {
     applyWordWrap(wrapPref === 1);
   }, [wrapPref]);
   const ide = fallbackIde(model);
+  // Code / Design lives in the ui store's pane sizes so it survives a screen switch like the other pane prefs.
+  const modePref = useUi((u) => u.paneSizes[WORKSPACE_MODE_KEY] ?? 0);
+  const mode: 'code' | 'design' = modePref === 1 ? 'design' : 'code';
+  const setMode = (next: 'code' | 'design') => {
+    setPaneSize(WORKSPACE_MODE_KEY, next === 'design' ? 1 : 0);
+    void command('ui.persist', { paneSizes: { [WORKSPACE_MODE_KEY]: next === 'design' ? 1 : 0 } });
+  };
+  const devUrl = projectId === null ? null : (model.settings.project[projectId]?.devUrl.value ?? null);
 
   if (projectId === null || worktree === null || worktreeId === null) {
     return (
@@ -190,17 +203,43 @@ export function Workspace() {
         }
       />
       <div ref={column} className={s['column']}>
-        <FileTabs tabs={tabs} activePath={activePath} onSelect={openFile} onClose={closeFile} />
-        <MonacoEditor
-          worktreeId={worktreeId}
-          path={activePath}
-          changes={changes}
-          agentOf={agentOf}
-          now={now}
-          screenReader={screenReader}
-          onFileState={setFileState}
-          onWordWrap={(on) => setPaneSize(WORD_WRAP_KEY, on ? 1 : 0)}
-        />
+        {/*
+          Code / Design share the editor column rather than splitting it: the design window needs the full width
+          to be worth having at tablet and desktop sizes, and the owner ranks it above the editor.
+        */}
+        <div className={s['modes']} role="tablist" aria-label={copy.workspace.design.design}>
+          <Tab
+            variant="approvals"
+            label={copy.workspace.design.code}
+            inv={mode === 'code'}
+            onClick={() => setMode('code')}
+            data-workspace-mode="code"
+          />
+          <Tab
+            variant="approvals"
+            label={copy.workspace.design.design}
+            inv={mode === 'design'}
+            onClick={() => setMode('design')}
+            data-workspace-mode="design"
+          />
+        </div>
+        {mode === 'design' ? (
+          <DesignPane projectId={projectId} devUrl={devUrl} active />
+        ) : (
+          <>
+            <FileTabs tabs={tabs} activePath={activePath} onSelect={openFile} onClose={closeFile} />
+            <MonacoEditor
+              worktreeId={worktreeId}
+              path={activePath}
+              changes={changes}
+              agentOf={agentOf}
+              now={now}
+              screenReader={screenReader}
+              onFileState={setFileState}
+              onWordWrap={(on) => setPaneSize(WORD_WRAP_KEY, on ? 1 : 0)}
+            />
+          </>
+        )}
         {changes.length > 0 && hunkAgent !== null && (
           <HunkBar
             label={hunkBarLabel(changes.length, hunkAgent, hunkNote)}

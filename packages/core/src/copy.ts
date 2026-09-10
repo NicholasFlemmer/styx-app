@@ -588,6 +588,18 @@ export const copy = {
     closeFile: (name: string): string => `Close ${name}`,
     /** Chat pane drag handle (owner addition: §4.1 gives the terminal one, the chat pane none). */
     resizeChat: 'Resize chat pane',
+    /** The design window (owner addition: the handoff has no preview surface). */
+    design: {
+      code: 'Code',
+      design: 'Design',
+      urlLabel: 'Dev server URL',
+      urlPlaceholder: 'localhost:3000',
+      reload: 'Reload',
+      openExternal: 'Open in browser',
+      devices: { desktop: 'Desktop', tablet: 'Tablet', phone: 'Phone' },
+      empty: 'Point Styx at your dev server to see it here.',
+      hint: 'Start the server in the terminal below, then enter its URL.',
+    },
     openIn: 'Open in {ide}',
     terminal: 'TERMINAL · {branch}',
     editorStatus: 'Monaco · {eol} · {lang}',

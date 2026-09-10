@@ -1,0 +1,159 @@
+import { PREVIEW_DEVICES, copy, type PreviewDevice, type ProjectId } from '@styx/core';
+import { Button, Input } from '@styx/ui';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { command } from '../../state/commands';
+import { useUi } from '../../state/hooks';
+import s from './DesignPane.module.css';
+
+export interface DesignPaneProps {
+  projectId: ProjectId;
+  /** The project's saved dev-server URL (`project.settings.devUrl`). */
+  devUrl: string | null;
+  /** False while the Code tab is showing: the native view detaches rather than hiding behind the editor. */
+  active: boolean;
+}
+
+/**
+ * The design window: a live view of the running app, beside the code.
+ *
+ * The page itself is a native `WebContentsView` owned by main — it cannot be an iframe under the renderer's CSP.
+ * This component is therefore chrome plus a measured hole: it reports the rectangle the view should occupy and
+ * whether it should be on screen at all. It must report `visible: false` whenever an overlay is open, because a
+ * native view paints above the DOM and would otherwise cover the palette, a modal, the grant sheet or a toast.
+ */
+export function DesignPane({ projectId, devUrl, active }: DesignPaneProps) {
+  const hole = useRef<HTMLDivElement>(null);
+  const [device, setDevice] = useState<PreviewDevice>('desktop');
+  const overlays = useUi((u) => u.overlays);
+  const url = devUrl ?? '';
+  // Re-seed the field when the saved URL changes (React's documented adjust-state-during-render pattern, rather
+  // than an effect, which would cascade a second render every time the URL round-trips through main).
+  const [seed, setSeed] = useState(url);
+  const [draft, setDraft] = useState(url);
+  if (seed !== url) {
+    setSeed(url);
+    setDraft(url);
+  }
+
+  // A native view sits above the DOM, so anything floating must take it off screen while it is open.
+  const covered = overlays.length > 0;
+  const visible = active && !covered && url !== '';
+
+  const report = useCallback(() => {
+    const el = hole.current;
+    const box = el === null ? null : el.getBoundingClientRect();
+    void command('preview.set', {
+      projectId,
+      visible: visible && box !== null,
+      bounds: {
+        x: Math.round(box?.left ?? 0),
+        y: Math.round(box?.top ?? 0),
+        width: Math.round(box?.width ?? 0),
+        height: Math.round(box?.height ?? 0),
+      },
+      url,
+      device,
+    });
+  }, [projectId, visible, url, device]);
+
+  // Bounds change with the window, the chat pane's drag handle, the terminal's, and the files pane — observe the
+  // hole itself rather than trying to enumerate every cause.
+  useEffect(() => {
+    report();
+    const el = hole.current;
+    if (el === null) return;
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    window.addEventListener('resize', report);
+    window.addEventListener('scroll', report, true);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', report);
+      window.removeEventListener('scroll', report, true);
+    };
+  }, [report]);
+
+  // Leaving the pane (or the screen) must detach the view, not merely stop updating it.
+  useEffect(
+    () => () => {
+      void command('preview.set', {
+        projectId,
+        visible: false,
+        bounds: { x: 0, y: 0, width: 0, height: 0 },
+        url: '',
+        device: 'desktop',
+      });
+    },
+    [projectId],
+  );
+
+  const save = () => {
+    const next = draft.trim();
+    if (next === url) return;
+    void command('project.settings.set', { projectId, patch: { devUrl: next === '' ? null : next } });
+  };
+
+  const onUrlKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      save();
+    }
+  };
+
+  return (
+    <div className={s['pane']} data-design-pane="true">
+      <div className={s['bar']}>
+        <Input
+          className={s['url'] ?? ''}
+          mono
+          value={draft}
+          aria-label={copy.workspace.design.urlLabel}
+          placeholder={copy.workspace.design.urlPlaceholder}
+          spellCheck={false}
+          autoComplete="off"
+          onChange={(e) => setDraft(e.currentTarget.value)}
+          onBlur={save}
+          onKeyDown={onUrlKeyDown}
+        />
+        <div className={s['devices']} role="group" aria-label={copy.workspace.design.devices.desktop}>
+          {PREVIEW_DEVICES.map((d) => (
+            <Button
+              key={d}
+              size="compact"
+              variant="ghost"
+              on={device === d}
+              onClick={() => setDevice(d)}
+              data-preview-device={d}
+            >
+              {copy.workspace.design.devices[d]}
+            </Button>
+          ))}
+        </div>
+        <Button
+          size="compact"
+          variant="ghost"
+          disabled={url === ''}
+          onClick={() => void command('preview.reload', {})}
+        >
+          {copy.workspace.design.reload}
+        </Button>
+        <Button
+          size="compact"
+          variant="ghost"
+          disabled={url === ''}
+          onClick={() => void command('preview.openExternal', { url })}
+        >
+          {copy.workspace.design.openExternal}
+        </Button>
+      </div>
+      <div ref={hole} className={s['hole']} data-preview-hole="true">
+        {url === '' && (
+          <div className={s['empty']}>
+            <span className="t-label">{copy.workspace.design.empty}</span>
+            <span className={s['hint']}>{copy.workspace.design.hint}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

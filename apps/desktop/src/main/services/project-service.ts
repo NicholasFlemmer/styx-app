@@ -228,6 +228,7 @@ const PROJECT_KEYS: (keyof ProjectSettings)[] = [
   'lineEndings',
   'envFiles',
   'envShareWithAgents',
+  'devUrl',
 ];
 
 /**
@@ -1106,6 +1107,11 @@ export const applySettingsToFile = (file: ProjectFileV1, s: Partial<ProjectSetti
   else delete out.shell;
   if (s.lineEndings !== undefined) out.lineEndings = s.lineEndings;
   else delete out.lineEndings;
+  // `devUrl` is flattened from `dev.url`; null means "cleared", so the block goes rather than storing a null.
+  if (s.devUrl !== undefined) {
+    if (s.devUrl === null) delete out.dev;
+    else out.dev = { ...(file.dev ?? {}), url: s.devUrl };
+  }
   const env: Record<string, unknown> = { ...(file.env ?? {}) };
   set(env, 'files', s.envFiles);
   set(env, 'shareWithAgents', s.envShareWithAgents);

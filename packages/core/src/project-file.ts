@@ -92,6 +92,8 @@ export const projectFileV1Schema = z
       .optional(),
     shell: z.object({ windows: windowsShellSchema.optional() }).passthrough().optional(),
     lineEndings: lineEndingsSchema.optional(),
+    /** Dev-server URL for the design window; describes the project, so it travels with the repo. */
+    dev: z.object({ url: z.string().optional() }).passthrough().optional(),
     env: z
       .object({
         files: z.array(z.string()).optional(),
@@ -177,6 +179,7 @@ const KEY_ORDER = [
   'worktrees',
   'shell',
   'lineEndings',
+  'dev',
   'env',
 ];
 const TARGET_KEY_ORDER = ['name', 'provider', 'env', 'authMethod', 'config', 'policy'];
@@ -216,6 +219,7 @@ export const projectSettingsFromFile = (file: ProjectFileV1): Partial<ProjectSet
   if (w?.location !== undefined) out.worktreeLocation = w.location;
   if (file.shell?.windows !== undefined) out.shellWindows = file.shell.windows;
   if (file.lineEndings !== undefined) out.lineEndings = file.lineEndings;
+  if (file.dev?.url !== undefined) out.devUrl = file.dev.url;
   if (file.env?.files !== undefined) out.envFiles = file.env.files;
   if (file.env?.shareWithAgents !== undefined) out.envShareWithAgents = file.env.shareWithAgents;
   return out;

@@ -66,6 +66,11 @@ export const projectSettingsSchema = z.object({
   lineEndings: lineEndingsSchema,
   envFiles: z.array(z.string()),
   envShareWithAgents: envShareSchema,
+  /**
+   * The project's dev-server URL, shown in the design window. Lives with the project settings (so it reaches
+   * `.styx/project.json` and the whole team) because it describes the project, not the machine.
+   */
+  devUrl: z.string().nullable(),
 });
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 
@@ -84,6 +89,7 @@ export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   lineEndings: 'auto',
   envFiles: ['.env.local'],
   envShareWithAgents: 'per-grant',
+  devUrl: null,
 };
 
 export const settingsSourceSchema = z.enum(['default', 'app', 'project']);
@@ -91,3 +97,18 @@ export type SettingsSource = z.infer<typeof settingsSourceSchema>;
 
 export type SettingsValue<T> = { value: T; source: SettingsSource };
 export type EffectiveProjectSettings = { [K in keyof ProjectSettings]: SettingsValue<ProjectSettings[K]> };
+
+/**
+ * Device presets for the design window. `desktop` disables emulation entirely (the view simply fills its pane);
+ * the others emulate a viewport so a responsive layout can be checked without leaving Styx.
+ */
+export const previewDeviceSchema = z.enum(['desktop', 'tablet', 'phone']);
+export type PreviewDevice = z.infer<typeof previewDeviceSchema>;
+
+export const PREVIEW_DEVICES: readonly PreviewDevice[] = previewDeviceSchema.options;
+
+/** CSS pixel viewports for the emulated presets (iPad Air and iPhone 14 Pro, the common check sizes). */
+export const PREVIEW_VIEWPORTS: Record<Exclude<PreviewDevice, 'desktop'>, { width: number; height: number }> = {
+  tablet: { width: 834, height: 1112 },
+  phone: { width: 393, height: 852 },
+};

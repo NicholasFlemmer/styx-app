@@ -5,6 +5,7 @@ import { registerDialogCommands } from './dialog';
 import { registerGrantCommands } from './grant';
 import { registerIdeCommands } from './ide';
 import { registerProjectCommands } from './project';
+import { registerPreviewCommands } from './preview';
 import { registerSessionCommands } from './session';
 import { registerStoreCommands } from './store';
 import { registerTargetCommands } from './target';
@@ -16,6 +17,7 @@ export function registerAllCommands(bus: CommandBus, app: Container): void {
   registerStoreCommands(bus, app);
   registerProjectCommands(bus, app);
   registerSessionCommands(bus, app);
+  registerPreviewCommands(bus, app);
   registerGrantCommands(bus, app);
   registerTargetCommands(bus, app);
   registerWorktreeCommands(bus, app);
