@@ -36,9 +36,13 @@ export interface WindowsPort {
   popoutSessionIds(): string[];
   openPopout(sessionId: string): void;
   dockPopout(sessionId: string): void;
+  /** The cross-project agent dock (one window, or none). */
+  openDock(): void;
+  closeDock(): void;
+  dockOpen(): boolean;
   control(
     senderId: number,
-    target: { window: 'main' | 'popout'; sessionId?: string },
+    target: { window: 'main' | 'popout' | 'dock'; sessionId?: string },
     action: 'minimize' | 'maximize' | 'restore' | 'close',
   ): void;
   focusMain(): void;

@@ -266,6 +266,9 @@ async function boot(): Promise<void> {
     popoutSessionIds: () => windowService.popoutSessionIds(),
     openPopout: (id) => void windowService.openPopout(id),
     dockPopout: (id) => windowService.dockPopout(id),
+    openDock: () => void windowService.openDock(),
+    closeDock: () => windowService.closeDock(),
+    dockOpen: () => windowService.dockOpen(),
     control: (senderId, target, action) => {
       const win =
         target.window === 'popout' && target.sessionId

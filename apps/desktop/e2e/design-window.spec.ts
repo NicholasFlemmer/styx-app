@@ -7,7 +7,9 @@ import { createServer, type Server } from 'node:http';
 import { test, expect } from '@playwright/test';
 import { launchStyx } from './launch';
 
-const PORT = 4318;
+// An ephemeral port, not a fixed one: a fixed port made this fail inside the full suite (still held by a
+// previous run) while passing on its own.
+let PORT = 0;
 let server: Server;
 
 test.beforeAll(async () => {
@@ -15,7 +17,9 @@ test.beforeAll(async () => {
     res.writeHead(200, { 'Content-Type': 'text/html' });
     res.end('<html><head><title>Dev Server</title></head><body>STYX PREVIEW OK</body></html>');
   });
-  await new Promise<void>((resolve) => server.listen(PORT, resolve));
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const addr = server.address();
+  PORT = typeof addr === 'object' && addr !== null ? addr.port : 0;
 });
 test.afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));

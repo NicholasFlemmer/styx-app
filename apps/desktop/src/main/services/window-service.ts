@@ -13,16 +13,19 @@ export interface WindowServiceDeps {
   /** Extra `process.argv` entries for the preload (`--styx-env=…`). */
   additionalArguments?: () => string[];
   /** Window registry hooks (Publisher / CommandBus sender allowlist). */
-  onWindowCreated?: (win: BrowserWindow, kind: 'main' | 'popout', sessionId: string | null) => void;
+  onWindowCreated?: (win: BrowserWindow, kind: 'main' | 'popout' | 'dock', sessionId: string | null) => void;
   onWindowClosed?: (webContentsId: number) => void;
 }
 
 const MAIN_DEFAULT: WindowBounds = { width: 1280, height: 800 };
 const POPOUT_DEFAULT: WindowBounds = { width: 400, height: 500 };
+/** The agent dock: a narrow always-on-top column of every agent that needs you, across all projects. */
+const DOCK_DEFAULT: WindowBounds = { width: 300, height: 620 };
 
 /** Owns the main window and per-session pop-out chat windows (spec §3, §4.13). */
 export class WindowService {
   private main: BrowserWindow | null = null;
+  private dock: BrowserWindow | null = null;
   private readonly popouts = new Map<string, BrowserWindow>();
 
   constructor(private readonly deps: WindowServiceDeps) {}
@@ -121,6 +124,10 @@ export class WindowService {
       this.main = null;
       for (const p of this.popouts.values()) if (!p.isDestroyed()) p.close(); // closing main closes pop-outs
       this.popouts.clear();
+      // The dock goes with main too: it holds no state of its own, and leaving it open would keep the app
+      // alive with no main window to return to.
+      if (this.dock !== null && !this.dock.isDestroyed()) this.dock.close();
+      this.dock = null;
       this.deps.onAllClosed?.();
     });
     this.load(win);
@@ -155,6 +162,50 @@ export class WindowService {
     this.load(win, { popout: sessionId });
     this.popouts.set(sessionId, win);
     return win;
+  }
+
+  /**
+   * The agent dock: one narrow, always-on-top window listing every agent that needs you, across every project.
+   * It renders the same read model as the Agents board (already cross-project) — no new selector, no state of
+   * its own — and clicking a card focuses the main window on that session.
+   */
+  openDock(): BrowserWindow {
+    if (this.dock !== null && !this.dock.isDestroyed()) {
+      this.dock.focus();
+      return this.dock;
+    }
+    const key = 'dock';
+    const saved = this.deps.windowState.get(key) ?? DOCK_DEFAULT;
+    const opts = this.baseOptions(saved, { w: 260, h: 320 });
+    if (this.deps.platform !== 'darwin')
+      opts.titleBarOverlay = {
+        height: 32,
+        color: colors[this.theme()].s1,
+        symbolColor: colors[this.theme()].mu,
+      };
+    opts.alwaysOnTop = true;
+    const win = new BrowserWindow(opts);
+    this.harden(win);
+    const wcId = win.webContents.id;
+    this.deps.onWindowCreated?.(win, 'dock', null);
+    win.once('ready-to-show', () => win.show());
+    this.persist(key, win);
+    win.on('closed', () => {
+      this.deps.onWindowClosed?.(wcId);
+      this.dock = null;
+    });
+    this.load(win, { dock: '1' });
+    this.dock = win;
+    return win;
+  }
+
+  closeDock(): void {
+    if (this.dock !== null && !this.dock.isDestroyed()) this.dock.close();
+    this.dock = null;
+  }
+
+  dockOpen(): boolean {
+    return this.dock !== null && !this.dock.isDestroyed();
   }
 
   dockPopout(sessionId: string): void {

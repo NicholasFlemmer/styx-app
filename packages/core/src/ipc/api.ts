@@ -27,7 +27,7 @@ export interface StyxApi {
   env: StyxEnv;
   /** Which window this renderer runs in. */
   window: {
-    kind: 'main' | 'popout';
+    kind: 'main' | 'popout' | 'dock';
     popoutSessionId: string | null;
     control(action: 'minimize' | 'maximize' | 'close'): void;
   };

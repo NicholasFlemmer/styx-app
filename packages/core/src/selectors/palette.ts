@@ -36,6 +36,7 @@ export type PaletteAction =
   | { kind: 'add-existing' }
   | { kind: 'open-folder' }
   | { kind: 'clone-url' }
+  | { kind: 'agent-dock' }
   | { kind: 'open-session'; sessionId: SessionId }
   | { kind: 'switch-project'; projectId: ProjectId };
 
@@ -158,6 +159,14 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
     meta: copy.palette.actions.cloneUrlMeta,
     first: false,
     action: { kind: 'clone-url' },
+  });
+  items.push({
+    id: 'agent-dock',
+    glyph: '■',
+    label: copy.chat.agentDock.open,
+    meta: copy.palette.actions.agentDockMeta,
+    first: false,
+    action: { kind: 'agent-dock' },
   });
   return items;
 };

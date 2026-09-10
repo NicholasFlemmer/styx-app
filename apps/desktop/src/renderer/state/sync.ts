@@ -1,5 +1,5 @@
 import { fixtures, hasSeqGap, type DeltaBatch } from '@styx/core';
-import { bridge, hasSnapshot, onEvent } from './bridge';
+import { bridge, hasSnapshot, onEvent, windowKind } from './bridge';
 import { useReadModel } from './read-model';
 import { useUiStore } from './ui-store';
 
@@ -84,12 +84,21 @@ export const connectSync = (): (() => void) => {
   );
   // Tray left-click / dock-menu items (spec §4.14) route the main window to a screen.
   const offNavGo = onEvent('nav.go', ({ screen }) => useUiStore.getState().setScreen(screen));
+  // A card in the agent dock: bring that session forward here. Only the main window acts on it — a pop-out
+  // shows one fixed session and the dock is the sender.
+  const offFocusSession = onEvent('session.focus', ({ sessionId }) => {
+    if (windowKind() !== 'main') return;
+    const session = useReadModel.getState().model.sessions.byId[sessionId];
+    if (session === undefined) return;
+    useUiStore.getState().openSession(session.projectId, session.id);
+  });
 
   void resync();
 
   return () => {
     disposed = true;
     offDelta();
+    offFocusSession();
     offBannerSet();
     offBannerClear();
     offNavGo();

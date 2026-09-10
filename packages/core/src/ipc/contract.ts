@@ -120,7 +120,10 @@ const readModelSnapshotSchema = z.object({
 });
 export type ReadModelSnapshot = z.infer<typeof readModelSnapshotSchema>;
 
-const windowTarget = z.object({ window: z.enum(['main', 'popout']), sessionId: sessionIdSchema.optional() });
+const windowTarget = z.object({
+  window: z.enum(['main', 'popout', 'dock']),
+  sessionId: sessionIdSchema.optional(),
+});
 
 /**
  * Every mutation and query the renderer can make (plan §7). Outputs never contain secrets; credentials
@@ -571,6 +574,13 @@ export const commands = {
   // --- windows & notifications ---
   'window.popout': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   'window.dock': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
+  /**
+   * The agent dock: one narrow always-on-top window listing every agent that needs you, across every project.
+   * `open: false` closes it, so a single palette action can toggle.
+   */
+  'window.agentDock': { input: z.object({ open: z.boolean() }), output: ok },
+  /** Brings the main window forward on a session (the dock's cards route here). */
+  'window.focusSession': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   'window.control': {
     input: windowTarget.extend({ action: z.enum(['minimize', 'maximize', 'restore', 'close']) }),
     output: ok,
@@ -637,6 +647,8 @@ export const events = {
   'pty.data': z.object({ id: z.string().min(1), data: z.string(), seq: z.number().int().nonnegative() }),
   'pty.exit': z.object({ id: z.string().min(1), exitCode: z.number().int().nullable() }),
   'ask.opened': z.object({ askId: askIdSchema, sessionId: sessionIdSchema, projectId: projectIdSchema }),
+  /** A dock card was clicked: the main window brings that session forward. */
+  'session.focus': z.object({ sessionId: sessionIdSchema }),
   'grant.result': z.object({
     grantId: grantIdSchema,
     sessionId: sessionIdSchema.nullable(),

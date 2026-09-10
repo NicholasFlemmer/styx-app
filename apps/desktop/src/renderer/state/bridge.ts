@@ -31,7 +31,7 @@ export const chromePlatform = (): BridgePlatform => {
   return platform();
 };
 
-export const windowKind = (): 'main' | 'popout' => bridge()?.window?.kind ?? 'main';
+export const windowKind = (): 'main' | 'popout' | 'dock' => bridge()?.window?.kind ?? 'main';
 
 export const popoutSessionId = (): string | null => bridge()?.window?.popoutSessionId ?? null;
 

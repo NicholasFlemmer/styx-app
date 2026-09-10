@@ -1,0 +1,102 @@
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: var(--bg);
+    overflow: hidden;
+  }
+  /* 32px titlebar, matching the pop-out's; the count is the needs-you badge. */
+  .titlebar {
+    flex: none;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--ln);
+    background: var(--s1);
+    -webkit-app-region: drag;
+  }
+  .titlebar[data-chrome='darwin'] {
+    padding-left: 76px;
+  }
+  .count {
+    min-width: 16px;
+    padding: 0 5px;
+    background: var(--ac);
+    color: var(--acx);
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+  }
+  .count:empty {
+    display: none;
+  }
+  .list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    border-bottom: 1px solid var(--ln);
+    background: transparent;
+    color: var(--tx);
+    text-align: left;
+    cursor: pointer;
+  }
+  .card:hover {
+    background: var(--s2);
+  }
+  .card:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: -2px;
+  }
+  /* Needs-you cards carry the accent edge the board uses for the same state. */
+  .card[data-on='true'] {
+    border-left: 2px solid var(--ac);
+    background: var(--add);
+  }
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .agent {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .branch {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--mu);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .note {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--mu);
+  }
+  .section {
+    padding: 8px 10px 4px;
+    color: var(--mu);
+  }
+  .empty {
+    padding: 20px 12px;
+    text-align: center;
+    color: var(--mu);
+  }
+}

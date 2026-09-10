@@ -74,11 +74,19 @@ export function makeTestApp(opts: TestAppOptions = {}): TestApp {
   const cli = opts.cli ?? new FakeCliRunner();
   const userData = mkdtempSync(join(tmpdir(), 'styx-test-'));
   const popouts: string[] = [];
+  let dockOpen = false;
   const windows: WindowsPort = {
     popoutSessionIds: () => popouts,
     openPopout: (id) => {
       if (!popouts.includes(id)) popouts.push(id);
     },
+    openDock: () => {
+      dockOpen = true;
+    },
+    closeDock: () => {
+      dockOpen = false;
+    },
+    dockOpen: () => dockOpen,
     dockPopout: (id) => {
       const i = popouts.indexOf(id);
       if (i >= 0) popouts.splice(i, 1);

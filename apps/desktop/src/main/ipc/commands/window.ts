@@ -17,6 +17,19 @@ export function registerWindowCommands(bus: CommandBus, app: Container): void {
     return {};
   });
 
+  bus.register('window.agentDock', ({ open }) => {
+    if (open) windows.openDock();
+    else windows.closeDock();
+    return {};
+  });
+
+  /** A dock card routes here: bring the main window forward and select that session. */
+  bus.register('window.focusSession', ({ sessionId }) => {
+    windows.focusMain();
+    publisher.sendEvent('session.focus', { sessionId });
+    return {};
+  });
+
   bus.register('window.control', ({ window, sessionId, action }, ctx) => {
     windows.control(ctx.senderId, { window, ...(sessionId !== undefined ? { sessionId } : {}) }, action);
     return {};

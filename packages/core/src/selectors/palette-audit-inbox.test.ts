@@ -244,6 +244,7 @@ describe('paletteResults', () => {
       '■ Add existing projects… · recents · scan this machine',
       '■ Open folder… · existing repo',
       '■ Clone URL… · git clone',
+      '■ Open agent dock · all projects · always on top',
     ]);
     expect(groups[1]?.items.map((i) => `${i.glyph} ${i.label} · ${i.meta}`)).toEqual([
       '● Claude · acme-shop · working',
@@ -277,8 +278,9 @@ describe('paletteResults', () => {
     expect(all[5]?.action).toEqual({ kind: 'add-existing' });
     expect(all[6]?.action).toEqual({ kind: 'open-folder' });
     expect(all[7]?.action).toEqual({ kind: 'clone-url' });
-    expect(all[8]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
-    expect(all[14]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
+    expect(all[8]?.action).toEqual({ kind: 'agent-dock' });
+    expect(all[9]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
+    expect(all[15]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
   });
 
   it('fuzzy on label + meta, best first; the first visible row is flagged; empty groups dropped', () => {
@@ -297,7 +299,7 @@ describe('paletteResults', () => {
   it('scope filtering (⇥) and scope cycling', () => {
     expect(paletteResults(model, ui, '', 'agents', NOW).map((g) => g.label)).toEqual(['Agents']);
     expect(paletteResults(model, ui, '', 'projects', NOW)[0]?.items[0]?.first).toBe(true);
-    expect(flat(model, '', 'actions')).toHaveLength(8);
+    expect(flat(model, '', 'actions')).toHaveLength(9);
     expect(nextPaletteScope('all')).toBe('actions');
     expect(nextPaletteScope('actions')).toBe('agents');
     expect(nextPaletteScope('agents')).toBe('projects');
@@ -307,7 +309,14 @@ describe('paletteResults', () => {
   it('without a current project only the project-entry rows remain in Actions', () => {
     expect(
       paletteResults(model, { projectId: null }, '', 'actions', NOW)[0]?.items.map((i) => i.label),
-    ).toEqual(['New project…', 'Add existing projects…', 'Open folder…', 'Clone URL…']);
+    ).toEqual([
+      'New project…',
+      'Add existing projects…',
+      'Open folder…',
+      'Clone URL…',
+      // The dock is cross-project, so it stays available with no project selected.
+      'Open agent dock',
+    ]);
   });
 
   it('lock state meta: locked / expired / unconnected, and after the grant', () => {

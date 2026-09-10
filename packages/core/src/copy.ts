@@ -30,6 +30,7 @@ export const copy = {
       openFolderMeta: 'existing repo',
       cloneUrl: 'Clone URL…',
       cloneUrlMeta: 'git clone',
+      agentDockMeta: 'all projects · always on top',
       switchProject: 'Switch to {project}',
     },
     meta: {
@@ -89,6 +90,15 @@ export const copy = {
     closeSessionNamed: (agent: string): string => `Close ${agent} chat`,
     poppedOut: 'Popped out',
     dock: 'Dock',
+    /** The cross-project agent dock (owner addition; the handoff has pop-out chat but no dock window). */
+    agentDock: {
+      title: 'Agents',
+      open: 'Open agent dock',
+      close: 'Close agent dock',
+      empty: 'No agent needs you.',
+      working: 'Working',
+      focus: 'Open {agent} in {project}',
+    },
     /** Claude Code parity controls (owner addition, docs/handoff-discrepancies #54; not in §10). */
     controls: {
       permissions: 'Permissions',

@@ -53,6 +53,8 @@ if (boot.e2e !== undefined) env.e2e = boot.e2e;
 
 const search = (globalThis as unknown as { location?: { search: string } }).location?.search ?? '';
 const popoutSessionId = new URLSearchParams(search).get('popout');
+/** `?dock=1` is the cross-project agent dock: a third window kind beside main and pop-out. */
+const isDock = new URLSearchParams(search).get('dock') === '1';
 
 let resolvedTheme: 'dark' | 'light' = boot.resolvedTheme ?? 'dark';
 const on = <T>(channel: string, cb: (payload: T) => void): (() => void) => {
@@ -73,14 +75,14 @@ const api: StyxApi = {
   platform: process.platform as StyxApi['platform'],
   env,
   window: {
-    kind: popoutSessionId ? 'popout' : 'main',
+    kind: popoutSessionId ? 'popout' : isDock ? 'dock' : 'main',
     popoutSessionId,
     control(action) {
       void command(
         'window.control',
         popoutSessionId
           ? { window: 'popout', sessionId: popoutSessionId as never, action }
-          : { window: 'main', action },
+          : { window: isDock ? 'dock' : 'main', action },
       );
     },
   },

@@ -45,6 +45,9 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
     case 'clone-url':
       open({ kind: 'modal', modal: 'new-project', mode: 'clone' });
       return;
+    case 'agent-dock':
+      void command('window.agentDock', { open: true });
+      return;
     case 'open-session': {
       const session = model.sessions.byId[action.sessionId];
       if (session === undefined) return;
