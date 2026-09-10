@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeTheme, screen, type BrowserWindowConstructorOptions } from 'electron';
+import { BrowserWindow, Menu, nativeTheme, screen, type BrowserWindowConstructorOptions } from 'electron';
 import { join } from 'node:path';
 import { colors } from '@styx/tokens';
 import type { WindowBounds, WindowStateStore } from '../db/kv';
@@ -58,6 +58,31 @@ export class WindowService {
   private harden(win: BrowserWindow): void {
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (e) => e.preventDefault());
+    this.clipboardMenu(win);
+  }
+
+  /**
+   * Right-click clipboard menu. Electron ships no context menu of its own, so without this right-clicking
+   * anywhere in Styx does nothing — no Copy, Paste, Cut or Select All. That matters most on Windows, where the
+   * window is frameless (`frame: false`) and the default menu bar is never rendered, leaving right-click as the
+   * only discoverable clipboard affordance; on macOS the default Edit menu supplies the accelerators but not
+   * this gesture. Built per invocation so it reflects what was actually clicked.
+   */
+  private clipboardMenu(win: BrowserWindow): void {
+    win.webContents.on('context-menu', (_e, params) => {
+      const hasSelection = params.selectionText.trim() !== '';
+      const items: Electron.MenuItemConstructorOptions[] = [];
+      if (params.isEditable) items.push({ role: 'cut', enabled: hasSelection && params.editFlags.canCut });
+      if (hasSelection || !params.isEditable)
+        items.push({ role: 'copy', enabled: hasSelection && params.editFlags.canCopy });
+      if (params.isEditable) items.push({ role: 'paste', enabled: params.editFlags.canPaste });
+      if (params.isEditable || hasSelection) {
+        items.push({ type: 'separator' });
+        items.push({ role: 'selectAll' });
+      }
+      if (items.length === 0) return;
+      Menu.buildFromTemplate(items).popup({ window: win });
+    });
   }
 
   private load(win: BrowserWindow, query: Record<string, string> = {}): void {
