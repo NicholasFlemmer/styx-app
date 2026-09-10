@@ -20,7 +20,12 @@ import {
   targetPolicySchema,
   worktreeIdSchema,
 } from '../model/common';
-import { cliInstallSchema, ideInstallSchema, ideKindSchema } from '../model/discovery';
+import {
+  cliInstallSchema,
+  ideInstallSchema,
+  ideKindSchema,
+  skillSummarySchema,
+} from '../model/discovery';
 import { policyRuleSchema, policySchema } from '../model/policy';
 import { targetNameSchema } from '../project-file';
 import {
@@ -210,6 +215,35 @@ export const commands = {
    * Runs the provider's deploy command for a target. It requests a `deploy`-scoped grant first, so a prod deploy
    * hits the same MFA gate and audit trail as any other prod access — a deploy is not a privileged side door.
    */
+  /**
+   * Skills: what is installed, what the pinned catalogue offers, and the text of one so it can be read before
+   * installing — a SKILL.md is instructions an agent will follow, so installing unread is the hazard.
+   */
+  'skills.list': {
+    input: z.object({ projectId: projectIdSchema.nullable() }),
+    output: z.object({ skills: z.array(skillSummarySchema) }),
+  },
+  'skills.catalogue': { input: z.object({}), output: z.object({ skills: z.array(skillSummarySchema) }) },
+  'skills.preview': {
+    input: z.object({ directory: z.string().min(1) }),
+    output: z.object({ text: z.string() }),
+  },
+  'skills.install': {
+    input: z.object({
+      directory: z.string().min(1),
+      scope: z.enum(['global', 'project']),
+      projectId: projectIdSchema.nullable(),
+    }),
+    output: z.object({ skill: skillSummarySchema }),
+  },
+  'skills.remove': {
+    input: z.object({
+      directory: z.string().min(1),
+      scope: z.enum(['global', 'project']),
+      projectId: projectIdSchema.nullable(),
+    }),
+    output: ok,
+  },
   'deploy.start': {
     input: z.object({ targetId: targetIdSchema }),
     output: z.object({ deployId: z.string(), terminalId: z.string() }),

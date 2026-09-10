@@ -22,6 +22,7 @@ import {
 } from '@styx/ui';
 import { PROJECT_POLICY_BANNER } from '../../features/banners/BannerStack';
 import { cliTargetMeta } from '../../features/modals/modals';
+import { SkillsPane } from './SkillsPane';
 import { command } from '../../state/commands';
 import { useCopyPlatform, useModel, useNow, useUi } from '../../state/hooks';
 import { sectionRows, type SettingsRow } from './rows';
@@ -95,6 +96,8 @@ export function Settings() {
         </header>
         {section === 'project:targets' ? (
           <Targets model={model} projectId={projectId} />
+        ) : section === 'app:skills' ? (
+          <SkillsPane projectId={projectId} />
         ) : (
           <Rows model={model} section={section} projectId={projectId} />
         )}

@@ -57,3 +57,17 @@ export const cliInstallSchema = z.object({
   checkedAt: timestampSchema,
 });
 export type CliInstall = z.infer<typeof cliInstallSchema>;
+
+/** Where a skill lives: the user's own, this project's committed ones, or the remote catalogue. */
+export const skillScopeSchema = z.enum(['global', 'project', 'catalogue']);
+export type SkillScope = z.infer<typeof skillScopeSchema>;
+
+/** One skill as listed in Settings or the catalogue. The body is fetched separately, to be read before install. */
+export const skillSummarySchema = z.object({
+  name: z.string(),
+  /** The directory it lives in; the install/remove key, since `name` comes from user-authored frontmatter. */
+  directory: z.string(),
+  description: z.string(),
+  scope: skillScopeSchema,
+});
+export type SkillSummary = z.infer<typeof skillSummarySchema>;

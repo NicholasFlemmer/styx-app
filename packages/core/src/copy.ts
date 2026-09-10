@@ -229,6 +229,26 @@ export const copy = {
     exitCode: 'exit {code}',
   },
 
+  /** Skills (owner addition: the handoff has no skills surface). */
+  skills: {
+    title: 'Skills',
+    installed: 'Installed',
+    browse: 'Browse',
+    install: 'Install',
+    remove: 'Remove',
+    read: 'Read first',
+    installing: 'Installing…',
+    empty: 'No skills installed.',
+    catalogueEmpty: 'Nothing in the catalogue.',
+    catalogueFailed: 'Could not reach the skill catalogue: {error}',
+    noSkillMd: '{name} has no SKILL.md',
+    scopes: { global: 'You', project: 'Project', catalogue: 'Catalogue' },
+    /** The security line: an installed skill is instructions the agent will follow. */
+    warning:
+      'A skill is instructions your agents will follow, with whatever access their grants allow. Read it before installing.',
+    installedTo: { global: 'Installed for you', project: 'Installed in this project' },
+  },
+
   accessRequest: {
     title: 'Access request',
     header: 'Access request · {target}',

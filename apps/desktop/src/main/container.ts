@@ -27,6 +27,7 @@ import { RetentionJob } from './services/retention-job';
 import { SessionService } from './services/session-service';
 import { StreamRunner, type StreamRunnerLike } from './services/stream-runner';
 import { DeployService } from './services/deploy-service';
+import { SkillsService } from './services/skills-service';
 import { TargetService } from './services/target-service';
 import { TerminalService } from './services/terminal-service';
 import { TranscriptService } from './services/transcript-service';
@@ -158,6 +159,7 @@ export interface Container {
   hunks: HunkService;
   targets: TargetService;
   deploys: DeployService;
+  skills: SkillsService;
   terminals: TerminalService;
   broker: BrokerHost;
   windows: WindowsPort;
@@ -290,6 +292,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     pty,
     cli,
   });
+  const skills = new SkillsService({ repos, fetch: opts.fetch ?? fetch });
   const refresh = new RefreshScheduler({
     repos,
     clock,
@@ -350,6 +353,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     hunks,
     targets,
     deploys,
+    skills,
     terminals,
     broker,
     windows: opts.windows,

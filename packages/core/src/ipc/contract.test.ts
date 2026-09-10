@@ -33,6 +33,7 @@ describe('ipc contract', () => {
         'preview',
         'project',
         'session',
+        'skills',
         'settings',
         'store',
         'target',

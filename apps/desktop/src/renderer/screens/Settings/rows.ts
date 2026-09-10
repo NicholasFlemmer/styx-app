@@ -446,6 +446,9 @@ export const sectionRows = (model: ReadModel, section: SettingsSection, ctx: Row
       return editorRows(model, ctx);
     case 'app:agents':
       return agentsRows(model, ctx);
+    // Skills render their own pane, not label/value rows.
+    case 'app:skills':
+      return [];
     case 'app:keychain':
       return keychainRows(model, ctx);
     case 'app:policies':

@@ -1,0 +1,77 @@
+@layer components {
+  .pane {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 16px 20px;
+    overflow-y: auto;
+  }
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--ln);
+  }
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .name {
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .desc {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--mu);
+    user-select: text;
+  }
+  .actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  /* The security line: a skill is instructions, so it gets the accent edge a grant request gets. */
+  .warning {
+    padding: 8px 10px;
+    border-left: 2px solid var(--ac);
+    background: var(--add);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--tx);
+  }
+  .error {
+    padding: 8px 10px;
+    border: 1px solid var(--ln);
+    background: var(--s1);
+    font-size: 12px;
+    color: var(--tx);
+    user-select: text;
+  }
+  .empty {
+    font-size: 12px;
+    color: var(--mu);
+  }
+  /* The skill's own text, read before installing it. */
+  .read {
+    max-height: 320px;
+    margin: 6px 0 0;
+    padding: 10px;
+    border: 1px solid var(--ln);
+    background: var(--s1);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow: auto;
+    user-select: text;
+  }
+}
