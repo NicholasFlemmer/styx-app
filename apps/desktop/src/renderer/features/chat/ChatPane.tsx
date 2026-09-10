@@ -1,4 +1,5 @@
 import {
+  IMAGE_MEDIA_TYPES,
   chatMeta,
   composerPlaceholder,
   copy,
@@ -25,7 +26,16 @@ import {
   WorkingLine,
   QuestionSet,
 } from '@styx/ui';
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
+import { sizes } from '@styx/tokens';
 import { env } from '../../state/bridge';
 import { command } from '../../state/commands';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
@@ -147,6 +157,15 @@ function AgentBody({ text }: { text: string }) {
  * Chat pane (spec §4.1, 360px): session tabs (3 visible + ▾, accent `!` when needs-you, `+` spawns, ⤢ pops
  * out), meta line, transcript of the six Message kinds, composer. `data-keyscope="chat"` / `"composer"`.
  */
+/** Chat pane width is persisted per machine like the terminal's height (`ui.persist` → `paneSizes`). */
+const CHAT_PANE_KEY = 'chat';
+const CHAT_MIN = 280;
+/** Leave room for the editor stack: the window minimum is 1100 and files + rail + nav already take ~424. */
+const CHAT_MAX = 720;
+const CHAT_KEY_STEP = 16;
+
+export const clampChatWidth = (w: number): number => Math.max(CHAT_MIN, Math.min(CHAT_MAX, Math.round(w)));
+
 export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: ChatPaneProps) {
   const model = useModel(useCallback((m: ReadModel) => m, []));
   const activeSessionId = useSessionId();
@@ -290,6 +309,49 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   );
 
   /** Pasted / dropped images are read here and sent as base64 blocks; anything else is refused with §57 copy. */
+  const imageInput = useRef<HTMLInputElement>(null);
+
+  // Resize, mirroring the terminal's handle (spec §4.1 gives the terminal one; the chat pane was left fixed).
+  const chatWidth = useUi((u) => u.paneSizes[CHAT_PANE_KEY] ?? null);
+  const setPaneSize = useUi((u) => u.setPaneSize);
+  const persistWidth = useCallback(
+    (w: number) => {
+      setPaneSize(CHAT_PANE_KEY, w);
+      void command('ui.persist', { paneSizes: { [CHAT_PANE_KEY]: w } });
+    },
+    [setPaneSize],
+  );
+  const onResizeDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const handle = e.currentTarget;
+    const startX = e.clientX;
+    const startW = handle.parentElement?.getBoundingClientRect().width ?? CHAT_MIN;
+    let next = startW;
+    handle.setPointerCapture(e.pointerId);
+    // Dragging left widens the chat: it is the right-hand pane, so the delta is inverted.
+    const move = (ev: globalThis.PointerEvent) => {
+      next = clampChatWidth(startW + (startX - ev.clientX));
+      setPaneSize(CHAT_PANE_KEY, next);
+    };
+    const up = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+      persistWidth(next);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+  };
+  /** Keyboard parity with the terminal handle (spec §9): ← / → resize by 16px. */
+  const onResizeKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const base = chatWidth ?? sizes.chatPane;
+    persistWidth(clampChatWidth(base + (e.key === 'ArrowLeft' ? CHAT_KEY_STEP : -CHAT_KEY_STEP)));
+  };
+
   const addImages = (files: readonly File[]) => {
     for (const file of files) {
       const id = `img:${file.name}:${file.size}:${Date.now()}`;
@@ -426,11 +488,27 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   return (
     <section
       className={[s['pane'], compact ? s['compact'] : undefined].filter(Boolean).join(' ')}
+      {...(compact || chatWidth === null ? {} : { style: { width: chatWidth } })}
       data-keyscope="chat"
       data-chat-pane="true"
       data-chat-compact={compact ? 'true' : undefined}
       aria-label={copy.nav.agents}
     >
+      {!compact && (
+        <div
+          className={s['resize']}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={copy.workspace.resizeChat}
+          aria-valuenow={chatWidth ?? sizes.chatPane}
+          aria-valuemin={CHAT_MIN}
+          aria-valuemax={CHAT_MAX}
+          tabIndex={0}
+          onPointerDown={onResizeDown}
+          onKeyDown={onResizeKeyDown}
+          data-chat-resize="true"
+        />
+      )}
       {!compact && (
         <div className={s['tabsRow']}>
           <TabRow aria-label="Sessions" className={s['tabs']}>
@@ -530,6 +608,23 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
         </Transcript>
       )}
       <div data-keyscope="composer">
+        {/*
+          Paste and drop already worked but nothing said so. The picker is images only: a `file` attachment is
+          confined to the session's worktree in main, so an arbitrary path off disk would be refused — worktree
+          files have their own route through `@`.
+        */}
+        <input
+          ref={imageInput}
+          type="file"
+          accept={IMAGE_MEDIA_TYPES.join(',')}
+          multiple
+          hidden
+          data-chat-image-input="true"
+          onChange={(e) => {
+            addImages(Array.from(e.currentTarget.files ?? []));
+            e.currentTarget.value = '';
+          }}
+        />
         <Composer
           placeholder={placeholder}
           onSend={send}
@@ -544,6 +639,8 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           canSend={pending.length > 0}
           onPaste={addImages}
           onDrop={addImages}
+          onAttachClick={() => imageInput.current?.click()}
+          attachLabel={copy.chat.composer.attach}
           dropHint={copy.chat.attach.dropHint}
           onMentionQuery={onMentionQuery}
           mentionItems={toMentionItems(mentionPaths)}

@@ -204,6 +204,47 @@ describe('ChatPane', () => {
     expect(screen.queryByRole('tab', { name: /^\+/ })).toBeNull();
   });
 
+  it('the chat pane has a resize handle: ← / → step its width and persist it', () => {
+    render(<ChatPane projectId={acme} />);
+    const handle = screen.getByRole('separator', { name: copy.workspace.resizeChat });
+    expect(handle.getAttribute('aria-orientation')).toBe('vertical');
+    // Default is the token width until the user moves it.
+    expect(handle.getAttribute('aria-valuenow')).toBe('360');
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' });
+    expect(useUiStore.getState().paneSizes['chat']).toBe(376);
+    expect(commands.filter((c) => c.name === 'ui.persist')).toHaveLength(1);
+    fireEvent.keyDown(handle, { key: 'ArrowRight' });
+    expect(useUiStore.getState().paneSizes['chat']).toBe(360);
+  });
+
+  it('the resize handle stops at the floor, so the editor cannot be squeezed out', () => {
+    useUiStore.setState({ paneSizes: { chat: 285 } });
+    render(<ChatPane projectId={acme} />);
+    const handle = screen.getByRole('separator', { name: copy.workspace.resizeChat });
+    fireEvent.keyDown(handle, { key: 'ArrowRight' }); // narrower, past the 280 floor
+    expect(useUiStore.getState().paneSizes['chat']).toBe(280);
+  });
+
+  it('the resize handle stops at the ceiling', () => {
+    useUiStore.setState({ paneSizes: { chat: 715 } });
+    render(<ChatPane projectId={acme} />);
+    const handle = screen.getByRole('separator', { name: copy.workspace.resizeChat });
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' }); // wider, past the 720 ceiling
+    expect(useUiStore.getState().paneSizes['chat']).toBe(720);
+  });
+
+  it('attach: the composer offers a picker that feeds the same path as paste and drop', () => {
+    render(<ChatPane projectId={acme} />);
+    const attach = screen.getByRole('button', { name: copy.chat.composer.attach });
+    const input = document.querySelector('[data-chat-image-input]') as HTMLInputElement;
+    expect(input).toBeTruthy();
+    expect(input.accept).toContain('image/png');
+    expect(input.multiple).toBe(true);
+    const clicked = vi.spyOn(input, 'click');
+    fireEvent.click(attach);
+    expect(clicked).toHaveBeenCalled();
+  });
+
   it('✕ on a session tab closes that chat', () => {
     render(<ChatPane projectId={acme} />);
     const tab = document.querySelector(`[data-session-tab="${fixtures.ids.session.claude}"]`) as HTMLElement;

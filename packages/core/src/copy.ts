@@ -84,7 +84,7 @@ export const copy = {
   chat: {
     waitingOnYou: 'waiting on you',
     composerPlaceholder: 'Message {agent}…',
-    composer: { file: '@file', command: '/command', model: 'Model ▾', send: '⏎ send' },
+    composer: { file: '@file', command: '/command', model: 'Model ▾', send: '⏎ send', attach: 'attach' },
     /** Session menu actions (owner addition: §10 has no session-close copy). */
     closeSessionNamed: (agent: string): string => `Close ${agent} chat`,
     poppedOut: 'Popped out',
@@ -581,6 +581,8 @@ export const copy = {
     files: 'Files',
     /** ✕ on an editor file tab (owner addition: §10 has no close affordance). */
     closeFile: (name: string): string => `Close ${name}`,
+    /** Chat pane drag handle (owner addition: §4.1 gives the terminal one, the chat pane none). */
+    resizeChat: 'Resize chat pane',
     openIn: 'Open in {ide}',
     terminal: 'TERMINAL · {branch}',
     editorStatus: 'Monaco · {eol} · {lang}',

@@ -2,6 +2,7 @@
   .pane {
     width: var(--w-chat);
     flex: none;
+    position: relative;
     border-left: 1px solid var(--ln);
     background: var(--s1);
     display: flex;
@@ -170,5 +171,23 @@
     align-items: flex-start;
     gap: 10px;
     padding: 14px;
+  }
+}
+
+@layer components {
+  /* Drag handle on the chat's left edge, the terminal's 6px handle turned 90°. Sits over the 1px border so the
+     pane itself does not shift. Hidden in the pop-out, which is its own window. */
+  .resize {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -3px;
+    width: 6px;
+    cursor: ew-resize;
+    z-index: 1;
+  }
+  .resize:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: -1px;
   }
 }
