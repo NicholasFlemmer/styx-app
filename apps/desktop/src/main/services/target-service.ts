@@ -284,11 +284,23 @@ export class TargetService {
     host: string;
     user: string;
     keyPath: string;
+    port?: number;
+    passphrase?: string;
   }): Promise<Target> {
     const target = this.placeholder(input.projectId, 'ssh', input.env, input.name);
     const r = await this.deps.providers
       .get('ssh')
-      .connect({ method: 'ssh', host: input.host, user: input.user, keyPath: input.keyPath }, target.id)
+      .connect(
+        {
+          method: 'ssh',
+          host: input.host,
+          user: input.user,
+          keyPath: input.keyPath,
+          ...(input.port !== undefined ? { port: input.port } : {}),
+          ...(input.passphrase ? { passphrase: input.passphrase } : {}),
+        },
+        target.id,
+      )
       .catch((e: Error) => fail('provider-error', e.message));
     return this.finishConnect(target, r);
   }

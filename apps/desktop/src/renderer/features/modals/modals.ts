@@ -130,9 +130,22 @@ export interface SshForm {
   host: string;
   user: string;
   keyPath: string;
+  /** Blank means the default 22; bastions and forwarded hosts routinely sit elsewhere. */
+  port: string;
+  /** Optional: only encrypted keys need one. */
+  passphrase: string;
 }
 export const sshFormValid = (f: SshForm): boolean =>
-  f.host.trim() !== '' && f.user.trim() !== '' && f.keyPath.trim() !== '';
+  f.host.trim() !== '' && f.user.trim() !== '' && f.keyPath.trim() !== '' && sshPort(f) !== null;
+
+/** The port a form means: blank is 22; anything not a port number is invalid (null blocks save). */
+export const sshPort = (f: SshForm): number | null => {
+  const raw = f.port.trim();
+  if (raw === '') return 22;
+  if (!/^\d{1,5}$/.test(raw)) return null;
+  const n = Number(raw);
+  return n >= 1 && n <= 65535 ? n : null;
+};
 
 /** SSH targets are named after the host (the prototype shows no Name field on the SSH step). */
 export const sshTargetName = (f: SshForm): string => f.host.trim();

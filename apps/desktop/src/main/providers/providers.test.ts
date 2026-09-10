@@ -1,6 +1,7 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { connect as netConnect } from 'node:net';
 import { OpenSSHAgent, utils } from 'ssh2';
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryVault } from '../services/credential-vault';
@@ -9,7 +10,8 @@ import { FakeCliRunner } from './cli-runner';
 import { GcpAdapter } from './gcp';
 import { GitHubAdapter } from './github';
 import { ProviderRegistry } from './index';
-import { SshAdapter } from './ssh';
+import { SshAdapter, expandHome } from './ssh';
+import { StyxSshAgent } from './ssh-agent';
 import { SupabaseAdapter } from './supabase';
 import type { AdapterDeps, ProviderAdapter, TargetInfo } from './types';
 import { VercelAdapter } from './vercel';
@@ -225,6 +227,143 @@ describe('SshAdapter', () => {
     expect(ssh.scopeOfCommand(['deploy@h', 'rm -rf /srv'])).toEqual(['delete']);
     expect(ssh.scopeOfCommand(['deploy@h', 'uptime'])).toEqual(['read']);
   });
+
+  it('expands ~ in the key path: the shell would, readFile will not', async () => {
+    const keys = utils.generateKeyPairSync('ed25519', { comment: 'styx-test' });
+    const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+    const sshDir = join(home, '.ssh');
+    mkdirSync(sshDir, { recursive: true });
+    writeFileSync(join(sshDir, 'id_ed25519'), keys.private, { mode: 0o600 });
+    // os.homedir() reads $HOME on POSIX, which is also how the user's own shell would expand the path.
+    const prevHome = process.env['HOME'];
+    process.env['HOME'] = home;
+    try {
+      expect(expandHome('~/.ssh/id_ed25519')).toBe(join(sshDir, 'id_ed25519'));
+      expect(expandHome('$HOME/.ssh/id_ed25519')).toBe(join(sshDir, 'id_ed25519'));
+      expect(expandHome('/absolute/path/id_ed25519')).toBe('/absolute/path/id_ed25519');
+      const d = deps({});
+      const ssh = new SshAdapter(d, { socketDir: home });
+      // Typed exactly as a user would type it. Before expansion this threw ENOENT on a path that looks right.
+      const c = await ssh.connect(
+        { method: 'ssh', host: 'bastion.acme.internal', user: 'deploy', keyPath: '~/.ssh/id_ed25519' },
+        't-tilde',
+      );
+      const stored = JSON.parse((await d.vault.get(c.credentialRef)) ?? '{}') as { keyPath: string };
+      expect(stored.keyPath).toBe(join(sshDir, 'id_ed25519'));
+    } finally {
+      if (prevHome === undefined) delete process.env['HOME'];
+      else process.env['HOME'] = prevHome;
+    }
+  });
+
+  it('keeps a non-default port, and defaults to 22 when none is given', async () => {
+    const keys = utils.generateKeyPairSync('ed25519', { comment: 'styx-test' });
+    const dir = mkdtempSync(join(tmpdir(), 'styx-ssh-'));
+    const keyPath = join(dir, 'id_ed25519');
+    writeFileSync(keyPath, keys.private, { mode: 0o600 });
+    const ssh = new SshAdapter(deps({}), { socketDir: dir });
+    const withPort = await ssh.connect(
+      { method: 'ssh', host: 'bastion.acme.internal', user: 'deploy', keyPath, port: 2222 },
+      't-port',
+    );
+    expect(withPort.config['port']).toBe(2222);
+    const noPort = await ssh.connect(
+      { method: 'ssh', host: 'plain.acme.internal', user: 'deploy', keyPath },
+      't-noport',
+    );
+    expect(noPort.config['port']).toBe(22);
+  });
+
+  it('serves an encrypted key when the passphrase is supplied (and fails without it)', async () => {
+    const keys = utils.generateKeyPairSync('ed25519', { comment: 'styx-test', passphrase: 'hunter2', cipher: 'aes256-cbc' });
+    const dir = mkdtempSync(join(tmpdir(), 'styx-ssh-'));
+    const keyPath = join(dir, 'id_ed25519');
+    writeFileSync(keyPath, keys.private, { mode: 0o600 });
+    const ssh = new SshAdapter(deps({}), { socketDir: dir });
+    const c = await ssh.connect(
+      { method: 'ssh', host: 'enc.acme.internal', user: 'deploy', keyPath, passphrase: 'hunter2' },
+      't-enc',
+    );
+    const issued = await ssh.issue(
+      grant,
+      target({ provider: 'ssh', credentialRef: c.credentialRef, config: c.config }),
+    );
+    expect(issued.kind).toBe('ssh-agent');
+    await ssh.revoke(issued);
+
+    const bad = new SshAdapter(deps({}), { socketDir: dir });
+    const c2 = await bad.connect(
+      { method: 'ssh', host: 'enc.acme.internal', user: 'deploy', keyPath },
+      't-enc-2',
+    );
+    await expect(
+      bad.issue(grant, target({ provider: 'ssh', credentialRef: c2.credentialRef, config: c2.config })),
+    ).rejects.toThrow();
+  });
+
+
+  it('answers session-bind@openssh.com so identities still come back (OpenSSH >= 8.9)', async () => {
+    const keys = utils.generateKeyPairSync('ed25519', { comment: 'styx-test' });
+    const dir = mkdtempSync(join(tmpdir(), 'styx-bind-'));
+    const sock = join(dir, 'agent.sock');
+    const agent = new StyxSshAgent(() => undefined);
+    await agent.start(sock, keys.private);
+    try {
+      // Byte-for-byte what a modern OpenSSH client sends first: SSH_AGENTC_EXTENSION (27) carrying
+      // "session-bind@openssh.com", then SSH_AGENTC_REQUEST_IDENTITIES (11). Before the filter, ssh2 consumed
+      // only the extension's 5-byte header, re-parsed the body as garbage and never answered the second message.
+      const name = Buffer.from('session-bind@openssh.com');
+      const body = Buffer.concat([
+        Buffer.from([27]),
+        (() => {
+          const b = Buffer.alloc(4);
+          b.writeUInt32BE(name.length, 0);
+          return b;
+        })(),
+        name,
+        Buffer.alloc(180), // opaque payload: host key, session id, signature
+      ]);
+      const ext = Buffer.alloc(4 + body.length);
+      ext.writeUInt32BE(body.length, 0);
+      body.copy(ext, 4);
+      const reqIds = Buffer.from([0, 0, 0, 1, 11]);
+
+      const types = await new Promise<number[]>((resolve, reject) => {
+        const seen: number[] = [];
+        const c = netConnect(sock);
+        let buf = Buffer.alloc(0);
+        const timer = setTimeout(() => {
+          c.destroy();
+          reject(new Error(`timed out; saw types [${seen.join(',')}]`));
+        }, 4000);
+        c.on('connect', () => c.write(Buffer.concat([ext, reqIds])));
+        c.on('data', (d: Buffer) => {
+          buf = Buffer.concat([buf, d]);
+          while (buf.length >= 4) {
+            const len = buf.readUInt32BE(0);
+            if (buf.length < 4 + len) break;
+            seen.push(buf[4] as number);
+            buf = buf.subarray(4 + len);
+          }
+          // 5 = SSH_AGENT_FAILURE (declining the extension), 12 = SSH_AGENT_IDENTITIES_ANSWER
+          if (seen.includes(12)) {
+            clearTimeout(timer);
+            c.destroy();
+            resolve(seen);
+          }
+        });
+        c.on('error', (e) => {
+          clearTimeout(timer);
+          reject(e);
+        });
+      });
+      expect(types[0]).toBe(5); // the extension is declined, not ignored
+      expect(types).toContain(12); // and the stream is still in sync for the real request
+    } finally {
+      await agent.stop();
+    }
+  });
+
 });
 
 describe('ProviderRegistry', () => {

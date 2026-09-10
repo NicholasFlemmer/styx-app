@@ -343,6 +343,10 @@ export const commands = {
       host: z.string().min(1),
       user: z.string().min(1),
       keyPath: z.string().min(1),
+      /** Non-standard SSH ports are common on jump/bastion hosts; 22 when omitted. */
+      port: z.number().int().min(1).max(65535).default(22),
+      /** Passphrase for an encrypted key. The vault and the agent already support it; the form did not collect it. */
+      passphrase: z.string().optional(),
     }),
     output: idOut('targetId', targetIdSchema),
   },

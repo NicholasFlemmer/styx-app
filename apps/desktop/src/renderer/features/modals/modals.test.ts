@@ -26,6 +26,7 @@ import {
   spawnPayload,
   spawnValid,
   sshFormValid,
+  sshPort,
 } from './modals';
 
 const acme = fixtures.ids.project.acmeShop;
@@ -112,8 +113,8 @@ describe('connect helpers', () => {
     expect(keyFormValid({ name: 'acme-prod', accessKey: ' ', secret: 's' })).toBe(false);
     expect(keyFormValid({ name: 'acme-prod', accessKey: 'AKIA', secret: '' })).toBe(false);
     expect(keyFormValid({ name: 'acme-prod', accessKey: 'AKIA', secret: 's' })).toBe(true);
-    expect(sshFormValid({ host: 'h', user: 'u', keyPath: '' })).toBe(false);
-    expect(sshFormValid({ host: 'h', user: 'u', keyPath: '~/.ssh/id_ed25519' })).toBe(true);
+    expect(sshFormValid({ host: 'h', user: 'u', keyPath: '', port: '', passphrase: '' })).toBe(false);
+    expect(sshFormValid({ host: 'h', user: 'u', keyPath: '~/.ssh/id_ed25519', port: '', passphrase: '' })).toBe(true);
   });
 });
 
@@ -252,5 +253,28 @@ describe('new project helpers', () => {
     expect(githubTargetOf(model, fixtures.ids.project.infraTools)).toBeUndefined();
     expect(createLabel('agent', 'claude', 'darwin', '⌘')).toBe('Create · spawn Claude Code · ⌘⏎');
     expect(createLabel('empty', 'claude', 'win32', 'Ctrl')).toBe('Create · Ctrl⏎');
+  });
+});
+
+describe('SSH form port', () => {
+  const form = (port: string) => ({ host: 'h', user: 'u', keyPath: '/k', port, passphrase: '' });
+
+  it('blank means the default 22', () => {
+    expect(sshPort(form(''))).toBe(22);
+    expect(sshPort(form('  '))).toBe(22);
+  });
+
+  it('accepts a real port and rejects anything that is not one', () => {
+    expect(sshPort(form('2222'))).toBe(2222);
+    expect(sshPort(form('1'))).toBe(1);
+    expect(sshPort(form('65535'))).toBe(65535);
+    for (const bad of ['0', '65536', '-1', '22x', 'ssh', '2 2', '999999'])
+      expect(sshPort(form(bad))).toBeNull();
+  });
+
+  it('an invalid port blocks save, so the form cannot submit a port the contract will reject', () => {
+    expect(sshFormValid(form('2222'))).toBe(true);
+    expect(sshFormValid(form(''))).toBe(true);
+    expect(sshFormValid(form('nope'))).toBe(false);
   });
 });

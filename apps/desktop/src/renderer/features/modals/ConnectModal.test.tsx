@@ -403,8 +403,36 @@ describe('ConnectModal', () => {
       host: 'prod-1.acme.internal',
       user: 'deploy',
       keyPath: '~/.ssh/id_ed25519',
+      port: 22,
     });
     expect(calls('target.connect.cliStatus')).toHaveLength(0);
+  });
+
+  it('ssh step: a non-default port and a passphrase reach saveSsh; a bad port blocks Save', async () => {
+    render(<ConnectModal id="modal-1" projectId={acme} provider="ssh" />);
+    fireEvent.change(screen.getByLabelText(copy.connect.ssh.host), {
+      target: { value: 'bastion.acme.internal' },
+    });
+    fireEvent.change(screen.getByLabelText(copy.connect.ssh.user), { target: { value: 'deploy' } });
+    fireEvent.change(screen.getByLabelText(copy.connect.ssh.key), {
+      target: { value: '~/.ssh/id_ed25519' },
+    });
+    const save = screen.getByRole('button', { name: copy.connect.ssh.save });
+    // A port that is not a port must not reach the contract (which would reject it as an opaque failure).
+    fireEvent.change(screen.getByLabelText(copy.connect.ssh.port), { target: { value: '22x' } });
+    expect(save.hasAttribute('disabled')).toBe(true);
+    fireEvent.change(screen.getByLabelText(copy.connect.ssh.port), { target: { value: '2222' } });
+    fireEvent.change(screen.getByLabelText(copy.connect.ssh.passphrase), {
+      target: { value: 'hunter2' },
+    });
+    expect(save.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(save);
+    await waitFor(() => expect(calls('target.connect.saveSsh')).toHaveLength(1));
+    expect(calls('target.connect.saveSsh')[0]?.[1]).toMatchObject({
+      host: 'bastion.acme.internal',
+      port: 2222,
+      passphrase: 'hunter2',
+    });
   });
 
   it('oauth (Advanced): Open browser starts the flow with the shared env', async () => {

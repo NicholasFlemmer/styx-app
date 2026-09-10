@@ -448,6 +448,11 @@ export const copy = {
       user: 'User',
       key: 'Key',
       browse: 'Browse',
+      /** Owner additions: the spec's four-field form could not reach a non-22 host or an encrypted key. */
+      port: 'Port',
+      portHint: 'Default 22',
+      passphrase: 'Passphrase',
+      passphraseHint: 'Only for an encrypted key',
       body: "Agents get a forwarded agent socket for the grant's duration, never the key file.",
       test: 'Test connection',
       save: 'Save',

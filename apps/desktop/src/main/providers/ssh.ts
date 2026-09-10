@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execa } from 'execa';
 import { makeCredentialRef } from '../services/credential-vault';
@@ -14,6 +14,18 @@ export interface SshAdapterOptions {
 }
 
 /** SSH host: key path (and optional passphrase) in the vault; each grant runs an in-process agent on its own socket. */
+/**
+ * `~` and `$HOME` in a key path. Users type `~/.ssh/id_ed25519` — the shell would expand it, `readFile` will not,
+ * so every such connect died with ENOENT on a path that looks perfectly correct in the form.
+ */
+export const expandHome = (p: string): string => {
+  const home = homedir();
+  if (p === '~') return home;
+  if (p.startsWith('~/') || p.startsWith('~\\')) return join(home, p.slice(2));
+  if (p.startsWith('$HOME/')) return join(home, p.slice(6));
+  return p;
+};
+
 export class SshAdapter implements ProviderAdapter {
   readonly provider = 'ssh' as const;
   readonly authMethod = 'ssh' as const;
@@ -24,9 +36,11 @@ export class SshAdapter implements ProviderAdapter {
 
   async connect(input: ConnectInput, targetId: string) {
     if (input.method !== 'ssh') throw new Error('SSH connect expects host/user/key');
-    await readFile(input.keyPath, 'utf8'); // key must be readable now; it is read again per grant, never copied
+    // Expand before both the readability check and the vault write, so what is stored is what will be read.
+    const keyPath = expandHome(input.keyPath);
+    await readFile(keyPath, 'utf8'); // key must be readable now; it is read again per grant, never copied
     const ref = makeCredentialRef('ssh', targetId, 'ssh-key-path');
-    await this.deps.vault.set(ref, JSON.stringify({ keyPath: input.keyPath, ...(input.passphrase ? { passphrase: input.passphrase } : {}) }));
+    await this.deps.vault.set(ref, JSON.stringify({ keyPath, ...(input.passphrase ? { passphrase: input.passphrase } : {}) }));
     return { credentialRef: ref, config: { host: input.host, user: input.user, port: input.port ?? 22 }, label: `SSH ${input.user}@${input.host}` };
   }
 
@@ -34,7 +48,9 @@ export class SshAdapter implements ProviderAdapter {
     if (!target.credentialRef) throw new Error('not connected');
     const raw = await this.deps.vault.get(target.credentialRef);
     if (!raw) throw new Error('credential missing from keychain');
-    return JSON.parse(raw) as { keyPath: string; passphrase?: string };
+    const parsed = JSON.parse(raw) as { keyPath: string; passphrase?: string };
+    // Rows saved before paths were expanded still hold a literal `~`.
+    return { ...parsed, keyPath: expandHome(parsed.keyPath) };
   }
 
   private socketPath(grantId: string): string {

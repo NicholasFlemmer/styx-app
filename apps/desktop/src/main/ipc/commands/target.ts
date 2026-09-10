@@ -16,7 +16,10 @@ export function registerTargetCommands(bus: CommandBus, app: Container): void {
     targetId: (await targets.saveToken(targetId, token)).id,
   }));
 
-  bus.register('target.connect.saveSsh', async (input) => ({ targetId: (await targets.saveSsh(input)).id }));
+  bus.register('target.connect.saveSsh', async ({ passphrase, ...rest }) => ({
+    // exactOptionalPropertyTypes: an absent passphrase must be absent, not `undefined`.
+    targetId: (await targets.saveSsh({ ...rest, ...(passphrase !== undefined ? { passphrase } : {}) })).id,
+  }));
 
   bus.register('target.connect.cliStatus', ({ provider }) => targets.cliStatus(provider));
 

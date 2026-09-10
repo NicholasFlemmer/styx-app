@@ -34,6 +34,7 @@ import {
   type CliStatus,
   type ConnectStep,
   type KeyForm,
+  sshPort,
   type SshForm,
 } from './modals';
 
@@ -97,7 +98,13 @@ export function ConnectModal({
   const [flow, setFlow] = useState<OAuthFlow | null>(null);
   const [token, setToken] = useState('');
   const [key, setKey] = useState<KeyForm>({ name: '', accessKey: '', secret: '' });
-  const [ssh, setSsh] = useState<SshForm>({ host: '', user: '', keyPath: '' });
+  const [ssh, setSsh] = useState<SshForm>({
+    host: '',
+    user: '',
+    keyPath: '',
+    port: '',
+    passphrase: '',
+  });
   const [cliStatus, setCliStatus] = useState<CliStatus | null>(null);
   const [account, setAccount] = useState<string | null>(reconnectAccount);
   const [name, setName] = useState(reconnectCli ? target.name : '');
@@ -275,6 +282,8 @@ export function ConnectModal({
         host: ssh.host.trim(),
         user: ssh.user.trim(),
         keyPath: ssh.keyPath.trim(),
+        port: sshPort(ssh) ?? 22,
+        ...(ssh.passphrase !== '' ? { passphrase: ssh.passphrase } : {}),
       });
     } else {
       if (!keyFormValid(key) || (provider !== 'aws' && provider !== 'gcp')) return null;
@@ -615,6 +624,21 @@ export function ConnectModal({
           label={copy.connect.ssh.user}
           value={ssh.user}
           onChange={(v) => setSsh({ ...ssh, user: v })}
+        />
+      </div>
+      <div className={s['two']}>
+        <TextField
+          label={copy.connect.ssh.port}
+          hint={copy.connect.ssh.portHint}
+          value={ssh.port}
+          onChange={(v) => setSsh({ ...ssh, port: v })}
+        />
+        <TextField
+          label={copy.connect.ssh.passphrase}
+          hint={copy.connect.ssh.passphraseHint}
+          value={ssh.passphrase}
+          masked
+          onChange={(v) => setSsh({ ...ssh, passphrase: v })}
         />
       </div>
       <TextField
