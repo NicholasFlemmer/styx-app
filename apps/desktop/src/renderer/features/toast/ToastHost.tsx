@@ -2,17 +2,25 @@ import {
   branchOf,
   copy,
   fill,
+  isDeployActive,
   projectNameOf,
   rows,
   toastFor,
   type AskId,
   type ProjectId,
   type SessionId,
+  type TargetId,
 } from '@styx/core';
 import { motion } from '@styx/tokens';
 import { Toast } from '@styx/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { findOverlay, invokerOf, rememberInvoker, type Overlay, type ToastPayload } from '../../overlays/stack';
+import {
+  findOverlay,
+  invokerOf,
+  rememberInvoker,
+  type Overlay,
+  type ToastPayload,
+} from '../../overlays/stack';
 import { onEvent } from '../../state/bridge';
 import { command } from '../../state/commands';
 import { useUi, useUiShallow } from '../../state/hooks';
@@ -88,13 +96,79 @@ function ErrorToast({ id, code, message }: { id: string; code: string; message: 
   );
 }
 
+/** A confirmation with nothing to do (skill installed / removed): heading, source meta and one line. */
+function InfoToast({ id, heading, title }: { id: string; heading: string; title: string }) {
+  const popOverlay = useUi((st) => st.popOverlay);
+  return (
+    <Toast
+      heading={heading}
+      meta={copy.toast.source}
+      title={title}
+      ttl={motion.toastTtl}
+      onDismiss={() => popOverlay(id)}
+      data-toast="info"
+    />
+  );
+}
+
+/**
+ * A deploy finished while its modal was closed (owner request: progress must not depend on the modal). The row
+ * in `model.deploys` is the source: succeeded / failed, the CLI's exit code or the error, and "Show output"
+ * re-opens the modal attached to that deploy's terminal.
+ */
+export function DeployToast({
+  id,
+  deployId,
+  targetId,
+}: {
+  id: string;
+  deployId: string;
+  targetId: TargetId;
+}) {
+  const model = useReadModel((st) => st.model);
+  const popOverlay = useUi((st) => st.popOverlay);
+  const pushOverlay = useUi((st) => st.pushOverlay);
+  const target = model.targets.byId[targetId];
+  const deploy = model.deploys[deployId];
+  const label = target === undefined ? '' : `${target.name} ${target.env}`;
+  const ok = deploy?.phase === 'succeeded';
+  const detail =
+    deploy?.error ??
+    (deploy?.exitCode != null && deploy.exitCode !== 0
+      ? fill(copy.deploy.exitCode, { code: String(deploy.exitCode) })
+      : undefined);
+  const showOutput = () => {
+    const invoker = invokerOf(id);
+    popOverlay(id);
+    const modalId = pushOverlay({ kind: 'modal', modal: 'deploy', targetId, deployId });
+    if (invoker !== null) rememberInvoker(modalId, invoker);
+  };
+  return (
+    <Toast
+      heading={fill(copy.deploy.title, { target: label })}
+      meta={copy.toast.source}
+      title={fill(ok ? copy.deploy.deployed : copy.deploy.deployFailed, { target: label })}
+      detail={detail}
+      ttl={motion.toastTtl}
+      onDismiss={() => popOverlay(id)}
+      actions={[{ label: copy.deploy.showOutput, onClick: showOutput, primary: true }]}
+      data-deploy-toast={ok ? 'succeeded' : 'failed'}
+    />
+  );
+}
+
 const renderToast = (overlay: Extract<Overlay, { kind: 'toast' }>) => {
   const t: ToastPayload = overlay.toast;
-  return t.kind === 'ask' ? (
-    <AskToast id={overlay.id} askId={t.askId} sessionId={t.sessionId} projectId={t.projectId} />
-  ) : (
-    <ErrorToast id={overlay.id} code={t.code} message={t.message} />
-  );
+  switch (t.kind) {
+    case 'deploy':
+      return <DeployToast id={overlay.id} deployId={t.deployId} targetId={t.targetId} />;
+    case 'ask':
+      return <AskToast id={overlay.id} askId={t.askId} sessionId={t.sessionId} projectId={t.projectId} />;
+    case 'error':
+      return <ErrorToast id={overlay.id} code={t.code} message={t.message} />;
+    case 'info':
+      return <InfoToast id={overlay.id} heading={t.heading} title={t.title} />;
+  }
 };
 
 /** Vertical gap between stacked toasts. */
@@ -143,6 +217,34 @@ export function ToastHost() {
         const existing = findOverlay(ui.overlays, 'toast');
         if (existing !== null && existing.toast.kind === 'ask' && existing.toast.askId === askId) return;
         ui.pushOverlay({ kind: 'toast', toast: { kind: 'ask', askId, sessionId, projectId } });
+      }),
+    [],
+  );
+  // A deploy row going active → succeeded/failed with no deploy modal open for it gets a finish toast. Cancelled
+  // is the user's own doing and rows that arrive already finished (a fresh snapshot) are history, not news.
+  useEffect(
+    () =>
+      useReadModel.subscribe((st, prev) => {
+        if (st.model.deploys === prev.model.deploys) return;
+        if (st.model.settings.app.dnd) return;
+        for (const [deployId, d] of Object.entries(st.model.deploys)) {
+          const before = prev.model.deploys[deployId];
+          if (before === undefined || !isDeployActive(before) || isDeployActive(d)) continue;
+          if (d.phase === 'cancelled') continue;
+          const ui = useUiStore.getState();
+          const modalOpen = ui.overlays.some(
+            (o) =>
+              o.kind === 'modal' &&
+              o.modal === 'deploy' &&
+              (o.deployId === deployId || (o.deployId === undefined && o.targetId === d.targetId)),
+          );
+          if (modalOpen) continue;
+          const shown = ui.overlays.some(
+            (o) => o.kind === 'toast' && o.toast.kind === 'deploy' && o.toast.deployId === deployId,
+          );
+          if (shown) continue;
+          ui.pushOverlay({ kind: 'toast', toast: { kind: 'deploy', deployId, targetId: d.targetId } });
+        }
       }),
     [],
   );

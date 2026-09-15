@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { SkillsService, parseFrontmatter } from './skills-service';
+import { SKILL_HOST_DIRS, SkillsService, parseFrontmatter } from './skills-service';
 import type { Repos } from '../db/repos';
 
 const home = () => mkdtempSync(join(tmpdir(), 'styx-skills-'));
@@ -56,7 +56,9 @@ describe('SkillsService', () => {
     mkdirSync(join(h, '.claude', 'skills', 'not-a-skill'), { recursive: true });
     const svc = new SkillsService({ repos, fetch: vi.fn(), home: h });
     const skills = await svc.list(null);
-    expect(skills).toEqual([{ name: 'alpha', directory: 'alpha', description: 'first', scope: 'global', host: 'claude' }]);
+    expect(skills).toEqual([
+      { name: 'alpha', directory: 'alpha', description: 'first', scope: 'global', host: 'claude' },
+    ]);
   });
 
   it('an empty skills directory is not an error', async () => {
@@ -70,7 +72,12 @@ describe('SkillsService', () => {
     const fetchMock = vi.fn(async () => new Response(md, { status: 200 }));
     const svc = new SkillsService({ repos, fetch: fetchMock as never, home: h });
 
-    const installed = await svc.install({ directory: 'pdf', scope: 'global', hosts: ['claude'], projectId: null });
+    const installed = await svc.install({
+      directory: 'pdf',
+      scope: 'global',
+      hosts: ['claude'],
+      projectId: null,
+    });
     expect(installed).toEqual([
       { name: 'pdf', directory: 'pdf', description: 'fills forms', scope: 'global', host: 'claude' },
     ]);
@@ -134,6 +141,127 @@ describe('SkillsService', () => {
     });
     const svc = new SkillsService({ repos, fetch: fetchMock as never, home: home() });
     const rows = await svc.catalogue();
-    expect(rows).toEqual([{ name: 'pdf', directory: 'pdf', description: 'fills forms', scope: 'catalogue', host: null }]);
+    expect(rows).toEqual([
+      { name: 'pdf', directory: 'pdf', description: 'fills forms', scope: 'catalogue', host: null },
+    ]);
+  });
+});
+
+describe('SkillsService across agent CLIs', () => {
+  const md = (name: string) => `---\nname: ${name}\ndescription: about ${name}\n---\n# ${name}`;
+  const writeAt = (root: string, segments: string[], dir: string, body: string) => {
+    mkdirSync(join(root, ...segments, dir), { recursive: true });
+    writeFileSync(join(root, ...segments, dir, 'SKILL.md'), body, 'utf8');
+  };
+  const catalogueFetch = vi.fn(async (url: string) => {
+    const m = /\/skills\/([^/]+)\/SKILL\.md$/.exec(url);
+    return m?.[1] === undefined
+      ? new Response('not found', { status: 404 })
+      : new Response(md(m[1]), { status: 200 });
+  });
+
+  it('SKILL_HOST_DIRS: every CLI has its own root, the shared `.agents` dir is a fifth', () => {
+    expect(Object.keys(SKILL_HOST_DIRS)).toEqual(['claude', 'codex', 'gemini', 'cursor', 'agents']);
+    for (const [host, dirs] of Object.entries(SKILL_HOST_DIRS)) {
+      expect(dirs.global).toEqual([`.${host}`, 'skills']);
+      expect(dirs.project).toEqual([`.${host}`, 'skills']);
+    }
+  });
+
+  it('Codex honours $CODEX_HOME for its global dir; everyone else is relative to home', async () => {
+    const h = home();
+    const codexHome = mkdtempSync(join(tmpdir(), 'styx-codex-home-'));
+    const svc = new SkillsService({
+      repos,
+      fetch: catalogueFetch as never,
+      home: h,
+      env: { CODEX_HOME: codexHome },
+    });
+    await svc.install({ directory: 'pdf', scope: 'global', hosts: ['codex', 'gemini'], projectId: null });
+    expect(existsSync(join(codexHome, 'skills', 'pdf', 'SKILL.md'))).toBe(true);
+    expect(existsSync(join(h, '.codex', 'skills', 'pdf'))).toBe(false);
+    expect(existsSync(join(h, '.gemini', 'skills', 'pdf', 'SKILL.md'))).toBe(true);
+    expect((await svc.list(null)).map((s) => s.host)).toEqual(['codex', 'gemini']);
+    // An empty CODEX_HOME means "unset".
+    const plain = new SkillsService({
+      repos,
+      fetch: catalogueFetch as never,
+      home: h,
+      env: { CODEX_HOME: '' },
+    });
+    await plain.install({ directory: 'xlsx', scope: 'global', hosts: ['codex'], projectId: null });
+    expect(existsSync(join(h, '.codex', 'skills', 'xlsx', 'SKILL.md'))).toBe(true);
+  });
+
+  it('installing for two hosts writes two files and returns one summary per host', async () => {
+    const h = home();
+    const svc = new SkillsService({ repos, fetch: catalogueFetch as never, home: h });
+    const out = await svc.install({
+      directory: 'pdf',
+      scope: 'global',
+      hosts: ['claude', 'cursor', 'claude'],
+      projectId: null,
+    });
+    expect(out).toEqual([
+      { name: 'pdf', directory: 'pdf', description: 'about pdf', scope: 'global', host: 'claude' },
+      { name: 'pdf', directory: 'pdf', description: 'about pdf', scope: 'global', host: 'cursor' },
+    ]);
+    expect(readFileSync(join(h, '.claude', 'skills', 'pdf', 'SKILL.md'), 'utf8')).toBe(md('pdf'));
+    expect(readFileSync(join(h, '.cursor', 'skills', 'pdf', 'SKILL.md'), 'utf8')).toBe(md('pdf'));
+    // One fetch for the text, however many hosts.
+    expect(catalogueFetch.mock.calls.filter((c) => c[0].includes('/pdf/'))).toHaveLength(1);
+  });
+
+  it('remove takes one host: the other CLI keeps its copy', async () => {
+    const h = home();
+    const svc = new SkillsService({ repos, fetch: catalogueFetch as never, home: h });
+    await svc.install({ directory: 'pdf', scope: 'global', hosts: ['claude', 'codex'], projectId: null });
+    await svc.remove({ directory: 'pdf', scope: 'global', host: 'codex', projectId: null });
+    expect(existsSync(join(h, '.codex', 'skills', 'pdf'))).toBe(false);
+    expect(existsSync(join(h, '.claude', 'skills', 'pdf', 'SKILL.md'))).toBe(true);
+    expect(await svc.list(null)).toEqual([
+      { name: 'pdf', directory: 'pdf', description: 'about pdf', scope: 'global', host: 'claude' },
+    ]);
+  });
+
+  it('lists every host dir plus the shared `.agents` dir, for the user and the project, sorted by name then host', async () => {
+    const h = home();
+    const project = mkdtempSync(join(tmpdir(), 'styx-skills-project-'));
+    writeAt(h, ['.claude', 'skills'], 'pdf', md('pdf'));
+    writeAt(h, ['.cursor', 'skills'], 'pdf', md('pdf'));
+    writeAt(h, ['.agents', 'skills'], 'sql-review', md('sql-review'));
+    writeAt(project, ['.codex', 'skills'], 'release-notes', md('release-notes'));
+    writeAt(project, ['.agents', 'skills'], 'pdf', md('pdf'));
+    const projectRepos = {
+      projects: { get: (id: string) => (id === 'p1' ? { path: project } : null) },
+    } as unknown as Repos;
+    const svc = new SkillsService({ repos: projectRepos, fetch: vi.fn(), home: h });
+    const rows = await svc.list('p1');
+    expect(rows.map((r) => [r.name, r.scope, r.host])).toEqual([
+      ['pdf', 'project', 'agents'],
+      ['pdf', 'global', 'claude'],
+      ['pdf', 'global', 'cursor'],
+      ['release-notes', 'project', 'codex'],
+      ['sql-review', 'global', 'agents'],
+    ]);
+    // Without a project only the user's dirs are scanned.
+    expect((await svc.list(null)).map((r) => [r.name, r.host])).toEqual([
+      ['pdf', 'claude'],
+      ['pdf', 'cursor'],
+      ['sql-review', 'agents'],
+    ]);
+  });
+
+  it('a project-scope install or remove without a project is rejected, and the shared dir is never an install target', async () => {
+    const svc = new SkillsService({ repos, fetch: catalogueFetch as never, home: home() });
+    await expect(
+      svc.install({ directory: 'pdf', scope: 'project', hosts: ['claude'], projectId: null }),
+    ).rejects.toMatchObject({ code: 'invalid-input' });
+    await expect(
+      svc.remove({ directory: 'pdf', scope: 'project', host: 'claude', projectId: null }),
+    ).rejects.toMatchObject({ code: 'invalid-input' });
+    await expect(
+      svc.install({ directory: 'pdf', scope: 'global', hosts: [], projectId: null }),
+    ).rejects.toMatchObject({ code: 'invalid-input' });
   });
 });

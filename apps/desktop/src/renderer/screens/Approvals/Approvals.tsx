@@ -165,7 +165,7 @@ function AuditLog({ rows, onOpen }: AuditLogProps) {
   const openId = useUi((u) => {
     for (let i = u.overlays.length - 1; i >= 0; i--) {
       const o = u.overlays[i];
-      if (o?.kind === 'drawer') return o.auditId;
+      if (o?.kind === 'drawer' && o.drawer === 'audit') return o.auditId;
     }
     return null;
   });

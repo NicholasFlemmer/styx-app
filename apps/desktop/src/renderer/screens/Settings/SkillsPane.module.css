@@ -1,77 +1,87 @@
-@layer components {
+@layer screens {
   .pane {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    padding: 16px 20px;
-    overflow-y: auto;
+    min-height: 0;
+  }
+  /* Same recipe as Settings .empty: muted 12.5px lead under the section header. */
+  .lead {
+    margin: 0;
+    padding: var(--sp-4) var(--sp-5) 0;
+    color: var(--mu);
+    font-size: 12.5px;
+    line-height: 1.5;
+    max-width: 460px;
+  }
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-5);
+    border-bottom: 1px solid var(--ln);
+  }
+  .search {
+    flex: none;
+    width: 240px;
+  }
+  .banner {
+    margin: var(--sp-3) var(--sp-5) 0;
   }
   .section {
     display: flex;
     flex-direction: column;
-    gap: 8px;
   }
-  .row {
+  .sectionHead {
+    margin: 0;
+    padding: 14px var(--sp-5) 6px;
+  }
+  .who {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--ln);
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    gap: 2px;
+    min-width: 0;
   }
   .name {
-    font-family: var(--font-ui);
-    font-size: 13px;
     font-weight: 600;
   }
   .desc {
     font-size: 12px;
-    line-height: 1.5;
     color: var(--mu);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     user-select: text;
   }
+  .tags {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  /* Trailing text-link actions: same recipe as the Targets table (Settings .actions / .action). */
   .actions {
     display: flex;
-    gap: 6px;
-    margin-top: 4px;
+    justify-content: flex-end;
+    gap: 14px;
   }
-  /* The security line: a skill is instructions, so it gets the accent edge a grant request gets. */
-  .warning {
-    padding: 8px 10px;
-    border-left: 2px solid var(--ac);
-    background: var(--add);
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--tx);
+  .action {
+    position: relative;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
   }
-  .error {
-    padding: 8px 10px;
-    border: 1px solid var(--ln);
-    background: var(--s1);
-    font-size: 12px;
-    color: var(--tx);
-    user-select: text;
+  /* spec §9: hit targets ≥ 28px for the 10px action label */
+  .action::after {
+    content: '';
+    position: absolute;
+    inset: -9px -6px;
   }
-  .empty {
+  .note {
+    margin: 0;
+    padding: var(--sp-3) var(--sp-5);
     font-size: 12px;
     color: var(--mu);
   }
-  /* The skill's own text, read before installing it. */
-  .read {
-    max-height: 320px;
-    margin: 6px 0 0;
-    padding: 10px;
-    border: 1px solid var(--ln);
-    background: var(--s1);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    overflow: auto;
-    user-select: text;
+  .loadingRow {
+    grid-column: 1 / -1;
   }
 }

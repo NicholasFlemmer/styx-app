@@ -5,7 +5,11 @@ export type OverlayKind = 'palette' | 'modal' | 'sheet' | 'drawer' | 'toast';
 
 export type ToastPayload =
   | { kind: 'ask'; askId: AskId; sessionId: SessionId; projectId: ProjectId }
-  | { kind: 'error'; code: string; message: string };
+  | { kind: 'error'; code: string; message: string }
+  /** Plain confirmation (a skill installed or removed): heading + title, no actions. */
+  | { kind: 'info'; heading: string; title: string }
+  /** A deploy finished (succeeded / failed) while its modal was not open; "Show output" re-opens it. */
+  | { kind: 'deploy'; deployId: string; targetId: TargetId };
 
 export type ModalPayload =
   | { modal: 'spawn'; projectId: ProjectId }
@@ -28,6 +32,8 @@ export type Overlay =
   | ({ id: string; kind: 'modal' } & ModalPayload)
   | { id: string; kind: 'sheet'; sheet: 'grant'; sessionId: SessionId; askId: AskId }
   | { id: string; kind: 'drawer'; drawer: 'audit'; auditId: AuditId }
+  /** Skill reader (Settings › Skills): the catalogue SKILL.md by directory, read before it can be installed. */
+  | { id: string; kind: 'drawer'; drawer: 'skill'; directory: string }
   | { id: string; kind: 'toast'; toast: ToastPayload };
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;

@@ -1,5 +1,9 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join, resolve, sep } from 'node:path';
 import { chainRows } from '../services/audit-service';
-import { defaultPolicies, fixtures, type ProjectSettings } from '@styx/core';
+import { fixtureCatalogueText, fixtureSkillMarkdown } from '../services/skills-fixture';
+import { SKILL_HOST_DIRS } from '../services/skills-service';
+import { defaultPolicies, fixtures, type ProjectSettings, type SkillSummary } from '@styx/core';
 import type { Repos } from './repos';
 
 export type FixtureName = 'demo' | 'empty' | 'error';
@@ -17,15 +21,51 @@ export const loadFixture = (name: FixtureName): fixtures.DemoFixture =>
 const AUDIT_COLS =
   'id, seq, time, actor_kind, actor_label, action, project_id, target_id, session_id, worktree_id, grant_id, policy_id, target_label, session_label, worktree_label, agent, scope_json, duration, triggered_by, detail_json, prev_hash, hash';
 
+export interface SeedOptions {
+  reset?: boolean;
+  /** Home the fixture's global skills are written under (`<home>/.claude/skills/…`): a temp dir, never the real one. */
+  skillsHome?: string;
+  /** Where the fixture's project skills go: the demo acme-shop checkout, written before seed-repos commits it. */
+  skillsProjectDir?: string;
+}
+
+/**
+ * Writes the fixture's installed skills as real `SKILL.md` files where each agent CLI would read them, so the
+ * Skills pane lists the same rows on every machine. Global rows go under `home`, project rows under `projectDir`
+ * (skipped when there is none); nothing is ever written outside those two roots. Returns the files written.
+ */
+export function seedSkills(
+  skills: readonly SkillSummary[],
+  roots: { home: string; projectDir: string | null },
+): string[] {
+  const written: string[] = [];
+  for (const skill of skills) {
+    if (skill.scope === 'catalogue' || skill.host === null) continue;
+    const root = skill.scope === 'global' ? roots.home : roots.projectDir;
+    if (root === null) continue;
+    const base = resolve(root, ...SKILL_HOST_DIRS[skill.host][skill.scope]);
+    const dir = resolve(base, skill.directory);
+    if (!dir.startsWith(base + sep)) continue; // fixture names are ours, but never write outside the skills root
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, 'SKILL.md');
+    writeFileSync(file, fixtureCatalogueText(skill.directory) ?? fixtureSkillMarkdown(skill), 'utf8');
+    written.push(file);
+  }
+  return written;
+}
+
 /**
  * Loads a core fixture into the DB. Idempotent: skips when any domain table already has rows unless `reset` is set.
- * `audit_entries` is append-only, so a reset keeps existing audit rows and ignores duplicate ids.
+ * `audit_entries` is append-only, so a reset keeps existing audit rows and ignores duplicate ids. Fixture skills
+ * are files, not rows, so they are (re)written on every boot the caller passes a `skillsHome` for.
  */
 export function seed(
   repos: Repos,
   fixture: fixtures.DemoFixture,
-  opts: { reset?: boolean } = {},
+  opts: SeedOptions = {},
 ): { seeded: boolean } {
+  if (opts.skillsHome !== undefined)
+    seedSkills(fixture.skills, { home: opts.skillsHome, projectDir: opts.skillsProjectDir ?? null });
   const db = repos.db;
   const populated =
     repos.projects.count() > 0 || repos.policies.all().length > 0 || repos.sessions.all().length > 0;
@@ -102,9 +142,28 @@ export function seed(
     );
     for (const e of chained) {
       insertAudit.run(
-        e.id, e.seq, e.time, e.actorKind, e.actorLabel, e.action, e.projectId, e.targetId, e.sessionId, e.worktreeId,
-        e.grantId, e.policyId, e.targetLabel, e.sessionLabel, e.worktreeLabel, e.agent, e.scopeJson, e.duration,
-        e.triggeredBy, e.detailJson, e.prevHash, e.hash,
+        e.id,
+        e.seq,
+        e.time,
+        e.actorKind,
+        e.actorLabel,
+        e.action,
+        e.projectId,
+        e.targetId,
+        e.sessionId,
+        e.worktreeId,
+        e.grantId,
+        e.policyId,
+        e.targetLabel,
+        e.sessionLabel,
+        e.worktreeLabel,
+        e.agent,
+        e.scopeJson,
+        e.duration,
+        e.triggeredBy,
+        e.detailJson,
+        e.prevHash,
+        e.hash,
       );
     }
     for (const list of Object.values(fixture.hunks)) for (const h of list) repos.agentChanges.upsert(h);

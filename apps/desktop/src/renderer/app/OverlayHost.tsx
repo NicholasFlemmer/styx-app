@@ -8,6 +8,7 @@ import { DeployModal } from '../features/modals/DeployModal';
 import { NewProjectModal } from '../features/modals/NewProjectModal';
 import { SpawnModal } from '../features/modals/SpawnModal';
 import { Palette } from '../features/palette/Palette';
+import { SkillDrawer } from '../features/skills/SkillDrawer';
 import { ToastHost } from '../features/toast/ToastHost';
 import { isTrapping, type Overlay } from '../overlays/stack';
 import { useUi } from '../state/hooks';
@@ -58,7 +59,13 @@ const render = (o: Overlay) => {
     case 'sheet':
       return <GrantSheet key={o.id} id={o.id} sessionId={o.sessionId} askId={o.askId} />;
     case 'drawer':
-      return <AuditDrawer key={o.id} id={o.id} auditId={o.auditId} />;
+      switch (o.drawer) {
+        case 'audit':
+          return <AuditDrawer key={o.id} id={o.id} auditId={o.auditId} />;
+        case 'skill':
+          return <SkillDrawer key={o.id} id={o.id} directory={o.directory} />;
+      }
+      return null;
     case 'toast':
       return null;
   }
