@@ -243,12 +243,12 @@ export function Workspace() {
         {changes.length > 0 && hunkAgent !== null && (
           <HunkBar
             label={hunkBarLabel(changes.length, hunkAgent, hunkNote)}
-            onAcceptAll={() => {
-              for (const id of hunkSessions) void command('hunk.acceptAll', { sessionId: id });
-            }}
             onReview={() => setScreen('diff')}
-            onRejectAll={() => {
-              for (const id of hunkSessions) void command('hunk.rejectAll', { sessionId: id });
+            onRevertAll={() => {
+              for (const id of hunkSessions) void command('hunk.revertAll', { sessionId: id });
+            }}
+            onMarkReviewed={() => {
+              for (const id of hunkSessions) void command('hunk.done', { sessionId: id });
             }}
           />
         )}

@@ -34,14 +34,17 @@ describe('Diff review data', () => {
     ]);
   });
 
-  it('meta and counts follow the statuses', () => {
+  it('meta counts live changes, reverted (rejected) and reviewed (accepted); stale ones are not changes', () => {
     expect(reviewOf(fixtures.demoReadModel(), acme, claude).meta).toBe(
-      'Claude · fix/checkout · 0 accepted · 0 rejected · 3 pending',
+      'Claude · fix/checkout · 3 changes · 0 reverted · 0 reviewed',
     );
     const r = reviewOf(withStatus({ 1: 'accepted', 2: 'rejected' }), acme, claude);
-    expect(r.counts).toEqual({ accepted: 1, rejected: 1, pending: 1 });
-    expect(r.meta).toBe('Claude · fix/checkout · 1 accepted · 1 rejected · 1 pending');
-    expect(reviewCounts([])).toEqual({ accepted: 0, rejected: 0, pending: 0 });
+    expect(r.counts).toEqual({ reverted: 1, reviewed: 1, pending: 1 });
+    expect(r.meta).toBe('Claude · fix/checkout · 3 changes · 1 reverted · 1 reviewed');
+    expect(reviewOf(withStatus({ 2: 'rejected', 3: 'stale' }), acme, claude).meta).toBe(
+      'Claude · fix/checkout · 2 changes · 1 reverted · 0 reviewed',
+    );
+    expect(reviewCounts([])).toEqual({ reverted: 0, reviewed: 0, pending: 0 });
   });
 
   it('files carry added-line counts in first-seen order', () => {
@@ -56,7 +59,7 @@ describe('Diff review data', () => {
     const r = reviewOf(fixtures.emptyReadModel(), null, null);
     expect(r.sessionId).toBeNull();
     expect(r.hunks).toEqual([]);
-    expect(r.meta).toBe('— · — · 0 accepted · 0 rejected · 0 pending');
+    expect(r.meta).toBe('— · — · 0 changes · 0 reverted · 0 reviewed');
   });
 
   it.each([

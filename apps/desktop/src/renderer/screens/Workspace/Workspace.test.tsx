@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { copy, fixtures, type ProjectId } from '@styx/core';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { copy, fixtures, type ProjectId, type SessionId } from '@styx/core';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
@@ -36,6 +36,8 @@ vi.mock('../../features/terminal/TerminalPane', () => ({
 
 const side = fixtures.ids.project.sideApi as ProjectId;
 const sideMain = fixtures.ids.worktree.sideMain;
+const acme = fixtures.ids.project.acmeShop as ProjectId;
+const claude = fixtures.ids.session.claude as SessionId;
 
 const listDir = (path: string) =>
   path === ''
@@ -100,5 +102,27 @@ describe('Workspace screen', () => {
     expect(screen.getByTestId('terminal').getAttribute('data-branch')).toBe(copy.workspace.noGit);
     expect(document.querySelector('[data-workspace]')?.getAttribute('data-workspace')).toBe('no-git');
     expect(document.querySelector('[data-hunk-bar]')).toBeNull();
+  });
+
+  it('the hunk bar offers Review / Revert all / Mark reviewed (no Accept): revertAll and done per hunk session, Review opens the diff', async () => {
+    useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected'); // Claude owns fix/checkout with 3 pending hunks
+    useUiStore.setState({ projectId: acme, projectSession: { [acme]: claude } });
+    render(<Workspace />);
+    await waitFor(() => expect(document.querySelector('[data-hunk-bar]')).not.toBeNull());
+    const bar = within(document.querySelector('[data-hunk-bar]') as HTMLElement);
+    expect(bar.getByText('3 hunks from Claude · 42 tests pass')).toBeTruthy();
+    expect(bar.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      copy.diff.review,
+      copy.diff.revertAll,
+      copy.diff.markReviewed,
+    ]);
+    expect(bar.queryByRole('button', { name: 'Accept all' })).toBeNull();
+    fireEvent.click(bar.getByRole('button', { name: copy.diff.revertAll }));
+    expect(commandMock).toHaveBeenCalledWith('hunk.revertAll', { sessionId: claude });
+    fireEvent.click(bar.getByRole('button', { name: copy.diff.markReviewed }));
+    expect(commandMock).toHaveBeenCalledWith('hunk.done', { sessionId: claude });
+    expect(commandMock.mock.calls.filter(([name]) => name.startsWith('hunk.'))).toHaveLength(2);
+    fireEvent.click(bar.getByRole('button', { name: copy.diff.review }));
+    expect(useUiStore.getState().screen).toBe('diff');
   });
 });

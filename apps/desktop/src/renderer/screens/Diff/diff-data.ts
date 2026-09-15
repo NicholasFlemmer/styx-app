@@ -15,7 +15,10 @@ import {
 import { shortcuts } from '@styx/tokens';
 import { changeHeader, changeRows, type DiffRow } from '../../features/diff';
 
-/** One reviewable hunk (prototype `hunks`): stale ones are gone from the worktree and never listed. */
+/**
+ * One reviewable hunk (prototype `hunks`): stale ones are gone from the worktree and never listed. The status keeps
+ * the DB vocabulary; it reads via `copy.diff.status` as applied / reverted / reviewed.
+ */
 export interface ReviewHunk {
   id: HunkId;
   file: string;
@@ -24,7 +27,8 @@ export interface ReviewHunk {
   rows: DiffRow[];
 }
 
-export type ReviewCounts = { accepted: number; rejected: number; pending: number };
+/** `reverted` = status `rejected`, `reviewed` = status `accepted`, `pending` = applied and not yet looked at. */
+export type ReviewCounts = { reverted: number; reviewed: number; pending: number };
 
 export interface Review {
   sessionId: SessionId | null;
@@ -33,7 +37,7 @@ export interface Review {
   hunks: ReviewHunk[];
   files: { file: string; added: number }[];
   counts: ReviewCounts;
-  /** `Claude · fix/checkout · 0 accepted · 0 rejected · 3 pending` */
+  /** `Claude · fix/checkout · 3 changes · 0 reverted · 0 reviewed` */
   meta: string;
 }
 
@@ -78,8 +82,8 @@ export const fileCounts = (hunks: readonly ReviewHunk[]): { file: string; added:
 };
 
 export const reviewCounts = (hunks: readonly ReviewHunk[]): ReviewCounts => ({
-  accepted: hunks.filter((h) => h.status === 'accepted').length,
-  rejected: hunks.filter((h) => h.status === 'rejected').length,
+  reverted: hunks.filter((h) => h.status === 'rejected').length,
+  reviewed: hunks.filter((h) => h.status === 'accepted').length,
   pending: hunks.filter((h) => h.status === 'pending').length,
 });
 
@@ -101,7 +105,11 @@ export const reviewOf = (
     hunks,
     files: fileCounts(hunks),
     counts,
-    meta: fill(copy.diff.meta, { agent, branch, summary: fill(copy.diff.summary, counts) }),
+    meta: fill(copy.diff.meta, {
+      agent,
+      branch,
+      summary: fill(copy.diff.summaryReviewed, { n: hunks.length, ...counts }),
+    }),
   };
 };
 

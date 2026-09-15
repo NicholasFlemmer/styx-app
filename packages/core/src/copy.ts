@@ -334,7 +334,13 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     /** Redesign (owner request): search, per-agent hosts, a reader sheet, loading and result states. */
     search: 'Search skills',
     columns: { skill: 'Skill', for: 'For', where: 'Where' },
-    hosts: { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', cursor: 'Cursor', agents: 'Shared' },
+    hosts: {
+      claude: 'Claude Code',
+      codex: 'Codex',
+      gemini: 'Gemini CLI',
+      cursor: 'Cursor',
+      agents: 'Shared',
+    },
     hostsShort: { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', cursor: 'Cursor', agents: 'Shared' },
     /** `.agents/skills` is read by Codex, Gemini CLI and Cursor; Styx lists it but never writes there. */
     sharedHint: 'read by Codex, Gemini CLI and Cursor',
@@ -350,6 +356,10 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     removedToast: 'Removed {name}',
     noMatch: 'No skills match "{query}".',
     close: 'Close',
+    /** The reader drawer (heading) and its loading line; the host filter's group label. */
+    drawerHeading: 'Skill',
+    readerLoading: 'Loading skill…',
+    filterLabel: 'Agent',
   },
 
   accessRequest: {
@@ -693,6 +703,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     },
     actions: {
       connect: 'Connect',
+      reconnect: 'Reconnect',
       fix: 'Fix',
       verify: 'Verify',
       signIn: 'Sign in',
@@ -779,23 +790,18 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   diff: {
     title: 'Review',
     meta: '{agent} · {branch} · {summary}',
-    summary: '{accepted} accepted · {rejected} rejected · {pending} pending',
-    acceptAll: 'Accept all',
-    rejectAll: 'Reject all',
     done: 'Done',
-    accept: 'Accept',
-    reject: 'Reject',
     review: 'Review',
     /** Owner decision: agents already applied their edits, so the review reverts or marks reviewed; nothing "accepts". */
     revert: 'Revert',
     revertAll: 'Revert all',
     markReviewed: 'Mark reviewed',
+    /** Keyed by `ChangeStatus`: the DB value `accepted` reads as "reviewed". */
     status: { pending: 'applied', rejected: 'reverted', accepted: 'reviewed' },
     summaryReviewed: '{n} changes · {reverted} reverted · {reviewed} reviewed',
     files: 'Files · {n}',
     keys: {
       title: 'Keys',
-      acceptReject: 'a accept · r reject',
       revert: 'r revert',
       nextPrev: 'j / k next · prev',
       done: '{mod}⏎ done',

@@ -272,7 +272,10 @@ export const commands = {
     input: z.object({ projectId: projectIdSchema }),
     output: z.object({
       suggestions: z.array(
-        z.object({ command: z.string().min(1), source: z.enum(['package.json', 'makefile', 'django', 'cargo', 'go']) }),
+        z.object({
+          command: z.string().min(1),
+          source: z.enum(['package.json', 'makefile', 'django', 'cargo', 'go']),
+        }),
       ),
     }),
   },
@@ -552,13 +555,16 @@ export const commands = {
   },
 
   // --- hunks ---
-  'hunk.accept': { input: z.object({ hunkId: hunkIdSchema }), output: ok },
-  'hunk.reject': { input: z.object({ hunkId: hunkIdSchema }), output: ok },
-  'hunk.acceptAll': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
-  'hunk.rejectAll': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
+  // Agents already applied their edits to the worktree (owner decision, replaces spec §4.7 Accept/Reject): review
+  // = look, revert, mark reviewed. There is no "accept"; nothing here stages or applies.
+  /** Reverse-apply one pending hunk in the working tree (`git apply -R`), then rescan. */
+  'hunk.revert': { input: z.object({ hunkId: hunkIdSchema }), output: ok },
+  /** Revert every pending hunk of the session. */
+  'hunk.revertAll': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
+  /** Mark every pending hunk reviewed (status `accepted`), except `.styx/project.json` (H-1); returns how many. */
   'hunk.done': {
     input: z.object({ sessionId: sessionIdSchema }),
-    output: z.object({ applied: z.number().int().nonnegative() }),
+    output: z.object({ reviewed: z.number().int().nonnegative() }),
   },
 
   // --- fs (confined to the worktree path) ---

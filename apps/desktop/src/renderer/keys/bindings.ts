@@ -254,17 +254,19 @@ export const popoutBindings = (sessionId: SessionId): KeyBinding[] => [
 ];
 
 export interface DiffActions {
-  accept: () => void;
-  reject: () => void;
+  /** `r`: reverse-apply the focused hunk. The agent already applied its edit, so there is no accept key. */
+  revert: () => void;
   next: () => void;
   prev: () => void;
   done: () => void;
 }
 
-/** a r j k Mod+Enter, only in scope `diff` (spec §6). */
+/**
+ * r j k Mod+Enter, only in scope `diff` (spec §6 minus `a`: the owner dropped Accept because the edit is already in
+ * the worktree; the `r` token keeps its `diffReject` name in tokens.json).
+ */
 export const diffBindings = (actions: DiffActions): KeyBinding[] => [
-  { id: 'diffAccept', chord: shortcuts.diffAccept, scope: 'diff', run: actions.accept },
-  { id: 'diffReject', chord: shortcuts.diffReject, scope: 'diff', run: actions.reject },
+  { id: 'diffRevert', chord: shortcuts.diffReject, scope: 'diff', run: actions.revert },
   { id: 'diffNext', chord: shortcuts.diffNext, scope: 'diff', run: actions.next },
   { id: 'diffPrev', chord: shortcuts.diffPrev, scope: 'diff', run: actions.prev },
   { id: 'diffDone', chord: shortcuts.diffDone, scope: 'diff', run: actions.done },

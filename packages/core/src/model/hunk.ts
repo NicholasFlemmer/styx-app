@@ -29,6 +29,11 @@ export const hunkSchema = z.object({
 });
 export type Hunk = z.infer<typeof hunkSchema>;
 
+/**
+ * Review status of an agent hunk. The agent already applied its edit, so the values read: `pending` = applied,
+ * not yet looked at · `accepted` = marked reviewed (the DB/enum value is kept; nothing is staged or applied on
+ * the way there) · `rejected` = reverted in the working tree · `stale` = no longer present in the worktree diff.
+ */
 export const changeStatusSchema = z.enum(['pending', 'accepted', 'rejected', 'stale']);
 export type ChangeStatus = z.infer<typeof changeStatusSchema>;
 

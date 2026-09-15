@@ -19,6 +19,11 @@ import s from './Diff.module.css';
 
 const identity = (m: ReadModel) => m;
 
+/**
+ * One hunk: file · range · status tag (applied / reverted / reviewed; `data-on` once reverted) · a single Revert
+ * button (inverted once reverted, enabled only while pending). The agent already applied the edit, so there is no
+ * Accept (owner decision, replaces spec §4.7).
+ */
 function HunkView({
   hunk,
   index,
@@ -28,8 +33,7 @@ function HunkView({
   index: number;
   setEl: (el: HTMLElement | null) => void;
 }) {
-  const accepted = hunk.status === 'accepted';
-  const rejected = hunk.status === 'rejected';
+  const reverted = hunk.status === 'rejected';
   return (
     <article
       ref={setEl}
@@ -45,24 +49,17 @@ function HunkView({
         <span>{hunk.file}</span>
         <span className={s['range']}>{hunk.range}</span>
         <span className={s['spacer']} />
-        <Tag size="md" on={accepted} className={s['status']} data-hunk-status="true">
-          {hunk.status}
+        <Tag size="md" on={reverted} className={s['status']} data-hunk-status="true">
+          {copy.diff.status[hunk.status]}
         </Tag>
         <Button
           size="hunk"
-          inv={accepted}
+          inv={reverted}
+          disabled={hunk.status !== 'pending'}
           className={s['hunkButton']}
-          onClick={() => void command('hunk.accept', { hunkId: hunk.id })}
+          onClick={() => void command('hunk.revert', { hunkId: hunk.id })}
         >
-          {copy.diff.accept}
-        </Button>
-        <Button
-          size="hunk"
-          inv={rejected}
-          className={s['hunkButton']}
-          onClick={() => void command('hunk.reject', { hunkId: hunk.id })}
-        >
-          {copy.diff.reject}
+          {copy.diff.revert}
         </Button>
       </div>
       <DiffBlock rows={hunk.rows} gutter="spaced" />
@@ -70,7 +67,10 @@ function HunkView({
   );
 }
 
-/** Diff review (spec §4.7): a / r / j / k / Mod+⏎ in scope `diff`; Done applies accepted hunks and returns to Workspace. */
+/**
+ * Diff review: r / j / k / Mod+⏎ in scope `diff`. The agent already applied its edits, so review = look, revert,
+ * mark reviewed; Done marks the pending hunks reviewed (`hunk.done`) and returns to the Workspace.
+ */
 export function Diff() {
   const model = useModel(identity);
   const projectId = useUi((u) => u.projectId);
@@ -103,10 +103,11 @@ export function Diff() {
     if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest' });
   }, []);
 
-  const decide = useCallback((verdict: 'accept' | 'reject') => {
+  /** `r`: revert the focused hunk; a hunk that is no longer pending is left alone (main would refuse anyway). */
+  const revert = useCallback(() => {
     const hunk = currentReview().hunks[useUiStore.getState().diffFocusIndex];
-    if (hunk === undefined) return;
-    void command(verdict === 'accept' ? 'hunk.accept' : 'hunk.reject', { hunkId: hunk.id });
+    if (hunk === undefined || hunk.status !== 'pending') return;
+    void command('hunk.revert', { hunkId: hunk.id });
   }, []);
 
   const done = useCallback(() => {
@@ -124,19 +125,18 @@ export function Diff() {
     () =>
       keys.registerAll(
         diffBindings({
-          accept: () => decide('accept'),
-          reject: () => decide('reject'),
+          revert,
           next: () => move(1),
           prev: () => move(-1),
           done,
         }),
       ),
-    [decide, move, done],
+    [revert, move, done],
   );
 
-  const all = (verdict: 'hunk.acceptAll' | 'hunk.rejectAll') => {
+  const revertAll = () => {
     const sessionId = currentReview().sessionId;
-    if (sessionId !== null) void command(verdict, { sessionId });
+    if (sessionId !== null) void command('hunk.revertAll', { sessionId });
   };
 
   // Plain folder (no git): nothing to review until `git init`; Done still returns to the Workspace.
@@ -174,11 +174,8 @@ export function Diff() {
           {review.meta}
         </span>
         <span className={s['spacer']} />
-        <Button size="regular" onClick={() => all('hunk.acceptAll')}>
-          {copy.diff.acceptAll}
-        </Button>
-        <Button size="regular" onClick={() => all('hunk.rejectAll')}>
-          {copy.diff.rejectAll}
+        <Button size="regular" onClick={revertAll}>
+          {copy.diff.revertAll}
         </Button>
         <Button size="regular" variant="primary" onClick={done}>
           {copy.diff.done}
@@ -199,7 +196,7 @@ export function Diff() {
             {copy.diff.keys.title}
           </Label>
           <div className={s['legend']} data-diff-keys="true">
-            {copy.diff.keys.acceptReject}
+            {copy.diff.keys.revert}
             <br />
             {copy.diff.keys.nextPrev}
             <br />

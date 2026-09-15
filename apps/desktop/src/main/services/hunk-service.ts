@@ -19,8 +19,9 @@ import { logger } from './logger';
 export const HUNK_DEBOUNCE_MS = 300;
 
 /**
- * `.styx/project.json` carries grant policy (H-1): its hunks are never swept up by a bulk or automatic accept and
- * an `autoApproveEdits` session still asks before an agent edits it. Accept them one at a time in the diff view.
+ * `.styx/project.json` carries grant policy (H-1): its hunks are never swept up by a bulk "mark reviewed" (`done`)
+ * and an `autoApproveEdits` session still asks before an agent edits it. They stay visible until reverted or the
+ * project-policy banner is accepted.
  */
 export const isPolicyFile = (file: string): boolean =>
   /(^|\/)\.styx\/project\.json$/i.test(normalize(file).replace(/\\/g, '/'));
@@ -54,6 +55,11 @@ export interface HunkServiceDeps {
 /**
  * Attribution = worktree ownership (plan §5 HunkService): a chokidar watcher per agent worktree, 300 ms debounce,
  * `git diff -U3 <base_commit>` (+ untracked) parsed with core `parseUnifiedDiff`, upserted by content hash.
+ *
+ * Review model (owner decision, replaces spec §4.7 Accept/Reject): the agent already wrote its edit into the
+ * worktree, so a hunk is `pending` (= applied, not yet looked at) until the user either *reverts* it
+ * (`git apply -R`, status `rejected`) or *marks it reviewed* (status `accepted`, a bookkeeping flag; no git call).
+ * Nothing here stages, applies, or accepts anything.
  */
 export class HunkService {
   private readonly watchers = new Map<
@@ -182,14 +188,8 @@ export class HunkService {
         }
         repos.worktrees.upsert({ ...worktree, changes: { added, removed, files: diff.files.length } });
       });
-      const hunks = repos.agentChanges.bySession(sessionId);
-      publisher.hunksReplace(sessionId, hunks);
+      this.publish(sessionId, worktree.id);
       publisher.upsert('worktrees', [worktree.id]);
-      publisher.sendEvent('hunks.changed', {
-        sessionId,
-        worktreeId: worktree.id,
-        pending: hunks.filter((h) => h.status === 'pending').length,
-      });
     } finally {
       this.scanning.delete(worktreeId);
       if (this.dirty.delete(worktreeId)) void this.rescanWorktree(worktreeId, sessionIdHint);
@@ -203,16 +203,11 @@ export class HunkService {
     return { hunk, worktree };
   }
 
-  /** Accept = stage this hunk (`git apply --cached`); the working tree is untouched. */
-  async accept(hunkId: string): Promise<void> {
-    const { hunk, worktree } = this.requireHunk(hunkId);
-    if (hunk.status !== 'pending') fail('invalid-transition', `hunk is ${hunk.status}`);
-    await this.deps.git.applyPatch(worktree.path, hunk.patch, { cached: true });
-    this.decide(hunk, 'accepted');
-  }
-
-  /** Reject = reverse-apply in the working tree (`git apply -R`), then rescan. */
-  async reject(hunkId: string): Promise<void> {
+  /**
+   * Revert = reverse-apply the hunk in the working tree (`git apply -R`), mark it `rejected`, then rescan so the
+   * worktree counters and any neighbouring hunks follow. Only a `pending` hunk can be reverted.
+   */
+  async revert(hunkId: string): Promise<void> {
     const { hunk, worktree } = this.requireHunk(hunkId);
     if (hunk.status !== 'pending') fail('invalid-transition', `hunk is ${hunk.status}`);
     await this.deps.git.applyPatch(worktree.path, hunk.patch, { reverse: true });
@@ -220,40 +215,50 @@ export class HunkService {
     await this.rescanWorktree(worktree.id, hunk.sessionId);
   }
 
-  /** Accepts every pending hunk except those touching `.styx/project.json` (they stay pending for an explicit accept). */
-  async acceptAll(sessionId: string): Promise<number> {
-    let n = 0;
-    for (const h of this.deps.repos.agentChanges.bySession(sessionId)) {
-      if (h.status !== 'pending' || isPolicyFile(h.file)) continue;
-      await this.accept(h.id);
-      n += 1;
-    }
-    return n;
-  }
-
-  async rejectAll(sessionId: string): Promise<number> {
+  /** Reverts every pending hunk of the session (policy-file hunks included: undoing is always allowed). */
+  async revertAll(sessionId: string): Promise<number> {
     let n = 0;
     for (const h of this.deps.repos.agentChanges.bySession(sessionId)) {
       if (h.status !== 'pending') continue;
-      await this.reject(h.id);
+      await this.revert(h.id);
       n += 1;
     }
     return n;
   }
 
-  /** Done = accepted stay staged, pending stay unstaged; returns how many were applied. */
+  /**
+   * Done = mark every pending hunk reviewed (status `accepted`, `decidedAt` = now). Pure bookkeeping: the edits are
+   * already in the worktree and stay there; no git call. Hunks on `.styx/project.json` are skipped (H-1 trust gate)
+   * and stay visible until reverted or the project-policy banner is accepted. Returns how many were marked.
+   */
   done(sessionId: string): number {
-    return this.deps.repos.agentChanges.bySession(sessionId).filter((h) => h.status === 'accepted').length;
+    const { repos, clock } = this.deps;
+    const now = clock.now();
+    const hunks = repos.agentChanges.bySession(sessionId);
+    const reviewed = hunks.filter((h) => h.status === 'pending' && !isPolicyFile(h.file));
+    const first = reviewed[0];
+    if (first === undefined) return 0;
+    repos.transaction(() => {
+      for (const h of reviewed) repos.agentChanges.upsert({ ...h, status: 'accepted', decidedAt: now });
+    });
+    this.publish(first.sessionId, first.worktreeId);
+    return reviewed.length;
   }
 
-  private decide(hunk: AgentChange, status: 'accepted' | 'rejected'): void {
-    const { repos, publisher, clock } = this.deps;
+  private decide(hunk: AgentChange, status: 'rejected'): void {
+    const { repos, clock } = this.deps;
     repos.agentChanges.upsert({ ...hunk, status, decidedAt: clock.now() });
-    const hunks = repos.agentChanges.bySession(hunk.sessionId);
-    publisher.hunksReplace(hunk.sessionId, hunks);
+    this.publish(hunk.sessionId, hunk.worktreeId);
+  }
+
+  /** Replace the session's hunk list in every window and report how many are still pending. */
+  private publish(sessionId: SessionId, worktreeId: WorktreeId): void {
+    const { repos, publisher } = this.deps;
+    const hunks = repos.agentChanges.bySession(sessionId);
+    publisher.hunksReplace(sessionId, hunks);
     publisher.sendEvent('hunks.changed', {
-      sessionId: hunk.sessionId,
-      worktreeId: hunk.worktreeId,
+      sessionId,
+      worktreeId,
       pending: hunks.filter((h) => h.status === 'pending').length,
     });
   }

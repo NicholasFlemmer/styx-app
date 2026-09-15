@@ -137,24 +137,16 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
     return {};
   });
 
-  // --- hunks ---
-  bus.register('hunk.accept', async ({ hunkId }) => {
-    await hunks.accept(hunkId);
+  // --- hunks --- (the agent already applied its edits: revert / revert all / mark reviewed; no accept)
+  bus.register('hunk.revert', async ({ hunkId }) => {
+    await hunks.revert(hunkId);
     return {};
   });
-  bus.register('hunk.reject', async ({ hunkId }) => {
-    await hunks.reject(hunkId);
+  bus.register('hunk.revertAll', async ({ sessionId }) => {
+    await hunks.revertAll(sessionId);
     return {};
   });
-  bus.register('hunk.acceptAll', async ({ sessionId }) => {
-    await hunks.acceptAll(sessionId);
-    return {};
-  });
-  bus.register('hunk.rejectAll', async ({ sessionId }) => {
-    await hunks.rejectAll(sessionId);
-    return {};
-  });
-  bus.register('hunk.done', ({ sessionId }) => ({ applied: hunks.done(sessionId) }));
+  bus.register('hunk.done', ({ sessionId }) => ({ reviewed: hunks.done(sessionId) }));
 
   // --- fs (confined to the worktree) ---
   bus.register('fs.readFile', async ({ worktreeId, path }) => {
