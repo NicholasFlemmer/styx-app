@@ -11,7 +11,7 @@ import {
   type TargetId,
 } from '@styx/core';
 import { Button, Field, Input, Modal, Tag } from '@styx/ui';
-import { useCallback, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { command } from '../../state/commands';
 import { useModel, useUi } from '../../state/hooks';
 import s from './DeploySetupModal.module.css';
@@ -38,7 +38,28 @@ export function DeploySetupModal({ id, projectId }: DeploySetupModalProps) {
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggested, setSuggested] = useState<Record<string, string>>({});
   const baseId = useId();
+
+  // Targets without a command yet are pre-filled with what the repo (and, for GCP, Cloud Run) says they deploy
+  // with, so setup is one Save; the field stays editable and the hint says where the suggestion came from.
+  useEffect(() => {
+    let cancelled = false;
+    for (const t of targets) {
+      if (DEPLOYABLE_PROVIDERS.includes(t.provider) || deployCommandOf(t) !== null) continue;
+      void command('deploy.detect', { targetId: t.id as TargetId }).then((r) => {
+        if (cancelled || !r.ok) return;
+        const first = r.value.suggestions[0];
+        if (first === undefined) return;
+        setSuggested((s) => ({ ...s, [t.id]: first.source }));
+        setDraft((d) => (d[t.id] === undefined || d[t.id] === '' ? { ...d, [t.id]: first.command } : d));
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   const close = () => popOverlay(id);
   const changed = (t: Target) => (draft[t.id] ?? '').trim() !== (deployCommandOf(t) ?? '');
@@ -103,7 +124,13 @@ export function DeploySetupModal({ id, projectId }: DeploySetupModalProps) {
                   })}
                 </span>
               ) : (
-                <Field label={copy.deploy.commandLabel} htmlFor={fieldId}>
+                <Field
+                  label={copy.deploy.commandLabel}
+                  htmlFor={fieldId}
+                  {...(suggested[t.id] !== undefined
+                    ? { hint: fill(copy.deploy.suggestedFrom, { source: suggested[t.id] ?? '' }) }
+                    : {})}
+                >
                   <Input
                     id={fieldId}
                     mono

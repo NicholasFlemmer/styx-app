@@ -195,7 +195,10 @@ describe('tracking setting (Settings › Editor › Track agent edits)', () => {
     const cleared = t.win
       .batches()
       .flatMap((b) => b.deltas)
-      .some((d) => d.op === 'hunks.replace' && d.sessionId === claude && d.hunks.length === 0);
+      .some((raw) => {
+        const d = raw as { op: string; sessionId?: string; hunks?: unknown[] };
+        return d.op === 'hunks.replace' && d.sessionId === claude && d.hunks?.length === 0;
+      });
     expect(cleared).toBe(true);
     expect(t.app.publisher.snapshot().hunks).toEqual({});
     expect(t.app.repos.agentChanges.bySession(claude).length).toBeGreaterThan(0);

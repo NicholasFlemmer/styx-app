@@ -259,6 +259,8 @@ export const copy = {
       vercel: 'vercel deploy --prod',
     },
     commands: 'Deploy commands…',
+    /** Field hint when the command was pre-filled from the repo or the provider. */
+    suggestedFrom: 'suggested from {source}',
   },
 
   /**

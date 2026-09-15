@@ -300,6 +300,11 @@ export const commands = {
     output: ok,
   },
   'deploy.cancel': { input: z.object({ deployId: z.string() }), output: ok },
+  /** What a target most likely deploys with, read from the repo (and Cloud Run's service list); pre-fills its command. */
+  'deploy.detect': {
+    input: z.object({ targetId: targetIdSchema }),
+    output: z.object({ suggestions: z.array(z.object({ command: z.string().min(1), source: z.string() })) }),
+  },
   'preview.set': {
     input: z.object({
       projectId: projectIdSchema,

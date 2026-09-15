@@ -1,12 +1,41 @@
-import { createServer, type Server, type Socket } from 'node:net';
+import { connect, createServer, type Server, type Socket } from 'node:net';
 import { chmodSync, existsSync, lstatSync, mkdirSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { onNdjson, writeNdjson } from './ndjson';
-import { ErrorCode, methods, RpcRequest, type MethodName, type NotificationName, type Params, type Result, type RpcError, type SessionBrief, PROTOCOL_VERSION, type notifications } from './protocol';
+import {
+  ErrorCode,
+  methods,
+  RpcRequest,
+  type MethodName,
+  type NotificationName,
+  type Params,
+  type Result,
+  type RpcError,
+  type SessionBrief,
+  PROTOCOL_VERSION,
+  type notifications,
+} from './protocol';
 import type { z } from 'zod';
 
+/** True when something accepts connections at the socket path; a refused or missing socket is stale. */
+export const isLive = (path: string): Promise<boolean> =>
+  new Promise((resolve) => {
+    const s = connect(path);
+    const done = (live: boolean) => {
+      s.destroy();
+      resolve(live);
+    };
+    s.once('connect', () => done(true));
+    s.once('error', () => done(false));
+    s.setTimeout(1000, () => done(false));
+  });
+
 export class BrokerError extends Error {
-  constructor(public readonly code: number, message: string, public readonly data?: unknown) {
+  constructor(
+    public readonly code: number,
+    message: string,
+    public readonly data?: unknown,
+  ) {
     super(message);
   }
 }
@@ -18,7 +47,11 @@ export interface ConnectionContext {
   connectionId: number;
 }
 
-export type MethodHandler<M extends MethodName> = (params: Params<M>, ctx: ConnectionContext, req: { id: string | number; hold: HoldHandle }) => Promise<Result<M>>;
+export type MethodHandler<M extends MethodName> = (
+  params: Params<M>,
+  ctx: ConnectionContext,
+  req: { id: string | number; hold: HoldHandle },
+) => Promise<Result<M>>;
 
 /** Lets a handler defer the reply (e.g. request_access waits for the user) and resolve it later from anywhere. */
 /** Marks this request as held under `key`; reply later with `BrokerServer.resolveHeld(key, result)`. */
@@ -52,8 +85,10 @@ export function assertPrivateDir(dir: string): void {
   const st = lstatSync(dir);
   const uid = process.getuid?.();
   if (!st.isDirectory()) throw new Error(`${dir} is not a directory`);
-  if (uid !== undefined && st.uid !== uid) throw new Error(`${dir} is owned by uid ${st.uid}, expected ${uid}`);
-  if ((st.mode & 0o777) !== 0o700) throw new Error(`${dir} has mode ${(st.mode & 0o777).toString(8)}, expected 0700`);
+  if (uid !== undefined && st.uid !== uid)
+    throw new Error(`${dir} is owned by uid ${st.uid}, expected ${uid}`);
+  if ((st.mode & 0o777) !== 0o700)
+    throw new Error(`${dir} has mode ${(st.mode & 0o777).toString(8)}, expected 0700`);
 }
 
 export interface BrokerServerOptions {
@@ -100,7 +135,13 @@ export class BrokerServer {
     if (posix) {
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
       assertPrivateDir(dirname(path));
-      if (existsSync(path)) unlinkSync(path);
+      // Only a stale socket (nothing answering) is removed. A live one belongs to another Styx instance; unlinking it
+      // would leave that app listening on a path that no longer exists, so every new shim and MCP client of it fails.
+      if (existsSync(path)) {
+        if (await isLive(path))
+          throw new BrokerError(ErrorCode.internal, `another broker is listening at ${path}`);
+        unlinkSync(path);
+      }
     }
     this.server = createServer((socket) => this.accept(socket));
     // The socket is created 0600 from the start (umask 077) instead of chmod'ing after bind, so there is no window
@@ -128,7 +169,11 @@ export class BrokerServer {
   }
 
   /** Push a notification to every connection bound to the session. */
-  notify<N extends NotificationName>(sessionId: string, method: N, params: z.infer<(typeof notifications)[N]>): void {
+  notify<N extends NotificationName>(
+    sessionId: string,
+    method: N,
+    params: z.infer<(typeof notifications)[N]>,
+  ): void {
     for (const c of this.conns.values()) {
       if (c.ctx?.session.sessionId === sessionId) writeNdjson(c.socket, { jsonrpc: '2.0', method, params });
     }
@@ -141,7 +186,11 @@ export class BrokerServer {
     this.held.delete(key);
     const parsed = methods[h.method].result.safeParse(result);
     if (!parsed.success) {
-      writeNdjson(h.conn.socket, { jsonrpc: '2.0', id: h.id, error: { code: ErrorCode.internal, message: 'invalid held result' } });
+      writeNdjson(h.conn.socket, {
+        jsonrpc: '2.0',
+        id: h.id,
+        error: { code: ErrorCode.internal, message: 'invalid held result' },
+      });
       return true;
     }
     writeNdjson(h.conn.socket, { jsonrpc: '2.0', id: h.id, result: parsed.data });
@@ -180,19 +229,33 @@ export class BrokerServer {
     onNdjson(
       socket,
       (msg) => void this.dispatch(conn, msg),
-      () => writeNdjson(socket, { jsonrpc: '2.0', id: null, error: { code: ErrorCode.parse, message: 'parse error' } }),
+      () =>
+        writeNdjson(socket, {
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: ErrorCode.parse, message: 'parse error' },
+        }),
     );
   }
 
   private async dispatch(conn: Conn, msg: unknown): Promise<void> {
     const req = RpcRequest.safeParse(msg);
     if (!req.success) {
-      writeNdjson(conn.socket, { jsonrpc: '2.0', id: null, error: { code: ErrorCode.invalidRequest, message: 'invalid request' } });
+      writeNdjson(conn.socket, {
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: ErrorCode.invalidRequest, message: 'invalid request' },
+      });
       return;
     }
     const { id, method, params } = req.data;
     const reply = (result: unknown) => writeNdjson(conn.socket, { jsonrpc: '2.0', id, result });
-    const fail = (code: number, message: string, data?: unknown) => writeNdjson(conn.socket, { jsonrpc: '2.0', id, error: { code, message, ...(data !== undefined ? { data } : {}) } });
+    const fail = (code: number, message: string, data?: unknown) =>
+      writeNdjson(conn.socket, {
+        jsonrpc: '2.0',
+        id,
+        error: { code, message, ...(data !== undefined ? { data } : {}) },
+      });
 
     if (!(method in methods)) return fail(ErrorCode.methodNotFound, `unknown method ${method}`);
     const m = method as MethodName;
@@ -207,7 +270,8 @@ export class BrokerServer {
         return;
       }
       const p = parsed.data as Params<'hello'>;
-      if (p.v !== PROTOCOL_VERSION) return fail(ErrorCode.invalidRequest, `unsupported protocol version ${p.v}`);
+      if (p.v !== PROTOCOL_VERSION)
+        return fail(ErrorCode.invalidRequest, `unsupported protocol version ${p.v}`);
       const session = await this.opts.authenticate(p.sessionId, p.token);
       if (!session) {
         fail(ErrorCode.unauthenticated, 'unauthenticated');
@@ -221,7 +285,11 @@ export class BrokerServer {
         return;
       }
       conn.ctx = { session, client: p.client, pid: p.pid, connectionId: conn.id };
-      this.opts.onLog?.('info', 'broker hello', { sessionId: session.sessionId, client: p.client, pid: p.pid });
+      this.opts.onLog?.('info', 'broker hello', {
+        sessionId: session.sessionId,
+        client: p.client,
+        pid: p.pid,
+      });
       return reply({ ok: true, session } satisfies Result<'hello'>);
     }
 

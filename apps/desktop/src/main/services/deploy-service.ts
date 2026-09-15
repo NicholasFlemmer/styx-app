@@ -13,6 +13,7 @@ import { fail } from '../ipc/bus';
 import type { Publisher } from '../store/publisher';
 import type { ProviderRegistry } from '../providers';
 import type { CliRunner } from '../providers/cli-runner';
+import { detectDeployCommands, type DeploySuggestion } from './deploy-detect';
 import type { GrantService } from './grant-service';
 import { logger } from './logger';
 import type { PtyService } from './pty-service';
@@ -200,6 +201,13 @@ export class DeployService {
     logger.info('deploy: started', { deployId, target: target.name, command: spawn.label });
     emit('running', { terminalId });
     return { deployId, terminalId };
+  }
+
+  /** Suggested deploy commands for a target (repo markers, and Cloud Run's service list for GCP). */
+  async detect(targetId: TargetId): Promise<DeploySuggestion[]> {
+    const target = this.deps.repos.targets.get(targetId) ?? fail('not-found', 'target not found');
+    const project = this.deps.repos.projects.get(target.projectId) ?? fail('not-found', 'project not found');
+    return detectDeployCommands(target, project.path, { cli: this.deps.cli });
   }
 
   /** Kills the deploy's process; the exit handler reports it as failed with the signal's exit code. */
