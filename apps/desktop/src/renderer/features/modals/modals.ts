@@ -166,6 +166,12 @@ export const cliMissing = (model: ReadModel, agent: Agent): boolean => {
   return cli !== undefined && !cli.found;
 };
 
+/** Installed but signed out: the Spawn row warns and offers "Fix connection" (the Connect agent modal). */
+export const cliNotConnected = (model: ReadModel, agent: Agent): boolean => {
+  const cli = cliOf(model, agent);
+  return cli !== undefined && cli.found && cli.authState === 'signed-out';
+};
+
 /** Worktrees of a project, main first. */
 export const projectWorktrees = (model: ReadModel, projectId: ProjectId): Worktree[] =>
   rows(model.worktrees)

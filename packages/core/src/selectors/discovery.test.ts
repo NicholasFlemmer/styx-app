@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { demoClis, demoIdes, errorFixture } from '../fixtures/demo';
-import { cliAuthLabel, cliVersionLabel, ideImportsLabel, ideVersionLabel } from './discovery';
+import {
+  cliAccountLabel,
+  cliAuthLabel,
+  cliConnectionLabel,
+  cliConnectionState,
+  cliVersionLabel,
+  ideImportsLabel,
+  ideVersionLabel,
+} from './discovery';
 
 describe('onboarding discovery labels', () => {
   it('IDE rows match the prototype ideDefs', () => {
@@ -38,5 +46,35 @@ describe('onboarding discovery labels', () => {
     expect(cliAuthLabel({ found: true, authState: 'unknown' })).toBe('Sign in →');
     expect(cliVersionLabel({ agent: 'gemini', found: true, version: null, binary: null })).toBe('gemini');
     expect(cliVersionLabel({ agent: 'gemini', found: true, version: '1.0', binary: '' })).toBe('gemini 1.0');
+  });
+});
+
+describe('agent connection state (Settings › Agents)', () => {
+  it('demo rows: claude/codex connected, gemini signed out, cursor unverified, shell ready', () => {
+    expect(demoClis().map((c) => [c.agent, cliConnectionState(c), cliAccountLabel(c)])).toEqual([
+      ['claude', 'connected', 'nic@acme.dev'],
+      ['codex', 'connected', 'ChatGPT'],
+      ['gemini', 'signed-out', '—'],
+      ['cursor', 'unverified', 'nic@acme.dev'],
+      ['shell', 'shell', '—'],
+    ]);
+  });
+
+  it.each([
+    ['shell wins over everything', { agent: 'shell', found: false, authState: 'n/a', verifiedAt: null }, 'shell'],
+    ['not found → missing', { agent: 'codex', found: false, authState: 'signed-in', verifiedAt: 1 }, 'missing'],
+    ['signed-out → signed-out', { agent: 'gemini', found: true, authState: 'signed-out', verifiedAt: 1 }, 'signed-out'],
+    ['unknown → signed-out', { agent: 'cursor', found: true, authState: 'unknown', verifiedAt: null }, 'signed-out'],
+    ['n/a on a real CLI → signed-out', { agent: 'claude', found: true, authState: 'n/a', verifiedAt: 1 }, 'signed-out'],
+    ['signed-in, never verified → unverified', { agent: 'claude', found: true, authState: 'signed-in', verifiedAt: null }, 'unverified'],
+    ['signed-in and verified → connected', { agent: 'claude', found: true, authState: 'signed-in', verifiedAt: 1 }, 'connected'],
+  ] as const)('%s', (_name, cli, expected) => {
+    expect(cliConnectionState(cli)).toBe(expected);
+  });
+
+  it('labels every state with the verbatim agentsPage copy', () => {
+    expect(
+      (['connected', 'unverified', 'signed-out', 'missing', 'shell'] as const).map(cliConnectionLabel),
+    ).toEqual(['connected', 'not verified', 'signed out', 'not installed', 'ready']);
   });
 });

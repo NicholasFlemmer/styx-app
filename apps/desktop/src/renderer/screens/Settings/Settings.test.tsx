@@ -349,6 +349,25 @@ describe('<Settings />', () => {
     expect(commandMock).toHaveBeenCalledWith('detect.setBinary', { agent: 'claude', path: ext });
   });
 
+  it('Agents · the app-level connections table sits above the preference rows', () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
+    expect(screen.getByRole('heading', { name: 'Agents' })).toBeTruthy();
+    expect(screen.getByText(copy.agentsPage.lead)).toBeTruthy();
+    const table = screen.getByRole('table', { name: copy.agentsPage.title });
+    expect(table.querySelectorAll('[data-agent-row]')).toHaveLength(5);
+    expect(screen.getByText(copy.agentsPage.preferences)).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: copy.settings.rows.defaultAgent })).toBeTruthy();
+    fireEvent.change(screen.getByRole('combobox', { name: copy.settings.rows.autoWorktree }), {
+      target: { value: 'off' },
+    });
+    expect(commandMock).toHaveBeenCalledWith('settings.set', { patch: { autoWorktreePerAgent: false } });
+    fireEvent.click(screen.getByRole('button', { name: /^Connect · Gemini CLI/ }));
+    expect(useUiStore.getState().overlays).toMatchObject([
+      { kind: 'modal', modal: 'connect-agent', agent: 'gemini' },
+    ]);
+  });
+
   it('Editor · Screen reader mode dispatches settings.set { screenReader } (spec §9)', () => {
     render(<Settings />);
     fireEvent.click(screen.getByRole('button', { name: 'Editor' }));

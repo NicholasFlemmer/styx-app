@@ -116,6 +116,51 @@ describe('SpawnModal', () => {
     expect(useUiStore.getState().overlays).toHaveLength(0);
   });
 
+  it('a signed-out CLI warns without blocking; Fix connection swaps in the Connect agent modal that returns here', () => {
+    render(<SpawnModal id="modal-1" projectId={acme} />);
+    // The demo default (claude) is connected: no row at all, so the spawn baseline is untouched.
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: /^Gemini/ }));
+    const alert = screen.getByRole('alert');
+    expect(alert.getAttribute('data-spawn-cli')).toBe('not-connected');
+    expect(alert.textContent).toContain("Gemini CLI isn't connected.");
+    expect(within(alert).queryByRole('button', { name: copy.errors.cliMissing.cta })).toBeNull();
+    expect(within(alert).queryByRole('button', { name: copy.errors.locateBinary })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Spawn · ⌘⏎' }).hasAttribute('disabled')).toBe(false);
+    fireEvent.click(within(alert).getByRole('button', { name: copy.errors.fixConnection }));
+    expect(useUiStore.getState().overlays).toMatchObject([
+      {
+        kind: 'modal',
+        modal: 'connect-agent',
+        agent: 'gemini',
+        returnTo: { modal: 'spawn', projectId: acme },
+      },
+    ]);
+    expect(useUiStore.getState().overlays).toHaveLength(1);
+  });
+
+  it('a missing CLI keeps Install guide + Locate binary and gains Fix connection', () => {
+    useReadModel.getState().replaceModel(fixtures.errorReadModel(), 'connected');
+    render(<SpawnModal id="modal-1" projectId={acme} />);
+    fireEvent.click(screen.getByRole('radio', { name: /^Codex/ }));
+    const alert = screen.getByRole('alert');
+    expect(alert.getAttribute('data-spawn-cli')).toBe('missing');
+    expect(
+      within(alert)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual([copy.errors.cliMissing.cta, copy.errors.locateBinary, copy.errors.fixConnection]);
+    fireEvent.click(within(alert).getByRole('button', { name: copy.errors.fixConnection }));
+    expect(useUiStore.getState().overlays).toMatchObject([
+      {
+        kind: 'modal',
+        modal: 'connect-agent',
+        agent: 'codex',
+        returnTo: { modal: 'spawn', projectId: acme },
+      },
+    ]);
+  });
+
   it('Spawn sends session.spawn, closes and opens Workspace on the new session', async () => {
     render(<SpawnModal id="modal-1" projectId={acme} />);
     fireEvent.change(screen.getByLabelText(copy.spawn.firstMessage), { target: { value: 'Add validation' } });

@@ -306,22 +306,44 @@ export function Onboarding() {
               gap="14px"
               aria-label={copy.onboarding.steps.agents}
             >
-              {clis.map((c) => (
-                <TableRow key={c.agent} data-agent={c.agent}>
-                  <TableCell strong>{copy.agentProducts[c.agent]}</TableCell>
-                  <TableCell mono muted>
-                    {cliLocationLabel(c)}
-                  </TableCell>
-                  <TableCell mono>{cliAuthLabel(c)}</TableCell>
-                  <TableCell align="end">
-                    <StatusDot
-                      tone="hollow"
-                      on={!c.found}
-                      {...(c.found ? {} : { label: copy.onboarding.agents.notFound })}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
+              {clis.map((c) => {
+                const auth = cliAuthLabel(c);
+                // "Sign in →" / "Install →" open the Connect agent modal (owner addition); connected rows stay text.
+                const connectable =
+                  auth === copy.onboarding.agents.signIn || auth === copy.onboarding.agents.install;
+                return (
+                  <TableRow key={c.agent} data-agent={c.agent}>
+                    <TableCell strong>{copy.agentProducts[c.agent]}</TableCell>
+                    <TableCell mono muted>
+                      {cliLocationLabel(c)}
+                    </TableCell>
+                    <TableCell mono>
+                      {connectable ? (
+                        <button
+                          type="button"
+                          className={s['action']}
+                          data-agent-connect={c.agent}
+                          aria-label={`${auth} · ${copy.agentProducts[c.agent]}`}
+                          onClick={() =>
+                            pushOverlay({ kind: 'modal', modal: 'connect-agent', agent: c.agent })
+                          }
+                        >
+                          {auth}
+                        </button>
+                      ) : (
+                        auth
+                      )}
+                    </TableCell>
+                    <TableCell align="end">
+                      <StatusDot
+                        tone="hollow"
+                        on={!c.found}
+                        {...(c.found ? {} : { label: copy.onboarding.agents.notFound })}
+                      />
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </Table>
           </div>
         </section>

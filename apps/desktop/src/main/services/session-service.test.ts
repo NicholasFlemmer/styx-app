@@ -465,6 +465,49 @@ describe('SessionService CLI-outdated (model needs a newer CLI)', () => {
     expect(a.repos.notifications.byBannerKey('cli-outdated:claude')?.state).toBe('resolved');
     expect(win.events('banner.clear')).toContainEqual({ bannerKey: 'cli-outdated:claude' });
   });
+
+  it('refreshClis keeps a recorded verification (account, verifiedAt, and its authState) when the binary is unchanged', async () => {
+    const { app: a } = app();
+    const detection = (authState: 'signed-in' | 'signed-out') => async () => [
+      {
+        agent: 'claude' as const,
+        label: 'Claude Code',
+        binary: '/opt/homebrew/bin/claude',
+        version: '2.4.1',
+        found: true,
+        authState,
+        capabilities: { streamJson: true },
+        source: 'path' as const,
+        alternatives: [],
+      },
+    ];
+    // The CLI itself said nobody is signed in (`agent.verify`), while its credentials file still exists on disk.
+    a.repos.discovery.saveCli({
+      agent: 'claude',
+      binary: '/opt/homebrew/bin/claude',
+      version: '2.4.1',
+      found: true,
+      authState: 'signed-out',
+      capabilities: { streamJson: true, source: 'path' },
+      checkedAt: DEMO_NOW,
+      account: null,
+      verifiedAt: DEMO_NOW,
+      verifyError: null,
+    });
+    a.detect.detectClis = detection('signed-in');
+    expect((await a.sessions.refreshClis()).find((c) => c.agent === 'claude')).toMatchObject({
+      authState: 'signed-out',
+      verifiedAt: DEMO_NOW,
+      account: null,
+    });
+    // A different binary is a different install: the verification no longer applies and detection is trusted.
+    a.detect.detectClis = async () => [{ ...(await detection('signed-in')())[0]!, binary: '/usr/local/bin/claude' }];
+    expect((await a.sessions.refreshClis()).find((c) => c.agent === 'claude')).toMatchObject({
+      authState: 'signed-in',
+      verifiedAt: null,
+      binary: '/usr/local/bin/claude',
+    });
+  });
 });
 
 describe('SessionService relaunch + re-detect', () => {

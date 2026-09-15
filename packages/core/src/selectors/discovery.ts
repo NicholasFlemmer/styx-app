@@ -83,3 +83,38 @@ export const cliLocationLabel = (
   const source = cliSourceOf(cli);
   return source === null ? base : `${base} · ${copy.cliSources[source]}`;
 };
+
+/**
+ * Settings › Agents state cell (owner addition): what one CLI's connection row says. `connected` needs a successful
+ * `agent.verify` (`verifiedAt`); a detected sign-in that was never verified is `unverified`.
+ */
+export type CliConnectionState = 'connected' | 'unverified' | 'signed-out' | 'missing' | 'shell';
+
+export const cliConnectionState = (
+  cli: Pick<CliInstall, 'agent' | 'found' | 'authState' | 'verifiedAt'>,
+): CliConnectionState => {
+  if (cli.agent === 'shell') return 'shell';
+  if (!cli.found) return 'missing';
+  if (cli.authState !== 'signed-in') return 'signed-out';
+  return cli.verifiedAt === null ? 'unverified' : 'connected';
+};
+
+/** Settings › Agents state cell text: `connected` · `not verified` · `signed out` · `not installed` · `ready`. */
+export const cliConnectionLabel = (state: CliConnectionState): string => {
+  const c = copy.agentsPage.state;
+  switch (state) {
+    case 'connected':
+      return c.connected;
+    case 'unverified':
+      return c.unverified;
+    case 'signed-out':
+      return c.signedOut;
+    case 'missing':
+      return c.missing;
+    case 'shell':
+      return c.shell;
+  }
+};
+
+/** Settings › Agents account cell: `nic@acme.dev`, `ChatGPT`, or `—` when the CLI has not said who it is. */
+export const cliAccountLabel = (cli: Pick<CliInstall, 'account'>): string => cli.account ?? copy.general.none;

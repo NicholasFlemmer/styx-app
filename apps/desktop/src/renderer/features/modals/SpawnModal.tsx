@@ -26,6 +26,7 @@ import {
   SPAWN_AGENTS,
   autoBranchFor,
   cliMissing,
+  cliNotConnected,
   cliOf,
   cliVersionLabel,
   defaultSessionSettings,
@@ -51,6 +52,7 @@ const selectModel = (m: ReadModel) => m;
  */
 export function SpawnModal({ id, projectId }: SpawnModalProps) {
   const popOverlay = useUi((u) => u.popOverlay);
+  const pushOverlay = useUi((u) => u.pushOverlay);
   const openSession = useUi((u) => u.openSession);
   const setScreen = useUi((u) => u.setScreen);
   const setOnboardingStep = useUi((u) => u.setOnboardingStep);
@@ -90,6 +92,8 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
       branch: branchTouched ? f.branch : autoBranchFor(model, projectId, agent),
     }));
   const missing = cliMissing(model, form.agent);
+  /** Installed but signed out: warns without blocking (the CLI may still hold an API key Styx cannot see). */
+  const notConnected = !missing && cliNotConnected(model, form.agent);
   const valid = spawnValid(model, form) && !busy;
 
   const spawn = useCallback(async () => {
@@ -120,6 +124,16 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
     close();
     setOnboardingStep(3);
     setScreen('onboarding');
+  };
+  /** Connect agent modal for this CLI; it re-opens this Spawn modal for the project when done. */
+  const fixConnection = () => {
+    close();
+    pushOverlay({
+      kind: 'modal',
+      modal: 'connect-agent',
+      agent: form.agent,
+      returnTo: { modal: 'spawn', projectId },
+    });
   };
 
   const worktrees = projectWorktrees(model, projectId);
@@ -170,14 +184,23 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
               </button>
             ))}
           </div>
-          {missing ? (
-            <div className={s['error']} role="alert">
+          {missing || notConnected ? (
+            <div className={s['error']} role="alert" data-spawn-cli={missing ? 'missing' : 'not-connected'}>
               <StatusDot tone="accent" />
-              <span className={s['errorText']}>{fill(copy.errors.spawnCliMissing, { cli: agentName })}</span>
-              <Button onClick={installGuide}>{copy.errors.cliMissing.cta}</Button>
-              <Button title={copy.errors.locateBinary} onClick={() => void locateBinary()}>
-                {copy.errors.locateBinary}
-              </Button>
+              <span className={s['errorText']}>
+                {missing
+                  ? fill(copy.errors.spawnCliMissing, { cli: agentName })
+                  : fill(copy.errors.spawnNotConnected, { cli: agentName })}
+              </span>
+              {missing ? (
+                <>
+                  <Button onClick={installGuide}>{copy.errors.cliMissing.cta}</Button>
+                  <Button title={copy.errors.locateBinary} onClick={() => void locateBinary()}>
+                    {copy.errors.locateBinary}
+                  </Button>
+                </>
+              ) : null}
+              <Button onClick={fixConnection}>{copy.errors.fixConnection}</Button>
             </div>
           ) : null}
         </div>

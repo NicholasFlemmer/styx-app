@@ -14,9 +14,8 @@ import { onEvent } from '../../state/bridge';
 import { command } from '../../state/commands';
 import { useCopyPlatform, useUi } from '../../state/hooks';
 import { useReadModel } from '../../state/read-model';
-import { attachTerminal, detachTerminal } from '../terminal/terminal-registry';
 import s from './ConnectModal.module.css';
-import { createLoginTerminal, disposeLoginTerminal } from './login-terminal';
+import { LoginTerminal } from './LoginTerminal';
 import {
   CONNECT_ENVS,
   PROVIDERS,
@@ -660,33 +659,6 @@ export function ConnectModal({
       <div className={s['body']}>{copy.connect.ssh.body}</div>
       {statusLine}
     </Modal>
-  );
-}
-
-/**
- * The CLI's login flow, inline (prototype terminal recipe at 130px): an xterm bound to the pty main spawned for
- * `target.connect.cliLogin`, focused so prompts can be answered; the label follows `connect.cliLogin`.
- */
-function LoginTerminal({ terminalId, label }: { terminalId: string; label: string }) {
-  const host = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = host.current;
-    if (el === null) return;
-    const entry = createLoginTerminal(terminalId);
-    attachTerminal(entry, el);
-    entry.term.focus();
-    return () => {
-      detachTerminal(entry);
-      disposeLoginTerminal(entry);
-    };
-  }, [terminalId]);
-  return (
-    <div className={s['terminal']} data-login-terminal={terminalId}>
-      <div className={s['terminalLabel']} aria-live="polite">
-        {label}
-      </div>
-      <div ref={host} className={s['terminalHost']} />
-    </div>
   );
 }
 

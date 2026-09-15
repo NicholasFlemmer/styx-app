@@ -1,0 +1,81 @@
+@layer screens {
+  /* One column, generous spacing: the modal body stacks these 14px apart; sections add their own room. */
+  .heading {
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .body {
+    color: var(--mu);
+    line-height: 1.5;
+    font-size: 12.5px;
+  }
+  /* Status row: `claude 2.4.1 · /opt/homebrew/bin/claude` or `gemini is not installed. · Install guide · Locate binary`. */
+  .status {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    border: 1px solid var(--ln);
+    padding: var(--sp-3);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .statusText {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Identity row: dot + "Signed in as nic@acme.dev" (aria-live). */
+  .identity {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-1) 0;
+    font-size: 13px;
+  }
+  .identityText {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Hollow accent dot (not signed in / not verified / check failed): accent outline, no fill. */
+  .dotAttention {
+    background: transparent;
+    border-color: var(--ac);
+  }
+  /* Text links: `Sign in with claude…`, `Install guide`, `Locate binary` (t-label, 28px hit area per spec §9). */
+  .link {
+    position: relative;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--mu);
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .link::after {
+    content: '';
+    position: absolute;
+    inset: -8px -4px;
+  }
+  .link:hover:not(:disabled) {
+    color: var(--tx);
+  }
+  .link:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+  /* The one primary action of the signed-out state sits on its own line, left-aligned. */
+  .signIn {
+    align-self: flex-start;
+  }
+}

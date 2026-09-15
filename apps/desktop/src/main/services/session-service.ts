@@ -822,7 +822,22 @@ export class SessionService {
     const found = await this.deps.detect.detectClis(overrides);
     const now = this.deps.clock.now();
     const before = repos.discovery.clis();
-    const clis = found.map((c) => toCliInstall(c, now));
+    // A re-detection that lands on the same binary keeps the connection (`agent.verify`: account / verifiedAt /
+    // verifyError), so a focus refresh never wipes a verification the user just did. While a verification is on
+    // record its answer also outranks the file heuristic for `authState`: the CLI said who it is (or that nobody
+    // is), and a credentials file lying around must not flip that back.
+    const clis = found.map((c) => {
+      const fresh = toCliInstall(c, now);
+      const prev = before.find((p) => p.agent === fresh.agent);
+      if (prev === undefined || !prev.found || !fresh.found || prev.binary !== fresh.binary) return fresh;
+      return {
+        ...fresh,
+        ...(prev.verifiedAt !== null && prev.verifyError === null ? { authState: prev.authState } : {}),
+        account: prev.account,
+        verifiedAt: prev.verifiedAt,
+        verifyError: prev.verifyError,
+      };
+    });
     repos.discovery.replaceClis(clis);
     const strip = (list: CliInstall[]) => JSON.stringify(list.map(({ checkedAt: _c, ...rest }) => rest));
     if (strip(before) !== strip(clis)) publisher.discoverySet(repos.discovery.ides(), clis);

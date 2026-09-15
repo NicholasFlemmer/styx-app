@@ -22,6 +22,7 @@ import {
 } from '@styx/ui';
 import { PROJECT_POLICY_BANNER } from '../../features/banners/BannerStack';
 import { cliTargetMeta } from '../../features/modals/modals';
+import { AgentsPane } from './AgentsPane';
 import { SkillsPane } from './SkillsPane';
 import { command } from '../../state/commands';
 import { useCopyPlatform, useModel, useNow, useUi } from '../../state/hooks';
@@ -98,6 +99,10 @@ export function Settings() {
           <Targets model={model} projectId={projectId} />
         ) : section === 'app:skills' ? (
           <SkillsPane projectId={projectId} />
+        ) : section === 'app:agents' ? (
+          <AgentsPane>
+            <Rows model={model} section={section} projectId={projectId} />
+          </AgentsPane>
         ) : (
           <Rows model={model} section={section} projectId={projectId} />
         )}

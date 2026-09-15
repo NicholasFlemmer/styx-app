@@ -147,4 +147,17 @@
   .next {
     padding: 14px 28px;
   }
+  /* Step 3 auth cell as a text link (`Sign in →` / `Install →`): the Settings table's action recipe, same 28px hit area (spec §9). */
+  .action {
+    position: relative;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
+  }
+  .action::after {
+    content: '';
+    position: absolute;
+    inset: -9px -6px;
+  }
 }

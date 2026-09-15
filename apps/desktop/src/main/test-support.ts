@@ -63,6 +63,8 @@ export interface TestAppOptions {
   redetectClis?: boolean;
   /** What `link.open` hands to the OS (default: a no-op). */
   openExternal?: (url: string) => Promise<void>;
+  /** AgentService's CLI status runner (`claude auth status --json` …); tests fake it so no real CLI runs. */
+  exec?: (bin: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>;
 }
 
 /** An in-memory app: SQLite `:memory:`, MemoryVault, FakeMfa, no Electron, one registered fake window. */
@@ -118,6 +120,7 @@ export function makeTestApp(opts: TestAppOptions = {}): TestApp {
     ...(opts.pty ? { pty: opts.pty } : {}),
     ...(opts.stream ? { stream: opts.stream } : {}),
     ...(opts.detect ? { detect: opts.detect } : {}),
+    ...(opts.exec ? { exec: opts.exec } : {}),
     redetectClis: opts.redetectClis ?? false,
     cli,
   });
