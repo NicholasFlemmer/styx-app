@@ -29,7 +29,7 @@ import type { AuditService } from './audit-service';
 import type { CredentialVault } from './credential-vault';
 import type { GrantService } from './grant-service';
 import { auditContext } from './labels';
-import { logger, redact } from './logger';
+import { commandCarriesSecret, logger, redact } from './logger';
 import type { PtyService } from './pty-service';
 import type { RefreshReason } from './refresh-scheduler';
 import type { TerminalService } from './terminal-service';
@@ -535,10 +535,16 @@ export class TargetService {
   }
 
   /** The user's own deploy command (`config.deployCommand`); null removes it. Machine-local, never a secret. */
+  /**
+   * The per-target deploy command (user-typed or agent-taught). Refused when it carries a secret: the row is in the
+   * read model, the command is echoed in grant uses and logs, and the credential belongs in the keychain anyway.
+   */
   setDeployCommand(targetId: string, command: string | null): Target {
     const target = this.require(targetId);
     const config: Record<string, unknown> = { ...target.config };
     const trimmed = command?.trim() ?? '';
+    if (trimmed !== '' && commandCarriesSecret(trimmed))
+      fail('invalid-input', copy.abilities.secretInCommand);
     if (trimmed === '') delete config['deployCommand'];
     else config['deployCommand'] = trimmed;
     const next: Target = { ...target, config: config as Target['config'] };

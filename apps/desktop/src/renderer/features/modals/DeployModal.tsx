@@ -1,4 +1,4 @@
-import { copy, fill, type DeployPhase, type TargetId } from '@styx/core';
+import { copy, deployCommandOf, fill, type DeployPhase, type TargetId } from '@styx/core';
 import { Button, Modal } from '@styx/ui';
 import { useEffect, useRef, useState } from 'react';
 import { onEvent } from '../../state/bridge';
@@ -49,6 +49,8 @@ export function DeployModal({ id, targetId, deployId: attachId }: DeployModalPro
   });
   const host = useRef<HTMLDivElement>(null);
 
+  // The exact command this deploy runs (remembered / typed), shown before anything starts so nothing runs unseen.
+  const deployCommand = target === null ? null : deployCommandOf(target);
   const phase = row?.phase ?? local.phase;
   const error = row?.error ?? local.error;
   const exitCode = row?.exitCode ?? local.exitCode;
@@ -122,6 +124,12 @@ export function DeployModal({ id, targetId, deployId: attachId }: DeployModalPro
         </>
       }
     >
+      {deployCommand !== null && (
+        <div className={s['command']} data-deploy-command="true">
+          <span className="t-label">{copy.deploy.commandLabel}</span>
+          <code className={s['commandText']}>{deployCommand}</code>
+        </div>
+      )}
       <div className={s['status']} data-phase={phase} data-deploy-phase={phase}>
         <span className="t-label">{copy.deploy.phases[phase]}</span>
         {exitCode !== null && exitCode !== 0 && (

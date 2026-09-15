@@ -26,7 +26,7 @@ import { PtyService } from './services/pty-service';
 import { RefreshScheduler } from './services/refresh-scheduler';
 import { RetentionJob } from './services/retention-job';
 import { isLoopbackUrl, RunService } from './services/run-service';
-import { redactArgv } from './services/logger';
+import { commandCarriesSecret } from './services/logger';
 import { SessionService } from './services/session-service';
 import { StreamRunner, type StreamRunnerLike } from './services/stream-runner';
 import { DeployService } from './services/deploy-service';
@@ -356,11 +356,12 @@ export function buildContainer(opts: ContainerOptions): Container {
         const session = repos.sessions.get(sessionId);
         if (!session) return;
         const cmd = command.trim();
-        if (redactArgv(cmd.split(/\s+/)).join(' ') !== cmd) {
+        if (commandCarriesSecret(cmd)) {
           transcript.system(session.id, copy.abilities.secretInCommand);
           return;
         }
-        const safeUrl = url !== null && isLoopbackUrl(url) ? url : null;
+        // Stored in its parsed form: the parser strips stray whitespace and control characters.
+        const safeUrl = url !== null && isLoopbackUrl(url) ? new URL(url).href : null;
         await projects.setSettings(session.projectId, {
           devCommand: cmd,
           ...(safeUrl !== null ? { devUrl: safeUrl } : {}),
@@ -388,6 +389,10 @@ export function buildContainer(opts: ContainerOptions): Container {
       rememberDeploy: async (sessionId, targetId, command) => {
         const session = repos.sessions.get(sessionId);
         if (!session) return;
+        if (commandCarriesSecret(command)) {
+          transcript.system(session.id, copy.abilities.secretInCommand);
+          return;
+        }
         const target = targets.setDeployCommand(targetId, command);
         const label = `${target.name} ${target.env}`;
         transcript.system(

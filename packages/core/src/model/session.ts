@@ -14,6 +14,12 @@ import {
 } from './common';
 
 export const sessionStateSchema = z.enum(['idle', 'working', 'needs-you', 'done', 'paused']);
+/**
+ * Why Styx itself started a session: the Run locally / Deploy buttons hand the first attempt to the agent, and only
+ * such a session may teach Styx the result (`remember_command`). Stored on the row, not on the read model.
+ */
+export const sessionPurposeSchema = z.enum(['learn-run', 'learn-deploy']);
+export type SessionPurpose = z.infer<typeof sessionPurposeSchema>;
 export type SessionState = z.infer<typeof sessionStateSchema>;
 
 /** The first three are faults Styx detected; `user` is the owner holding the agent from the chat. */

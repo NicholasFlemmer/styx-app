@@ -2,6 +2,14 @@ import log from 'electron-log/main';
 
 const SECRET_KEYS =
   /(token|secret|password|passphrase|private[_-]?key|authorization|cookie|session_token|access_key)/i;
+/**
+ * Names of `NAME=value` tokens on a command line that carry a secret: the object-key rule plus `API_KEY`,
+ * `STRIPE_KEY`, … (a bare property called `key` is not a secret, so this is not folded into `SECRET_KEYS`).
+ */
+const SECRET_ENV_KEYS =
+  /(token|secret|password|passphrase|private[_-]?key|authorization|cookie|access_key|api[_-]?key|[_-]key$)/i;
+/** `scheme://user:password@host` — a connection string with credentials (`DATABASE_URL=postgres://u:p@…`). */
+const URL_USERINFO = /^[a-z][a-z0-9+.-]*:\/\/[^\s/@:]+:[^\s/@]+@/i;
 const SECRET_SHAPES = [
   /AKIA[0-9A-Z]{16}/g,
   /gh[pousr]_[A-Za-z0-9]{36}/g,
@@ -35,12 +43,14 @@ export function redact<T>(value: T): T {
  * CLI flags whose *next* argument (or `=value`) is a secret. `-p` covers `--password` short forms (ssh's port is
  * collateral); `--body`/`-b`/`--value` carry `gh secret set` / `vercel env add` payloads (PR bodies are collateral).
  */
-const SECRET_FLAGS = /^(--token|--with-token|--password|--passphrase|--secret[a-z-]*|--api-key|--body|--value|-p|-b)$/i;
+const SECRET_FLAGS =
+  /^(--token|--with-token|--password|--passphrase|--secret[a-z-]*|--api-key|--body|--value|-p|-b)$/i;
 /**
  * Compound identifiers that name a secret and take the next token as its value (`aws configure set
  * aws_secret_access_key X`, `--set api-token X`). Bare `secret`/`token` are subcommands (`gh secret set`) and stay.
  */
-const SECRET_WORD = /^(?:[a-z0-9.]+[_-])+(?:token|secret|password|passphrase|access_key|access-key|private_key|private-key)(?:[_-][a-z0-9.]+)*$|^(?:token|secret|password|passphrase)(?:[_-][a-z0-9.]+)+$/i;
+const SECRET_WORD =
+  /^(?:[a-z0-9.]+[_-])+(?:token|secret|password|passphrase|access_key|access-key|private_key|private-key)(?:[_-][a-z0-9.]+)*$|^(?:token|secret|password|passphrase)(?:[_-][a-z0-9.]+)+$/i;
 const SECRET_KV = /^(--?[a-z][a-z0-9_.-]*|[A-Za-z_][A-Za-z0-9_.-]*)=(.*)$/s;
 
 /**
@@ -63,13 +73,40 @@ export function redactArgv(argv: readonly string[]): string[] {
       continue;
     }
     const kv = SECRET_KV.exec(a);
-    if (kv?.[1] !== undefined && (SECRET_FLAGS.test(kv[1]) || SECRET_KEYS.test(kv[1]))) {
+    if (kv?.[1] !== undefined && (SECRET_FLAGS.test(kv[1]) || SECRET_ENV_KEYS.test(kv[1]))) {
       out.push(`${kv[1]}=[redacted]`);
+      continue;
+    }
+    if (kv?.[2] !== undefined) {
+      // `--set-env-vars=DB_PASSWORD=x`, `-e TOKEN=x`: a secret key one level down.
+      const inner = SECRET_KV.exec(kv[2]);
+      if (
+        URL_USERINFO.test(kv[2]) ||
+        (inner?.[1] !== undefined && (SECRET_FLAGS.test(inner[1]) || SECRET_ENV_KEYS.test(inner[1])))
+      ) {
+        out.push(`${kv[1]}=[redacted]`);
+        continue;
+      }
+    }
+    if (URL_USERINFO.test(a)) {
+      out.push('[redacted]');
       continue;
     }
     out.push(redact(a));
   }
   return out;
+}
+
+/**
+ * Whether a command line Styx is asked to keep (a run or deploy command an agent or the user hands over) carries
+ * anything `redactArgv` would mask. Such a command is refused rather than stored: it would land in the committed
+ * `.styx/project.json` or the target row, and be echoed in transcripts and audit rows. Compared token by token,
+ * so spacing never counts as a difference.
+ */
+export function commandCarriesSecret(command: string): boolean {
+  const tokens = command.split(/\s+/).filter((t) => t !== '');
+  const masked = redactArgv(tokens);
+  return masked.some((t, i) => t !== tokens[i]);
 }
 
 /** Every log line passes through `redact()`: the message too, since callers interpolate error text into it (L-b). */

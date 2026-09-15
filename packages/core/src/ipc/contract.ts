@@ -37,6 +37,7 @@ import {
   imageMediaTypeSchema,
   permissionModeSchema,
   sessionTogglesSchema,
+  sessionPurposeSchema,
   transcriptMessageSchema,
 } from '../model/session';
 import { appSettingsSchema, previewDeviceSchema, projectSettingsSchema } from '../model/settings';
@@ -362,6 +363,8 @@ export const commands = {
       model: z.string().nullable().default(null),
       permissionMode: permissionModeSchema.default('default'),
       effort: effortSchema.nullable().default(null),
+      /** Set when Styx starts the session for a job of its own (Run locally / Deploy); gates `remember_command`. */
+      purpose: sessionPurposeSchema.nullable().default(null),
     }),
     output: z.object({ sessionId: sessionIdSchema, worktreeId: worktreeIdSchema }),
   },

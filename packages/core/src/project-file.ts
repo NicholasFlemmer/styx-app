@@ -1,3 +1,4 @@
+import { isLocalDevUrl } from './dev-url';
 import { z } from 'zod';
 import { effortSchema, permissionModeSchema } from './model/session';
 import {
@@ -219,7 +220,8 @@ export const projectSettingsFromFile = (file: ProjectFileV1): Partial<ProjectSet
   if (w?.location !== undefined) out.worktreeLocation = w.location;
   if (file.shell?.windows !== undefined) out.shellWindows = file.shell.windows;
   if (file.lineEndings !== undefined) out.lineEndings = file.lineEndings;
-  if (file.dev?.url !== undefined) out.devUrl = file.dev.url;
+  // A committed file must not be able to point the design window at a remote page (it renders as the local app).
+  if (file.dev?.url !== undefined && isLocalDevUrl(file.dev.url)) out.devUrl = file.dev.url;
   if (file.dev?.command !== undefined) out.devCommand = file.dev.command;
   if (file.env?.files !== undefined) out.envFiles = file.env.files;
   if (file.env?.shareWithAgents !== undefined) out.envShareWithAgents = file.env.shareWithAgents;

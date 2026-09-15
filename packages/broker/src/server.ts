@@ -72,6 +72,8 @@ const RATE_LIMIT_MESSAGE: Record<RateBucket, string> = {
 export const RATE_LIMITED_METHODS: Readonly<Partial<Record<MethodName, RateBucket>>> = {
   request_access: 'request',
   ask_user: 'ask',
+  // A remembered command is something Styx will run later: never a free, unbounded write.
+  remember_command: 'ask',
   // Its own bucket: without one, two agents can fill each other's context windows for free.
   send_message: 'peer',
 };

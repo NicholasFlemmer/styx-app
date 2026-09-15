@@ -2,6 +2,7 @@ import {
   PREVIEW_DEVICES,
   copy,
   fill,
+  isLocalDevUrl,
   projectSettingsOfOrDefault,
   type DevRun,
   type PreviewDevice,
@@ -172,7 +173,8 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
   // A native view sits above the DOM, so anything floating must take it off screen while it is open.
   const covered = overlays.length > 0;
   // A live run is the source of truth for where the app is; the saved URL is the fallback for "I run it myself".
-  const previewUrl = live && run.url !== null ? run.url : url;
+  // Local servers only (a committed project file could otherwise point the window at a remote page).
+  const previewUrl = live && run.url !== null ? run.url : isLocalDevUrl(url) ? url : '';
   const visible = active && !covered && previewUrl !== '';
   // Main probes a new URL until the server answers, then loads it; until then the hole says so.
   const [status, setStatus] = useState<{
@@ -231,8 +233,14 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
     [projectId],
   );
 
+  const [localOnly, setLocalOnly] = useState(false);
   const save = () => {
     const next = draft.trim();
+    if (next !== '' && !isLocalDevUrl(next)) {
+      setLocalOnly(true);
+      return;
+    }
+    setLocalOnly(false);
     if (next === url) return;
     void command('project.settings.set', { projectId, patch: { devUrl: next === '' ? null : next } });
   };
@@ -389,8 +397,10 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
       )}
       <div ref={hole} className={s['hole']} data-preview-hole="true">
         {previewUrl === '' && (
-          <div className={s['empty']}>
-            <span className="t-label">{copy.workspace.design.empty}</span>
+          <div className={s['empty']} data-preview-local-only={localOnly ? 'true' : undefined}>
+            <span className="t-label">
+              {localOnly ? copy.workspace.design.localOnly : copy.workspace.design.empty}
+            </span>
             <span className={s['hint']}>{copy.workspace.design.hint}</span>
           </div>
         )}

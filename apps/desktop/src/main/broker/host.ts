@@ -16,6 +16,7 @@ import {
   type PendingAsk,
   type Scope,
   type Target,
+  copy,
 } from '@styx/core';
 import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
@@ -335,16 +336,33 @@ export class BrokerHost {
 
     /** An agent worked something out; Styx keeps it. A deploy target must belong to the caller's project. */
     server.on('remember_command', async (p, ctx) => {
+      // Only a session Styx itself started for this (the Run locally / Deploy buttons) may teach it: an ordinary
+      // session, or one steered by a peer or by the repo, cannot plant a command Styx would later run.
+      const purpose = deps.repos.sessions.purposeOf(ctx.session.sessionId);
       if (p.kind === 'run') {
+        if (purpose !== 'learn-run') throw new BrokerError(ErrorCode.notAllowed, copy.abilities.notLearning);
         await deps.abilities.rememberRun(ctx.session.sessionId, p.command, p.url ?? null);
         return { ok: true };
       }
+      if (purpose !== 'learn-deploy') throw new BrokerError(ErrorCode.notAllowed, copy.abilities.notLearning);
       const target = p.targetId === undefined ? undefined : deps.repos.targets.get(p.targetId);
       if (!target || target.projectId !== ctx.session.projectId)
         throw new BrokerError(
           ErrorCode.targetNotFound,
           "targetId must be one of this project's targets (list_targets)",
         );
+      // Evidence the deploy really happened under the user's eyes: a grant to this session on that target, used
+      // with a clean exit. Without it the stored command would run next time with a credential nobody approved
+      // this agent for.
+      // The use row carries the session (an `always` grant itself outlives sessions and has none).
+      const deployed = deps.repos.grants
+        .byTarget(target.id)
+        .some((g) =>
+          deps.repos.grantUses
+            .byGrant(g.id)
+            .some((u) => u.sessionId === ctx.session.sessionId && u.exitCode === 0),
+        );
+      if (!deployed) throw new BrokerError(ErrorCode.notAllowed, copy.abilities.deployFirst);
       await deps.abilities.rememberDeploy(ctx.session.sessionId, target.id, p.command);
       return { ok: true };
     });

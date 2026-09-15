@@ -12,9 +12,13 @@ describe('preview URL', () => {
     expect(normaliseUrl('localhost:3000/dashboard')).toBe('http://localhost:3000/dashboard');
   });
 
-  it('keeps an explicit http or https URL as given', () => {
-    expect(normaliseUrl('https://staging.acme.dev')).toBe('https://staging.acme.dev/');
+  it('keeps an explicit http or https URL as given, for local hosts only', () => {
+    expect(normaliseUrl('https://localhost:8443')).toBe('https://localhost:8443/');
     expect(normaliseUrl('http://localhost:8080/x?y=1')).toBe('http://localhost:8080/x?y=1');
+    expect(normaliseUrl('http://127.0.0.1:3000')).toBe('http://127.0.0.1:3000/');
+    // The window renders as "the app"; a remote page (which a committed dev.url could name) never loads in it.
+    expect(normaliseUrl('https://staging.acme.dev')).toBeNull();
+    expect(normaliseUrl('http://user:pw@localhost:3000')).toBeNull();
   });
 
   it('refuses anything that is not http(s)', () => {

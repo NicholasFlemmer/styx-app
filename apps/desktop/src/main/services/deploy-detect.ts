@@ -3,6 +3,11 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { CliRunner } from '../providers/cli-runner';
 
+/** Provider ids, regions, refs, service names: letters, digits, `.`, `_`, `-`, `:` only — never shell text. */
+const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+/** Workflow file names as `gh workflow run` takes them. */
+const SAFE_FILE = /^[A-Za-z0-9._-]+\.ya?ml$/i;
+
 export interface DeploySuggestion {
   command: string;
   /** What the suggestion was read from (`app.yaml`, `cloud run · acme-web`, `samconfig.toml` …). */
@@ -27,7 +32,8 @@ const parseRunServices = (json: string): { name: string; region: string | null }
       const meta = (r as { metadata?: { name?: unknown; labels?: Record<string, unknown> } }).metadata;
       const name = typeof meta?.name === 'string' ? meta.name : null;
       const region = meta?.labels?.['cloud.googleapis.com/location'];
-      return name === null ? [] : [{ name, region: typeof region === 'string' ? region : null }];
+      if (name === null || !SAFE_ID.test(name)) return [];
+      return [{ name, region: typeof region === 'string' && SAFE_ID.test(region) ? region : null }];
     });
   } catch {
     return [];
@@ -57,9 +63,11 @@ export async function detectDeployCommands(
       }
     });
   const has = (name: string) => exists(join(projectPath, name));
+  // Config values come from the target row, which a committed `.styx/project.json` can seed: only a plain
+  // identifier is ever composed into a command Styx suggests (and the agent is invited to run).
   const cfg = (key: string): string | null => {
     const v = target.config[key];
-    return typeof v === 'string' && v.trim() !== '' ? v.trim() : null;
+    return typeof v === 'string' && SAFE_ID.test(v.trim()) ? v.trim() : null;
   };
   const out: DeploySuggestion[] = [];
 
@@ -140,7 +148,7 @@ export async function detectDeployCommands(
     }
     case 'github': {
       const dir = join(projectPath, '.github', 'workflows');
-      const files = readDir(dir).filter((f) => /\.ya?ml$/i.test(f));
+      const files = readDir(dir).filter((f) => SAFE_FILE.test(f));
       const deployish = files.filter((f) => /deploy|release|publish/i.test(f));
       const fallback = files.filter((f) => /deploy/i.test(readText(join(dir, f)) ?? ''));
       for (const f of deployish.length > 0 ? deployish : fallback)

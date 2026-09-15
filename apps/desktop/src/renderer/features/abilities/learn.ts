@@ -39,8 +39,10 @@ const spawnFor = async (
   model: ReadModel,
   projectId: ProjectId,
   firstMessage: string,
-  mayRequestTargets: boolean,
+  purpose: 'learn-run' | 'learn-deploy',
 ): Promise<SessionId | null> => {
+  // Only a deploy may touch targets; and only a session with this purpose may `remember_command` (main enforces).
+  const mayRequestTargets = purpose === 'learn-deploy';
   const worktree = mainWorktreeOf(model, projectId);
   if (worktree === null) return null;
   const settings = projectSettingsOfOrDefault(model, projectId);
@@ -53,6 +55,7 @@ const spawnFor = async (
     model: null,
     permissionMode: 'default',
     effort: null,
+    purpose,
   });
   return r.ok ? r.value.sessionId : null;
 };
@@ -83,7 +86,7 @@ export const startLearnRun = async (
   } else {
     prompt = fill(copy.agentPrompt.fixRun, { project, command: failed.command, failure: failed.failure });
   }
-  const sessionId = await spawnFor(model, projectId, prompt, false);
+  const sessionId = await spawnFor(model, projectId, prompt, 'learn-run');
   remember(projectId, learnKey.run(projectId), sessionId);
   return sessionId;
 };
@@ -92,9 +95,10 @@ export const startLearnRun = async (
 export const startLearnDeploy = async (model: ReadModel, target: Target): Promise<SessionId | null> => {
   const project = projectNameOf(model, target.projectId);
   const detected = await command('deploy.detect', { targetId: target.id });
+  // A committed `.styx/project.json` can seed target config: only a plain identifier goes into the message.
   const providerProject = target.config['projectId'];
   const hints = [
-    ...(typeof providerProject === 'string' && providerProject !== ''
+    ...(typeof providerProject === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(providerProject)
       ? [`, provider project ${providerProject}`]
       : []),
     ...(detected.ok ? [guessText(detected.value.suggestions)] : []),
@@ -107,7 +111,7 @@ export const startLearnDeploy = async (model: ReadModel, target: Target): Promis
     hints,
     targetId: target.id,
   });
-  const sessionId = await spawnFor(model, target.projectId, prompt, true);
+  const sessionId = await spawnFor(model, target.projectId, prompt, 'learn-deploy');
   remember(target.projectId, learnKey.deploy(target.id), sessionId);
   return sessionId;
 };

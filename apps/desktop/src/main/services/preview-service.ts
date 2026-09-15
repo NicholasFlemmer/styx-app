@@ -1,5 +1,5 @@
 import { WebContentsView, net, shell, type BrowserWindow } from 'electron';
-import { PREVIEW_VIEWPORTS, type PreviewDevice } from '@styx/core';
+import { PREVIEW_VIEWPORTS, type PreviewDevice, isLocalDevUrl } from '@styx/core';
 import { logger } from './logger';
 import { PreviewProbe, type PreviewStatus } from './preview-probe';
 
@@ -168,9 +168,10 @@ export const normaliseUrl = (raw: string): string | null => {
   const text = raw.trim();
   if (text === '') return null;
   const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `http://${text}`;
+  // Local servers only: the window renders as "the app", and a `dev.url` can come from a committed project file.
+  if (!isLocalDevUrl(withScheme)) return null;
   try {
-    const u = new URL(withScheme);
-    return u.protocol === 'http:' || u.protocol === 'https:' ? u.toString() : null;
+    return new URL(withScheme).toString();
   } catch {
     return null;
   }

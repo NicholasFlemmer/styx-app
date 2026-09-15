@@ -15,7 +15,7 @@ import type { ProviderRegistry } from '../providers';
 import type { CliRunner } from '../providers/cli-runner';
 import { detectDeployCommands, type DeploySuggestion } from './deploy-detect';
 import type { GrantService } from './grant-service';
-import { logger } from './logger';
+import { logger, redactArgv } from './logger';
 import type { PtyService } from './pty-service';
 import type { TerminalService } from './terminal-service';
 
@@ -74,8 +74,10 @@ export class DeployService {
     const { repos, publisher } = this.deps;
     const target = repos.targets.get(targetId) ?? fail('not-found', 'target not found');
     const adapter = this.deps.providers.get(target.provider);
-    // A built-in verb (Vercel) or the user's own command (`gcloud run deploy …` on a GCP target); neither → not deployable.
-    const custom = adapter.deployCommand ? null : deployCommandOf(target);
+    // The remembered / typed command for this target wins (the agent or the user worked it out for this repo);
+    // a provider's built-in verb (Vercel) is the fallback. Neither → not deployable.
+    const custom = deployCommandOf(target);
+    const customLabel = custom === null ? null : redactArgv(custom.split(/\s+/)).join(' ');
     if (!adapter.deployCommand && custom === null)
       fail('invalid-input', fill(copy.deploy.notDeployable, { provider: copy.providers[target.provider] }));
     if (target.credentialRef === null) fail('invalid-input', copy.deploy.notConnected);
@@ -125,7 +127,8 @@ export class DeployService {
         sessionId: null,
         targetId: target.id,
         scope: ['deploy'],
-        reason: copy.deploy.reason,
+        // The grant sheet and the audit row name the exact command that will run under this grant.
+        reason: customLabel === null ? copy.deploy.reason : `${copy.deploy.reason} · $ ${customLabel}`,
         triggeredBy,
       })
       .catch((e: Error) => {
@@ -152,25 +155,26 @@ export class DeployService {
     const cwd = project?.path ?? fail('not-found', 'project path missing');
 
     let spawn: { file: string; args: string[]; env: Record<string, string>; label: string };
-    if (adapter.deployCommand) {
-      const cmd = adapter.deployCommand(this.info(target));
+    if (custom !== null && customLabel !== null) {
+      // The command string goes through the login shell so it resolves exactly as in the user's terminal. The
+      // label (grant use, logs) is the redacted form; the shell gets the text as written.
+      const shell = this.deps.shell?.() ?? '/bin/sh';
+      const args =
+        this.deps.platform === 'win32'
+          ? /wsl(\.exe)?$/i.test(shell)
+            ? ['-e', 'sh', '-lc', custom]
+            : ['-NoLogo', '-Command', custom]
+          : ['-lc', custom];
+      spawn = { file: shell, args, env: {}, label: customLabel };
+    } else {
+      const cmd =
+        adapter.deployCommand?.(this.info(target)) ?? fail('invalid-input', copy.deploy.notDeployable);
       const file = await this.deps.cli.which(cmd.bin);
       if (!file) {
         emit('failed', { error: fill(copy.deploy.cliMissing, { bin: cmd.bin }) });
         fail('cli-missing', fill(copy.deploy.cliMissing, { bin: cmd.bin }));
       }
       spawn = { file, args: cmd.args, env: cmd.env ?? {}, label: `${cmd.bin} ${cmd.args.join(' ')}` };
-    } else {
-      // The user's command string goes through their login shell so it resolves exactly as in their terminal.
-      const shell = this.deps.shell?.() ?? '/bin/sh';
-      const text = custom ?? '';
-      const args =
-        this.deps.platform === 'win32'
-          ? /wsl(\.exe)?$/i.test(shell)
-            ? ['-e', 'sh', '-lc', text]
-            : ['-NoLogo', '-Command', text]
-          : ['-lc', text];
-      spawn = { file: shell, args, env: {}, label: text };
     }
 
     const terminalId = await this.deps.terminals

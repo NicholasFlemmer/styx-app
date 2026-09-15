@@ -1,4 +1,4 @@
-import { sessionSchema, type Session } from '@styx/core';
+import { sessionPurposeSchema, sessionSchema, type Session, type SessionPurpose } from '@styx/core';
 import type { Db } from '../open';
 import { asBool, asJson, asNum, asStr, asTime, placeholders, toBit, toTime, type Raw } from './mappers';
 
@@ -133,5 +133,17 @@ export class SessionsRepo {
 
   setBrokerTokenHash(id: string, hash: string): void {
     this.setTokenHashStmt.run(hash, id);
+  }
+
+  /** Why Styx started the session (0012); null for sessions the user started. Not on the read model. */
+  purposeOf(id: string): SessionPurpose | null {
+    const r = this.db.prepare('SELECT purpose FROM sessions WHERE id = ?').get(id) as
+      { purpose: string | null } | undefined;
+    const parsed = sessionPurposeSchema.safeParse(r?.purpose);
+    return parsed.success ? parsed.data : null;
+  }
+
+  setPurpose(id: string, purpose: SessionPurpose | null): void {
+    this.db.prepare('UPDATE sessions SET purpose = ? WHERE id = ?').run(purpose, id);
   }
 }

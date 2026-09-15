@@ -75,6 +75,7 @@ describe('learned abilities: the first Run locally / Deploy is a task for the pr
         model: null,
         permissionMode: 'default',
         effort: null,
+        purpose: 'learn-run',
       },
     ]);
     const ui = useUiStore.getState();
@@ -114,6 +115,7 @@ describe('learned abilities: the first Run locally / Deploy is a task for the pr
         targetId: gcp.id,
       }),
       toggles: { autoApproveEdits: false, mayRequestTargets: true },
+      purpose: 'learn-deploy',
     });
     expect(useUiStore.getState().learning).toEqual({ [learnKey.deploy(gcp.id)]: 's-learn' });
     expect(useUiStore.getState().projectSession[ids.project.infraTools]).toBe('s-learn');

@@ -21,6 +21,7 @@ import {
   type Project,
   type Runner,
   type Session,
+  type SessionPurpose,
   type SessionEffect,
   type SessionEvent,
   type SessionId,
@@ -107,6 +108,8 @@ export interface SpawnInput {
   model: string | null;
   permissionMode?: PermissionMode;
   effort?: Effort | null;
+  /** Why Styx started it (Run locally / Deploy hand-off); only such a session may `remember_command`. */
+  purpose?: SessionPurpose | null;
 }
 
 export const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
@@ -380,6 +383,7 @@ export class SessionService {
     repos.transaction(() => {
       repos.sessions.upsert(session);
       repos.sessions.setBrokerTokenHash(session.id, sha256(token));
+      if (input.purpose) repos.sessions.setPurpose(session.id, input.purpose);
       const previousOwner =
         worktree.owner.kind === 'session' ? repos.sessions.get(worktree.owner.sessionId) : null;
       const reassign =
