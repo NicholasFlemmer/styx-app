@@ -40,7 +40,9 @@ export function AddExistingModal({ id }: AddExistingModalProps) {
         return;
       }
       setResult({ key: scanKey, repos: r.value.repos, error: null });
-      setChecked(new Set(r.value.repos.filter((x) => x.suggested).map((x) => x.path)));
+      // Nothing pre-selected (owner request): the scan lists everything it found, and picking is the user's step.
+      // Onboarding step 2 keeps the spec's suggested pre-selection; this modal is for adding a few later.
+      setChecked(new Set());
     });
     return () => {
       cancelled = true;

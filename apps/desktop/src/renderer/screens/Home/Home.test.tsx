@@ -129,7 +129,7 @@ describe('Home', () => {
       ).toHaveLength(0);
     });
 
-    it('Scan this machine opens the Add existing modal; New project opens its modal', () => {
+    it('Scan this machine opens the Add from recent modal; New project opens its modal', () => {
       render(<Home />);
       fireEvent.click(screen.getByRole('button', { name: copy.empty.projects.scan }));
       expect(useUiStore.getState().overlays).toMatchObject([{ kind: 'modal', modal: 'add-existing' }]);

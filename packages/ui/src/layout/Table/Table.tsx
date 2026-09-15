@@ -18,6 +18,10 @@ export const TABLE_COLUMNS = {
   onboardingIde: '20px 1.1fr 1.2fr 1fr auto',
   onboardingRepos: '20px 1fr 1fr',
   onboardingClis: '1.2fr 1.2fr 1fr auto',
+  /** Settings › App › Agents: agent · version/location · account · state · actions (owner addition). */
+  agents: '1.1fr 1.5fr 1.2fr 1fr .8fr',
+  /** Settings › App › Skills: skill (+ description) · for · where · actions (owner addition). */
+  skills: '2.2fr 1.1fr .7fr .5fr',
 } as const;
 
 /** Name for visually blank (action) header cells: rendered visually hidden (axe `empty-table-header` needs DOM text). */

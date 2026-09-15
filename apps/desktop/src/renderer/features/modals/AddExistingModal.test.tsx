@@ -54,7 +54,7 @@ describe('AddExistingModal', () => {
     Object.assign(window, { styx: undefined });
   });
 
-  it('scans on open (recents included), lists rows with onboarding meta, suggested rows pre-checked', async () => {
+  it('scans on open (recents included), lists rows with onboarding meta, nothing pre-checked', async () => {
     render(<AddExistingModal id="modal-1" />);
     expect(screen.getByRole('status').textContent).toBe(copy.addExisting.scanning);
     await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(3));
@@ -65,14 +65,20 @@ describe('AddExistingModal', () => {
       'no remote · 1y old',
       copy.workspace.noGit,
     ]);
+    // Owner request: every row used to arrive checked, so adding two meant unticking the rest first.
     const boxes = screen.getAllByRole('checkbox');
-    expect(boxes.map((b) => (b as HTMLInputElement).checked)).toEqual([true, false, true]);
-    expect(screen.getByRole('button', { name: 'Add 2' })).toBeTruthy();
+    expect(boxes.map((b) => (b as HTMLInputElement).checked)).toEqual([false, false, false]);
+    expect((screen.getByRole('button', { name: copy.addExisting.addNone }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
   });
 
   it('Add n adds every checked row, closes, and enters the project only when exactly one was added', async () => {
     render(<AddExistingModal id="modal-1" />);
     await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(3));
+    const boxes = screen.getAllByRole('checkbox');
+    fireEvent.click(boxes[0] as HTMLElement);
+    fireEvent.click(boxes[2] as HTMLElement);
     fireEvent.click(screen.getByRole('button', { name: 'Add 2' }));
     await waitFor(() => expect(useUiStore.getState().overlays).toHaveLength(0));
     expect(calls('project.add').map((c) => c[1])).toEqual([
@@ -84,13 +90,13 @@ describe('AddExistingModal', () => {
     expect(calls('project.select')).toHaveLength(0);
   });
 
-  it('a single added project lands in its Workspace; unchecking everything disables Add', async () => {
+  it('a single added project lands in its Workspace; unchecking again disables Add', async () => {
     render(<AddExistingModal id="modal-1" />);
     await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(3));
     const boxes = screen.getAllByRole('checkbox');
     fireEvent.click(boxes[2] as HTMLElement);
     expect(screen.getByRole('button', { name: 'Add 1' })).toBeTruthy();
-    fireEvent.click(boxes[0] as HTMLElement);
+    fireEvent.click(boxes[2] as HTMLElement);
     expect((screen.getByRole('button', { name: copy.addExisting.addNone }) as HTMLButtonElement).disabled).toBe(
       true,
     );
