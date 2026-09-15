@@ -60,6 +60,8 @@ export interface UiState {
   editorFile: string | null;
   banners: Record<string, BannerEvent>;
   dismissedBanners: string[];
+  /** Sessions working an ability out for the Run locally / Deploy buttons: `run:<projectId>` / `deploy:<targetId>` → session. */
+  learning: Record<string, SessionId>;
 }
 
 export interface UiActions {
@@ -89,6 +91,7 @@ export interface UiActions {
   setDiffFocusIndex(i: number): void;
   setApprovalsTab(tab: ApprovalsTab): void;
   setSettingsSection(section: string): void;
+  setLearning(key: string, sessionId: SessionId | null): void;
   setOnboardingStep(step: OnboardingStep): void;
   setEditorFile(file: string | null): void;
   setBanner(banner: BannerEvent): void;
@@ -127,6 +130,7 @@ export const useUiStore = create<UiStore>()(
     diffFocusIndex: 0,
     approvalsTab: 'inbox',
     settingsSection: 'project:targets',
+    learning: {},
     onboardingStep: initialFromEnv?.step ?? 1,
     editorFile: null,
     banners: {},
@@ -244,6 +248,11 @@ export const useUiStore = create<UiStore>()(
     setSettingsSection: (section) =>
       set((s) => {
         s.settingsSection = section;
+      }),
+    setLearning: (key, sessionId) =>
+      set((s) => {
+        if (sessionId === null) delete s.learning[key];
+        else s.learning[key] = sessionId;
       }),
     setOnboardingStep: (step) =>
       set((s) => {

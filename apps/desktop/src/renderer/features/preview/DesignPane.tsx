@@ -1,9 +1,19 @@
-import { PREVIEW_DEVICES, copy, fill, type DevRun, type PreviewDevice, type ProjectId } from '@styx/core';
+import {
+  PREVIEW_DEVICES,
+  copy,
+  fill,
+  projectSettingsOfOrDefault,
+  type DevRun,
+  type PreviewDevice,
+  type ProjectId,
+} from '@styx/core';
 import { Button, Icon, Input } from '@styx/ui';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { onEvent } from '../../state/bridge';
 import { command } from '../../state/commands';
 import { useModel, useUi } from '../../state/hooks';
+import { useReadModel } from '../../state/read-model';
+import { learnKey, learningSession, startLearnRun } from '../abilities/learn';
 import { createLoginTerminal, disposeLoginTerminal } from '../modals/login-terminal';
 import { attachTerminal, detachTerminal, type TerminalEntry } from '../terminal/terminal-registry';
 import cm from '../modals/ConnectModal.module.css';
@@ -17,11 +27,17 @@ export interface DesignPaneProps {
   active: boolean;
   /** The project's local run (`model.runs[projectId]`), main-owned; null when nothing was started or it was dismissed. */
   run: DevRun | null;
-  /** The saved run command (`project.settings.devCommand`); null falls back to what `run.detect` suggests. */
+  /** The run command Styx has learned for this project (`project.settings.devCommand`); null until an agent taught it. */
   devCommand: string | null;
 }
 
-type Suggestion = { command: string; source: string };
+/** Why a finished run counts as failed, in the words the agent is asked to fix (`agentPrompt.fixRun`). */
+export const runFailure = (run: DevRun): string | null => {
+  if (run.phase !== 'exited') return null;
+  if (run.exitCode !== null && run.exitCode !== 0)
+    return fill(copy.workspace.run.failureExit, { code: String(run.exitCode) });
+  return run.url === null ? copy.workspace.run.failureNoUrl : null;
+};
 
 /** The phase line in the output strip header: `Starting…` · `Running · http://localhost:5173` · `Exited · code 1`. */
 export const runPhaseText = (run: DevRun): string => {
@@ -45,8 +61,11 @@ export const runPhaseText = (run: DevRun): string => {
  * whether it should be on screen at all. It must report `visible: false` whenever an overlay is open, because a
  * native view paints above the DOM and would otherwise cover the palette, a modal, the grant sheet or a toast.
  *
- * "Run locally" (owner request) lives in the same bar: main starts the project's dev server in a pty, the strip
- * under the bar shows its output, and the first localhost URL it prints becomes the URL the window points at.
+ * "Run locally" (owner request) has its own row. It works the way asking an agent does (owner principle,
+ * AI-native): the first click hands the job to the project's agent in chat, which works the command out, may ask a
+ * question, and teaches Styx through `remember_command`; main then starts the dev server in a pty, the strip under
+ * the row shows its output, and the first localhost URL it prints becomes the URL the window points at. Every later
+ * click runs the remembered command directly; a failed run offers to send it back to the agent with what went wrong.
  */
 export function DesignPane({ projectId, devUrl, active, run, devCommand }: DesignPaneProps) {
   const hole = useRef<HTMLDivElement>(null);
@@ -71,35 +90,53 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
 
   // --- run locally ---------------------------------------------------------
   const live = run !== null && run.phase !== 'exited';
-  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    void command('run.detect', { projectId }).then((r) => {
-      if (cancelled || !r.ok) return;
-      setSuggestion(r.value.suggestions[0] ?? null);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
-  const commandSeed = devCommand ?? suggestion?.command ?? '';
+  // The learned command is also the override: editable, saved on blur, run on Enter.
+  const commandSeed = devCommand ?? '';
   const [cmdSeed, setCmdSeed] = useState(commandSeed);
   const [cmd, setCmd] = useState(commandSeed);
   if (cmdSeed !== commandSeed) {
     setCmdSeed(commandSeed);
     setCmd(commandSeed);
   }
-  const detectedTitle =
-    devCommand === null && suggestion !== null && cmd === suggestion.command
-      ? fill(copy.workspace.run.detected, { source: suggestion.source })
-      : undefined;
+  // Who works it out: the session doing so while it is alive, else the project's default agent.
+  const runKey = learnKey.run(projectId);
+  const learning = useUi((u) => u.learning);
+  const setLearning = useUi((u) => u.setLearning);
+  const openSession = useUi((u) => u.openSession);
+  const learnerId = useModel((m) => learningSession(m, learning, runKey));
+  const agentName = useModel((m) => {
+    const learner = learnerId === null ? undefined : m.sessions.byId[learnerId];
+    return copy.agentProducts[learner?.agent ?? projectSettingsOfOrDefault(m, projectId).defaultAgent];
+  });
+  // The agent taught Styx a (new) command: the row goes back to being a button.
+  const taught = useRef(devCommand);
+  useEffect(() => {
+    if (taught.current === devCommand) return;
+    taught.current = devCommand;
+    if (learning[runKey] !== undefined) setLearning(runKey, null);
+  }, [devCommand, learning, runKey, setLearning]);
   const startRun = () => {
+    if (live) return;
+    if (devCommand === null) {
+      void startLearnRun(useReadModel.getState().model, projectId);
+      return;
+    }
     const next = cmd.trim();
-    if (next === '' || live) return;
+    if (next === '') return;
     void command('run.start', { projectId, command: next });
   };
   const stopRun = () => void command('run.stop', { projectId });
   const dismissRun = () => void command('run.dismiss', { projectId });
+  const failure = run === null ? null : runFailure(run);
+  const askToFix = () => {
+    if (run === null || failure === null) return;
+    void startLearnRun(useReadModel.getState().model, projectId, { command: run.command, failure });
+  };
+  const saveCmd = () => {
+    const next = cmd.trim();
+    if (next === '' || next === devCommand) return;
+    void command('project.settings.set', { projectId, patch: { devCommand: next } });
+  };
   const onCmdKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -255,36 +292,60 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
         </Button>
       </div>
       {/* Run locally has its own row: the URL bar is full at the window minimum, and a run is a separate act. */}
-      <div className={s['runRow']} data-run-row="true">
+      <div
+        className={s['runRow']}
+        data-run-row="true"
+        data-learning={learnerId === null ? undefined : 'true'}
+      >
         {live ? (
           <Button size="compact" variant="secondary" on onClick={stopRun} data-run-stop="true">
             {copy.workspace.run.stop}
           </Button>
+        ) : learnerId !== null ? (
+          <>
+            <span className={s['phase']} data-phase="starting" role="status" data-run-learning="true">
+              {fill(copy.workspace.run.learning, { agent: agentName })}
+            </span>
+            <button
+              type="button"
+              className={cm['link']}
+              onClick={() => openSession(projectId, learnerId)}
+              data-run-open-chat="true"
+            >
+              {copy.workspace.run.openChat}
+            </button>
+          </>
         ) : (
           <Button
             size="compact"
             variant="secondary"
-            disabled={cmd.trim() === ''}
+            disabled={devCommand !== null && cmd.trim() === ''}
             onClick={startRun}
             data-run-start="true"
           >
             {copy.workspace.run.run}
           </Button>
         )}
-        <Input
-          className={s['cmd'] ?? ''}
-          mono
-          value={cmd}
-          aria-label={copy.workspace.run.command}
-          placeholder={copy.workspace.run.commandPlaceholder}
-          title={detectedTitle}
-          spellCheck={false}
-          autoComplete="off"
-          disabled={live}
-          onChange={(e) => setCmd(e.currentTarget.value)}
-          onKeyDown={onCmdKeyDown}
-          data-run-command="true"
-        />
+        {devCommand !== null || live ? (
+          <Input
+            className={s['cmd'] ?? ''}
+            mono
+            value={cmd}
+            aria-label={copy.workspace.run.command}
+            placeholder={copy.workspace.run.commandPlaceholder}
+            spellCheck={false}
+            autoComplete="off"
+            disabled={live}
+            onChange={(e) => setCmd(e.currentTarget.value)}
+            onBlur={saveCmd}
+            onKeyDown={onCmdKeyDown}
+            data-run-command="true"
+          />
+        ) : learnerId === null ? (
+          <span className={s['hint']} data-run-first-time="true">
+            {fill(copy.workspace.run.firstTime, { agent: agentName })}
+          </span>
+        ) : null}
       </div>
       {run !== null && (
         <div className={s['strip']} data-run-strip="true" data-open={open ? 'true' : 'false'}>
@@ -302,10 +363,20 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
             <span className={s['phase']} data-phase={run.phase} data-run-phase="true">
               {runPhaseText(run)}
             </span>
-            {run.phase === 'exited' && (
+            {failure !== null && learnerId === null && (
               <button
                 type="button"
                 className={[cm['link'], s['dismiss']].join(' ')}
+                onClick={askToFix}
+                data-run-fix="true"
+              >
+                {fill(copy.workspace.run.askToFix, { agent: agentName })}
+              </button>
+            )}
+            {run.phase === 'exited' && (
+              <button
+                type="button"
+                className={[cm['link'], failure === null && learnerId === null ? s['dismiss'] : ''].join(' ')}
                 onClick={dismissRun}
                 data-run-dismiss="true"
               >

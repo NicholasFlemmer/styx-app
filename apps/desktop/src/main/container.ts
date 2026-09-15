@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import type { AppSettings } from '@styx/core';
+import { copy, fill, type AppSettings } from '@styx/core';
 import type { Clock } from './clock';
 import type { Db } from './db/open';
 import { Repos } from './db/repos';
@@ -25,7 +25,8 @@ import { PtyLog } from './services/pty-log';
 import { PtyService } from './services/pty-service';
 import { RefreshScheduler } from './services/refresh-scheduler';
 import { RetentionJob } from './services/retention-job';
-import { RunService } from './services/run-service';
+import { isLoopbackUrl, RunService } from './services/run-service';
+import { redactArgv } from './services/logger';
 import { SessionService } from './services/session-service';
 import { StreamRunner, type StreamRunnerLike } from './services/stream-runner';
 import { DeployService } from './services/deploy-service';
@@ -348,6 +349,64 @@ export function buildContainer(opts: ContainerOptions): Container {
     providers,
     clock,
     endpoint: runtime.brokerEndpoint,
+    abilities: {
+      // The agent worked out how to run the project: keep the command (and URL), say so in its chat and on Home,
+      // and start the managed run so the design window shows the app straight away.
+      rememberRun: async (sessionId, command, url) => {
+        const session = repos.sessions.get(sessionId);
+        if (!session) return;
+        const cmd = command.trim();
+        if (redactArgv(cmd.split(/\s+/)).join(' ') !== cmd) {
+          transcript.system(session.id, copy.abilities.secretInCommand);
+          return;
+        }
+        const safeUrl = url !== null && isLoopbackUrl(url) ? url : null;
+        await projects.setSettings(session.projectId, {
+          devCommand: cmd,
+          ...(safeUrl !== null ? { devUrl: safeUrl } : {}),
+        });
+        transcript.system(
+          session.id,
+          fill(copy.abilities.learnedRun, {
+            command: cmd,
+            url: safeUrl === null ? '' : fill(copy.abilities.learnedRunUrl, { url: safeUrl }),
+          }),
+        );
+        const project = repos.projects.get(session.projectId);
+        activity.append({
+          who: copy.agentProducts[session.agent],
+          what: fill(copy.abilities.activityRun, {
+            agent: copy.agentProducts[session.agent],
+            project: project?.name ?? '',
+          }),
+          projectId: session.projectId,
+          sessionId: session.id,
+        });
+        const live = runs.all().find((r) => r.projectId === session.projectId && r.phase !== 'exited');
+        if (live === undefined) await runs.start(session.projectId, cmd).catch(() => undefined);
+      },
+      rememberDeploy: async (sessionId, targetId, command) => {
+        const session = repos.sessions.get(sessionId);
+        if (!session) return;
+        const target = targets.setDeployCommand(targetId, command);
+        const label = `${target.name} ${target.env}`;
+        transcript.system(
+          session.id,
+          fill(copy.abilities.learnedDeploy, { target: label, command: command.trim() }),
+        );
+        const project = repos.projects.get(session.projectId);
+        activity.append({
+          who: copy.agentProducts[session.agent],
+          what: fill(copy.abilities.activityDeploy, {
+            agent: copy.agentProducts[session.agent],
+            project: project?.name ?? '',
+            target: label,
+          }),
+          projectId: session.projectId,
+          sessionId: session.id,
+        });
+      },
+    },
   });
 
   const retention = new RetentionJob({

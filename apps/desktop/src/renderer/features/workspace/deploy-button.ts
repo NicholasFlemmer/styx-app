@@ -1,14 +1,16 @@
 import {
-  isDeployableTarget,
   copy,
   fill,
   isDeployActive,
+  isDeployableTarget,
   rows,
   type ProjectId,
   type ReadModel,
+  type SessionId,
   type Target,
   type TargetId,
 } from '@styx/core';
+import { learnKey, learningSession } from '../abilities/learn';
 
 /** How a target is named wherever the deploy button, toast and status bar mention it: `Vercel prod`. */
 export const deployTargetLabel = (t: Pick<Target, 'name' | 'env'>): string => `${t.name} ${t.env}`;
@@ -19,32 +21,39 @@ export interface DeployOption {
   name: string;
   env: string;
   prod: boolean;
+  /** Styx has no command for this target yet: choosing it hands the first deploy to the agent. */
+  learn: boolean;
 }
 
 export type DeployButtonState =
-  /** No deployable target: the button is disabled with `copy.deploy.noTarget` as its title. */
+  /** No target in the project: the button connects one. */
   | { kind: 'none' }
   /** A deploy is in flight for one of the project's targets: the button attaches to it. */
   | { kind: 'deploying'; targetId: TargetId; deployId: string; label: string }
-  /** One candidate: click starts it. `live` = prod, which is what makes it the accent button. */
-  | { kind: 'single'; targetId: TargetId; label: string; live: boolean }
+  /** The agent is working out (and running) the first deploy to a target in chat: the button opens that chat. */
+  | { kind: 'learning'; targetId: TargetId; sessionId: SessionId; label: string }
+  /** One candidate: click deploys (`learn` = the agent does it first and teaches Styx). `live` = prod → accent. */
+  | { kind: 'single'; targetId: TargetId; label: string; live: boolean; learn: boolean }
   /** Several candidates: click opens the picker. */
-  | { kind: 'menu'; label: string; live: boolean; options: DeployOption[] }
-  /** The project has targets, but none has a deploy verb or a deploy command yet: click opens the setup modal. */
-  | { kind: 'setup' };
+  | { kind: 'menu'; label: string; live: boolean; options: DeployOption[] };
 
 /**
- * What the workspace deploy button shows for a project (owner request: "clearly shows which target").
+ * What the workspace deploy button shows for a project (owner request: "clearly shows which target", and it works
+ * the way asking an agent to deploy works).
  *
- * Deployable = a built-in verb or the user's own deploy command (`isDeployableTarget`). Prod targets win: with one, the button is
- * `Deploy to live · Vercel prod`; with several, a picker. Only non-prod deployables → `Deploy · Vercel preview`.
- * While a deploy runs for any of the project's targets the button reports it instead, so the state survives the
- * modal being closed.
+ * Every target of the project is a candidate. Prod targets win: with one, the button is `Deploy to live · Vercel
+ * prod`; with several, a picker. Only non-prod targets → `Deploy · Vercel preview`. A target Styx can already
+ * deploy to (built-in verb or remembered command, `isDeployableTarget`) deploys directly; any other hands the
+ * first deploy to the agent, which teaches Styx the command for next time. While a deploy runs, or the agent is
+ * working one out, the button reports that instead, so the state survives the modal or chat being closed.
  */
-export const deployButtonState = (model: ReadModel, projectId: ProjectId): DeployButtonState => {
+export const deployButtonState = (
+  model: ReadModel,
+  projectId: ProjectId,
+  learning: Readonly<Record<string, SessionId>> = {},
+): DeployButtonState => {
   const own = rows(model.targets).filter((t) => t.projectId === projectId);
-  const deployable = own.filter(isDeployableTarget);
-  if (deployable.length === 0) return own.length === 0 ? { kind: 'none' } : { kind: 'setup' };
+  if (own.length === 0) return { kind: 'none' };
 
   const active = Object.values(model.deploys)
     .filter((d) => d.projectId === projectId && isDeployActive(d))
@@ -59,15 +68,29 @@ export const deployButtonState = (model: ReadModel, projectId: ProjectId): Deplo
     };
   }
 
-  const prod = deployable.filter((t) => t.env === 'prod');
+  for (const t of own) {
+    const sessionId = learningSession(model, learning, learnKey.deploy(t.id));
+    if (sessionId === null) continue;
+    const session = model.sessions.byId[sessionId];
+    const agent = session === undefined ? '' : copy.agentProducts[session.agent];
+    return {
+      kind: 'learning',
+      targetId: t.id,
+      sessionId,
+      label: fill(copy.deploy.learning, { agent, target: deployTargetLabel(t) }),
+    };
+  }
+
+  const prod = own.filter((t) => t.env === 'prod');
   const live = prod.length > 0;
-  const candidates = live ? prod : deployable;
+  const candidates = live ? prod : own;
   const first = candidates[0];
   if (candidates.length === 1 && first !== undefined) {
     return {
       kind: 'single',
       targetId: first.id,
       live,
+      learn: !isDeployableTarget(first),
       label: fill(live ? copy.deploy.toLive : copy.deploy.button, { target: deployTargetLabel(first) }),
     };
   }
@@ -81,6 +104,7 @@ export const deployButtonState = (model: ReadModel, projectId: ProjectId): Deplo
       name: t.name,
       env: t.env,
       prod: t.env === 'prod',
+      learn: !isDeployableTarget(t),
     })),
   };
 };

@@ -238,6 +238,11 @@ describe('paletteResults', () => {
     expect(groups[0]?.items.map((i) => `${i.glyph} ${i.label} · ${i.meta}`)).toEqual([
       '▲ Deploy acme-shop → Vercel prod · open · 58m',
       '▲ Deploy acme-shop → Vercel preview · always',
+      // Every target is a deploy row (owner principle, AI-native): a target Styx has no command for yet hands the
+      // first deploy to the agent, so it is never missing from the palette.
+      '▲ Deploy acme-shop → Supabase prod · locked',
+      '▲ Deploy acme-shop → AWS acme-prod prod · locked',
+      '▲ Deploy acme-shop → GitHub acme/shop scm · always',
       '◆ Grant Codex → Supabase prod · needs you',
       '+ Spawn agent in acme-shop · claude ▾',
       '■ New project… · empty · template · agent',
@@ -269,26 +274,29 @@ describe('paletteResults', () => {
       projectId: ids.project.acmeShop,
       targetId: ids.target.vercelProd,
     });
-    expect(all[2]?.action).toEqual({
+    expect(all[5]?.action).toEqual({
       kind: 'review-ask',
       sessionId: ids.session.codex,
       askId: ids.ask.codexGrant,
     });
-    expect(all[3]?.action).toEqual({ kind: 'spawn', projectId: ids.project.acmeShop });
-    expect(all[4]?.action).toEqual({ kind: 'new-project' });
-    expect(all[5]?.action).toEqual({ kind: 'add-existing' });
-    expect(all[6]?.action).toEqual({ kind: 'open-folder' });
-    expect(all[7]?.action).toEqual({ kind: 'clone-url' });
-    expect(all[8]?.action).toEqual({ kind: 'debt-audit', projectId: ids.project.acmeShop });
-    expect(all[9]?.action).toEqual({ kind: 'agent-dock' });
-    expect(all[10]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
-    expect(all[16]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
+    expect(all[6]?.action).toEqual({ kind: 'spawn', projectId: ids.project.acmeShop });
+    expect(all[7]?.action).toEqual({ kind: 'new-project' });
+    expect(all[8]?.action).toEqual({ kind: 'add-existing' });
+    expect(all[9]?.action).toEqual({ kind: 'open-folder' });
+    expect(all[10]?.action).toEqual({ kind: 'clone-url' });
+    expect(all[11]?.action).toEqual({ kind: 'debt-audit', projectId: ids.project.acmeShop });
+    expect(all[12]?.action).toEqual({ kind: 'agent-dock' });
+    expect(all[13]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
+    expect(all[19]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
   });
 
   it('fuzzy on label + meta, best first; the first visible row is flagged; empty groups dropped', () => {
     const results = paletteResults(model, ui, 'supa', 'all', NOW);
     expect(results.map((g) => g.label)).toEqual(['Actions']);
-    expect(results[0]?.items.map((i) => [i.label, i.first])).toEqual([['Grant Codex → Supabase prod', true]]);
+    expect(results[0]?.items.map((i) => [i.label, i.first])).toEqual([
+      ['Grant Codex → Supabase prod', true],
+      ['Deploy acme-shop → Supabase prod', false],
+    ]);
     expect(flat(model, 'needs you')).toEqual([
       '◆ Grant Codex → Supabase prod · needs you',
       '● Codex · acme-shop · needs you',
@@ -301,7 +309,7 @@ describe('paletteResults', () => {
   it('scope filtering (⇥) and scope cycling', () => {
     expect(paletteResults(model, ui, '', 'agents', NOW).map((g) => g.label)).toEqual(['Agents']);
     expect(paletteResults(model, ui, '', 'projects', NOW)[0]?.items[0]?.first).toBe(true);
-    expect(flat(model, '', 'actions')).toHaveLength(10);
+    expect(flat(model, '', 'actions')).toHaveLength(13);
     expect(nextPaletteScope('all')).toBe('actions');
     expect(nextPaletteScope('actions')).toBe('agents');
     expect(nextPaletteScope('agents')).toBe('projects');
@@ -340,7 +348,7 @@ describe('paletteResults', () => {
       '▲ Deploy acme-shop → Vercel prod · unconnected',
     );
     expect(DEPLOYABLE_PROVIDERS).toContain('vercel');
-    expect(flat(errorReadModel(), 'deploy', 'actions')).toHaveLength(2);
+    expect(flat(errorReadModel(), 'deploy', 'actions')).toHaveLength(5);
   });
 
   it('a deploy in flight for the target replaces the lock state with `deploying…`', () => {
@@ -432,7 +440,8 @@ describe('palette deploy rows (user deploy commands)', () => {
     const after = paletteResults(withCommand, { projectId: ids.project.infraTools }, '', 'all', DEMO_NOW)
       .flatMap((g) => g.items)
       .filter((i) => i.id.startsWith('deploy:'));
-    expect(before).toEqual([]);
-    expect(after.map((i) => i.label)).toEqual([`Deploy infra-tools → ${gcp.name} ${gcp.env}`]);
+    // The row is there either way; with a remembered command it deploys directly, without one the agent works it out.
+    expect(before.map((i) => i.label)).toEqual(after.map((i) => i.label));
+    expect(after.map((i) => i.label)).toContain(`Deploy infra-tools → ${gcp.name} ${gcp.env}`);
   });
 });

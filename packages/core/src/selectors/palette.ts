@@ -107,8 +107,10 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
   const projectId = ui.projectId;
   if (projectId !== null) {
     const project = projectNameOf(model, projectId);
+    // Every target of the project, not only the ones with a deploy verb or a learned command: a row for a target
+    // Styx cannot deploy to yet hands the first deploy to the agent (owner principle, AI-native).
     for (const t of rows(model.targets)) {
-      if (t.projectId !== projectId || !isDeployableTarget(t)) continue;
+      if (t.projectId !== projectId) continue;
       items.push({
         id: `deploy:${t.id}`,
         glyph: '▲',

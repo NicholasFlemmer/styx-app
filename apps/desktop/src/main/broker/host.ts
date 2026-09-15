@@ -33,6 +33,11 @@ export interface BrokerHostDeps {
   providers: ProviderRegistry;
   clock: Clock;
   endpoint: string;
+  /** What an agent teaches Styx (`remember_command`): persisted on the project / target by the container. */
+  abilities: {
+    rememberRun(sessionId: string, command: string, url: string | null): Promise<void>;
+    rememberDeploy(sessionId: string, targetId: string, command: string): Promise<void>;
+  };
 }
 
 const activeResult = (
@@ -251,7 +256,10 @@ export class BrokerHost {
       const covering = deps.grants.covering(target, ctx.session.sessionId, scopes);
       if (covering) {
         // Through credentialFor so a persistent grant issued before a restart is re-issued (project-bound, M3).
-        const cred = await deps.grants.credentialFor(covering.id, { sessionId: ctx.session.sessionId, projectId: ctx.session.projectId });
+        const cred = await deps.grants.credentialFor(covering.id, {
+          sessionId: ctx.session.sessionId,
+          projectId: ctx.session.projectId,
+        });
         return this.authorizeUse(covering, command, scopes, ctx, cred);
       }
       // Only the path that inserts a grant request consumes the session's request bucket (L1); covered shim
@@ -325,6 +333,22 @@ export class BrokerHost {
       return { ok: true };
     });
 
+    /** An agent worked something out; Styx keeps it. A deploy target must belong to the caller's project. */
+    server.on('remember_command', async (p, ctx) => {
+      if (p.kind === 'run') {
+        await deps.abilities.rememberRun(ctx.session.sessionId, p.command, p.url ?? null);
+        return { ok: true };
+      }
+      const target = p.targetId === undefined ? undefined : deps.repos.targets.get(p.targetId);
+      if (!target || target.projectId !== ctx.session.projectId)
+        throw new BrokerError(
+          ErrorCode.targetNotFound,
+          "targetId must be one of this project's targets (list_targets)",
+        );
+      await deps.abilities.rememberDeploy(ctx.session.sessionId, target.id, p.command);
+      return { ok: true };
+    });
+
     /** Peers in the caller's project. Discovery must exist before messaging: ids are ULIDs, never names. */
     server.on('list_sessions', async (_p, ctx) => {
       return deps.repos.sessions
@@ -354,8 +378,7 @@ export class BrokerHost {
         throw new BrokerError(ErrorCode.targetNotFound, 'no such session');
       if (target.projectId !== ctx.session.projectId)
         throw new BrokerError(ErrorCode.notAllowed, 'session belongs to another project');
-      if (target.state === 'done')
-        throw new BrokerError(ErrorCode.notAllowed, 'that session has ended');
+      if (target.state === 'done') throw new BrokerError(ErrorCode.notAllowed, 'that session has ended');
       const from = deps.repos.sessions.get(ctx.session.sessionId);
       if (!from) throw new BrokerError(ErrorCode.unauthenticated, 'unknown session');
       deps.sessions.deliverPeerMessage(from, target, p.body);
@@ -380,7 +403,7 @@ export class BrokerHost {
                   ? 'open'
                   : 'locked';
         const scopes = [...new Set(live.flatMap((g) => g.scope))] as Scope[];
-        return { name: t.name, provider: t.provider, env: t.env, lockState, scopes };
+        return { id: t.id, name: t.name, provider: t.provider, env: t.env, lockState, scopes };
       });
     });
   }

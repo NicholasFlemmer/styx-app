@@ -1,7 +1,11 @@
 import { randomBytes } from 'node:crypto';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { BrokerClient, ErrorCode } from '@styx/broker';
-import { fixtures } from '@styx/core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { copy, fill, fixtures } from '@styx/core';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { PtyService } from '../services/pty-service';
 import { sha256 } from '../services/session-service';
 import { makeTestApp, type TestApp } from '../test-support';
 
@@ -153,7 +157,12 @@ describe('BrokerHost', () => {
 async function secondClient(app: TestApp, sessionId: string): Promise<BrokerClient> {
   const token = randomBytes(32).toString('hex');
   app.app.repos.sessions.setBrokerTokenHash(sessionId, sha256(token));
-  const client = new BrokerClient({ endpoint: app.app.runtime.brokerEndpoint, sessionId, token, client: 'shim' });
+  const client = new BrokerClient({
+    endpoint: app.app.runtime.brokerEndpoint,
+    sessionId,
+    token,
+    client: 'shim',
+  });
   await client.connect();
   return client;
 }
@@ -174,14 +183,22 @@ describe('BrokerHost security regressions', () => {
     expect(r.env).toEqual({ VERCEL_TOKEN: 'vt-preview' }); // the real credential still flows to the shim
     await client.call('exec_report', { useId: r.useId, exitCode: 0 });
     const pending = client
-      .call('request_access', { target: 'supabase-prod', scope: ['read'], reason: `migrate with ${ghp}`, triggeredBy: `$ supabase --token ${ghp} db push` })
+      .call('request_access', {
+        target: 'supabase-prod',
+        scope: ['read'],
+        reason: `migrate with ${ghp}`,
+        triggeredBy: `$ supabase --token ${ghp} db push`,
+      })
       .catch(() => undefined);
     await new Promise((res) => setTimeout(res, 50));
     const requested = app.app.repos.grants.bySession(ids.session.gemini).find((g) => g.state === 'requested');
     expect(requested).toBeDefined();
     const dump = JSON.stringify({
       grants: app.app.repos.grants.all(),
-      uses: [...app.app.repos.grantUses.byGrant(r.grantId), ...app.app.repos.grantUses.byGrant(requested?.id ?? '')],
+      uses: [
+        ...app.app.repos.grantUses.byGrant(r.grantId),
+        ...app.app.repos.grantUses.byGrant(requested?.id ?? ''),
+      ],
       audit: app.app.repos.audit.all(),
       transcript: app.app.repos.transcripts.last(ids.session.gemini),
       asks: app.app.repos.pendingAsks.openBySession(ids.session.gemini),
@@ -190,7 +207,9 @@ describe('BrokerHost security regressions', () => {
     expect(dump).not.toContain('secretvalue123');
     expect(dump).not.toContain('hunter2');
     expect(dump).not.toContain(ghp);
-    expect(app.app.repos.grants.get(r.grantId)?.reason).toBe('$ vercel --token [redacted] env add X --password=[redacted] [redacted]');
+    expect(app.app.repos.grants.get(r.grantId)?.reason).toBe(
+      '$ vercel --token [redacted] env add X --password=[redacted] [redacted]',
+    );
     expect(requested?.reason).toBe('migrate with [redacted]');
     app.app.grants.deny(requested?.id ?? '');
     await pending;
@@ -202,9 +221,17 @@ describe('BrokerHost security regressions', () => {
     const ghp = `ghp_${'g'.repeat(36)}`;
     await client.call('report_status', { note: `pushing with ${ghp}` });
     expect(app.app.repos.sessions.get(ids.session.gemini)?.note).toBe('pushing with [redacted]');
-    const pending = client.call('ask_user', { kind: 'decision', payload: { prompt: `Use ${ghp}?`, options: ['Yes', `No ${ghp}`] }, waitMs: 1000 }).catch(() => undefined);
+    const pending = client
+      .call('ask_user', {
+        kind: 'decision',
+        payload: { prompt: `Use ${ghp}?`, options: ['Yes', `No ${ghp}`] },
+        waitMs: 1000,
+      })
+      .catch(() => undefined);
     await new Promise((res) => setTimeout(res, 50));
-    const ask = app.app.repos.pendingAsks.openBySession(ids.session.gemini).find((a) => a.kind === 'decision');
+    const ask = app.app.repos.pendingAsks
+      .openBySession(ids.session.gemini)
+      .find((a) => a.kind === 'decision');
     expect(JSON.stringify(ask)).not.toContain(ghp);
     expect(ask?.payload).toMatchObject({ prompt: 'Use [redacted]?', options: ['Yes', 'No [redacted]'] });
     await pending;
@@ -217,15 +244,28 @@ describe('BrokerHost security regressions', () => {
     if (!preview?.credentialRef) throw new Error('fixture');
     await app.vault.set(preview.credentialRef, JSON.stringify({ token: 'vt-preview' }));
     // Control: the persistent preview grant is visible from its own project.
-    await expect(client.call('get_credential', { grantId: ids.grant.vercelPreviewAlways })).resolves.toMatchObject({ env: { VERCEL_TOKEN: 'vt-preview' } });
+    await expect(
+      client.call('get_credential', { grantId: ids.grant.vercelPreviewAlways }),
+    ).resolves.toMatchObject({ env: { VERCEL_TOKEN: 'vt-preview' } });
     const blog = await secondClient(app, ids.session.blog);
     expect(app.app.repos.sessions.get(ids.session.blog)?.projectId).toBe(ids.project.blogV2);
-    await expect(blog.call('get_credential', { grantId: ids.grant.vercelPreviewAlways })).rejects.toMatchObject({ code: ErrorCode.targetNotFound });
-    await expect(blog.call('check_grant', { grantId: ids.grant.vercelPreviewAlways, waitMs: 0 })).rejects.toMatchObject({ code: ErrorCode.targetNotFound });
     await expect(
-      app.app.grants.credentialFor(ids.grant.vercelPreviewAlways, { sessionId: ids.session.blog, projectId: ids.project.blogV2 }),
+      blog.call('get_credential', { grantId: ids.grant.vercelPreviewAlways }),
+    ).rejects.toMatchObject({ code: ErrorCode.targetNotFound });
+    await expect(
+      blog.call('check_grant', { grantId: ids.grant.vercelPreviewAlways, waitMs: 0 }),
+    ).rejects.toMatchObject({ code: ErrorCode.targetNotFound });
+    await expect(
+      app.app.grants.credentialFor(ids.grant.vercelPreviewAlways, {
+        sessionId: ids.session.blog,
+        projectId: ids.project.blogV2,
+      }),
     ).rejects.toThrow(/another project/);
-    expect(app.app.repos.grantUses.byGrant(ids.grant.vercelPreviewAlways).filter((u) => u.sessionId === ids.session.blog)).toEqual([]);
+    expect(
+      app.app.repos.grantUses
+        .byGrant(ids.grant.vercelPreviewAlways)
+        .filter((u) => u.sessionId === ids.session.blog),
+    ).toEqual([]);
     blog.close();
     client.close();
   });
@@ -237,7 +277,9 @@ describe('BrokerHost security regressions', () => {
     await app.vault.set(preview.credentialRef, JSON.stringify({ token: 'vt-preview' }));
     const r = await client.call('exec_authorize', { tool: 'vercel', argv: ['env', 'ls'], cwd: '/tmp' });
     const blog = await secondClient(app, ids.session.blog);
-    await expect(blog.call('exec_report', { useId: r.useId, exitCode: 0 })).rejects.toMatchObject({ code: ErrorCode.targetNotFound });
+    await expect(blog.call('exec_report', { useId: r.useId, exitCode: 0 })).rejects.toMatchObject({
+      code: ErrorCode.targetNotFound,
+    });
     expect(app.app.repos.grantUses.get(r.useId)?.exitCode).toBeNull();
     await client.call('exec_report', { useId: r.useId, exitCode: 3 });
     expect(app.app.repos.grantUses.get(r.useId)?.exitCode).toBe(3);
@@ -251,17 +293,32 @@ describe('BrokerHost security regressions', () => {
     if (!preview?.credentialRef) throw new Error('fixture');
     await app.vault.set(preview.credentialRef, JSON.stringify({ token: 'vt-preview' }));
     // Covered shim execs are not metered.
-    for (let i = 0; i < 7; i += 1) await client.call('exec_authorize', { tool: 'vercel', argv: ['env', 'ls'], cwd: '/tmp' });
+    for (let i = 0; i < 7; i += 1)
+      await client.call('exec_authorize', { tool: 'vercel', argv: ['env', 'ls'], cwd: '/tmp' });
     // Requests that need the user are: the 6th within a minute is refused.
     const held = Array.from({ length: 5 }, (_, i) =>
-      client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push', `--n=${i}`], cwd: '/tmp' }, { timeoutMs: 5_000 }).catch(() => undefined),
+      client
+        .call(
+          'exec_authorize',
+          { tool: 'supabase', argv: ['db', 'push', `--n=${i}`], cwd: '/tmp' },
+          { timeoutMs: 5_000 },
+        )
+        .catch(() => undefined),
     );
     await new Promise((res) => setTimeout(res, 50));
-    await expect(client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' })).rejects.toMatchObject({ code: ErrorCode.rateLimited });
+    await expect(
+      client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' }),
+    ).rejects.toMatchObject({ code: ErrorCode.rateLimited });
     // Duplicate asks collapsed onto one requested grant + one open ask (GrantService dedupe).
-    const requested = app.app.repos.grants.bySession(ids.session.gemini).filter((g) => g.state === 'requested' && g.targetId === ids.target.supabaseProd);
+    const requested = app.app.repos.grants
+      .bySession(ids.session.gemini)
+      .filter((g) => g.state === 'requested' && g.targetId === ids.target.supabaseProd);
     expect(requested).toHaveLength(1);
-    expect(app.app.repos.pendingAsks.openBySession(ids.session.gemini).filter((a) => a.grantId === requested[0]?.id)).toHaveLength(1);
+    expect(
+      app.app.repos.pendingAsks
+        .openBySession(ids.session.gemini)
+        .filter((a) => a.grantId === requested[0]?.id),
+    ).toHaveLength(1);
     app.app.grants.deny(requested[0]?.id ?? '');
     await Promise.all(held);
     client.close();
@@ -273,19 +330,27 @@ describe('BrokerHost security regressions', () => {
     if (!prod?.credentialRef) throw new Error('fixture');
     const before = app.app.repos.grants.all().length;
     app.app.repos.targets.upsert({ ...prod, health: 'expired', expiredAt: app.clock.now() });
-    await expect(client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' })).rejects.toMatchObject({
+    await expect(
+      client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' }),
+    ).rejects.toMatchObject({
       code: ErrorCode.notAllowed,
       message: expect.stringContaining('expired'),
     });
-    await expect(client.call('request_access', { target: 'supabase-prod', scope: ['read'], reason: 'r', waitMs: 0 })).rejects.toMatchObject({
+    await expect(
+      client.call('request_access', { target: 'supabase-prod', scope: ['read'], reason: 'r', waitMs: 0 }),
+    ).rejects.toMatchObject({
       code: ErrorCode.notAllowed,
     });
     app.app.repos.targets.upsert({ ...prod, credentialRef: null, health: 'unconnected' });
-    await expect(client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' })).rejects.toMatchObject({
+    await expect(
+      client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' }),
+    ).rejects.toMatchObject({
       code: ErrorCode.notAllowed,
       message: expect.stringContaining('not connected'),
     });
-    await expect(client.call('request_access', { target: 'supabase-prod', scope: ['read'], reason: 'r', waitMs: 0 })).rejects.toMatchObject({
+    await expect(
+      client.call('request_access', { target: 'supabase-prod', scope: ['read'], reason: 'r', waitMs: 0 }),
+    ).rejects.toMatchObject({
       code: ErrorCode.notAllowed,
     });
     expect(app.app.repos.grants.all().length).toBe(before); // no grant row was opened
@@ -297,26 +362,34 @@ describe('BrokerHost security regressions', () => {
     const prod = app.app.repos.targets.get(ids.target.supabaseProd);
     if (!prod?.credentialRef) throw new Error('fixture');
     await app.vault.set(prod.credentialRef, JSON.stringify({ token: 'sbp-prod' }));
-    const pending = client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' }, { timeoutMs: 5_000 });
+    const pending = client.call(
+      'exec_authorize',
+      { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' },
+      { timeoutMs: 5_000 },
+    );
     await new Promise((res) => setTimeout(res, 50));
-    const grant = app.app.repos.grants.bySession(ids.session.gemini).find((g) => g.state === 'requested' && g.targetId === ids.target.supabaseProd);
+    const grant = app.app.repos.grants
+      .bySession(ids.session.gemini)
+      .find((g) => g.state === 'requested' && g.targetId === ids.target.supabaseProd);
     if (!grant) throw new Error('expected a requested grant');
     const issued = await app.app.grants.approve(grant.id, 'always');
     expect(issued.sessionId).toBeNull(); // detached persistent grant
     const r = await pending;
     expect(r.env).toEqual({ SUPABASE_ACCESS_TOKEN: 'sbp-prod' });
-    expect(app.app.repos.grantUses.get(r.useId)).toMatchObject({ sessionId: ids.session.gemini, via: 'shim', scopeUsed: 'write' });
+    expect(app.app.repos.grantUses.get(r.useId)).toMatchObject({
+      sessionId: ids.session.gemini,
+      via: 'shim',
+      scopeUsed: 'write',
+    });
     client.close();
   });
 });
 
 describe('BrokerHost agent-to-agent messaging', () => {
-  it('lists only this project\'s sessions, flagging the caller', async () => {
+  it("lists only this project's sessions, flagging the caller", async () => {
     const { t: app, client } = await connectedClient(ids.session.gemini);
     const peers = await client.call('list_sessions', {});
-    const projectIds = new Set(
-      peers.map((p) => app.app.repos.sessions.get(p.sessionId)?.projectId),
-    );
+    const projectIds = new Set(peers.map((p) => app.app.repos.sessions.get(p.sessionId)?.projectId));
     expect(projectIds).toEqual(new Set([ids.project.acmeShop]));
     expect(peers.filter((p) => p.self).map((p) => p.sessionId)).toEqual([ids.session.gemini]);
     expect(peers.length).toBeGreaterThan(1);
@@ -353,14 +426,12 @@ describe('BrokerHost agent-to-agent messaging', () => {
   it('refuses an unknown session, itself, and a finished one rather than silently swallowing', async () => {
     const { t: app, client } = await connectedClient(ids.session.gemini);
     await expect(client.call('send_message', { to: 'nope', body: 'x' })).rejects.toThrow();
-    await expect(
-      client.call('send_message', { to: ids.session.gemini, body: 'x' }),
-    ).rejects.toThrow(/yourself/);
+    await expect(client.call('send_message', { to: ids.session.gemini, body: 'x' })).rejects.toThrow(
+      /yourself/,
+    );
     const claude = app.app.repos.sessions.get(ids.session.claude);
     if (claude) app.app.repos.sessions.upsert({ ...claude, state: 'done', endedAt: 1, pausedReason: null });
-    await expect(
-      client.call('send_message', { to: ids.session.claude, body: 'x' }),
-    ).rejects.toThrow(/ended/);
+    await expect(client.call('send_message', { to: ids.session.claude, body: 'x' })).rejects.toThrow(/ended/);
   });
 
   it('is rate limited in its own bucket, so two agents cannot flood each other', async () => {
@@ -373,5 +444,154 @@ describe('BrokerHost agent-to-agent messaging', () => {
       });
     }
     expect(refused).toBeGreaterThan(0);
+  });
+});
+
+/** A pty that never forks: `remember_command` (run) starts the managed run, which must not spawn a real shell here. */
+class FakePty extends PtyService {
+  private readonly live = new Set<string>();
+  constructor() {
+    super('darwin');
+  }
+  override async resolveLoginPath(): Promise<string> {
+    return '/usr/bin';
+  }
+  override async spawn(opts: { id: string }) {
+    this.live.add(opts.id);
+    return { pid: 1 };
+  }
+  override write(): void {}
+  override resize(): void {}
+  override kill(id: string): void {
+    if (!this.live.delete(id)) return;
+    this.emit('exit', id, 0, undefined);
+  }
+  override has(id: string): boolean {
+    return this.live.has(id);
+  }
+  override killAll(): void {
+    for (const id of [...this.live]) this.kill(id);
+  }
+}
+
+describe('BrokerHost learned abilities (remember_command)', () => {
+  const acme = ids.project.acmeShop;
+  const gemini = ids.session.gemini;
+
+  /** The Gemini session on acme-shop, connected over MCP; acme-shop re-pointed at a temp dir (its fixture path is literal). */
+  const learner = async () => {
+    t = makeTestApp({ pty: new FakePty() });
+    const dir = mkdtempSync(join(tmpdir(), 'styx-learn-'));
+    const project = t.app.repos.projects.get(acme);
+    if (!project) throw new Error('fixture project');
+    t.app.repos.projects.upsert({ ...project, path: dir }, t.app.repos.projects.settings(acme));
+    const token = randomBytes(32).toString('hex');
+    t.app.repos.sessions.setBrokerTokenHash(gemini, sha256(token));
+    await t.app.broker.listen();
+    const client = new BrokerClient({
+      endpoint: t.app.runtime.brokerEndpoint,
+      sessionId: gemini,
+      token,
+      client: 'mcp',
+    });
+    await client.connect();
+    return { app: t.app, client };
+  };
+  const systemLines = (app: TestApp['app']) =>
+    app.repos.transcripts
+      .last(gemini)
+      .filter((m) => m.payload.kind === 'system')
+      .map((m) => m.body);
+
+  it('kind "run": remembers the command and its loopback URL on the project, says so in chat and on Home, and starts the run', async () => {
+    const { app, client } = await learner();
+    expect(
+      await client.call('remember_command', {
+        kind: 'run',
+        command: ' pnpm dev ',
+        url: 'http://localhost:5173',
+      }),
+    ).toEqual({
+      ok: true,
+    });
+    expect(app.repos.projects.settings(acme)).toMatchObject({
+      devCommand: 'pnpm dev',
+      devUrl: 'http://localhost:5173',
+    });
+    expect(systemLines(app)).toContain(
+      fill(copy.abilities.learnedRun, {
+        command: 'pnpm dev',
+        url: fill(copy.abilities.learnedRunUrl, { url: 'http://localhost:5173' }),
+      }),
+    );
+    expect(app.repos.activity.recent().map((a) => a.what)).toContain(
+      fill(copy.abilities.activityRun, { agent: copy.agentProducts.gemini, project: 'acme-shop' }),
+    );
+    await vi.waitFor(() =>
+      expect(app.runs.all().map((r) => [r.projectId, r.command])).toEqual([[acme, 'pnpm dev']]),
+    );
+  });
+
+  it('kind "run": a URL that is not loopback is dropped, and the command alone is remembered', async () => {
+    const { app, client } = await learner();
+    const before = app.repos.projects.settings(acme).devUrl;
+    await client.call('remember_command', { kind: 'run', command: 'make dev', url: 'http://evil.example/' });
+    const after = app.repos.projects.settings(acme);
+    expect(after.devCommand).toBe('make dev');
+    expect(after.devUrl).toBe(before);
+  });
+
+  it('kind "run": a command carrying a secret is refused with an explanation, and nothing is stored or started', async () => {
+    const { app, client } = await learner();
+    const before = app.repos.projects.settings(acme);
+    await client.call('remember_command', {
+      kind: 'run',
+      command: 'pnpm dev --token abc123',
+      url: 'http://localhost:5173',
+    });
+    expect(app.repos.projects.settings(acme)).toEqual(before);
+    expect(systemLines(app)).toContain(copy.abilities.secretInCommand);
+    expect(app.runs.all()).toEqual([]);
+  });
+
+  it('kind "deploy": remembers the command on the target and says so', async () => {
+    const { app, client } = await learner();
+    expect(
+      await client.call('remember_command', {
+        kind: 'deploy',
+        targetId: ids.target.vercelProd,
+        command: 'vercel deploy --prod',
+      }),
+    ).toEqual({ ok: true });
+    expect(app.repos.targets.get(ids.target.vercelProd)?.config['deployCommand']).toBe(
+      'vercel deploy --prod',
+    );
+    expect(systemLines(app)).toContain(
+      fill(copy.abilities.learnedDeploy, { target: 'Vercel prod', command: 'vercel deploy --prod' }),
+    );
+    expect(app.repos.activity.recent().map((a) => a.what)).toContain(
+      fill(copy.abilities.activityDeploy, {
+        agent: copy.agentProducts.gemini,
+        project: 'acme-shop',
+        target: 'Vercel prod',
+      }),
+    );
+  });
+
+  it('kind "deploy": a target of another project, or no target, is refused (only this project\'s targets)', async () => {
+    const { app, client } = await learner();
+    await expect(
+      client.call('remember_command', {
+        kind: 'deploy',
+        targetId: ids.target.infraGcp,
+        command: 'gcloud run deploy',
+      }),
+    ).rejects.toMatchObject({ code: ErrorCode.targetNotFound });
+    await expect(
+      client.call('remember_command', { kind: 'deploy', command: 'gcloud run deploy' }),
+    ).rejects.toMatchObject({
+      code: ErrorCode.targetNotFound,
+    });
+    expect(app.repos.targets.get(ids.target.infraGcp)?.config['deployCommand']).toBeUndefined();
   });
 });

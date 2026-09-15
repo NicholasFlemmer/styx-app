@@ -1,5 +1,13 @@
 // @vitest-environment jsdom
-import { copy, fixtures, type DevRun } from '@styx/core';
+import {
+  copy,
+  fill,
+  fixtures,
+  projectSettingsOfOrDefault,
+  type DevRun,
+  type ReadModel,
+  type Session,
+} from '@styx/core';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
@@ -46,6 +54,22 @@ const pane = (props: Partial<Parameters<typeof DesignPane>[0]> = {}) => (
   <DesignPane projectId={acme} devUrl="localhost:3000" active run={null} devCommand={null} {...props} />
 );
 
+/** The demo model plus a live session `id` on acme-shop (a copy of the Gemini session). */
+const withSession = (m: ReadModel, id: string): ReadModel => {
+  const base = m.sessions.byId[fixtures.ids.session.gemini];
+  if (base === undefined) throw new Error('fixture');
+  const sid = id as Session['id'];
+  return {
+    ...m,
+    sessions: {
+      byId: { ...m.sessions.byId, [sid]: { ...base, id: sid, projectId: acme, state: 'working' } },
+      ids: [...m.sessions.ids, sid],
+    },
+  };
+};
+const defaultAgent = () =>
+  copy.agentProducts[projectSettingsOfOrDefault(fixtures.demoReadModel(), acme).defaultAgent];
+
 describe('DesignPane', () => {
   beforeEach(() => {
     commands.length = 0;
@@ -61,6 +85,7 @@ describe('DesignPane', () => {
         command: vi.fn(async (name: string, input: unknown) => {
           commands.push({ name, input });
           if (name === 'run.detect') return { ok: true, value: { suggestions } };
+          if (name === 'session.spawn') return { ok: true, value: { sessionId: 's-learn' } };
           return { ok: true, value: {} };
         }),
       },
@@ -85,7 +110,14 @@ describe('DesignPane', () => {
       },
     );
     useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
-    useUiStore.setState({ overlays: [], screen: 'workspace', platform: 'darwin', projectId: acme });
+    useUiStore.setState({
+      overlays: [],
+      screen: 'workspace',
+      platform: 'darwin',
+      projectId: acme,
+      projectSession: {},
+      learning: {},
+    });
   });
   afterEach(() => {
     cleanup();
@@ -151,35 +183,103 @@ describe('DesignPane', () => {
   });
 
   describe('run locally', () => {
-    it('seeds the command from run.detect when nothing is saved, and says where it came from', async () => {
+    it('nothing learned yet: no command field, a first-time hint naming the agent, and Run hands the job to the agent', async () => {
       render(pane({ devUrl: null }));
-      expect(of('run.detect')).toEqual([{ projectId: acme }]);
-      const field = screen.getByLabelText(copy.workspace.run.command) as HTMLInputElement;
-      await waitFor(() => expect(field.value).toBe('pnpm dev'));
-      expect(field.getAttribute('title')).toBe('Detected from package.json');
-      expect(field.getAttribute('placeholder')).toBe(copy.workspace.run.commandPlaceholder);
-      expect(screen.queryByTestId('run-strip')).toBeNull();
+      expect(of('run.detect')).toEqual([]);
+      expect(screen.queryByLabelText(copy.workspace.run.command)).toBeNull();
+      expect(document.querySelector('[data-run-first-time]')?.textContent).toBe(
+        fill(copy.workspace.run.firstTime, { agent: defaultAgent() }),
+      );
       expect(document.querySelector('[data-run-strip]')).toBeNull();
+      const button = screen.getByRole('button', { name: /Run locally/ });
+      expect(button.hasAttribute('disabled')).toBe(false);
+      fireEvent.click(button);
+      await waitFor(() => expect(of('session.spawn')).toHaveLength(1));
+      expect(of('run.start')).toEqual([]);
+      // Styx's own detection rides along as a hint the agent must check.
+      expect(of('run.detect')).toEqual([{ projectId: acme }]);
+      expect(of('session.spawn')[0]).toMatchObject({
+        projectId: acme,
+        toggles: { mayRequestTargets: false, autoApproveEdits: false },
+      });
+      const first = (of('session.spawn')[0] as { firstMessage: string }).firstMessage;
+      expect(first).toContain('run acme-shop locally');
+      expect(first).toContain('`pnpm dev` (from package.json)');
+      expect(first).toContain('remember_command');
+      expect(useUiStore.getState().projectSession[acme]).toBe('s-learn');
+      expect(useUiStore.getState().learning[`run:${acme}`]).toBe('s-learn');
     });
 
-    it('a saved devCommand wins over the suggestion, with no "detected" title', async () => {
+    it('while the agent works it out the row says so and opens the chat; a learned command ends it', async () => {
+      useReadModel.getState().replaceModel(withSession(fixtures.demoReadModel(), 's-learn'), 'connected');
+      useUiStore.setState({ learning: { [`run:${acme}`]: 's-learn' as Session['id'] } });
+      const { rerender } = render(pane({ devUrl: null }));
+      expect(screen.queryByRole('button', { name: /Run locally/ })).toBeNull();
+      expect(document.querySelector('[data-run-learning]')?.textContent).toBe(
+        fill(copy.workspace.run.learning, { agent: copy.agentProducts.gemini }),
+      );
+      fireEvent.click(screen.getByRole('button', { name: copy.workspace.run.openChat }));
+      expect(useUiStore.getState().projectSession[acme]).toBe('s-learn');
+      // remember_command landed: the command shows in the field and Run is a plain button again.
+      rerender(pane({ devUrl: null, devCommand: 'pnpm dev' }));
+      await waitFor(() => expect(useUiStore.getState().learning[`run:${acme}`]).toBeUndefined());
+      expect((screen.getByLabelText(copy.workspace.run.command) as HTMLInputElement).value).toBe('pnpm dev');
+      expect(screen.getByRole('button', { name: /Run locally/ })).toBeTruthy();
+    });
+
+    it('a learned command shows in the field, with no detection on mount; clearing it disables Run; blur saves an edit', async () => {
       render(pane({ devCommand: 'make dev' }));
       const field = screen.getByLabelText(copy.workspace.run.command) as HTMLInputElement;
-      await waitFor(() => expect(of('run.detect')).toHaveLength(1));
       expect(field.value).toBe('make dev');
-      expect(field.getAttribute('title')).toBeNull();
-    });
-
-    it('with no suggestion and nothing saved the field is empty and Run is disabled', async () => {
-      suggestions = [];
-      render(pane());
-      await waitFor(() => expect(of('run.detect')).toHaveLength(1));
-      const field = screen.getByLabelText(copy.workspace.run.command) as HTMLInputElement;
-      expect(field.value).toBe('');
+      expect(field.getAttribute('placeholder')).toBe(copy.workspace.run.commandPlaceholder);
+      expect(of('run.detect')).toEqual([]);
+      expect(document.querySelector('[data-run-first-time]')).toBeNull();
+      fireEvent.change(field, { target: { value: '   ' } });
       const button = screen.getByRole('button', { name: /Run locally/ });
       expect(button.hasAttribute('disabled')).toBe(true);
       fireEvent.click(button);
       expect(of('run.start')).toEqual([]);
+      fireEvent.change(field, { target: { value: ' npm run dev ' } });
+      fireEvent.blur(field);
+      expect(of('project.settings.set')).toEqual([{ projectId: acme, patch: { devCommand: 'npm run dev' } }]);
+    });
+
+    it('a failed run offers to ask the agent to fix it, with the command and what went wrong', async () => {
+      const { rerender } = render(
+        pane({
+          devCommand: 'pnpm dev',
+          run: run({ phase: 'exited', exitCode: 1, endedAt: fixtures.DEMO_NOW }),
+        }),
+      );
+      const fix = screen.getByRole('button', {
+        name: fill(copy.workspace.run.askToFix, { agent: defaultAgent() }),
+      });
+      fireEvent.click(fix);
+      await waitFor(() => expect(of('session.spawn')).toHaveLength(1));
+      const first = (of('session.spawn')[0] as { firstMessage: string }).firstMessage;
+      expect(first).toContain('`pnpm dev`');
+      expect(first).toContain('exited with code 1');
+      expect(of('run.detect')).toEqual([]);
+      // Exit 0 without ever answering on a URL is a failure too; a clean exit with a URL is not.
+      rerender(
+        pane({
+          devCommand: 'pnpm dev',
+          run: run({ phase: 'exited', exitCode: 0, endedAt: fixtures.DEMO_NOW }),
+        }),
+      );
+      expect(document.querySelector('[data-run-fix]')).not.toBeNull();
+      rerender(
+        pane({
+          devCommand: 'pnpm dev',
+          run: run({
+            phase: 'exited',
+            exitCode: 0,
+            url: 'http://localhost:5173',
+            endedAt: fixtures.DEMO_NOW,
+          }),
+        }),
+      );
+      expect(document.querySelector('[data-run-fix]')).toBeNull();
     });
 
     it('Run locally and Enter in the command field both start the run with the command shown', async () => {

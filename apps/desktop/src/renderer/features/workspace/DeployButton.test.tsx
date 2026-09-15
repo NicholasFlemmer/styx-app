@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { copy, fixtures, removeRows, type Deploy, type ReadModel } from '@styx/core';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { copy, fixtures, removeRows, type Deploy, type ReadModel, type Session } from '@styx/core';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
@@ -22,19 +22,38 @@ const running = (over: Partial<Deploy> = {}): Deploy => ({
   ...over,
 });
 
-/** Demo model with a second prod Vercel target on acme-shop (→ picker). */
+/** Demo model with acme-shop down to Vercel prod + a second prod Vercel target (→ a two-row picker). */
 const twoProd = (): ReadModel => {
   const m = fixtures.demoReadModel();
   const prod = m.targets.byId[ids.target.vercelProd];
   if (prod === undefined) throw new Error('fixture');
   const second = { ...prod, id: 'target:second' as typeof prod.id, name: 'Vercel EU' };
+  const targets = removeRows(m.targets, [ids.target.supabaseProd, ids.target.awsProd]);
   return {
     ...m,
-    targets: { byId: { ...m.targets.byId, [second.id]: second }, ids: [...m.targets.ids, second.id] },
+    targets: { byId: { ...targets.byId, [second.id]: second }, ids: [...targets.ids, second.id] },
+  };
+};
+
+/** The model plus a live session `id` (a copy of the demo Gemini session) on `projectId`. */
+const withSession = (m: ReadModel, id: string, projectId: Session['projectId']): ReadModel => {
+  const base = m.sessions.byId[ids.session.gemini];
+  if (base === undefined) throw new Error('fixture');
+  const sid = id as Session['id'];
+  return {
+    ...m,
+    sessions: {
+      byId: { ...m.sessions.byId, [sid]: { ...base, id: sid, projectId, state: 'working' } },
+      ids: [...m.sessions.ids, sid],
+    },
   };
 };
 
 const modals = () => useUiStore.getState().overlays.filter((o) => o.kind === 'modal');
+const calls = (name: string) =>
+  (vi.mocked(window.styx.command).mock.calls as [string, unknown][])
+    .filter((c) => c[0] === name)
+    .map((c) => c[1]);
 
 describe('DeployButton', () => {
   beforeEach(() => {
@@ -42,11 +61,23 @@ describe('DeployButton', () => {
       styx: {
         platform: 'darwin',
         env: { now: DEMO_NOW },
-        command: vi.fn(async () => ({ ok: true, value: {} })),
+        command: vi.fn(async (name: string) => {
+          if (name === 'session.spawn') return { ok: true, value: { sessionId: 's-learn' } };
+          if (name === 'deploy.detect')
+            return { ok: true, value: { suggestions: [{ command: 'sam deploy', source: 'template.yaml' }] } };
+          return { ok: true, value: {} };
+        }),
       },
     });
     useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
-    useUiStore.setState({ overlays: [], screen: 'workspace', platform: 'darwin', projectId: acme });
+    useUiStore.setState({
+      overlays: [],
+      screen: 'workspace',
+      platform: 'darwin',
+      projectId: acme,
+      projectSession: {},
+      learning: {},
+    });
   });
   afterEach(() => {
     cleanup();
@@ -54,25 +85,47 @@ describe('DeployButton', () => {
   });
 
   it('names the prod target and starts a deploy for it', () => {
-    render(<DeployButton projectId={acme} />);
+    render(<DeployButton projectId={ids.project.blogV2} />);
     const button = screen.getByRole('button', { name: /Deploy to live · Vercel prod/ });
     expect(button.getAttribute('disabled')).toBeNull();
     expect(button.textContent).toBe('▲Deploy to live · Vercel prod');
+    expect(button.closest('[data-deploy-button]')?.getAttribute('data-learn')).toBeNull();
     fireEvent.click(button);
     expect(modals()).toEqual([
-      expect.objectContaining({ kind: 'modal', modal: 'deploy', targetId: ids.target.vercelProd }),
+      expect.objectContaining({ kind: 'modal', modal: 'deploy', targetId: ids.target.blogVercel }),
     ]);
     expect((modals()[0] as { deployId?: string }).deployId).toBeUndefined();
   });
 
-  it('targets without a deploy verb or command: an enabled "Set up deploy" that opens the setup modal', () => {
+  it('a target Styx has no command for: the same button, and the click hands the first deploy to the agent', async () => {
     render(<DeployButton projectId={ids.project.infraTools} />);
-    const button = screen.getByRole('button', { name: copy.deploy.setup });
+    const button = screen.getByRole('button', { name: /Deploy to live · AWS acme-prod prod/ });
     expect(button.hasAttribute('disabled')).toBe(false);
+    expect(button.closest('[data-deploy-button]')?.getAttribute('data-learn')).toBe('true');
     fireEvent.click(button);
-    expect(modals()).toEqual([
-      expect.objectContaining({ kind: 'modal', modal: 'deploy-setup', projectId: ids.project.infraTools }),
-    ]);
+    await waitFor(() => expect(calls('session.spawn')).toHaveLength(1));
+    expect(modals()).toEqual([]);
+    expect(calls('session.spawn')[0]).toMatchObject({
+      projectId: ids.project.infraTools,
+      toggles: { mayRequestTargets: true, autoApproveEdits: false },
+    });
+    const first = (calls('session.spawn')[0] as { firstMessage: string }).firstMessage;
+    expect(first).toContain('AWS acme-prod prod');
+    expect(first).toContain(`targetId "${ids.target.infraAws}"`);
+    expect(first).toContain('`sam deploy` (from template.yaml)');
+    // The chat opens on the new session, and the button reports who is on it until the session ends.
+    const ui = useUiStore.getState();
+    expect(ui.projectSession[ids.project.infraTools]).toBe('s-learn');
+    expect(ui.learning[`deploy:${ids.target.infraAws}`]).toBe('s-learn');
+    useReadModel
+      .getState()
+      .replaceModel(withSession(fixtures.demoReadModel(), 's-learn', ids.project.infraTools), 'connected');
+    const learning = await screen.findByRole('button', {
+      name: `${copy.agentProducts.gemini} is deploying · AWS acme-prod prod`,
+    });
+    useUiStore.setState({ projectSession: {} });
+    fireEvent.click(learning);
+    expect(useUiStore.getState().projectSession[ids.project.infraTools]).toBe('s-learn');
   });
 
   it('no targets at all: an enabled "Connect a deploy target" that opens the connect modal', () => {
@@ -94,9 +147,18 @@ describe('DeployButton', () => {
 
   it('only non-prod deployables: the plain secondary "Deploy · Vercel preview"', () => {
     const m = fixtures.demoReadModel();
-    useReadModel
-      .getState()
-      .replaceModel({ ...m, targets: removeRows(m.targets, [ids.target.vercelProd]) }, 'connected');
+    useReadModel.getState().replaceModel(
+      {
+        ...m,
+        targets: removeRows(m.targets, [
+          ids.target.vercelProd,
+          ids.target.supabaseProd,
+          ids.target.awsProd,
+          ids.target.github,
+        ]),
+      },
+      'connected',
+    );
     render(<DeployButton projectId={acme} />);
     const button = screen.getByRole('button', { name: /Deploy · Vercel preview/ });
     expect(button.getAttribute('data-on')).toBeNull();

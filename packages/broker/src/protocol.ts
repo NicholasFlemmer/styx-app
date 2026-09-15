@@ -31,7 +31,11 @@ export const GrantOutcome = z.discriminatedUnion('status', [
 export type GrantOutcome = z.infer<typeof GrantOutcome>;
 
 export const AskResolution = z.union([
-  z.object({ kind: z.literal('plan'), answer: z.enum(['approve', 'reject', 'edit']), note: z.string().optional() }),
+  z.object({
+    kind: z.literal('plan'),
+    answer: z.enum(['approve', 'reject', 'edit']),
+    note: z.string().optional(),
+  }),
   z.object({ kind: z.literal('decision'), answer: z.string() }),
   z.object({ kind: z.literal('question'), answer: z.string() }),
 ]);
@@ -76,7 +80,10 @@ export const methods = {
     params: z.object({ tool: z.string(), argv: z.array(z.string()), cwd: z.string() }),
     result: z.object({ grantId: z.string(), useId: z.string(), env: z.record(z.string(), z.string()) }),
   },
-  exec_report: { params: z.object({ useId: z.string(), exitCode: z.number().int() }), result: z.object({ ok: z.literal(true) }) },
+  exec_report: {
+    params: z.object({ useId: z.string(), exitCode: z.number().int() }),
+    result: z.object({ ok: z.literal(true) }),
+  },
   ask_user: {
     params: z.object({ kind: z.enum(['plan', 'decision', 'question']), payload: z.unknown(), waitMs }),
     result: z.object({ resolution: AskResolution }),
@@ -86,7 +93,11 @@ export const methods = {
     result: z.object({ ok: z.literal(true) }),
   },
   hook: {
-    params: z.object({ agent: z.enum(['claude', 'codex', 'gemini', 'cursor', 'shell']), event: z.string(), payload: z.unknown() }),
+    params: z.object({
+      agent: z.enum(['claude', 'codex', 'gemini', 'cursor', 'shell']),
+      event: z.string(),
+      payload: z.unknown(),
+    }),
     result: z.object({ ok: z.literal(true) }),
   },
   /**
@@ -114,10 +125,26 @@ export const methods = {
     params: z.object({ to: z.string().min(1), body: z.string().min(1).max(4000) }),
     result: z.object({ delivered: z.literal(true) }),
   },
+  /**
+   * The agent teaches Styx an ability it worked out (owner principle: the Run locally / Deploy buttons do what asking
+   * an agent does, then the result persists). `run` = the command that starts the project locally and the URL it
+   * serves; `deploy` = the command that deploys to one of the project's targets (`targetId` from list_targets).
+   */
+  remember_command: {
+    params: z.object({
+      kind: z.enum(['run', 'deploy']),
+      command: z.string().min(1).max(2000),
+      targetId: z.string().optional(),
+      url: z.string().max(500).optional(),
+      note: z.string().max(200).optional(),
+    }),
+    result: z.object({ ok: z.literal(true) }),
+  },
   list_targets: {
     params: z.object({}),
     result: z.array(
       z.object({
+        id: z.string(),
         name: z.string(),
         provider: z.string(),
         env: z.string(),
@@ -158,7 +185,11 @@ export const RpcRequest = z.object({
   method: z.string(),
   params: z.unknown().optional(),
 });
-export const RpcNotification = z.object({ jsonrpc: z.literal('2.0'), method: z.string(), params: z.unknown().optional() });
+export const RpcNotification = z.object({
+  jsonrpc: z.literal('2.0'),
+  method: z.string(),
+  params: z.unknown().optional(),
+});
 export const RpcError = z.object({ code: z.number(), message: z.string(), data: z.unknown().optional() });
 export const RpcResponse = z.object({
   jsonrpc: z.literal('2.0'),

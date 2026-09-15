@@ -73,6 +73,7 @@ describe('BrokerServer', () => {
   it('authenticates, dispatches, validates results, and maps BrokerError codes', async () => {
     server.on('list_targets', async (_p, ctx) => [
       {
+        id: 'tgt-1',
         name: `t-${ctx.session.projectName}`,
         provider: 'vercel',
         env: 'prod',
@@ -87,7 +88,7 @@ describe('BrokerServer', () => {
     const s = await c.connect();
     expect(s.projectName).toBe('acme-shop');
     expect(await c.call('list_targets', {})).toEqual([
-      { name: 't-acme-shop', provider: 'vercel', env: 'prod', lockState: 'locked', scopes: ['deploy'] },
+      { id: 'tgt-1', name: 't-acme-shop', provider: 'vercel', env: 'prod', lockState: 'locked', scopes: ['deploy'] },
     ]);
     await expect(c.call('get_credential', { grantId: 'g' })).rejects.toMatchObject({
       code: ErrorCode.revoked,

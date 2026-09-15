@@ -1,6 +1,7 @@
-import type { PaletteAction, SessionId } from '@styx/core';
+import { isDeployableTarget, type PaletteAction, type SessionId } from '@styx/core';
 import { invokerOf, rememberInvoker } from '../../overlays/stack';
 import { command } from '../../state/commands';
+import { startLearnDeploy } from '../abilities/learn';
 import { startDebtAudit } from '../audit';
 import { openFolderAsProject } from '../../state/project-entry';
 import { useReadModel } from '../../state/read-model';
@@ -80,6 +81,12 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
     case 'deploy': {
       // This row is the palette's default selection, so ⌘K then Enter used to run a no-op.
       ui.setProject(action.projectId);
+      const target = model.targets.byId[action.targetId];
+      // No command for this target yet: the agent works the first deploy out and teaches Styx (AI-native).
+      if (target !== undefined && !isDeployableTarget(target)) {
+        void startLearnDeploy(model, target);
+        return;
+      }
       open({ kind: 'modal', modal: 'deploy', targetId: action.targetId });
       return;
     }
