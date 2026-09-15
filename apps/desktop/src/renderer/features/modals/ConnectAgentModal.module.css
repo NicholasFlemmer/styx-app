@@ -42,11 +42,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /* Hollow accent dot (not signed in / not verified / check failed): accent outline, no fill. */
-  .dotAttention {
-    background: transparent;
-    border-color: var(--ac);
-  }
   /* Text links: `Sign in with claude…`, `Install guide`, `Locate binary` (t-label, 28px hit area per spec §9). */
   .link {
     position: relative;

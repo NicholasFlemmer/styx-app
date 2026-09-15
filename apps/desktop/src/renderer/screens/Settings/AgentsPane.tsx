@@ -84,11 +84,8 @@ export function AgentsPane({ children }: { children?: ReactNode }) {
               </TableCell>
               {/* A stale account on a row that is no longer installed is not an identity anyone can use. */}
               <TableCell mono>{cli.found ? cliAccountLabel(cli) : copy.general.none}</TableCell>
-              <TableCell mono muted className={s['state']} aria-busy={busy || undefined}>
-                <StatusDot
-                  tone={ready ? 'accent' : 'hollow'}
-                  className={ready ? undefined : s['dotAttention']}
-                />
+              <TableCell mono muted className={s['state']} aria-busy={busy || undefined} aria-live="polite">
+                <StatusDot tone="hollow" on={!ready} />
                 <span>{stateText}</span>
               </TableCell>
               <TableCell label muted align="end" className={s['actions']}>
@@ -98,7 +95,7 @@ export function AgentsPane({ children }: { children?: ReactNode }) {
                       <button
                         type="button"
                         className={s['action']}
-                        disabled={busy}
+                        aria-disabled={busy || undefined}
                         aria-label={`${a.verify} · ${name}`}
                         onClick={() => void verify(cli.agent)}
                       >

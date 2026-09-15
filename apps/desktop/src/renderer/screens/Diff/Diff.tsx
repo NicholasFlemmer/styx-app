@@ -55,9 +55,13 @@ function HunkView({
         <Button
           size="hunk"
           inv={reverted}
-          disabled={hunk.status !== 'pending'}
+          // aria-disabled rather than disabled: a disabled control drops focus to body and the j/k/r scope with it.
+          aria-disabled={hunk.status !== 'pending' || undefined}
+          aria-label={`${copy.diff.revert} · ${hunk.file} ${hunk.range}`}
           className={s['hunkButton']}
-          onClick={() => void command('hunk.revert', { hunkId: hunk.id })}
+          onClick={() => {
+            if (hunk.status === 'pending') void command('hunk.revert', { hunkId: hunk.id });
+          }}
         >
           {copy.diff.revert}
         </Button>
@@ -76,7 +80,10 @@ export function Diff() {
   const projectId = useUi((u) => u.projectId);
   const activeSessionId = useSessionId();
   const platform = useUi((u) => u.platform);
-  const review = useMemo(() => reviewOf(model, projectId, activeSessionId), [model, projectId, activeSessionId]);
+  const review = useMemo(
+    () => reviewOf(model, projectId, activeSessionId),
+    [model, projectId, activeSessionId],
+  );
 
   const root = useRef<HTMLDivElement>(null);
   const hunkEls = useRef<(HTMLElement | null)[]>([]);
@@ -142,7 +149,14 @@ export function Diff() {
   // Plain folder (no git): nothing to review until `git init`; Done still returns to the Workspace.
   if (projectId !== null && !projectHasGit(model, projectId)) {
     return (
-      <div ref={root} className={s['screen']} tabIndex={-1} data-keyscope="diff" data-diff-review="true" data-diff-empty="no-git">
+      <div
+        ref={root}
+        className={s['screen']}
+        tabIndex={-1}
+        data-keyscope="diff"
+        data-diff-review="true"
+        data-diff-empty="no-git"
+      >
         <div className={s['head']}>
           <span className={s['title']}>{copy.diff.title}</span>
           <span className={s['meta']} data-diff-meta="true">
@@ -182,7 +196,11 @@ export function Diff() {
         </Button>
       </div>
       <div className={s['body']}>
-        <aside className={s['files']} style={{ width: sizes.diffFilesPane }} aria-label={copy.diff.files.split(' ')[0]}>
+        <aside
+          className={s['files']}
+          style={{ width: sizes.diffFilesPane }}
+          aria-label={copy.diff.files.split(' ')[0]}
+        >
           <Label as="div" className={s['filesLabel']}>
             {fill(copy.diff.files, { n: review.files.length })}
           </Label>

@@ -113,7 +113,7 @@ describe('DeployModal', () => {
     // Once the id is known the deploys slice drives the modal.
     setDeploy(deploy());
     await waitFor(() => expect(screen.getByText(copy.deploy.phases.running)).toBeTruthy());
-    expect(loginTerminal.createLoginTerminal).toHaveBeenCalledWith('term:1');
+    expect(loginTerminal.createLoginTerminal).toHaveBeenCalledWith('term:1', { screenReader: false });
     expect(registry.attachTerminal).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: copy.deploy.cancel })).toBeTruthy();
 
@@ -130,7 +130,7 @@ describe('DeployModal', () => {
     render(<DeployModal id="modal-1" targetId={vercelProd} deployId="dep:1" />);
     expect(screen.getByText(copy.deploy.phases.running)).toBeTruthy();
     await waitFor(() => expect(registry.attachTerminal).toHaveBeenCalledTimes(1));
-    expect(loginTerminal.createLoginTerminal).toHaveBeenCalledWith('term:1');
+    expect(loginTerminal.createLoginTerminal).toHaveBeenCalledWith('term:1', { screenReader: false });
     expect(calls('deploy.start')).toHaveLength(0);
 
     fireEvent.click(screen.getByRole('button', { name: copy.deploy.cancel }));
@@ -179,7 +179,7 @@ describe('DeployModal', () => {
       error: null,
       terminalId: 'term:1',
     });
-    await waitFor(() => expect(loginTerminal.createLoginTerminal).toHaveBeenCalledWith('term:1'));
+    await waitFor(() => expect(loginTerminal.createLoginTerminal).toHaveBeenCalledWith('term:1', { screenReader: false }));
     expect(screen.getByText(copy.deploy.phases.running)).toBeTruthy();
   });
 

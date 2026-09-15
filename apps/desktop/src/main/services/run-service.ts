@@ -7,7 +7,7 @@ import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
 import { fail } from '../ipc/bus';
 import type { Publisher } from '../store/publisher';
-import { logger } from './logger';
+import { logger, redactArgv } from './logger';
 import type { ProjectService } from './project-service';
 import type { PtyService } from './pty-service';
 import type { TerminalService } from './terminal-service';
@@ -29,7 +29,6 @@ export type RunSuggestion = {
   source: 'package.json' | 'makefile' | 'django' | 'cargo' | 'go';
 };
 
- 
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
 /** The first URL a dev server prints for itself: `http://localhost:5173/`, `http://127.0.0.1:8000`, `http://0.0.0.0:3000`. */
 const LOCAL_URL = /https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\])(:\d+)?[^\s"'<>)]*/;
@@ -44,10 +43,28 @@ const TAIL = 4096;
 export const sniffLocalUrl = (text: string): string | null => {
   const m = LOCAL_URL.exec(text.replace(ANSI, ''));
   if (m === null) return null;
-  return m[0]
+  const candidate = m[0]
     .replace('0.0.0.0', 'localhost')
     .replace('[::]', 'localhost')
     .replace(/[.,;]+$/, '');
+  // The prefix match is not enough: `http://localhost@evil.example/` and `http://localhost.evil.example/` both start
+  // the same way. Only a real loopback host with no userinfo may become the design window's URL.
+  return isLoopbackUrl(candidate) ? candidate : null;
+};
+
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+export const isLoopbackUrl = (text: string): boolean => {
+  try {
+    const u = new URL(text);
+    return (
+      (u.protocol === 'http:' || u.protocol === 'https:') &&
+      u.username === '' &&
+      u.password === '' &&
+      LOOPBACK_HOSTS.has(u.hostname)
+    );
+  } catch {
+    return false;
+  }
 };
 
 /**
@@ -194,7 +211,7 @@ export class RunService {
     // The exit handler may already have run (a command that fails at once); only a still-starting row moves on.
     if (cur !== undefined && cur.runId === runId && cur.phase === 'starting')
       this.publish({ ...cur, phase: 'running' });
-    logger.info('run: started', { project: project.name, command: cmd });
+    logger.info('run: started', { project: project.name, command: redactArgv(cmd.split(/\s+/)).join(' ') });
     await this.rememberCommand(projectId, cmd);
     return { runId, terminalId };
   }
@@ -248,9 +265,17 @@ export class RunService {
     return { file: shell, args: ['-lc', command] };
   }
 
+  /**
+   * Saves the command to `.styx/project.json` (`dev.command`) so the next run starts with it. That file is committed,
+   * so a command carrying something that looks like a secret (`API_KEY=… pnpm dev`) is run but never written.
+   */
   private async rememberCommand(projectId: ProjectId, command: string): Promise<void> {
     const saved = this.deps.repos.projects.settings(projectId).devCommand ?? null;
     if (saved === command) return;
+    if (redactArgv(command.split(/\s+/)).join(' ') !== command) {
+      logger.warn('run: devCommand not saved, it carries a secret-looking value');
+      return;
+    }
     await this.deps.projects
       .setSettings(projectId, { devCommand: command })
       .catch((e: Error) => logger.warn('run: could not save devCommand', { error: e.message }));

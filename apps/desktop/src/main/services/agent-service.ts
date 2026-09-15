@@ -68,20 +68,17 @@ const geminiAccountsSchema = z.object({ active: z.string().nullish() }).passthro
 
 const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/;
 
-const firstLine = (text: string): string | null => {
-  const line = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .find((l) => l.length > 0);
-  return line === undefined ? null : line;
-};
-
 /** The JSON object inside a CLI's output (`exec` appends stderr after stdout, so the object may not be the whole text). */
 const parseJsonObject = (text: string): unknown => {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start < 0 || end < start) throw new Error('no JSON object in the status output');
-  return JSON.parse(text.slice(start, end + 1)) as unknown;
+  try {
+    return JSON.parse(text.slice(start, end + 1)) as unknown;
+  } catch {
+    // Node's parse error quotes the input; the row stores a fixed message, never CLI output.
+    throw new Error('the status output is not valid JSON');
+  }
 };
 
 const parseClaude = (stdout: string): Probe => {
@@ -94,11 +91,8 @@ const parseClaude = (stdout: string): Probe => {
 const parseCodex = (stdout: string): Probe => {
   if (/not logged in/i.test(stdout)) return SIGNED_OUT;
   if (!/logged in/i.test(stdout)) throw new Error('unexpected `codex login status` output');
-  const account = /chatgpt/i.test(stdout)
-    ? 'ChatGPT'
-    : /api key/i.test(stdout)
-      ? 'API key'
-      : firstLine(stdout);
+  // Only fixed labels reach the row: an unrecognised sign-in method shows as signed in with no account name.
+  const account = /chatgpt/i.test(stdout) ? 'ChatGPT' : /api key/i.test(stdout) ? 'API key' : null;
   return { authState: 'signed-in', account };
 };
 

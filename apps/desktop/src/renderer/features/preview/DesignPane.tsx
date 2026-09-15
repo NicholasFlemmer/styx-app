@@ -2,9 +2,10 @@ import { PREVIEW_DEVICES, copy, fill, type DevRun, type PreviewDevice, type Proj
 import { Button, Icon, Input } from '@styx/ui';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { command } from '../../state/commands';
-import { useUi } from '../../state/hooks';
+import { useModel, useUi } from '../../state/hooks';
 import { createLoginTerminal, disposeLoginTerminal } from '../modals/login-terminal';
 import { attachTerminal, detachTerminal, type TerminalEntry } from '../terminal/terminal-registry';
+import cm from '../modals/ConnectModal.module.css';
 import s from './DesignPane.module.css';
 
 export interface DesignPaneProps {
@@ -111,15 +112,16 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
   const host = useRef<HTMLDivElement>(null);
   const entry = useRef<TerminalEntry | null>(null);
   const terminalId = run?.terminalId ?? null;
+  const screenReader = useModel((m) => m.settings.app.screenReader);
   useEffect(() => {
     if (terminalId === null) return;
-    const t = createLoginTerminal(terminalId);
+    const t = createLoginTerminal(terminalId, { screenReader });
     entry.current = t;
     return () => {
       disposeLoginTerminal(t);
       entry.current = null;
     };
-  }, [terminalId]);
+  }, [terminalId, screenReader]);
   useEffect(() => {
     const t = entry.current;
     const el = host.current;
@@ -197,41 +199,6 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
   return (
     <div className={s['pane']} data-design-pane="true">
       <div className={s['bar']}>
-        {live ? (
-          <Button size="compact" variant="secondary" on onClick={stopRun} data-run-stop="true">
-            <span className={s['glyph']} aria-hidden="true">
-              ■
-            </span>
-            {copy.workspace.run.stop}
-          </Button>
-        ) : (
-          <Button
-            size="compact"
-            variant="secondary"
-            disabled={cmd.trim() === ''}
-            onClick={startRun}
-            data-run-start="true"
-          >
-            <span className={s['glyph']} aria-hidden="true">
-              ▶
-            </span>
-            {copy.workspace.run.run}
-          </Button>
-        )}
-        <Input
-          className={s['cmd'] ?? ''}
-          mono
-          value={cmd}
-          aria-label={copy.workspace.run.command}
-          placeholder={copy.workspace.run.commandPlaceholder}
-          title={detectedTitle}
-          spellCheck={false}
-          autoComplete="off"
-          disabled={live}
-          onChange={(e) => setCmd(e.currentTarget.value)}
-          onKeyDown={onCmdKeyDown}
-          data-run-command="true"
-        />
         <Input
           className={s['url'] ?? ''}
           mono
@@ -244,13 +211,14 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
           onBlur={save}
           onKeyDown={onUrlKeyDown}
         />
-        <div className={s['devices']} role="group" aria-label={copy.workspace.design.devices.desktop}>
+        <div className={s['devices']} role="group" aria-label={copy.workspace.design.devicesLabel}>
           {PREVIEW_DEVICES.map((d) => (
             <Button
               key={d}
               size="compact"
               variant="ghost"
               on={device === d}
+              aria-pressed={device === d}
               onClick={() => setDevice(d)}
               data-preview-device={d}
             >
@@ -275,6 +243,38 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
           {copy.workspace.design.openExternal}
         </Button>
       </div>
+      {/* Run locally has its own row: the URL bar is full at the window minimum, and a run is a separate act. */}
+      <div className={s['runRow']} data-run-row="true">
+        {live ? (
+          <Button size="compact" variant="secondary" on onClick={stopRun} data-run-stop="true">
+            {copy.workspace.run.stop}
+          </Button>
+        ) : (
+          <Button
+            size="compact"
+            variant="secondary"
+            disabled={cmd.trim() === ''}
+            onClick={startRun}
+            data-run-start="true"
+          >
+            {copy.workspace.run.run}
+          </Button>
+        )}
+        <Input
+          className={s['cmd'] ?? ''}
+          mono
+          value={cmd}
+          aria-label={copy.workspace.run.command}
+          placeholder={copy.workspace.run.commandPlaceholder}
+          title={detectedTitle}
+          spellCheck={false}
+          autoComplete="off"
+          disabled={live}
+          onChange={(e) => setCmd(e.currentTarget.value)}
+          onKeyDown={onCmdKeyDown}
+          data-run-command="true"
+        />
+      </div>
       {run !== null && (
         <div className={s['strip']} data-run-strip="true" data-open={open ? 'true' : 'false'}>
           <div className={s['stripHead']}>
@@ -292,7 +292,12 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
               {runPhaseText(run)}
             </span>
             {run.phase === 'exited' && (
-              <button type="button" className={s['link']} onClick={dismissRun} data-run-dismiss="true">
+              <button
+                type="button"
+                className={[cm['link'], s['dismiss']].join(' ')}
+                onClick={dismissRun}
+                data-run-dismiss="true"
+              >
                 {copy.workspace.run.dismiss}
               </button>
             )}

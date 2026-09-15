@@ -65,8 +65,8 @@ describe('deployButtonState', () => {
       live: true,
       label: copy.deploy.pick,
       options: [
-        { targetId: ids.target.vercelProd, label: 'Vercel prod', prod: true },
-        { targetId: second.id, label: 'Vercel EU prod', prod: true },
+        { targetId: ids.target.vercelProd, label: 'Vercel prod', name: 'Vercel', env: 'prod', prod: true },
+        { targetId: second.id, label: 'Vercel EU prod', name: 'Vercel EU', env: 'prod', prod: true },
       ],
     });
     // Without any prod target, every deployable is offered.

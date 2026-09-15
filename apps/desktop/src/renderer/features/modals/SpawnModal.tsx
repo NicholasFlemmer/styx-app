@@ -10,6 +10,7 @@ import {
 } from '@styx/core';
 import { Button, Checkbox, Field, Input, Modal, Select, StatusDot, Textarea } from '@styx/ui';
 import { useCallback, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { invokerOf, rememberInvoker } from '../../overlays/stack';
 import { command } from '../../state/commands';
 import { useCopyPlatform, useModel, useUi } from '../../state/hooks';
 import {
@@ -127,13 +128,15 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
   };
   /** Connect agent modal for this CLI; it re-opens this Spawn modal for the project when done. */
   const fixConnection = () => {
+    const invoker = invokerOf(id);
     close();
-    pushOverlay({
+    const next = pushOverlay({
       kind: 'modal',
       modal: 'connect-agent',
       agent: form.agent,
       returnTo: { modal: 'spawn', projectId },
     });
+    if (invoker !== null) rememberInvoker(next, invoker);
   };
 
   const worktrees = projectWorktrees(model, projectId);
@@ -185,7 +188,7 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
             ))}
           </div>
           {missing || notConnected ? (
-            <div className={s['error']} role="alert" data-spawn-cli={missing ? 'missing' : 'not-connected'}>
+            <div className={s['error']} role="status" data-spawn-cli={missing ? 'missing' : 'not-connected'}>
               <StatusDot tone="accent" />
               <span className={s['errorText']}>
                 {missing

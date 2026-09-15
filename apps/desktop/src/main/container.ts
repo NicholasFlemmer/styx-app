@@ -303,7 +303,8 @@ export function buildContainer(opts: ContainerOptions): Container {
   const skills = new SkillsService({
     repos,
     fetch: opts.fetch ?? fetch,
-    ...(opts.skillsHome !== undefined ? { home: opts.skillsHome } : {}),
+    // A fixture home is the whole world: the developer's real $CODEX_HOME must not leak in beside it.
+    ...(opts.skillsHome !== undefined ? { home: opts.skillsHome, env: {} } : {}),
   });
   const agents = new AgentService({
     repos,

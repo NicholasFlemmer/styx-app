@@ -25,7 +25,9 @@ const hunk = (n: number) => {
   if (el === null) throw new Error(`no hunk ${n}`);
   return el;
 };
-const revertButton = (n: number) => within(hunk(n)).getByRole('button', { name: copy.diff.revert });
+/** Each Revert names its hunk (`Revert · checkout.ts @@ …`) so screen readers can tell them apart. */
+const revertButton = (n: number) =>
+  within(hunk(n)).getByRole('button', { name: new RegExp(`^${copy.diff.revert} · `) });
 
 /** Demo model with hunk 1 reviewed (`accepted`) and hunk 2 reverted (`rejected`); hunk 3 stays applied. */
 const decidedModel = () => {
@@ -39,7 +41,9 @@ const decidedModel = () => {
 describe('Diff review screen', () => {
   beforeEach(() => {
     commandMock.mockClear();
-    Object.assign(window, { styx: { platform: 'darwin', env: { now: fixtures.DEMO_NOW }, command: commandMock } });
+    Object.assign(window, {
+      styx: { platform: 'darwin', env: { now: fixtures.DEMO_NOW }, command: commandMock },
+    });
     useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
     useUiStore.setState({
       overlays: [],
@@ -62,7 +66,9 @@ describe('Diff review screen', () => {
     expect(screen.getByText(copy.diff.title)).toBeTruthy();
     expect(screen.getByText('Claude · fix/checkout · 3 changes · 0 reverted · 0 reviewed')).toBeTruthy();
     expect(screen.getByText('Files · 2')).toBeTruthy();
-    expect(within(document.querySelector('[data-file="checkout.ts"]') as HTMLElement).getByText('+2')).toBeTruthy();
+    expect(
+      within(document.querySelector('[data-file="checkout.ts"]') as HTMLElement).getByText('+2'),
+    ).toBeTruthy();
     const legend = document.querySelector('[data-diff-keys]')?.textContent ?? '';
     expect(legend).toContain(copy.diff.keys.revert);
     expect(legend).toContain(copy.diff.keys.nextPrev);
@@ -75,7 +81,7 @@ describe('Diff review screen', () => {
     expect(first.getByText('+ import { validate } from "./validate"').getAttribute('data-kind')).toBe('add');
     // One verb per hunk: Revert, enabled while applied. Nothing "accepts".
     expect(first.getAllByRole('button')).toHaveLength(1);
-    expect((revertButton(1) as HTMLButtonElement).disabled).toBe(false);
+    expect(revertButton(1)?.getAttribute('aria-disabled')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Accept all' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Reject all' })).toBeNull();
@@ -99,13 +105,13 @@ describe('Diff review screen', () => {
     const first = within(hunk(1));
     expect(first.getByText(copy.diff.status.accepted).getAttribute('data-on')).toBeNull();
     expect(revertButton(1).getAttribute('data-inv')).toBeNull();
-    expect((revertButton(1) as HTMLButtonElement).disabled).toBe(true);
+    expect(revertButton(1)?.getAttribute('aria-disabled')).toBe('true');
     const second = within(hunk(2));
     expect(second.getByText(copy.diff.status.rejected).getAttribute('data-on')).toBe('true');
     expect(revertButton(2).getAttribute('data-inv')).toBe('true');
-    expect((revertButton(2) as HTMLButtonElement).disabled).toBe(true);
+    expect(revertButton(2)?.getAttribute('aria-disabled')).toBe('true');
     expect(within(hunk(3)).getByText(copy.diff.status.pending)).toBeTruthy();
-    expect((revertButton(3) as HTMLButtonElement).disabled).toBe(false);
+    expect(revertButton(3)?.getAttribute('aria-disabled')).toBeNull();
     // A disabled Revert never dispatches.
     fireEvent.click(revertButton(1));
     fireEvent.click(revertButton(2));
@@ -146,7 +152,9 @@ describe('Diff review screen', () => {
   });
 
   it('Done marks the pending hunks reviewed (hunk.done) then returns to Workspace only when main succeeds', async () => {
-    commandMock.mockImplementationOnce(async () => ({ ok: false, error: { code: 'internal', message: 'x' } }) as never);
+    commandMock.mockImplementationOnce(
+      async () => ({ ok: false, error: { code: 'internal', message: 'x' } }) as never,
+    );
     render(<Diff />);
     fireEvent.click(screen.getByRole('button', { name: copy.diff.done }));
     expect(commandMock).toHaveBeenCalledWith('hunk.done', { sessionId: claude });

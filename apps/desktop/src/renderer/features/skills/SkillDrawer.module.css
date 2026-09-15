@@ -13,15 +13,6 @@
     padding: 0 var(--sp-4) var(--sp-4);
     outline: 0;
   }
-  /* The security line: a skill is instructions, so it gets the accent edge a grant request gets. */
-  .warning {
-    padding: var(--sp-2) 10px;
-    border-left: 2px solid var(--ac);
-    background: var(--add);
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--tx);
-  }
   .loading {
     display: block;
   }

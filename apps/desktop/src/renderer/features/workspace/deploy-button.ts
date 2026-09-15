@@ -16,6 +16,8 @@ export const deployTargetLabel = (t: Pick<Target, 'name' | 'env'>): string => `$
 export interface DeployOption {
   targetId: TargetId;
   label: string;
+  name: string;
+  env: string;
   prod: boolean;
 }
 
@@ -72,6 +74,12 @@ export const deployButtonState = (model: ReadModel, projectId: ProjectId): Deplo
     kind: 'menu',
     live,
     label: copy.deploy.pick,
-    options: candidates.map((t) => ({ targetId: t.id, label: deployTargetLabel(t), prod: t.env === 'prod' })),
+    options: candidates.map((t) => ({
+      targetId: t.id,
+      label: deployTargetLabel(t),
+      name: t.name,
+      env: t.env,
+      prod: t.env === 'prod',
+    })),
   };
 };

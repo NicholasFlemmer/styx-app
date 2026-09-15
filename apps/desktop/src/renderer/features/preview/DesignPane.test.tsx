@@ -209,7 +209,7 @@ describe('DesignPane', () => {
       expect(strip).not.toBeNull();
       expect(screen.getByText(copy.workspace.run.output)).toBeTruthy();
       expect(document.querySelector('[data-run-phase]')?.textContent).toBe(copy.workspace.run.starting);
-      expect(loginTerminal.createLoginTerminal).toHaveBeenCalledWith('term:1');
+      expect(loginTerminal.createLoginTerminal).toHaveBeenCalledWith('term:1', { screenReader: false });
       await waitFor(() => expect(registry.attachTerminal).toHaveBeenCalledTimes(1));
       expect(screen.queryByRole('button', { name: copy.workspace.run.dismiss })).toBeNull();
 

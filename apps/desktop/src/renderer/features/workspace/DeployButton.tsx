@@ -1,5 +1,5 @@
 import { copy, type ProjectId, type TargetId } from '@styx/core';
-import { Button, StatusDot } from '@styx/ui';
+import { Button, Icon, StatusDot, Tag } from '@styx/ui';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useModel, useUi } from '../../state/hooks';
 import { deployButtonState } from './deploy-button';
@@ -84,18 +84,16 @@ export function DeployButton({ projectId }: DeployButtonProps) {
   };
 
   const live = (state.kind === 'single' || state.kind === 'menu') && state.live;
-  const label =
-    state.kind === 'none' ? copy.deploy.noTarget : state.kind === 'menu' ? `${state.label} ▾` : state.label;
+  const label = state.kind === 'none' ? copy.deploy.noTarget : state.label;
 
   return (
     <div className={s['wrap']} data-deploy-button="true" data-state={state.kind}>
       <Button
         ref={buttonRef}
         size="compact"
-        variant={live ? 'accent' : 'secondary'}
+        variant={live ? 'primary' : 'secondary'}
         className={s['button'] ?? ''}
         disabled={state.kind === 'none'}
-        title={state.kind === 'none' ? copy.deploy.noTarget : undefined}
         aria-haspopup={state.kind === 'menu' ? 'menu' : undefined}
         aria-expanded={state.kind === 'menu' ? menuOpen : undefined}
         onClick={onClick}
@@ -114,6 +112,7 @@ export function DeployButton({ projectId }: DeployButtonProps) {
           </span>
         )}
         {label}
+        {state.kind === 'menu' ? <Icon name="chevron" size={10} /> : null}
       </Button>
       {menuOpen && state.kind === 'menu' ? (
         <div
@@ -124,17 +123,21 @@ export function DeployButton({ projectId }: DeployButtonProps) {
           onKeyDown={onMenuKeyDown}
           data-deploy-menu="true"
         >
-          <div className={['t-label', s['menuHead']].join(' ')}>{copy.deploy.pick}</div>
+          <div className={['t-label', s['menuHead']].join(' ')} role="presentation">
+            {copy.deploy.pick}
+          </div>
           {state.options.map((o) => (
             <button
               key={o.targetId}
               type="button"
               role="menuitem"
               className={s['menuItem']}
-              data-on={o.prod ? 'true' : undefined}
               onClick={() => choose(o.targetId)}
             >
-              {o.label}
+              {o.name}{' '}
+              <Tag tone={o.prod ? 'accent' : 'neutral'} size="sm">
+                {o.env}
+              </Tag>
             </button>
           ))}
         </div>

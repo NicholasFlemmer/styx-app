@@ -156,10 +156,10 @@ describe('AgentService.verify', () => {
       expect: { authState: 'signed-in', account: 'API key', verifyError: null },
     },
     {
-      name: 'codex: any other logged-in line is kept verbatim',
+      name: 'codex: an unrecognised sign-in method is signed in with no account label (CLI output never lands in the row)',
       agent: 'codex',
       exec: async () => ({ stdout: '\nLogged in as ops@acme.dev\n', exitCode: 0 }),
-      expect: { authState: 'signed-in', account: 'Logged in as ops@acme.dev', verifyError: null },
+      expect: { authState: 'signed-in', account: null, verifyError: null },
     },
     {
       name: 'codex: "Not logged in" → signed out',

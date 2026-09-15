@@ -69,7 +69,6 @@ describe('DeployButton', () => {
     render(<DeployButton projectId={ids.project.infraTools} />);
     const button = screen.getByRole('button', { name: copy.deploy.noTarget });
     expect(button.hasAttribute('disabled')).toBe(true);
-    expect(button.getAttribute('title')).toBe(copy.deploy.noTarget);
     fireEvent.click(button);
     expect(modals()).toEqual([]);
   });
@@ -105,7 +104,7 @@ describe('DeployButton', () => {
 
     it('opens a menu with a heading and one row per target; choosing starts that target', () => {
       render(<DeployButton projectId={acme} />);
-      const button = screen.getByRole('button', { name: /Deploy to ▾/ });
+      const button = screen.getByRole('button', { name: /^Deploy to$/ });
       expect(button.getAttribute('aria-haspopup')).toBe('menu');
       expect(button.getAttribute('aria-expanded')).toBe('false');
       fireEvent.click(button);
@@ -122,7 +121,7 @@ describe('DeployButton', () => {
 
     it('arrow keys move, Escape closes and returns focus, an outside mousedown closes', () => {
       render(<DeployButton projectId={acme} />);
-      const button = screen.getByRole('button', { name: /Deploy to ▾/ });
+      const button = screen.getByRole('button', { name: /^Deploy to$/ });
       button.focus();
       fireEvent.keyDown(button, { key: 'ArrowDown' });
       const menu = screen.getByRole('menu');

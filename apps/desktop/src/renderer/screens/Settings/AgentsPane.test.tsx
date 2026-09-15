@@ -78,14 +78,19 @@ describe('<AgentsPane />', () => {
       'VerifyConnect',
     ]);
     expect(cells('shell')).toEqual(['Shell', 'zsh 5.9', '—', 'ready', '']);
-    // Connected rows carry a filled accent dot; everything else the hollow accent outline.
-    const dot = (agent: string) =>
-      document.querySelector(`[data-agent-row="${agent}"] [data-tone]`)?.getAttribute('data-tone');
-    expect(['claude', 'gemini', 'cursor', 'shell'].map(dot)).toEqual([
-      'accent',
+    // The onboarding step-3 recipe: a hollow dot that turns accent (`data-on`) when the row needs attention.
+    const dot = (agent: string) => document.querySelector(`[data-agent-row="${agent}"] [data-tone]`);
+    expect(['claude', 'gemini', 'cursor', 'shell'].map((a) => dot(a)?.getAttribute('data-tone'))).toEqual([
       'hollow',
       'hollow',
-      'accent',
+      'hollow',
+      'hollow',
+    ]);
+    expect(['claude', 'gemini', 'cursor', 'shell'].map((a) => dot(a)?.getAttribute('data-on'))).toEqual([
+      null,
+      'true',
+      'true',
+      null,
     ]);
   });
 
@@ -106,8 +111,8 @@ describe('<AgentsPane />', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Verify · Gemini CLI/ }));
     expect(calls('agent.verify')).toEqual([['agent.verify', { agent: 'gemini' }]]);
     await waitFor(() => expect(cells('gemini')[3]).toBe(copy.agentsPage.state.checking));
-    expect((screen.getByRole('button', { name: /^Verify · Gemini CLI/ }) as HTMLButtonElement).disabled).toBe(
-      true,
+    expect(screen.getByRole('button', { name: /^Verify · Gemini CLI/ }).getAttribute('aria-disabled')).toBe(
+      'true',
     );
     // A second click while checking does nothing.
     fireEvent.click(screen.getByRole('button', { name: /^Verify · Gemini CLI/ }));

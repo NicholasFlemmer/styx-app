@@ -112,7 +112,7 @@ describe('ConnectAgentModal', () => {
     render(<ConnectAgentModal id="modal-1" agent="claude" />);
     await waitFor(() => expect(identity()?.getAttribute('data-agent-identity')).toBe('connected'));
     expect(identity()?.textContent).toBe('Signed in as nic@acme.dev');
-    expect(identity()?.querySelector('[data-tone]')?.getAttribute('data-tone')).toBe('accent');
+    expect(identity()?.querySelector('[data-tone]')?.getAttribute('data-on')).toBeNull();
     expect(screen.getByRole('button', { name: 'Sign in with claude…' })).toBeTruthy();
     cleanup();
     render(<ConnectAgentModal id="modal-1" agent="cursor" />);
@@ -155,7 +155,7 @@ describe('ConnectAgentModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with gemini…' }));
     await waitFor(() => expect(calls('agent.login')).toEqual([['agent.login', { agent: 'gemini' }]]));
     await waitFor(() => expect(document.querySelector('[data-login-terminal="term-login-1"]')).toBeTruthy());
-    expect(loginTerminal.createLoginTerminal).toHaveBeenCalledWith('term-login-1');
+    expect(loginTerminal.createLoginTerminal).toHaveBeenCalledWith('term-login-1', { screenReader: false });
     expect(screen.getByText('Waiting for gemini…')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Sign in with gemini…' }) as HTMLButtonElement).disabled).toBe(
       true,
@@ -224,18 +224,32 @@ describe('ConnectAgentModal', () => {
     expect(useUiStore.getState().overlays).toHaveLength(0);
   });
 
-  it('Done and Escape close; with returnTo the Spawn modal comes back for that project', () => {
-    render(<ConnectAgentModal id="modal-1" agent="gemini" returnTo={{ modal: 'spawn', projectId: acme }} />);
+  it('Done closes; with returnTo on the overlay the Spawn modal comes back for that project, whoever pops it', () => {
+    const returnTo = { modal: 'spawn' as const, projectId: acme };
+    useUiStore.setState({
+      overlays: [{ id: 'modal-1', kind: 'modal', modal: 'connect-agent', agent: 'gemini', returnTo }],
+    });
+    render(<ConnectAgentModal id="modal-1" agent="gemini" returnTo={returnTo} />);
     fireEvent.click(screen.getByRole('button', { name: copy.agentsPage.connect.done }));
     expect(useUiStore.getState().overlays).toMatchObject([
       { kind: 'modal', modal: 'spawn', projectId: acme },
     ]);
     cleanup();
+    // Esc goes through the shell's close binding → store.popOverlay, never the component: the store honours returnTo.
     useUiStore.setState({
-      overlays: [{ id: 'modal-2', kind: 'modal', modal: 'connect-agent', agent: 'gemini' }],
+      overlays: [{ id: 'modal-2', kind: 'modal', modal: 'connect-agent', agent: 'gemini', returnTo }],
     });
-    render(<ConnectAgentModal id="modal-2" agent="gemini" />);
-    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    useUiStore.getState().popOverlay('modal-2');
+    expect(useUiStore.getState().overlays).toMatchObject([
+      { kind: 'modal', modal: 'spawn', projectId: acme },
+    ]);
+    cleanup();
+    // Without returnTo the modal simply closes (Escape is handled by the registry, not the dialog).
+    useUiStore.setState({
+      overlays: [{ id: 'modal-3', kind: 'modal', modal: 'connect-agent', agent: 'gemini' }],
+    });
+    render(<ConnectAgentModal id="modal-3" agent="gemini" />);
+    useUiStore.getState().popOverlay('modal-3');
     expect(useUiStore.getState().overlays).toHaveLength(0);
   });
 });

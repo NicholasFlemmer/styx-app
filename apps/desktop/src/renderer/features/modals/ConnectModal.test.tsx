@@ -226,7 +226,7 @@ describe('ConnectModal', () => {
         return el;
       });
       expect(terminal.textContent).toContain('Waiting for gcloud auth login…');
-      expect(loginTerminal.createLoginTerminal).toHaveBeenCalledWith('pty-login-1');
+      expect(loginTerminal.createLoginTerminal).toHaveBeenCalledWith('pty-login-1', { screenReader: false });
       expect(screen.getByRole('button', { name: 'Sign in with gcloud…' }).hasAttribute('disabled')).toBe(
         true,
       );

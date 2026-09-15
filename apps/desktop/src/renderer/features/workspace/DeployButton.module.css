@@ -51,10 +51,8 @@
     text-transform: uppercase;
     text-align: left;
     white-space: nowrap;
+    gap: 8px;
     cursor: pointer;
-  }
-  .menuItem[data-on='true'] {
-    color: var(--act);
   }
   .menuItem:hover,
   .menuItem:focus-visible {

@@ -826,6 +826,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       reload: 'Reload',
       openExternal: 'Open in browser',
       devices: { desktop: 'Desktop', tablet: 'Tablet', phone: 'Phone' },
+      /** Accessible name of the device preset group (spec §9; not rendered). */
+      devicesLabel: 'Device',
       empty: 'Point Styx at your dev server to see it here.',
       hint: 'Run it locally, or start the server yourself and enter its URL.',
     },

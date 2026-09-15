@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import {
   forgetInvoker,
+  invokerOf,
   overlayId,
   pushOverlay as pushOverlayPure,
   rememberInvoker,
@@ -69,7 +70,12 @@ export interface UiActions {
   openSession(projectId: ProjectId, sessionId: SessionId): void;
   resolveInitialScreen(model: ReadModel): void;
   /** Seeds screen/project/pane state from the snapshot's persisted `ui` block (env overrides win). */
-  hydratePersisted(ui: { screen: string | null; projectId: ProjectId | null; projectSession: Record<string, SessionId>; paneSizes: Record<string, number> }): void;
+  hydratePersisted(ui: {
+    screen: string | null;
+    projectId: ProjectId | null;
+    projectSession: Record<string, SessionId>;
+    paneSizes: Record<string, number>;
+  }): void;
   setResolvedTheme(theme: 'dark' | 'light'): void;
   setPaneSize(key: string, size: number): void;
   setPalette(patch: Partial<PaletteUiState>): void;
@@ -202,9 +208,21 @@ export const useUiStore = create<UiStore>()(
     popOverlay: (id) => {
       const target = id ?? topOverlay(get().overlays)?.id;
       if (target === undefined) return;
+      const closing = get().overlays.find((o) => o.id === target);
+      // A Connect agent modal opened from Spawn hands back to Spawn however it was closed (Done, Esc, backdrop),
+      // and the new modal inherits the invoker so focus still returns to where the user started.
+      const returnTo =
+        closing?.kind === 'modal' && closing.modal === 'connect-agent' ? closing.returnTo : undefined;
+      const invoker = returnTo === undefined ? null : invokerOf(target);
       set((s) => {
         s.overlays = removeOverlay(s.overlays, target);
       });
+      if (returnTo !== undefined) {
+        forgetInvoker(target);
+        const next = get().pushOverlay({ kind: 'modal', modal: 'spawn', projectId: returnTo.projectId });
+        if (invoker !== null) rememberInvoker(next, invoker);
+        return;
+      }
       restoreInvoker(target);
     },
     closeOverlays: (kind) => {

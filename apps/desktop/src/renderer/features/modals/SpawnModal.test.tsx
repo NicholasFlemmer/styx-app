@@ -98,9 +98,9 @@ describe('SpawnModal', () => {
   it('shows the inline error and disables Spawn when the chosen CLI is missing', async () => {
     useReadModel.getState().replaceModel(fixtures.errorReadModel(), 'connected');
     render(<SpawnModal id="modal-1" projectId={acme} />);
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
     fireEvent.click(screen.getByRole('radio', { name: /^Codex/ }));
-    const alert = screen.getByRole('alert');
+    const alert = screen.getByRole('status');
     expect(alert.textContent).toContain('Codex CLI not found on PATH.');
     expect(within(alert).getByRole('button', { name: copy.errors.cliMissing.cta })).toBeTruthy();
     // Locate binary: OS file picker (main) → detect.setBinary for the chosen agent.
@@ -119,9 +119,9 @@ describe('SpawnModal', () => {
   it('a signed-out CLI warns without blocking; Fix connection swaps in the Connect agent modal that returns here', () => {
     render(<SpawnModal id="modal-1" projectId={acme} />);
     // The demo default (claude) is connected: no row at all, so the spawn baseline is untouched.
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
     fireEvent.click(screen.getByRole('radio', { name: /^Gemini/ }));
-    const alert = screen.getByRole('alert');
+    const alert = screen.getByRole('status');
     expect(alert.getAttribute('data-spawn-cli')).toBe('not-connected');
     expect(alert.textContent).toContain("Gemini CLI isn't connected.");
     expect(within(alert).queryByRole('button', { name: copy.errors.cliMissing.cta })).toBeNull();
@@ -143,7 +143,7 @@ describe('SpawnModal', () => {
     useReadModel.getState().replaceModel(fixtures.errorReadModel(), 'connected');
     render(<SpawnModal id="modal-1" projectId={acme} />);
     fireEvent.click(screen.getByRole('radio', { name: /^Codex/ }));
-    const alert = screen.getByRole('alert');
+    const alert = screen.getByRole('status');
     expect(alert.getAttribute('data-spawn-cli')).toBe('missing');
     expect(
       within(alert)

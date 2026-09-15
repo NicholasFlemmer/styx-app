@@ -15,11 +15,6 @@
     gap: var(--sp-2);
     font-size: 11.5px;
   }
-  /* Hollow accent dot (signed out / not verified / not installed): accent outline, no fill. */
-  .dotAttention {
-    background: transparent;
-    border-color: var(--ac);
-  }
   /* Verify · Connect side by side in the trailing cell (Settings Targets recipe). */
   .actions {
     display: flex;

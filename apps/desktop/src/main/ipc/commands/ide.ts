@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { execa } from 'execa';
 import { cliAlternatives, type IdeInstall } from '@styx/core';
 import type { Container } from '../../container';
@@ -68,6 +68,7 @@ export function registerIdeCommands(bus: CommandBus, app: Container): void {
 
   bus.register('detect.setBinary', async ({ agent, path }) => {
     if (agent === 'shell') fail('invalid-input', 'the shell agent has no binary to locate');
+    if (!isAbsolute(path)) fail('invalid-input', 'the binary path must be absolute');
     if (!existsSync(path)) fail('not-found', `${path} does not exist`);
     const probed = await detect.probe(agent, path);
     if (!probed.found) fail('invalid-input', `${path} is not a runnable ${agent} CLI`);

@@ -38,6 +38,7 @@ interface Local {
 export function DeployModal({ id, targetId, deployId: attachId }: DeployModalProps) {
   const popOverlay = useUi((u) => u.popOverlay);
   const target = useModel((m) => m.targets.byId[targetId] ?? null);
+  const screenReader = useModel((m) => m.settings.app.screenReader);
   const [deployId, setDeployId] = useState<string | null>(attachId ?? null);
   const row = useReadModel((st) => (deployId === null ? null : (st.model.deploys[deployId] ?? null)));
   const [local, setLocal] = useState<Local>({
@@ -86,13 +87,13 @@ export function DeployModal({ id, targetId, deployId: attachId }: DeployModalPro
   useEffect(() => {
     const el = host.current;
     if (terminalId === null || el === null) return;
-    const t = createLoginTerminal(terminalId);
+    const t = createLoginTerminal(terminalId, { screenReader });
     attachTerminal(t, el);
     return () => {
       detachTerminal(t);
       t.term.dispose();
     };
-  }, [terminalId]);
+  }, [terminalId, screenReader]);
 
   const done = phase === 'succeeded' || phase === 'failed' || phase === 'cancelled';
   const close = () => popOverlay(id);

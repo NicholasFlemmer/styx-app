@@ -84,7 +84,15 @@ const renderBlock = (b: Block, ctx: Ctx): ReactNode => {
     }
     case 'code':
       return (
-        <pre className={s['pre']} data-lang={b.lang ?? undefined} data-open={b.open ? 'true' : undefined}>
+        <pre
+          className={s['pre']}
+          data-lang={b.lang ?? undefined}
+          data-open={b.open ? 'true' : undefined}
+          // A long block scrolls sideways; it must be reachable by keyboard (axe scrollable-region-focusable).
+          tabIndex={0}
+          role="region"
+          aria-label={b.lang ?? 'code'}
+        >
           {b.lang !== null && (
             <span className={s['lang']} aria-hidden="true">
               {b.lang}

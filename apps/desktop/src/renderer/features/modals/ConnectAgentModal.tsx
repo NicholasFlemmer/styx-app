@@ -50,9 +50,8 @@ const cliNameOf = (agent: Agent, cli: CliInstall | undefined): string => {
  * (`agent.login`, the pty in a LoginTerminal). Main re-verifies when that exits, so the row here just follows
  * the model. Shell needs nothing. Done returns to the Spawn modal when `returnTo` is set.
  */
-export function ConnectAgentModal({ id, agent, returnTo }: ConnectAgentModalProps) {
+export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
   const popOverlay = useUi((u) => u.popOverlay);
-  const pushOverlay = useUi((u) => u.pushOverlay);
   const cli = useModel((m: ReadModel) => m.discovery.clis.find((c) => c.agent === agent));
   // Opens checking: the page may be hours old, the CLI may have been signed in elsewhere.
   const [checking, setChecking] = useState(agent !== 'shell');
@@ -68,10 +67,8 @@ export function ConnectAgentModal({ id, agent, returnTo }: ConnectAgentModalProp
   const installed = cli !== undefined && cli.found && cli.binary !== null;
   const state = cli === undefined ? 'missing' : cliConnectionState(cli);
 
-  const close = () => {
-    popOverlay(id);
-    if (returnTo !== undefined) pushOverlay({ kind: 'modal', modal: 'spawn', projectId: returnTo.projectId });
-  };
+  // `returnTo` is honoured by the store's popOverlay, so Esc and the backdrop hand back to Spawn as Done does.
+  const close = () => popOverlay(id);
 
   const verify = async (): Promise<void> => {
     if (shell) return;
@@ -113,6 +110,8 @@ export function ConnectAgentModal({ id, agent, returnTo }: ConnectAgentModalProp
       if (e.terminalId !== login.terminalId || e.status !== 'exited') return;
       const exitCode = e.exitCode ?? null;
       setLogin(exitCode === 0 ? null : { ...login, status: 'exited', exitCode });
+      // A clean exit unmounts the terminal that had focus; the heading takes it so the dialog keeps it.
+      if (exitCode === 0) heading.current?.focus();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [login?.terminalId]);
@@ -160,7 +159,7 @@ export function ConnectAgentModal({ id, agent, returnTo }: ConnectAgentModalProp
       width={560}
       title={fill(c.title, { agent: product })}
       onClose={close}
-      escapeEnabled
+      escapeEnabled={false}
       bodyPad="20px 16px"
       initialFocus={heading}
       footer={
@@ -210,10 +209,7 @@ export function ConnectAgentModal({ id, agent, returnTo }: ConnectAgentModalProp
           {installed ? (
             <>
               <div className={s['identity']} aria-live="polite" data-agent-identity={identity}>
-                <StatusDot
-                  tone={identity === 'connected' ? 'accent' : 'hollow'}
-                  className={identity === 'connected' ? undefined : s['dotAttention']}
-                />
+                <StatusDot tone="hollow" on={identity !== 'connected'} />
                 <span className={s['identityText']}>{identityText}</span>
               </div>
               <button

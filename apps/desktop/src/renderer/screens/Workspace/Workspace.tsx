@@ -221,21 +221,23 @@ export function Workspace() {
           Code / Design share the editor column rather than splitting it: the design window needs the full width
           to be worth having at tablet and desktop sizes, and the owner ranks it above the editor.
         */}
-        <div className={s['modes']} role="tablist" aria-label={copy.workspace.design.design}>
-          <Tab
-            variant="approvals"
-            label={copy.workspace.design.code}
-            inv={mode === 'code'}
-            onClick={() => setMode('code')}
-            data-workspace-mode="code"
-          />
-          <Tab
-            variant="approvals"
-            label={copy.workspace.design.design}
-            inv={mode === 'design'}
-            onClick={() => setMode('design')}
-            data-workspace-mode="design"
-          />
+        <div className={s['modes']}>
+          <div className={s['tabs']} role="tablist" aria-label={copy.workspace.design.design}>
+            <Tab
+              variant="approvals"
+              label={copy.workspace.design.code}
+              inv={mode === 'code'}
+              onClick={() => setMode('code')}
+              data-workspace-mode="code"
+            />
+            <Tab
+              variant="approvals"
+              label={copy.workspace.design.design}
+              inv={mode === 'design'}
+              onClick={() => setMode('design')}
+              data-workspace-mode="design"
+            />
+          </div>
           <DeployButton projectId={projectId} />
         </div>
         {mode === 'design' ? (

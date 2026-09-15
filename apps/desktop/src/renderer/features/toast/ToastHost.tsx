@@ -11,7 +11,7 @@ import {
   type SessionId,
   type TargetId,
 } from '@styx/core';
-import { motion } from '@styx/tokens';
+import { motion, space } from '@styx/tokens';
 import { Toast } from '@styx/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -172,7 +172,7 @@ const renderToast = (overlay: Extract<Overlay, { kind: 'toast' }>) => {
 };
 
 /** Vertical gap between stacked toasts. */
-const TOAST_GAP = 8;
+const TOAST_GAP = space.scale[2];
 
 interface ToastSlotProps {
   overlay: Extract<Overlay, { kind: 'toast' }>;

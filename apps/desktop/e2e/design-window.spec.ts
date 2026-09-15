@@ -44,8 +44,8 @@ test('renders the dev server, emulates a device, and leaves the screen for overl
       return w === undefined ? null : { title: w.getTitle(), url: w.getURL() };
     }, PORT);
 
-  await expect.poll(view, { timeout: 10_000 }).not.toBeNull();
-  expect((await view())?.title).toBe('Dev Server');
+  // The view exists as soon as the URL is set; the title arrives once the page has loaded.
+  await expect.poll(async () => (await view())?.title ?? null, { timeout: 10_000 }).toBe('Dev Server');
 
   const body = await app.evaluate(async ({ webContents }, port: number) => {
     const w = webContents.getAllWebContents().find((x) => x.getURL().includes(String(port)));

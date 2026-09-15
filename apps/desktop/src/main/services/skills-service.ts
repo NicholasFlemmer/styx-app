@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, sep } from 'node:path';
 import { copy, fill, type SkillHost, type SkillScope, type SkillSummary } from '@styx/core';
@@ -33,7 +33,8 @@ export interface SkillsServiceDeps {
 
 /**
  * Where each agent CLI reads skills. Every CLI uses the same `SKILL.md` layout but its own roots; `agents` is the
- * shared `.agents/skills` convention that Codex, Gemini CLI and Cursor all read (Styx lists it, never writes it).
+ * shared `.agents/skills` convention that Codex, Gemini CLI and Cursor all read (Styx lists it and lets the user
+ * remove from it, but never installs into it).
  * Global roots are relative to the home dir except Codex, which honours `$CODEX_HOME`.
  */
 export const SKILL_HOST_DIRS: Record<SkillHost, { global: string[]; project: string[] }> = {
@@ -55,7 +56,9 @@ export class SkillsService {
     const env = this.deps.env ?? process.env;
     if (host === 'codex') {
       const codexHome = env['CODEX_HOME'];
-      return codexHome !== undefined && codexHome !== '' ? join(codexHome, 'skills') : join(home, ...SKILL_HOST_DIRS.codex.global);
+      return codexHome !== undefined && codexHome !== ''
+        ? join(codexHome, 'skills')
+        : join(home, ...SKILL_HOST_DIRS.codex.global);
     }
     return join(home, ...SKILL_HOST_DIRS[host].global);
   }
@@ -76,7 +79,8 @@ export class SkillsService {
     const out: SkillSummary[] = [];
     for (const host of HOSTS) {
       out.push(...(await this.scan(this.globalDir(host), 'global', host)));
-      if (projectId !== null) out.push(...(await this.scan(this.projectDir(host, projectId), 'project', host)));
+      if (projectId !== null)
+        out.push(...(await this.scan(this.projectDir(host, projectId), 'project', host)));
     }
     return out.sort((a, b) => a.name.localeCompare(b.name) || a.host!.localeCompare(b.host!));
   }
@@ -168,9 +172,12 @@ export class SkillsService {
     for (const host of [...new Set(input.hosts)]) {
       const root = this.dirFor(host, input.scope, input.projectId);
       const dir = join(root, input.directory);
-      // Belt and braces over SAFE_NAME: never write outside the skills root.
+      // Belt and braces over SAFE_NAME: never write outside the skills root, and never through a symlink a repo
+      // could have planted at the skill's path.
       if (!dir.startsWith(root + sep)) fail('invalid-input', 'bad skill name');
+      await refuseSymlink(dir);
       await mkdir(dir, { recursive: true });
+      await refuseSymlink(join(dir, 'SKILL.md'));
       await writeFile(join(dir, 'SKILL.md'), text, 'utf8');
       logger.info('skills: installed', { directory: input.directory, scope: input.scope, host });
       out.push({
@@ -195,10 +202,17 @@ export class SkillsService {
     const root = this.dirFor(input.host, input.scope, input.projectId);
     const dir = join(root, input.directory);
     if (!dir.startsWith(root + sep)) fail('invalid-input', 'bad skill name');
+    await refuseSymlink(dir);
     await rm(dir, { recursive: true, force: true });
     logger.info('skills: removed', { directory: input.directory, scope: input.scope, host: input.host });
   }
 }
+
+/** A skill path that is a symlink is not ours to write through or delete (a repo can plant one under `.claude/skills`). */
+const refuseSymlink = async (path: string): Promise<void> => {
+  const st = await lstat(path).catch(() => null);
+  if (st !== null && st.isSymbolicLink()) fail('invalid-input', 'skill path is a symlink');
+};
 
 /**
  * The YAML frontmatter Claude Code reads: `name` and `description`. Written by hand rather than pulling a YAML

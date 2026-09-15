@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useModel } from '../../state/hooks';
 import { attachTerminal, detachTerminal } from '../terminal/terminal-registry';
 import s from './ConnectModal.module.css';
 import { createLoginTerminal, disposeLoginTerminal } from './login-terminal';
@@ -17,17 +18,18 @@ export interface LoginTerminalProps {
  */
 export function LoginTerminal({ terminalId, label }: LoginTerminalProps) {
   const host = useRef<HTMLDivElement>(null);
+  const screenReader = useModel((m) => m.settings.app.screenReader);
   useEffect(() => {
     const el = host.current;
     if (el === null) return;
-    const entry = createLoginTerminal(terminalId);
+    const entry = createLoginTerminal(terminalId, { screenReader });
     attachTerminal(entry, el);
     entry.term.focus();
     return () => {
       detachTerminal(entry);
       disposeLoginTerminal(entry);
     };
-  }, [terminalId]);
+  }, [terminalId, screenReader]);
   return (
     <div className={s['terminal']} data-login-terminal={terminalId}>
       <div className={s['terminalLabel']} aria-live="polite">

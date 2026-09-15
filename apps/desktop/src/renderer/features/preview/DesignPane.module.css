@@ -6,7 +6,7 @@
     flex-direction: column;
     background: var(--bg);
   }
-  /* Chrome row above the native view: run locally, command, URL, device presets, reload, open in browser. */
+  /* Chrome row above the native view: URL, device presets, reload, open in browser. */
   .bar {
     flex: none;
     height: var(--h-tabrow);
@@ -17,10 +17,16 @@
     border-bottom: 1px solid var(--ln);
     background: var(--s1);
   }
-  /* ▶ / ■ before the button text, same as the palette's ▲ ◆ glyph column. */
-  .glyph {
-    margin-right: 6px;
-    font-size: 9px;
+  /* Second row: ▶ Run locally / ■ Stop and the command it runs (own row so neither input starves at 1100px). */
+  .runRow {
+    flex: none;
+    height: var(--h-tabrow);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    border-bottom: 1px solid var(--ln);
+    background: var(--s1);
   }
   .cmd {
     flex: 1;
@@ -52,6 +58,7 @@
     padding: 0 8px;
   }
   .toggle {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -60,6 +67,12 @@
     background: transparent;
     color: var(--tx);
     cursor: pointer;
+  }
+  /* spec §9: a 28px hit area for the 26px strip's toggle */
+  .toggle::after {
+    content: '';
+    position: absolute;
+    inset: -4px -6px;
   }
   .chevron {
     color: var(--mu);
@@ -78,19 +91,9 @@
   .phase[data-phase='running'] {
     color: var(--act);
   }
-  .link {
+  /* Dismiss: the connect modal's t-label text-link recipe (imported), pushed to the row's right edge. */
+  .dismiss {
     margin-left: auto;
-    border: 0;
-    padding: 0;
-    background: transparent;
-    color: var(--mu);
-    font-family: var(--font-ui);
-    font-size: 11px;
-    text-decoration: underline;
-    cursor: pointer;
-  }
-  .link:hover {
-    color: var(--tx);
   }
   .term {
     height: var(--h-terminal);

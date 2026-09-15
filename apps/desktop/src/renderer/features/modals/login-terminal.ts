@@ -15,7 +15,10 @@ const reducedMotion = (): boolean =>
  * Same recipe as the session terminals (JetBrains Mono 12, tokens theme, DOM renderer — the modal is short-lived,
  * so no WebGL); disposed with the modal, and the pty is left to main (`connect.cliLogin` reports its exit).
  */
-export const createLoginTerminal = (terminalId: string): TerminalEntry => {
+export const createLoginTerminal = (
+  terminalId: string,
+  opts: { screenReader?: boolean } = {},
+): TerminalEntry => {
   const host = document.createElement('div');
   host.style.width = '100%';
   host.style.height = '100%';
@@ -27,6 +30,7 @@ export const createLoginTerminal = (terminalId: string): TerminalEntry => {
     cursorStyle: 'block',
     cursorInactiveStyle: 'block',
     cursorBlink: env().e2e !== true && !reducedMotion(),
+    screenReaderMode: opts.screenReader === true,
     scrollback: 1000,
     allowTransparency: false,
     minimumContrastRatio: 1,

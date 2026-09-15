@@ -37,7 +37,6 @@ test('names the prod target on acme-shop and is disabled where nothing can be de
   });
   await expect(button).toBeDisabled();
   await expect(button).toHaveText('▲Connect a deploy target');
-  await expect(button).toHaveAttribute('title', 'Connect a deploy target');
 
   await app.close();
 });

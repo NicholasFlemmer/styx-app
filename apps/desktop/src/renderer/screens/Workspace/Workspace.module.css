@@ -14,7 +14,11 @@
     border-bottom: 1px solid var(--ln);
     background: var(--s1);
   }
-  /* The deploy button is the strip's last child and hugs the right edge (owner addition). */
+  /* The tabs are their own tablist (a tablist may only own tabs); the deploy button is a sibling that hugs the right edge. */
+  .tabs {
+    display: flex;
+    align-items: stretch;
+  }
   .modes > [data-deploy-button] {
     margin-left: auto;
   }

@@ -113,7 +113,7 @@ export function SkillDrawer({ id, directory }: SkillDrawerProps) {
     >
       <div ref={body} tabIndex={-1} className={s['body']} data-skill-drawer={directory}>
         {/* The security line: a skill is instructions, so it gets the accent edge a grant request gets. */}
-        <div className={s['warning']}>{copy.skills.warning}</div>
+        <Banner tone="info" text={copy.skills.warning} data-skill-warning="true" />
         {error !== null && <Banner tone="error" text={error} onDismiss={() => setError(null)} />}
         {parsed === null ? (
           <span className={['t-label', s['loading']].join(' ')}>{copy.skills.readerLoading}</span>
@@ -137,7 +137,7 @@ export function SkillDrawer({ id, directory }: SkillDrawerProps) {
                     label={
                       <span className={s['hostLabel']}>
                         {copy.skills.hosts[host]}
-                        {already && <Tag tone="accent">{copy.skills.installedTag}</Tag>}
+                        {already && <Tag tone="strong">{copy.skills.installedTag}</Tag>}
                       </span>
                     }
                     checked={already || picked.includes(host)}

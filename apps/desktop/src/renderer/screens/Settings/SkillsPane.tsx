@@ -305,7 +305,7 @@ export function SkillsPane({ projectId }: { projectId: ProjectId | null }) {
                     {installedHostsOf(skill.directory).map((h) => (
                       <Tag
                         key={h}
-                        tone="accent"
+                        tone="strong"
                         title={h === 'agents' ? copy.skills.sharedHint : copy.skills.hosts[h]}
                         data-skill-installed={h}
                       >
