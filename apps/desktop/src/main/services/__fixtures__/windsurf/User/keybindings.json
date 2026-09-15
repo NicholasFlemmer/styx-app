@@ -1,0 +1,6 @@
+// Windsurf keybindings (VS Code format) with Windsurf-only commands
+[
+  { "key": "cmd+i", "command": "windsurf.prioritized.command.open", "when": "editorTextFocus" },
+  { "key": "cmd+shift+l", "command": "windsurf.prioritized.chat.open" },
+  { "command": "ignored.no-key" },
+]

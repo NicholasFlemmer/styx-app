@@ -149,7 +149,9 @@ export function parseBackupsWorkspaces(json: string, platform: NodeJS.Platform):
  */
 export function mergeRecents(...lists: readonly (readonly RecentFolder[])[]): RecentFolder[] {
   const known = new Map<string, number>();
-  for (const list of lists) for (const r of list) if (r.openedAt !== null) known.set(r.path, Math.max(known.get(r.path) ?? 0, r.openedAt));
+  for (const list of lists)
+    for (const r of list)
+      if (r.openedAt !== null) known.set(r.path, Math.max(known.get(r.path) ?? 0, r.openedAt));
   const seen = new Set<string>();
   const mru: RecentFolder[] = [];
   const dated: RecentFolder[] = [];
@@ -259,6 +261,32 @@ export function parseVscodeTheme(text: string): ImportedTheme {
   }
 }
 
+// --- Zed -----------------------------------------------------------------------
+
+/**
+ * Zed `~/.config/zed/settings.json` (JSONC): `theme` is either a name or `{ mode, light, dark }` — the name for
+ * the explicit mode, else the dark one (Styx's default appearance) — and `buffer_font_family` is the editor font.
+ * Zed keeps no VS Code-style keybindings and its recent workspaces live in its own SQLite store: neither is read.
+ */
+export function parseZedTheme(text: string): ImportedTheme {
+  try {
+    const doc = parseJsonc(text) as Record<string, unknown> | null;
+    const theme = doc?.['theme'];
+    const font = doc?.['buffer_font_family'];
+    let name: unknown = theme;
+    if (theme && typeof theme === 'object') {
+      const t = theme as { mode?: unknown; light?: unknown; dark?: unknown };
+      name = t.mode === 'light' ? t.light : (t.dark ?? t.light);
+    }
+    return {
+      colorTheme: typeof name === 'string' && name ? name : null,
+      fontFamily: typeof font === 'string' && font ? font : null,
+    };
+  } catch {
+    return { colorTheme: null, fontFamily: null };
+  }
+}
+
 // --- JetBrains -----------------------------------------------------------------
 
 /** `options/recentProjects.xml`: `<entry key="$USER_HOME$/code/x">` (2020+) or `<option value="…">` (older). */
@@ -351,7 +379,7 @@ export interface IdeImportDeps {
 
 export interface IdeImportSource {
   kind: ImportIdeKind;
-  /** VS Code / Cursor `User` dir (from DetectService); ignored for JetBrains / Neovim. */
+  /** VS Code / Cursor / Windsurf `User` dir or Zed's config dir (from DetectService); ignored for JetBrains / Neovim. */
   configDir: string | null;
 }
 
@@ -429,7 +457,10 @@ export class IdeImportService {
     let backedUp: RecentFolder[] = [];
     if (this.exists(backups)) {
       try {
-        backedUp = parseBackupsWorkspaces(this.readFile(backups), platform).map((path) => ({ path, openedAt: null }));
+        backedUp = parseBackupsWorkspaces(this.readFile(backups), platform).map((path) => ({
+          path,
+          openedAt: null,
+        }));
       } catch {
         /* unreadable */
       }
@@ -456,7 +487,7 @@ export class IdeImportService {
           /* unreadable */
         }
       }
-    } else {
+    } else if (src.kind === 'neovim') {
       const shada =
         platform === 'win32'
           ? join(
@@ -481,6 +512,7 @@ export class IdeImportService {
         }
       }
     }
+    // Zed: its workspace history is an internal SQLite store; nothing is read (recentsSource null).
     return folders.filter((r) => this.isDir(r.path));
   }
 
@@ -500,6 +532,9 @@ export class IdeImportService {
         const f = join(src.configDir, 'settings.json');
         if (this.exists(f)) out.theme = parseVscodeTheme(this.readFile(f));
       }
+    } else if (src.kind === 'zed' && src.configDir && what.theme) {
+      const f = join(src.configDir, 'settings.json');
+      if (this.exists(f)) out.theme = parseZedTheme(this.readFile(f));
     }
     return out;
   }
@@ -583,7 +618,11 @@ const WIN_LAUNCHER = `@echo off\r\nsetlocal\r\nset "d=%~1"\r\nif "%d%"=="" set "
 export async function installOpenIn(deps: OpenInInstallDeps): Promise<OpenInInstallResult> {
   deps.mkdir(deps.launcherDir);
   if (deps.platform === 'win32') {
-    const binDir = win32.join(deps.env['LOCALAPPDATA'] ?? win32.join(deps.home, 'AppData', 'Local'), 'Styx', 'bin');
+    const binDir = win32.join(
+      deps.env['LOCALAPPDATA'] ?? win32.join(deps.home, 'AppData', 'Local'),
+      'Styx',
+      'bin',
+    );
     deps.mkdir(binDir);
     const launcher = win32.join(binDir, 'styx.cmd');
     deps.writeFile(launcher, WIN_LAUNCHER);

@@ -1,0 +1,9 @@
+{
+  "name": "WebStorm",
+  "version": "2024.3.1",
+  "buildNumber": "243.22562.13",
+  "productCode": "WS",
+  "dataDirectoryName": "WebStorm2024.3",
+  "svgIconPath": "bin/webstorm.svg",
+  "launch": [{ "os": "Windows", "launcherPath": "bin/webstorm64.exe", "vmOptionsFilePath": "bin/webstorm64.exe.vmoptions" }]
+}

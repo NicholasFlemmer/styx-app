@@ -37,8 +37,10 @@ import {
   type MfaProvider,
 } from './services/mfa-service';
 import { NotificationService, type AskSummary } from './services/notification-service';
+import { launchArgs } from './services/open-in-ide';
 import { ElectronOsNotifier, type ElectronLike } from './services/os-notifier';
 import { writeShims } from './services/shim-service';
+import { fixtureCatalogueFetch, fixtureSkillsFetch } from './services/skills-fixture';
 import { PreviewService } from './services/preview-service';
 import { rendererPaths, WindowService } from './services/window-service';
 
@@ -211,10 +213,20 @@ async function boot(): Promise<void> {
   if (env['STYX_FIXTURE_RESET'] === '1' && existsSync(dbFile)) rmSync(dbFile);
   const db = openDatabase(dbFile);
   const repos = new Repos(db, () => clock.now());
-  if (fixtureName) {
-    const { seeded } = seed(repos, loadFixture(fixtureName), { reset: env['STYX_FIXTURE_RESET'] === '1' });
+  // A fixture's skills live in a seeded home under userData (never the real ~/.claude etc.), and the catalogue is
+  // answered offline (`skills-fixture.ts`); e2e runs get the offline fetch for everything so nothing leaves the box.
+  const fixtureHome = fixtureName !== null ? join(userData, 'fixture-home') : null;
+  if (fixtureName !== null && fixtureHome !== null) {
+    const demoRepos = (fixtureName === 'demo' || fixtureName === 'error') && env['STYX_DEMO_REPOS'] !== '0';
+    const { seeded } = seed(repos, loadFixture(fixtureName), {
+      reset: env['STYX_FIXTURE_RESET'] === '1',
+      skillsHome: fixtureHome,
+      // Project skills go into the demo acme-shop checkout before seed-repos commits it, so they ride in its
+      // init commit instead of showing up as untracked changes on the main lane (same path seed-repos uses).
+      ...(demoRepos ? { skillsProjectDir: join(userData, 'demo-repos', 'acme-shop') } : {}),
+    });
     logger.info('fixture', { name: fixtureName, seeded, userData });
-    if ((fixtureName === 'demo' || fixtureName === 'error') && env['STYX_DEMO_REPOS'] !== '0') {
+    if (demoRepos) {
       // Real git repos behind the fixture rows so fs.*, worktree.diff, hunks and terminals work on the demo.
       await seedDemoRepos({ repos, userData, fixture: fixtureName }).catch((e: Error) =>
         logger.warn('demo repos failed', { error: e.message }),
@@ -339,6 +351,12 @@ async function boot(): Promise<void> {
     disableRefresh: fixtureName !== null && env['STYX_KEYCHAIN'] === 'memory',
     // Fixture rows are fake binaries; re-detecting would swap them for whatever this machine has.
     redetectClis: fixtureName === null,
+    ...(fixtureHome !== null ? { skillsHome: fixtureHome } : {}),
+    ...(env['STYX_E2E'] === '1'
+      ? { fetch: fixtureSkillsFetch }
+      : fixtureHome !== null
+        ? { fetch: fixtureCatalogueFetch(fetch) }
+        : {}),
     db,
     clock,
     vault,
@@ -362,9 +380,8 @@ async function boot(): Promise<void> {
         ? shell.openExternal(url)
         : Promise.reject(new Error('only https urls open externally')),
     openInIde: async (launcher, path) => {
-      if (launcher.startsWith('open -a'))
-        await execa('open', ['-a', launcher.replace(/^open -a\s*"?|"?$/g, ''), path]);
-      else await execa(launcher, [path], { detached: true, stdio: 'ignore' });
+      const l = launchArgs(launcher, path, process.platform);
+      await execa(l.file, l.args, { shell: l.shell, detached: l.detached, stdio: 'ignore' });
     },
     onAppSettings: applyAppSettings,
   });

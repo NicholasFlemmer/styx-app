@@ -1,8 +1,10 @@
 import Database from 'better-sqlite3';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
+import { fakeIdeMachine, installVscodeLike, installZed, writeStateDb } from './__fixtures__/ide-machine';
 import {
   IdeImportService,
   fileUriToPath,
@@ -16,6 +18,7 @@ import {
   parseVscodeRecents,
   parseVscodeTheme,
   parseWorkspaceJson,
+  parseZedTheme,
   readVscdbRecents,
   repoRootOf,
   workspaceFileToFolder,
@@ -294,6 +297,119 @@ describe('IdeImportService', () => {
         { kind: 'neovim', configDir: null },
       ]),
     ).toEqual(['/Users/me/code/acme-shop', '/Users/me/work/infra-tools']);
+  });
+});
+
+describe('Cursor / Windsurf / Zed', () => {
+  it('Cursor: keybindings (Cursor-only commands included) and theme parse with the VS Code readers', () => {
+    expect(parseKeybindings(read('cursor/User/keybindings.json'))).toEqual([
+      {
+        key: 'cmd+k',
+        command: 'aipopup.action.modal.generate',
+        when: 'editorFocus && !composerBarIsVisible',
+      },
+      { key: 'cmd+l', command: 'aichat.newchataction' },
+      { key: 'cmd+shift+p', command: 'workbench.action.showCommands' },
+    ]);
+    expect(parseVscodeTheme(read('cursor/User/settings.json'))).toEqual({
+      colorTheme: 'Cursor Dark Midnight',
+      fontFamily: 'Berkeley Mono, Menlo, monospace',
+    });
+    expect(parseVscodeRecents(read('cursor/recentlyOpened.json'), 'darwin')).toEqual([
+      '/Users/me/code/acme-shop',
+      '/Users/me/work/client-x',
+    ]);
+  });
+
+  it('Windsurf: recents (state.vscdb), keybindings and theme go through the same readers as VS Code, on real files', () => {
+    const m = fakeIdeMachine('darwin');
+    const ws = installVscodeLike(m, 'windsurf', '1.12.5');
+    const configDir = ws.configDir ?? '';
+    // The fixture folders do not exist here; point the recents at two that do (+ one that does not).
+    const infra = join(m.home, 'work', 'infra-tools');
+    const shop = join(m.home, 'code', 'acme-shop');
+    mkdirSync(infra, { recursive: true });
+    mkdirSync(shop, { recursive: true });
+    writeStateDb(
+      join(configDir, 'globalStorage', 'state.vscdb'),
+      JSON.stringify({
+        entries: [
+          { folderUri: pathToFileURL(infra).href },
+          { fileUri: pathToFileURL(join(shop, 'README.md')).href },
+          { folderUri: pathToFileURL(join(m.home, 'gone')).href },
+          { folderUri: pathToFileURL(shop).href },
+        ],
+      }),
+    );
+    const svc = new IdeImportService({ platform: 'darwin', home: m.home, env: {} });
+    expect(
+      svc.importFrom({ kind: 'windsurf', configDir }, { recents: true, keybindings: true, theme: true }),
+    ).toEqual({
+      recents: [infra, shop],
+      keybindings: [
+        { key: 'cmd+i', command: 'windsurf.prioritized.command.open', when: 'editorTextFocus' },
+        { key: 'cmd+shift+l', command: 'windsurf.prioritized.chat.open' },
+      ],
+      theme: { colorTheme: 'Windsurf Dark', fontFamily: 'Fira Code' },
+    });
+    expect(parseVscodeRecents(read('windsurf/recentlyOpened.json'), 'darwin')).toEqual([
+      '/Users/me/work/infra-tools',
+      '/Users/me/code/acme-shop',
+      '/Users/me/work/teko',
+    ]);
+  });
+
+  it('Zed: theme name (object form → the dark one, or the explicit mode) and buffer font; nothing else', () => {
+    expect(parseZedTheme(read('zed/settings.json'))).toEqual({
+      colorTheme: 'Ayu Dark',
+      fontFamily: 'Zed Plex Mono',
+    });
+    expect(parseZedTheme('{ "theme": "One Dark", "buffer_font_size": 15 }')).toEqual({
+      colorTheme: 'One Dark',
+      fontFamily: null,
+    });
+    expect(
+      parseZedTheme('{ "theme": { "mode": "light", "light": "One Light", "dark": "One Dark" } }'),
+    ).toEqual({
+      colorTheme: 'One Light',
+      fontFamily: null,
+    });
+    expect(parseZedTheme('{ "theme": { "mode": "dark", "light": "One Light" } }')).toEqual({
+      colorTheme: 'One Light',
+      fontFamily: null,
+    });
+    expect(parseZedTheme('nope')).toEqual({ colorTheme: null, fontFamily: null });
+  });
+
+  it('Zed import: theme only — no keybindings, no recents (never the Neovim shada), on real files', () => {
+    const m = fakeIdeMachine('darwin');
+    const zed = installZed(m, '0.201.6');
+    const shada = join(m.home, '.local', 'share', 'nvim', 'shada');
+    mkdirSync(shada, { recursive: true });
+    const svc = new IdeImportService({
+      platform: 'darwin',
+      home: m.home,
+      env: {},
+      readBytes: () => new Uint8Array(readFileSync(join(FIX, 'nvim', 'main.shada'))),
+    });
+    expect(
+      svc.importFrom(
+        { kind: 'zed', configDir: zed.configDir },
+        { recents: true, keybindings: true, theme: true },
+      ),
+    ).toEqual({
+      recents: [],
+      keybindings: null,
+      theme: { colorTheme: 'Ayu Dark', fontFamily: 'Zed Plex Mono' },
+    });
+    expect(svc.recentFoldersWithTime({ kind: 'zed', configDir: zed.configDir })).toEqual([]);
+    expect(
+      svc.importFrom({ kind: 'zed', configDir: null }, { recents: true, keybindings: true, theme: true }),
+    ).toEqual({
+      recents: [],
+      keybindings: null,
+      theme: null,
+    });
   });
 });
 

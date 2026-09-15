@@ -1,0 +1,6 @@
+// Cursor keybindings (VS Code format) with Cursor-only commands
+[
+  { "key": "cmd+k", "command": "aipopup.action.modal.generate", "when": "editorFocus && !composerBarIsVisible" },
+  { "key": "cmd+l", "command": "aichat.newchataction" },
+  { "key": "cmd+shift+p", "command": "workbench.action.showCommands", },
+]

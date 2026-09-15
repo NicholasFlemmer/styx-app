@@ -1,0 +1,8 @@
+{
+  // Windsurf (VS Code fork): same keys as VS Code; only theme + font are read
+  "workbench.colorTheme": "Windsurf Dark",
+  "editor.fontFamily": "Fira Code",
+  "windsurf.autocompleteSpeed": "fast",
+  "windsurf.chatFontSize": "default",
+  "windsurf.openRecentConversation": false,
+}

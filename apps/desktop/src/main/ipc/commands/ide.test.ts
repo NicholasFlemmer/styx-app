@@ -2,9 +2,115 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import {
+  fakeIdeMachine,
+  installAll,
+  installVscodeLike,
+  installZed,
+} from '../../services/__fixtures__/ide-machine';
 import { DetectService, type DetectDeps } from '../../services/detect-service';
 import { makeTestApp } from '../../test-support';
 import { cliBinaryKey } from './ide';
+
+describe('detect.ides', () => {
+  it('publishes one IdeInstall per found kind with its recentsSource, and isFallback from the app setting', async () => {
+    const m = fakeIdeMachine('darwin');
+    installAll(m);
+    const t = makeTestApp({ fixture: 'empty', detect: new DetectService(m.deps) });
+    t.app.repos.settings.patch({ fallbackIde: 'windsurf' });
+    const r = await t.app.bus.dispatch(t.sender, 'detect.ides', {});
+    if (!r.ok) throw new Error(r.error.message);
+    expect(
+      r.value.ides.map((i) => ({
+        id: i.id,
+        kind: i.kind,
+        product: i.product,
+        recentsSource: i.recentsSource,
+        isFallback: i.isFallback,
+        launcher: i.launcher,
+      })),
+    ).toEqual([
+      {
+        id: 'ide-vscode',
+        kind: 'vscode',
+        product: 'VS Code',
+        recentsSource: 'state-db',
+        isFallback: false,
+        launcher: join(m.bins, 'code'),
+      },
+      {
+        id: 'ide-cursor',
+        kind: 'cursor',
+        product: 'Cursor',
+        recentsSource: 'state-db',
+        isFallback: false,
+        launcher: join(m.bins, 'cursor'),
+      },
+      {
+        id: 'ide-windsurf',
+        kind: 'windsurf',
+        product: 'Windsurf',
+        recentsSource: 'state-db',
+        isFallback: true,
+        launcher: join(m.bins, 'windsurf'),
+      },
+      {
+        id: 'ide-zed',
+        kind: 'zed',
+        product: 'Zed',
+        recentsSource: null,
+        isFallback: false,
+        launcher: join(m.bins, 'zed'),
+      },
+      {
+        id: 'ide-jetbrains',
+        kind: 'jetbrains',
+        product: 'JetBrains (WebStorm)',
+        recentsSource: 'recent-projects',
+        isFallback: false,
+        launcher: 'open -a "WebStorm"',
+      },
+      {
+        id: 'ide-neovim',
+        kind: 'neovim',
+        product: 'Neovim',
+        recentsSource: 'shada',
+        isFallback: false,
+        launcher: join(m.bins, 'nvim'),
+      },
+    ]);
+    // JetBrains recents are counted from recentProjects.xml at detection time; the rest wait for an import.
+    expect(r.value.ides.map((i) => i.imported.recents)).toEqual([0, 0, 0, 0, 3, 0]);
+    // Persisted (the DB CHECK admits the two new kinds) and published as one discovery.set delta.
+    expect(t.app.repos.discovery.ides().map((i) => i.kind)).toEqual([
+      'vscode',
+      'cursor',
+      'windsurf',
+      'zed',
+      'jetbrains',
+      'neovim',
+    ]);
+    t.app.publisher.flush();
+    expect(
+      t.win
+        .batches()
+        .at(-1)
+        ?.deltas.some((d) => d.op === 'discovery.set'),
+    ).toBe(true);
+
+    // Only what is installed is published: a machine with just Zed and Cursor yields two rows.
+    const m2 = fakeIdeMachine('win32');
+    installZed(m2, '0.201.6');
+    installVscodeLike(m2, 'cursor', '1.7.28');
+    const t2 = makeTestApp({ fixture: 'empty', detect: new DetectService(m2.deps) });
+    const r2 = await t2.app.bus.dispatch(t2.sender, 'detect.ides', {});
+    if (!r2.ok) throw new Error(r2.error.message);
+    expect(r2.value.ides.map((i) => [i.kind, i.isFallback])).toEqual([
+      ['cursor', false],
+      ['zed', false],
+    ]);
+  });
+});
 
 const fakeDetect = (home: string) =>
   new DetectService({

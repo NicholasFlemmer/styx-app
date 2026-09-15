@@ -1,9 +1,20 @@
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import {
+  IDE_KINDS,
+  fakeIdeMachine,
+  installAll,
+  installJetbrains,
+  installJetbrainsRecents,
+  installVscodeLike,
+  installZed,
+  toolboxApps,
+} from './__fixtures__/ide-machine';
 import {
   compareVersions,
+  defaultDeps,
   DetectService,
   findAllOnPath,
   findOnPath,
@@ -12,7 +23,11 @@ import {
   toCliInstall,
   versionSatisfies,
   type DetectDeps,
+  type IdeDetection,
 } from './detect-service';
+import { IdeImportService } from './ide-import-service';
+
+const FIX = join(__dirname, '__fixtures__');
 
 function bin(dir: string, name: string) {
   const p = join(dir, name);
@@ -240,17 +255,230 @@ describe('DetectService', () => {
     });
   });
 
-  it('detects IDEs without crashing on an empty machine', async () => {
+  it('detects IDEs without crashing on an empty machine: six rows in Onboarding order, none found', async () => {
     const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
     const svc = new DetectService({
       platform: 'darwin',
       home,
       pathEnv: '',
       env: {},
+      applicationsDir: join(home, 'Applications'),
       exec: async () => ({ stdout: '', exitCode: 1 }),
     });
     const ides = await svc.detectIdes();
-    expect(ides.map((i) => i.kind)).toEqual(['vscode', 'cursor', 'jetbrains', 'neovim']);
-    expect(ides.find((i) => i.kind === 'neovim')?.found).toBe(false);
+    expect(ides.map((i) => i.kind)).toEqual([...IDE_KINDS]);
+    expect(ides.map((i) => [i.found, i.launcher, i.version])).toEqual(
+      IDE_KINDS.map(() => [false, null, null]),
+    );
   });
+});
+
+describe('detectIdes on a fake machine', () => {
+  describe.each(['darwin', 'win32', 'linux'] as const)('%s, every editor installed', (platform) => {
+    const m = fakeIdeMachine(platform);
+    const expected = installAll(m);
+    let byKind = new Map<string, IdeDetection>();
+    beforeAll(async () => {
+      byKind = new Map((await new DetectService(m.deps).detectIdes()).map((i) => [i.kind, i]));
+    });
+
+    it.each(IDE_KINDS)('%s: found, product, version, launcher, configDir, imports', (kind) => {
+      expect(byKind.get(kind)).toEqual({ kind, found: true, ...expected[kind] });
+    });
+  });
+
+  it('macOS bundle without its CLI shim → `open -a` launcher; Windows install without the shim on PATH → bin\\<cli>.cmd / Zed.exe', async () => {
+    const mac = fakeIdeMachine('darwin');
+    installVscodeLike(mac, 'cursor', '1.7.28', { cli: false });
+    installZed(mac, '0.201.6', { cli: false });
+    const onMac = new Map((await new DetectService(mac.deps).detectIdes()).map((i) => [i.kind, i]));
+    expect(onMac.get('cursor')).toMatchObject({
+      found: true,
+      version: '1.7.28',
+      launcher: 'open -a "Cursor"',
+    });
+    expect(onMac.get('zed')).toMatchObject({ found: true, version: '0.201.6', launcher: 'open -a "Zed"' });
+    expect(onMac.get('vscode')).toMatchObject({ found: false, launcher: null });
+
+    const win = fakeIdeMachine('win32');
+    const ws = installVscodeLike(win, 'windsurf', '1.12.5', { cli: false });
+    const zed = installZed(win, '0.201.6', { cli: false });
+    const onWin = new Map((await new DetectService(win.deps).detectIdes()).map((i) => [i.kind, i]));
+    expect(onWin.get('windsurf')).toMatchObject({
+      found: true,
+      version: '1.12.5',
+      launcher: join(ws.location ?? '', 'bin', 'windsurf.cmd'),
+      configDir: join(win.appData, 'Windsurf', 'User'),
+    });
+    expect(onWin.get('zed')).toMatchObject({
+      found: true,
+      launcher: join(zed.location ?? '', 'Zed.exe'),
+      version: null,
+    });
+  });
+
+  it('linux: the CLI on PATH is the launcher and `--version` is the only version source', async () => {
+    const m = fakeIdeMachine('linux');
+    const code = m.onPath('code', '1.104.0\n0123abcd\nx64');
+    const ides = new Map((await new DetectService(m.deps).detectIdes()).map((i) => [i.kind, i]));
+    expect(ides.get('vscode')).toMatchObject({
+      found: true,
+      version: '1.104.0',
+      launcher: code,
+      location: null,
+      configDir: null,
+    });
+    expect(ides.get('vscode')?.imports).toEqual({ recents: 0, keybindings: false, theme: false });
+  });
+
+  describe('JetBrains', () => {
+    it('several IDEs installed → the first in preference order wins (WebStorm, IntelliJ IDEA, PyCharm…)', async () => {
+      const m = fakeIdeMachine('darwin');
+      installJetbrains(m, 'PyCharm', '2025.1.1', 'bundle');
+      installJetbrains(m, 'IntelliJ IDEA', '2025.1.2', 'bundle');
+      const ws = installJetbrains(m, 'WebStorm', '2025.1.3', 'bundle');
+      const first = (await new DetectService(m.deps).detectIdes()).find((i) => i.kind === 'jetbrains');
+      expect(first).toMatchObject({
+        found: true,
+        product: 'JetBrains (WebStorm)',
+        version: '2025.1.3',
+        location: ws.root,
+        launcher: 'open -a "WebStorm"',
+      });
+
+      const m2 = fakeIdeMachine('darwin');
+      installJetbrains(m2, 'PyCharm', '2025.1.1', 'bundle');
+      installJetbrains(m2, 'IntelliJ IDEA', '2025.1.2', 'toolbox');
+      const second = (await new DetectService(m2.deps).detectIdes()).find((i) => i.kind === 'jetbrains');
+      expect(second).toMatchObject({
+        product: 'JetBrains (IntelliJ IDEA)',
+        version: '2025.1.2',
+        launcher: 'open -a "IntelliJ IDEA"',
+      });
+    });
+
+    it('macOS: a bundle in /Applications beats the same product under Toolbox', async () => {
+      const m = fakeIdeMachine('darwin');
+      installJetbrains(m, 'WebStorm', '2024.3.1', 'toolbox');
+      const bundle = installJetbrains(m, 'WebStorm', '2025.1.3', 'bundle');
+      const jb = (await new DetectService(m.deps).detectIdes()).find((i) => i.kind === 'jetbrains');
+      expect(jb).toMatchObject({
+        version: '2025.1.3',
+        location: bundle.root,
+        launcher: 'open -a "WebStorm"',
+      });
+    });
+
+    it('macOS: Toolbox only → the Toolbox bundle (version from its plist), launched by name', async () => {
+      const m = fakeIdeMachine('darwin');
+      const tb = installJetbrains(m, 'WebStorm', '2024.3.1', 'toolbox');
+      const jb = (await new DetectService(m.deps).detectIdes()).find((i) => i.kind === 'jetbrains');
+      expect(jb).toMatchObject({
+        found: true,
+        version: '2024.3.1',
+        location: tb.root,
+        launcher: 'open -a "WebStorm"',
+      });
+    });
+
+    it("Windows: Program Files beats the Toolbox copy; the launcher is the bundle's bin\\webstorm64.exe", async () => {
+      const m = fakeIdeMachine('win32');
+      m.deps.env['LOCALAPPDATA'] = join(FIX, 'jetbrains-win', 'LocalAppData'); // Toolbox 2024.3.1 (committed fixture)
+      const pf = installJetbrains(m, 'WebStorm', '2025.1.3', 'bundle');
+      const jb = (await new DetectService(m.deps).detectIdes()).find((i) => i.kind === 'jetbrains');
+      expect(jb).toMatchObject({ version: '2025.1.3', location: pf.root, launcher: pf.launcher });
+      expect(pf.launcher.endsWith(join('bin', 'webstorm64.exe'))).toBe(true);
+    });
+
+    it('Windows: Toolbox only (committed fixture) → Toolbox exe, version from product-info.json, recents under %APPDATA%', async () => {
+      const m = fakeIdeMachine('win32');
+      m.deps.env['LOCALAPPDATA'] = join(FIX, 'jetbrains-win', 'LocalAppData');
+      m.deps.env['APPDATA'] = join(FIX, 'jetbrains-win', 'AppData');
+      const jb = (await new DetectService(m.deps).detectIdes()).find((i) => i.kind === 'jetbrains');
+      expect(jb).toEqual({
+        kind: 'jetbrains',
+        found: true,
+        product: 'JetBrains (WebStorm)',
+        version: '2024.3.1',
+        location: join(
+          FIX,
+          'jetbrains-win',
+          'LocalAppData',
+          'JetBrains',
+          'Toolbox',
+          'apps',
+          'WebStorm',
+          'ch-0',
+          '243.22562.13',
+        ),
+        launcher: join(
+          FIX,
+          'jetbrains-win',
+          'LocalAppData',
+          'JetBrains',
+          'Toolbox',
+          'apps',
+          'WebStorm',
+          'ch-0',
+          '243.22562.13',
+          'bin',
+          'webstorm64.exe',
+        ),
+        configDir: null,
+        imports: { recents: 2, keybindings: false, theme: false },
+      });
+    });
+
+    it('Linux: the Toolbox script on PATH is preferred as launcher; version still comes from product-info.json', async () => {
+      const m = fakeIdeMachine('linux');
+      const tb = installJetbrains(m, 'WebStorm', '2025.1.3', 'toolbox');
+      const script = m.onPath('webstorm', '');
+      installJetbrainsRecents(m);
+      const jb = (await new DetectService(m.deps).detectIdes()).find((i) => i.kind === 'jetbrains');
+      expect(jb).toMatchObject({
+        found: true,
+        version: '2025.1.3',
+        location: tb.root,
+        launcher: script,
+        imports: { recents: 3 },
+      });
+    });
+
+    it('a Toolbox apps dir holding only unknown products still counts as found, without a launcher', async () => {
+      const m = fakeIdeMachine('darwin');
+      mkdirSync(join(toolboxApps(m), 'DataGrip', 'ch-0'), { recursive: true });
+      const jb = (await new DetectService(m.deps).detectIdes()).find((i) => i.kind === 'jetbrains');
+      expect(jb).toMatchObject({
+        found: true,
+        product: 'JetBrains',
+        version: null,
+        launcher: null,
+        location: toolboxApps(m),
+      });
+    });
+  });
+});
+
+/**
+ * Runs against this machine (VS Code is installed here: /Applications/Visual Studio Code.app + `code` on PATH).
+ * Skipped unless STYX_LIVE=1 so CI and other machines are unaffected; the fake-machine tests above cover the rest.
+ */
+const live = process.env['STYX_LIVE'] === '1';
+describe.skipIf(!live)('IDE detection on this machine (live)', () => {
+  it('finds VS Code with a version, the `code` launcher, its User dir and recent folders', async () => {
+    const ides = await new DetectService(defaultDeps()).detectIdes();
+    const vscode = ides.find((i) => i.kind === 'vscode');
+    const imports = new IdeImportService({ platform: process.platform, home: homedir(), env: process.env });
+    const recents = vscode?.configDir
+      ? imports.recentFolders({ kind: 'vscode', configDir: vscode.configDir })
+      : [];
+    console.log(
+      JSON.stringify({ ides, vscodeRecents: recents.length, firstRecents: recents.slice(0, 3) }, null, 2),
+    );
+    expect(vscode).toMatchObject({ found: true, product: 'VS Code' });
+    expect(vscode?.version).toMatch(/^\d+\.\d+/);
+    expect(vscode?.launcher).toMatch(/(^|\/)code$/);
+    expect(vscode?.configDir).toMatch(/Library\/Application Support\/Code\/User$/);
+    expect(recents.length).toBeGreaterThan(0);
+  }, 60_000);
 });

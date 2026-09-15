@@ -1,0 +1,8 @@
+{
+  // Cursor keeps VS Code's keys; only theme + font are read
+  "workbench.colorTheme": "Cursor Dark Midnight",
+  "editor.fontFamily": "Berkeley Mono, Menlo, monospace",
+  "editor.fontSize": 13,
+  "cursor.cpp.disabledLanguages": ["plaintext"],
+  "cursorpyright.analysis.autoImportCompletions": true,
+}

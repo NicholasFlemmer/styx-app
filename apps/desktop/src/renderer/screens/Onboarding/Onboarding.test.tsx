@@ -110,6 +110,40 @@ describe('Onboarding', () => {
     ).toEqual([true, true, true, false]);
   });
 
+  it('Editor: every detected editor kind gets its own row (Windsurf and Zed included)', () => {
+    const m = fixtures.demoReadModel();
+    const vscode = m.discovery.ides[0];
+    if (!vscode) throw new Error('demo fixture has no IDE rows');
+    const extra = (id: string, kind: 'windsurf' | 'zed', product: string) => ({
+      ...vscode,
+      id,
+      kind,
+      product,
+      isFallback: false,
+      recentsSource: kind === 'zed' ? null : ('state-db' as const),
+    });
+    useReadModel.getState().replaceModel(
+      {
+        ...m,
+        discovery: {
+          ...m.discovery,
+          ides: [
+            ...m.discovery.ides,
+            extra('ide-windsurf', 'windsurf', 'Windsurf'),
+            extra('ide-zed', 'zed', 'Zed'),
+          ],
+        },
+      },
+      'connected',
+    );
+    render(<Onboarding />);
+    expect(
+      [...screen.getByRole('table').querySelectorAll('[data-ide-id]')].map((r) =>
+        r.getAttribute('data-ide-id'),
+      ),
+    ).toEqual(['ide-vscode', 'ide-cursor', 'ide-webstorm', 'ide-neovim', 'ide-windsurf', 'ide-zed']);
+  });
+
   it('Continue on Editor sets the fallback, imports the checked items and installs Open in Styx only when checked', async () => {
     render(<Onboarding />);
     fireEvent.click(screen.getByRole('checkbox', { name: copy.onboarding.editor.importTheme }));
@@ -229,6 +263,20 @@ describe('Onboarding', () => {
     ]);
     const dots = [...rows].map((r) => r.querySelector('[data-tone="hollow"]')?.getAttribute('data-on'));
     expect(dots).toEqual([null, 'true', null, null, null]);
+    // "Sign in →" / "Install →" are real buttons (owner addition): they open the Connect agent modal for that CLI.
+    expect(
+      [...rows].map((r) => r.querySelector('[data-agent-connect]')?.getAttribute('data-agent-connect')),
+    ).toEqual([undefined, 'codex', 'gemini', undefined, undefined]);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in → · Gemini CLI' }));
+    expect(useUiStore.getState().overlays).toMatchObject([
+      { kind: 'modal', modal: 'connect-agent', agent: 'gemini' },
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Install → · Codex' }));
+    expect(useUiStore.getState().overlays).toMatchObject([
+      { kind: 'modal', modal: 'connect-agent', agent: 'codex' },
+    ]);
+    expect(useUiStore.getState().overlays).toHaveLength(1);
+    useUiStore.setState({ overlays: [] });
     const before = commandMock.mock.calls.length;
     fireEvent.click(screen.getByRole('button', { name: copy.onboarding.footer.continue }));
     await waitFor(() => expect(useUiStore.getState().onboardingStep).toBe(4));
