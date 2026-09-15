@@ -410,3 +410,29 @@ describe('paletteResults', () => {
     );
   });
 });
+
+describe('palette deploy rows (user deploy commands)', () => {
+  it('a GCP target with a deploy command gets a row like a built-in Vercel one', () => {
+    const m = demoReadModel();
+    const gcp = m.targets.byId[ids.target.infraGcp];
+    if (gcp === undefined) throw new Error('fixture');
+    const withCommand = {
+      ...m,
+      targets: {
+        ...m.targets,
+        byId: {
+          ...m.targets.byId,
+          [gcp.id]: { ...gcp, config: { ...gcp.config, deployCommand: 'gcloud run deploy api --source .' } },
+        },
+      },
+    };
+    const before = paletteResults(m, { projectId: ids.project.infraTools }, '', 'all', DEMO_NOW)
+      .flatMap((g) => g.items)
+      .filter((i) => i.id.startsWith('deploy:'));
+    const after = paletteResults(withCommand, { projectId: ids.project.infraTools }, '', 'all', DEMO_NOW)
+      .flatMap((g) => g.items)
+      .filter((i) => i.id.startsWith('deploy:'));
+    expect(before).toEqual([]);
+    expect(after.map((i) => i.label)).toEqual([`Deploy infra-tools → ${gcp.name} ${gcp.env}`]);
+  });
+});

@@ -33,8 +33,11 @@ export function buildSnapshot(deps: ProjectionDeps, seq: number): ReadModelSnaps
   const transcripts: Record<string, TranscriptMessage[]> = {};
   for (const sid of repos.transcripts.sessionIds())
     transcripts[sid] = repos.transcripts.last(sid, TRANSCRIPT_WINDOW);
+  // Hunks ride along only while tracking is on: an installation with thousands of stale rows would otherwise ship
+  // every patch in each snapshot for a feature that is off.
   const hunks: Record<string, AgentChange[]> = {};
-  for (const sid of repos.agentChanges.sessionIds()) hunks[sid] = repos.agentChanges.bySession(sid);
+  if (repos.settings.app().trackAgentEdits)
+    for (const sid of repos.agentChanges.sessionIds()) hunks[sid] = repos.agentChanges.bySession(sid);
   const project: Record<string, EffectiveProjectSettings> = {};
   const projects = repos.projects.all();
   for (const p of projects) project[p.id] = projectSettingsFor(repos, p.id);

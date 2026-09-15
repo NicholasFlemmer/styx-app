@@ -1,6 +1,7 @@
 import type { AskId, ProjectId, SessionId, TargetId } from '../ids';
 import { copy, fill } from '../copy';
 import type { Provider } from '../model/common';
+import type { Target } from '../model/target';
 import { isDeployActive } from '../model/run';
 import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
@@ -63,8 +64,21 @@ export interface PaletteUi {
   projectId: ProjectId | null;
 }
 
-/** Providers that have a deploy verb in the palette. */
+/** Providers with a built-in deploy verb (`adapter.deployCommand`). */
 export const DEPLOYABLE_PROVIDERS: readonly Provider[] = ['vercel'];
+
+/** The user's own deploy command for a target (`config.deployCommand`), or null when none is set. */
+export const deployCommandOf = (t: Pick<Target, 'config'>): string | null => {
+  const v = t.config['deployCommand'];
+  return typeof v === 'string' && v.trim() !== '' ? v.trim() : null;
+};
+
+/**
+ * A target Styx can deploy to: a provider with a built-in verb, or any target the user gave a deploy command
+ * (owner request: GCP / AWS / SSH targets were "permanently greyed out" because only Vercel had a verb).
+ */
+export const isDeployableTarget = (t: Pick<Target, 'provider' | 'config'>): boolean =>
+  DEPLOYABLE_PROVIDERS.includes(t.provider) || deployCommandOf(t) !== null;
 
 const lockMeta = (model: ReadModel, targetId: TargetId, now: number): string => {
   // A deploy already running for this target is the thing to know before pressing Enter on the row again.
@@ -94,7 +108,7 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
   if (projectId !== null) {
     const project = projectNameOf(model, projectId);
     for (const t of rows(model.targets)) {
-      if (t.projectId !== projectId || !DEPLOYABLE_PROVIDERS.includes(t.provider)) continue;
+      if (t.projectId !== projectId || !isDeployableTarget(t)) continue;
       items.push({
         id: `deploy:${t.id}`,
         glyph: '▲',

@@ -241,6 +241,24 @@ export const copy = {
     statusBar: 'deploying · {target}',
     /** Palette row meta while a deploy for that target is in flight. */
     inFlight: 'deploying…',
+    /** Per-target deploy commands (owner request: only Vercel had a verb, so GCP / AWS / SSH targets could not deploy). */
+    setup: 'Set up deploy',
+    setupTitle: 'Deploy · {project}',
+    setupLead:
+      'Each target deploys with the command you would run yourself, under a scoped grant. Vercel targets are built in.',
+    commandLabel: 'Deploy command',
+    builtIn: 'built in · {command}',
+    noTargets: 'No targets in this project yet.',
+    save: 'Save',
+    placeholders: {
+      gcp: 'gcloud run deploy <service> --source . --region <region>',
+      aws: 'aws deploy … or sam deploy',
+      supabase: 'supabase db push',
+      github: 'gh workflow run deploy.yml',
+      ssh: "ssh <host> 'cd app && git pull && ./deploy.sh'",
+      vercel: 'vercel deploy --prod',
+    },
+    commands: 'Deploy commands…',
   },
 
   /**
@@ -806,6 +824,12 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       nextPrev: 'j / k next · prev',
       done: '{mod}⏎ done',
     },
+    /** Diff review when tracking is off (Settings › Editor › Track agent edits). */
+    off: {
+      headline: 'Agent edit tracking is off',
+      body: 'Styx is not watching agent worktrees, so there are no hunks in the editor and nothing to review here. Turn it on in Settings › Editor.',
+      cta: 'Open Settings',
+    },
     hunkBar: '{n} hunks from {agent} · {note}',
     hunkLabel: '{agent} · {age}',
     changesHeader: 'Changes · {n}',
@@ -830,6 +854,11 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       devicesLabel: 'Device',
       empty: 'Point Styx at your dev server to see it here.',
       hint: 'Run it locally, or start the server yourself and enter its URL.',
+      /** While the page is probed before loading, and when nothing ever answered. */
+      waiting: 'Waiting for {url}…',
+      waitingHint: 'The page opens as soon as the server answers.',
+      unreachable: 'Nothing is answering at {url}.',
+      retry: 'Retry',
     },
     /** "Run locally" (owner addition): the dev server started from the design window. */
     run: {
@@ -882,6 +911,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       lineEndings: 'Line endings',
       /** Spec §9: Monaco screen-reader mode + xterm accessibility tree; not a §10 string. */
       screenReader: 'Screen reader mode',
+      /** Owner decision: the hunk watcher is opt-in (it slowed the app at ~100 hunks); not a §10 string. */
+      trackAgentEdits: 'Track agent edits (diff review)',
       defaultAgent: 'Default agent',
       autoWorktree: 'Auto-create worktree per agent',
       shellWindows: 'Shell (Windows)',

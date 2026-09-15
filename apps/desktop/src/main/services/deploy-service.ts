@@ -1,4 +1,12 @@
-import { copy, fill, type Deploy, type DeployPhase, type Target, type TargetId } from '@styx/core';
+import {
+  copy,
+  deployCommandOf,
+  fill,
+  type Deploy,
+  type DeployPhase,
+  type Target,
+  type TargetId,
+} from '@styx/core';
 import { ulid } from 'ulid';
 import type { Repos } from '../db/repos';
 import { fail } from '../ipc/bus';
@@ -18,6 +26,9 @@ export interface DeployServiceDeps {
   terminals: TerminalService;
   pty: PtyService;
   cli: CliRunner;
+  /** The login shell a user-written deploy command runs through (`$SHELL -lc`); injectable for tests. */
+  shell?: () => string;
+  platform?: NodeJS.Platform;
   /** Timestamps for the `model.deploys` rows; the wall clock unless a test injects one. */
   now?: () => number;
 }
@@ -62,7 +73,9 @@ export class DeployService {
     const { repos, publisher } = this.deps;
     const target = repos.targets.get(targetId) ?? fail('not-found', 'target not found');
     const adapter = this.deps.providers.get(target.provider);
-    if (!adapter.deployCommand)
+    // A built-in verb (Vercel) or the user's own command (`gcloud run deploy …` on a GCP target); neither → not deployable.
+    const custom = adapter.deployCommand ? null : deployCommandOf(target);
+    if (!adapter.deployCommand && custom === null)
       fail('invalid-input', fill(copy.deploy.notDeployable, { provider: copy.providers[target.provider] }));
     if (target.credentialRef === null) fail('invalid-input', copy.deploy.notConnected);
 
@@ -134,24 +147,40 @@ export class DeployService {
       throw e;
     });
 
-    const cmd = adapter.deployCommand(this.info(target));
-    const file = await this.deps.cli.which(cmd.bin);
-    if (!file) {
-      emit('failed', { error: fill(copy.deploy.cliMissing, { bin: cmd.bin }) });
-      fail('cli-missing', fill(copy.deploy.cliMissing, { bin: cmd.bin }));
-    }
     const project = repos.projects.get(target.projectId);
     const cwd = project?.path ?? fail('not-found', 'project path missing');
 
+    let spawn: { file: string; args: string[]; env: Record<string, string>; label: string };
+    if (adapter.deployCommand) {
+      const cmd = adapter.deployCommand(this.info(target));
+      const file = await this.deps.cli.which(cmd.bin);
+      if (!file) {
+        emit('failed', { error: fill(copy.deploy.cliMissing, { bin: cmd.bin }) });
+        fail('cli-missing', fill(copy.deploy.cliMissing, { bin: cmd.bin }));
+      }
+      spawn = { file, args: cmd.args, env: cmd.env ?? {}, label: `${cmd.bin} ${cmd.args.join(' ')}` };
+    } else {
+      // The user's command string goes through their login shell so it resolves exactly as in their terminal.
+      const shell = this.deps.shell?.() ?? '/bin/sh';
+      const text = custom ?? '';
+      const args =
+        this.deps.platform === 'win32'
+          ? /wsl(\.exe)?$/i.test(shell)
+            ? ['-e', 'sh', '-lc', text]
+            : ['-NoLogo', '-Command', text]
+          : ['-lc', text];
+      spawn = { file: shell, args, env: {}, label: text };
+    }
+
     const terminalId = await this.deps.terminals
-      .spawnCommand({ file, args: cmd.args, cwd, env: { ...cmd.env, ...cred.env } })
+      .spawnCommand({ file: spawn.file, args: spawn.args, cwd, env: { ...spawn.env, ...cred.env } })
       .catch((e: Error) => {
         emit('failed', { error: e.message });
-        return fail('internal', `could not start ${cmd.bin}: ${e.message}`);
+        return fail('internal', `could not start ${spawn.label}: ${e.message}`);
       });
 
     const { useId } = this.deps.grants.use(grant.id, {
-      command: `${cmd.bin} ${cmd.args.join(' ')}`,
+      command: spawn.label,
       scopeUsed: 'deploy',
       via: 'app',
       sessionId: null,
@@ -168,7 +197,7 @@ export class DeployService {
     };
     this.deps.pty.on('exit', onExit);
 
-    logger.info('deploy: started', { deployId, target: target.name, bin: cmd.bin, args: cmd.args });
+    logger.info('deploy: started', { deployId, target: target.name, command: spawn.label });
     emit('running', { terminalId });
     return { deployId, terminalId };
   }

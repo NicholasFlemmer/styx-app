@@ -70,3 +70,15 @@ describe('projection', () => {
     expect(repos.projects.count()).toBe(fixture.projects.length);
   });
 });
+
+describe('hunks follow the tracking setting (Settings › Editor › Track agent edits)', () => {
+  it('omits every hunk from the snapshot while trackAgentEdits is off', () => {
+    const db = new Database(':memory:');
+    migrate(db);
+    const repos = new Repos(db, () => fixtures.DEMO_NOW);
+    seed(repos, loadFixture('demo'));
+    expect(Object.keys(buildSnapshot({ repos, popouts: () => [] }, 1).hunks).length).toBeGreaterThan(0);
+    repos.settings.patch({ trackAgentEdits: false });
+    expect(buildSnapshot({ repos, popouts: () => [] }, 2).hunks).toEqual({});
+  });
+});

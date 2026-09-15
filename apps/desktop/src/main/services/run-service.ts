@@ -1,6 +1,8 @@
 import type { DevRun, ProjectId } from '@styx/core';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import * as http from 'node:http';
+import * as https from 'node:https';
 import { join } from 'node:path';
 import { ulid } from 'ulid';
 import type { Clock } from '../clock';
@@ -22,7 +24,39 @@ export interface RunServiceDeps {
   /** The login shell used to run the command string (`$SHELL -lc`); injectable for tests. */
   shell: () => string;
   platform: NodeJS.Platform;
+  /** Does a URL answer? Defaults to an HTTP HEAD with a short timeout; injectable for tests. */
+  probe?: (url: string) => Promise<boolean>;
 }
+
+/** How often unanswered URL candidates are re-probed, and for how long after the run started. */
+export const PROBE_INTERVAL_MS = 1000;
+export const PROBE_WINDOW_MS = 120_000;
+
+/**
+ * Any HTTP response counts (a 404 or a 405 to HEAD still means a server is listening); a refused connection, a
+ * reset or a timeout means nothing is there yet.
+ */
+export const httpProbe = (url: string): Promise<boolean> =>
+  new Promise((resolve) => {
+    let u: URL;
+    try {
+      u = new URL(url);
+    } catch {
+      resolve(false);
+      return;
+    }
+    const mod = u.protocol === 'https:' ? https : http;
+    const req = mod.request(u, { method: 'HEAD', timeout: 1500 }, (res) => {
+      res.resume();
+      resolve(true);
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+    req.on('error', () => resolve(false));
+    req.end();
+  });
 
 export type RunSuggestion = {
   command: string;
@@ -32,6 +66,7 @@ export type RunSuggestion = {
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
 /** The first URL a dev server prints for itself: `http://localhost:5173/`, `http://127.0.0.1:8000`, `http://0.0.0.0:3000`. */
 const LOCAL_URL = /https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\])(:\d+)?[^\s"'<>)]*/;
+const LOCAL_URLS = new RegExp(LOCAL_URL.source, 'g');
 /** How much recent output is kept for the URL match (a URL split across pty chunks still matches). */
 const TAIL = 4096;
 
@@ -40,16 +75,25 @@ const TAIL = 4096;
  * both colour theirs), `0.0.0.0` / `[::]` become `localhost` because that is what a browser can open, and a
  * trailing full stop or comma from prose ("listening on http://localhost:3000.") is dropped.
  */
-export const sniffLocalUrl = (text: string): string | null => {
-  const m = LOCAL_URL.exec(text.replace(ANSI, ''));
-  if (m === null) return null;
-  const candidate = m[0]
-    .replace('0.0.0.0', 'localhost')
-    .replace('[::]', 'localhost')
-    .replace(/[.,;]+$/, '');
-  // The prefix match is not enough: `http://localhost@evil.example/` and `http://localhost.evil.example/` both start
-  // the same way. Only a real loopback host with no userinfo may become the design window's URL.
-  return isLoopbackUrl(candidate) ? candidate : null;
+export const sniffLocalUrl = (text: string): string | null => sniffLocalUrls(text)[0] ?? null;
+
+/**
+ * Every loopback URL in a chunk of output, in order of appearance and de-duplicated. A dev server often prints
+ * more than one (`Local:` plus an API it proxies to, or the port it *wanted* before falling back), so the run
+ * probes them and adopts the first that answers rather than trusting the first one printed.
+ */
+export const sniffLocalUrls = (text: string): string[] => {
+  const out: string[] = [];
+  for (const m of text.replace(ANSI, '').matchAll(LOCAL_URLS)) {
+    const candidate = m[0]
+      .replace('0.0.0.0', 'localhost')
+      .replace('[::]', 'localhost')
+      .replace(/[.,;]+$/, '');
+    // The prefix match is not enough: `http://localhost@evil.example/` and `http://localhost.evil.example/` both
+    // start the same way. Only a real loopback host with no userinfo may become the design window's URL.
+    if (isLoopbackUrl(candidate) && !out.includes(candidate)) out.push(candidate);
+  }
+  return out;
 };
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -110,7 +154,7 @@ export async function detectRunCommands(dir: string): Promise<RunSuggestion[]> {
 interface Attached {
   runId: string;
   terminalId: string;
-  /** Removes the pty listeners: called before the row is replaced or dropped so an old exit cannot clobber a new run. */
+  /** Removes the pty listeners and stops probing: called before the row is replaced or dropped so an old exit cannot clobber a new run. */
   off: () => void;
 }
 
@@ -162,17 +206,67 @@ export class RunService {
     });
 
     // Listeners go on before the spawn: a process that prints (or dies) immediately must not be missed.
+    // Every loopback URL the process prints is a candidate; the first one that actually answers becomes the run's URL.
+    // Candidates are probed as they appear and again every second, because a server prints its address before it
+    // accepts connections and may print an API or a fallback port that is not it.
     let tail = '';
-    const onData = (id: string, data: string) => {
-      if (id !== terminalId) return;
+    const candidates: string[] = [];
+    let probeTimer: NodeJS.Timeout | null = null;
+    let probing = false;
+    let adopted = false;
+    const startedAt = clock.now();
+    const probe = this.deps.probe ?? httpProbe;
+    const current = () => {
       const cur = this.runs.get(projectId);
-      if (cur === undefined || cur.runId !== runId || cur.url !== null) return;
-      tail = (tail + data).slice(-TAIL);
-      const url = sniffLocalUrl(tail);
-      if (url === null) return;
+      return cur !== undefined && cur.runId === runId ? cur : undefined;
+    };
+    const adopt = (url: string) => {
+      const cur = current();
+      if (adopted || cur === undefined) return;
+      adopted = true;
+      stopProbe();
       pty.off('data', onData);
       this.publish({ ...cur, url });
       void this.rememberUrl(projectId, url);
+    };
+    const runProbe = async () => {
+      if (probing || adopted) return;
+      probing = true;
+      try {
+        for (const url of [...candidates]) {
+          if (adopted || current() === undefined) return;
+          if (await probe(url)) {
+            adopt(url);
+            return;
+          }
+        }
+      } finally {
+        probing = false;
+      }
+    };
+    const schedule = () => {
+      if (adopted || probeTimer !== null || candidates.length === 0) return;
+      if (clock.now() - startedAt > PROBE_WINDOW_MS) return;
+      probeTimer = setTimeout(() => {
+        probeTimer = null;
+        void runProbe().then(schedule);
+      }, PROBE_INTERVAL_MS);
+      probeTimer.unref?.();
+    };
+    const stopProbe = () => {
+      if (probeTimer !== null) clearTimeout(probeTimer);
+      probeTimer = null;
+    };
+    const onData = (id: string, data: string) => {
+      if (id !== terminalId || adopted || current() === undefined) return;
+      tail = (tail + data).slice(-TAIL);
+      let fresh = false;
+      for (const url of sniffLocalUrls(tail)) {
+        if (candidates.includes(url)) continue;
+        candidates.push(url);
+        fresh = true;
+      }
+      if (fresh) void runProbe().then(schedule);
     };
     const onExit = (id: string, exitCode: number) => {
       if (id !== terminalId) return;
@@ -184,6 +278,7 @@ export class RunService {
       logger.info('run: exited', { project: project.name, command: cmd, exitCode });
     };
     const off = () => {
+      stopProbe();
       pty.off('data', onData);
       pty.off('exit', onExit);
     };
@@ -216,11 +311,11 @@ export class RunService {
     return { runId, terminalId };
   }
 
-  /** Kills the process; its exit handler publishes `exited` with the code. */
+  /** Kills the process group (shell, package manager, server); the exit handler publishes `exited` with the code. */
   stop(projectId: ProjectId): void {
     const run = this.runs.get(projectId);
     if (run === undefined || run.phase === 'exited') return;
-    this.deps.pty.kill(run.terminalId);
+    this.deps.pty.killGroup(run.terminalId);
   }
 
   /** Clears the row (the output strip closes). A live run is stopped first. */
@@ -233,7 +328,7 @@ export class RunService {
 
   /** Kills every run (app shutdown). */
   stopAll(): void {
-    for (const run of this.runs.values()) if (run.phase !== 'exited') this.deps.pty.kill(run.terminalId);
+    for (const run of this.runs.values()) if (run.phase !== 'exited') this.deps.pty.killGroup(run.terminalId);
   }
 
   private publish(run: DevRun): void {
@@ -248,7 +343,7 @@ export class RunService {
     a.off();
     this.attached.delete(projectId);
     const run = this.runs.get(projectId);
-    if (opts.kill && run !== undefined && run.phase !== 'exited') this.deps.pty.kill(a.terminalId);
+    if (opts.kill && run !== undefined && run.phase !== 'exited') this.deps.pty.killGroup(a.terminalId);
   }
 
   /**
@@ -281,10 +376,13 @@ export class RunService {
       .catch((e: Error) => logger.warn('run: could not save devCommand', { error: e.message }));
   }
 
-  /** The design window points at the URL the server printed, but only when the project had none saved. */
+  /**
+   * The design window points at the URL the server actually answered on. It replaces whatever was saved: a run is
+   * the source of truth while it is alive, and a stale port from last time is exactly what "run it yourself" cannot fix.
+   */
   private async rememberUrl(projectId: ProjectId, url: string): Promise<void> {
     const saved = this.deps.repos.projects.settings(projectId).devUrl ?? null;
-    if (saved !== null && saved.trim() !== '') return;
+    if (saved === url) return;
     await this.deps.projects
       .setSettings(projectId, { devUrl: url })
       .catch((e: Error) => logger.warn('run: could not save devUrl', { error: e.message }));

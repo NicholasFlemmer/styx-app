@@ -31,6 +31,11 @@ export const appSettingsSchema = z.object({
   screenReader: z.boolean(),
   dnd: z.boolean(),
   onboardingDone: z.boolean(),
+  /**
+   * Watch agent worktrees for edits (hunks in the editor, the hunk bar, Diff review). Off by default (owner request:
+   * with ~100 hunks the watcher and its deltas slowed the whole app); the demo fixture turns it on.
+   */
+  trackAgentEdits: z.boolean().default(false),
 });
 export type AppSettings = z.infer<typeof appSettingsSchema>;
 
@@ -45,6 +50,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   screenReader: false,
   dnd: false,
   onboardingDone: false,
+  trackAgentEdits: false,
 };
 
 /**

@@ -65,12 +65,31 @@ describe('DeployButton', () => {
     expect((modals()[0] as { deployId?: string }).deployId).toBeUndefined();
   });
 
-  it('without a deployable target it is disabled and says what to do', () => {
+  it('targets without a deploy verb or command: an enabled "Set up deploy" that opens the setup modal', () => {
+    render(<DeployButton projectId={ids.project.infraTools} />);
+    const button = screen.getByRole('button', { name: copy.deploy.setup });
+    expect(button.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(button);
+    expect(modals()).toEqual([
+      expect.objectContaining({ kind: 'modal', modal: 'deploy-setup', projectId: ids.project.infraTools }),
+    ]);
+  });
+
+  it('no targets at all: an enabled "Connect a deploy target" that opens the connect modal', () => {
+    const m = fixtures.demoReadModel();
+    useReadModel
+      .getState()
+      .replaceModel(
+        { ...m, targets: removeRows(m.targets, [ids.target.infraAws, ids.target.infraGcp]) },
+        'connected',
+      );
     render(<DeployButton projectId={ids.project.infraTools} />);
     const button = screen.getByRole('button', { name: copy.deploy.noTarget });
-    expect(button.hasAttribute('disabled')).toBe(true);
+    expect(button.hasAttribute('disabled')).toBe(false);
     fireEvent.click(button);
-    expect(modals()).toEqual([]);
+    expect(modals()).toEqual([
+      expect.objectContaining({ kind: 'modal', modal: 'connect', projectId: ids.project.infraTools }),
+    ]);
   });
 
   it('only non-prod deployables: the plain secondary "Deploy · Vercel preview"', () => {

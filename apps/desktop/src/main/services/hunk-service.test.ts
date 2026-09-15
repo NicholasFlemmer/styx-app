@@ -181,3 +181,31 @@ describe('HunkService', () => {
     await expect(t.app.hunks.revert('nope')).rejects.toMatchObject({ code: 'not-found' });
   });
 });
+
+describe('tracking setting (Settings › Editor › Track agent edits)', () => {
+  it('off: rescan yields nothing; applyTracking clears the renderer hunks and keeps the rows for later', async () => {
+    const t = makeTestApp();
+    const claude = fixtures.ids.session.claude;
+    expect(t.app.hunks.enabled()).toBe(true);
+    t.app.repos.settings.patch({ trackAgentEdits: false });
+    expect(t.app.hunks.enabled()).toBe(false);
+    expect(await t.app.hunks.rescan(claude)).toEqual([]);
+    await t.app.hunks.applyTracking();
+    t.app.publisher.flush();
+    const cleared = t.win
+      .batches()
+      .flatMap((b) => b.deltas)
+      .some((d) => d.op === 'hunks.replace' && d.sessionId === claude && d.hunks.length === 0);
+    expect(cleared).toBe(true);
+    expect(t.app.publisher.snapshot().hunks).toEqual({});
+    expect(t.app.repos.agentChanges.bySession(claude).length).toBeGreaterThan(0);
+  });
+
+  it('settings.set { trackAgentEdits } applies it through the bus', async () => {
+    const t = makeTestApp();
+    const r = await t.app.bus.dispatch(t.sender, 'settings.set', { patch: { trackAgentEdits: false } });
+    expect(r).toEqual({ ok: true, value: {} });
+    expect(t.app.hunks.enabled()).toBe(false);
+    expect(t.app.publisher.snapshot().hunks).toEqual({});
+  });
+});

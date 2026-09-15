@@ -171,6 +171,23 @@ describe('Diff review screen', () => {
     expect(useUiStore.getState().diffFocusIndex).toBe(2);
   });
 
+  it('tracking off: the empty state points at Settings › Editor, and Open Settings goes there', () => {
+    const m = fixtures.demoReadModel();
+    useReadModel
+      .getState()
+      .replaceModel(
+        { ...m, settings: { ...m.settings, app: { ...m.settings.app, trackAgentEdits: false } } },
+        'connected',
+      );
+    render(<Diff />);
+    expect(document.querySelector('[data-diff-empty]')?.getAttribute('data-diff-empty')).toBe('off');
+    expect(screen.getByText(copy.diff.off.headline)).toBeTruthy();
+    expect(screen.queryByRole('list', { name: copy.diff.title })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: copy.diff.off.cta }));
+    expect(useUiStore.getState().screen).toBe('settings');
+    expect(useUiStore.getState().settingsSection).toBe('app:editor');
+  });
+
   it('a plain folder (no git) shows the empty state with `Initialise git` → project.gitInit; Done returns to Workspace', () => {
     const side = fixtures.ids.project.sideApi as ProjectId;
     useReadModel.getState().replaceModel(plainFolderReadModel(), 'connected');

@@ -372,7 +372,10 @@ async function boot(): Promise<void> {
       rendererOrigins,
     },
     windows: windowsPort,
-    preview: new PreviewService({ mainWindow: () => windowService.mainWindow() ?? null }),
+    preview: new PreviewService({
+      mainWindow: () => windowService.mainWindow() ?? null,
+      onStatus: (status) => container?.publisher.sendEvent('preview.status', status),
+    }),
     dialogs: dialogsPort,
     notifications,
     openExternal: (url) =>

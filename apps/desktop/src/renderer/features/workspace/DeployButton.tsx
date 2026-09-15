@@ -70,6 +70,11 @@ export function DeployButton({ projectId }: DeployButtonProps) {
   const onClick = () => {
     switch (state.kind) {
       case 'none':
+        // Nothing to deploy to yet: the button is the way to connect a target (it used to be greyed out).
+        pushOverlay({ kind: 'modal', modal: 'connect', projectId });
+        return;
+      case 'setup':
+        pushOverlay({ kind: 'modal', modal: 'deploy-setup', projectId });
         return;
       case 'deploying':
         pushOverlay({ kind: 'modal', modal: 'deploy', targetId: state.targetId, deployId: state.deployId });
@@ -84,7 +89,8 @@ export function DeployButton({ projectId }: DeployButtonProps) {
   };
 
   const live = (state.kind === 'single' || state.kind === 'menu') && state.live;
-  const label = state.kind === 'none' ? copy.deploy.noTarget : state.label;
+  const label =
+    state.kind === 'none' ? copy.deploy.noTarget : state.kind === 'setup' ? copy.deploy.setup : state.label;
 
   return (
     <div className={s['wrap']} data-deploy-button="true" data-state={state.kind}>
@@ -93,7 +99,6 @@ export function DeployButton({ projectId }: DeployButtonProps) {
         size="compact"
         variant={live ? 'primary' : 'secondary'}
         className={s['button'] ?? ''}
-        disabled={state.kind === 'none'}
         aria-haspopup={state.kind === 'menu' ? 'menu' : undefined}
         aria-expanded={state.kind === 'menu' ? menuOpen : undefined}
         onClick={onClick}

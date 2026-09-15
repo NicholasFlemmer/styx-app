@@ -34,8 +34,38 @@ describe('deployButtonState', () => {
     });
   });
 
-  it('infra-tools has aws + gcp only: nothing to deploy with', () => {
-    expect(deployButtonState(model, ids.project.infraTools)).toEqual({ kind: 'none' });
+  it('infra-tools has aws + gcp only, no deploy command yet: the button offers setup', () => {
+    expect(deployButtonState(model, ids.project.infraTools)).toEqual({ kind: 'setup' });
+  });
+
+  it('a project with no targets at all asks to connect one', () => {
+    const bare: ReadModel = {
+      ...model,
+      targets: removeRows(model.targets, [ids.target.infraAws, ids.target.infraGcp]),
+    };
+    expect(deployButtonState(bare, ids.project.infraTools)).toEqual({ kind: 'none' });
+  });
+
+  it('a GCP target with a deploy command is deployable like a built-in one', () => {
+    const gcp = model.targets.byId[ids.target.infraGcp];
+    if (gcp === undefined) throw new Error('fixture');
+    const withCommand: ReadModel = {
+      ...model,
+      targets: {
+        ...model.targets,
+        byId: {
+          ...model.targets.byId,
+          [gcp.id]: { ...gcp, config: { ...gcp.config, deployCommand: 'gcloud run deploy api --source .' } },
+        },
+      },
+    };
+    expect(deployButtonState(withCommand, ids.project.infraTools)).toEqual({
+      kind: 'single',
+      targetId: gcp.id,
+      // The fixture's GCP target is staging, so it is the plain "Deploy · …", not "Deploy to live".
+      live: false,
+      label: `Deploy · ${gcp.name} ${gcp.env}`,
+    });
   });
 
   it('only non-prod deployables → the plain "Deploy · Vercel preview"', () => {

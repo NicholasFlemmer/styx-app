@@ -21,6 +21,8 @@ export type ModalPayload =
   | { modal: 'connect'; projectId: ProjectId | null; provider?: Provider; targetId?: TargetId }
   /** Deploy progress: starts a deploy for `targetId`, or attaches to a running one when `deployId` is given. */
   | { modal: 'deploy'; targetId: TargetId; deployId?: string }
+  /** Per-target deploy commands for a project (targets without a built-in verb). */
+  | { modal: 'deploy-setup'; projectId: ProjectId }
   /**
    * Connect agent (Settings › Agents, onboarding step 3, the Spawn modal's "Fix connection"): verify / sign in for one
    * CLI. `returnTo` re-opens the Spawn modal for that project when the connect modal closes.

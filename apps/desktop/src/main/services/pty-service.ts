@@ -89,6 +89,42 @@ export class PtyService extends EventEmitter<PtyEvents> {
     p.kill(signal);
   }
 
+  /** The pty child's pid (the process-group leader on posix), or null once it has exited. */
+  pid(id: string): number | null {
+    const p = this.ptys.get(id);
+    return p ? p.pid : null;
+  }
+
+  /**
+   * Kills everything behind a pty, not only the shell it started: `pnpm dev` → `next dev` → `next-server` all live in
+   * the process group node-pty created, and signalling the shell alone left the server running and holding its port.
+   * SIGTERM first (dev servers clean up on it), SIGKILL for anything still there three seconds later.
+   */
+  killGroup(id: string): void {
+    const pid = this.pid(id);
+    // No group to signal (already gone, a fake, or conpty, which tears its tree down itself): plain kill.
+    if (pid === null || this.platform === 'win32') {
+      this.kill(id);
+      return;
+    }
+    const signalGroup = (signal: NodeJS.Signals): boolean => {
+      try {
+        process.kill(-pid, signal);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    if (!signalGroup('SIGTERM')) {
+      this.kill(id);
+      return;
+    }
+    const t = setTimeout(() => {
+      if (this.ptys.has(id)) signalGroup('SIGKILL');
+    }, 3000);
+    t.unref?.();
+  }
+
   has(id: string): boolean {
     return this.ptys.has(id);
   }

@@ -1,5 +1,5 @@
 import {
-  DEPLOYABLE_PROVIDERS,
+  isDeployableTarget,
   copy,
   fill,
   isDeployActive,
@@ -29,21 +29,22 @@ export type DeployButtonState =
   /** One candidate: click starts it. `live` = prod, which is what makes it the accent button. */
   | { kind: 'single'; targetId: TargetId; label: string; live: boolean }
   /** Several candidates: click opens the picker. */
-  | { kind: 'menu'; label: string; live: boolean; options: DeployOption[] };
+  | { kind: 'menu'; label: string; live: boolean; options: DeployOption[] }
+  /** The project has targets, but none has a deploy verb or a deploy command yet: click opens the setup modal. */
+  | { kind: 'setup' };
 
 /**
  * What the workspace deploy button shows for a project (owner request: "clearly shows which target").
  *
- * Deployable = provider with a deploy verb (`DEPLOYABLE_PROVIDERS`). Prod targets win: with one, the button is
+ * Deployable = a built-in verb or the user's own deploy command (`isDeployableTarget`). Prod targets win: with one, the button is
  * `Deploy to live · Vercel prod`; with several, a picker. Only non-prod deployables → `Deploy · Vercel preview`.
  * While a deploy runs for any of the project's targets the button reports it instead, so the state survives the
  * modal being closed.
  */
 export const deployButtonState = (model: ReadModel, projectId: ProjectId): DeployButtonState => {
-  const deployable = rows(model.targets).filter(
-    (t) => t.projectId === projectId && DEPLOYABLE_PROVIDERS.includes(t.provider),
-  );
-  if (deployable.length === 0) return { kind: 'none' };
+  const own = rows(model.targets).filter((t) => t.projectId === projectId);
+  const deployable = own.filter(isDeployableTarget);
+  if (deployable.length === 0) return own.length === 0 ? { kind: 'none' } : { kind: 'setup' };
 
   const active = Object.values(model.deploys)
     .filter((d) => d.projectId === projectId && isDeployActive(d))

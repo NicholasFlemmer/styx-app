@@ -456,6 +456,7 @@ export class SessionService {
       binary: binary ?? '',
       sessionId: session.id,
       worktreePath: worktree.path,
+      projectPath: project.path,
       firstMessage,
       model: session.model,
       runner,

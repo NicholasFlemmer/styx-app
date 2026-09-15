@@ -202,6 +202,15 @@ const editorRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
       change: { kind: 'app', patch: (b) => ({ screenReader: isOn(b) }) },
       overridden: false,
     },
+    // Owner decision: the hunk watcher is opt-in (it slowed the app at ~100 hunks).
+    {
+      id: 'trackAgentEdits',
+      label: r.trackAgentEdits,
+      value: onOff(app.trackAgentEdits),
+      options: ON_OFF,
+      change: { kind: 'app', patch: (b) => ({ trackAgentEdits: isOn(b) }) },
+      overridden: false,
+    },
   ];
 };
 

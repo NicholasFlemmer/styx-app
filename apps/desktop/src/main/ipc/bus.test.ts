@@ -19,6 +19,7 @@ const bus = () => {
       screenReader: false,
       dnd: false,
       onboardingDone: true,
+    trackAgentEdits: false,
     },
   }));
   b.register('project.select', ({ projectId }) => {

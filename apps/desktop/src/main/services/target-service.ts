@@ -534,6 +534,18 @@ export class TargetService {
     this.deps.publisher.sendEvent('banner.clear', { bannerKey: key });
   }
 
+  /** The user's own deploy command (`config.deployCommand`); null removes it. Machine-local, never a secret. */
+  setDeployCommand(targetId: string, command: string | null): Target {
+    const target = this.require(targetId);
+    const config: Record<string, unknown> = { ...target.config };
+    const trimmed = command?.trim() ?? '';
+    if (trimmed === '') delete config['deployCommand'];
+    else config['deployCommand'] = trimmed;
+    const next: Target = { ...target, config: config as Target['config'] };
+    this.upsertRow(next);
+    return next;
+  }
+
   setPolicy(targetId: string, policy: TargetPolicy): Target {
     const target = this.require(targetId);
     const next: Target = { ...target, policy, policySource: 'app' };

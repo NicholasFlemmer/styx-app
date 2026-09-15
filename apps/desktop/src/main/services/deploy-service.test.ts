@@ -104,6 +104,42 @@ describe('DeployService', () => {
     expect(events(t).map((e) => e.phase)).toEqual(['requesting-grant', 'running']);
   });
 
+  it("a target without a built-in verb runs the user's own deploy command through the login shell, with the grant env", async () => {
+    const { t, pty } = appWithPty();
+    const target = t.app.repos.targets.get(ids.target.infraGcp);
+    if (!target?.credentialRef) throw new Error('fixture target');
+    // No command yet: not deployable, and nothing is spawned.
+    await expect(t.app.deploys.start(target.id, 'palette')).rejects.toMatchObject({ code: 'invalid-input' });
+    expect(pty.spawned).toHaveLength(0);
+
+    t.app.targets.setDeployCommand(target.id, '  gcloud run deploy api --source . --region europe-west1  ');
+    expect(t.app.repos.targets.get(target.id)?.config['deployCommand']).toBe(
+      'gcloud run deploy api --source . --region europe-west1',
+    );
+    await t.vault.set(target.credentialRef, JSON.stringify({ kind: 'cli', account: 'nic@acme.dev' }));
+    vi.spyOn(t.app.providers.get('gcp'), 'issue').mockResolvedValue({
+      kind: 'env',
+      env: { CLOUDSDK_AUTH_ACCESS_TOKEN: 'ya29.scoped' },
+      expiresAt: null,
+      scoped: true,
+    });
+    // The target's policy is `ask`: make it `always` so `start` runs straight through without an ask.
+    t.app.repos.targets.upsert({ ...t.app.repos.targets.get(target.id)!, policy: 'always' });
+    const r = await t.app.deploys.start(target.id, 'palette');
+    const spawned = pty.spawned.at(-1);
+    expect(spawned?.shell).toBe('/bin/zsh');
+    expect(spawned?.args).toEqual(['-lc', 'gcloud run deploy api --source . --region europe-west1']);
+    expect(spawned?.env).toMatchObject({ CLOUDSDK_AUTH_ACCESS_TOKEN: 'ya29.scoped' });
+    const grants = t.app.repos.grants.byTarget(target.id).filter((g) => g.scope.includes('deploy'));
+    expect(t.app.repos.grantUses.byGrant(grants[0]!.id).at(-1)).toMatchObject({
+      via: 'app',
+      command: 'gcloud run deploy api --source . --region europe-west1',
+    });
+    expect(r.deployId).toMatch(/^dep:/);
+    t.app.targets.setDeployCommand(target.id, null);
+    expect(t.app.repos.targets.get(target.id)?.config['deployCommand']).toBeUndefined();
+  });
+
   it('publishes a model.deploys row on every phase, keeps the latest per target, and rides in the snapshot', async () => {
     const { t, pty } = appWithPty();
     const target = await ready(t);

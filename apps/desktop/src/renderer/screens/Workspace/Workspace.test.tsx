@@ -104,6 +104,20 @@ describe('Workspace screen', () => {
     expect(document.querySelector('[data-hunk-bar]')).toBeNull();
   });
 
+  it('tracking off (the default outside the demo): no hunk bar even though the model carries hunks', async () => {
+    const m = fixtures.demoReadModel();
+    useReadModel
+      .getState()
+      .replaceModel(
+        { ...m, settings: { ...m.settings, app: { ...m.settings.app, trackAgentEdits: false } } },
+        'connected',
+      );
+    useUiStore.setState({ projectId: acme, projectSession: { [acme]: claude } });
+    render(<Workspace />);
+    await waitFor(() => expect(document.querySelector('[data-status-bar]')).not.toBeNull());
+    expect(document.querySelector('[data-hunk-bar]')).toBeNull();
+  });
+
   it('the hunk bar offers Review / Revert all / Mark reviewed (no Accept): revertAll and done per hunk session, Review opens the diff', async () => {
     useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected'); // Claude owns fix/checkout with 3 pending hunks
     useUiStore.setState({ projectId: acme, projectSession: { [acme]: claude } });

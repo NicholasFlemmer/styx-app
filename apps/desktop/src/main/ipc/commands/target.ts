@@ -38,6 +38,11 @@ export function registerTargetCommands(bus: CommandBus, app: Container): void {
     return {};
   });
 
+  bus.register('target.setDeployCommand', ({ targetId, command }) => {
+    targets.setDeployCommand(targetId, command);
+    return {};
+  });
+
   bus.register('target.remove', async ({ targetId }) => {
     await targets.remove(targetId);
     return {};

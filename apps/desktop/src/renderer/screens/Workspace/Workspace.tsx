@@ -97,9 +97,11 @@ export function Workspace() {
   // The chat's active tab (falls back to the first tab when no session was picked yet).
   const activeSessionId = projectId === null ? null : sessionTabs(model, projectId, sessionId).activeId;
   const worktreeId = worktree?.id ?? null;
+  // Tracking off (the default): no bands, no hunk bar — main sends no hunks either, but a stale row must not show.
+  const tracking = model.settings.app.trackAgentEdits;
   const changes = useMemo(
-    () => (worktreeId === null ? [] : pendingHunksOf(model.hunks, worktreeId)),
-    [model.hunks, worktreeId],
+    () => (worktreeId === null || !tracking ? [] : pendingHunksOf(model.hunks, worktreeId)),
+    [model.hunks, worktreeId, tracking],
   );
   const agentOf = useCallback(
     (id: SessionId) => {

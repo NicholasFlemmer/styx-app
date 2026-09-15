@@ -5,6 +5,7 @@ import { AddExistingModal } from '../features/modals/AddExistingModal';
 import { ConnectAgentModal } from '../features/modals/ConnectAgentModal';
 import { ConnectModal } from '../features/modals/ConnectModal';
 import { DeployModal } from '../features/modals/DeployModal';
+import { DeploySetupModal } from '../features/modals/DeploySetupModal';
 import { NewProjectModal } from '../features/modals/NewProjectModal';
 import { SpawnModal } from '../features/modals/SpawnModal';
 import { Palette } from '../features/palette/Palette';
@@ -35,6 +36,8 @@ const render = (o: Overlay) => {
               {...(o.deployId !== undefined ? { deployId: o.deployId } : {})}
             />
           );
+        case 'deploy-setup':
+          return <DeploySetupModal key={o.id} id={o.id} projectId={o.projectId} />;
         case 'connect-agent':
           return (
             <ConnectAgentModal

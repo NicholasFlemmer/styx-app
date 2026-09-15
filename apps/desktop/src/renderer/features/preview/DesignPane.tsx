@@ -1,6 +1,7 @@
 import { PREVIEW_DEVICES, copy, fill, type DevRun, type PreviewDevice, type ProjectId } from '@styx/core';
 import { Button, Icon, Input } from '@styx/ui';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { onEvent } from '../../state/bridge';
 import { command } from '../../state/commands';
 import { useModel, useUi } from '../../state/hooks';
 import { createLoginTerminal, disposeLoginTerminal } from '../modals/login-terminal';
@@ -133,7 +134,17 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
   // --- native view ---------------------------------------------------------
   // A native view sits above the DOM, so anything floating must take it off screen while it is open.
   const covered = overlays.length > 0;
-  const visible = active && !covered && url !== '';
+  // A live run is the source of truth for where the app is; the saved URL is the fallback for "I run it myself".
+  const previewUrl = live && run.url !== null ? run.url : url;
+  const visible = active && !covered && previewUrl !== '';
+  // Main probes a new URL until the server answers, then loads it; until then the hole says so.
+  const [status, setStatus] = useState<{
+    url: string;
+    phase: 'waiting' | 'loaded' | 'failed';
+    attempts: number;
+  } | null>(null);
+  useEffect(() => onEvent('preview.status', (s) => setStatus(s)), []);
+  const pending = previewUrl !== '' && status !== null && status.phase !== 'loaded' ? status : null;
 
   const report = useCallback(() => {
     const el = hole.current;
@@ -147,10 +158,10 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
         width: Math.round(box?.width ?? 0),
         height: Math.round(box?.height ?? 0),
       },
-      url,
+      url: previewUrl,
       device,
     });
-  }, [projectId, visible, url, device]);
+  }, [projectId, visible, previewUrl, device]);
 
   // Bounds change with the window, the chat pane's drag handle, the terminal's, the files pane and the output
   // strip — observe the hole itself rather than trying to enumerate every cause.
@@ -229,7 +240,7 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
         <Button
           size="compact"
           variant="ghost"
-          disabled={url === ''}
+          disabled={previewUrl === ''}
           onClick={() => void command('preview.reload', {})}
         >
           {copy.workspace.design.reload}
@@ -237,8 +248,8 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
         <Button
           size="compact"
           variant="ghost"
-          disabled={url === ''}
-          onClick={() => void command('preview.openExternal', { url })}
+          disabled={previewUrl === ''}
+          onClick={() => void command('preview.openExternal', { url: previewUrl })}
         >
           {copy.workspace.design.openExternal}
         </Button>
@@ -306,10 +317,29 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
         </div>
       )}
       <div ref={hole} className={s['hole']} data-preview-hole="true">
-        {url === '' && (
+        {previewUrl === '' && (
           <div className={s['empty']}>
             <span className="t-label">{copy.workspace.design.empty}</span>
             <span className={s['hint']}>{copy.workspace.design.hint}</span>
+          </div>
+        )}
+        {pending !== null && (
+          <div className={s['empty']} role="status" data-preview-status={pending.phase}>
+            <span className="t-label">
+              {fill(
+                pending.phase === 'failed'
+                  ? copy.workspace.design.unreachable
+                  : copy.workspace.design.waiting,
+                { url: pending.url },
+              )}
+            </span>
+            {pending.phase === 'failed' ? (
+              <Button size="compact" variant="secondary" onClick={() => void command('preview.reload', {})}>
+                {copy.workspace.design.retry}
+              </Button>
+            ) : (
+              <span className={s['hint']}>{copy.workspace.design.waitingHint}</span>
+            )}
           </div>
         )}
       </div>

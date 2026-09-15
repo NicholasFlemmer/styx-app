@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { claudeLaunch } from './claude';
+import { codexLaunch, codexTrustKey } from './codex';
 import { cursorLaunch } from './cursor';
 import { geminiLaunch } from './gemini';
 import type { AgentLaunchContext } from './types';
@@ -14,6 +15,7 @@ const ctx = (agent: 'gemini' | 'cursor' | 'claude', worktreePath: string): Agent
   binary: agent,
   sessionId: 'sess-1',
   worktreePath,
+  projectPath: worktreePath,
   firstMessage: null,
   model: null,
   runner: 'pty',
@@ -60,6 +62,44 @@ describe('worktree MCP config (L5)', () => {
     expect(Object.keys(merged.mcpServers).sort()).toEqual(['other', 'styx']);
     await l.cleanup();
     expect(readFileSync(join(dir, 'settings.json'), 'utf8')).toBe(original);
+  });
+});
+
+describe('codex launch flags (verified against codex 0.154.0)', () => {
+  it('registers the styx MCP server with forwarded env names, the notify hook, and trusts both the worktree and the project root', async () => {
+    const base = ctx('gemini', '/Users/nic/.styx/worktrees/STYX/agent-codex-1');
+    const l = await codexLaunch({
+      ...base,
+      agent: 'codex',
+      binary: '/opt/codex',
+      projectPath: '/Users/nic/STYX',
+      firstMessage: 'fix the flaky test',
+      model: 'gpt-6',
+    });
+    expect(l.command).toBe('/opt/codex');
+    expect(l.typeFirstMessage).toBe(false);
+    const joined = l.args.join(' ');
+    expect(l.args).toContain('mcp_servers.styx.command="/shims/styx"');
+    expect(l.args).toContain('mcp_servers.styx.args=["mcp"]');
+    expect(joined).toContain('mcp_servers.styx.env_vars=["STYX_SESSION_ID","STYX_BROKER","STYX_TOKEN"');
+    expect(l.args).toContain('notify=["/shims/styx","hook","codex"]');
+    expect(l.args).toContain(
+      'projects."/Users/nic/.styx/worktrees/STYX/agent-codex-1".trust_level="trusted"',
+    );
+    expect(l.args).toContain('projects."/Users/nic/STYX".trust_level="trusted"');
+    // The token is forwarded by name, never spelled out on the command line.
+    expect(joined).not.toContain('tok-super-secret');
+    expect(l.args.slice(-3)).toEqual(['-m', 'gpt-6', 'fix the flaky test']);
+  });
+
+  it('marks the directory once when the worktree is the project root, and escapes quotes and backslashes in the key', async () => {
+    const l = await codexLaunch({
+      ...ctx('gemini', '/Users/nic/STYX'),
+      agent: 'codex',
+      projectPath: '/Users/nic/STYX',
+    });
+    expect(l.args.filter((a) => a.startsWith('projects.'))).toHaveLength(1);
+    expect(codexTrustKey('C:\\dev\\my "app"')).toBe('projects."C:\\\\dev\\\\my \\"app\\"".trust_level');
   });
 });
 

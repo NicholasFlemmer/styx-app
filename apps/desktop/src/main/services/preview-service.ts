@@ -1,6 +1,20 @@
-import { WebContentsView, shell, type BrowserWindow } from 'electron';
+import { WebContentsView, net, shell, type BrowserWindow } from 'electron';
 import { PREVIEW_VIEWPORTS, type PreviewDevice } from '@styx/core';
 import { logger } from './logger';
+import { PreviewProbe, type PreviewStatus } from './preview-probe';
+
+/** Chromium net error codes that mean "nothing is listening (yet)": refused, reset, closed, empty response, aborted. */
+const CONNECTION_ERRORS = new Set([-102, -101, -100, -324, -3]);
+
+/** Any response means a server is there; a network error means it is not up yet. */
+const netProbe = async (url: string): Promise<boolean> => {
+  try {
+    await net.fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(1500), redirect: 'manual' });
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 export interface PreviewBounds {
   x: number;
@@ -25,37 +39,59 @@ export class PreviewService {
   private view: WebContentsView | null = null;
   private window: BrowserWindow | null = null;
   private loaded: string | null = null;
+  private readonly probe: PreviewProbe;
 
-  constructor(private readonly deps: { mainWindow: () => BrowserWindow | null }) {}
+  constructor(
+    private readonly deps: {
+      mainWindow: () => BrowserWindow | null;
+      /** Reported to the renderer as `preview.status` so the pane can say it is waiting rather than show an error page. */
+      onStatus?: (status: PreviewStatus) => void;
+      probe?: (url: string) => Promise<boolean>;
+    },
+  ) {
+    this.probe = new PreviewProbe({
+      probe: deps.probe ?? netProbe,
+      onStatus: (s) => deps.onStatus?.(s),
+      onReady: (url) => {
+        const view = this.view;
+        if (view === null) return;
+        this.loaded = url;
+        void view.webContents.loadURL(url).catch((e: Error) => {
+          logger.warn('preview: load failed', { url, error: e.message });
+        });
+      },
+    });
+  }
 
   /**
    * The one entry point: where the hole in the renderer's layout is, what to show in it, and whether to show it
    * at all. Called on layout changes, so it must be cheap and idempotent.
    */
   set(input: { visible: boolean; bounds: PreviewBounds; url: string; device: PreviewDevice }): void {
-    if (!input.visible || input.url.trim() === '' || input.bounds.width <= 0 || input.bounds.height <= 0) {
+    const url = input.url.trim() === '' ? null : normaliseUrl(input.url);
+    if (url === null) {
       this.detach();
       return;
     }
     const win = this.deps.mainWindow();
     if (win === null || win.isDestroyed()) return;
     const view = this.ensure(win);
-    const url = normaliseUrl(input.url);
-    if (url === null) {
-      this.detach();
-      return;
+    // Covered by an overlay, or the Code tab is showing: hide rather than tear down, so the page keeps its state
+    // and nothing reloads every time the palette opens.
+    const visible = input.visible && input.bounds.width > 0 && input.bounds.height > 0;
+    view.setVisible(visible);
+    if (visible) view.setBounds(deviceBounds(input.bounds, input.device));
+    // A new URL is probed until it answers, then loaded; the same URL never reloads on a layout change.
+    if (url !== this.probe.current()) {
+      this.loaded = null;
+      this.probe.start(url);
     }
-    if (url !== this.loaded) {
-      this.loaded = url;
-      void view.webContents.loadURL(url).catch((e: Error) => {
-        logger.warn('preview: load failed', { url, error: e.message });
-      });
-    }
-    view.setBounds(deviceBounds(input.bounds, input.device));
   }
 
+  /** Reload the page; if it never loaded (server not up yet, or gave up), probe again instead. */
   reload(): void {
-    this.view?.webContents.reload();
+    if (this.loaded !== null && this.view !== null) this.view.webContents.reload();
+    else this.probe.restart();
   }
 
   /** Opens the previewed URL in the OS browser, where devtools and extensions live. */
@@ -67,13 +103,14 @@ export class PreviewService {
 
   /** Detaches on window close / app teardown. Kept separate from `set` so teardown never needs bounds. */
   detach(): void {
+    this.probe.reset();
+    this.loaded = null;
     if (this.view === null) return;
     const win = this.window;
     if (win !== null && !win.isDestroyed()) win.contentView.removeChildView(this.view);
     this.view.webContents.close();
     this.view = null;
     this.window = null;
-    this.loaded = null;
   }
 
   private ensure(win: BrowserWindow): WebContentsView {
@@ -93,12 +130,17 @@ export class PreviewService {
       void this.openExternal(url);
       return { action: 'deny' };
     });
+    // The server went away after loading (a dev server restart): back to probing rather than an error page.
+    view.webContents.on('did-fail-load', (_e, code, _desc, _url, isMainFrame) => {
+      if (!isMainFrame || !CONNECTION_ERRORS.has(code)) return;
+      this.loaded = null;
+      this.probe.restart();
+    });
     win.contentView.addChildView(view);
     this.view = view;
     this.window = win;
     return view;
   }
-
 }
 
 /**

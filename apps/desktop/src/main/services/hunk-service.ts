@@ -71,8 +71,32 @@ export class HunkService {
 
   constructor(private readonly deps: HunkServiceDeps) {}
 
+  /** Settings › Editor › Track agent edits: off by default (owner request: the watcher slowed the app at ~100 hunks). */
+  enabled(): boolean {
+    return this.deps.repos.settings.app().trackAgentEdits;
+  }
+
+  /**
+   * The setting flipped. On: watch every live session's worktree and scan it. Off: close the watchers and clear
+   * the hunks the renderer holds (the rows stay in the DB for when it comes back).
+   */
+  async applyTracking(): Promise<void> {
+    const { repos, publisher } = this.deps;
+    if (this.enabled()) {
+      for (const s of repos.sessions.live()) {
+        const worktree = repos.worktrees.get(s.worktreeId);
+        if (!worktree) continue;
+        await this.watch(s, worktree);
+        await this.rescanWorktree(worktree.id, s.id);
+      }
+      return;
+    }
+    await this.closeAll();
+    for (const sid of repos.agentChanges.sessionIds()) publisher.hunksReplace(sid as SessionId, []);
+  }
+
   async watch(session: Session, worktree: Worktree): Promise<void> {
-    if (worktree.isMain || this.watchers.has(worktree.id)) return;
+    if (!this.enabled() || worktree.isMain || this.watchers.has(worktree.id)) return;
     try {
       const watcher = await (this.deps.watch ?? chokidarWatch)(worktree.path);
       const entry = { watcher, sessionId: session.id, timer: null as NodeJS.Timeout | null };
@@ -108,11 +132,13 @@ export class HunkService {
 
   async rescan(sessionId: string): Promise<AgentChange[]> {
     const s = this.deps.repos.sessions.get(sessionId) ?? fail('not-found', `session ${sessionId} not found`);
+    if (!this.enabled()) return [];
     await this.rescanWorktree(s.worktreeId, s.id);
     return this.deps.repos.agentChanges.bySession(s.id);
   }
 
   private async rescanWorktree(worktreeId: string, sessionIdHint?: string): Promise<void> {
+    if (!this.enabled()) return;
     if (this.scanning.has(worktreeId)) {
       this.dirty.add(worktreeId);
       return;

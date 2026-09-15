@@ -6,6 +6,8 @@ export interface AgentLaunchContext {
   binary: string;
   sessionId: string;
   worktreePath: string;
+  /** The project's main checkout: some CLIs key per-directory trust on it rather than on the worktree (Codex). */
+  projectPath: string;
   firstMessage: string | null;
   model: string | null;
   /** `stream` = headless stream-json over pipes (ADR-0010); `pty` = the CLI's own TUI in xterm. */

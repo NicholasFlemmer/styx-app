@@ -29,14 +29,20 @@ test('names the prod target on acme-shop and is disabled where nothing can be de
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
 
-  // infra-tools: aws + gcp only → nothing deployable.
+  // infra-tools: aws + gcp only, no deploy command yet → the button offers setup and opens the per-target modal.
   // Rail tiles carry the project name as their title.
   await page.click('[data-rail] [title="infra-tools"]');
-  await expect(page.locator('[data-deploy-button]')).toHaveAttribute('data-state', 'none', {
+  await expect(page.locator('[data-deploy-button]')).toHaveAttribute('data-state', 'setup', {
     timeout: 10_000,
   });
-  await expect(button).toBeDisabled();
-  await expect(button).toHaveText('▲Connect a deploy target');
+  await expect(button).toBeEnabled();
+  await expect(button).toHaveText('▲Set up deploy');
+  await button.click();
+  const setup = page.getByRole('dialog');
+  await expect(setup).toContainText('Deploy · infra-tools', { timeout: 5_000 });
+  await expect(setup.getByLabel('Deploy command').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(setup).toHaveCount(0);
 
   await app.close();
 });

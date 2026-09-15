@@ -146,6 +146,44 @@ export function Diff() {
     if (sessionId !== null) void command('hunk.revertAll', { sessionId });
   };
 
+  // Tracking off (Settings › Editor): nothing is watched, so there is nothing to review; point at the switch.
+  if (!model.settings.app.trackAgentEdits) {
+    return (
+      <div
+        ref={root}
+        className={s['screen']}
+        tabIndex={-1}
+        data-keyscope="diff"
+        data-diff-review="true"
+        data-diff-empty="off"
+      >
+        <div className={s['head']}>
+          <span className={s['title']}>{copy.diff.title}</span>
+          <span className={s['spacer']} />
+          <Button size="regular" variant="primary" onClick={done}>
+            {copy.diff.done}
+          </Button>
+        </div>
+        <EmptyState
+          headline={copy.diff.off.headline}
+          body={copy.diff.off.body}
+          actions={
+            <Button
+              variant="primary"
+              onClick={() => {
+                const ui = useUiStore.getState();
+                ui.setSettingsSection('app:editor');
+                ui.setScreen('settings');
+              }}
+            >
+              {copy.diff.off.cta}
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
   // Plain folder (no git): nothing to review until `git init`; Done still returns to the Workspace.
   if (projectId !== null && !projectHasGit(model, projectId)) {
     return (

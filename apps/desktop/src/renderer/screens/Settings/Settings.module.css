@@ -112,6 +112,9 @@
     color: var(--mu);
   }
   .connectRow {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
     padding: 14px 20px;
   }
 }

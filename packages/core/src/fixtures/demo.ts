@@ -1232,7 +1232,8 @@ export const demoFixture = (): DemoFixture => ({
   clis: demoClis(),
   skills: demoSkills(),
   activity: demoActivity(),
-  appSettings: { ...DEFAULT_APP_SETTINGS, fallbackIde: 'vscode', onboardingDone: true },
+  // The demo keeps tracking on: its hunks are what the prototype's editor bands, hunk bar and Diff review show.
+  appSettings: { ...DEFAULT_APP_SETTINGS, fallbackIde: 'vscode', onboardingDone: true, trackAgentEdits: true },
   projectSettings: { [ids.project.acmeShop]: acmeProjectSettings() },
   runs: {},
   deploys: {},

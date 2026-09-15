@@ -45,7 +45,6 @@ const POLICY_OPTIONS = (['ask-mfa', 'ask', 'always'] as const).map((value) => ({
 }));
 const isPolicy = (v: string): v is TargetPolicy => v in copy.targets.policy;
 
-
 /** Settings (spec §4.6): 220px section nav · header · Targets table or label/value rows. */
 export function Settings() {
   const projectId = useUi((u) => u.projectId);
@@ -114,7 +113,9 @@ export function Settings() {
 function Targets({ model, projectId }: { model: ReadModel; projectId: ProjectId | null }) {
   const now = useNow();
   const pushOverlay = useUi((u) => u.pushOverlay);
-  const policyBanner = useUi((u) => (projectId === null ? undefined : u.banners[`${PROJECT_POLICY_BANNER}${projectId}`]));
+  const policyBanner = useUi((u) =>
+    projectId === null ? undefined : u.banners[`${PROJECT_POLICY_BANNER}${projectId}`],
+  );
   // The accept is bound to the reviewed file hash (security H-1 TOCTOU): main refuses and re-sets the banner if it changed.
   const policyHash = policyBanner?.action.kind === 'review-project-policy' ? policyBanner.action.hash : null;
   const rows = projectId === null ? [] : targetRows(model, projectId, now);
@@ -136,7 +137,13 @@ function Targets({ model, projectId }: { model: ReadModel; projectId: ProjectId 
     // Edit / Connect on an existing row reopens the connect modal on that target (CLI targets restart their login).
     const target = model.targets.byId[t.targetId];
     if (projectId !== null && target !== undefined && t.action !== copy.targets.actions.revoke) {
-      pushOverlay({ kind: 'modal', modal: 'connect', projectId, provider: target.provider, targetId: target.id });
+      pushOverlay({
+        kind: 'modal',
+        modal: 'connect',
+        projectId,
+        provider: target.provider,
+        targetId: target.id,
+      });
       return;
     }
     openConnect();
@@ -219,6 +226,17 @@ function Targets({ model, projectId }: { model: ReadModel; projectId: ProjectId 
       <div className={s['connectRow']}>
         <Button variant="dashed" size="regular" onClick={openConnect} disabled={projectId === null}>
           {copy.targets.connectRow}
+        </Button>
+        <Button
+          variant="ghost"
+          size="regular"
+          disabled={projectId === null || rows.length === 0}
+          onClick={() => {
+            if (projectId !== null) pushOverlay({ kind: 'modal', modal: 'deploy-setup', projectId });
+          }}
+          data-deploy-commands="true"
+        >
+          {copy.deploy.commands}
         </Button>
       </div>
     </>

@@ -158,7 +158,7 @@ describe('sectionRows', () => {
     const values = (section: Parameters<typeof sectionRows>[1]) =>
       sectionRows(model, section, ctx).map((r) => r.options.find((o) => o.value === r.value)?.label);
     expect(values('app:general')).toEqual(['System', 'Badge + sound', 'On']);
-    expect(values('app:editor')).toEqual(['Monaco (embedded)', 'Styx', 'VS Code', 'Per repo', 'Off']);
+    expect(values('app:editor')).toEqual(['Monaco (embedded)', 'Styx', 'VS Code', 'Per repo', 'Off', 'On']);
     expect(values('app:agents')).toEqual([
       'Claude Code',
       'On',
@@ -293,6 +293,14 @@ describe('<Settings />', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Refresh · AWS acme-prod/ }));
     expect(commandMock).toHaveBeenCalledWith('target.refresh', { targetId: aws.id });
     expect(screen.getByRole('button', { name: /^Edit · AWS acme-prod/ })).toBeTruthy();
+  });
+
+  it('Deploy commands… opens the per-target deploy setup modal for the project', () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByRole('button', { name: copy.deploy.commands }));
+    expect(useUiStore.getState().overlays).toMatchObject([
+      { kind: 'modal', modal: 'deploy-setup', projectId: acme },
+    ]);
   });
 
   it('+ Connect target opens the connect modal', () => {

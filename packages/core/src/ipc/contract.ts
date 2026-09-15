@@ -291,6 +291,14 @@ export const commands = {
     input: z.object({ targetId: targetIdSchema }),
     output: z.object({ deployId: z.string(), terminalId: z.string() }),
   },
+  /**
+   * The user's own deploy command for a target that has no built-in verb (`gcloud run deploy …`); run through the
+   * login shell with the grant's credential env. Null clears it. Stored on the target's config, machine-local.
+   */
+  'target.setDeployCommand': {
+    input: z.object({ targetId: targetIdSchema, command: z.string().max(2000).nullable() }),
+    output: ok,
+  },
   'deploy.cancel': { input: z.object({ deployId: z.string() }), output: ok },
   'preview.set': {
     input: z.object({
@@ -763,6 +771,12 @@ export const events = {
     provider: providerSchema,
     status: z.enum(['running', 'exited']),
     exitCode: z.number().int().nullable().optional(),
+  }),
+  /** The design window's page: probed until the server answers, then loaded; `failed` after two minutes of silence. */
+  'preview.status': z.object({
+    url: z.string(),
+    phase: z.enum(['waiting', 'loaded', 'failed']),
+    attempts: z.number().int().nonnegative(),
   }),
   /** Progress of an `agent.login` terminal; main re-verifies the connection when it exits. */
   'agent.login': z.object({

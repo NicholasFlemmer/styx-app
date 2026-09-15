@@ -136,6 +136,8 @@ export interface ContainerOptions {
   skillsHome?: string;
   /** Runs a CLI status command for AgentService (`claude auth status --json` …); faked in tests. */
   exec?: (bin: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>;
+  /** Does a dev-server URL answer? (RunService); faked in tests so nothing is ever probed for real. */
+  probe?: (url: string) => Promise<boolean>;
 }
 
 export interface Container {
@@ -299,6 +301,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     terminals,
     pty,
     cli,
+    shell: () => pty.defaultShell(),
+    platform: runtime.platform,
   });
   const skills = new SkillsService({
     repos,
@@ -326,6 +330,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     projects,
     shell: () => pty.defaultShell(),
     platform: runtime.platform,
+    ...(opts.probe !== undefined ? { probe: opts.probe } : {}),
   });
   publisher.bindExtras({ runs: () => runs.all(), deploys: () => deploys.all() });
   const refresh = new RefreshScheduler({

@@ -25,6 +25,8 @@ export function registerStoreCommands(bus: CommandBus, app: Container): void {
     if (patch.dnd !== undefined) app.notifications?.setDnd(patch.dnd);
     publisher.settingsSet(next);
     app.onAppSettings(next);
+    // Tracking agent edits starts or stops the worktree watchers for the sessions that are live right now.
+    if (patch.trackAgentEdits !== undefined) void app.hunks.applyTracking();
     return {};
   });
 

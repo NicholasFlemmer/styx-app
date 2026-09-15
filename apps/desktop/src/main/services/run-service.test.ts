@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
 import { PtyService } from './pty-service';
-import { detectRunCommands, sniffLocalUrl } from './run-service';
+import { detectRunCommands, sniffLocalUrl, sniffLocalUrls } from './run-service';
 
 /** In-memory pty: records spawns and lets the test feed output and end the process. */
 class FakePty extends PtyService {
@@ -56,6 +56,9 @@ class FakePty extends PtyService {
   override killAll(): void {
     for (const id of [...this.live]) this.kill(id);
   }
+  override killGroup(id: string): void {
+    this.kill(id);
+  }
   data(id: string, chunk: string): void {
     this.emit('data', id, chunk);
   }
@@ -77,15 +80,31 @@ const tmp = (files: Record<string, string> = {}): string => {
   return dir;
 };
 
-/** Demo app whose acme-shop project lives in a fresh temp folder (so `.styx/project.json` can be written). */
-const setup = (files: Record<string, string> = {}) => {
+/**
+ * Demo app whose acme-shop project lives in a fresh temp folder (so `.styx/project.json` can be written). URL
+ * probes answer from `answers` (default: everything answers); unlisted URLs answer true.
+ */
+const setup = (files: Record<string, string> = {}, answers: Record<string, boolean> = {}) => {
   const pty = new FakePty();
-  const t = makeTestApp({ pty });
+  const probed: string[] = [];
+  const t = makeTestApp({
+    pty,
+    probe: async (url: string) => {
+      probed.push(url);
+      return answers[url] ?? true;
+    },
+  });
   const dir = tmp(files);
   const project = t.app.repos.projects.get(acme);
   if (!project) throw new Error('fixture project');
   t.app.repos.projects.upsert({ ...project, path: dir }, t.app.repos.projects.settings(acme));
-  return { t, pty, dir };
+  return { t, pty, dir, probed };
+};
+
+/** Adoption follows an async probe: wait for the row to carry a URL (or not, after a tick). */
+const adoptedUrl = async (t: TestApp): Promise<string | null> => {
+  await new Promise((res) => setTimeout(res, 5));
+  return runRows(t).at(-1)?.url ?? null;
 };
 
 const runRows = (t: TestApp): (DevRun | null)[] => {
@@ -254,22 +273,73 @@ describe('RunService', () => {
     });
   });
 
-  it('sniffs the first localhost URL through ANSI and across split chunks, once', async () => {
-    const { t, pty } = setup();
+  it('adopts the first localhost URL that answers, through ANSI and across split chunks, once', async () => {
+    const { t, pty, probed } = setup();
     const r = await t.app.runs.start(acme, 'pnpm dev');
     pty.data(r.terminalId, '\x1b[32m➜\x1b[39m  Local:   \x1b[36mhttp://local');
-    expect(runRows(t).at(-1)?.url).toBeNull();
+    expect(await adoptedUrl(t)).toBeNull();
     pty.data(r.terminalId, 'host:\x1b[1m5173\x1b[22m/\x1b[39m\n');
+    expect(await adoptedUrl(t)).toBe('http://localhost:5173/');
     expect(runRows(t).at(-1)).toMatchObject({ phase: 'running', url: 'http://localhost:5173/' });
-    // A second URL (the network one) does not replace the first.
+    expect(probed).toEqual(['http://localhost:5173/']);
+    // A later URL (the network one) does not replace an adopted one, and is not probed.
     pty.data(r.terminalId, '➜  Network: http://localhost:9999/\n');
-    expect(runRows(t).at(-1)?.url).toBe('http://localhost:5173/');
+    expect(await adoptedUrl(t)).toBe('http://localhost:5173/');
+    expect(probed).toEqual(['http://localhost:5173/']);
     // Output for some other pty is ignored.
     pty.data('term:other', 'http://localhost:1\n');
-    expect(runRows(t).at(-1)?.url).toBe('http://localhost:5173/');
+    expect(await adoptedUrl(t)).toBe('http://localhost:5173/');
   });
 
-  it('the URL fills an empty devUrl setting, and never overwrites one the user set', async () => {
+  it('a URL that refuses is skipped: the API a Next app prints first loses to the Local one that answers', async () => {
+    const { t, pty, probed } = setup({}, { 'http://localhost:3001': false });
+    const r = await t.app.runs.start(acme, 'pnpm dev');
+    pty.data(r.terminalId, 'API proxy → http://localhost:3001\n');
+    expect(await adoptedUrl(t)).toBeNull();
+    pty.data(r.terminalId, '   - Local:        http://localhost:3000\n');
+    expect(await adoptedUrl(t)).toBe('http://localhost:3000');
+    expect(probed).toEqual(['http://localhost:3001', 'http://localhost:3001', 'http://localhost:3000']);
+  });
+
+  it('re-probes on the interval until the server answers', async () => {
+    vi.useFakeTimers();
+    try {
+      let up = false;
+      const pty = new FakePty();
+      const probed: string[] = [];
+      const t = makeTestApp({
+        pty,
+        probe: async (url: string) => {
+          probed.push(url);
+          return up;
+        },
+      });
+      const r = await t.app.runs.start(acme, 'pnpm dev');
+      pty.data(r.terminalId, 'Local: http://localhost:3000\n');
+      await vi.advanceTimersByTimeAsync(10);
+      expect(runRows(t).at(-1)?.url).toBeNull();
+      await vi.advanceTimersByTimeAsync(2_500);
+      expect(probed.length).toBeGreaterThanOrEqual(3);
+      up = true;
+      await vi.advanceTimersByTimeAsync(1_100);
+      expect(runRows(t).at(-1)?.url).toBe('http://localhost:3000');
+      const n = probed.length;
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(probed.length).toBe(n);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sniffLocalUrls lists every loopback URL once, in order, and drops look-alike hosts', () => {
+    expect(
+      sniffLocalUrls(
+        'api http://localhost:3001 and http://localhost@evil.example/ then http://0.0.0.0:3000/ http://localhost:3001',
+      ),
+    ).toEqual(['http://localhost:3001', 'http://localhost:3000/']);
+  });
+
+  it('the URL that answered becomes devUrl, replacing a stale one from an earlier run', async () => {
     const { t, pty, dir } = setup();
     const r = await t.app.runs.start(acme, 'pnpm dev');
     pty.data(r.terminalId, 'ready http://0.0.0.0:3000\n');
@@ -277,14 +347,15 @@ describe('RunService', () => {
     await vi.waitFor(() => expect(t.app.repos.projects.settings(acme).devUrl).toBe('http://localhost:3000'));
     expect(existsSync(join(dir, '.styx', 'project.json'))).toBe(true);
 
+    // A saved port from last time is exactly what a fresh run must correct.
     const second = setup();
-    await second.t.app.projects.setSettings(acme, { devUrl: 'localhost:8080' });
+    await second.t.app.projects.setSettings(acme, { devUrl: 'http://localhost:3001' });
     const r2 = await second.t.app.runs.start(acme, 'pnpm dev');
     second.pty.data(r2.terminalId, 'ready http://localhost:3000\n');
-    expect(runRows(second.t).at(-1)?.url).toBe('http://localhost:3000');
-    // Give a (wrong) save every chance to land before asserting it did not.
-    await new Promise((res) => setTimeout(res, 20));
-    expect(second.t.app.repos.projects.settings(acme).devUrl).toBe('localhost:8080');
+    expect(await adoptedUrl(second.t)).toBe('http://localhost:3000');
+    await vi.waitFor(() =>
+      expect(second.t.app.repos.projects.settings(acme).devUrl).toBe('http://localhost:3000'),
+    );
   });
 
   it('persists the command as devCommand when it differs from the saved one', async () => {
@@ -312,7 +383,7 @@ describe('RunService', () => {
     expect(runRows(t).at(-1)).toMatchObject({ phase: 'exited', exitCode: 3, endedAt: t.clock.now() });
     // Output after exit changes nothing.
     pty.data(r.terminalId, 'http://localhost:1\n');
-    expect(runRows(t).at(-1)?.url).toBeNull();
+    expect(await adoptedUrl(t)).toBeNull();
     // Stopping an exited run is a no-op.
     t.app.runs.stop(acme);
     expect(pty.killed).toEqual([]);
