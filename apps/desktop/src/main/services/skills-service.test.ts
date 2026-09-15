@@ -56,7 +56,7 @@ describe('SkillsService', () => {
     mkdirSync(join(h, '.claude', 'skills', 'not-a-skill'), { recursive: true });
     const svc = new SkillsService({ repos, fetch: vi.fn(), home: h });
     const skills = await svc.list(null);
-    expect(skills).toEqual([{ name: 'alpha', directory: 'alpha', description: 'first', scope: 'global' }]);
+    expect(skills).toEqual([{ name: 'alpha', directory: 'alpha', description: 'first', scope: 'global', host: 'claude' }]);
   });
 
   it('an empty skills directory is not an error', async () => {
@@ -70,13 +70,15 @@ describe('SkillsService', () => {
     const fetchMock = vi.fn(async () => new Response(md, { status: 200 }));
     const svc = new SkillsService({ repos, fetch: fetchMock as never, home: h });
 
-    const installed = await svc.install({ directory: 'pdf', scope: 'global', projectId: null });
-    expect(installed).toMatchObject({ name: 'pdf', directory: 'pdf', scope: 'global' });
+    const installed = await svc.install({ directory: 'pdf', scope: 'global', hosts: ['claude'], projectId: null });
+    expect(installed).toEqual([
+      { name: 'pdf', directory: 'pdf', description: 'fills forms', scope: 'global', host: 'claude' },
+    ]);
     const path = join(h, '.claude', 'skills', 'pdf', 'SKILL.md');
     expect(readFileSync(path, 'utf8')).toBe(md);
     expect(await svc.list(null)).toHaveLength(1);
 
-    await svc.remove({ directory: 'pdf', scope: 'global', projectId: null });
+    await svc.remove({ directory: 'pdf', scope: 'global', host: 'claude', projectId: null });
     expect(existsSync(path)).toBe(false);
     expect(await svc.list(null)).toEqual([]);
   });
@@ -86,11 +88,11 @@ describe('SkillsService', () => {
     const svc = new SkillsService({ repos, fetch: vi.fn(), home: h });
     for (const bad of ['../evil', '../../etc', 'a/b', '/abs', '.', '..', '']) {
       await expect(
-        svc.install({ directory: bad, scope: 'global', projectId: null }),
+        svc.install({ directory: bad, scope: 'global', hosts: ['claude'], projectId: null }),
       ).rejects.toMatchObject({ code: 'invalid-input' });
-      await expect(svc.remove({ directory: bad, scope: 'global', projectId: null })).rejects.toMatchObject({
-        code: 'invalid-input',
-      });
+      await expect(
+        svc.remove({ directory: bad, scope: 'global', host: 'claude', projectId: null }),
+      ).rejects.toMatchObject({ code: 'invalid-input' });
     }
   });
 
@@ -132,6 +134,6 @@ describe('SkillsService', () => {
     });
     const svc = new SkillsService({ repos, fetch: fetchMock as never, home: home() });
     const rows = await svc.catalogue();
-    expect(rows).toEqual([{ name: 'pdf', directory: 'pdf', description: 'fills forms', scope: 'catalogue' }]);
+    expect(rows).toEqual([{ name: 'pdf', directory: 'pdf', description: 'fills forms', scope: 'catalogue', host: null }]);
   });
 });

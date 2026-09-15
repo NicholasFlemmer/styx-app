@@ -418,6 +418,9 @@ describe('SessionService CLI-outdated (model needs a newer CLI)', () => {
       authState: 'signed-in',
       capabilities: {}, // no stream-json → pty runner
       checkedAt: DEMO_NOW,
+      account: null,
+      verifiedAt: null,
+      verifyError: null,
     });
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
     expect(session.runner).toBe('pty');
@@ -572,6 +575,9 @@ describe('SessionService pty runner + CLI hooks', () => {
       authState: 'signed-in',
       capabilities: {},
       checkedAt: DEMO_NOW,
+      account: null,
+      verifiedAt: null,
+      verifyError: null,
     });
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
     expect(session.runner).toBe('pty');
@@ -630,6 +636,9 @@ describe('SessionService pty runner + CLI hooks', () => {
       authState: 'signed-in',
       capabilities: {},
       checkedAt: DEMO_NOW,
+      account: null,
+      verifiedAt: null,
+      verifyError: null,
     });
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo, ''));
     a.sessions.onHook(session.id, 'claude', 'Notification', {
@@ -662,6 +671,9 @@ describe('SessionService pty runner + CLI hooks', () => {
       authState: 'unknown',
       capabilities: {},
       checkedAt: DEMO_NOW,
+      account: null,
+      verifiedAt: null,
+      verifyError: null,
     });
     const { session } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
     expect(session).toMatchObject({ state: 'paused', pausedReason: 'cli-missing' });

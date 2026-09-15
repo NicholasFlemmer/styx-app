@@ -22,7 +22,11 @@ export interface ImportedTheme {
   fontFamily: string | null;
 }
 
-export type ImportIdeKind = 'vscode' | 'cursor' | 'jetbrains' | 'neovim';
+export type ImportIdeKind = 'vscode' | 'cursor' | 'windsurf' | 'zed' | 'jetbrains' | 'neovim';
+
+/** Editors with the VS Code config layout (`User/globalStorage/state.vscdb`, `keybindings.json`, `settings.json`). */
+export const VSCODE_LIKE: readonly ImportIdeKind[] = ['vscode', 'cursor', 'windsurf'];
+export const isVscodeLike = (kind: ImportIdeKind): boolean => VSCODE_LIKE.includes(kind);
 
 export interface IdeImportResult {
   /** Absolute folder paths, most recent first, de-duplicated. */
@@ -437,7 +441,7 @@ export class IdeImportService {
   recentFoldersWithTime(src: IdeImportSource): RecentFolder[] {
     const { platform, home } = this.deps;
     let folders: RecentFolder[] = [];
-    if (src.kind === 'vscode' || src.kind === 'cursor') {
+    if (isVscodeLike(src.kind)) {
       if (src.configDir) folders = this.vscodeRecents(src.configDir);
     } else if (src.kind === 'jetbrains') {
       const seen = new Set<string>();
@@ -487,7 +491,7 @@ export class IdeImportService {
   ): IdeImportResult {
     const out: IdeImportResult = { recents: [], keybindings: null, theme: null };
     if (what.recents) out.recents = this.recentFolders(src);
-    if ((src.kind === 'vscode' || src.kind === 'cursor') && src.configDir) {
+    if (isVscodeLike(src.kind) && src.configDir) {
       if (what.keybindings) {
         const f = join(src.configDir, 'keybindings.json');
         if (this.exists(f)) out.keybindings = parseKeybindings(this.readFile(f));

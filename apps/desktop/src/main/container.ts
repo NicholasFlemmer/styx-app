@@ -10,9 +10,10 @@ import { ExecaCliRunner, type CliRunner } from './providers/cli-runner';
 import { GitHubAdapter } from './providers/github';
 import { BrokerHost } from './broker/host';
 import { ActivityService } from './services/activity-service';
+import { AgentService } from './services/agent-service';
 import { AuditService } from './services/audit-service';
 import type { CredentialVault } from './services/credential-vault';
-import { DetectService } from './services/detect-service';
+import { DetectService, defaultDeps as defaultDetectDeps } from './services/detect-service';
 import { GitService } from './services/git';
 import { GrantService } from './services/grant-service';
 import { HunkService, type WatchFactory } from './services/hunk-service';
@@ -24,6 +25,7 @@ import { PtyLog } from './services/pty-log';
 import { PtyService } from './services/pty-service';
 import { RefreshScheduler } from './services/refresh-scheduler';
 import { RetentionJob } from './services/retention-job';
+import { RunService } from './services/run-service';
 import { SessionService } from './services/session-service';
 import { StreamRunner, type StreamRunnerLike } from './services/stream-runner';
 import { DeployService } from './services/deploy-service';
@@ -130,6 +132,10 @@ export interface ContainerOptions {
   disableRefresh?: boolean;
   /** Re-detect agent CLIs before every spawn / relaunch and on focus (default on; off for fixture rows and tests). */
   redetectClis?: boolean;
+  /** Home dir the skills service scans (`~/.claude/skills` …); fixtures point it at a seeded temp dir. */
+  skillsHome?: string;
+  /** Runs a CLI status command for AgentService (`claude auth status --json` …); faked in tests. */
+  exec?: (bin: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>;
 }
 
 export interface Container {
@@ -160,6 +166,8 @@ export interface Container {
   targets: TargetService;
   deploys: DeployService;
   skills: SkillsService;
+  agents: AgentService;
+  runs: RunService;
   terminals: TerminalService;
   broker: BrokerHost;
   windows: WindowsPort;
@@ -292,7 +300,33 @@ export function buildContainer(opts: ContainerOptions): Container {
     pty,
     cli,
   });
-  const skills = new SkillsService({ repos, fetch: opts.fetch ?? fetch });
+  const skills = new SkillsService({
+    repos,
+    fetch: opts.fetch ?? fetch,
+    ...(opts.skillsHome !== undefined ? { home: opts.skillsHome } : {}),
+  });
+  const agents = new AgentService({
+    repos,
+    publisher,
+    clock,
+    terminals,
+    pty,
+    exec: opts.exec ?? defaultDetectDeps().exec,
+    openExternal: opts.openExternal,
+    home: homedir(),
+    env: process.env,
+  });
+  const runs = new RunService({
+    repos,
+    publisher,
+    clock,
+    terminals,
+    pty,
+    projects,
+    shell: () => pty.defaultShell(),
+    platform: runtime.platform,
+  });
+  publisher.bindExtras({ runs: () => runs.all() });
   const refresh = new RefreshScheduler({
     repos,
     clock,
@@ -354,6 +388,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     targets,
     deploys,
     skills,
+    agents,
+    runs,
     terminals,
     broker,
     windows: opts.windows,
@@ -375,6 +411,7 @@ export function buildContainer(opts: ContainerOptions): Container {
       retention.stop();
       refresh.stop();
       sessions.killAll();
+      runs.stopAll();
       await hunks.closeAll();
       await broker.close();
       await grants.stop();

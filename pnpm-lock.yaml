@@ -53,18 +53,6 @@ importers:
       '@napi-rs/keyring':
         specifier: ^2.0.0
         version: 2.0.0
-      '@styx/broker':
-        specifier: workspace:*
-        version: link:../../packages/broker
-      '@styx/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@styx/tokens':
-        specifier: workspace:*
-        version: link:../../packages/tokens
-      '@styx/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
       '@tanstack/react-virtual':
         specifier: ^3.14.10
         version: 3.14.10(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -111,6 +99,18 @@ importers:
       '@playwright/test':
         specifier: ^1.62.1
         version: 1.62.1
+      '@styx/broker':
+        specifier: workspace:*
+        version: link:../../packages/broker
+      '@styx/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@styx/tokens':
+        specifier: workspace:*
+        version: link:../../packages/tokens
+      '@styx/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13

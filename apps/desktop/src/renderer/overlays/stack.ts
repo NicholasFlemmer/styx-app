@@ -1,4 +1,4 @@
-import type { AskId, AuditId, ProjectId, Provider, SessionId, TargetId } from '@styx/core';
+import type { Agent, AskId, AuditId, ProjectId, Provider, SessionId, TargetId } from '@styx/core';
 
 /** Overlay kinds and their z-order / behaviour (plan §8 Overlays). */
 export type OverlayKind = 'palette' | 'modal' | 'sheet' | 'drawer' | 'toast';
@@ -15,8 +15,13 @@ export type ModalPayload =
   | { modal: 'add-existing' }
   /** projectId is null during onboarding (no project yet); provider/targetId preselect the flow (Reconnect, step 4). */
   | { modal: 'connect'; projectId: ProjectId | null; provider?: Provider; targetId?: TargetId }
-  /** Deploy progress: phases plus the CLI's own output, from `deploy.start` to its exit. */
-  | { modal: 'deploy'; targetId: TargetId };
+  /** Deploy progress: starts a deploy for `targetId`, or attaches to a running one when `deployId` is given. */
+  | { modal: 'deploy'; targetId: TargetId; deployId?: string }
+  /**
+   * Connect agent (Settings › Agents, onboarding step 3, the Spawn modal's "Fix connection"): verify / sign in for one
+   * CLI. `returnTo` re-opens the Spawn modal for that project when the connect modal closes.
+   */
+  | { modal: 'connect-agent'; agent: Agent; returnTo?: { modal: 'spawn'; projectId: ProjectId } };
 
 export type Overlay =
   | { id: string; kind: 'palette' }

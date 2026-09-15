@@ -18,6 +18,9 @@ export interface ProjectionDeps {
   repos: Repos;
   /** Pop-out chat windows currently open (WindowService). */
   popouts: () => string[];
+  /** Main-owned in-memory rows (RunService / DeployService); absent in tests that only project SQLite. */
+  runs?: () => ReadModelSnapshot['runs'];
+  deploys?: () => ReadModelSnapshot['deploys'];
 }
 
 /** Effective per-project settings: builtin defaults ← app ← `.styx/project.json` overrides stored in `projects.settings_json`. */
@@ -59,5 +62,7 @@ export function buildSnapshot(deps: ProjectionDeps, seq: number): ReadModelSnaps
     },
     popouts: deps.popouts() as SessionId[],
     activity: repos.activity.recent(ACTIVITY_WINDOW),
+    runs: deps.runs?.() ?? [],
+    deploys: deps.deploys?.() ?? [],
   };
 }

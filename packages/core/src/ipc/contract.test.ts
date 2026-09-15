@@ -17,6 +17,7 @@ describe('ipc contract', () => {
     const families = new Set(COMMAND_NAMES.map((n) => n.split('.')[0]));
     expect([...families].sort()).toEqual(
       [
+        'agent',
         'ask',
         'audit',
         'deploy',
@@ -32,6 +33,7 @@ describe('ipc contract', () => {
         'policy',
         'preview',
         'project',
+        'run',
         'session',
         'skills',
         'settings',
@@ -184,6 +186,8 @@ describe('ipc contract', () => {
       popouts: m.popouts,
       ui: { screen: null, projectId: null, projectSession: {}, paneSizes: {} },
       activity: m.activity,
+      runs: Object.values(m.runs),
+      deploys: Object.values(m.deploys),
     };
     const r = commands['store.snapshot'].output.safeParse(snapshot);
     expect(r.success).toBe(true);

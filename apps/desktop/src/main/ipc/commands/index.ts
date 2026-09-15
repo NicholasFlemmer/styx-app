@@ -1,5 +1,6 @@
 import type { Container } from '../../container';
 import type { CommandBus } from '../bus';
+import { registerAgentCommands } from './agent';
 import { registerAuditCommands } from './audit';
 import { registerDialogCommands } from './dialog';
 import { registerGrantCommands } from './grant';
@@ -8,6 +9,7 @@ import { registerProjectCommands } from './project';
 import { registerDeployCommands } from './deploy';
 import { registerSkillsCommands } from './skills';
 import { registerPreviewCommands } from './preview';
+import { registerRunCommands } from './run';
 import { registerSessionCommands } from './session';
 import { registerStoreCommands } from './store';
 import { registerTargetCommands } from './target';
@@ -22,6 +24,8 @@ export function registerAllCommands(bus: CommandBus, app: Container): void {
   registerPreviewCommands(bus, app);
   registerDeployCommands(bus, app);
   registerSkillsCommands(bus, app);
+  registerAgentCommands(bus, app);
+  registerRunCommands(bus, app);
   registerGrantCommands(bus, app);
   registerTargetCommands(bus, app);
   registerWorktreeCommands(bus, app);

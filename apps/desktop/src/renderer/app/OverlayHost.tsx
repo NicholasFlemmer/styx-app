@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { AuditDrawer } from '../features/audit-drawer/AuditDrawer';
 import { GrantSheet } from '../features/grant-sheet/GrantSheet';
 import { AddExistingModal } from '../features/modals/AddExistingModal';
+import { ConnectAgentModal } from '../features/modals/ConnectAgentModal';
 import { ConnectModal } from '../features/modals/ConnectModal';
 import { DeployModal } from '../features/modals/DeployModal';
 import { NewProjectModal } from '../features/modals/NewProjectModal';
@@ -25,7 +26,23 @@ const render = (o: Overlay) => {
         case 'add-existing':
           return <AddExistingModal key={o.id} id={o.id} />;
         case 'deploy':
-          return <DeployModal key={o.id} id={o.id} targetId={o.targetId} />;
+          return (
+            <DeployModal
+              key={o.id}
+              id={o.id}
+              targetId={o.targetId}
+              {...(o.deployId !== undefined ? { deployId: o.deployId } : {})}
+            />
+          );
+        case 'connect-agent':
+          return (
+            <ConnectAgentModal
+              key={o.id}
+              id={o.id}
+              agent={o.agent}
+              {...(o.returnTo !== undefined ? { returnTo: o.returnTo } : {})}
+            />
+          );
         case 'connect':
           return (
             <ConnectModal

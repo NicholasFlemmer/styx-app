@@ -13,6 +13,8 @@ type Phase = 'requesting-grant' | 'running' | 'succeeded' | 'failed' | 'cancelle
 export interface DeployModalProps {
   id: string;
   targetId: TargetId;
+  /** Attach to a deploy already running (from the workspace button / a finish toast) instead of starting one. */
+  deployId?: string;
 }
 
 /**

@@ -71,6 +71,8 @@ export const projectSettingsSchema = z.object({
    * `.styx/project.json` and the whole team) because it describes the project, not the machine.
    */
   devUrl: z.string().nullable(),
+  /** The command "Run locally" runs in the main worktree (`pnpm dev` …); detected from the repo when unset. */
+  devCommand: z.string().nullable(),
 });
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 
@@ -90,6 +92,7 @@ export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   envFiles: ['.env.local'],
   envShareWithAgents: 'per-grant',
   devUrl: null,
+  devCommand: null,
 };
 
 export const settingsSourceSchema = z.enum(['default', 'app', 'project']);

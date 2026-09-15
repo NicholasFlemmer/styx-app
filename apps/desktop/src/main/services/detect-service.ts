@@ -35,7 +35,7 @@ export interface CliDetection {
 export type CliOverrides = Partial<Record<Exclude<AgentKind, 'shell'>, string>>;
 
 export interface IdeDetection {
-  kind: 'vscode' | 'cursor' | 'jetbrains' | 'neovim';
+  kind: 'vscode' | 'cursor' | 'windsurf' | 'zed' | 'jetbrains' | 'neovim';
   product: string;
   version: string | null;
   location: string | null;
@@ -223,6 +223,10 @@ export const toCliInstall = (c: CliDetection, checkedAt: number): CliInstall => 
     ...(c.alternatives.length === 0 ? {} : { alternatives: c.alternatives }),
   },
   checkedAt,
+  // Connection fields belong to AgentService (`agent.verify`); a fresh detection knows nothing about them.
+  account: null,
+  verifiedAt: null,
+  verifyError: null,
 });
 
 interface ProbeCache {

@@ -4,7 +4,8 @@ import { asBool, asJson, asStr, placeholders, toBit, toJson, type Raw } from './
 
 const IDE_COLS =
   'id, kind, product, version, location, launcher, config_dir, is_fallback, imported_json, detected_at';
-const CLI_COLS = 'agent, binary, version, found, auth_state, capabilities_json, checked_at';
+const CLI_COLS =
+  'agent, binary, version, found, auth_state, capabilities_json, checked_at, account, verified_at, verify_error';
 
 export const ideFromRow = (r: Raw): IdeInstall =>
   ideInstallSchema.parse({
@@ -38,6 +39,9 @@ export const cliFromRow = (r: Raw): CliInstall =>
     authState: String(r['auth_state']),
     capabilities: asJson<Record<string, unknown>>(r['capabilities_json'], {}),
     checkedAt: Number(r['checked_at']),
+    account: asStr(r['account']),
+    verifiedAt: r['verified_at'] === null || r['verified_at'] === undefined ? null : Number(r['verified_at']),
+    verifyError: asStr(r['verify_error']),
   });
 
 /** `ide_installs` + `cli_installs`: the persisted result of DetectService. */
@@ -61,9 +65,10 @@ export class DiscoveryRepo {
     this.delIdes = db.prepare('DELETE FROM ide_installs');
     this.setFallbackStmt = db.prepare('UPDATE ide_installs SET is_fallback = (kind = ?)');
     this.upsertCli = db.prepare(
-      `INSERT INTO cli_installs (${CLI_COLS}) VALUES (${placeholders(7)})
+      `INSERT INTO cli_installs (${CLI_COLS}) VALUES (${placeholders(10)})
        ON CONFLICT(agent) DO UPDATE SET binary = excluded.binary, version = excluded.version, found = excluded.found, auth_state = excluded.auth_state,
-         capabilities_json = excluded.capabilities_json, checked_at = excluded.checked_at`,
+         capabilities_json = excluded.capabilities_json, checked_at = excluded.checked_at, account = excluded.account,
+         verified_at = excluded.verified_at, verify_error = excluded.verify_error`,
     );
     this.allClis = db.prepare(`SELECT ${CLI_COLS} FROM cli_installs ORDER BY rowid`);
     this.getCli = db.prepare(`SELECT ${CLI_COLS} FROM cli_installs WHERE agent = ?`);
@@ -116,6 +121,9 @@ export class DiscoveryRepo {
       c.authState,
       toJson(c.capabilities),
       c.checkedAt,
+      c.account,
+      c.verifiedAt,
+      c.verifyError,
     );
   }
 

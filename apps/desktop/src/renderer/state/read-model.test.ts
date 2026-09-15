@@ -24,6 +24,8 @@ const snapshotOf = (seq: number): ReadModelSnapshot => {
     popouts: [],
     ui: { screen: null, projectId: null, projectSession: {}, paneSizes: {} },
     activity: f.activity,
+    runs: [],
+    deploys: [],
   };
 };
 

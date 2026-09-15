@@ -8,6 +8,8 @@ import { agentChangeSchema } from './model/hunk';
 import { notificationSchema } from './model/notification';
 import { policySchema } from './model/policy';
 import { projectSchema, repoSchema, worktreeSchema } from './model/project';
+import { deploySchema, devRunSchema } from './model/run';
+import { projectIdSchema } from './model/common';
 import { pendingAskSchema, sessionSchema, transcriptMessageSchema } from './model/session';
 import { appSettingsSchema, projectSettingsSchema, settingsSourceSchema } from './model/settings';
 import { targetSchema } from './model/target';
@@ -91,6 +93,10 @@ export const deltaSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('popouts.set'), sessionIds: z.array(sessionIdSchema) }),
   /** Prepends rows not already present (by id); main keeps the feed capped. */
   z.object({ op: z.literal('activity.append'), rows: z.array(activityRowSchema) }),
+  /** The project's local run; `null` clears it (stopped and dismissed). */
+  z.object({ op: z.literal('runs.set'), projectId: projectIdSchema, run: devRunSchema.nullable() }),
+  /** A deploy row by id; every phase change re-sends the whole row. */
+  z.object({ op: z.literal('deploys.set'), deploy: deploySchema }),
 ]);
 export type Delta = z.infer<typeof deltaSchema>;
 
@@ -157,6 +163,16 @@ export const applyDelta = (model: ReadModel, delta: Delta): ReadModel => {
       const fresh = delta.rows.filter((r) => !seen.has(r.id));
       return fresh.length === 0 ? model : { ...model, activity: [...fresh, ...model.activity] };
     }
+    case 'runs.set': {
+      const runs = { ...model.runs };
+      if (delta.run === null) {
+        if (!(delta.projectId in runs)) return model;
+        delete runs[delta.projectId];
+      } else runs[delta.projectId] = delta.run;
+      return { ...model, runs };
+    }
+    case 'deploys.set':
+      return { ...model, deploys: { ...model.deploys, [delta.deploy.deployId]: delta.deploy } };
   }
 };
 

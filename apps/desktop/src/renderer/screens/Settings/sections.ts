@@ -25,7 +25,7 @@ export const DEFAULT_SETTINGS_SECTION: SettingsSection = 'project:targets';
 export const SECTION_LABEL: Record<SettingsSection, string> = {
   'app:general': copy.settings.app.general,
   'app:editor': copy.settings.app.editor,
-  'app:agents': copy.settings.app.agents,
+  'app:agents': copy.agentsPage.title,
   'app:skills': copy.skills.title,
   'app:keychain': copy.settings.app.keychain,
   'app:policies': copy.settings.app.policies,

@@ -19,6 +19,9 @@ export { CLI_BINARY_KEY_PREFIX, cliBinaryKey } from '../../services/session-serv
 const RECENTS_SOURCE = {
   vscode: 'state-db',
   cursor: 'state-db',
+  windsurf: 'state-db',
+  /** Zed keeps its workspaces in its own SQLite store, not read in this version. */
+  zed: null,
   jetbrains: 'recent-projects',
   neovim: 'shada',
 } as const;

@@ -15,7 +15,8 @@ import { mergeSettings } from '../project-file';
 import type { ActivityRow } from '../model/activity';
 import type { AuditEntry } from '../model/audit';
 import type { Agent, Env, Provider, Scope, TargetPolicy } from '../model/common';
-import type { CliInstall, IdeInstall } from '../model/discovery';
+import type { CliInstall, IdeInstall, SkillSummary } from '../model/discovery';
+import type { Deploy, DevRun } from '../model/run';
 import type { Grant } from '../model/grant';
 import type { AgentChange } from '../model/hunk';
 import type { Notification } from '../model/notification';
@@ -1043,6 +1044,9 @@ export const demoClis = (): CliInstall[] => [
     authState: 'signed-in',
     capabilities: { streamJson: true, hooks: true },
     checkedAt: ago(5 * MIN),
+    account: 'nic@acme.dev',
+    verifiedAt: ago(5 * MIN),
+    verifyError: null,
   },
   {
     agent: 'codex',
@@ -1052,6 +1056,9 @@ export const demoClis = (): CliInstall[] => [
     authState: 'signed-in',
     capabilities: { mcp: true, notify: true },
     checkedAt: ago(5 * MIN),
+    account: 'ChatGPT',
+    verifiedAt: ago(5 * MIN),
+    verifyError: null,
   },
   {
     agent: 'gemini',
@@ -1061,6 +1068,9 @@ export const demoClis = (): CliInstall[] => [
     authState: 'signed-out',
     capabilities: { mcp: true },
     checkedAt: ago(5 * MIN),
+    account: null,
+    verifiedAt: ago(5 * MIN),
+    verifyError: null,
   },
   {
     agent: 'cursor',
@@ -1070,6 +1080,9 @@ export const demoClis = (): CliInstall[] => [
     authState: 'signed-in',
     capabilities: { streamJson: true },
     checkedAt: ago(5 * MIN),
+    account: 'nic@acme.dev',
+    verifiedAt: null,
+    verifyError: null,
   },
   {
     agent: 'shell',
@@ -1079,6 +1092,38 @@ export const demoClis = (): CliInstall[] => [
     authState: 'n/a',
     capabilities: {},
     checkedAt: ago(5 * MIN),
+    account: null,
+    verifiedAt: null,
+    verifyError: null,
+  },
+];
+
+/**
+ * Installed skills as the Settings › Skills pane lists them: one of the user's own for Claude Code, one committed
+ * in acme-shop, one in the shared `.agents` dir (read by Codex, Gemini CLI and Cursor). The seed writes these to
+ * the fixture home so the pane is deterministic and never reads the real one.
+ */
+export const demoSkills = (): SkillSummary[] => [
+  {
+    name: 'pdf',
+    directory: 'pdf',
+    description: 'Read, fill and merge PDF files with the pdf toolkit.',
+    scope: 'global',
+    host: 'claude',
+  },
+  {
+    name: 'release-notes',
+    directory: 'release-notes',
+    description: 'Write release notes from the commits since the last tag, in this repo\u2019s voice.',
+    scope: 'project',
+    host: 'claude',
+  },
+  {
+    name: 'sql-review',
+    directory: 'sql-review',
+    description: 'Review a migration for locking, index and backfill hazards before it ships.',
+    scope: 'global',
+    host: 'agents',
   },
 ];
 
@@ -1154,9 +1199,12 @@ export interface DemoFixture {
   notifications: Notification[];
   ides: IdeInstall[];
   clis: CliInstall[];
+  skills: SkillSummary[];
   activity: ActivityRow[];
   appSettings: AppSettings;
   projectSettings: Record<string, EffectiveProjectSettings>;
+  runs: Record<string, DevRun>;
+  deploys: Record<string, Deploy>;
 }
 
 const acmeProjectSettings = (): EffectiveProjectSettings =>
@@ -1182,9 +1230,12 @@ export const demoFixture = (): DemoFixture => ({
   notifications: demoNotifications(),
   ides: demoIdes(),
   clis: demoClis(),
+  skills: demoSkills(),
   activity: demoActivity(),
   appSettings: { ...DEFAULT_APP_SETTINGS, fallbackIde: 'vscode', onboardingDone: true },
   projectSettings: { [ids.project.acmeShop]: acmeProjectSettings() },
+  runs: {},
+  deploys: {},
 });
 
 /** Prototype "Empty states": no projects, sessions or targets; builtins and detection intact. */
@@ -1202,6 +1253,7 @@ export const emptyFixture = (): DemoFixture => ({
   hunks: {},
   notifications: [],
   activity: [],
+  skills: [],
   projectSettings: {},
 });
 
@@ -1304,6 +1356,8 @@ export const fixtureReadModel = (f: DemoFixture): ReadModel => ({
   settings: { app: f.appSettings, project: f.projectSettings },
   popouts: [],
   activity: f.activity,
+  runs: f.runs,
+  deploys: f.deploys,
 });
 
 export const demoReadModel = (): ReadModel => fixtureReadModel(demoFixture());

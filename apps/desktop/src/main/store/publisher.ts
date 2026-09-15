@@ -5,6 +5,8 @@ import {
   type AppSettings,
   type CliInstall,
   type Delta,
+  type Deploy,
+  type DevRun,
   type EffectiveProjectSettings,
   type EventName,
   type EventPayload,
@@ -31,6 +33,12 @@ export interface PublisherDeps {
   tickMs?: number;
 }
 
+/** In-memory slices that ride in the snapshot (main-owned processes: local runs and deploys). Bound after the services exist. */
+export interface SnapshotExtras {
+  runs: () => DevRun[];
+  deploys: () => Deploy[];
+}
+
 /** The single `styx:evt` channel carries every main → renderer event as `{ name, payload }`. */
 export const EVENT_CHANNEL = 'styx:evt';
 
@@ -47,9 +55,15 @@ export class Publisher {
   private readonly ptySeq = new Map<string, number>();
   private ptyTimer: NodeJS.Timeout | null = null;
   private readonly tickMs: number;
+  private extras: SnapshotExtras = { runs: () => [], deploys: () => [] };
 
   constructor(private readonly deps: PublisherDeps) {
     this.tickMs = deps.tickMs ?? 16;
+  }
+
+  /** Services that own in-memory state register it here so a fresh window's snapshot includes it. */
+  bindExtras(extras: Partial<SnapshotExtras>): void {
+    this.extras = { ...this.extras, ...extras };
   }
 
   get seq(): number {
@@ -152,11 +166,22 @@ export class Publisher {
     this.emit({ op: 'popouts.set', sessionIds: this.deps.popouts() as SessionId[] });
   }
 
+  runsSet(projectId: string, run: DevRun | null): void {
+    this.emit({ op: 'runs.set', projectId: projectId as DevRun['projectId'], run });
+  }
+
+  deploysSet(deploy: Deploy): void {
+    this.emit({ op: 'deploys.set', deploy });
+  }
+
   // --- snapshot ------------------------------------------------------------
 
   snapshot(): ReadModelSnapshot {
     this.flush();
-    return buildSnapshot({ repos: this.deps.repos, popouts: this.deps.popouts }, this.seqNo);
+    return buildSnapshot(
+      { repos: this.deps.repos, popouts: this.deps.popouts, runs: this.extras.runs, deploys: this.extras.deploys },
+      this.seqNo,
+    );
   }
 
   // --- events --------------------------------------------------------------

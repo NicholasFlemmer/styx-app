@@ -323,7 +323,7 @@ export const ideInstalls = sqliteTable(
   'ide_installs',
   {
     id: text('id').primaryKey(),
-    kind: text('kind', { enum: ['vscode', 'cursor', 'jetbrains', 'neovim'] }).notNull(),
+    kind: text('kind', { enum: ['vscode', 'cursor', 'windsurf', 'zed', 'jetbrains', 'neovim'] }).notNull(),
     product: text('product'),
     version: text('version'),
     location: text('location').notNull(),
@@ -346,6 +346,10 @@ export const cliInstalls = sqliteTable('cli_installs', {
     .default('unknown'),
   capabilitiesJson: text('capabilities_json').notNull().default('{}'),
   checkedAt: integer('checked_at').notNull(),
+  /** Connection (migration 0011): who the CLI is signed in as, when it was verified, and the last failure text. */
+  account: text('account'),
+  verifiedAt: integer('verified_at'),
+  verifyError: text('verify_error'),
 });
 
 export const uiState = sqliteTable('ui_state', {

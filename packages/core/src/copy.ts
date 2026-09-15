@@ -24,7 +24,7 @@ export const copy = {
       newProject: 'New project…',
       newProjectMeta: 'empty · template · agent',
       /** Owner additions (not in §10, spec tone): existing repos reachable from the palette too. */
-      addExisting: 'Add existing projects…',
+      addExisting: 'Add from recent projects…',
       addExistingMeta: 'recents · scan this machine',
       openFolder: 'Open folder…',
       openFolderMeta: 'existing repo',
@@ -228,6 +228,19 @@ export const copy = {
     cancel: 'Cancel',
     close: 'Close',
     exitCode: 'exit {code}',
+    /** Workspace deploy button (owner addition, spec tone): the target is always in the label. */
+    toLive: 'Deploy to live · {target}',
+    button: 'Deploy · {target}',
+    deploying: 'Deploying · {target}…',
+    deployed: 'Deployed · {target}',
+    deployFailed: 'Deploy failed · {target}',
+    noTarget: 'Connect a deploy target',
+    pick: 'Deploy to',
+    showOutput: 'Show output',
+    /** Status bar item while a deploy runs. */
+    statusBar: 'deploying · {target}',
+    /** Palette row meta while a deploy for that target is in flight. */
+    inFlight: 'deploying…',
   },
 
   /**
@@ -301,13 +314,15 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   /** Skills (owner addition: the handoff has no skills surface). */
   skills: {
     title: 'Skills',
+    lead: 'Skills are instruction files your agents pick up. Install once per agent; project skills are committed with the repo.',
     installed: 'Installed',
     browse: 'Browse',
     install: 'Install',
     remove: 'Remove',
-    read: 'Read first',
+    read: 'Read',
     installing: 'Installing…',
     empty: 'No skills installed.',
+    emptyBody: 'Read one from the catalogue below and install it for the agents you use.',
     catalogueEmpty: 'Nothing in the catalogue.',
     catalogueFailed: 'Could not reach the skill catalogue: {error}',
     noSkillMd: '{name} has no SKILL.md',
@@ -316,6 +331,25 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     warning:
       'A skill is instructions your agents will follow, with whatever access their grants allow. Read it before installing.',
     installedTo: { global: 'Installed for you', project: 'Installed in this project' },
+    /** Redesign (owner request): search, per-agent hosts, a reader sheet, loading and result states. */
+    search: 'Search skills',
+    columns: { skill: 'Skill', for: 'For', where: 'Where' },
+    hosts: { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', cursor: 'Cursor', agents: 'Shared' },
+    hostsShort: { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', cursor: 'Cursor', agents: 'Shared' },
+    /** `.agents/skills` is read by Codex, Gemini CLI and Cursor; Styx lists it but never writes there. */
+    sharedHint: 'read by Codex, Gemini CLI and Cursor',
+    filterAll: 'All agents',
+    loading: 'Loading catalogue…',
+    retry: 'Retry',
+    installedTag: 'Installed',
+    installFor: 'For',
+    installWhere: 'Where',
+    pickHost: 'Pick at least one agent.',
+    needsProject: 'Open a project to install it there.',
+    installedToast: 'Installed {name} for {hosts}',
+    removedToast: 'Removed {name}',
+    noMatch: 'No skills match "{query}".',
+    close: 'Close',
   },
 
   accessRequest: {
@@ -487,6 +521,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       cta: 'Install guide',
     },
     spawnCliMissing: '{cli} CLI not found on PATH.',
+    /** Spawn modal row when the CLI exists but is not signed in (owner addition; spec tone). */
+    spawnNotConnected: "{cli} isn't connected.",
+    fixConnection: 'Fix connection',
     locateBinary: 'Locate binary',
   },
 
@@ -521,6 +558,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       signIn: 'Sign in →',
       install: 'Install →',
       notFound: 'not found on PATH',
+      /** Row action (owner addition): opens the Connect agent modal. */
+      connect: 'Connect →',
+      fix: 'Fix →',
     },
     targets: {
       headline: 'Connect deploy and server targets.',
@@ -634,6 +674,53 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     },
   },
 
+  /**
+   * Agents page (Settings › App › Agents) and the Connect agent modal (owner addition; spec tone, not §10):
+   * one connection per agent CLI, verified here, spawned per project.
+   */
+  agentsPage: {
+    title: 'Agents',
+    lead: 'Connect each agent once; every project spawns from these connections.',
+    columns: { agent: 'Agent', version: 'Version', account: 'Account', state: 'State' },
+    state: {
+      connected: 'connected',
+      signedOut: 'signed out',
+      missing: 'not installed',
+      unverified: 'not verified',
+      checking: 'checking…',
+      failed: 'check failed',
+      shell: 'ready',
+    },
+    actions: {
+      connect: 'Connect',
+      fix: 'Fix',
+      verify: 'Verify',
+      signIn: 'Sign in',
+      locate: 'Locate binary',
+      installGuide: 'Install guide',
+    },
+    preferences: 'Preferences',
+    connect: {
+      title: 'Connect agent · {agent}',
+      heading: 'Connect {agent}',
+      body: "Sign-in happens in {cli}'s own flow. Styx stores where it lives and who you're signed in as, never a token.",
+      installedLine: '{version} · {location}',
+      notInstalled: '{cli} is not installed.',
+      signedInAs: 'Signed in as {account}',
+      signedIn: 'Signed in',
+      notSignedIn: 'Not signed in',
+      unverified: 'Not verified yet',
+      checking: 'Checking {cli}…',
+      checkFailed: "Couldn't verify: {error}",
+      signIn: 'Sign in with {cli}…',
+      waiting: 'Waiting for {command}…',
+      loginFailed: '{command} exited with code {code}.',
+      verify: 'Verify',
+      done: 'Done',
+      shell: 'The shell needs no sign-in.',
+    },
+  },
+
   spawn: {
     title: 'Spawn agent · {project}',
     worktree: 'Worktree',
@@ -699,10 +786,17 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     accept: 'Accept',
     reject: 'Reject',
     review: 'Review',
+    /** Owner decision: agents already applied their edits, so the review reverts or marks reviewed; nothing "accepts". */
+    revert: 'Revert',
+    revertAll: 'Revert all',
+    markReviewed: 'Mark reviewed',
+    status: { pending: 'applied', rejected: 'reverted', accepted: 'reviewed' },
+    summaryReviewed: '{n} changes · {reverted} reverted · {reviewed} reviewed',
     files: 'Files · {n}',
     keys: {
       title: 'Keys',
       acceptReject: 'a accept · r reject',
+      revert: 'r revert',
       nextPrev: 'j / k next · prev',
       done: '{mod}⏎ done',
     },
@@ -727,7 +821,24 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       openExternal: 'Open in browser',
       devices: { desktop: 'Desktop', tablet: 'Tablet', phone: 'Phone' },
       empty: 'Point Styx at your dev server to see it here.',
-      hint: 'Start the server in the terminal below, then enter its URL.',
+      hint: 'Run it locally, or start the server yourself and enter its URL.',
+    },
+    /** "Run locally" (owner addition): the dev server started from the design window. */
+    run: {
+      run: 'Run locally',
+      stop: 'Stop',
+      command: 'Command',
+      commandPlaceholder: 'pnpm dev',
+      detected: 'Detected from {source}',
+      starting: 'Starting…',
+      running: 'Running · {url}',
+      runningNoUrl: 'Running',
+      exited: 'Exited · code {code}',
+      output: 'Output',
+      dismiss: 'Dismiss',
+      /** Status bar item while the run is alive. */
+      statusBar: 'dev · {url}',
+      statusBarNoUrl: 'dev · running',
     },
     openIn: 'Open in {ide}',
     terminal: 'TERMINAL · {branch}',
@@ -844,7 +955,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     },
     addRow: {
       newProject: '+ New project',
-      addExisting: '+ Add existing',
+      addExisting: '+ Add from recent',
       openFolder: '+ Open folder',
       cloneUrl: '+ Clone URL',
     },
@@ -859,18 +970,18 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     remove: 'Remove from sidebar',
     menu: {
       newProject: 'New project…',
-      addExisting: 'Add existing…',
+      addExisting: 'Add from recent…',
       openFolder: 'Open folder…',
       cloneUrl: 'Clone URL…',
     },
   },
 
   /**
-   * "Add existing projects" modal (owner addition, docs/handoff-discrepancies #53): the onboarding step-2 list
-   * (editor recents + repos found on this machine) reachable any time after onboarding.
+   * "Add from recent projects" modal (owner addition, docs/handoff-discrepancies #53, renamed #71): the onboarding
+   * step-2 list (editor recents + repos found on this machine) reachable any time after onboarding.
    */
   addExisting: {
-    title: 'Add existing projects',
+    title: 'Add from recent projects',
     lead: 'Recent folders from your editor and repos found on this machine. Projects already in Styx are hidden.',
     scanning: 'Scanning this machine…',
     empty: 'Nothing new to add. Every recent folder and repo found here is already a project.',

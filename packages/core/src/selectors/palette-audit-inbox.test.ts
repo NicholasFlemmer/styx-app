@@ -241,7 +241,7 @@ describe('paletteResults', () => {
       '◆ Grant Codex → Supabase prod · needs you',
       '+ Spawn agent in acme-shop · claude ▾',
       '■ New project… · empty · template · agent',
-      '■ Add existing projects… · recents · scan this machine',
+      '■ Add from recent projects… · recents · scan this machine',
       '■ Open folder… · existing repo',
       '■ Clone URL… · git clone',
       '▲ Audit debt · spawns an agent to review this repo',
@@ -313,7 +313,7 @@ describe('paletteResults', () => {
       paletteResults(model, { projectId: null }, '', 'actions', NOW)[0]?.items.map((i) => i.label),
     ).toEqual([
       'New project…',
-      'Add existing projects…',
+      'Add from recent projects…',
       'Open folder…',
       'Clone URL…',
       // No audit row: it needs a project to audit. The dock is cross-project, so it stays.

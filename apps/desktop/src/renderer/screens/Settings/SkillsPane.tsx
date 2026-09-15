@@ -45,7 +45,7 @@ export function SkillsPane({ projectId }: { projectId: ProjectId | null }) {
 
   const install = (directory: string, scope: Scope) => {
     setBusy(directory);
-    void command('skills.install', { directory, scope, projectId }).then((r) => {
+    void command('skills.install', { directory, scope, hosts: ['claude'], projectId }).then((r) => {
       setBusy(null);
       if (r.ok) {
         setReading(null);
@@ -55,10 +55,13 @@ export function SkillsPane({ projectId }: { projectId: ProjectId | null }) {
   };
 
   const remove = (skill: SkillSummary) => {
-    if (skill.scope === 'catalogue') return;
-    void command('skills.remove', { directory: skill.directory, scope: skill.scope, projectId }).then(
-      refresh,
-    );
+    if (skill.scope === 'catalogue' || skill.host === null) return;
+    void command('skills.remove', {
+      directory: skill.directory,
+      scope: skill.scope,
+      host: skill.host,
+      projectId,
+    }).then(refresh);
   };
 
   const isInstalled = (directory: string) => installed.some((i) => i.directory === directory);

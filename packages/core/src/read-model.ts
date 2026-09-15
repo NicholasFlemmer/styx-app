@@ -7,6 +7,7 @@ import type { AgentChange } from './model/hunk';
 import type { Notification } from './model/notification';
 import type { Policy } from './model/policy';
 import type { Project, Repo, Worktree } from './model/project';
+import type { Deploy, DevRun } from './model/run';
 import type { PendingAsk, Session, TranscriptMessage } from './model/session';
 import type { AppSettings, EffectiveProjectSettings } from './model/settings';
 import type { Target } from './model/target';
@@ -105,6 +106,10 @@ export interface ReadModel extends ReadModelTables {
   popouts: readonly SessionId[];
   /** Home activity feed rows (main appends; capped there). */
   activity: readonly ActivityRow[];
+  /** The local dev-server run per project ("Run locally"), while one exists. */
+  runs: Readonly<Record<string, DevRun>>;
+  /** Deploys Styx started this session, keyed by deploy id (main keeps the latest per target). */
+  deploys: Readonly<Record<string, Deploy>>;
 }
 
 export const TABLE_NAMES: readonly TableName[] = [
@@ -138,6 +143,8 @@ export const emptyReadModel = (app: AppSettings): ReadModel => ({
   settings: { app, project: {} },
   popouts: [],
   activity: [],
+  runs: {},
+  deploys: {},
 });
 
 export const projectSettingsOf = (model: ReadModel, projectId: ProjectId): EffectiveProjectSettings | null =>

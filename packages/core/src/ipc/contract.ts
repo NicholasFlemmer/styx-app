@@ -24,8 +24,10 @@ import {
   cliInstallSchema,
   ideInstallSchema,
   ideKindSchema,
+  skillHostSchema,
   skillSummarySchema,
 } from '../model/discovery';
+import { deploySchema, devRunSchema } from '../model/run';
 import { policyRuleSchema, policySchema } from '../model/policy';
 import { targetNameSchema } from '../project-file';
 import {
@@ -122,6 +124,8 @@ const readModelSnapshotSchema = z.object({
   }),
   popouts: z.array(sessionIdSchema),
   activity: z.array(activityRowSchema),
+  runs: z.array(devRunSchema),
+  deploys: z.array(deploySchema),
 });
 export type ReadModelSnapshot = z.infer<typeof readModelSnapshotSchema>;
 
@@ -228,22 +232,58 @@ export const commands = {
     input: z.object({ directory: z.string().min(1) }),
     output: z.object({ text: z.string() }),
   },
+  /** Installs one catalogue skill for each chosen agent (its own skills dir); the shared `.agents` dir is never written. */
   'skills.install': {
     input: z.object({
       directory: z.string().min(1),
       scope: z.enum(['global', 'project']),
+      hosts: z.array(skillHostSchema.exclude(['agents'])).min(1),
       projectId: projectIdSchema.nullable(),
     }),
-    output: z.object({ skill: skillSummarySchema }),
+    output: z.object({ skills: z.array(skillSummarySchema) }),
   },
   'skills.remove': {
     input: z.object({
       directory: z.string().min(1),
       scope: z.enum(['global', 'project']),
+      host: skillHostSchema,
       projectId: projectIdSchema.nullable(),
     }),
     output: ok,
   },
+
+  // --- agent connections (Settings › App › Agents; one connection per agent CLI, spawned per project) ---
+  /**
+   * Asks the CLI itself who it is signed in as (`claude auth status --json`, `codex login status`,
+   * `cursor-agent status`; Gemini's account file) and stores the answer on the `cli_installs` row. Never a token.
+   */
+  'agent.verify': { input: z.object({ agent: agentSchema }), output: z.object({ cli: cliInstallSchema }) },
+  /** Runs the CLI's own sign-in in a pty the renderer attaches to; `agent.login` events report running/exited. */
+  'agent.login': {
+    input: z.object({ agent: agentSchema }),
+    output: z.object({ terminalId: z.string().min(1), command: z.string().min(1) }),
+  },
+  /** Opens the CLI's install documentation in the OS browser. */
+  'agent.installGuide': { input: z.object({ agent: agentSchema }), output: ok },
+
+  // --- run locally (the design window's dev server) ---
+  /** Suggests run commands from the repo (`package.json` scripts and the lockfile, Makefile, manage.py, Cargo.toml, go.mod). */
+  'run.detect': {
+    input: z.object({ projectId: projectIdSchema }),
+    output: z.object({
+      suggestions: z.array(
+        z.object({ command: z.string().min(1), source: z.enum(['package.json', 'makefile', 'django', 'cargo', 'go']) }),
+      ),
+    }),
+  },
+  /** Starts (or restarts) the project's local run in its main worktree; the row lands in `model.runs`. */
+  'run.start': {
+    input: z.object({ projectId: projectIdSchema, command: z.string().min(1) }),
+    output: z.object({ runId: z.string().min(1), terminalId: z.string().min(1) }),
+  },
+  'run.stop': { input: z.object({ projectId: projectIdSchema }), output: ok },
+  /** Clears a finished run from the model (the output strip closes). */
+  'run.dismiss': { input: z.object({ projectId: projectIdSchema }), output: ok },
   'deploy.start': {
     input: z.object({ targetId: targetIdSchema }),
     output: z.object({ deployId: z.string(), terminalId: z.string() }),
@@ -715,6 +755,13 @@ export const events = {
   'connect.cliLogin': z.object({
     terminalId: z.string().min(1),
     provider: providerSchema,
+    status: z.enum(['running', 'exited']),
+    exitCode: z.number().int().nullable().optional(),
+  }),
+  /** Progress of an `agent.login` terminal; main re-verifies the connection when it exits. */
+  'agent.login': z.object({
+    terminalId: z.string().min(1),
+    agent: agentSchema,
     status: z.enum(['running', 'exited']),
     exitCode: z.number().int().nullable().optional(),
   }),

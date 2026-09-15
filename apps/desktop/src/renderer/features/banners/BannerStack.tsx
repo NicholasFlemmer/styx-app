@@ -39,7 +39,7 @@ export const runBannerAction = (action: BannerAction): void => {
       return;
     }
     case 'install-guide':
-      ui.setSettingsSection('agents');
+      ui.setSettingsSection('app:agents');
       ui.setScreen('settings');
       return;
     case 'resolve':
