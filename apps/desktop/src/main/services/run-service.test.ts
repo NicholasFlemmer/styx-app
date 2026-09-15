@@ -314,6 +314,11 @@ describe('RunService', () => {
           return up;
         },
       });
+      // The fixture project's path is a literal `~/code/acme-shop`; the run persists dev.url / dev.command into
+      // `<path>/.styx/project.json`, so point it at a temp dir (a relative `~` would land inside the repo).
+      const project = t.app.repos.projects.get(acme);
+      if (!project) throw new Error('fixture project');
+      t.app.repos.projects.upsert({ ...project, path: tmp() }, t.app.repos.projects.settings(acme));
       const r = await t.app.runs.start(acme, 'pnpm dev');
       pty.data(r.terminalId, 'Local: http://localhost:3000\n');
       await vi.advanceTimersByTimeAsync(10);
