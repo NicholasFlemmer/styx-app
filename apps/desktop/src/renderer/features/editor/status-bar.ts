@@ -2,9 +2,11 @@ import {
   copy,
   fill,
   headAskOf,
+  isDeployActive,
   rows,
   sessionsInProject,
   targetDerivedState,
+  type DevRun,
   type ProjectId,
   type ReadModel,
 } from '@styx/core';
@@ -40,6 +42,29 @@ export const statusBarTargets = (model: ReadModel, projectId: ProjectId, now: nu
   }
   return out;
 };
+
+/**
+ * Status-bar item for the project's local run (owner addition): `dev · http://localhost:5173` once the server
+ * printed its URL, `dev · running` before that; nothing once it exited (the strip under the design bar says so).
+ */
+export const statusBarRun = (run: DevRun | null): string[] => {
+  if (run === null || run.phase === 'exited') return [];
+  return [
+    run.url === null
+      ? copy.workspace.run.statusBarNoUrl
+      : fill(copy.workspace.run.statusBar, { url: run.url }),
+  ];
+};
+
+/** `deploying · Vercel prod` for every deploy in flight for one of the project's targets. */
+export const statusBarDeploy = (model: ReadModel, projectId: ProjectId): string[] =>
+  Object.values(model.deploys)
+    .filter((d) => d.projectId === projectId && isDeployActive(d))
+    .sort((a, b) => a.startedAt - b.startedAt)
+    .map((d) => {
+      const t = model.targets.byId[d.targetId];
+      return fill(copy.deploy.statusBar, { target: t === undefined ? '' : `${t.name} ${t.env}` });
+    });
 
 export const editorStatusLabel = (eol: 'lf' | 'crlf', lang: string): string =>
   fill(copy.workspace.editorStatus, { eol: eol.toUpperCase(), lang });

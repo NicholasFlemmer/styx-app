@@ -1,6 +1,7 @@
 import type { AskId, ProjectId, SessionId, TargetId } from '../ids';
 import { copy, fill } from '../copy';
 import type { Provider } from '../model/common';
+import { isDeployActive } from '../model/run';
 import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
 import {
@@ -66,6 +67,10 @@ export interface PaletteUi {
 export const DEPLOYABLE_PROVIDERS: readonly Provider[] = ['vercel'];
 
 const lockMeta = (model: ReadModel, targetId: TargetId, now: number): string => {
+  // A deploy already running for this target is the thing to know before pressing Enter on the row again.
+  for (const d of Object.values(model.deploys)) {
+    if (d.targetId === targetId && isDeployActive(d)) return copy.deploy.inFlight;
+  }
   const state = targetDerivedState(model, targetId, now);
   switch (state.kind) {
     case 'open':

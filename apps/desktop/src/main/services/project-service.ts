@@ -229,6 +229,7 @@ const PROJECT_KEYS: (keyof ProjectSettings)[] = [
   'envFiles',
   'envShareWithAgents',
   'devUrl',
+  'devCommand',
 ];
 
 /**

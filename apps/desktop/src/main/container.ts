@@ -326,7 +326,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     shell: () => pty.defaultShell(),
     platform: runtime.platform,
   });
-  publisher.bindExtras({ runs: () => runs.all() });
+  publisher.bindExtras({ runs: () => runs.all(), deploys: () => deploys.all() });
   const refresh = new RefreshScheduler({
     repos,
     clock,

@@ -26,7 +26,14 @@ import {
   applyWordWrap,
   type FileState,
 } from '../../features/editor/MonacoEditor';
-import { editorReadoutItems, editorStatusLabel, statusBarTargets } from '../../features/editor/status-bar';
+import {
+  editorReadoutItems,
+  editorStatusLabel,
+  statusBarDeploy,
+  statusBarRun,
+  statusBarTargets,
+} from '../../features/editor/status-bar';
+import { DeployButton } from '../../features/workspace/DeployButton';
 import { StatusBar } from '../../features/editor/StatusBar';
 import { TerminalPane } from '../../features/terminal/TerminalPane';
 import { command } from '../../state/commands';
@@ -153,7 +160,14 @@ export function Workspace() {
   const hunkNote =
     hunkSessions[0] === undefined ? null : (model.sessions.byId[hunkSessions[0]]?.note ?? null);
 
-  const targets = projectId === null ? [] : statusBarTargets(model, projectId, now);
+  const targets =
+    projectId === null
+      ? []
+      : [
+          ...statusBarTargets(model, projectId, now),
+          ...statusBarRun(model.runs[projectId] ?? null),
+          ...statusBarDeploy(model, projectId),
+        ];
   const editorStatus = editorStatusLabel(fileState?.eol ?? 'lf', fileState?.lang ?? 'TS');
   // Right of the prototype's `Monaco · LF · TS`: caret, wrap and any read-only notice (discrepancies #58).
   const editorExtras =
@@ -222,9 +236,16 @@ export function Workspace() {
             onClick={() => setMode('design')}
             data-workspace-mode="design"
           />
+          <DeployButton projectId={projectId} />
         </div>
         {mode === 'design' ? (
-          <DesignPane projectId={projectId} devUrl={devUrl} active />
+          <DesignPane
+            projectId={projectId}
+            devUrl={devUrl}
+            active
+            run={model.runs[projectId] ?? null}
+            devCommand={model.settings.project[projectId]?.devCommand.value ?? null}
+          />
         ) : (
           <>
             <FileTabs tabs={tabs} activePath={activePath} onSelect={openFile} onClose={closeFile} />

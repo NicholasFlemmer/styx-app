@@ -6,7 +6,7 @@
     flex-direction: column;
     background: var(--bg);
   }
-  /* Chrome row above the native view: URL, device presets, reload, open in browser. */
+  /* Chrome row above the native view: run locally, command, URL, device presets, reload, open in browser. */
   .bar {
     flex: none;
     height: var(--h-tabrow);
@@ -17,6 +17,15 @@
     border-bottom: 1px solid var(--ln);
     background: var(--s1);
   }
+  /* ▶ / ■ before the button text, same as the palette's ▲ ◆ glyph column. */
+  .glyph {
+    margin-right: 6px;
+    font-size: 9px;
+  }
+  .cmd {
+    flex: 1;
+    min-width: 0;
+  }
   .url {
     flex: 1;
     min-width: 0;
@@ -25,6 +34,77 @@
     display: flex;
     gap: 1px;
     flex: none;
+  }
+  /* Run output under the bar: the prototype's 130px terminal recipe (connect modal's inline login terminal). */
+  .strip {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid var(--ln);
+    background: var(--s1);
+  }
+  .stripHead {
+    flex: none;
+    height: var(--h-statusbar);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 8px;
+  }
+  .toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--tx);
+    cursor: pointer;
+  }
+  .chevron {
+    color: var(--mu);
+    transform: rotate(-90deg);
+  }
+  .strip[data-open='true'] .chevron {
+    transform: none;
+  }
+  .phase {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--mu);
+  }
+  /* Starting / running read as attention; an exit goes muted with its code. */
+  .phase[data-phase='starting'],
+  .phase[data-phase='running'] {
+    color: var(--act);
+  }
+  .link {
+    margin-left: auto;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--mu);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .link:hover {
+    color: var(--tx);
+  }
+  .term {
+    height: var(--h-terminal);
+    flex: none;
+    border-top: 1px solid var(--ln);
+    background: var(--term);
+    color: var(--termtx);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    padding: 8px 12px;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
   }
   /* The rectangle the native WebContentsView is positioned over: it must stay empty and unpainted. */
   .hole {
@@ -48,4 +128,13 @@
     color: var(--mu);
     font-size: 12px;
   }
+}
+
+/* xterm paints its own surface; keep the terminal background and drop the default padding. */
+.term :global(.xterm) {
+  padding: 0;
+  height: 100%;
+}
+.term :global(.xterm .xterm-viewport) {
+  background: var(--term) !important;
 }

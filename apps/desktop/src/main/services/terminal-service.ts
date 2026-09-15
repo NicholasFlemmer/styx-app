@@ -9,6 +9,8 @@ export interface CommandSpawn {
   args: string[];
   cwd: string;
   env?: Record<string, string>;
+  /** Caller-chosen `term:<ulid>` so the row can be published before the pty is up (RunService). */
+  id?: string;
 }
 
 /** User terminals (the 130 px pane), one pty per `terminal.spawn`, cwd = the worktree. Ids are `term:<ulid>`. */
@@ -34,7 +36,7 @@ export class TerminalService {
    * `gh auth login --web`…). No shell in between, so argv is never re-parsed; the shim dir is not on its PATH.
    */
   async spawnCommand(cmd: CommandSpawn): Promise<string> {
-    const id = `term:${ulid()}`;
+    const id = cmd.id ?? `term:${ulid()}`;
     const win = this.pty.platform === 'win32';
     // conpty needs `cmd.exe /c` for `.cmd` shims (vercel.cmd, supabase.cmd); posix execs the file directly.
     const shell = win && /\.(cmd|bat)$/i.test(cmd.file) ? 'cmd.exe' : cmd.file;
@@ -44,6 +46,11 @@ export class TerminalService {
     const args = shell === 'cmd.exe' ? ['/c', cmd.file, ...cmd.args] : cmd.args;
     await this.pty.spawn({ id, cwd: cmd.cwd, shell, args, ...(cmd.env ? { env: cmd.env } : {}) });
     return id;
+  }
+
+  /** The `STYX_*` variables user terminals get (shim dir, CLI, broker endpoint); the local run inherits them too. */
+  shimEnv(): Record<string, string> {
+    return this.env();
   }
 
   input(id: string, data: string): void {

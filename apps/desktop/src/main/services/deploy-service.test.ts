@@ -1,4 +1,4 @@
-import { fixtures } from '@styx/core';
+import { fixtures, isDeployActive, type Deploy } from '@styx/core';
 import { describe, expect, it, vi } from 'vitest';
 import { FakeCliRunner } from '../providers/cli-runner';
 import { PtyService } from './pty-service';
@@ -6,8 +6,13 @@ import { makeTestApp, type TestApp } from '../test-support';
 
 /** In-memory pty: records spawns and lets the test end the deploy. */
 class FakePty extends PtyService {
-  readonly spawned: { id: string; shell: string; args: string[]; cwd: string; env: Record<string, string> }[] =
-    [];
+  readonly spawned: {
+    id: string;
+    shell: string;
+    args: string[];
+    cwd: string;
+    env: Record<string, string>;
+  }[] = [];
   private readonly live = new Set<string>();
   constructor() {
     super('darwin');
@@ -97,6 +102,60 @@ describe('DeployService', () => {
     expect(uses.at(-1)).toMatchObject({ via: 'app', scopeUsed: 'deploy' });
 
     expect(events(t).map((e) => e.phase)).toEqual(['requesting-grant', 'running']);
+  });
+
+  it('publishes a model.deploys row on every phase, keeps the latest per target, and rides in the snapshot', async () => {
+    const { t, pty } = appWithPty();
+    const target = await ready(t);
+    const rows = () => {
+      t.app.publisher.flush();
+      return t.win
+        .batches()
+        .flatMap((b) => b.deltas)
+        .filter((d) => d.op === 'deploys.set')
+        .map((d) => (d as unknown as { deploy: Deploy }).deploy);
+    };
+    const r = await t.app.deploys.start(target.id, 'palette');
+    expect(rows().map((d) => d.phase)).toEqual(['requesting-grant', 'running']);
+    const running = rows().at(-1);
+    expect(running).toMatchObject({
+      deployId: r.deployId,
+      targetId: target.id,
+      projectId: target.projectId,
+      terminalId: r.terminalId,
+      exitCode: null,
+      error: null,
+      endedAt: null,
+    });
+    expect(isDeployActive(running as Deploy)).toBe(true);
+    expect(t.app.deploys.all()).toEqual([running]);
+    expect(t.app.publisher.snapshot().deploys).toEqual([running]);
+
+    pty.exit(r.terminalId, 1);
+    const done = rows().at(-1);
+    expect(done).toMatchObject({
+      deployId: r.deployId,
+      phase: 'failed',
+      exitCode: 1,
+      terminalId: r.terminalId,
+    });
+    expect(done?.endedAt).not.toBeNull();
+    expect(isDeployActive(done as Deploy)).toBe(false);
+    // The finished row stays as the target's latest until the next deploy replaces it.
+    expect(t.app.deploys.all()).toEqual([done]);
+    const r2 = await t.app.deploys.start(target.id, 'palette');
+    expect(t.app.deploys.all().map((d) => d.deployId)).toEqual([r2.deployId]);
+  });
+
+  it('a refused start still leaves a failed row behind, so the button and toast can explain it', async () => {
+    const { t } = appWithPty();
+    const target = t.app.repos.targets.get(ids.target.vercelPreview);
+    if (target) t.app.repos.targets.upsert({ ...target, credentialRef: null });
+    await expect(t.app.deploys.start(ids.target.vercelPreview, 'palette')).rejects.toMatchObject({
+      code: 'invalid-input',
+    });
+    // Refused before a row exists (not connected): nothing published.
+    expect(t.app.deploys.all()).toEqual([]);
   });
 
   it('reports succeeded or failed with the exit code when the CLI returns', async () => {

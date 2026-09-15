@@ -1,4 +1,4 @@
-import { copy, fill, type Target, type TargetId } from '@styx/core';
+import { copy, fill, type Deploy, type DeployPhase, type Target, type TargetId } from '@styx/core';
 import { ulid } from 'ulid';
 import type { Repos } from '../db/repos';
 import { fail } from '../ipc/bus';
@@ -18,6 +18,8 @@ export interface DeployServiceDeps {
   terminals: TerminalService;
   pty: PtyService;
   cli: CliRunner;
+  /** Timestamps for the `model.deploys` rows; the wall clock unless a test injects one. */
+  now?: () => number;
 }
 
 interface Running {
@@ -38,12 +40,23 @@ interface Running {
  */
 export class DeployService {
   private readonly running = new Map<string, Running>();
+  /** The latest row per target, so a fresh window's snapshot shows a deploy that is running or just finished. */
+  private readonly latest = new Map<string, Deploy>();
+  private readonly now: () => number;
 
-  constructor(private readonly deps: DeployServiceDeps) {}
+  constructor(private readonly deps: DeployServiceDeps) {
+    this.now = deps.now ?? (() => Date.now());
+  }
+
+  /** Rows for the snapshot (`model.deploys`). */
+  all(): Deploy[] {
+    return [...this.latest.values()];
+  }
 
   /**
-   * Starts a deploy. Resolves once the process is spawned — progress arrives as `deploy.progress` events and the
-   * output streams over the existing pty channel, so the renderer can attach a terminal to it like any other.
+   * Starts a deploy. Resolves once the process is spawned — progress lands in `model.deploys` (and, for now, as
+   * `deploy.progress` events) and the output streams over the existing pty channel, so the renderer can attach a
+   * terminal to it like any other.
    */
   async start(targetId: TargetId, triggeredBy: string): Promise<{ deployId: string; terminalId: string }> {
     const { repos, publisher } = this.deps;
@@ -54,10 +67,33 @@ export class DeployService {
     if (target.credentialRef === null) fail('invalid-input', copy.deploy.notConnected);
 
     const deployId = `dep:${ulid()}`;
+    let row: Deploy = {
+      deployId,
+      targetId,
+      projectId: target.projectId,
+      phase: 'requesting-grant',
+      terminalId: null,
+      exitCode: null,
+      error: null,
+      startedAt: this.now(),
+      endedAt: null,
+    };
     const emit = (
-      phase: 'requesting-grant' | 'running' | 'succeeded' | 'failed' | 'cancelled',
+      phase: DeployPhase,
       extra: { exitCode?: number | null; error?: string | null; terminalId?: string } = {},
     ) => {
+      const done = phase === 'succeeded' || phase === 'failed' || phase === 'cancelled';
+      row = {
+        ...row,
+        phase,
+        exitCode: extra.exitCode ?? null,
+        error: extra.error ?? null,
+        // The terminal id sticks once known: the modal attaches to it whichever phase it opens on.
+        terminalId: extra.terminalId ?? row.terminalId,
+        endedAt: done ? this.now() : null,
+      };
+      this.latest.set(targetId, row);
+      publisher.deploysSet(row);
       publisher.sendEvent('deploy.progress', {
         deployId,
         targetId,

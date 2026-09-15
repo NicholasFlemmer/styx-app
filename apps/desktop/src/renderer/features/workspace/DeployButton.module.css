@@ -1,0 +1,63 @@
+@layer components {
+  /* Sits at the right end of the workspace mode strip; the picker hangs off it. */
+  .wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+  }
+  .button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  /* ▲ before the text, the palette's deploy glyph. */
+  .glyph {
+    font-size: 9px;
+  }
+  /* In-flight dot: the chat WorkingLine's blink; motion.css flattens it under reduced motion. */
+  .blink {
+    animation: styx-blink var(--motion-blink);
+  }
+  /* The rail "+" menu recipe: --s1 surface, 1px text-colour border, t-label rows. */
+  .menu {
+    position: absolute;
+    top: 100%;
+    right: 8px;
+    z-index: 2;
+    min-width: 200px;
+    background: var(--s1);
+    border: 1px solid var(--tx);
+    display: flex;
+    flex-direction: column;
+  }
+  .menuHead {
+    padding: 8px 12px 4px;
+    color: var(--mu);
+    white-space: nowrap;
+  }
+  .menuItem {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border: 0;
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .menuItem[data-on='true'] {
+    color: var(--act);
+  }
+  .menuItem:hover,
+  .menuItem:focus-visible {
+    background: var(--s2);
+  }
+}

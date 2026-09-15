@@ -343,6 +343,31 @@ describe('paletteResults', () => {
     expect(flat(errorReadModel(), 'deploy', 'actions')).toHaveLength(2);
   });
 
+  it('a deploy in flight for the target replaces the lock state with `deploying…`', () => {
+    const deploy = {
+      deployId: 'dep:1',
+      targetId: ids.target.vercelProd,
+      projectId: ids.project.acmeShop,
+      phase: 'running' as const,
+      terminalId: 'term:1',
+      exitCode: null,
+      error: null,
+      startedAt: NOW - MIN,
+      endedAt: null,
+    };
+    const inFlight: ReadModel = { ...model, deploys: { 'dep:1': deploy } };
+    expect(flat(inFlight, 'vercel prod', 'actions')[0]).toBe('▲ Deploy acme-shop → Vercel prod · deploying…');
+    // Other targets keep their own lock state; a finished deploy no longer counts.
+    expect(flat(inFlight, 'vercel preview', 'actions')[0]).toBe(
+      '▲ Deploy acme-shop → Vercel preview · always',
+    );
+    const done: ReadModel = {
+      ...model,
+      deploys: { 'dep:1': { ...deploy, phase: 'succeeded', exitCode: 0, endedAt: NOW } },
+    };
+    expect(flat(done, 'vercel prod', 'actions')[0]).toBe('▲ Deploy acme-shop → Vercel prod · open · 58m');
+  });
+
   it('grant rows need a grant head ask with a known grant and target', () => {
     const ask = model.pendingAsks.byId[ids.ask.codexGrant] as PendingAsk;
     const planAsk: PendingAsk = {

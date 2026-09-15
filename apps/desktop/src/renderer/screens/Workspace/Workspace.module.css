@@ -14,6 +14,10 @@
     border-bottom: 1px solid var(--ln);
     background: var(--s1);
   }
+  /* The deploy button is the strip's last child and hugs the right edge (owner addition). */
+  .modes > [data-deploy-button] {
+    margin-left: auto;
+  }
   .column {
     flex: 1;
     display: flex;
