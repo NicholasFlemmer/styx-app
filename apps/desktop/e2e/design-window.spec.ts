@@ -66,13 +66,14 @@ test('renders the dev server, emulates a device, and leaves the screen for overl
     )
     .toBe(393);
 
-  // The palette is a DOM overlay: the native view must go off screen or it would cover it.
+  // The palette is a DOM overlay: the native view must stop painting (hidden, so the page keeps its state and does
+  // not reload when the palette closes) or it would cover it.
   const bounds = async () =>
     app.evaluate(async ({ BaseWindow }) => {
       const win = BaseWindow.getAllWindows()[0];
       const child = win?.contentView.children.at(-1);
       const b = child?.getBounds();
-      return b ? b.width * b.height : -1;
+      return b && child?.getVisible() ? b.width * b.height : -1;
     });
   expect(await bounds()).toBeGreaterThan(0);
   await page.keyboard.press('Meta+K');

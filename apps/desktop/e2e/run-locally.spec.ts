@@ -18,7 +18,10 @@ test('Run locally detects the command, surfaces the URL in the status bar, and S
       {
         name: 'acme-shop',
         private: true,
-        scripts: { dev: `node -e "console.log('ready http://localhost:3999'); setInterval(()=>{},1000)"` },
+        // A URL is only adopted once something answers on it, so the fixture really listens before it prints.
+        scripts: {
+          dev: `node -e "require('http').createServer((q,s)=>s.end('ok')).listen(3999,()=>console.log('ready http://localhost:3999'))"`,
+        },
       },
       null,
       2,
