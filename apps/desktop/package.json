@@ -18,7 +18,8 @@
     "rebuild:native": "electron-rebuild -f -w better-sqlite3,node-pty",
     "postinstall": "electron-builder install-app-deps",
     "package:mac": "pnpm run build && STYX_NOTARIZE=1 electron-builder --mac",
-    "package:win": "electron-vite build && electron-builder --win",
+    "package:win": "pnpm run build && electron-builder --win",
+    "release:preflight": "bash scripts/release-preflight.sh",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
@@ -46,6 +47,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@electron/notarize": "^2.5.0",
     "@electron/rebuild": "^4.2.0",
     "@playwright/test": "^1.62.1",
     "@styx/broker": "workspace:*",

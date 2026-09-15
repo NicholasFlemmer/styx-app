@@ -1,0 +1,76 @@
+name: release
+# Signed, notarized macOS artifacts and a Windows installer on every `v*` tag.
+#
+# Secrets (Settings › Secrets and variables › Actions):
+#   CSC_LINK / CSC_KEY_PASSWORD            base64 .p12 of the Developer ID Application certificate + its password
+#   APPLE_API_KEY_P8 / APPLE_API_KEY_ID /  App Store Connect API key (contents of the .p8, its key id, the issuer id)
+#   APPLE_API_ISSUER                       — used by build/notarize.cjs instead of the local keychain profile
+#   WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD    optional Windows code-signing certificate; unsigned when absent
+on:
+  push:
+    tags: ['v*']
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tokens:build
+      - name: Write the notary API key
+        run: |
+          echo "${{ secrets.APPLE_API_KEY_P8 }}" > "$RUNNER_TEMP/AuthKey.p8"
+          echo "APPLE_API_KEY=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+      - name: Preflight
+        run: pnpm release:preflight
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      - name: Package (sign + notarize)
+        run: pnpm package:mac
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: styx-mac
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+  win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tokens:build
+      - name: Package (NSIS; signed when WIN_CSC_LINK is set)
+        run: pnpm package:win
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: styx-win
+          path: apps/desktop/release/*.exe
+  publish:
+    needs: [mac, win]
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist }
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            dist/styx-mac/*
+            dist/styx-win/*
