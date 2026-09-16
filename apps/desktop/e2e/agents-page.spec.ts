@@ -21,8 +21,7 @@ test('Settings › Agents lists every agent with its account and opens Connect a
   try {
     await page.locator('[data-screen-ready]').first().waitFor({ state: 'attached', timeout: READY_TIMEOUT });
     // App sections open from the app rail (owner layout #85); Settings itself starts on the project's Targets.
-    await page.click('[data-app-rail-item="settings"]');
-    await page.click('[data-settings-nav="app:agents"]');
+    await page.click('[data-app-rail-item=\"app:agents\"]');
     await expect(page.locator('[data-settings-section="app:agents"]')).toBeVisible();
 
     const rows = page.locator('[data-agent-row]');

@@ -1,4 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react';
+import { Icon, type IconName } from '../../primitives/Icon';
 import s from './RailTile.module.css';
 
 export type RailTileVariant = 'project' | 'add';
@@ -6,6 +7,8 @@ export type RailTileVariant = 'project' | 'add';
 export interface RailTileProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'title'> {
   /** Two-letter initials (project tiles). */
   initials?: string;
+  /** A navigation icon instead of initials (app rail tiles). */
+  icon?: IconName;
   /** Tooltip and accessible name. */
   title: string;
   /** Current project → data-on. */
@@ -25,6 +28,7 @@ export interface RailTileProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
 export const RailTile = forwardRef<HTMLButtonElement, RailTileProps>(function RailTile(
   {
     initials,
+    icon,
     title,
     active,
     current = 'true',
@@ -54,7 +58,7 @@ export const RailTile = forwardRef<HTMLButtonElement, RailTileProps>(function Ra
       data-on={on || active ? 'true' : undefined}
       {...rest}
     >
-      {isAdd ? '+' : initials}
+      {isAdd ? '+' : icon !== undefined ? <Icon name={icon} size={16} /> : initials}
       {needs ? <span className={s['corner']} aria-hidden="true" /> : null}
     </button>
   );

@@ -30,8 +30,13 @@
   .appRail {
     background: var(--bg);
   }
-  .appRailFoot {
-    margin-top: auto;
+  /* Between the app's places and its settings tiles. */
+  .appRailDivider {
+    width: 24px;
+    height: 1px;
+    flex: none;
+    background: var(--ln);
+    margin: 2px 0;
   }
   /* Rail "+" menu: chat overflow-menu recipe (1px --tx border on --s1), fixed beside the tile since the rail clips. */
   .addMenu {

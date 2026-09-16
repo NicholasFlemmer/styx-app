@@ -9,7 +9,7 @@ import {
   sessionsInProject,
   type ReadModel,
 } from '@styx/core';
-import { NavItem } from '@styx/ui';
+import { NavItem, type IconName } from '@styx/ui';
 import { useCallback } from 'react';
 import { useModel, useNow, useUi } from '../state/hooks';
 import { startDebtAudit } from '../features/audit';
@@ -19,6 +19,7 @@ import s from './Shell.module.css';
 
 interface NavRow {
   screen: Screen;
+  icon: IconName;
   label: string;
   meta: string | null;
 }
@@ -35,6 +36,8 @@ export function Nav() {
   const setScreen = useUi((u) => u.setScreen);
   const settingsSection = useUi((u) => u.settingsSection);
   const setSettingsSection = useUi((u) => u.setSettingsSection);
+  const boardScope = useUi((u) => u.boardScope);
+  const setBoardScope = useUi((u) => u.setBoardScope);
   const now = useNow();
   const model = useModel(useCallback((m: ReadModel) => m, []));
 
@@ -51,9 +54,14 @@ export function Nav() {
   const onProjectSettings = screen === 'settings' && isProjectSection(resolveSection(settingsSection));
 
   const items: NavRow[] = [
-    { screen: 'workspace', label: copy.nav.workspace, meta: null },
-    { screen: 'agents', label: copy.nav.agents, meta: String(agents) },
-    { screen: 'repo', label: copy.nav.repo, meta: fill(copy.nav.worktreesMeta, { n: worktrees }) },
+    { screen: 'workspace', icon: 'workspace', label: copy.nav.workspace, meta: null },
+    { screen: 'agents', icon: 'agents', label: copy.nav.agents, meta: String(agents) },
+    {
+      screen: 'repo',
+      icon: 'repo',
+      label: copy.nav.repo,
+      meta: fill(copy.nav.worktreesMeta, { n: worktrees }),
+    },
   ];
 
   const openProjectSettings = () => {
@@ -74,20 +82,27 @@ export function Nav() {
       {items.map((it) => (
         <NavItem
           key={it.screen}
+          icon={it.icon}
           label={it.label}
           meta={it.meta}
-          inv={screen === it.screen}
-          onClick={() => setScreen(it.screen)}
+          inv={screen === it.screen && (it.screen !== 'agents' || boardScope === 'project')}
+          onClick={() => {
+            // The project's agents, not everyone's (the app rail's Agents tile shows all).
+            if (it.screen === 'agents') setBoardScope('project');
+            setScreen(it.screen);
+          }}
           data-nav-item={it.screen}
         />
       ))}
       <NavItem
+        icon="projectSettings"
         label={copy.nav.projectSettings}
         inv={onProjectSettings}
         onClick={openProjectSettings}
         data-nav-item="settings"
       />
       <NavItem
+        icon="audit"
         label={copy.debtAudit.action}
         disabled={projectId === null}
         onClick={() => {

@@ -5,7 +5,13 @@ const meta = {
   title: 'Layout/NavItem',
   component: NavItem,
   args: { label: 'Workspace', meta: '3' },
-  decorators: [(Story) => <div style={{ width: 168, borderRight: '1px solid var(--ln)' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ width: 168, borderRight: '1px solid var(--ln)' }}>
+        <Story />
+      </div>
+    ),
+  ],
 } satisfies Meta<typeof NavItem>;
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -32,6 +38,19 @@ export const Matrix: Story = {
         <NavItem dense label="Agents" />
         <NavItem dense label="Editor" />
       </div>
+    </div>
+  ),
+};
+
+/** Project nav rows (owner layout #87): an icon before the label, muted until the row is current or hovered. */
+export const Icons: Story = {
+  render: () => (
+    <div style={{ width: 168 }}>
+      <NavItem icon="workspace" label="Workspace" inv />
+      <NavItem icon="agents" label="Agents" meta="3" />
+      <NavItem icon="repo" label="Repo" meta="4 wt" />
+      <NavItem icon="projectSettings" label="Project settings" />
+      <NavItem icon="audit" label="Tech debt audit" />
     </div>
   ),
 };

@@ -27,7 +27,16 @@
     border-bottom: 0;
     font-weight: 400;
   }
+  .icon {
+    flex: none;
+    color: var(--mu);
+  }
+  .item[data-inv='true'] .icon,
+  .item:hover .icon {
+    color: inherit;
+  }
   .label {
+    flex: 1;
     min-width: 0;
   }
   .meta {

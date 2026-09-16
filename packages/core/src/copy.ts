@@ -65,13 +65,26 @@ export const copy = {
     /** Project nav (owner layout, discrepancy #85): the group is the project; its Settings are the project's. */
     projectSettings: 'Project settings',
   },
-  /** Global rail left of the project switcher (owner layout, discrepancy #85): app-level places, as glyph tiles. */
+  /**
+   * Global rail left of the project switcher (owner layout, discrepancies #85 / #87): app-level places and every
+   * App settings section, each its own icon tile. Titles are the tooltips and accessible names.
+   */
   appRail: {
     label: 'App',
-    home: { glyph: '■', title: 'All projects' },
-    approvals: { glyph: '◆', title: 'Approvals' },
-    tasks: { glyph: '▶', title: 'Tasks' },
-    settings: { glyph: '≡', title: 'App settings' },
+    home: { title: 'All projects' },
+    agents: { title: 'All agents' },
+    approvals: { title: 'Approvals' },
+    tasks: { title: 'Tasks' },
+    /** The App settings sections, in the order of the Settings nav. */
+    sections: {
+      'app:general': 'General settings',
+      'app:editor': 'Editor',
+      'app:agents': 'Agent connections',
+      'app:skills': 'Skills',
+      'app:keychain': 'Keychain & secrets',
+      'app:policies': 'Policies',
+      'app:shortcuts': 'Shortcuts',
+    },
     /** Corner meanings, read as part of the tile's name so the count is not lost with the old nav rows. */
     inboxCount: '{n} in the inbox',
     tasksNeedYou: '{n} need you',
@@ -81,6 +94,8 @@ export const copy = {
 
   board: {
     columns: { needsYou: 'Needs you', working: 'Working', done: 'Done' },
+    /** Which sessions the board shows (owner layout #87): the app rail's tile = every project; the project nav = one. */
+    scope: { all: 'All projects', project: '{project}' },
     empty: {
       needsYou: 'Nothing waiting on you.',
       working: 'No agents running. Spawn one below, or ask in the palette.',

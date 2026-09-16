@@ -75,8 +75,15 @@ const COLUMN_STATES: Record<BoardColumnKey, readonly SessionState[]> = {
  * Needs you | Working (includes idle and paused) | Done; counts zero-padded; empty copy from spec §10.
  * Cards keep read-model (spawn) order, as the prototype does — no recency sort (visual baseline, ADR-0012).
  */
-export const boardColumns = (model: ReadModel, now: number): BoardColumn[] => {
-  const sessions = liveSessions(model).filter((s) => !s.purpose);
+export const boardColumns = (
+  model: ReadModel,
+  now: number,
+  projectId: ProjectId | null = null,
+): BoardColumn[] => {
+  // Every project's sessions from the app rail; one project's from its nav (owner layout #87).
+  const sessions = liveSessions(model).filter(
+    (s) => !s.purpose && (projectId === null || s.projectId === projectId),
+  );
   const column = (
     key: BoardColumnKey,
     label: string,

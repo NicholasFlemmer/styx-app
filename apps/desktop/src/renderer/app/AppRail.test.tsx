@@ -8,8 +8,9 @@ import { AppRail } from './AppRail';
 import { Nav } from './Nav';
 
 const { ids } = fixtures;
+const tile = (name: string | RegExp) => screen.getByRole('button', { name });
 
-describe('app rail + project nav (owner layout, discrepancy #85)', () => {
+describe('app rail + project nav (owner layout, discrepancies #85 / #87)', () => {
   beforeEach(() => {
     Object.assign(window, {
       styx: {
@@ -25,6 +26,7 @@ describe('app rail + project nav (owner layout, discrepancy #85)', () => {
       platform: 'darwin',
       projectId: ids.project.acmeShop,
       settingsSection: 'project:targets',
+      boardScope: 'project',
     });
   });
   afterEach(() => {
@@ -32,61 +34,79 @@ describe('app rail + project nav (owner layout, discrepancy #85)', () => {
     Object.assign(window, { styx: undefined });
   });
 
-  it('the app rail holds the global places: All projects, Approvals (corner while the inbox has rows), Tasks, App settings', () => {
+  it('holds the global places, then every App settings section as its own icon tile, in the Settings nav order', () => {
     render(<AppRail />);
     const rail = screen.getByRole('navigation', { name: copy.appRail.label });
-    const names = Array.from(rail.querySelectorAll('button')).map((b) => b.getAttribute('title'));
-    expect(names).toEqual([
+    const titles = Array.from(rail.querySelectorAll('button')).map((b) => b.getAttribute('title'));
+    expect(titles).toEqual([
       copy.appRail.home.title,
+      copy.appRail.agents.title,
       copy.appRail.approvals.title,
       copy.appRail.tasks.title,
-      copy.appRail.settings.title,
+      ...Object.values(copy.appRail.sections),
     ]);
-    // The demo inbox has open asks: the Approvals tile carries the count in its accessible name (the old nav row's
-    // meta), and navigation tiles are the current *page*, not a current item.
-    const approvals = screen.getByRole('button', { name: /^Approvals · \d+ in the inbox$/ });
-    expect(approvals).toBeTruthy();
-    const home = screen.getByRole('button', { name: copy.appRail.home.title });
+    // Every tile is an icon, not text: nothing hides behind a menu any more.
+    for (const b of rail.querySelectorAll('button')) expect(b.querySelector('svg')).not.toBeNull();
+  });
+
+  it('places: All projects and Approvals (count in its name) are pages; Tasks opens the modeless dialog', () => {
+    render(<AppRail />);
+    const approvals = tile(/^Approvals · \d+ in the inbox$/);
+    const home = tile(copy.appRail.home.title);
     fireEvent.click(home);
     expect(useUiStore.getState().screen).toBe('home');
     expect(home.getAttribute('aria-current')).toBe('page');
     fireEvent.click(approvals);
     expect(useUiStore.getState().screen).toBe('approvals');
-    // Tasks opens a modeless dialog: the tile says so and reflects it while it is open.
-    const tasks = screen.getByRole('button', { name: copy.appRail.tasks.title });
+    const tasks = tile(copy.appRail.tasks.title);
     expect(tasks.getAttribute('aria-haspopup')).toBe('dialog');
     expect(tasks.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(tasks);
     expect(useUiStore.getState().overlays.at(-1)).toMatchObject({ kind: 'task' });
-    expect(screen.getByRole('button', { name: copy.appRail.tasks.title }).getAttribute('aria-expanded')).toBe(
-      'true',
-    );
+    expect(tile(copy.appRail.tasks.title).getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('App settings opens the App group; the nav’s Project settings opens the Project group; each swaps a stale section', () => {
+  it('All agents shows every project; the nav’s Agents row shows the project’s; each is current for its own scope', () => {
     render(
       <>
         <AppRail />
         <Nav />
       </>,
     );
-    fireEvent.click(screen.getByRole('button', { name: copy.appRail.settings.title }));
-    expect(useUiStore.getState()).toMatchObject({ screen: 'settings', settingsSection: 'app:general' });
-    expect(
-      screen.getByRole('button', { name: copy.appRail.settings.title }).getAttribute('aria-current'),
-    ).toBe('page');
-    fireEvent.click(screen.getByRole('button', { name: copy.nav.projectSettings }));
-    expect(useUiStore.getState()).toMatchObject({ screen: 'settings', settingsSection: 'project:targets' });
-    expect(
-      screen.getByRole('button', { name: copy.appRail.settings.title }).getAttribute('aria-current'),
-    ).toBeNull();
-    // A specific app section set elsewhere (a banner's "Agents" link) survives the app-rail route.
-    act(() => useUiStore.setState({ screen: 'workspace', settingsSection: 'app:agents' }));
-    fireEvent.click(screen.getByRole('button', { name: copy.appRail.settings.title }));
-    expect(useUiStore.getState().settingsSection).toBe('app:agents');
+    fireEvent.click(tile(copy.appRail.agents.title));
+    expect(useUiStore.getState()).toMatchObject({ screen: 'agents', boardScope: 'all' });
+    expect(tile(copy.appRail.agents.title).getAttribute('aria-current')).toBe('page');
+    const nav = screen.getByRole('navigation', { name: 'Sections' });
+    const row = nav.querySelector('[data-nav-item="agents"]') as HTMLElement;
+    expect(row.getAttribute('aria-current')).toBeNull();
+    fireEvent.click(row);
+    expect(useUiStore.getState()).toMatchObject({ screen: 'agents', boardScope: 'project' });
+    expect(row.getAttribute('aria-current')).toBe('page');
+    expect(tile(copy.appRail.agents.title).getAttribute('aria-current')).toBeNull();
   });
 
-  it('the project nav shows the project’s details (name, branch) and only its places; no Home, Approvals or Tasks rows', () => {
+  it('each settings tile opens its App section directly; the nav’s Project settings opens the Project group', () => {
+    render(
+      <>
+        <AppRail />
+        <Nav />
+      </>,
+    );
+    fireEvent.click(tile(copy.appRail.sections['app:agents']));
+    expect(useUiStore.getState()).toMatchObject({ screen: 'settings', settingsSection: 'app:agents' });
+    expect(tile(copy.appRail.sections['app:agents']).getAttribute('aria-current')).toBe('page');
+    expect(tile(copy.appRail.sections['app:general']).getAttribute('aria-current')).toBeNull();
+    fireEvent.click(tile(copy.appRail.sections['app:keychain']));
+    expect(useUiStore.getState().settingsSection).toBe('app:keychain');
+    fireEvent.click(screen.getByRole('button', { name: copy.nav.projectSettings }));
+    expect(useUiStore.getState()).toMatchObject({ screen: 'settings', settingsSection: 'project:targets' });
+    expect(tile(copy.appRail.sections['app:keychain']).getAttribute('aria-current')).toBeNull();
+    // A section set elsewhere (a banner's Agents link) lights the matching tile.
+    act(() => useUiStore.setState({ screen: 'settings', settingsSection: 'app:editor' }));
+    expect(tile(copy.appRail.sections['app:editor']).getAttribute('aria-current')).toBe('page');
+  });
+
+  it('the project nav shows the project’s details and only its places, each row with its icon', () => {
     render(<Nav />);
     const nav = screen.getByRole('navigation', { name: 'Sections' });
     expect(nav.textContent).toContain('acme-shop');
@@ -95,6 +115,8 @@ describe('app rail + project nav (owner layout, discrepancy #85)', () => {
       b.getAttribute('data-nav-item'),
     );
     expect(rows).toEqual(['workspace', 'agents', 'repo', 'settings']);
+    for (const b of nav.querySelectorAll('[data-nav-item], [data-nav-audit]'))
+      expect(b.querySelector('svg')).not.toBeNull();
     expect(nav.querySelector('[data-nav-tasks]')).toBeNull();
     expect(screen.getByRole('button', { name: copy.debtAudit.action })).toBeTruthy();
   });

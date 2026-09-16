@@ -63,8 +63,7 @@ test('a Codex session runs through the app-server: pong, an approval ask, tokens
     await expect(chat.locator('[data-chat-meta]')).not.toContainText('waiting on you');
 
     // Settings › Agents: Verify goes through the app-server and shows `email · plan`.
-    await page.click('[data-app-rail-item="settings"]');
-    await page.click('[data-settings-nav="app:agents"]');
+    await page.click('[data-app-rail-item=\"app:agents\"]');
     const row = page.locator('[data-agent-row="codex"]');
     await expect(row).toBeVisible();
     await row.getByRole('button', { name: /^Verify · Codex/ }).click();

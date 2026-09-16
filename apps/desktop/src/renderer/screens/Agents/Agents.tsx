@@ -1,4 +1,11 @@
-import { boardColumns, copy, type BoardCard, type BoardColumn, type ReadModel, type SessionId } from '@styx/core';
+import {
+  boardColumns,
+  copy,
+  type BoardCard,
+  type BoardColumn,
+  type ReadModel,
+  type SessionId,
+} from '@styx/core';
 import { Button, Card, Numeral, Tag } from '@styx/ui';
 import { useCallback, useEffect, useRef } from 'react';
 import { approveGrantAsRequested, boardBindings } from '../../keys/bindings';
@@ -125,12 +132,17 @@ function Column({
   );
 }
 
-/** Agents board (spec §4.3): Needs you | Working (incl. idle) | Done, across all projects. */
+/**
+ * Agents board (spec §4.3): Needs you | Working (incl. idle) | Done. Across every project from the app rail's
+ * Agents tile, the current project's only from the project nav (owner layout #87, `ui.boardScope`).
+ */
 export function Agents() {
   const now = useNow();
-  const select = useCallback((model: ReadModel) => boardColumns(model, now), [now]);
-  const columns = useModel(select);
   const projectId = useUi((u) => u.projectId);
+  const boardScope = useUi((u) => u.boardScope);
+  const scopeId = boardScope === 'project' ? projectId : null;
+  const select = useCallback((model: ReadModel) => boardColumns(model, now, scopeId), [now, scopeId]);
+  const columns = useModel(select);
 
   const onSpawn = useCallback(() => {
     const ui = useUiStore.getState();
@@ -146,9 +158,9 @@ export function Agents() {
   const focusedCard = useCallback((): BoardCard | null => {
     const id = focused.current;
     if (id === null) return null;
-    const cols = boardColumns(useReadModel.getState().model, Date.now());
+    const cols = boardColumns(useReadModel.getState().model, Date.now(), scopeId);
     return cols.flatMap((c) => c.items).find((c) => c.sessionId === id && c.needs) ?? null;
-  }, []);
+  }, [scopeId]);
   useEffect(
     () =>
       keys.registerAll(

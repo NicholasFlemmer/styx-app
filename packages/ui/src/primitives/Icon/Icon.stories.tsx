@@ -1,15 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { renderMatrix } from '../../storybook/matrix';
-import { Icon, type IconName } from './Icon';
+import { ICON_NAMES, Icon } from './Icon';
 
-const NAMES = [
-  'chevron',
-  'close',
-  'popout',
-  'minimize',
-  'maximize',
-  'plus',
-] as const satisfies readonly IconName[];
+/** Every icon: the chrome glyphs first, then the navigation set (app rail, project nav). */
+const NAMES = ICON_NAMES;
 
 const meta = {
   title: 'Primitives/Icon',

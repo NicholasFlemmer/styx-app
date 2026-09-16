@@ -1,8 +1,11 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { Icon, type IconName } from '../../primitives/Icon';
 import s from './NavItem.module.css';
 
 export interface NavItemProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   label: ReactNode;
+  /** A navigation icon before the label (project nav rows). */
+  icon?: IconName;
   /** Mono 11px trailing meta (counts, ages). */
   meta?: ReactNode;
   /** Settings nav: `7px 16px`, no divider. */
@@ -13,7 +16,7 @@ export interface NavItemProps extends Omit<ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 export const NavItem = forwardRef<HTMLButtonElement, NavItemProps>(function NavItem(
-  { label, meta, dense, inv, on, className, type = 'button', ...rest },
+  { label, icon, meta, dense, inv, on, className, type = 'button', ...rest },
   ref,
 ) {
   const cls = [s['item'], dense && s['dense'], className].filter(Boolean).join(' ');
@@ -27,6 +30,7 @@ export const NavItem = forwardRef<HTMLButtonElement, NavItemProps>(function NavI
       data-on={on ? 'true' : undefined}
       {...rest}
     >
+      {icon !== undefined ? <Icon name={icon} size={14} className={s['icon']} /> : null}
       <span className={s['label']}>{label}</span>
       {meta !== undefined && meta !== null ? <span className={s['meta']}>{meta}</span> : null}
     </button>

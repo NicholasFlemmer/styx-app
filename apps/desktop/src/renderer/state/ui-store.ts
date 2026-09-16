@@ -66,6 +66,8 @@ export interface UiState {
   dismissedBanners: string[];
   /** Sessions working an ability out for the Run locally / Deploy buttons: `run:<projectId>` / `deploy:<targetId>` → session. */
   learning: Record<string, SessionId>;
+  /** What the Agents board shows: every project's sessions (the default, and the app rail's tile) or the current project's (the project nav's row). */
+  boardScope: 'all' | 'project';
   taskLaunches: Record<string, TaskLaunch>;
 }
 
@@ -98,6 +100,7 @@ export interface UiActions {
   setSettingsSection(section: string): void;
   setTaskLaunch(key: string, launch: TaskLaunch): void;
   setLearning(key: string, sessionId: SessionId | null): void;
+  setBoardScope(scope: 'all' | 'project'): void;
   setOnboardingStep(step: OnboardingStep): void;
   setEditorFile(file: string | null): void;
   setBanner(banner: BannerEvent): void;
@@ -137,6 +140,7 @@ export const useUiStore = create<UiStore>()(
     approvalsTab: 'inbox',
     settingsSection: 'project:targets',
     learning: {},
+    boardScope: 'all',
     taskLaunches: {},
     onboardingStep: initialFromEnv?.step ?? 1,
     editorFile: null,
@@ -280,6 +284,10 @@ export const useUiStore = create<UiStore>()(
       set((s) => {
         if (sessionId === null) delete s.learning[key];
         else s.learning[key] = sessionId;
+      }),
+    setBoardScope: (scope) =>
+      set((s) => {
+        s.boardScope = scope;
       }),
     setOnboardingStep: (step) =>
       set((s) => {
