@@ -64,8 +64,8 @@ describe('session controls (Claude Code parity, discrepancy #54)', () => {
     ]);
   });
 
-  it('effort options: default + the five levels', () => {
-    expect(effortOptions().map((o) => o.value)).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max']);
+  it('effort options: default + the six levels (ultra is Codex-only, listed for the models that have it)', () => {
+    expect(effortOptions().map((o) => o.value)).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
     expect(effortOptions()[5]?.label).toBe('Max');
   });
 

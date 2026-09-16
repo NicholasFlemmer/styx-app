@@ -87,7 +87,7 @@ describe('copy (spec §10 verbatim)', () => {
       'auto',
     ]);
     expect(Object.keys(copy.session.permissionModeHints)).toEqual(Object.keys(copy.session.permissionModes));
-    expect(Object.keys(copy.session.efforts)).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max']);
+    expect(Object.keys(copy.session.efforts)).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
     expect(Object.keys(copy.session.models)).toEqual(['default', 'fable', 'opus', 'sonnet', 'haiku']);
     expect(copy.session.tool).toEqual({ running: '…', ok: '✓', error: '×' });
   });

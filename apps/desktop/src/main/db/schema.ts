@@ -72,6 +72,9 @@ export const sessions = sqliteTable(
     costUsd: real('cost_usd').notNull().default(0),
     numTurns: integer('num_turns').notNull().default(0),
     slashCommandsJson: text('slash_commands_json').notNull().default('[]'),
+    /** 0013: token totals for CLIs that report tokens rather than dollars (Codex). */
+    tokensUsed: integer('tokens_used').notNull().default(0),
+    contextWindow: integer('context_window'),
     brokerTokenHash: text('broker_token_hash').notNull().default(''),
     /** 0012: set when Styx spawned the session for a job of its own (`learn-run` / `learn-deploy`). */
     purpose: text('purpose', { enum: ['learn-run', 'learn-deploy'] }),

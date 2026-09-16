@@ -1,5 +1,12 @@
 import type { Agent, Effort, PermissionMode, Runner } from '@styx/core';
 
+/** The styx MCP server as an agent protocol takes it in-band (`session/new.mcpServers`, Codex `-c mcp_servers.*`). */
+export interface McpServerEntry {
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+}
+
 export interface AgentLaunchContext {
   agent: Agent;
   /** Resolved CLI binary (DetectService) or the login shell for `shell`. */
@@ -12,6 +19,8 @@ export interface AgentLaunchContext {
   model: string | null;
   /** `stream` = headless stream-json over pipes (ADR-0010); `pty` = the CLI's own TUI in xterm. */
   runner: Runner;
+  /** Flag capabilities DetectService read off `--help` (`streamJson`, `appServer`, `acp`, …). */
+  capabilities: Record<string, boolean>;
   /** Session toggle: edits are allowed without a permission prompt. */
   autoApproveEdits: boolean;
   /**
@@ -39,8 +48,13 @@ export interface AgentLaunchContext {
  * - `stdin`: one long-lived process; each message is an NDJSON `{type:'user'}` line on stdin (Claude Code).
  * - `argv`: one process per turn; the prompt is the last argument and later turns pass `<resumeFlag> <chatId>`
  *   with the id learned from the first turn's `system/init` event (cursor-agent).
+ * - `app-server`: Codex `codex app-server`, JSON-RPC 2.0 over stdio (thread/start, turn/start, approvals as
+ *   server requests). See docs/research/agent-parity.md.
+ * - `acp`: the Agent Client Protocol over stdio (`gemini --acp`, `agent acp`): session/new, session/prompt,
+ *   session/update, session/request_permission.
  */
-export type StreamInput = { kind: 'stdin' } | { kind: 'argv'; resumeFlag: string };
+export type StreamInput =
+  { kind: 'stdin' } | { kind: 'argv'; resumeFlag: string } | { kind: 'app-server' } | { kind: 'acp' };
 
 export interface AgentLaunch {
   command: string;
@@ -84,7 +98,12 @@ export const styxMcpServerInherit = (ctx: AgentLaunchContext): { command: string
 export async function writeWorktreeMcpConfig(
   file: string,
   ctx: AgentLaunchContext,
-  io: { mkdir(dir: string): Promise<void>; read(file: string): Promise<string>; write(file: string, text: string): Promise<void>; remove(file: string): Promise<void> },
+  io: {
+    mkdir(dir: string): Promise<void>;
+    read(file: string): Promise<string>;
+    write(file: string, text: string): Promise<void>;
+    remove(file: string): Promise<void>;
+  },
   dir: string,
 ): Promise<{ restore(): Promise<void> }> {
   await io.mkdir(dir);

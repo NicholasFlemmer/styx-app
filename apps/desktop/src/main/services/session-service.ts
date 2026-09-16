@@ -32,6 +32,7 @@ import {
   type PermissionMode,
 } from '@styx/core';
 import { buildAgentLaunch, type AgentLaunch, type AgentLaunchContext } from '../agents';
+import { styxMcpServer } from '../agents/types';
 import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
 import { fail } from '../ipc/bus';
@@ -223,7 +224,15 @@ export function parseCliOutdated(text: string): { have: string | null; need: str
 export function runnerFor(agent: Agent, cli: Pick<CliInstall, 'capabilities'> | null): Runner {
   const caps = cli?.capabilities ?? {};
   if (agent === 'claude' && caps['streamJson'] === true) return 'stream';
-  if (agent === 'cursor' && caps['streamJson'] === true && caps['printMode'] === true) return 'stream';
+  // Codex: its JSON-RPC app-server (docs/research/agent-parity.md); older builds without it stay on the TUI.
+  if (agent === 'codex' && caps['appServer'] === true) return 'stream';
+  // Gemini and Cursor: the Agent Client Protocol; Cursor's print mode is the fallback (no approvals there).
+  if (agent === 'gemini' && caps['acp'] === true) return 'stream';
+  if (
+    agent === 'cursor' &&
+    (caps['acp'] === true || (caps['streamJson'] === true && caps['printMode'] === true))
+  )
+    return 'stream';
   return 'pty';
 }
 
@@ -464,6 +473,11 @@ export class SessionService {
       firstMessage,
       model: session.model,
       runner,
+      capabilities: Object.fromEntries(
+        Object.entries(cli?.capabilities ?? {}).filter(
+          (e): e is [string, boolean] => typeof e[1] === 'boolean',
+        ),
+      ),
       autoApproveEdits: session.toggles.autoApproveEdits,
       permissionMode: session.permissionMode,
       effort: session.effort,
@@ -488,6 +502,16 @@ export class SessionService {
           input: launch.stream,
           worktreePath: worktree.path,
           firstMessage,
+          session: {
+            agent: session.agent,
+            model: session.model,
+            effort: session.effort,
+            permissionMode: session.permissionMode,
+            autoApproveEdits: session.toggles.autoApproveEdits,
+            resumeSessionId: session.cliSessionId,
+            projectPath: project.path,
+            mcp: styxMcpServer(ctx),
+          },
         });
         pid = r.pid;
         if (firstMessage) this.render(session.id, `> ${firstMessage}\r\n`);
@@ -506,7 +530,7 @@ export class SessionService {
       this.deps.publisher.upsert('sessions', [s.id]);
       this.applyEvent(session.id, { type: 'start' });
       if (!launch.stream && launch.typeFirstMessage && firstMessage) {
-        setTimeout(() => this.deps.pty.write(session.id, `${firstMessage}\r`), 400).unref?.();
+        setTimeout(() => this.typeIntoPty(session.id, firstMessage), 400).unref?.();
       }
     } catch (e) {
       logger.error('session spawn failed', { sessionId: session.id, error: (e as Error).message });
@@ -563,7 +587,7 @@ export class SessionService {
           s.id,
           `${prepared.images.length === 1 ? 'Image' : 'Images'} dropped: ${AGENT_LABEL[s.agent]} runs in a terminal here; images need a stream session (Claude Code).`,
         );
-      this.deps.pty.write(s.id, `${text}\r`);
+      this.typeIntoPty(s.id, text);
     }
     this.applyEvent(s.id, { type: 'activity' });
   }
@@ -609,9 +633,11 @@ export class SessionService {
     this.deps.publisher.upsert('sessions', [s.id]);
     const modelChanged = next.model !== s.model;
     const modeChanged = next.permissionMode !== s.permissionMode;
+    const effortChanged = next.effort !== s.effort;
     if (this.deps.stream.has(s.id)) {
       if (modelChanged) this.deps.stream.setModel(s.id, next.model);
       if (modeChanged) this.deps.stream.setPermissionMode(s.id, next.permissionMode);
+      if (effortChanged) this.deps.stream.setEffort(s.id, next.effort);
     }
     if (modelChanged)
       this.deps.transcript.system(
@@ -684,6 +710,15 @@ export class SessionService {
   }
 
   /** Raw bytes from the terminal pane. Stream sessions have no TTY, so typed input is ignored there. */
+  /**
+   * Text, then Enter as a second write a beat later: a TUI that receives both in one read treats the burst as a
+   * paste and turns the Enter into a newline (Codex's composer did exactly that), so nothing was ever submitted.
+   */
+  private typeIntoPty(sessionId: string, text: string): void {
+    this.deps.pty.write(sessionId, text);
+    setTimeout(() => this.deps.pty.write(sessionId, '\r'), 120).unref?.();
+  }
+
   ptyInput(sessionId: string, data: string): void {
     if (this.deps.stream.has(sessionId)) return;
     this.deps.pty.write(sessionId, data);
@@ -750,7 +785,10 @@ export class SessionService {
   }
 
   /** Requests parked by `pause`, released in arrival order on resume. */
-  private readonly heldPermissions = new Map<string, { requestId: string; toolName: string; input: Record<string, unknown> }[]>();
+  private readonly heldPermissions = new Map<
+    string,
+    { requestId: string; toolName: string; input: Record<string, unknown> }[]
+  >();
 
   async resume(sessionId: string): Promise<void> {
     const s = this.require(sessionId);
@@ -1007,13 +1045,21 @@ export class SessionService {
       }
       case 'usage': {
         // `total_cost_usd` / `num_turns` are running totals for the CLI session; after `--resume` they carry on, so
-        // the stored value only ever grows.
+        // the stored value only ever grows. Token totals (Codex) likewise.
+        const tokens = effect.tokensUsed ?? null;
         const next: Session = {
           ...s,
           costUsd: effect.costUsd === null ? s.costUsd : Math.max(s.costUsd, effect.costUsd),
           numTurns: effect.numTurns === null ? s.numTurns : Math.max(s.numTurns, effect.numTurns),
+          ...(tokens === null ? {} : { tokensUsed: Math.max(s.tokensUsed ?? 0, tokens) }),
+          ...(effect.contextWindow === undefined ? {} : { contextWindow: effect.contextWindow }),
         };
-        if (next.costUsd !== s.costUsd || next.numTurns !== s.numTurns) {
+        if (
+          next.costUsd !== s.costUsd ||
+          next.numTurns !== s.numTurns ||
+          next.tokensUsed !== s.tokensUsed ||
+          next.contextWindow !== s.contextWindow
+        ) {
           this.deps.repos.sessions.upsert(next);
           this.deps.publisher.upsert('sessions', [s.id]);
         }
@@ -1022,6 +1068,17 @@ export class SessionService {
       case 'toolResult':
         this.patchToolLine(s.id, effect.toolUseId, effect.ok, effect.detail);
         return;
+      case 'catalogue': {
+        // The CLI's own model list rides on its row (`capabilities.models`) so the composer's pickers fit the agent.
+        const cli = this.deps.repos.discovery.cli(s.agent);
+        if (!cli || JSON.stringify(cli.capabilities['models']) === JSON.stringify(effect.models)) return;
+        this.deps.repos.discovery.saveCli({
+          ...cli,
+          capabilities: { ...cli.capabilities, models: effect.models },
+        });
+        this.deps.publisher.discoverySet(this.deps.repos.discovery.ides(), this.deps.repos.discovery.clis());
+        return;
+      }
       case 'render':
         this.render(id, effect.text);
         return;
@@ -1774,13 +1831,13 @@ export class SessionService {
       // ticked label); the legacy `question` shape still resolves for broker `ask_user`.
       const answer =
         resolution?.kind === 'questions'
-          ? (resolution.answers[0]?.freeText?.trim() || (resolution.answers[0]?.chosen ?? []).join(', '))
+          ? resolution.answers[0]?.freeText?.trim() || (resolution.answers[0]?.chosen ?? []).join(', ')
           : resolution?.kind === 'question'
             ? resolution.answer.trim()
             : '';
       if (answer) {
         if (this.deps.stream.has(ask.sessionId)) this.deps.stream.send(ask.sessionId, answer);
-        else if (this.deps.pty.has(ask.sessionId)) this.deps.pty.write(ask.sessionId, `${answer}\r`);
+        else if (this.deps.pty.has(ask.sessionId)) this.typeIntoPty(ask.sessionId, answer);
       }
     }
     return next;

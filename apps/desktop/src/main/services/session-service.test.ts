@@ -110,6 +110,7 @@ class FakeStream extends EventEmitter<StreamEvents> implements StreamRunnerLike 
   setPermissionMode(id: string, mode: string): void {
     this.controls.push({ id, request: { subtype: 'set_permission_mode', mode } });
   }
+  setEffort(): void {}
   interrupt(id: string): void {
     this.controls.push({ id, request: { subtype: 'interrupt' } });
   }
@@ -168,6 +169,9 @@ const spawnInput = (agent: 'claude' | 'codex' | 'gemini', worktreeId: string, fi
   toggles: { autoApproveEdits: false, mayRequestTargets: true, notifyWhenNeedsMe: true },
   model: null,
 });
+
+/** Waits out the pty typing delay (text, then Enter 120 ms later). */
+const typed = () => new Promise((r) => setTimeout(r, 170));
 
 describe('runnerFor (ADR-0010)', () => {
   it('claude streams when its CLI advertises stream-json; cursor also needs --print; the rest is pty', () => {
@@ -501,7 +505,9 @@ describe('SessionService CLI-outdated (model needs a newer CLI)', () => {
       account: null,
     });
     // A different binary is a different install: the verification no longer applies and detection is trusted.
-    a.detect.detectClis = async () => [{ ...(await detection('signed-in')())[0]!, binary: '/usr/local/bin/claude' }];
+    a.detect.detectClis = async () => [
+      { ...(await detection('signed-in')())[0]!, binary: '/usr/local/bin/claude' },
+    ];
     expect((await a.sessions.refreshClis()).find((c) => c.agent === 'claude')).toMatchObject({
       authState: 'signed-in',
       verifiedAt: null,
@@ -594,7 +600,12 @@ describe('SessionService pty runner + CLI hooks', () => {
     expect(session.state).toBe('working');
 
     a.sessions.sendMessage(session.id, 'more');
-    expect(pty.writes).toEqual([{ id: session.id, data: 'more\r' }]);
+    await typed();
+    // Text, then Enter a beat later: one write would be a paste burst to a TUI, and Enter inside it a newline.
+    expect(pty.writes).toEqual([
+      { id: session.id, data: 'more' },
+      { id: session.id, data: '\r' },
+    ]);
 
     a.sessions.onHook(session.id, 'codex', 'notify', {
       type: 'agent-turn-complete',
@@ -693,7 +704,11 @@ describe('SessionService pty runner + CLI hooks', () => {
       askId: ask.id,
       resolution: { kind: 'question', answer: 'postgres' },
     });
-    expect(pty.writes.at(-1)).toEqual({ id: session.id, data: 'postgres\r' });
+    await typed();
+    expect(pty.writes.slice(-2)).toEqual([
+      { id: session.id, data: 'postgres' },
+      { id: session.id, data: '\r' },
+    ]);
     expect(a.sessions.get(session.id)?.state).toBe('working');
 
     a.sessions.onHook(session.id, 'claude', 'SessionEnd', { reason: 'clear' });
@@ -848,10 +863,19 @@ describe('SessionService Claude Code parity (stream)', () => {
       permissionMode: 'default',
       slashCommands: [],
     });
-    expect(a.sessions.get(session.id)).toMatchObject({ cliSessionId: 'cli-sess-9', model: 'claude-opus-4-1' });
+    expect(a.sessions.get(session.id)).toMatchObject({
+      cliSessionId: 'cli-sess-9',
+      model: 'claude-opus-4-1',
+    });
     // a second init (the CLI restarted) keeps an explicit model; a null chat id keeps the stored one
     a.sessions.configure(session.id, { model: 'sonnet' });
-    stream.effect(session.id, { type: 'init', chatId: null, model: 'claude-x', permissionMode: null, slashCommands: [] });
+    stream.effect(session.id, {
+      type: 'init',
+      chatId: null,
+      model: 'claude-x',
+      permissionMode: null,
+      slashCommands: [],
+    });
     expect(a.sessions.get(session.id)).toMatchObject({ cliSessionId: 'cli-sess-9', model: 'sonnet' });
 
     stream.effect(session.id, { type: 'session', event: 'quiet' });
@@ -866,7 +890,13 @@ describe('SessionService Claude Code parity (stream)', () => {
   it.each([
     ['first result', 0, 0, { costUsd: 0.02, numTurns: 2 }, { costUsd: 0.02, numTurns: 2 }],
     ['running total grows', 0.02, 2, { costUsd: 0.05, numTurns: 5 }, { costUsd: 0.05, numTurns: 5 }],
-    ['a restarted CLI reports less: keep the max', 0.05, 5, { costUsd: 0.01, numTurns: 1 }, { costUsd: 0.05, numTurns: 5 }],
+    [
+      'a restarted CLI reports less: keep the max',
+      0.05,
+      5,
+      { costUsd: 0.01, numTurns: 1 },
+      { costUsd: 0.05, numTurns: 5 },
+    ],
     ['nulls leave the row alone', 0.05, 5, { costUsd: null, numTurns: null }, { costUsd: 0.05, numTurns: 5 }],
   ])('usage: %s', async (_label, costUsd, numTurns, reported, expected) => {
     const { app: a } = app();
@@ -892,11 +922,21 @@ describe('SessionService Claude Code parity (stream)', () => {
     stream.effect(session.id, { type: 'toolResult', toolUseId: 'unknown', ok: true, detail: null }); // ignored
     const tools = a.repos.transcripts.last(session.id).filter((m) => m.payload.kind === 'tool');
     expect(tools.map((m) => m.payload)).toEqual([
-      { kind: 'tool', tool: 'Bash', hint: 'pnpm test', toolUseId: 't1', status: 'error', detail: 'exit 1: 3 failed' },
+      {
+        kind: 'tool',
+        tool: 'Bash',
+        hint: 'pnpm test',
+        toolUseId: 't1',
+        status: 'error',
+        detail: 'exit 1: 3 failed',
+      },
       { kind: 'tool', tool: 'Read', hint: 'a.ts', toolUseId: 't2', status: 'ok', detail: null },
     ]);
     a.publisher.flush();
-    const replaces = win.batches().flatMap((b) => b.deltas).filter((d) => d.op === 'transcript.replace');
+    const replaces = win
+      .batches()
+      .flatMap((b) => b.deltas)
+      .filter((d) => d.op === 'transcript.replace');
     expect(replaces).toHaveLength(2);
     expect(a.sessions.get(session.id)?.state).toBe('working');
   });
@@ -905,7 +945,12 @@ describe('SessionService Claude Code parity (stream)', () => {
     const { app: a } = app();
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
     const questions = [
-      { question: 'Which database?', header: 'Storage', options: [{ label: 'Postgres', description: 'p' }, { label: 'SQLite' }], multiSelect: false },
+      {
+        question: 'Which database?',
+        header: 'Storage',
+        options: [{ label: 'Postgres', description: 'p' }, { label: 'SQLite' }],
+        multiSelect: false,
+      },
       { question: 'Add tests?', options: [{ label: 'Yes' }, { label: 'No' }], multiSelect: true },
     ];
     stream.effect(session.id, {
@@ -997,7 +1042,12 @@ describe('SessionService Claude Code parity (stream)', () => {
       { question: 'Framework?', options: [{ label: 'React' }] },
       { question: 'Anything else?', options: [] },
     ];
-    stream.effect(session.id, { type: 'permission', requestId: 'q-3', toolName: 'AskUserQuestion', input: { questions } });
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'q-3',
+      toolName: 'AskUserQuestion',
+      input: { questions },
+    });
     const asks = a.repos.pendingAsks.openBySession(session.id);
     expect(asks).toHaveLength(1);
     const set = (asks[0]!.payload as { questions: { prompt: string; options: unknown[] }[] }).questions;
@@ -1030,10 +1080,18 @@ describe('SessionService Claude Code parity (stream)', () => {
   it('AskUserQuestion with an unparseable input falls back to a plain Allow/Deny decision', async () => {
     const { app: a } = app();
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
-    stream.effect(session.id, { type: 'permission', requestId: 'q-3', toolName: 'AskUserQuestion', input: {} });
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'q-3',
+      toolName: 'AskUserQuestion',
+      input: {},
+    });
     const ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
     expect(ask.payload).toEqual({ kind: 'decision', prompt: 'AskUserQuestion', options: ['Allow', 'Deny'] });
-    await a.bus.dispatch(sender, 'ask.respond', { askId: ask.id, resolution: { kind: 'decision', chosen: 'Deny' } });
+    await a.bus.dispatch(sender, 'ask.respond', {
+      askId: ask.id,
+      resolution: { kind: 'decision', chosen: 'Deny' },
+    });
     expect(stream.permissions).toEqual([{ id: session.id, requestId: 'q-3', allow: false }]);
   });
 
@@ -1048,9 +1106,11 @@ describe('SessionService Claude Code parity (stream)', () => {
     });
     expect(a.sessions.get(session.id)?.state).toBe('needs-you');
     // Archiving a live session is the 7-day retention step and refuses; closing it is what a ✕ does.
-    await expect(a.bus.dispatch(sender, 'session.archive', { sessionId: session.id })).resolves.toMatchObject({
-      ok: false,
-    });
+    await expect(a.bus.dispatch(sender, 'session.archive', { sessionId: session.id })).resolves.toMatchObject(
+      {
+        ok: false,
+      },
+    );
     await a.bus.dispatch(sender, 'session.close', { sessionId: session.id });
     expect(a.sessions.get(session.id)).toMatchObject({ state: 'done' });
     expect(a.sessions.get(session.id)?.archivedAt).not.toBeNull();
@@ -1067,18 +1127,28 @@ describe('SessionService Claude Code parity (stream)', () => {
       type: 'permission',
       requestId: 'q-4',
       toolName: 'AskUserQuestion',
-      input: { questions: [{ question: 'A?', options: [{ label: 'x' }] }, { question: 'B?', options: [{ label: 'y' }] }] },
+      input: {
+        questions: [
+          { question: 'A?', options: [{ label: 'x' }] },
+          { question: 'B?', options: [{ label: 'y' }] },
+        ],
+      },
     });
     // One ask holds both questions, so there is a single thing to cancel.
     expect(a.repos.pendingAsks.openBySession(session.id)).toHaveLength(1);
     a.sessions.stop(session.id);
-    expect(stream.permissions).toEqual([{ id: session.id, requestId: 'q-4', allow: false, message: 'Session stopped' }]);
+    expect(stream.permissions).toEqual([
+      { id: session.id, requestId: 'q-4', allow: false, message: 'Session stopped' },
+    ]);
     expect(a.repos.pendingAsks.openBySession(session.id)).toEqual([]);
   });
 
   it('ExitPlanMode: a plan ask; approve → allow + the session leaves plan mode; reject → deny with the note', async () => {
     const { app: a } = app();
-    const { session } = await a.sessions.spawn({ ...spawnInput('claude', ids.worktree.featPromo), permissionMode: 'plan' });
+    const { session } = await a.sessions.spawn({
+      ...spawnInput('claude', ids.worktree.featPromo),
+      permissionMode: 'plan',
+    });
     stream.effect(session.id, {
       type: 'permission',
       requestId: 'p-1',
@@ -1087,9 +1157,16 @@ describe('SessionService Claude Code parity (stream)', () => {
     });
     expect(a.sessions.get(session.id)).toMatchObject({ state: 'needs-you', note: 'Plan ready for review' });
     let ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
-    expect(ask.payload).toEqual({ kind: 'plan', summary: '# Plan\n1. add validate.ts\n2. wire it up', files: [] });
+    expect(ask.payload).toEqual({
+      kind: 'plan',
+      summary: '# Plan\n1. add validate.ts\n2. wire it up',
+      files: [],
+    });
     // The plan gets its own transcript kind, so it renders as an approvable card instead of agent prose.
-    expect(a.repos.transcripts.last(session.id).at(-1)).toMatchObject({ askId: ask.id, payload: { kind: 'plan' } });
+    expect(a.repos.transcripts.last(session.id).at(-1)).toMatchObject({
+      askId: ask.id,
+      payload: { kind: 'plan' },
+    });
 
     await a.bus.dispatch(sender, 'ask.respond', {
       askId: ask.id,
@@ -1100,7 +1177,12 @@ describe('SessionService Claude Code parity (stream)', () => {
     ]);
     expect(a.sessions.get(session.id)).toMatchObject({ state: 'working', permissionMode: 'plan' });
 
-    stream.effect(session.id, { type: 'permission', requestId: 'p-2', toolName: 'ExitPlanMode', input: { plan: 'v2' } });
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'p-2',
+      toolName: 'ExitPlanMode',
+      input: { plan: 'v2' },
+    });
     ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
     await a.bus.dispatch(sender, 'ask.respond', {
       askId: ask.id,
@@ -1113,7 +1195,12 @@ describe('SessionService Claude Code parity (stream)', () => {
       message: 'Plan rejected in Styx',
     });
 
-    stream.effect(session.id, { type: 'permission', requestId: 'p-3', toolName: 'ExitPlanMode', input: { plan: 'v3' } });
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'p-3',
+      toolName: 'ExitPlanMode',
+      input: { plan: 'v3' },
+    });
     ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
     await a.bus.dispatch(sender, 'ask.respond', {
       askId: ask.id,
@@ -1121,16 +1208,30 @@ describe('SessionService Claude Code parity (stream)', () => {
     });
     expect(stream.permissions.at(-1)).toEqual({ id: session.id, requestId: 'p-3', allow: true });
     expect(a.sessions.get(session.id)).toMatchObject({ state: 'working', permissionMode: 'default' });
-    expect(stream.controls.at(-1)).toEqual({ id: session.id, request: { subtype: 'set_permission_mode', mode: 'default' } });
+    expect(stream.controls.at(-1)).toEqual({
+      id: session.id,
+      request: { subtype: 'set_permission_mode', mode: 'default' },
+    });
     expect(systemLines(a, session.id).at(-1)).toBe('permissions: Ask each time');
   });
 
   it('ExitPlanMode approval in a non-plan mode (the agent entered plan mode itself) keeps the stored mode', async () => {
     const { app: a } = app();
-    const { session } = await a.sessions.spawn({ ...spawnInput('claude', ids.worktree.featPromo), permissionMode: 'acceptEdits' });
-    stream.effect(session.id, { type: 'permission', requestId: 'p-9', toolName: 'ExitPlanMode', input: { plan: 'x' } });
+    const { session } = await a.sessions.spawn({
+      ...spawnInput('claude', ids.worktree.featPromo),
+      permissionMode: 'acceptEdits',
+    });
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'p-9',
+      toolName: 'ExitPlanMode',
+      input: { plan: 'x' },
+    });
     const ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
-    await a.bus.dispatch(sender, 'ask.respond', { askId: ask.id, resolution: { kind: 'plan', outcome: 'approved', note: null } });
+    await a.bus.dispatch(sender, 'ask.respond', {
+      askId: ask.id,
+      resolution: { kind: 'plan', outcome: 'approved', note: null },
+    });
     expect(stream.permissions).toEqual([{ id: session.id, requestId: 'p-9', allow: true }]);
     expect(a.sessions.get(session.id)?.permissionMode).toBe('acceptEdits');
     expect(stream.controls).toEqual([]);
@@ -1140,7 +1241,11 @@ describe('SessionService Claude Code parity (stream)', () => {
     const { app: a } = app();
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
     a.sessions.configure(session.id, { model: 'opus', permissionMode: 'acceptEdits', effort: 'max' });
-    expect(a.sessions.get(session.id)).toMatchObject({ model: 'opus', permissionMode: 'acceptEdits', effort: 'max' });
+    expect(a.sessions.get(session.id)).toMatchObject({
+      model: 'opus',
+      permissionMode: 'acceptEdits',
+      effort: 'max',
+    });
     expect(stream.controls).toEqual([
       { id: session.id, request: { subtype: 'set_model', model: 'opus' } },
       { id: session.id, request: { subtype: 'set_permission_mode', mode: 'acceptEdits' } },
@@ -1151,7 +1256,10 @@ describe('SessionService Claude Code parity (stream)', () => {
     expect(systemLines(a, session.id)).toHaveLength(2);
     expect(a.sessions.get(session.id)?.effort).toBe('low');
     a.sessions.configure(session.id, { model: null });
-    expect(stream.controls.at(-1)).toEqual({ id: session.id, request: { subtype: 'set_model', model: null } });
+    expect(stream.controls.at(-1)).toEqual({
+      id: session.id,
+      request: { subtype: 'set_model', model: null },
+    });
     expect(systemLines(a, session.id).at(-1)).toBe('model: Default model');
     a.sessions.configure(session.id, { model: 'claude-opus-4-1-20250805' });
     expect(systemLines(a, session.id).at(-1)).toBe('model: claude-opus-4-1-20250805');
@@ -1206,9 +1314,9 @@ describe('SessionService Claude Code parity (stream)', () => {
     expect(r).toMatchObject({ ok: true });
     expect(a.sessions.get(session.id)?.pausedReason).toBe('user');
     a.sessions.close(session.id);
-    await expect(
-      a.bus.dispatch(sender, 'session.pause', { sessionId: session.id }),
-    ).resolves.toMatchObject({ ok: false });
+    await expect(a.bus.dispatch(sender, 'session.pause', { sessionId: session.id })).resolves.toMatchObject({
+      ok: false,
+    });
   });
 
   it('interrupt: stream → interrupt control + "interrupted" system line + idle; pty → Ctrl+C, line and idle', async () => {
@@ -1242,14 +1350,25 @@ describe('SessionService Claude Code parity (stream)', () => {
   it('ask.respond is idempotent: a repeat answer to a resolved ask is ok and sends nothing; a cancelled ask is an error', async () => {
     const { app: a } = app();
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
-    stream.effect(session.id, { type: 'permission', requestId: 'r-1', toolName: 'Bash', input: { command: 'ls' } });
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'r-1',
+      toolName: 'Bash',
+      input: { command: 'ls' },
+    });
     const ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
     const respond = () =>
-      a.bus.dispatch(sender, 'ask.respond', { askId: ask.id, resolution: { kind: 'decision', chosen: 'Allow' } });
+      a.bus.dispatch(sender, 'ask.respond', {
+        askId: ask.id,
+        resolution: { kind: 'decision', chosen: 'Allow' },
+      });
     expect(await respond()).toEqual({ ok: true, value: {} });
     expect(await respond()).toEqual({ ok: true, value: {} });
     expect(
-      await a.bus.dispatch(sender, 'ask.respond', { askId: ask.id, resolution: { kind: 'decision', chosen: 'Deny' } }),
+      await a.bus.dispatch(sender, 'ask.respond', {
+        askId: ask.id,
+        resolution: { kind: 'decision', chosen: 'Deny' },
+      }),
     ).toEqual({ ok: true, value: {} });
     expect(stream.permissions).toEqual([{ id: session.id, requestId: 'r-1', allow: true }]);
     expect(a.repos.pendingAsks.get(ask.id)?.resolution).toEqual({ kind: 'decision', chosen: 'Allow' });
@@ -1258,12 +1377,20 @@ describe('SessionService Claude Code parity (stream)', () => {
       resolution: { kind: 'decision', chosen: 'Allow' },
     });
 
-    stream.effect(session.id, { type: 'permission', requestId: 'r-2', toolName: 'Bash', input: { command: 'rm' } });
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'r-2',
+      toolName: 'Bash',
+      input: { command: 'rm' },
+    });
     const second = a.repos.pendingAsks.openBySession(session.id)[0]!;
     a.sessions.stop(session.id);
     expect(a.repos.pendingAsks.get(second.id)?.state).toBe('cancelled');
     expect(
-      await a.bus.dispatch(sender, 'ask.respond', { askId: second.id, resolution: { kind: 'decision', chosen: 'Allow' } }),
+      await a.bus.dispatch(sender, 'ask.respond', {
+        askId: second.id,
+        resolution: { kind: 'decision', chosen: 'Allow' },
+      }),
     ).toMatchObject({ ok: false, error: { code: 'invalid-transition' } });
     expect(() => a.sessions.resolveAsk(second.id, { kind: 'decision', chosen: 'Allow' })).toThrow();
   });
@@ -1309,7 +1436,10 @@ describe('SessionService partial messages (stream rows patched live)', () => {
 
     stream.effect(id, { type: 'streamDelta', key: 'm:0', text: 'rld' });
     stream.effect(id, { type: 'streamStop', key: 'm:0' }); // flushes the pending text, then settles the payload
-    expect(a.repos.transcripts.get(row.id)).toMatchObject({ body: 'Hello world', payload: { kind: 'agent' } });
+    expect(a.repos.transcripts.get(row.id)).toMatchObject({
+      body: 'Hello world',
+      payload: { kind: 'agent' },
+    });
     a.publisher.flush();
     expect(deltas(win, 'transcript.patch').map((d) => d.body)).toEqual(['Hello wo', 'Hello world']);
     expect(deltas(win, 'transcript.replace')).toHaveLength(1);
@@ -1348,7 +1478,10 @@ describe('SessionService partial messages (stream rows patched live)', () => {
 
   it.each<[string, () => void]>([
     ['a thinking block that only ever carries a signature', () => {}],
-    ['a text block whose only text is blank', () => stream.effect(ids.session.cursor, { type: 'streamDelta', key: 'm:0', text: ' \n' })],
+    [
+      'a text block whose only text is blank',
+      () => stream.effect(ids.session.cursor, { type: 'streamDelta', key: 'm:0', text: ' \n' }),
+    ],
   ])('%s never gets a row', async (_name, during) => {
     const { app: a, win } = app();
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
@@ -1389,7 +1522,11 @@ describe('SessionService partial messages (stream rows patched live)', () => {
     a.publisher.flush();
     const before = deltas(win, 'transcript.patch').length;
     // The final block equals what was streamed (post-redaction it is compared raw, so a secret means one more patch).
-    stream.effect(id, { type: 'streamFinal', key: 'm:0', body: 'The key is AKIAABCDEFGHIJKLMNOP, so deploy.' });
+    stream.effect(id, {
+      type: 'streamFinal',
+      key: 'm:0',
+      body: 'The key is AKIAABCDEFGHIJKLMNOP, so deploy.',
+    });
     a.publisher.flush();
     expect(deltas(win, 'transcript.patch').length).toBe(before);
     expect(a.repos.transcripts.get(row.id)?.body).toBe('The key is [redacted], so deploy.');
@@ -1409,7 +1546,8 @@ describe('SessionService partial messages (stream rows patched live)', () => {
   it('a streamed final that carries the CLI-outdated message raises the banner like a plain agent row', async () => {
     const { app: a, win } = app();
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
-    const msg = 'API Error: 400 Claude Code 2.1.199 does not support this model; version 2.1.251 or newer is required';
+    const msg =
+      'API Error: 400 Claude Code 2.1.199 does not support this model; version 2.1.251 or newer is required';
     stream.effect(session.id, { type: 'streamStart', key: 'm:0', kind: 'text' });
     stream.effect(session.id, { type: 'streamDelta', key: 'm:0', text: msg });
     stream.effect(session.id, { type: 'streamStop', key: 'm:0' });
@@ -1417,7 +1555,9 @@ describe('SessionService partial messages (stream rows patched live)', () => {
     expect(win.events('banner.set')).toEqual([]); // only the complete text is trusted
     stream.effect(session.id, { type: 'streamFinal', key: 'm:0', body: msg });
     a.publisher.flush();
-    expect(win.events('banner.set')).toContainEqual(expect.objectContaining({ bannerKey: 'cli-outdated:claude' }));
+    expect(win.events('banner.set')).toContainEqual(
+      expect.objectContaining({ bannerKey: 'cli-outdated:claude' }),
+    );
     expect(rows(a, session.id).map((m) => m.payload.kind)).toEqual(['user', 'agent', 'system']);
   });
 
@@ -1543,7 +1683,12 @@ describe('SessionService attachments + slash commands', () => {
     a.repos.worktrees.upsert({ ...wt, path: root });
     return root;
   };
-  const png = { kind: 'image' as const, name: 'shot.png', mediaType: 'image/png' as const, data: 'iVBORw0KGgo=' };
+  const png = {
+    kind: 'image' as const,
+    name: 'shot.png',
+    mediaType: 'image/png' as const,
+    data: 'iVBORw0KGgo=',
+  };
   const userRows = (a: TestApp['app'], id: string) =>
     a.repos.transcripts.last(id).filter((m) => m.payload.kind === 'user');
 
@@ -1559,7 +1704,10 @@ describe('SessionService attachments + slash commands', () => {
     });
     expect(userRows(a, session.id).at(-1)).toMatchObject({
       body: 'what is this?',
-      payload: { kind: 'user', attachments: [{ kind: 'image', name: 'shot.png', mediaType: 'image/png', bytes: 8 }] },
+      payload: {
+        kind: 'user',
+        attachments: [{ kind: 'image', name: 'shot.png', mediaType: 'image/png', bytes: 8 }],
+      },
     });
     expect(JSON.stringify(userRows(a, session.id).at(-1))).not.toContain(png.data);
   });
@@ -1595,11 +1743,41 @@ describe('SessionService attachments + slash commands', () => {
 
   it.each([
     ['empty body and no attachments', '', [], 'invalid-input', /empty/],
-    ['image over 5 MB', 'x', [{ ...png, data: Buffer.alloc(MAX_IMAGE_BYTES + 1).toString('base64') }], 'invalid-input', /shot\.png is larger than 5 MB/],
-    ['file over 200 KB', 'x', [{ kind: 'file' as const, path: 'big.txt' }], 'invalid-input', /big\.txt is larger than 200 KB/],
-    ['relative escape', 'x', [{ kind: 'file' as const, path: '../outside/secret.txt' }], 'fs-denied', /outside the worktree/],
-    ['absolute path outside', 'x', [{ kind: 'file' as const, path: '/etc/passwd' }], 'fs-denied', /outside the worktree/],
-    ['symlink escape', 'x', [{ kind: 'file' as const, path: 'escape.txt' }], 'fs-denied', /outside the worktree/],
+    [
+      'image over 5 MB',
+      'x',
+      [{ ...png, data: Buffer.alloc(MAX_IMAGE_BYTES + 1).toString('base64') }],
+      'invalid-input',
+      /shot\.png is larger than 5 MB/,
+    ],
+    [
+      'file over 200 KB',
+      'x',
+      [{ kind: 'file' as const, path: 'big.txt' }],
+      'invalid-input',
+      /big\.txt is larger than 200 KB/,
+    ],
+    [
+      'relative escape',
+      'x',
+      [{ kind: 'file' as const, path: '../outside/secret.txt' }],
+      'fs-denied',
+      /outside the worktree/,
+    ],
+    [
+      'absolute path outside',
+      'x',
+      [{ kind: 'file' as const, path: '/etc/passwd' }],
+      'fs-denied',
+      /outside the worktree/,
+    ],
+    [
+      'symlink escape',
+      'x',
+      [{ kind: 'file' as const, path: 'escape.txt' }],
+      'fs-denied',
+      /outside the worktree/,
+    ],
     ['a directory', 'x', [{ kind: 'file' as const, path: 'src' }], 'invalid-input', /not a file/],
     ['a missing file', 'x', [{ kind: 'file' as const, path: 'src/nope.ts' }], 'invalid-input', /not a file/],
   ])('rejects %s and records nothing', async (_label, body, attachments, code, message) => {
@@ -1607,7 +1785,10 @@ describe('SessionService attachments + slash commands', () => {
     worktreeDir(a, ids.worktree.featPromo);
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
     const before = userRows(a, session.id).length;
-    await expect(a.sessions.sendMessage(session.id, body, attachments)).rejects.toMatchObject({ code, message });
+    await expect(a.sessions.sendMessage(session.id, body, attachments)).rejects.toMatchObject({
+      code,
+      message,
+    });
     expect(userRows(a, session.id)).toHaveLength(before);
     expect(stream.sent).toEqual([]);
   });
@@ -1617,14 +1798,17 @@ describe('SessionService attachments + slash commands', () => {
     worktreeDir(a, ids.worktree.testFlaky);
     const { session } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
     await a.sessions.sendMessage(session.id, 'look', [png, { kind: 'file', path: 'src/a.ts' }]);
-    expect(pty.writes.at(-1)).toEqual({
-      id: session.id,
-      data: 'look\n\n<file path="src/a.ts">\nexport const a = 1;\n\n</file>\r',
-    });
+    await typed();
+    expect(pty.writes.slice(-2)).toEqual([
+      { id: session.id, data: 'look\n\n<file path="src/a.ts">\nexport const a = 1;\n\n</file>' },
+      { id: session.id, data: '\r' },
+    ]);
     const last = a.repos.transcripts.last(session.id).slice(-2);
     expect(last.map((m) => m.payload.kind)).toEqual(['user', 'system']);
     expect(last[1]!.body).toMatch(/Image dropped: Codex .* images need a stream session/);
-    expect(last[0]!.payload).toMatchObject({ attachments: [{ kind: 'image' }, { kind: 'file', path: 'src/a.ts' }] });
+    expect(last[0]!.payload).toMatchObject({
+      attachments: [{ kind: 'image' }, { kind: 'file', path: 'src/a.ts' }],
+    });
   });
 
   it('init stores the slash command list on the session and publishes it; an empty report keeps the last list', async () => {
@@ -1643,11 +1827,21 @@ describe('SessionService attachments + slash commands', () => {
     const upserts = win
       .batches()
       .flatMap((b) => b.deltas)
-      .filter((d): d is { op: string; table: string; rows: { id: string; slashCommands: string[] }[] } =>
-        d.op === 'upsert' && (d as { table?: string }).table === 'sessions',
+      .filter(
+        (d): d is { op: string; table: string; rows: { id: string; slashCommands: string[] }[] } =>
+          d.op === 'upsert' && (d as { table?: string }).table === 'sessions',
       );
-    expect(upserts.at(-1)?.rows.find((r) => r.id === session.id)?.slashCommands).toEqual(['compact', 'model']);
-    stream.effect(session.id, { type: 'init', chatId: 'c1', model: null, permissionMode: null, slashCommands: [] });
+    expect(upserts.at(-1)?.rows.find((r) => r.id === session.id)?.slashCommands).toEqual([
+      'compact',
+      'model',
+    ]);
+    stream.effect(session.id, {
+      type: 'init',
+      chatId: 'c1',
+      model: null,
+      permissionMode: null,
+      slashCommands: [],
+    });
     expect(a.sessions.get(session.id)?.slashCommands).toEqual(['compact', 'model']);
   });
 });

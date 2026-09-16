@@ -127,6 +127,8 @@ export const copy = {
       modelChanged: 'model: {model}',
       /** Chat meta suffix once a stream session has reported usage. */
       usage: '{cost} · {turns} turns',
+      /** CLIs that count tokens rather than dollars (Codex on a ChatGPT plan). */
+      usageTokens: '{tokens} tokens · {turns} turns',
       /** Short option labels for the 360px composer line (the long forms live in `session.*`; hints via title). */
       modeShort: {
         default: 'Ask',
@@ -203,6 +205,7 @@ export const copy = {
       high: 'High',
       xhigh: 'Extra high',
       max: 'Max',
+      ultra: 'Ultra',
     },
     /** Plan-approval decision (ExitPlanMode) and clarifying questions (AskUserQuestion) from the CLI. */
     plan: {

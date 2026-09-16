@@ -13,6 +13,7 @@ import type { AgentLaunchContext } from './types';
 const ctx = (agent: 'gemini' | 'cursor' | 'claude', worktreePath: string): AgentLaunchContext => ({
   agent,
   binary: agent,
+  capabilities: {},
   sessionId: 'sess-1',
   worktreePath,
   projectPath: worktreePath,

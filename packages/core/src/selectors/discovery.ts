@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { copy } from '../copy';
+import { modelInfoSchema, type ModelInfo } from '../model/session';
 import {
   cliCandidateSchema,
   cliSourceSchema,
@@ -118,3 +119,10 @@ export const cliConnectionLabel = (state: CliConnectionState): string => {
 
 /** Settings › Agents account cell: `nic@acme.dev`, `ChatGPT`, or `—` when the CLI has not said who it is. */
 export const cliAccountLabel = (cli: Pick<CliInstall, 'account'>): string => cli.account ?? copy.general.none;
+
+/** The models a CLI offers, as its last verification / session init stored them (`capabilities.models`); [] when unknown. */
+export const modelCatalogueOf = (cli: Pick<CliInstall, 'capabilities'> | null | undefined): ModelInfo[] => {
+  if (!cli) return [];
+  const r = z.array(modelInfoSchema).safeParse(cli.capabilities['models']);
+  return r.success ? r.data : [];
+};

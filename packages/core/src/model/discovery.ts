@@ -80,7 +80,12 @@ export const skillHostSchema = z.enum(['claude', 'codex', 'gemini', 'cursor', 'a
 export type SkillHost = z.infer<typeof skillHostSchema>;
 export const SKILL_HOSTS: readonly SkillHost[] = skillHostSchema.options;
 /** The hosts a skill can be installed for (the shared dir is listed, never written to). */
-export const INSTALLABLE_SKILL_HOSTS: readonly Exclude<SkillHost, 'agents'>[] = ['claude', 'codex', 'gemini', 'cursor'];
+export const INSTALLABLE_SKILL_HOSTS: readonly Exclude<SkillHost, 'agents'>[] = [
+  'claude',
+  'codex',
+  'gemini',
+  'cursor',
+];
 
 /** One skill as listed in Settings or the catalogue. The body is fetched separately, to be read before install. */
 export const skillSummarySchema = z.object({

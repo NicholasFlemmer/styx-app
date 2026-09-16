@@ -3,7 +3,7 @@ import type { Db } from '../open';
 import { asBool, asJson, asNum, asStr, asTime, placeholders, toBit, toTime, type Raw } from './mappers';
 
 const COLS = `id, project_id, worktree_id, agent, runner, model, state, paused_reason, note, first_message, auto_approve_edits, may_request_targets,
-  notify_when_needs_me, pid, exit_code, started_at, last_activity_at, ended_at, archived_at, permission_mode, effort, cli_session_id, cost_usd, num_turns, slash_commands_json`;
+  notify_when_needs_me, pid, exit_code, started_at, last_activity_at, ended_at, archived_at, permission_mode, effort, cli_session_id, cost_usd, num_turns, slash_commands_json, tokens_used, context_window`;
 
 export const sessionFromRow = (r: Raw): Session =>
   sessionSchema.parse({
@@ -18,6 +18,12 @@ export const sessionFromRow = (r: Raw): Session =>
     cliSessionId: asStr(r['cli_session_id']),
     costUsd: Number(r['cost_usd'] ?? 0),
     numTurns: Number(r['num_turns'] ?? 0),
+    // Optional on the model ("never reported" is the absence of the key), so a row that never counted tokens
+    // round-trips exactly.
+    ...(Number(r['tokens_used'] ?? 0) > 0 ? { tokensUsed: Number(r['tokens_used']) } : {}),
+    ...(r['context_window'] !== null && r['context_window'] !== undefined
+      ? { contextWindow: Number(r['context_window']) }
+      : {}),
     slashCommands: asJson<string[]>(r['slash_commands_json'], []),
     state: String(r['state']),
     pausedReason: asStr(r['paused_reason']),
@@ -49,12 +55,12 @@ export class SessionsRepo {
 
   constructor(private readonly db: Db) {
     this.upsertStmt = db.prepare(
-      `INSERT INTO sessions (${COLS}) VALUES (${placeholders(25)})
+      `INSERT INTO sessions (${COLS}) VALUES (${placeholders(27)})
        ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, worktree_id = excluded.worktree_id, agent = excluded.agent, runner = excluded.runner, model = excluded.model,
          state = excluded.state, paused_reason = excluded.paused_reason, note = excluded.note, first_message = excluded.first_message, auto_approve_edits = excluded.auto_approve_edits,
          may_request_targets = excluded.may_request_targets, notify_when_needs_me = excluded.notify_when_needs_me, pid = excluded.pid, exit_code = excluded.exit_code,
          started_at = excluded.started_at, last_activity_at = excluded.last_activity_at, ended_at = excluded.ended_at, archived_at = excluded.archived_at,
-         permission_mode = excluded.permission_mode, effort = excluded.effort, cli_session_id = excluded.cli_session_id, cost_usd = excluded.cost_usd, num_turns = excluded.num_turns, slash_commands_json = excluded.slash_commands_json`,
+         permission_mode = excluded.permission_mode, effort = excluded.effort, cli_session_id = excluded.cli_session_id, cost_usd = excluded.cost_usd, num_turns = excluded.num_turns, slash_commands_json = excluded.slash_commands_json, tokens_used = excluded.tokens_used, context_window = excluded.context_window`,
     );
     this.getStmt = db.prepare(`SELECT ${COLS} FROM sessions WHERE id = ?`);
     this.allStmt = db.prepare(`SELECT ${COLS} FROM sessions ORDER BY rowid ASC`);
@@ -92,6 +98,8 @@ export class SessionsRepo {
       s.costUsd,
       s.numTurns,
       JSON.stringify(s.slashCommands),
+      s.tokensUsed ?? 0,
+      s.contextWindow ?? null,
     );
   }
 

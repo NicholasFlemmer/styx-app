@@ -42,9 +42,26 @@ export type PermissionMode = z.infer<typeof permissionModeSchema>;
 export const PERMISSION_MODES: readonly PermissionMode[] = permissionModeSchema.options;
 
 /** Claude Code `--effort` levels. */
-export const effortSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
+/** Claude Code: low…max. Codex adds `ultra` on some models; the per-model list comes from the CLI (`ModelInfo.efforts`). */
+export const effortSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
 export type Effort = z.infer<typeof effortSchema>;
 export const EFFORTS: readonly Effort[] = effortSchema.options;
+
+/**
+ * One model a CLI offers (Codex `model/list`; Claude's aliases are static): the composer's model and effort pickers
+ * are built from this list, stored under `CliInstall.capabilities.models` (see `modelCatalogueOf`).
+ */
+export const modelInfoSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().nullable().default(null),
+  efforts: z.array(effortSchema),
+  defaultEffort: effortSchema.nullable(),
+  isDefault: z.boolean(),
+  /** Hidden by the CLI (still selectable by id). */
+  hidden: z.boolean().default(false),
+});
+export type ModelInfo = z.infer<typeof modelInfoSchema>;
 
 /** Model aliases the Claude CLI accepts (`--model`); `null` = the CLI's configured default. */
 export const MODEL_ALIASES = ['fable', 'opus', 'sonnet', 'haiku'] as const;
@@ -72,6 +89,9 @@ export const sessionSchema = z
     /** Running totals from stream `result` events. */
     costUsd: z.number().nonnegative(),
     numTurns: z.number().int().nonnegative(),
+    /** Token totals for CLIs that report tokens rather than dollars (Codex `thread/tokenUsage/updated`). */
+    tokensUsed: z.number().int().nonnegative().optional(),
+    contextWindow: z.number().int().positive().nullable().optional(),
     /** Slash commands the CLI advertised at init (skills, plugins, built-ins); the composer's `/` popup lists them. */
     slashCommands: z.array(z.string()),
     state: sessionStateSchema,
@@ -151,6 +171,8 @@ export const askQuestionSchema = z.object({
   prompt: z.string().min(1),
   multiSelect: z.boolean(),
   options: z.array(z.object({ label: z.string().min(1), description: z.string().nullable() })),
+  /** The answer is a secret (Codex `requestUserInput.isSecret`): masked input, never echoed into the transcript. */
+  secret: z.boolean().optional(),
 });
 export type AskQuestion = z.infer<typeof askQuestionSchema>;
 

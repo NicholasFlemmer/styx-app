@@ -352,6 +352,10 @@ export class DetectService {
       settingsFlag: /--settings/.test(help),
       streamJson: /stream-json/.test(help),
       printMode: /(^|\s)(-p|--print)\b/.test(help),
+      // Structured control surfaces (docs/research/agent-parity.md): Codex's JSON-RPC app-server subcommand, and the
+      // Agent Client Protocol mode of Gemini (`--acp`) and Cursor (`agent acp`).
+      appServer: /(^|\s)app-server\b/.test(help),
+      acp: /(^|\s)(--acp|acp)\b/.test(help),
       configOverride: /(^|\s)-c,? ?(--config)?\b/.test(help) || /--config/.test(help),
     };
     return {

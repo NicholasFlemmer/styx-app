@@ -131,7 +131,7 @@ describe('sectionRows', () => {
     });
     const effort = rows.find((r) => r.id === 'effort');
     expect(effort?.value).toBe('default');
-    expect(effort?.options.map((o) => o.value)).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max']);
+    expect(effort?.options.map((o) => o.value)).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
     expect(effort?.change.kind === 'project' && effort.change.patch('xhigh')).toEqual({ effort: 'xhigh' });
     expect(effort?.change.kind === 'project' && effort.change.patch('default')).toEqual({ effort: null });
     expect(modelRow?.change.kind === 'project' && modelRow.change.patch('opus')).toEqual({ model: 'opus' });

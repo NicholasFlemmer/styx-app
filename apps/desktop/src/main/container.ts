@@ -29,6 +29,9 @@ import { isLoopbackUrl, RunService } from './services/run-service';
 import { commandCarriesSecret } from './services/logger';
 import { SessionService } from './services/session-service';
 import { StreamRunner, type StreamRunnerLike } from './services/stream-runner';
+import { RunnerMux } from './services/runner-mux';
+import { AppServerRunner } from './services/app-server-runner';
+import { AcpRunner } from './services/acp-runner';
 import { DeployService } from './services/deploy-service';
 import { SkillsService } from './services/skills-service';
 import { TargetService } from './services/target-service';
@@ -201,7 +204,14 @@ export function buildContainer(opts: ContainerOptions): Container {
   });
   const git = new GitService();
   const pty = opts.pty ?? new PtyService(runtime.platform);
-  const stream = opts.stream ?? new StreamRunner();
+  // One door, several protocols (docs/research/agent-parity.md): Claude's NDJSON now; the Codex app-server and
+  // ACP backends register here as they land.
+  const stream =
+    opts.stream ??
+    new RunnerMux()
+      .register(['stdin', 'argv'], new StreamRunner())
+      .register(['app-server'], new AppServerRunner())
+      .register(['acp'], new AcpRunner());
   const ptyLog = new PtyLog(`${runtime.userData}/logs/pty`);
   const detect = opts.detect ?? new DetectService();
   const ideImport =

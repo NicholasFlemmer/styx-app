@@ -1,8 +1,16 @@
 import { spawn as spawnChild, type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { isAbsolute, relative, sep } from 'node:path';
-import { fill, copy, type MessagePayload } from '@styx/core';
-import type { StreamInput } from '../agents/types';
+import {
+  fill,
+  copy,
+  type Agent,
+  type Effort,
+  type MessagePayload,
+  type ModelInfo,
+  type PermissionMode,
+} from '@styx/core';
+import type { McpServerEntry, StreamInput } from '../agents/types';
 import { logger } from './logger';
 
 /**
@@ -31,7 +39,15 @@ export type StreamEffect =
   /** A `tool_result` for an earlier `tool_use`: patches the matching `tool` transcript line. */
   | { type: 'toolResult'; toolUseId: string; ok: boolean; detail: string | null }
   /** From `result`: running totals for the CLI session (null when the CLI did not report them). */
-  | { type: 'usage'; costUsd: number | null; numTurns: number | null; durationMs: number | null }
+  | {
+      type: 'usage';
+      costUsd: number | null;
+      numTurns: number | null;
+      durationMs: number | null;
+      /** Token totals for CLIs that count tokens instead of dollars (running total; null when not reported). */
+      tokensUsed?: number | null;
+      contextWindow?: number | null;
+    }
   | { type: 'session'; event: 'activity' | 'quiet' }
   /**
    * `--include-partial-messages`: one text / thinking block streaming live. `key` is `<messageId>:<index>`; the block
@@ -45,6 +61,8 @@ export type StreamEffect =
   /** `message_delta.usage.output_tokens` for the message in flight (a running total, not a delta). */
   | { type: 'streamUsage'; outputTokens: number }
   | { type: 'note'; note: string }
+  /** The CLI's model list (Codex `model/list`), stored on the CLI row so the composer's pickers fit the agent. */
+  | { type: 'catalogue'; models: ModelInfo[] }
   | { type: 'rescan' }
   | {
       type: 'permission';
@@ -516,6 +534,22 @@ export const permissionResponseLine = (
 
 // --- Runner -----------------------------------------------------------------
 
+/**
+ * What a protocol runner needs beyond the process: the session's settings (mapped by the backend onto the CLI's
+ * own approval / sandbox / model / effort vocabulary), the CLI's earlier thread id for a resume, and the styx MCP
+ * server entry for protocols that take MCP servers in-band (ACP `session/new`, Codex thread config).
+ */
+export interface StreamSessionSettings {
+  agent: Agent;
+  model: string | null;
+  effort: Effort | null;
+  permissionMode: PermissionMode;
+  autoApproveEdits: boolean;
+  resumeSessionId: string | null;
+  projectPath: string;
+  mcp: McpServerEntry;
+}
+
 export interface StreamSpawnOptions {
   id: string;
   command: string;
@@ -525,6 +559,8 @@ export interface StreamSpawnOptions {
   input: StreamInput;
   worktreePath: string;
   firstMessage: string | null;
+  /** Present for every launch the session service makes; tests that only drive the NDJSON parser may omit it. */
+  session?: StreamSessionSettings;
 }
 
 export interface StreamEvents {
@@ -550,6 +586,8 @@ export interface StreamRunnerLike extends EventEmitter<StreamEvents> {
   /** Control requests on stdin (Claude Code): live model / permission-mode switches and turn interrupt. */
   setModel(id: string, model: string | null): void;
   setPermissionMode(id: string, mode: string): void;
+  /** Effort for the next turn where the protocol takes it per turn (Codex); Claude Code applies it at relaunch. */
+  setEffort(id: string, effort: string | null): void;
   interrupt(id: string): void;
   kill(id: string): void;
   has(id: string): boolean;
@@ -671,16 +709,21 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
       return;
     }
     if (blocks.length > 0)
-      logger.warn('stream runner: argv input is text-only, image blocks dropped', { id, count: blocks.length });
+      logger.warn('stream runner: argv input is text-only, image blocks dropped', {
+        id,
+        count: blocks.length,
+      });
     if (entry.proc) {
       // A turn is still running: cursor-agent has no stdin protocol, so the message waits for the next turn.
       logger.warn('stream runner: turn in progress, message dropped', { id });
       return;
     }
     const chatId = entry.parser.chatId;
-    const args = chatId
-      ? [...entry.opts.args, entry.opts.input.resumeFlag, chatId, text]
-      : [...entry.opts.args, text];
+    const resumeFlag = entry.opts.input.kind === 'argv' ? entry.opts.input.resumeFlag : null;
+    const args =
+      chatId && resumeFlag !== null
+        ? [...entry.opts.args, resumeFlag, chatId, text]
+        : [...entry.opts.args, text];
     void this.start(entry, args).catch((e: Error) => {
       this.emit('effect', id, { type: 'error', message: e.message });
       this.entries.delete(id);
@@ -719,6 +762,9 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
   setPermissionMode(id: string, mode: string): void {
     this.sendControl(id, { subtype: 'set_permission_mode', mode });
   }
+
+  /** Claude Code has no live effort switch (`--effort` is a launch flag): the session service relaunches instead. */
+  setEffort(): void {}
 
   interrupt(id: string): void {
     this.sendControl(id, { subtype: 'interrupt' });

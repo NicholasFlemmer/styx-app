@@ -20,6 +20,10 @@ function cleanEnv(): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env))
     if (v !== undefined && k !== 'ELECTRON_RUN_AS_NODE') env[k] = v;
+  // Fake agent CLIs (e2e/fixtures/bin: `codex` speaking the app-server protocol, …) shadow the real ones, so a
+  // session spawned in a test never launches a real agent or spends anyone's usage.
+  env['PATH'] =
+    `${resolve(__dirname, 'fixtures', 'bin')}${process.platform === 'win32' ? ';' : ':'}${env['PATH'] ?? ''}`;
   return env;
 }
 

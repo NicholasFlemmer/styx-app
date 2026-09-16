@@ -9,11 +9,24 @@ import { formatAge } from './format';
 /** `$0.12` — running cost from the stream's `result` events, two decimals. */
 export const formatCost = (usd: number): string => `$${usd.toFixed(2)}`;
 
-/** "$0.12 · 3 turns" once a stream session has reported usage; null before the first `result`. */
-export const usageLabel = (session: Pick<Session, 'costUsd' | 'numTurns'>): string | null =>
-  session.costUsd > 0 || session.numTurns > 0
+/** `14.6k` — token totals, one decimal above a thousand. */
+export const formatTokens = (n: number): string =>
+  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+
+/**
+ * "$0.12 · 3 turns" once a stream session has reported usage; "14.6k tokens · 3 turns" for a CLI that counts
+ * tokens rather than dollars (Codex); null before anything was reported.
+ */
+export const usageLabel = (
+  session: Pick<Session, 'costUsd' | 'numTurns'> & { tokensUsed?: number | undefined },
+): string | null => {
+  const tokens = session.tokensUsed ?? 0;
+  if (session.costUsd === 0 && tokens > 0)
+    return fill(copy.chat.controls.usageTokens, { tokens: formatTokens(tokens), turns: session.numTurns });
+  return session.costUsd > 0 || session.numTurns > 0
     ? fill(copy.chat.controls.usage, { cost: formatCost(session.costUsd), turns: session.numTurns })
     : null;
+};
 
 /**
  * "codex · test/flaky · 3m · waiting on you" (agent id lowercase, branch, age, suffix when needs-you), then
