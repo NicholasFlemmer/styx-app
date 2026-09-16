@@ -324,20 +324,53 @@ describe('DesignPane', () => {
       expect(document.querySelector('[data-run-phase]')?.textContent).toBe(copy.workspace.run.runningNoUrl);
       rerender(pane({ run: run({ url: 'http://localhost:5173' }) }));
       expect(document.querySelector('[data-run-phase]')?.textContent).toBe('Running · http://localhost:5173');
-      // Same pty: the terminal is created once and stays attached.
+      // Same pty: the terminal is created once; the URL folded the strip, which detached the terminal.
       expect(loginTerminal.createLoginTerminal).toHaveBeenCalledTimes(1);
 
       const toggle = screen.getByRole('button', { name: copy.workspace.run.output });
-      expect(toggle.getAttribute('aria-expanded')).toBe('true');
-      fireEvent.click(toggle);
       expect(toggle.getAttribute('aria-expanded')).toBe('false');
       expect(document.querySelector('[data-run-terminal]')).toBeNull();
       expect(registry.detachTerminal).toHaveBeenCalledTimes(1);
       fireEvent.click(toggle);
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
       expect(document.querySelector('[data-run-terminal]')).not.toBeNull();
       await waitFor(() => expect(registry.attachTerminal).toHaveBeenCalledTimes(2));
+      fireEvent.click(toggle);
+      expect(document.querySelector('[data-run-terminal]')).toBeNull();
+      expect(registry.detachTerminal).toHaveBeenCalledTimes(2);
       // Collapsing keeps the entry: no dispose until the run goes away.
       expect(loginTerminal.disposeLoginTerminal).not.toHaveBeenCalled();
+    });
+
+    it('the strip is open while the server comes up, folds once the app has a URL, and reopens when the run fails', async () => {
+      const { rerender } = render(pane({ devUrl: null, run: run({ phase: 'starting' }) }));
+      const toggle = () => screen.getByRole('button', { name: copy.workspace.run.output });
+      expect(toggle().getAttribute('aria-expanded')).toBe('true');
+      // The app is up: the strip gets out of the design window's way (it cannot float over a native view).
+      rerender(pane({ devUrl: null, run: run({ url: 'http://localhost:5173' }) }));
+      expect(toggle().getAttribute('aria-expanded')).toBe('false');
+      // The user's own toggle wins until the next transition.
+      fireEvent.click(toggle());
+      expect(toggle().getAttribute('aria-expanded')).toBe('true');
+      rerender(pane({ devUrl: null, run: run({ url: 'http://localhost:5173', phase: 'running' }) }));
+      expect(toggle().getAttribute('aria-expanded')).toBe('true');
+      fireEvent.click(toggle());
+      // A failure reopens it: the output is the only explanation.
+      rerender(
+        pane({
+          devUrl: null,
+          run: run({
+            url: 'http://localhost:5173',
+            phase: 'exited',
+            exitCode: 1,
+            endedAt: fixtures.DEMO_NOW,
+          }),
+        }),
+      );
+      expect(toggle().getAttribute('aria-expanded')).toBe('true');
+      // A fresh run starts the cycle again.
+      rerender(pane({ devUrl: null, run: run({ runId: 'run:2', terminalId: 'term:2', phase: 'starting' }) }));
+      expect(toggle().getAttribute('aria-expanded')).toBe('true');
     });
 
     it('after exit: the code, a Dismiss link that clears the run, Run locally back on', async () => {

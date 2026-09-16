@@ -24,9 +24,17 @@ export interface RunServiceDeps {
   /** The login shell used to run the command string (`$SHELL -lc`); injectable for tests. */
   shell: () => string;
   platform: NodeJS.Platform;
-  /** Does a URL answer? Defaults to an HTTP HEAD with a short timeout; injectable for tests. */
-  probe?: (url: string) => Promise<boolean>;
+  /**
+   * Does a URL answer, and with a page? Defaults to an HTTP GET with a short timeout; injectable for tests (a
+   * plain boolean means "answers, kind unknown").
+   */
+  probe?: (url: string) => Promise<boolean | ProbeAnswer>;
 }
+
+/** What a probe learned: nothing listening, or a server that does / does not serve HTML (null = could not tell). */
+export type ProbeAnswer = { up: false } | { up: true; page: boolean | null };
+const toAnswer = (r: boolean | ProbeAnswer): ProbeAnswer =>
+  typeof r === 'boolean' ? { up: r, page: null } : r;
 
 /** How often unanswered URL candidates are re-probed, and for how long after the run started. */
 export const PROBE_INTERVAL_MS = 1000;
@@ -36,25 +44,28 @@ export const PROBE_WINDOW_MS = 120_000;
  * Any HTTP response counts (a 404 or a 405 to HEAD still means a server is listening); a refused connection, a
  * reset or a timeout means nothing is there yet.
  */
-export const httpProbe = (url: string): Promise<boolean> =>
+export const httpProbe = (url: string): Promise<ProbeAnswer> =>
   new Promise((resolve) => {
     let u: URL;
     try {
       u = new URL(url);
     } catch {
-      resolve(false);
+      resolve({ up: false });
       return;
     }
     const mod = u.protocol === 'https:' ? https : http;
-    const req = mod.request(u, { method: 'HEAD', timeout: 1500 }, (res) => {
+    // GET, not HEAD: the content type says whether this is the page a person opens (a frontend) or an API that
+    // happens to listen first (a backend). The body is discarded.
+    const req = mod.request(u, { method: 'GET', timeout: 1500 }, (res) => {
+      const type = String(res.headers['content-type'] ?? '');
       res.resume();
-      resolve(true);
+      resolve({ up: true, page: type === '' ? null : /text\/html/i.test(type) });
     });
     req.on('timeout', () => {
       req.destroy();
-      resolve(false);
+      resolve({ up: false });
     });
-    req.on('error', () => resolve(false));
+    req.on('error', () => resolve({ up: false }));
     req.end();
   });
 
@@ -206,27 +217,37 @@ export class RunService {
     });
 
     // Listeners go on before the spawn: a process that prints (or dies) immediately must not be missed.
-    // Every loopback URL the process prints is a candidate; the first one that actually answers becomes the run's URL.
-    // Candidates are probed as they appear and again every second, because a server prints its address before it
-    // accepts connections and may print an API or a fallback port that is not it.
+    //
+    // Which URL is "the app" (a project with a backend and a frontend prints both, and the API usually listens
+    // first): the URL Styx already knows (taught by the agent or typed by the user) wins as soon as it answers;
+    // otherwise the first candidate that answers *with a page* wins; a candidate that answers with something else
+    // (an API) is shown provisionally while the search goes on, and is replaced the moment a page answers within
+    // the probe window. Candidates are probed as they appear and again every second, because a server prints its
+    // address before it accepts connections.
     let tail = '';
-    const candidates: string[] = [];
+    const known = this.deps.repos.projects.settings(projectId).devUrl ?? null;
+    const candidates: string[] = known !== null && isLoopbackUrl(known) ? [known] : [];
     let probeTimer: NodeJS.Timeout | null = null;
     let probing = false;
     let adopted = false;
+    let provisional: string | null = null;
     const startedAt = clock.now();
     const probe = this.deps.probe ?? httpProbe;
     const current = () => {
       const cur = this.runs.get(projectId);
       return cur !== undefined && cur.runId === runId ? cur : undefined;
     };
-    const adopt = (url: string) => {
+    const adopt = (url: string, final: boolean) => {
       const cur = current();
       if (adopted || cur === undefined) return;
+      if (cur.url !== url) this.publish({ ...cur, url });
+      if (!final) {
+        provisional = url;
+        return;
+      }
       adopted = true;
       stopProbe();
       pty.off('data', onData);
-      this.publish({ ...cur, url });
       void this.rememberUrl(projectId, url);
     };
     const runProbe = async () => {
@@ -235,10 +256,13 @@ export class RunService {
       try {
         for (const url of [...candidates]) {
           if (adopted || current() === undefined) return;
-          if (await probe(url)) {
-            adopt(url);
+          const answer = toAnswer(await probe(url));
+          if (!answer.up) continue;
+          if (url === known || answer.page !== false) {
+            adopt(url, true);
             return;
           }
+          if (provisional === null) adopt(url, false);
         }
       } finally {
         probing = false;
@@ -246,7 +270,11 @@ export class RunService {
     };
     const schedule = () => {
       if (adopted || probeTimer !== null || candidates.length === 0) return;
-      if (clock.now() - startedAt > PROBE_WINDOW_MS) return;
+      if (clock.now() - startedAt > PROBE_WINDOW_MS) {
+        // Nothing better turned up: what is showing is the app after all.
+        if (provisional !== null) adopt(provisional, true);
+        return;
+      }
       probeTimer = setTimeout(() => {
         probeTimer = null;
         void runProbe().then(schedule);
@@ -285,6 +313,8 @@ export class RunService {
     pty.on('data', onData);
     pty.on('exit', onExit);
     this.attached.set(projectId, { runId, terminalId, off });
+    // A known URL is probed from the start, whether or not the process ever prints it.
+    if (candidates.length > 0) schedule();
 
     const { file, args } = this.shellArgs(cmd);
     try {

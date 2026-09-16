@@ -352,8 +352,8 @@ describe('RunService', () => {
     await vi.waitFor(() => expect(t.app.repos.projects.settings(acme).devUrl).toBe('http://localhost:3000'));
     expect(existsSync(join(dir, '.styx', 'project.json'))).toBe(true);
 
-    // A saved port from last time is exactly what a fresh run must correct.
-    const second = setup();
+    // A saved port from last time that nothing listens on is exactly what a fresh run must correct.
+    const second = setup({}, { 'http://localhost:3001': false });
     await second.t.app.projects.setSettings(acme, { devUrl: 'http://localhost:3001' });
     const r2 = await second.t.app.runs.start(acme, 'pnpm dev');
     second.pty.data(r2.terminalId, 'ready http://localhost:3000\n');
@@ -361,6 +361,37 @@ describe('RunService', () => {
     await vi.waitFor(() =>
       expect(second.t.app.repos.projects.settings(acme).devUrl).toBe('http://localhost:3000'),
     );
+  });
+
+  it('the URL Styx already knows wins as soon as it answers, even when the process prints another one first', async () => {
+    // Backend + frontend behind one script: the API prints (and listens) first; the agent taught Styx the frontend.
+    const { t, pty, probed } = setup();
+    await t.app.projects.setSettings(acme, { devUrl: 'http://localhost:5173' });
+    const r = await t.app.runs.start(acme, 'pnpm dev');
+    pty.data(r.terminalId, 'api listening on http://localhost:4000\n');
+    expect(await adoptedUrl(t)).toBe('http://localhost:5173');
+    // The known URL was probed without ever being printed.
+    expect(probed[0]).toBe('http://localhost:5173');
+  });
+
+  it('with nothing known, an API that answers is shown provisionally and replaced by the first page that answers', async () => {
+    const page = (url: string) => ({ up: true, page: url.includes('5173') });
+    const pty = new FakePty();
+    const t = makeTestApp({ pty, probe: async (url: string) => page(url) });
+    const project = t.app.repos.projects.get(acme);
+    if (!project) throw new Error('fixture project');
+    t.app.repos.projects.upsert({ ...project, path: tmp() }, t.app.repos.projects.settings(acme));
+    const r = await t.app.runs.start(acme, 'pnpm dev');
+    pty.data(r.terminalId, 'api listening on http://localhost:4000\n');
+    expect(await adoptedUrl(t)).toBe('http://localhost:4000');
+    // Provisional: nothing saved yet, and the search is still on.
+    expect(t.app.repos.projects.settings(acme).devUrl).toBeUndefined();
+    pty.data(r.terminalId, '  Local: http://localhost:5173/\n');
+    expect(await adoptedUrl(t)).toBe('http://localhost:5173/');
+    await vi.waitFor(() => expect(t.app.repos.projects.settings(acme).devUrl).toBe('http://localhost:5173/'));
+    // Adopted for good: a later URL changes nothing.
+    pty.data(r.terminalId, 'also http://localhost:9999\n');
+    expect(await adoptedUrl(t)).toBe('http://localhost:5173/');
   });
 
   it('persists the command as devCommand when it differs from the saved one', async () => {

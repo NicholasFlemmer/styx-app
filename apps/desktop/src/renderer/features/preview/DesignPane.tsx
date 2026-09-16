@@ -146,8 +146,27 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
   };
 
   // The output strip: an xterm bound to the run's pty, kept for the run's lifetime and re-parented when the strip
-  // is collapsed / expanded so scrollback survives the toggle.
-  const [open, setOpen] = useState(true);
+  // is collapsed / expanded so scrollback survives the toggle. It is open while the server is coming up (the output
+  // is the only feedback then), folds away the moment the app has a URL (the app is the feedback now, and the strip
+  // would only take room from it: the design window is a native view, so nothing can float over it), and reopens
+  // when the run fails. The toggle is the user's at any time in between.
+  const [open, setOpen] = useState(run !== null && run.url === null && run.phase !== 'exited');
+  const [seen, setSeen] = useState<{ runId: string | null; url: string | null; failed: boolean }>({
+    runId: run?.runId ?? null,
+    url: run?.url ?? null,
+    failed: run !== null && runFailure(run) !== null,
+  });
+  {
+    const runId = run?.runId ?? null;
+    const url = run?.url ?? null;
+    const failed = run !== null && runFailure(run) !== null;
+    if (runId !== seen.runId || url !== seen.url || failed !== seen.failed) {
+      setSeen({ runId, url, failed });
+      if (runId !== seen.runId) setOpen(run !== null && url === null && run.phase !== 'exited');
+      else if (url !== null && seen.url === null) setOpen(false);
+      else if (failed && !seen.failed) setOpen(true);
+    }
+  }
   const host = useRef<HTMLDivElement>(null);
   const entry = useRef<TerminalEntry | null>(null);
   const terminalId = run?.terminalId ?? null;
