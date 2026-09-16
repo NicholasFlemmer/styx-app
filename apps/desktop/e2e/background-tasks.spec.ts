@@ -51,7 +51,7 @@ test('background audit keeps project navigation usable and retains approvals and
     await expect(dialog).toContainText('acme-shop');
     await dialog.getByRole('button', { name: 'Continue in background' }).click();
     await expect(dialog).toHaveCount(0);
-    await page.locator('[data-nav-tasks]').click();
+    await page.locator('[data-app-rail-item="tasks"]').click();
     await page.getByRole('button', { name: /Tech debt audit · acme-shop/ }).click();
     await dialog.getByRole('button', { name: 'Allow', exact: true }).click();
     await expect(dialog.getByRole('status')).toHaveText('Finished', { timeout: 20_000 });
@@ -65,7 +65,7 @@ test('background audit keeps project navigation usable and retains approvals and
     await dialog.getByRole('button', { name: 'Close', exact: true }).last().click();
     // The report also survives losing all renderer-local task state.
     await page.reload();
-    await page.locator('[data-nav-tasks]').click();
+    await page.locator('[data-app-rail-item="tasks"]').click();
     await page.getByRole('button', { name: /Tech debt audit · acme-shop/ }).click();
     await expect(dialog).toContainText('pong');
     await page.screenshot({ path: testInfo.outputPath('background-task-result.png') });

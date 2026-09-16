@@ -13,7 +13,8 @@
     min-height: 0;
     position: relative;
   }
-  .rail {
+  .rail,
+  .appRail {
     width: var(--w-rail);
     flex: none;
     border-right: 1px solid var(--ln);
@@ -24,6 +25,13 @@
     padding: 10px 0;
     gap: 8px;
     overflow: hidden;
+  }
+  /* The app rail sits on --bg so the project rail reads as the second column, not a continuation. */
+  .appRail {
+    background: var(--bg);
+  }
+  .appRailFoot {
+    margin-top: auto;
   }
   /* Rail "+" menu: chat overflow-menu recipe (1px --tx border on --s1), fixed beside the tile since the rail clips. */
   .addMenu {
@@ -65,6 +73,16 @@
   }
   .navHead {
     padding: 14px 14px 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Project details under the name: the branch, where the titlebar used to show it beside the project dropdown. */
+  .navBranch {
+    padding: 0 14px 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--mu);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

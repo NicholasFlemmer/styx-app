@@ -72,20 +72,31 @@ export function Settings() {
 
   return (
     <div className={s['screen']} data-settings-section={section}>
+      {/* One group at a time (owner layout #85): the app rail opens the App group, the project nav the Project group. */}
       <nav className={s['nav']} aria-label={copy.nav.settings}>
-        <Label as="div" className={s['groupHead']}>
-          {copy.settings.groups.app}
-        </Label>
-        {navGroup(APP_SECTIONS)}
-        <Label as="div" className={[s['groupHead'], s['groupHeadProject']].join(' ')}>
-          {fill(copy.settings.groups.project, { project: projectName })}
-        </Label>
-        {navGroup(PROJECT_SECTIONS)}
-        <div className={s['navFoot']}>
-          {copy.settings.footer.file}
-          <br />
-          {copy.settings.footer.note}
-        </div>
+        {isProjectSection(section) ? (
+          <>
+            <Label as="div" className={s['groupHead']}>
+              {fill(copy.settings.groups.project, { project: projectName })}
+            </Label>
+            {navGroup(PROJECT_SECTIONS)}
+          </>
+        ) : (
+          <>
+            <Label as="div" className={s['groupHead']}>
+              {copy.settings.groups.app}
+            </Label>
+            {navGroup(APP_SECTIONS)}
+          </>
+        )}
+        {/* The footer describes the project file; the App group has no file behind it. */}
+        {isProjectSection(section) ? (
+          <div className={s['navFoot']}>
+            {copy.settings.footer.file}
+            <br />
+            {copy.settings.footer.note}
+          </div>
+        ) : null}
       </nav>
       <section className={s['main']} aria-labelledby="settings-title">
         <header className={s['header']}>

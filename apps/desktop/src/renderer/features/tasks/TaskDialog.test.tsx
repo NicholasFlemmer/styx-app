@@ -2,6 +2,7 @@
 import { copy, fixtures, sessionTabs, boardColumns, taskKey, type Session } from '@styx/core';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AppRail } from '../../app/AppRail';
 import { Nav } from '../../app/Nav';
 import { OverlayHost } from '../../app/OverlayHost';
 import { isTrapping } from '../../overlays/stack';
@@ -31,16 +32,14 @@ function seedTask(patch: Partial<Session> = {}) {
       createdAt: fixtures.DEMO_NOW,
     },
   ];
-  useReadModel
-    .getState()
-    .replaceModel(
-      {
-        ...model,
-        sessions: { ...model.sessions, byId: { ...model.sessions.byId, [session.id]: session } },
-        transcripts: { ...model.transcripts, [session.id]: messages },
-      },
-      'connected',
-    );
+  useReadModel.getState().replaceModel(
+    {
+      ...model,
+      sessions: { ...model.sessions, byId: { ...model.sessions.byId, [session.id]: session } },
+      transcripts: { ...model.transcripts, [session.id]: messages },
+    },
+    'connected',
+  );
   return session;
 }
 
@@ -93,6 +92,7 @@ describe('background tasks', () => {
     render(
       <>
         <div id="layer-app">
+          <AppRail />
           <Nav />
         </div>
         <OverlayHost />
@@ -104,7 +104,8 @@ describe('background tasks', () => {
     expect(screen.getByRole('dialog').textContent).toContain('acme-shop');
     fireEvent.click(screen.getByRole('button', { name: copy.tasks.background }));
     expect(screen.queryByRole('dialog')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /^Tasks/ }));
+    // Tasks moved to the app rail (owner layout #85); its tile reopens the dialog.
+    fireEvent.click(screen.getByRole('button', { name: copy.appRail.tasks.title }));
     fireEvent.click(screen.getByRole('button', { name: /Tech debt audit · acme-shop/ }));
     expect(screen.getByRole('dialog').textContent).toContain('Audit report');
     expect(useUiStore.getState().projectId).toBe(ids.project.blogV2);

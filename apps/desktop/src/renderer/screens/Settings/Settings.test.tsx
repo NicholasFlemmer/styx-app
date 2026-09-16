@@ -404,8 +404,13 @@ describe('<Settings />', () => {
     expect(screen.getByText('Project · No project')).toBeTruthy();
   });
 
-  it('nav switches sections; app sections carry the app scope', () => {
+  it('nav switches sections within one group; app sections carry the app scope (owner layout #85)', () => {
     render(<Settings />);
+    // Project group is showing (Targets): the App group's rows are not in this nav, the app rail opens them.
+    expect(screen.queryByRole('button', { name: 'General' })).toBeNull();
+    expect(screen.getByRole('button', { name: copy.settings.project.agentDefaults })).toBeTruthy();
+    act(() => useUiStore.getState().setSettingsSection('app:general'));
+    expect(screen.queryByRole('button', { name: copy.settings.project.agentDefaults })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'General' }));
     expect(useUiStore.getState().settingsSection).toBe('app:general');
     expect(screen.getByRole('heading', { name: 'General' })).toBeTruthy();
@@ -454,6 +459,7 @@ describe('<Settings />', () => {
       },
     });
     render(<Settings />);
+    act(() => useUiStore.getState().setSettingsSection('app:agents'));
     fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
     expect(screen.getByRole('heading', { name: 'Agents' })).toBeTruthy();
     expect(screen.getByText(copy.agentsPage.lead)).toBeTruthy();
@@ -477,6 +483,7 @@ describe('<Settings />', () => {
 
   it('Editor · Screen reader mode dispatches settings.set { screenReader } (spec §9)', () => {
     render(<Settings />);
+    act(() => useUiStore.getState().setSettingsSection('app:editor'));
     fireEvent.click(screen.getByRole('button', { name: 'Editor' }));
     const select = screen.getByRole('combobox', { name: copy.settings.rows.screenReader });
     expect((select as HTMLSelectElement).value).toBe('off');

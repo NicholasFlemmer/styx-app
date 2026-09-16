@@ -62,6 +62,21 @@ export const copy = {
     approvals: 'Approvals',
     settings: 'Settings',
     worktreesMeta: '{n} wt',
+    /** Project nav (owner layout, discrepancy #85): the group is the project; its Settings are the project's. */
+    projectSettings: 'Project settings',
+  },
+  /** Global rail left of the project switcher (owner layout, discrepancy #85): app-level places, as glyph tiles. */
+  appRail: {
+    label: 'App',
+    home: { glyph: '■', title: 'All projects' },
+    approvals: { glyph: '◆', title: 'Approvals' },
+    tasks: { glyph: '▶', title: 'Tasks' },
+    settings: { glyph: '≡', title: 'App settings' },
+    /** Corner meanings, read as part of the tile's name so the count is not lost with the old nav rows. */
+    inboxCount: '{n} in the inbox',
+    tasksNeedYou: '{n} need you',
+    /** Visually hidden label before the branch line in the project nav. */
+    branch: 'Branch',
   },
 
   board: {

@@ -10,8 +10,12 @@ export interface RailTileProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
   title: string;
   /** Current project → data-on. */
   active?: boolean;
+  /** What `active` means for AT: a current item (project tiles) or the current page (app rail navigation tiles). */
+  current?: 'true' | 'page';
   /** Needs-you corner square. */
   needs?: boolean;
+  /** What the corner stands for, in the accessible name ("2 in the inbox"); defaults to "needs you". */
+  needsLabel?: string;
   /** add = dashed `+` tile. */
   variant?: RailTileVariant;
   inv?: boolean;
@@ -19,12 +23,25 @@ export interface RailTileProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
 }
 
 export const RailTile = forwardRef<HTMLButtonElement, RailTileProps>(function RailTile(
-  { initials, title, active, needs, variant = 'project', inv, on, className, type = 'button', ...rest },
+  {
+    initials,
+    title,
+    active,
+    current = 'true',
+    needs,
+    needsLabel = 'needs you',
+    variant = 'project',
+    inv,
+    on,
+    className,
+    type = 'button',
+    ...rest
+  },
   ref,
 ) {
   const isAdd = variant === 'add';
   const cls = [s['tile'], isAdd ? s['add'] : s['project'], className].filter(Boolean).join(' ');
-  const name = needs ? `${title} · needs you` : title;
+  const name = needs ? `${title} · ${needsLabel}` : title;
   return (
     <button
       ref={ref}
@@ -32,7 +49,7 @@ export const RailTile = forwardRef<HTMLButtonElement, RailTileProps>(function Ra
       className={cls}
       title={title}
       aria-label={name}
-      aria-current={active ? 'true' : undefined}
+      aria-current={active ? current : undefined}
       data-inv={inv ? 'true' : undefined}
       data-on={on || active ? 'true' : undefined}
       {...rest}

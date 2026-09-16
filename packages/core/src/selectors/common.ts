@@ -59,7 +59,7 @@ export const byRecentActivity = (
 export const projectBranch = (model: ReadModel, projectId: ProjectId): string =>
   projectBranchOrNull(model, projectId) ?? '—';
 
-/** Same, but null when the project is on no branch (plain folder, or no worktree yet); the titlebar shows blank. */
+/** Same, but null when the project is on no branch (plain folder, or no worktree yet); the project nav shows no branch line. */
 export const projectBranchOrNull = (model: ReadModel, projectId: ProjectId): string | null => {
   const first = sessionsInProject(model, projectId)
     .filter((s) => s.state !== 'done')

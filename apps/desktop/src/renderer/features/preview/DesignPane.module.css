@@ -34,12 +34,15 @@
   }
   .url {
     flex: 1;
-    min-width: 0;
+    /* Never starved: Reload and Open in browser are the only other things on this row now. */
+    min-width: 120px;
   }
+  /* Device presets sit at the right of the Run row (the URL row has no room beside them once the app rail exists). */
   .devices {
     display: flex;
     gap: 1px;
     flex: none;
+    margin-left: auto;
   }
   /* Run output under the bar: the prototype's 130px terminal recipe (connect modal's inline login terminal). */
   .strip {
@@ -130,6 +133,14 @@
   .hint {
     color: var(--mu);
     font-size: 12px;
+  }
+  /* On the Run row the hint shares the line with the presets: one line, trimmed, never wrapping the row. */
+  .runRow .hint {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 

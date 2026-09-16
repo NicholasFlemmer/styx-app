@@ -5,6 +5,7 @@ import type { TaskLaunch } from '../features/tasks/task-launch';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import {
+  findOverlay,
   forgetInvoker,
   invokerOf,
   overlayId,
@@ -215,7 +216,17 @@ export const useUiStore = create<UiStore>()(
     },
     pushOverlay: (overlay) => {
       const id = overlayId(overlay.kind);
-      rememberInvoker(id);
+      // A push that replaces an overlay of the same kind (a task's detail view over the task list) keeps the
+      // original invoker: the button inside the replaced overlay unmounts, so focus would otherwise fall to body.
+      const replaced =
+        overlay.kind === 'task' || overlay.kind === 'modal' || overlay.kind === 'palette'
+          ? findOverlay(get().overlays, overlay.kind)
+          : null;
+      const inherited = replaced === null ? null : invokerOf(replaced.id);
+      if (inherited !== null && replaced !== null) {
+        rememberInvoker(id, inherited);
+        forgetInvoker(replaced.id);
+      } else rememberInvoker(id);
       set((s) => {
         s.overlays = pushOverlayPure(s.overlays, { ...overlay, id } as Overlay);
       });

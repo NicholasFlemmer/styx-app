@@ -267,21 +267,6 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
           onBlur={save}
           onKeyDown={onUrlKeyDown}
         />
-        <div className={s['devices']} role="group" aria-label={copy.workspace.design.devicesLabel}>
-          {PREVIEW_DEVICES.map((d) => (
-            <Button
-              key={d}
-              size="compact"
-              variant="ghost"
-              on={device === d}
-              aria-pressed={device === d}
-              onClick={() => setDevice(d)}
-              data-preview-device={d}
-            >
-              {copy.workspace.design.devices[d]}
-            </Button>
-          ))}
-        </div>
         <Button
           size="compact"
           variant="ghost"
@@ -354,6 +339,21 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
             {fill(copy.workspace.run.firstTime, { agent: agentName })}
           </span>
         ) : null}
+        <div className={s['devices']} role="group" aria-label={copy.workspace.design.devicesLabel}>
+          {PREVIEW_DEVICES.map((d) => (
+            <Button
+              key={d}
+              size="compact"
+              variant="ghost"
+              on={device === d}
+              aria-pressed={device === d}
+              onClick={() => setDevice(d)}
+              data-preview-device={d}
+            >
+              {copy.workspace.design.devices[d]}
+            </Button>
+          ))}
+        </div>
       </div>
       {run !== null && (
         <div className={s['strip']} data-run-strip="true" data-open={open ? 'true' : 'false'}>

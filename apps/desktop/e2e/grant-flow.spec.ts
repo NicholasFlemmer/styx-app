@@ -6,7 +6,10 @@ import { launchStyx } from './launch';
  * (chat system line, board, inbox count, audit, target state, counters) — spec §4.1 / README "Interactions".
  */
 test('grant flow propagates through chat, counters, approvals, audit and targets; revoke locks again', async () => {
-  const { app, page } = await launchStyx({ screen: 'workspace', env: { STYX_MFA: 'auto', STYX_DEMO_REPOS: '0' } });
+  const { app, page } = await launchStyx({
+    screen: 'workspace',
+    env: { STYX_MFA: 'auto', STYX_DEMO_REPOS: '0' },
+  });
   await page.waitForSelector('[data-screen-ready="workspace"]');
 
   const needsYou = page.getByText(/02 needs you/i).first();
@@ -28,7 +31,7 @@ test('grant flow propagates through chat, counters, approvals, audit and targets
   await page.getByRole('tab', { name: /audit log/i }).click();
   await expect(page.getByText(/granted read\+write to Codex · 1h/)).toBeVisible();
 
-  await page.getByRole('button', { name: /^settings/i }).click();
+  await page.getByRole('button', { name: /^project settings/i }).click();
   await page.waitForSelector('[data-screen-ready="settings"]');
   const supabaseRow = page.getByRole('row', { name: /supabase/i }).first();
   await expect(supabaseRow.getByText(/open · (1h|\d+m) left/)).toBeVisible();
