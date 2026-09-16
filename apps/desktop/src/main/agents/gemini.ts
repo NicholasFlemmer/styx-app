@@ -11,22 +11,36 @@ const io = {
 };
 
 /**
- * Gemini CLI reads `<worktree>/.gemini/settings.json`; the styx MCP server is merged in and the file is kept out
- * of the repo via `.git/info/exclude`. The entry carries no env block — Gemini spawns MCP servers with its own
- * environment, which is the session env (`STYX_TOKEN` never touches the worktree) — and `cleanup` restores the file
- * to what it was before the session (or deletes it).
+ * Gemini CLI has two launches (ADR-0017):
  *
- * UNVERIFIED (2026-09-04): `gemini` is not installed on the verifying machine; `-m <model>` and
- * `-i/--prompt-interactive <prompt>` follow the Gemini CLI docs and were not checked with `--help`. Gemini stays on
- * the `pty` runner (ADR-0010): its headless mode is one-shot (`-p`) with no stream input, so idle/working comes from
- * pty output + the 3 s quiet timer.
+ * - **ACP** (`gemini --acp`, the `stream` runner) when DetectService saw `--acp` in the CLI's `--help`: JSON-RPC
+ *   over pipes, the styx MCP server handed over in `session/new.mcpServers`, so nothing is written into the
+ *   worktree. `-m <model>` is the launch model; live switches go through the protocol.
+ * - **pty fallback** for older builds: the TUI in xterm, the styx MCP server merged into
+ *   `<worktree>/.gemini/settings.json` (kept out of the repo via `.git/info/exclude`, no env block so `STYX_TOKEN`
+ *   never touches the worktree; `cleanup` restores the file). `-i/--prompt-interactive` carries the first message.
+ *
+ * UNVERIFIED (2026-09-16): `gemini` is not installed on the verifying machine; `--acp`, `-m` and `-i` follow the
+ * Gemini CLI docs (0.39) and were not checked with `--help`.
  */
 export async function geminiLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch> {
+  const args: string[] = [];
+  if (ctx.runner === 'stream' && ctx.capabilities['acp'] === true) {
+    args.push('--acp');
+    if (ctx.model) args.push('-m', ctx.model);
+    return {
+      command: ctx.binary,
+      args,
+      env: {},
+      typeFirstMessage: false,
+      stream: { kind: 'acp' },
+      cleanup: async () => undefined,
+    };
+  }
   const dir = join(ctx.worktreePath, '.gemini');
   const file = join(dir, 'settings.json');
   const written = await writeWorktreeMcpConfig(file, ctx, io, dir);
   await excludeLocally(ctx.worktreePath, '.gemini/settings.json');
-  const args: string[] = [];
   if (ctx.model) args.push('-m', ctx.model);
   if (ctx.firstMessage) args.push('-i', ctx.firstMessage);
   return { command: ctx.binary, args, env: {}, typeFirstMessage: false, cleanup: () => written.restore() };

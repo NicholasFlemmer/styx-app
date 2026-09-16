@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { copy } from '../copy';
+import type { Agent } from '../model/common';
 import { modelInfoSchema, type ModelInfo } from '../model/session';
+import type { ReadModel } from '../read-model';
 import {
   cliCandidateSchema,
   cliSourceSchema,
@@ -126,3 +128,7 @@ export const modelCatalogueOf = (cli: Pick<CliInstall, 'capabilities'> | null | 
   const r = z.array(modelInfoSchema).safeParse(cli.capabilities['models']);
   return r.success ? r.data : [];
 };
+
+/** The catalogue of the CLI detected for `agent` ([] when undetected or the CLI does not publish one). */
+export const modelCatalogueFor = (model: Pick<ReadModel, 'discovery'>, agent: Agent): ModelInfo[] =>
+  modelCatalogueOf(model.discovery.clis.find((c) => c.agent === agent));

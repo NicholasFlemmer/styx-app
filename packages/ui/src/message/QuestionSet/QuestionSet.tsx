@@ -17,6 +17,11 @@ export interface Question {
   /** Several options may be ticked; renders squares instead of dots. */
   multiSelect: boolean;
   options: readonly QuestionOption[];
+  /**
+   * The answer is a secret (Codex `requestUserInput.isSecret`): a masked input with no option chips, and once
+   * answered the card shows a mask, never the value.
+   */
+  secret?: boolean | undefined;
 }
 
 export interface QuestionAnswer {
@@ -36,9 +41,14 @@ export interface QuestionSetProps {
   header: string;
   submitLabel: string;
   freeTextPlaceholder: string;
+  /** Placeholder of a secret question's masked input (app: `copy.session.questions.secret`); defaults to `freeTextPlaceholder`. */
+  secretPlaceholder?: string;
   compact?: boolean;
   className?: string;
 }
+
+/** What a settled secret question shows in place of its answer (also what main stores for it). */
+const SECRET_MASK = '••••••';
 
 type Draft = Record<string, { chosen: string[]; freeText: string }>;
 
@@ -62,6 +72,7 @@ export function QuestionSet({
   header,
   submitLabel,
   freeTextPlaceholder,
+  secretPlaceholder,
   compact,
   className,
 }: QuestionSetProps) {
@@ -82,7 +93,7 @@ export function QuestionSet({
       return { ...d, [q.key]: { ...cur, chosen } };
     });
 
-  const setFreeText = (q: Question, e: ChangeEvent<HTMLTextAreaElement>) =>
+  const setFreeText = (q: Question, e: ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) =>
     setDraft((d) => ({
       ...d,
       [q.key]: { ...(d[q.key] ?? { chosen: [], freeText: '' }), freeText: e.target.value },
@@ -121,11 +132,28 @@ export function QuestionSet({
               {q.prompt}
             </div>
             {settled ? (
-              <div className={s['given']}>
+              <div className={s['given']} data-secret={q.secret ? 'true' : undefined}>
                 {given === null
                   ? ''
-                  : (given.freeText ?? (given.chosen.length > 0 ? given.chosen.join(', ') : ''))}
+                  : q.secret
+                    ? // Never the value, whatever was stored: the transcript is history other eyes read.
+                      given.freeText !== null || given.chosen.length > 0
+                      ? SECRET_MASK
+                      : ''
+                    : (given.freeText ?? (given.chosen.length > 0 ? given.chosen.join(', ') : ''))}
               </div>
+            ) : q.secret ? (
+              <input
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                className={s['free']}
+                placeholder={secretPlaceholder ?? freeTextPlaceholder}
+                aria-labelledby={labelId}
+                value={cur.freeText}
+                onChange={(e) => setFreeText(q, e)}
+                data-secret="true"
+              />
             ) : (
               <>
                 {q.options.length > 0 ? (

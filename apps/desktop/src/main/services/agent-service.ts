@@ -1,4 +1,4 @@
-import { copy, type Agent, type CliInstall } from '@styx/core';
+import { copy, type Agent, type CliInstall, type ModelInfo } from '@styx/core';
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { z } from 'zod';
@@ -6,6 +6,7 @@ import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
 import { fail } from '../ipc/bus';
 import type { Publisher } from '../store/publisher';
+import { probeCodexAppServer, type AppServerIdentity } from './app-server-client';
 import { logger } from './logger';
 import type { PtyService } from './pty-service';
 import type { TerminalService } from './terminal-service';
@@ -16,8 +17,17 @@ export interface AgentServiceDeps {
   clock: Clock;
   terminals: Pick<TerminalService, 'spawnCommand'>;
   pty: Pick<PtyService, 'on' | 'off'>;
-  /** Runs a CLI status command (`claude auth status --json` …); injectable so tests never spawn the real CLI. */
-  exec: (bin: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>;
+  /**
+   * Runs a CLI status command (`claude auth status --json` …); injectable so tests never spawn the real CLI. A
+   * runner that keeps stderr apart may hand it over separately; the parsers read both (Codex prints its status
+   * on stderr).
+   */
+  exec: (bin: string, args: string[]) => Promise<{ stdout: string; stderr?: string; exitCode: number }>;
+  /**
+   * Codex identity through `codex app-server` (`account/read` + `model/list`); null when that build has no working
+   * app-server, in which case `codex login status` is asked instead. Injectable so tests never spawn it.
+   */
+  appServer?: (bin: string) => Promise<AppServerIdentity | null>;
   openExternal: (url: string) => Promise<void>;
   home: string;
   env: NodeJS.ProcessEnv;
@@ -47,10 +57,14 @@ const INSTALL_GUIDES: Record<ConnectableAgent, string> = {
   cursor: 'https://cursor.com/docs/cli',
 };
 
-/** What a status probe learned. `account` is an identity label (email, "ChatGPT", "API key"), never a credential. */
+/**
+ * What a status probe learned. `account` is an identity label (email, "ChatGPT", "API key"), never a credential.
+ * `models` is the CLI's own catalogue when the probe could ask for one (Codex app-server).
+ */
 interface Probe {
   authState: 'signed-in' | 'signed-out';
   account: string | null;
+  models?: ModelInfo[];
 }
 
 const SIGNED_OUT: Probe = { authState: 'signed-out', account: null };
@@ -88,11 +102,12 @@ const parseClaude = (stdout: string): Probe => {
   return { authState: 'signed-in', account: r.data.email ?? r.data.authMethod ?? null };
 };
 
-const parseCodex = (stdout: string): Probe => {
-  if (/not logged in/i.test(stdout)) return SIGNED_OUT;
-  if (!/logged in/i.test(stdout)) throw new Error('unexpected `codex login status` output');
+/** `codex login status` prints "Logged in using ChatGPT" on **stderr** (codex 0.154.0); `text` is stdout + stderr. */
+const parseCodex = (text: string): Probe => {
+  if (/not logged in/i.test(text)) return SIGNED_OUT;
+  if (!/logged in/i.test(text)) throw new Error('unexpected `codex login status` output');
   // Only fixed labels reach the row: an unrecognised sign-in method shows as signed in with no account name.
-  const account = /chatgpt/i.test(stdout) ? 'ChatGPT' : /api key/i.test(stdout) ? 'API key' : null;
+  const account = /chatgpt/i.test(text) ? 'ChatGPT' : /api key/i.test(text) ? 'API key' : null;
   return { authState: 'signed-in', account };
 };
 
@@ -104,11 +119,16 @@ const parseCursor = (stdout: string): Probe => {
 
 /**
  * Agent connections (Settings › App › Agents): verifies who each CLI is signed in as through the CLI's own status
- * command, runs its sign-in in a pty the renderer attaches to, and opens its install guide. Only identity labels
- * are stored (`account`); tokens stay with the CLI and never cross this service.
+ * command (Codex: its app-server's `account/read`, which also yields the model catalogue), runs its sign-in in a
+ * pty the renderer attaches to, and opens its install guide. Only identity labels are stored (`account`); tokens
+ * stay with the CLI and never cross this service.
  */
 export class AgentService {
-  constructor(private readonly deps: AgentServiceDeps) {}
+  private readonly appServer: (bin: string) => Promise<AppServerIdentity | null>;
+
+  constructor(private readonly deps: AgentServiceDeps) {
+    this.appServer = deps.appServer ?? ((bin) => probeCodexAppServer(bin, { env: deps.env }));
+  }
 
   /**
    * Re-checks one CLI's sign-in and persists `account` / `verifiedAt` / `verifyError`. Not-installed rows come back
@@ -122,8 +142,18 @@ export class AgentService {
     if (!row.found || row.binary === null) return row;
     let next: CliInstall;
     try {
-      const probe = await this.probe(agent, row.binary);
-      next = { ...row, authState: probe.authState, account: probe.account, verifyError: null };
+      const probe = await this.probe(agent, row.binary, row.capabilities);
+      next = {
+        ...row,
+        authState: probe.authState,
+        account: probe.account,
+        verifyError: null,
+        // The CLI's own model list rides on the row so the composer's pickers fit the agent (same key the
+        // session `catalogue` effect writes).
+        ...(probe.models !== undefined
+          ? { capabilities: { ...row.capabilities, models: probe.models } }
+          : {}),
+      };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       logger.warn('agent: verify failed', { agent, error: message });
@@ -170,17 +200,28 @@ export class AgentService {
     await this.deps.openExternal(INSTALL_GUIDES[agent]);
   }
 
-  private async probe(agent: ConnectableAgent, binary: string): Promise<Probe> {
+  private async probe(
+    agent: ConnectableAgent,
+    binary: string,
+    capabilities: CliInstall['capabilities'],
+  ): Promise<Probe> {
     if (agent === 'gemini') return this.probeGemini();
+    if (agent === 'codex' && capabilities['appServer'] === true) {
+      // ADR-0016: the app-server names the account (email · plan) and the models; an older build without one
+      // (probe → null) is asked the old way below.
+      const identity = await this.appServer(binary);
+      if (identity !== null) return identity;
+    }
     const r = await this.deps.exec(binary, STATUS_ARGS[agent]);
     if (r.exitCode !== 0) return SIGNED_OUT;
+    const text = r.stderr !== undefined && r.stderr !== '' ? `${r.stdout}\n${r.stderr}` : r.stdout;
     switch (agent) {
       case 'claude':
-        return parseClaude(r.stdout);
+        return parseClaude(text);
       case 'codex':
-        return parseCodex(r.stdout);
+        return parseCodex(text);
       case 'cursor':
-        return parseCursor(r.stdout);
+        return parseCursor(text);
     }
   }
 

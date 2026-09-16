@@ -1,7 +1,5 @@
 import {
   BUILTIN_POLICY_IDS,
-  EFFORTS,
-  MODEL_ALIASES,
   PERMISSION_MODES,
   cliAlternatives,
   cliCandidateLabel,
@@ -11,6 +9,7 @@ import {
   DEFAULT_PROJECT_SETTINGS,
   fill,
   formatChord,
+  modelCatalogueFor,
   platformCopy,
   projectSettingsOf,
   type Agent,
@@ -22,6 +21,12 @@ import {
   type ReadModel,
 } from '@styx/core';
 import { shortcuts } from '@styx/tokens';
+import {
+  decodeEffort,
+  effortOptionsFor,
+  modelOptionsFor,
+  takesEffort,
+} from '../../features/chat/session-controls';
 import type { SettingsSection } from './sections';
 
 /** What a row's Select dispatches. `fixed` rows are informational (engine, store, shortcuts …). */
@@ -338,29 +343,45 @@ const shortcutsRows = (ctx: RowContext): SettingsRow[] => {
   ];
 };
 
-/** Permission mode / Model / Effort option lists (Claude Code parity, discrepancy #54). */
+/** Permission mode option list (Claude Code parity, discrepancy #54); main maps a mode onto each CLI (#83). */
 const PERMISSION_MODE_OPTIONS: readonly RowOption[] = optionsOf(
   copy.session.permissionModes,
   PERMISSION_MODES,
 );
-const EFFORT_OPTIONS: readonly RowOption[] = [
-  { value: MODEL_DEFAULT, label: copy.session.efforts.default },
-  ...optionsOf(copy.session.efforts, EFFORTS),
-];
 
 const agentDefaultsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
   const r = copy.settings.rows;
   const v = copy.settings.values;
   const eff = ctx.projectId === null ? null : projectSettingsOf(model, ctx.projectId);
+  const agent = eff?.defaultAgent.value ?? DEFAULT_PROJECT_SETTINGS.defaultAgent;
   const currentModel = eff?.model.value ?? DEFAULT_PROJECT_SETTINGS.model;
-  // `Default` (prototype) + the CLI aliases; a full model name already in project.json stays selectable.
-  const modelOptions: RowOption[] = [
-    { value: MODEL_DEFAULT, label: v.modelDefault },
-    ...optionsOf(copy.session.models, MODEL_ALIASES),
-  ];
-  if (currentModel !== null && !modelOptions.some((o) => o.value === currentModel)) {
-    modelOptions.push({ value: currentModel, label: currentModel });
-  }
+  const currentEffort = eff?.effort.value ?? DEFAULT_PROJECT_SETTINGS.effort;
+  // The default agent's own lists (discrepancy #83): `Default` (prototype) then Claude's aliases or the
+  // catalogue its CLI published; a model already in project.json that neither lists stays selectable.
+  const catalogue = modelCatalogueFor(model, agent);
+  const modelOptions: RowOption[] = modelOptionsFor(agent, currentModel, catalogue).map((o) =>
+    o.value === MODEL_DEFAULT
+      ? { value: o.value, label: v.modelDefault }
+      : { value: o.value, label: o.label },
+  );
+  const effortOptions: RowOption[] = effortOptionsFor(agent, currentModel, catalogue, currentEffort).map(
+    ({ value, label }) => ({ value, label }),
+  );
+  const effortRow: SettingsRow[] = takesEffort(agent)
+    ? [
+        projectRow(
+          model,
+          ctx,
+          'effort',
+          r.effort,
+          'effort',
+          (e) => e ?? MODEL_DEFAULT,
+          decodeEffort,
+          effortOptions,
+          true,
+        ),
+      ]
+    : [];
   return [
     projectRow(
       model,
@@ -409,20 +430,7 @@ const agentDefaultsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => 
       PERMISSION_MODE_OPTIONS,
       true,
     ),
-    projectRow(
-      model,
-      ctx,
-      'effort',
-      r.effort,
-      'effort',
-      (e) => e ?? MODEL_DEFAULT,
-      (e) =>
-        EFFORTS.includes(e as NonNullable<ProjectSettings['effort']>)
-          ? (e as ProjectSettings['effort'])
-          : null,
-      EFFORT_OPTIONS,
-      true,
-    ),
+    ...effortRow,
   ];
 };
 

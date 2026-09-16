@@ -114,7 +114,9 @@ describe('connect helpers', () => {
     expect(keyFormValid({ name: 'acme-prod', accessKey: 'AKIA', secret: '' })).toBe(false);
     expect(keyFormValid({ name: 'acme-prod', accessKey: 'AKIA', secret: 's' })).toBe(true);
     expect(sshFormValid({ host: 'h', user: 'u', keyPath: '', port: '', passphrase: '' })).toBe(false);
-    expect(sshFormValid({ host: 'h', user: 'u', keyPath: '~/.ssh/id_ed25519', port: '', passphrase: '' })).toBe(true);
+    expect(
+      sshFormValid({ host: 'h', user: 'u', keyPath: '~/.ssh/id_ed25519', port: '', passphrase: '' }),
+    ).toBe(true);
   });
 });
 
@@ -165,7 +167,7 @@ describe('spawn helpers', () => {
     expect(existing.worktree).toEqual({ kind: 'existing', worktreeId: fixtures.ids.worktree.fixCheckout });
   });
 
-  it('Claude session settings ride along; other agents fall back to the CLI defaults (discrepancy #54)', () => {
+  it('session settings ride along for every agent but the shell (discrepancies #54, #83)', () => {
     expect(defaultSessionSettings(model, acme)).toEqual({
       permissionMode: 'default',
       model: null,
@@ -173,12 +175,10 @@ describe('spawn helpers', () => {
     });
     const chosen = { permissionMode: 'plan' as const, model: 'opus', effort: 'high' as const };
     expect(sessionSettingsFor('claude', chosen)).toEqual(chosen);
-    expect(sessionSettingsFor('cursor', chosen)).toEqual({
-      permissionMode: 'default',
-      model: 'opus',
-      effort: null,
-    });
-    expect(sessionSettingsFor('codex', chosen)).toEqual({
+    // The modal has already reconciled model / effort against the agent's lists; main maps the mode.
+    expect(sessionSettingsFor('cursor', chosen)).toEqual(chosen);
+    expect(sessionSettingsFor('codex', chosen)).toEqual(chosen);
+    expect(sessionSettingsFor('shell', chosen)).toEqual({
       permissionMode: 'default',
       model: null,
       effort: null,

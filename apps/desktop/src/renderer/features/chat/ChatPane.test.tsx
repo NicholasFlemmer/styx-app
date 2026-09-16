@@ -3,6 +3,8 @@ import {
   copy,
   fixtures,
   upsertRows,
+  type AskQuestion,
+  type ModelInfo,
   type ProjectId,
   type ReadModel,
   type Session,
@@ -20,6 +22,59 @@ const claude = fixtures.ids.session.claude as SessionId;
 const codex = fixtures.ids.session.codex as SessionId;
 
 const flush = () => act(async () => {});
+
+/** Codex `model/list` as the app-server runner stores it on the CLI row (docs/research/agent-parity.md §2.4). */
+const CODEX_MODELS: ModelInfo[] = [
+  {
+    id: 'gpt-6-astra',
+    label: 'GPT-6 Astra',
+    description: null,
+    efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+    defaultEffort: 'low',
+    isDefault: true,
+    hidden: false,
+  },
+  {
+    id: 'gpt-5.5',
+    label: 'GPT-5.5',
+    description: null,
+    efforts: ['low', 'medium', 'high', 'xhigh'],
+    defaultEffort: 'xhigh',
+    isDefault: false,
+    hidden: false,
+  },
+];
+
+/** The demo Codex session moved onto the app-server: stream runner, idle, a model and effort set, tokens counted. */
+const codexLive = (patch: Partial<Session> = {}): ReadModel => {
+  const model = fixtures.demoReadModel();
+  const s = model.sessions.byId[codex];
+  if (s === undefined) throw new Error('fixture');
+  return {
+    ...model,
+    discovery: {
+      ...model.discovery,
+      clis: model.discovery.clis.map((c) =>
+        c.agent === 'codex'
+          ? { ...c, capabilities: { ...c.capabilities, appServer: true, models: CODEX_MODELS } }
+          : c,
+      ),
+    },
+    sessions: upsertRows(model.sessions, [
+      {
+        ...s,
+        runner: 'stream',
+        state: 'idle',
+        model: 'gpt-6-astra',
+        effort: 'ultra',
+        tokensUsed: 14574,
+        costUsd: 0,
+        numTurns: 1,
+        ...patch,
+      },
+    ]),
+  };
+};
 
 describe('transcript items', () => {
   it('maps the Codex transcript onto message kinds with lowercase scope labels', () => {
@@ -408,6 +463,141 @@ describe('ChatPane', () => {
       'claude-opus-4-1',
     ]);
     expect(screen.queryByRole('button', { name: 'Stop · esc' })).toBeNull();
+  });
+
+  it('Codex over its app-server: Codex mode hints, the catalogue as the model list, a live Effort that follows the model, tokens in the meta (discrepancy #83)', async () => {
+    useReadModel.getState().replaceModel(codexLive(), 'connected');
+    useUiStore.getState().setSession(acme, codex);
+    render(<ChatPane projectId={acme} />);
+    expect(screen.getByText('codex · test/flaky · 3m · 14.6k tokens · 1 turn')).toBeTruthy();
+    const mode = screen.getByRole('combobox', { name: 'Permissions' }) as HTMLSelectElement;
+    expect(mode.title).toBe(copy.session.permissionModeHintsByAgent.codex.default);
+    const modelSel = screen.getByRole('combobox', { name: 'Model' }) as HTMLSelectElement;
+    expect(modelSel.value).toBe('gpt-6-astra');
+    expect([...modelSel.options].map((o) => o.textContent)).toEqual(['Default', 'GPT-6 Astra', 'GPT-5.5']);
+    const effort = screen.getByRole('combobox', { name: 'Effort' }) as HTMLSelectElement;
+    expect(effort.value).toBe('ultra');
+    expect([...effort.options].map((o) => o.value)).toEqual([
+      'default',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+      'ultra',
+    ]);
+    fireEvent.change(effort, { target: { value: 'high' } });
+    fireEvent.change(modelSel, { target: { value: 'gpt-5.5' } });
+    fireEvent.change(mode, { target: { value: 'auto' } });
+    await flush();
+    expect(commands).toEqual([
+      { name: 'session.configure', input: { sessionId: codex, effort: 'high' } },
+      { name: 'session.configure', input: { sessionId: codex, model: 'gpt-5.5' } },
+      { name: 'session.configure', input: { sessionId: codex, permissionMode: 'auto' } },
+    ]);
+    // Once main applies the model, the effort list follows it (gpt-5.5 has no ultra); the effort still on the
+    // session stays visible rather than the select lying about it.
+    act(() => {
+      useReadModel
+        .getState()
+        .replaceModel(codexLive({ model: 'gpt-5.5', permissionMode: 'auto' }), 'connected');
+    });
+    const after = screen.getByRole('combobox', { name: 'Effort' }) as HTMLSelectElement;
+    expect([...after.options].map((o) => o.value)).toEqual([
+      'default',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'ultra',
+    ]);
+    expect((screen.getByRole('combobox', { name: 'Permissions' }) as HTMLSelectElement).title).toBe(
+      copy.session.permissionModeHintsByAgent.codex.auto,
+    );
+  });
+
+  it('a Codex session still on the pty keeps the static Model ▾ hint', () => {
+    useReadModel.getState().replaceModel(codexLive({ runner: 'pty' }), 'connected');
+    useUiStore.getState().setSession(acme, codex);
+    render(<ChatPane projectId={acme} />);
+    expect(screen.getByRole('button', { name: 'Model' })).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: 'Effort' })).toBeNull();
+  });
+
+  const secretQuestion: AskQuestion = {
+    key: 'token',
+    header: 'Deploy',
+    prompt: 'Paste the deploy token.',
+    multiSelect: false,
+    options: [],
+    secret: true,
+  };
+
+  /** A question-set ask on the Claude session holding one secret question, open or resolved with the stored mask. */
+  const withSecretAsk = (resolved: boolean): ReadModel => {
+    const model = fixtures.demoReadModel();
+    const base = model.transcripts[claude]?.[0];
+    const ask = model.pendingAsks.byId[fixtures.ids.ask.codexGrant];
+    if (base === undefined || ask === undefined) throw new Error('fixture');
+    const secretAsk = {
+      ...ask,
+      id: 'ask-secret' as typeof ask.id,
+      sessionId: claude,
+      kind: 'questions' as const,
+      grantId: null,
+      payload: { kind: 'questions' as const, questions: [secretQuestion] },
+      state: resolved ? ('resolved' as const) : ('open' as const),
+      resolution: resolved
+        ? { kind: 'questions' as const, answers: [{ key: 'token', chosen: [], freeText: '••••••' }] }
+        : null,
+    };
+    return {
+      ...model,
+      pendingAsks: upsertRows(model.pendingAsks, [secretAsk]),
+      transcripts: {
+        ...model.transcripts,
+        [claude]: [
+          {
+            ...base,
+            id: 'm-secret' as typeof base.id,
+            seq: 100,
+            body: '',
+            askId: secretAsk.id,
+            payload: { kind: 'questions', questions: [secretQuestion], answers: null },
+          },
+        ],
+      },
+    };
+  };
+
+  it('a secret question (Codex isSecret) renders as a masked input and answers through ask.respond (discrepancy #83)', async () => {
+    useReadModel.getState().replaceModel(withSecretAsk(false), 'connected');
+    render(<ChatPane projectId={acme} />);
+    const input = screen.getByPlaceholderText(copy.session.questions.secret) as HTMLInputElement;
+    expect(input.type).toBe('password');
+    expect(input.getAttribute('autocomplete')).toBe('off');
+    expect(screen.queryByRole('radio')).toBeNull();
+    fireEvent.change(input, { target: { value: 'hunter2' } });
+    fireEvent.click(screen.getByRole('button', { name: copy.session.questions.submit }));
+    await flush();
+    expect(commands).toEqual([
+      {
+        name: 'ask.respond',
+        input: {
+          askId: 'ask-secret',
+          resolution: { kind: 'questions', answers: [{ key: 'token', chosen: [], freeText: 'hunter2' }] },
+        },
+      },
+    ]);
+    expect(screen.queryByText('hunter2')).toBeNull();
+  });
+
+  it('a resolved secret question shows the mask main stored, never the value', () => {
+    useReadModel.getState().replaceModel(withSecretAsk(true), 'connected');
+    render(<ChatPane projectId={acme} />);
+    expect(screen.queryByPlaceholderText(copy.session.questions.secret)).toBeNull();
+    expect(screen.getByText('••••••')).toBeTruthy();
+    expect(document.querySelector('[data-kind="questions"][data-settled="true"]')).not.toBeNull();
   });
 
   it('answered decision rows are settled: options disabled and the choice inverted', () => {

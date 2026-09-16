@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { copy, fixtures } from '@styx/core';
+import { copy, fixtures, type ModelInfo } from '@styx/core';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
@@ -8,6 +8,42 @@ import { plainFolderReadModel } from '../../test-support/plain-folder';
 import { SpawnModal } from './SpawnModal';
 
 const acme = fixtures.ids.project.acmeShop;
+
+/** The Codex CLI row once the app-server runner has stored `model/list` (docs/research/agent-parity.md §2.4). */
+const CODEX_MODELS: ModelInfo[] = [
+  {
+    id: 'gpt-6-astra',
+    label: 'GPT-6 Astra',
+    description: null,
+    efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+    defaultEffort: 'low',
+    isDefault: true,
+    hidden: false,
+  },
+  {
+    id: 'gpt-5.5',
+    label: 'GPT-5.5',
+    description: null,
+    efforts: ['low', 'medium', 'high', 'xhigh'],
+    defaultEffort: 'xhigh',
+    isDefault: false,
+    hidden: false,
+  },
+];
+const withCodexCatalogue = () => {
+  const model = fixtures.demoReadModel();
+  return {
+    ...model,
+    discovery: {
+      ...model.discovery,
+      clis: model.discovery.clis.map((c) =>
+        c.agent === 'codex'
+          ? { ...c, capabilities: { ...c.capabilities, appServer: true, models: CODEX_MODELS } }
+          : c,
+      ),
+    },
+  };
+};
 const commandMock = vi.fn(async (name: string, _input?: unknown) => {
   if (name === 'session.spawn')
     return { ok: true as const, value: { sessionId: 'session-new', worktreeId: 'wt-new' } };
@@ -200,19 +236,59 @@ describe('SpawnModal', () => {
     });
   });
 
-  it('Cursor shows only Model; Codex shows no session settings and spawns with CLI defaults', async () => {
+  it('the tile drives the lists: Cursor keeps Permissions + Model (ACP has no effort); Codex lists its catalogue and reconciles picks (discrepancy #83)', async () => {
+    useReadModel.getState().replaceModel(withCodexCatalogue(), 'connected');
     render(<SpawnModal id="modal-1" projectId={acme} />);
     fireEvent.change(screen.getByLabelText(copy.chat.controls.model), { target: { value: 'opus' } });
+    fireEvent.change(screen.getByLabelText(copy.chat.controls.effort), { target: { value: 'max' } });
     fireEvent.click(screen.getByRole('radio', { name: /^Cursor/ }));
-    expect(screen.queryByLabelText(copy.chat.controls.permissions)).toBeNull();
+    expect(screen.getByLabelText(copy.chat.controls.permissions)).toBeTruthy();
+    expect(screen.getByText(copy.session.permissionModeHintsByAgent.cursor.default)).toBeTruthy();
     expect(screen.queryByLabelText(copy.chat.controls.effort)).toBeNull();
-    expect((screen.getByLabelText(copy.chat.controls.model) as HTMLSelectElement).value).toBe('opus');
+    // Cursor has no alias list: the Claude pick resets to the CLI default rather than riding along.
+    const cursorModel = screen.getByLabelText(copy.chat.controls.model) as HTMLSelectElement;
+    expect(cursorModel.value).toBe('default');
+    expect([...cursorModel.options].map((o) => o.value)).toEqual(['default']);
     fireEvent.click(screen.getByRole('radio', { name: /^Codex/ }));
-    expect(document.querySelector('[data-spawn-settings]')).toBeNull();
+    expect(screen.getByText(copy.session.permissionModeHintsByAgent.codex.default)).toBeTruthy();
+    const codexModel = screen.getByLabelText(copy.chat.controls.model) as HTMLSelectElement;
+    expect([...codexModel.options].map((o) => o.textContent)).toEqual([
+      'Default model',
+      'GPT-6 Astra',
+      'GPT-5.5',
+    ]);
+    const efforts = () =>
+      [...(screen.getByLabelText(copy.chat.controls.effort) as HTMLSelectElement).options].map(
+        (o) => o.value,
+      );
+    expect(efforts()).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
+    fireEvent.change(screen.getByLabelText(copy.chat.controls.effort), { target: { value: 'ultra' } });
+    fireEvent.change(codexModel, { target: { value: 'gpt-5.5' } });
+    // gpt-5.5 has no ultra: the list shrinks and the pick drops back to the default.
+    expect(efforts()).toEqual(['default', 'low', 'medium', 'high', 'xhigh']);
+    expect((screen.getByLabelText(copy.chat.controls.effort) as HTMLSelectElement).value).toBe('default');
+    fireEvent.change(screen.getByLabelText(copy.chat.controls.effort), { target: { value: 'xhigh' } });
+    fireEvent.change(screen.getByLabelText(copy.chat.controls.permissions), { target: { value: 'plan' } });
+    expect(screen.getByText(copy.session.permissionModeHintsByAgent.codex.plan)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Spawn · ⌘⏎' }));
     await waitFor(() => expect(calls('session.spawn')).toHaveLength(1));
     expect(calls('session.spawn')[0]?.[1]).toMatchObject({
       agent: 'codex',
+      model: 'gpt-5.5',
+      permissionMode: 'plan',
+      effort: 'xhigh',
+    });
+  });
+
+  it('the Shell tile shows no session settings and spawns with the defaults', async () => {
+    render(<SpawnModal id="modal-1" projectId={acme} />);
+    fireEvent.change(screen.getByLabelText(copy.chat.controls.model), { target: { value: 'opus' } });
+    fireEvent.click(screen.getByRole('radio', { name: /^Shell/ }));
+    expect(document.querySelector('[data-spawn-settings]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Spawn · ⌘⏎' }));
+    await waitFor(() => expect(calls('session.spawn')).toHaveLength(1));
+    expect(calls('session.spawn')[0]?.[1]).toMatchObject({
+      agent: 'shell',
       model: null,
       permissionMode: 'default',
       effort: null,

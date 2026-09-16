@@ -114,6 +114,51 @@ describe('QuestionSet', () => {
     expect(screen.getByText('ship it')).toBeTruthy();
   });
 
+  it('a secret question is a masked input with no options, and its answer is never echoed once settled', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const secret: Question = {
+      key: 'token',
+      header: 'Deploy',
+      prompt: 'Paste the deploy token.',
+      multiSelect: false,
+      options: [{ label: 'Skip' }],
+      secret: true,
+    };
+    const { unmount } = render(
+      <QuestionSet
+        {...props}
+        header="1 question"
+        secretPlaceholder="Secret · kept out of the transcript"
+        questions={[secret]}
+        onSubmit={onSubmit}
+      />,
+    );
+    expect(screen.queryByRole('radio')).toBeNull();
+    const input = screen.getByPlaceholderText('Secret · kept out of the transcript') as HTMLInputElement;
+    expect(input.type).toBe('password');
+    expect(input.getAttribute('autocomplete')).toBe('off');
+    expect(input.getAttribute('spellcheck')).toBe('false');
+    expect(screen.queryByPlaceholderText(props.freeTextPlaceholder)).toBeNull();
+    await user.type(input, 'hunter2');
+    await user.click(screen.getByRole('button', { name: 'Send answers' }));
+    expect(onSubmit).toHaveBeenCalledWith([{ key: 'token', chosen: [], freeText: 'hunter2' }]);
+    unmount();
+    // Settled: main stores the mask; the card shows a mask even if something else came back.
+    render(
+      <QuestionSet
+        {...props}
+        header="1 question"
+        questions={[secret]}
+        answers={[{ key: 'token', chosen: [], freeText: 'hunter2' }]}
+        onSubmit={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText('hunter2')).toBeNull();
+    expect(screen.getByText('••••••')).toBeTruthy();
+    expect(document.querySelector('[data-secret="true"]')?.textContent).toBe('••••••');
+  });
+
   it('disabled (resolved elsewhere) hides the controls too', () => {
     render(<QuestionSet {...props} questions={[single]} disabled onSubmit={vi.fn()} />);
     expect(screen.queryByRole('radio')).toBeNull();

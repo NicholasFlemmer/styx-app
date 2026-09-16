@@ -1,0 +1,200 @@
+#!/usr/bin/env node
+'use strict';
+/**
+ * Fake Gemini CLI for the e2e suite (shadowed onto PATH by e2e/launch.ts) so a spawned Gemini session never
+ * launches the real CLI. `--version` and `--help` answer DetectService (the help mentions `--acp`, which routes
+ * the session to the ACP stream runner); `--acp` runs a scripted Agent Client Protocol agent over stdio:
+ *
+ *   initialize            → v1, loadSession true, no image input, no auth methods
+ *   session/new | load    → sess_fake with Gemini's four approval modes
+ *   session/set_mode      → {} (the id is remembered and echoed as current_mode_update)
+ *   session/prompt        → streams "pong", then a tool call (kind execute) that first asks permission
+ *                           (request id 100) and only continues once Styx answers; completed → end_turn
+ *   session/cancel        → the running prompt ends with stopReason cancelled
+ *   anything else         → -32601
+ */
+const args = process.argv.slice(2);
+if (args.includes('--version')) {
+  process.stdout.write('0.39.1\n');
+  process.exit(0);
+}
+if (args.includes('--help')) {
+  process.stdout.write(
+    [
+      'Usage: gemini [options] [command]',
+      '',
+      'Gemini CLI - Launch an interactive CLI, use -p/--prompt for non-interactive mode',
+      '',
+      'Options:',
+      '  -m, --model                 Model                                        [string]',
+      '  -p, --prompt                Prompt. Appended to input on stdin (if any). [string]',
+      '  -i, --prompt-interactive    Execute the provided prompt and continue in interactive mode',
+      '  --approval-mode             Set the approval mode: default, auto_edit, yolo, plan',
+      '  --acp                       Starts the agent in ACP mode                 [boolean]',
+      '  -h, --help                  Show help                                    [boolean]',
+      '  -v, --version               Show version number                         [boolean]',
+      '',
+    ].join('\n'),
+  );
+  process.exit(0);
+}
+if (!args.includes('--acp')) {
+  process.stderr.write('fake gemini: only --acp is scripted here\n');
+  process.exit(2);
+}
+
+const SESSION = 'sess_fake';
+const MODES = [
+  { id: 'default', name: 'Default', description: 'Prompts for approval' },
+  { id: 'auto_edit', name: 'Auto Edit', description: 'Auto-approves edit tools' },
+  { id: 'yolo', name: 'YOLO', description: 'Auto-approves all tools' },
+  { id: 'plan', name: 'Plan', description: 'Read-only mode' },
+];
+let currentModeId = 'default';
+let nextRequestId = 100;
+let turns = 0;
+let cancelled = false;
+/** Answers Styx owes the agent, by request id. */
+const answers = new Map();
+
+const write = (m) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...m })}\n`);
+const respond = (id, result) => write({ id, result });
+const error = (id, code, message) => write({ id, error: { code, message } });
+const update = (u) => write({ method: 'session/update', params: { sessionId: SESSION, update: u } });
+const ask = (method, params) =>
+  new Promise((resolve) => {
+    const id = nextRequestId++;
+    answers.set(id, resolve);
+    write({ id, method, params });
+  });
+const tick = () => new Promise((r) => setTimeout(r, 15));
+
+async function prompt(msg) {
+  cancelled = false;
+  const text = (msg.params.prompt || []).map((b) => (b.type === 'text' ? b.text : '')).join('');
+  update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'po' } });
+  await tick();
+  update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'ng' } });
+  await tick();
+  if (cancelled) return respond(msg.id, { stopReason: 'cancelled' });
+  if (/^\/help/.test(text)) {
+    update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '\n\nCommands: /help /memory' } });
+    return respond(msg.id, { stopReason: 'end_turn' });
+  }
+  turns += 1;
+  const toolCallId = `call_echo_${turns}`;
+  update({
+    sessionUpdate: 'tool_call',
+    toolCallId,
+    title: 'echo pong',
+    kind: 'execute',
+    status: 'pending',
+    rawInput: { command: 'echo pong' },
+  });
+  const decision =
+    currentModeId === 'yolo'
+      ? { outcome: { outcome: 'selected', optionId: 'proceed_once' } }
+      : await ask('session/request_permission', {
+          sessionId: SESSION,
+          toolCall: { toolCallId, title: 'echo pong', kind: 'execute', rawInput: { command: 'echo pong' } },
+          options: [
+            { optionId: 'proceed_once', name: 'Allow', kind: 'allow_once' },
+            { optionId: 'proceed_always', name: 'Allow for this session', kind: 'allow_always' },
+            { optionId: 'cancel', name: 'Reject', kind: 'reject_once' },
+          ],
+        });
+  const allowed = decision && decision.outcome && String(decision.outcome.optionId || '').startsWith('proceed');
+  if (cancelled) {
+    update({ sessionUpdate: 'tool_call_update', toolCallId, status: 'failed' });
+    return respond(msg.id, { stopReason: 'cancelled' });
+  }
+  if (!allowed) {
+    update({
+      sessionUpdate: 'tool_call_update',
+      toolCallId,
+      status: 'failed',
+      content: [{ type: 'content', content: { type: 'text', text: 'rejected by the user' } }],
+    });
+    update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '\n\nSkipped the command.' } });
+    return respond(msg.id, { stopReason: 'end_turn' });
+  }
+  update({ sessionUpdate: 'tool_call_update', toolCallId, status: 'in_progress' });
+  await tick();
+  update({
+    sessionUpdate: 'tool_call_update',
+    toolCallId,
+    status: 'completed',
+    content: [{ type: 'content', content: { type: 'text', text: 'pong\n' } }],
+  });
+  update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '\n\nDone: the command printed pong.' } });
+  respond(msg.id, { stopReason: 'end_turn' });
+}
+
+function handle(msg) {
+  if (msg.method === undefined && msg.id !== undefined) {
+    const resolve = answers.get(msg.id);
+    if (resolve) {
+      answers.delete(msg.id);
+      resolve(msg.error ? null : msg.result);
+    }
+    return;
+  }
+  switch (msg.method) {
+    case 'initialize':
+      return respond(msg.id, {
+        protocolVersion: 1,
+        agentCapabilities: {
+          loadSession: true,
+          promptCapabilities: { image: false, audio: false, embeddedContext: true },
+          mcpCapabilities: { http: false, sse: false },
+        },
+        agentInfo: { name: 'fake-gemini', version: '0.39.1' },
+        authMethods: [],
+      });
+    case 'session/new':
+    case 'session/load': {
+      const result = { modes: { currentModeId, availableModes: MODES } };
+      respond(msg.id, msg.method === 'session/new' ? { sessionId: SESSION, ...result } : result);
+      update({
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [
+          { name: 'help', description: 'Show help' },
+          { name: 'memory', description: 'Manage memory' },
+        ],
+      });
+      return;
+    }
+    case 'session/set_mode':
+      if (!MODES.some((m) => m.id === msg.params.modeId)) return error(msg.id, -32602, 'unknown mode');
+      currentModeId = msg.params.modeId;
+      respond(msg.id, {});
+      return update({ sessionUpdate: 'current_mode_update', currentModeId });
+    case 'session/prompt':
+      return void prompt(msg);
+    case 'session/cancel':
+      cancelled = true;
+      return;
+    default:
+      if (msg.id !== undefined) error(msg.id, -32601, 'Method not found');
+  }
+}
+
+let buffer = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => {
+  buffer += chunk;
+  let nl = buffer.indexOf('\n');
+  while (nl >= 0) {
+    const line = buffer.slice(0, nl);
+    buffer = buffer.slice(nl + 1);
+    if (line.trim()) {
+      try {
+        handle(JSON.parse(line));
+      } catch (e) {
+        process.stderr.write(`fake gemini: ${e.message}\n`);
+      }
+    }
+    nl = buffer.indexOf('\n');
+  }
+});
+process.stdin.on('end', () => process.exit(0));

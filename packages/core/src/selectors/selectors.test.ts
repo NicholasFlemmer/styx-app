@@ -313,8 +313,12 @@ describe('chat', () => {
   it('chat meta appends "$cost · n turns" once a stream session reports usage (discrepancy #54)', () => {
     expect(usageLabel({ costUsd: 0, numTurns: 0 })).toBeNull();
     expect(usageLabel({ costUsd: 0.1234, numTurns: 3 })).toBe('$0.12 · 3 turns');
-    expect(usageLabel({ costUsd: 0, numTurns: 1 })).toBe('$0.00 · 1 turns');
+    // No dollars and no tokens reported (ACP agents): turns alone, never a made-up "$0.00".
+    expect(usageLabel({ costUsd: 0, numTurns: 1 })).toBe('1 turn');
     expect(usageLabel({ costUsd: 0.005, numTurns: 0 })).toBe('$0.01 · 0 turns');
+    // Codex on a ChatGPT plan counts tokens, not dollars (discrepancy #83).
+    expect(usageLabel({ costUsd: 0, numTurns: 1, tokensUsed: 14574 })).toBe('14.6k tokens · 1 turn');
+    expect(usageLabel({ costUsd: 0, numTurns: 3, tokensUsed: 14574 })).toBe('14.6k tokens · 3 turns');
     expect(formatCost(2)).toBe('$2.00');
     const used = withSession(model, { id: ids.session.claude, costUsd: 0.1234, numTurns: 3 });
     expect(chatMeta(used, ids.session.claude, NOW)).toBe('claude · fix/checkout · 14m · $0.12 · 3 turns');

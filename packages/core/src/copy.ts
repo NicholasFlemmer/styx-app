@@ -125,10 +125,11 @@ export const copy = {
       compacted: 'context compacted',
       modeChanged: 'permissions: {mode}',
       modelChanged: 'model: {model}',
-      /** Chat meta suffix once a stream session has reported usage. */
-      usage: '{cost} · {turns} turns',
+      /** Chat meta suffix once a stream session has reported usage; `{turns}` is `turns(n)`. */
+      usage: '{cost} · {turns}',
       /** CLIs that count tokens rather than dollars (Codex on a ChatGPT plan). */
-      usageTokens: '{tokens} tokens · {turns} turns',
+      usageTokens: '{tokens} tokens · {turns}',
+      turns: (n: number): string => (n === 1 ? '1 turn' : `${n} turns`),
       /** Short option labels for the 360px composer line (the long forms live in `session.*`; hints via title). */
       modeShort: {
         default: 'Ask',
@@ -197,6 +198,37 @@ export const copy = {
       dontAsk: 'Anything that would ask is denied instead.',
       auto: 'Claude decides what needs your approval.',
     },
+    /**
+     * The same six Styx modes, as each other CLI applies them (docs/research/agent-parity.md §5–§6). Codex maps
+     * a mode onto approval policy × sandbox; Gemini onto default / auto_edit / yolo / plan; Cursor onto
+     * agent / plan / ask. Modes an agent cannot express say so rather than promise a behaviour it lacks.
+     */
+    permissionModeHintsByAgent: {
+      codex: {
+        default: 'Edits inside the worktree run; commands that need the network or leave the worktree ask you here.',
+        acceptEdits: 'Same as Ask each time for Codex: edits in its sandbox never ask.',
+        plan: 'Read-only sandbox; the plan streams as Codex forms it.',
+        bypassPermissions: 'Nothing asks and there is no sandbox. Only for machines you trust.',
+        dontAsk: 'Anything that would ask fails back to Codex instead.',
+        auto: "Codex's own reviewer decides what runs.",
+      },
+      gemini: {
+        default: 'Every edit and command asks you here.',
+        acceptEdits: 'Edits run without asking (auto_edit); commands still ask.',
+        plan: "Gemini's plan mode, when enabled: read-only until you approve the plan.",
+        bypassPermissions: 'Gemini YOLO: every tool runs without asking. Only for sandboxes you trust.',
+        dontAsk: 'Gemini has no such mode; it becomes YOLO: every tool runs without asking.',
+        auto: 'Gemini has no reviewer; it becomes YOLO: every tool runs without asking.',
+      },
+      cursor: {
+        default: 'Agent mode: edits and commands ask you here.',
+        acceptEdits: 'Cursor has no edit-only mode: runs as Agent, where edits and commands ask you here.',
+        plan: 'Plan mode: read-only until you approve the plan.',
+        bypassPermissions: 'Cursor has no bypass: runs as Agent and still asks you here.',
+        dontAsk: 'Cursor has no such mode: runs as Agent and still asks you here.',
+        auto: 'Cursor has no reviewer: runs as Agent and still asks you here.',
+      },
+    },
     models: { default: 'Default model', fable: 'Fable', opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' },
     efforts: {
       default: 'Default effort',
@@ -220,6 +252,8 @@ export const copy = {
       header: (n: number): string => (n === 1 ? '1 question' : `${n} questions`),
       submit: 'Send answers',
       freeText: 'Or answer in your own words…',
+      /** Masked input of a secret question (Codex `isSecret`, discrepancy #83): the value never reaches the transcript. */
+      secret: 'Secret · kept out of the transcript',
       files: (n: number): string => (n === 1 ? '1 file' : `${n} files`),
     },
     tool: { running: '…', ok: '✓', error: '×' },
@@ -1078,6 +1112,35 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   },
 
   window: { popout: '⤢', dock: 'Dock', minimize: '─', maximize: '☐', close: '✕' },
+
+  /** Agent Client Protocol runner (Gemini CLI `--acp`, Cursor `agent acp`; ADR-0017): transcript and terminal lines. */
+  acpRunner: {
+    signInFirst: 'Sign in with {cli} first, then start the session again.',
+    authFailed: 'Sign-in through {cli} failed: {message}',
+    handshakeFailed: 'Could not start {cli} over ACP: {message}',
+    resumeFailed: 'Could not resume the earlier {cli} conversation ({message}); starting a new one.',
+    noModelSwitch: 'model switching is not offered by this agent',
+    noEffort: 'effort is not a setting this agent takes',
+    noMode: 'permissions: {mode} has no equivalent in this agent; still {current}',
+    modeMapped: 'permissions: {mode} → {agentMode} (closest this agent offers)',
+    modeFailed: 'permissions: {mode} was refused by the agent: {message}',
+    imagesDropped: 'this agent does not take images; {n} dropped',
+    promptFailed: 'prompt failed: {message}',
+    plan: 'Plan',
+  },
+
+  /** Codex app-server runner (ADR-0016): the lines it puts in the chat / terminal and the refusals it sends Codex. */
+  codexRunner: {
+    rateLimit: 'Codex {window} window {percent}% used · resets {resets}',
+    windowHours: '{n} h',
+    windowDays: '{n} d',
+    windowMinutes: '{n} min',
+    compacting: 'compacting context…',
+    reviewing: 'reviewing uncommitted changes…',
+    unsupported: '{method} is not supported by Styx',
+    mcpStartupFailed: 'styx MCP server failed to start: {error}',
+    willRetry: '{message} (Codex will retry)',
+  },
 
   general: {
     cancel: 'Cancel',

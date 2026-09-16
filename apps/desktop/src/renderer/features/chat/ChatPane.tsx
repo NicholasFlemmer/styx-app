@@ -5,8 +5,10 @@ import {
   copy,
   fill,
   headAskOf,
+  modelCatalogueFor,
   sessionTabs,
   type CommandInput,
+  type ModelInfo,
   type ProjectId,
   type ReadModel,
   type Session,
@@ -41,12 +43,15 @@ import { command } from '../../state/commands';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
 import s from './ChatPane.module.css';
 import {
+  decodeEffort,
   decodeModel,
   decodePermissionMode,
+  effortOptionsFor,
   encodeNullable,
   hasControls,
-  modelOptions,
-  permissionModeOptions,
+  modelOptionsFor,
+  permissionModeHint,
+  permissionModeOptionsFor,
   sessionControls,
 } from './session-controls';
 import {
@@ -73,14 +78,16 @@ export interface ChatPaneProps {
 const MODEL_LABEL = copy.chat.composer.model.replace(/\s*▾$/, '');
 
 /**
- * Live Claude Code controls in the composer hint row (owner addition, discrepancy #54): Permissions / Model /
- * Effort as t-label selects, `Stop · esc` mid-turn. Other agents keep the prototype's static `Model ▾` hint.
+ * Live session controls in the composer hint row (owner addition, discrepancies #54 / #83): Permissions / Model
+ * (/ Effort where it applies per turn) as t-label selects, `Stop · esc` mid-turn. The lists follow the session's
+ * agent: Claude's aliases, or the catalogue its CLI published (`capabilities.models`). A pty session keeps the
+ * prototype's static `Model ▾` hint.
  */
-function SessionControlsRow({ session }: { session: Session }) {
+function SessionControlsRow({ session, catalogue }: { session: Session; catalogue: readonly ModelInfo[] }) {
   const c = sessionControls(session);
   const configure = (patch: Omit<CommandInput<'session.configure'>, 'sessionId'>) =>
     void command('session.configure', { sessionId: session.id, ...patch });
-  const modeHint = copy.session.permissionModeHints[session.permissionMode];
+  const modeHint = permissionModeHint(session.agent, session.permissionMode);
   return (
     <>
       {c.mode && (
@@ -90,7 +97,10 @@ function SessionControlsRow({ session }: { session: Session }) {
           aria-label={copy.chat.controls.permissions}
           title={modeHint}
           value={session.permissionMode}
-          options={permissionModeOptions(true).map((o) => ({ value: o.value, label: o.label }))}
+          options={permissionModeOptionsFor(session.agent, true).map((o) => ({
+            value: o.value,
+            label: o.label,
+          }))}
           onChange={(e) => configure({ permissionMode: decodePermissionMode(e.currentTarget.value) })}
           data-session-control="permissionMode"
         />
@@ -102,9 +112,21 @@ function SessionControlsRow({ session }: { session: Session }) {
           aria-label={copy.chat.controls.model}
           title={copy.chat.controls.model}
           value={encodeNullable(session.model)}
-          options={modelOptions(session.model, true)}
+          options={modelOptionsFor(session.agent, session.model, catalogue, true)}
           onChange={(e) => configure({ model: decodeModel(e.currentTarget.value) })}
           data-session-control="model"
+        />
+      )}
+      {c.liveEffort && (
+        <Select
+          className={s['control'] ?? ''}
+          width="auto"
+          aria-label={copy.chat.controls.effort}
+          title={copy.chat.controls.effort}
+          value={encodeNullable(session.effort)}
+          options={effortOptionsFor(session.agent, session.model, catalogue, session.effort)}
+          onChange={(e) => configure({ effort: decodeEffort(e.currentTarget.value) })}
+          data-session-control="effort"
         />
       )}
       {c.pause && (
@@ -208,11 +230,17 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const popped = activeId !== null && model.popouts.includes(activeId);
   const placeholder = activeId === null ? '' : composerPlaceholder(model, activeId);
   const session = activeId === null ? null : (model.sessions.byId[activeId] ?? null);
+  const agent = session?.agent ?? null;
+  const clis = model.discovery.clis;
+  const catalogue = useMemo(
+    () => (agent === null ? [] : modelCatalogueFor({ discovery: { ides: [], clis } }, agent)),
+    [clis, agent],
+  );
   // Hidden under the e2e/visual harness: the prototype-baked `workspace` baseline has the static hint row and the
   // control row moved it by +0.37 % (discrepancy #54); the harness screenshots the fixture's working Claude session.
   const controls =
     session !== null && env().e2e !== true && hasControls(sessionControls(session)) ? (
-      <SessionControlsRow session={session} />
+      <SessionControlsRow session={session} catalogue={catalogue} />
     ) : undefined;
 
   useEffect(() => {
@@ -282,10 +310,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
     void command('ask.respond', { askId: item.askId, resolution: { kind: 'questions', answers } });
   };
 
-  const decidePlan = (
-    item: Extract<TranscriptItem, { kind: 'plan' }>,
-    outcome: 'approved' | 'rejected',
-  ) => {
+  const decidePlan = (item: Extract<TranscriptItem, { kind: 'plan' }>, outcome: 'approved' | 'rejected') => {
     if (item.askId === null) return;
     void command('ask.respond', { askId: item.askId, resolution: { kind: 'plan', outcome, note: null } });
   };
@@ -452,6 +477,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
             header={copy.session.questions.header(item.questions.length)}
             submitLabel={copy.session.questions.submit}
             freeTextPlaceholder={copy.session.questions.freeText}
+            secretPlaceholder={copy.session.questions.secret}
             compact={compact}
           />
         );

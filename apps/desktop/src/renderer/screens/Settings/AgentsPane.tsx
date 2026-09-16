@@ -82,8 +82,16 @@ export function AgentsPane({ children }: { children?: ReactNode }) {
               <TableCell mono muted>
                 {cliLocationLabel(cli)}
               </TableCell>
-              {/* A stale account on a row that is no longer installed is not an identity anyone can use. */}
-              <TableCell mono>{cli.found ? cliAccountLabel(cli) : copy.general.none}</TableCell>
+              {/* A stale account on a row that is no longer installed is not an identity anyone can use. The
+                  Codex verifier reports "email · plan", wider than the column: ellipsis, full text as title. */}
+              <TableCell
+                mono
+                className={s['account']}
+                title={cli.found ? cliAccountLabel(cli) : copy.general.none}
+                data-agent-account="true"
+              >
+                {cli.found ? cliAccountLabel(cli) : copy.general.none}
+              </TableCell>
               <TableCell mono muted className={s['state']} aria-busy={busy || undefined} aria-live="polite">
                 <StatusDot tone="hollow" on={!ready} />
                 <span>{stateText}</span>

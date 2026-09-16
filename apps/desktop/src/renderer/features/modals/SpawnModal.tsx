@@ -1,6 +1,7 @@
 import {
   copy,
   fill,
+  modelCatalogueFor,
   platformCopy,
   projectNameOf,
   projectSettingsOfOrDefault,
@@ -17,10 +18,13 @@ import {
   decodeEffort,
   decodeModel,
   decodePermissionMode,
-  effortOptions,
+  effortLevelsFor,
+  effortOptionsFor,
   encodeNullable,
-  modelOptions,
-  permissionModeOptions,
+  modelOptionsFor,
+  permissionModeHint,
+  permissionModeOptionsFor,
+  reconcileSessionSettings,
   spawnControlsFor,
 } from '../chat/session-controls';
 import {
@@ -86,12 +90,24 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
   const chosenTile = useRef<HTMLButtonElement>(null);
 
   const close = () => popOverlay(id);
+  /** The tile drives the model / effort lists: a pick the new agent does not offer resets to its default (#83). */
   const pickAgent = (agent: Agent) =>
-    setForm((f) => ({
-      ...f,
-      agent,
-      branch: branchTouched ? f.branch : autoBranchFor(model, projectId, agent),
-    }));
+    setForm((f) =>
+      reconcileSessionSettings(
+        agent,
+        { ...f, agent, branch: branchTouched ? f.branch : autoBranchFor(model, projectId, agent) },
+        modelCatalogueFor(model, agent),
+      ),
+    );
+  const catalogue = modelCatalogueFor(model, form.agent);
+  /** A model without the current effort (Codex `gpt-5.5` has no `ultra`) drops the effort back to default. */
+  const pickModel = (value: string) =>
+    setForm((f) => {
+      const next = { ...f, model: decodeModel(value) };
+      return next.effort !== null && !effortLevelsFor(f.agent, next.model, catalogue).includes(next.effort)
+        ? { ...next, effort: null }
+        : next;
+    });
   const missing = cliMissing(model, form.agent);
   /** Installed but signed out: warns without blocking (the CLI may still hold an API key Styx cannot see). */
   const notConnected = !missing && cliNotConnected(model, form.agent);
@@ -239,13 +255,14 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
         </div>
 
         {(settings.mode || settings.model || settings.effort) && (
-          // Claude Code session settings (owner addition, discrepancy #54): seeded from the project defaults.
+          // Session settings (owner addition, discrepancies #54 / #83): seeded from the project defaults; the
+          // lists and the mode hint follow the chosen tile (Claude's aliases, Codex's catalogue, ACP's modes).
           <div className={s['three']} data-spawn-settings="true">
             {settings.mode && (
               <Field
                 label={copy.chat.controls.permissions}
                 htmlFor={modeId}
-                hint={copy.session.permissionModeHints[form.permissionMode]}
+                hint={permissionModeHint(form.agent, form.permissionMode)}
               >
                 <Select
                   id={modeId}
@@ -255,7 +272,10 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
                   onChange={(e) =>
                     setForm({ ...form, permissionMode: decodePermissionMode(e.currentTarget.value) })
                   }
-                  options={permissionModeOptions().map((o) => ({ value: o.value, label: o.label }))}
+                  options={permissionModeOptionsFor(form.agent).map((o) => ({
+                    value: o.value,
+                    label: o.label,
+                  }))}
                 />
               </Field>
             )}
@@ -266,8 +286,8 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
                   className={s['worktree'] ?? ''}
                   width="100%"
                   value={encodeNullable(form.model)}
-                  onChange={(e) => setForm({ ...form, model: decodeModel(e.currentTarget.value) })}
-                  options={modelOptions(form.model)}
+                  onChange={(e) => pickModel(e.currentTarget.value)}
+                  options={modelOptionsFor(form.agent, form.model, catalogue)}
                 />
               </Field>
             )}
@@ -279,7 +299,7 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
                   width="100%"
                   value={encodeNullable(form.effort)}
                   onChange={(e) => setForm({ ...form, effort: decodeEffort(e.currentTarget.value) })}
-                  options={effortOptions()}
+                  options={effortOptionsFor(form.agent, form.model, catalogue, form.effort)}
                 />
               </Field>
             )}

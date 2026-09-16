@@ -8,6 +8,13 @@
     line-height: 1.5;
     max-width: 460px;
   }
+  /* Account column: "email · plan" from the Codex verifier outgrows 1.2fr; clip with an ellipsis (title = full). */
+  .account {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   /* State column: prototype Targets recipe (11.5px mono) with the dot in front. */
   .state {
     display: flex;

@@ -76,3 +76,34 @@ export const Answered: Story = {
 
 /** The ask was resolved or cancelled elsewhere (the board, the CLI). */
 export const Disabled: Story = { args: { ...args, questions: single, disabled: true } };
+
+const secret: Question[] = [
+  {
+    key: 'token',
+    header: 'Deploy',
+    prompt: 'Paste the Vercel deploy token for this run.',
+    multiSelect: false,
+    options: [],
+    secret: true,
+  },
+];
+
+/** Codex `requestUserInput` with `isSecret`: a masked input, no option chips, the value never reaches the transcript. */
+export const Secret: Story = {
+  args: {
+    ...args,
+    header: '1 question',
+    questions: secret,
+    secretPlaceholder: 'Secret · kept out of the transcript',
+  },
+};
+
+/** Settled secret: the card shows the mask main stored, never the value. */
+export const SecretAnswered: Story = {
+  args: {
+    ...args,
+    header: '1 question',
+    questions: secret,
+    answers: [{ key: 'token', chosen: [], freeText: '••••••' }],
+  },
+};

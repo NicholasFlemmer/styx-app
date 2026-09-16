@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { makeTestApp } from '../test-support';
 import { AgentService } from './agent-service';
+import type { AppServerIdentity } from './app-server-client';
 import { PtyService } from './pty-service';
 
 /** In-memory pty: records spawns, lets the test end the login command (same shape as target-cli.test.ts). */
@@ -57,17 +58,26 @@ class FakePty extends PtyService {
   }
 }
 
-type ExecResult = { stdout: string; exitCode: number };
+type ExecResult = { stdout: string; stderr?: string; exitCode: number };
 type ExecFake = (bin: string, args: string[]) => Promise<ExecResult>;
+type AppServerFake = (bin: string) => Promise<AppServerIdentity | null>;
 
 const CLAUDE_OK =
   '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","email":"nic@acme.dev","orgName":"Acme","subscriptionType":"max"}\n';
 
-function setup(exec: ExecFake = async () => ({ stdout: '', exitCode: 0 }), env: NodeJS.ProcessEnv = {}) {
+/** No build under test has a working app-server unless a case says so. */
+const NO_APP_SERVER: AppServerFake = async () => null;
+
+function setup(
+  exec: ExecFake = async () => ({ stdout: '', exitCode: 0 }),
+  env: NodeJS.ProcessEnv = {},
+  appServer: AppServerFake = NO_APP_SERVER,
+) {
   const pty = new FakePty();
   const t = makeTestApp({ pty });
   const home = mkdtempSync(join(tmpdir(), 'styx-agent-home-'));
   const execSpy = vi.fn(exec);
+  const appServerSpy = vi.fn(appServer);
   const openExternal = vi.fn(async (_url: string) => undefined);
   const agents = new AgentService({
     repos: t.app.repos,
@@ -76,11 +86,12 @@ function setup(exec: ExecFake = async () => ({ stdout: '', exitCode: 0 }), env: 
     terminals: t.app.terminals,
     pty,
     exec: execSpy,
+    appServer: appServerSpy,
     openExternal,
     home,
     env,
   });
-  return { ...t, pty, home, agents, exec: execSpy, openExternal };
+  return { ...t, pty, home, agents, exec: execSpy, appServer: appServerSpy, openExternal };
 }
 
 const row = (app: ReturnType<typeof setup>['app'], agent: Agent): CliInstall => {
@@ -147,6 +158,13 @@ describe('AgentService.verify', () => {
       name: 'codex: "Logged in using ChatGPT"',
       agent: 'codex',
       exec: async () => ({ stdout: 'Logged in using ChatGPT\n', exitCode: 0 }),
+      expect: { authState: 'signed-in', account: 'ChatGPT', verifyError: null },
+    },
+    {
+      // codex 0.154.0 prints its status on stderr; a runner that keeps the streams apart still gets a verdict.
+      name: 'codex: "Logged in using ChatGPT" on stderr only',
+      agent: 'codex',
+      exec: async () => ({ stdout: '', stderr: 'Logged in using ChatGPT\n', exitCode: 0 }),
       expect: { authState: 'signed-in', account: 'ChatGPT', verifyError: null },
     },
     {
@@ -296,6 +314,83 @@ describe('AgentService.verify', () => {
     expect(JSON.stringify([app.repos.discovery.clis(), app.publisher.snapshot(), win.sent])).not.toContain(
       'SECRET',
     );
+  });
+});
+
+describe('AgentService.verify: Codex through its app-server (ADR-0016)', () => {
+  const MODELS: AppServerIdentity['models'] = [
+    {
+      id: 'gpt-6-astra',
+      label: 'GPT-6 Astra',
+      description: null,
+      efforts: ['low', 'medium', 'high'],
+      defaultEffort: 'low',
+      isDefault: true,
+      hidden: false,
+    },
+  ];
+  const withAppServer = (t: ReturnType<typeof setup>) =>
+    t.app.repos.discovery.saveCli({
+      ...row(t.app, 'codex'),
+      capabilities: { ...row(t.app, 'codex').capabilities, appServer: true },
+    });
+
+  it('a build with app-server: account is `email · plan`, the catalogue lands on the row, `login status` never runs', async () => {
+    const t = setup(undefined, {}, async () => ({
+      authState: 'signed-in',
+      account: 'nic@acme.dev · team',
+      models: MODELS,
+    }));
+    withAppServer(t);
+    const out = await t.agents.verify('codex');
+    expect(out).toMatchObject({
+      authState: 'signed-in',
+      account: 'nic@acme.dev · team',
+      verifyError: null,
+      capabilities: { appServer: true, mcp: true, models: MODELS },
+    });
+    expect(t.appServer).toHaveBeenCalledWith('/opt/homebrew/bin/codex');
+    expect(t.exec).not.toHaveBeenCalled();
+    expect(row(t.app, 'codex')).toEqual(out);
+  });
+
+  it('signed out according to account/read → signed out, no account', async () => {
+    const t = setup(undefined, {}, async () => ({ authState: 'signed-out', account: null, models: [] }));
+    withAppServer(t);
+    expect(await t.agents.verify('codex')).toMatchObject({
+      authState: 'signed-out',
+      account: null,
+      verifyError: null,
+      capabilities: { models: [] },
+    });
+  });
+
+  it('no working app-server (probe → null) → falls back to `codex login status`', async () => {
+    const t = setup(async () => ({ stdout: '', stderr: 'Logged in using ChatGPT\n', exitCode: 0 }));
+    withAppServer(t);
+    expect(await t.agents.verify('codex')).toMatchObject({ authState: 'signed-in', account: 'ChatGPT' });
+    expect(t.appServer).toHaveBeenCalledTimes(1);
+    expect(t.exec).toHaveBeenCalledWith('/opt/homebrew/bin/codex', ['login', 'status']);
+  });
+
+  it('a row without the appServer capability is never probed that way', async () => {
+    const t = setup(async () => ({ stdout: 'Logged in using ChatGPT\n', exitCode: 0 }));
+    await t.agents.verify('codex');
+    expect(t.appServer).not.toHaveBeenCalled();
+    expect(t.exec).toHaveBeenCalledTimes(1);
+  });
+
+  it('a probe that fails after initialize records the failure and keeps the previous state', async () => {
+    const t = setup(undefined, {}, async () => {
+      throw new Error('account/read: token expired');
+    });
+    withAppServer(t);
+    expect(await t.agents.verify('codex')).toMatchObject({
+      authState: 'signed-in',
+      account: 'ChatGPT',
+      verifyError: 'account/read: token expired',
+    });
+    expect(t.exec).not.toHaveBeenCalled();
   });
 });
 

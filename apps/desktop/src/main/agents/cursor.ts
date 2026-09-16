@@ -11,24 +11,41 @@ const io = {
 };
 
 /**
- * cursor-agent reads `<worktree>/.cursor/mcp.json` (same shape as Cursor IDE). The file is excluded locally, carries
- * no env block (cursor-agent inherits the session env, so `STYX_TOKEN` never lands in the worktree) and is restored
- * or removed by `cleanup`.
+ * Cursor's CLI (`agent`, older installs `cursor-agent`) has three launches (ADR-0017):
  *
- * UNVERIFIED (2026-09-04): `cursor-agent` is not installed on the verifying machine, so none of these flags could be
- * checked with `--help`. They follow Cursor's published CLI docs: `--print` (`-p`) headless mode,
- * `--output-format stream-json`, `--model <name>`, `--resume <chat-id>`, positional prompt. The stream runner is
- * only chosen when DetectService saw both `stream-json` and `--print` in the CLI's own `--help`
- * (`capabilities.streamJson && capabilities.printMode`); otherwise the session falls back to `pty`. cursor-agent has
- * no stream-json *input* mode, so each user turn is a fresh process with `--resume <chatId>` (`stream.kind = 'argv'`).
+ * - **ACP** (`agent [--model m] acp`, the `stream` runner) when DetectService saw an `acp` subcommand in `--help`:
+ *   JSON-RPC over pipes with approvals, the styx MCP server handed over in `session/new.mcpServers`, nothing
+ *   written into the worktree. Global flags go before the subcommand, as Cursor's docs show (`agent -k acp`).
+ * - **print fallback** (`--print --output-format stream-json`, the `argv` stream runner) when the CLI advertises
+ *   stream-json and `--print` but no ACP: one process per turn with `--resume <chatId>`, no approvals.
+ * - **pty fallback** otherwise: the TUI in xterm.
+ *
+ * Both fallbacks read `<worktree>/.cursor/mcp.json` (same shape as Cursor IDE): the styx server is merged in,
+ * the file is excluded locally, carries no env block (cursor-agent inherits the session env, so `STYX_TOKEN` never
+ * lands in the worktree) and is restored or removed by `cleanup`.
+ *
+ * UNVERIFIED (2026-09-16): the CLI is not installed on the verifying machine, so none of these flags could be
+ * checked with `--help`; they follow Cursor's published CLI docs (`agent acp`, `--print`, `--output-format
+ * stream-json`, `--model <name>`, `--resume <chat-id>`, positional prompt).
  */
 export async function cursorLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch> {
+  const args: string[] = [];
+  if (ctx.model) args.push('--model', ctx.model);
+  if (ctx.runner === 'stream' && ctx.capabilities['acp'] === true) {
+    args.push('acp');
+    return {
+      command: ctx.binary,
+      args,
+      env: {},
+      typeFirstMessage: false,
+      stream: { kind: 'acp' },
+      cleanup: async () => undefined,
+    };
+  }
   const dir = join(ctx.worktreePath, '.cursor');
   const file = join(dir, 'mcp.json');
   const written = await writeWorktreeMcpConfig(file, ctx, io, dir);
   await excludeLocally(ctx.worktreePath, '.cursor/mcp.json');
-  const args: string[] = [];
-  if (ctx.model) args.push('--model', ctx.model);
   const cleanup = () => written.restore();
   if (ctx.runner === 'stream') {
     args.push('--print', '--output-format', 'stream-json');

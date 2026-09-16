@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import {
   AGENT_LABEL,
@@ -115,6 +115,27 @@ export interface SpawnInput {
 
 export const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 
+/** Every path a permission request names: Claude's file_path / notebook_path, Codex's paths, ACP's locations. */
+const editPathsOf = (input: Record<string, unknown>): string[] => {
+  const out: string[] = [];
+  for (const key of ['file_path', 'notebook_path']) {
+    const v = input[key];
+    if (typeof v === 'string' && v !== '') out.push(v);
+  }
+  for (const key of ['paths', 'locations']) {
+    const v = input[key];
+    if (Array.isArray(v)) for (const p of v) if (typeof p === 'string' && p !== '') out.push(p);
+  }
+  return [...new Set(out)];
+};
+
+/** Lexical containment: `p` (absolute or relative to `root`) resolves to `root` or below it. */
+const isInside = (root: string, p: string): boolean => {
+  const base = resolve(root);
+  const full = resolve(base, p);
+  return full === base || full.startsWith(base + sep);
+};
+
 const EDIT_TOOL = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
 const PERMISSION_OPTIONS = ['Allow', 'Deny'] as const;
 
@@ -143,10 +164,31 @@ const askUserQuestionInput = z.object({
           .array(z.object({ label: z.string().min(1), description: z.string().optional() }))
           .default([]),
         multiSelect: z.boolean().optional(),
+        /** Codex `requestUserInput.isSecret`: masked input, and the answer is never persisted (see `resolveAsk`). */
+        secret: z.boolean().optional(),
       }),
     )
     .min(1),
 });
+
+/** What a secret answer looks like on the row: the CLI got the real text, the transcript keeps the mask. */
+const SECRET_ANSWER_MASK = '••••••';
+
+/** The resolution that is safe to persist: answers to secret questions replaced by the mask. */
+const maskSecretAnswers = (
+  ask: PendingAsk,
+  resolution: PendingAsk['resolution'],
+): PendingAsk['resolution'] => {
+  if (resolution?.kind !== 'questions' || ask.payload.kind !== 'questions') return resolution;
+  const secret = new Set(ask.payload.questions.filter((q) => q.secret === true).map((q) => q.key));
+  if (secret.size === 0) return resolution;
+  return {
+    ...resolution,
+    answers: resolution.answers.map((a) =>
+      secret.has(a.key) ? { key: a.key, chosen: [], freeText: SECRET_ANSWER_MASK } : a,
+    ),
+  };
+};
 
 /** `can_use_tool` for ExitPlanMode: the plan markdown; allow = leave plan mode, deny (with a note) = keep planning. */
 const exitPlanModeInput = z.object({ plan: z.string().default('') });
@@ -258,6 +300,8 @@ export class SessionService {
   private hooks: SessionHooks | null = null;
   private readonly quietTimers = new Map<string, NodeJS.Timeout>();
   private readonly launches = new Map<string, AgentLaunch>();
+  /** Live broker tokens by session, for scrubbing the terminal view; dropped when the process exits. */
+  private readonly liveTokens = new Map<string, string>();
   /** Asks opened from a CLI hook (`permission_prompt` / `agent_needs_input`), cancelled once the agent moves on. */
   private readonly hookAsks = new Map<string, AskId>();
   /** Stream `can_use_tool` requests waiting on an ask (tool decision, plan approval, clarifying question). */
@@ -490,6 +534,7 @@ export class SessionService {
     };
     const launch = await buildAgentLaunch(ctx);
     this.launches.set(session.id, launch);
+    this.liveTokens.set(session.id, token);
     try {
       let pid: number;
       if (launch.stream) {
@@ -696,6 +741,16 @@ export class SessionService {
   interrupt(sessionId: string): void {
     const s = this.require(sessionId);
     if (this.deps.stream.has(s.id)) {
+      // Stop means stop: an approval still open would otherwise let a later Allow run what the user interrupted.
+      for (const ask of this.deps.repos.pendingAsks.openBySession(s.id)) {
+        const perm = this.permissionAsks.get(ask.id);
+        if (perm) {
+          this.permissionAsks.delete(ask.id);
+          this.denyPermission(perm, copy.chat.controls.interrupted);
+        }
+        this.hooks?.cancelHeldAsk(ask);
+        this.cancelAsk(ask);
+      }
       this.deps.stream.interrupt(s.id);
       this.finaliseStreams(s.id);
       this.deps.transcript.system(s.id, copy.chat.controls.interrupted);
@@ -967,11 +1022,22 @@ export class SessionService {
 
   /** Text for the session's terminal pane (and its log). */
   private render(id: string, text: string): void {
-    this.deps.publisher.pty(id, text);
-    this.deps.ptyLog.write(id, text);
+    const safe = this.scrubToken(id, text);
+    this.deps.publisher.pty(id, safe);
+    this.deps.ptyLog.write(id, safe);
+  }
+
+  /**
+   * The session's broker token travels to the CLI in-band (ACP `session/new`, the styx MCP env); a CLI that
+   * echoes its input would otherwise land it in the terminal pane and the on-disk pty log.
+   */
+  private scrubToken(id: string, text: string): string {
+    const token = this.liveTokens.get(id);
+    return token !== undefined && text.includes(token) ? text.split(token).join('[redacted]') : text;
   }
 
   private onPtyData(id: string, data: string): void {
+    data = this.scrubToken(id, data);
     this.deps.publisher.pty(id, data);
     const s = this.deps.repos.sessions.get(id);
     if (!s) return; // user terminals share the pty service
@@ -1002,6 +1068,7 @@ export class SessionService {
 
   private onProcessExit(s: Session, exitCode: number | null): void {
     this.ptyTails.delete(s.id);
+    this.liveTokens.delete(s.id);
     const launch = this.launches.get(s.id);
     if (launch) {
       void launch.cleanup().catch(() => undefined);
@@ -1320,16 +1387,19 @@ export class SessionService {
       this.permissionAsks.set(ask.id, { kind: 'plan', sessionId: s.id, requestId });
       return;
     }
-    const editPath =
-      typeof input['file_path'] === 'string'
-        ? input['file_path']
-        : typeof input['notebook_path'] === 'string'
-          ? input['notebook_path']
-          : '';
-    // Edits to `.styx/project.json` (grant policy) are never auto-approved, whatever the toggle says (H-1).
-    if (s.toggles.autoApproveEdits && EDIT_TOOL.test(toolName) && !isPolicyFile(editPath)) {
-      this.deps.stream.respondPermission(s.id, requestId, true);
-      return;
+    // Auto-approve (the session toggle) covers edits of files inside this session's worktree, and nothing else:
+    // every path the request names must resolve under the worktree, none may be `.styx/project.json` (H-1), and a
+    // request that names no path at all always asks. Codex only asks for edits *outside* its sandbox, and an ACP
+    // agent's tool title is never trusted (`styxEdit` comes from the ACP kind), so this gate is the only one.
+    const isEdit = EDIT_TOOL.test(toolName) || input['styxEdit'] === true;
+    if (s.toggles.autoApproveEdits && isEdit) {
+      const root = this.deps.repos.worktrees.get(s.worktreeId)?.path ?? null;
+      const paths = editPathsOf(input);
+      const inside = (p: string) => root !== null && isInside(root, p);
+      if (paths.length > 0 && paths.every((p) => inside(p) && !isPolicyFile(p))) {
+        this.deps.stream.respondPermission(s.id, requestId, true);
+        return;
+      }
     }
     const hint =
       typeof input['command'] === 'string'
@@ -1366,6 +1436,7 @@ export class SessionService {
       prompt: q.question,
       multiSelect: q.multiSelect === true,
       options: q.options.map((o) => ({ label: o.label, description: o.description ?? null })),
+      ...(q.secret === true ? { secret: true } : {}),
     }));
     const ask = this.openAsk(s.id, { kind: 'questions', questions: set }, null);
     this.permissionAsks.set(ask.id, { kind: 'question', sessionId: s.id, requestId });
@@ -1811,7 +1882,14 @@ export class SessionService {
     if (ask.state === 'resolved') return ask;
     if (ask.state !== 'open') fail('invalid-transition', 'ask is not open');
     const now = clock.now();
-    const next: PendingAsk = { ...ask, state: 'resolved', resolution, resolvedAt: now };
+    // A secret answer (Codex `isSecret`) reaches the CLI below through `answerPermission`; the row and the renderer
+    // only ever see the mask.
+    const next: PendingAsk = {
+      ...ask,
+      state: 'resolved',
+      resolution: maskSecretAnswers(ask, resolution),
+      resolvedAt: now,
+    };
     repos.pendingAsks.upsert(next);
     publisher.upsert('pendingAsks', [ask.id]);
     for (const n of repos.notifications.byAsk(ask.id)) {

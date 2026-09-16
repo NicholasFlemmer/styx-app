@@ -75,7 +75,13 @@ describe('copy (spec §10 verbatim)', () => {
       effort: 'Effort',
       stop: 'Stop · esc',
     });
-    expect(fill(copy.chat.controls.usage, { cost: '$0.12', turns: '3' })).toBe('$0.12 · 3 turns');
+    expect(fill(copy.chat.controls.usage, { cost: '$0.12', turns: copy.chat.controls.turns(3) })).toBe(
+      '$0.12 · 3 turns',
+    );
+    expect(copy.chat.controls.turns(1)).toBe('1 turn');
+    expect(
+      fill(copy.chat.controls.usageTokens, { tokens: '14.6k', turns: copy.chat.controls.turns(1) }),
+    ).toBe('14.6k tokens · 1 turn');
     expect(copy.settings.rows.permissionMode).toBe('Permission mode');
     expect(copy.settings.rows.effort).toBe('Effort');
     expect(Object.keys(copy.session.permissionModes)).toEqual([
@@ -87,7 +93,15 @@ describe('copy (spec §10 verbatim)', () => {
       'auto',
     ]);
     expect(Object.keys(copy.session.permissionModeHints)).toEqual(Object.keys(copy.session.permissionModes));
-    expect(Object.keys(copy.session.efforts)).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
+    expect(Object.keys(copy.session.efforts)).toEqual([
+      'default',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+      'ultra',
+    ]);
     expect(Object.keys(copy.session.models)).toEqual(['default', 'fable', 'opus', 'sonnet', 'haiku']);
     expect(copy.session.tool).toEqual({ running: '…', ok: '✓', error: '×' });
   });

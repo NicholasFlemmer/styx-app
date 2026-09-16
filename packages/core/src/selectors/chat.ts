@@ -21,10 +21,13 @@ export const usageLabel = (
   session: Pick<Session, 'costUsd' | 'numTurns'> & { tokensUsed?: number | undefined },
 ): string | null => {
   const tokens = session.tokensUsed ?? 0;
+  const turns = copy.chat.controls.turns(session.numTurns);
   if (session.costUsd === 0 && tokens > 0)
-    return fill(copy.chat.controls.usageTokens, { tokens: formatTokens(tokens), turns: session.numTurns });
-  return session.costUsd > 0 || session.numTurns > 0
-    ? fill(copy.chat.controls.usage, { cost: formatCost(session.costUsd), turns: session.numTurns })
+    return fill(copy.chat.controls.usageTokens, { tokens: formatTokens(tokens), turns });
+  // A CLI that reports neither dollars nor tokens (ACP agents) still counts turns: "$0.00" would be a claim.
+  if (session.costUsd === 0 && session.numTurns > 0) return turns;
+  return session.costUsd > 0
+    ? fill(copy.chat.controls.usage, { cost: formatCost(session.costUsd), turns })
     : null;
 };
 

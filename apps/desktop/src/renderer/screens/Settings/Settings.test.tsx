@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { copy, fixtures } from '@styx/core';
+import { copy, fixtures, type ModelInfo } from '@styx/core';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
@@ -131,7 +131,7 @@ describe('sectionRows', () => {
     });
     const effort = rows.find((r) => r.id === 'effort');
     expect(effort?.value).toBe('default');
-    expect(effort?.options.map((o) => o.value)).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
+    expect(effort?.options.map((o) => o.value)).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max']);
     expect(effort?.change.kind === 'project' && effort.change.patch('xhigh')).toEqual({ effort: 'xhigh' });
     expect(effort?.change.kind === 'project' && effort.change.patch('default')).toEqual({ effort: null });
     expect(modelRow?.change.kind === 'project' && modelRow.change.patch('opus')).toEqual({ model: 'opus' });
@@ -152,6 +152,90 @@ describe('sectionRows', () => {
     expect(customRow?.value).toBe('claude-opus-4-1');
     expect(customRow?.options.at(-1)).toEqual({ value: 'claude-opus-4-1', label: 'claude-opus-4-1' });
     expect(customRow?.overridden).toBe(true);
+  });
+
+  it('Agent defaults follow the default agent: Codex lists its catalogue and per-model efforts; Gemini has no effort row (discrepancy #83)', () => {
+    const eff = model.settings.project[acme];
+    if (eff === undefined) throw new Error('fixture');
+    const codexModels: ModelInfo[] = [
+      {
+        id: 'gpt-6-astra',
+        label: 'GPT-6 Astra',
+        description: null,
+        efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+        defaultEffort: 'low',
+        isDefault: true,
+        hidden: false,
+      },
+      {
+        id: 'gpt-5.5',
+        label: 'GPT-5.5',
+        description: null,
+        efforts: ['low', 'medium', 'high', 'xhigh'],
+        defaultEffort: 'xhigh',
+        isDefault: false,
+        hidden: false,
+      },
+    ];
+    const withAgent = (agent: 'codex' | 'gemini', modelValue: string | null) => ({
+      ...model,
+      discovery: {
+        ...model.discovery,
+        clis: model.discovery.clis.map((c) =>
+          c.agent === 'codex' ? { ...c, capabilities: { ...c.capabilities, models: codexModels } } : c,
+        ),
+      },
+      settings: {
+        ...model.settings,
+        project: {
+          ...model.settings.project,
+          [acme]: {
+            ...eff,
+            defaultAgent: { value: agent, source: 'project' as const },
+            model: { value: modelValue, source: 'project' as const },
+            effort: { value: 'ultra' as const, source: 'project' as const },
+          },
+        },
+      },
+    });
+    const codexRows = sectionRows(withAgent('codex', null), 'project:agent-defaults', ctx);
+    expect(codexRows.find((r) => r.id === 'model')?.options.map((o) => [o.value, o.label])).toEqual([
+      ['default', 'Default'],
+      ['gpt-6-astra', 'GPT-6 Astra'],
+      ['gpt-5.5', 'GPT-5.5'],
+    ]);
+    // Default model → the default row's efforts, ultra included.
+    expect(codexRows.find((r) => r.id === 'effort')?.options.map((o) => o.value)).toEqual([
+      'default',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+      'ultra',
+    ]);
+    // gpt-5.5 has no ultra; the stored one stays selectable so the row shows what project.json says.
+    const gpt55 = sectionRows(withAgent('codex', 'gpt-5.5'), 'project:agent-defaults', ctx).find(
+      (r) => r.id === 'effort',
+    );
+    expect(gpt55?.value).toBe('ultra');
+    expect(gpt55?.options.map((o) => o.value)).toEqual([
+      'default',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'ultra',
+    ]);
+    expect(gpt55?.change.kind === 'project' && gpt55.change.patch('bogus')).toEqual({ effort: null });
+    const geminiRows = sectionRows(withAgent('gemini', null), 'project:agent-defaults', ctx);
+    expect(geminiRows.map((r) => r.id)).toEqual([
+      'defaultAgent',
+      'model',
+      'autoApproveEdits',
+      'permissionMode',
+    ]);
+    expect(geminiRows.find((r) => r.id === 'model')?.options.map((o) => o.value)).toEqual(['default']);
   });
 
   it('prototype values match settingsRowsMap', () => {
@@ -358,12 +442,27 @@ describe('<Settings />', () => {
   });
 
   it('Agents · the app-level connections table sits above the preference rows', () => {
+    // The Codex verifier reports "email · plan" through `account/read` (docs/research/agent-parity.md §2.4).
+    const model = fixtures.demoReadModel();
+    seed({
+      ...model,
+      discovery: {
+        ...model.discovery,
+        clis: model.discovery.clis.map((c) =>
+          c.agent === 'codex' ? { ...c, account: 'nic@acme.dev · team' } : c,
+        ),
+      },
+    });
     render(<Settings />);
     fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
     expect(screen.getByRole('heading', { name: 'Agents' })).toBeTruthy();
     expect(screen.getByText(copy.agentsPage.lead)).toBeTruthy();
     const table = screen.getByRole('table', { name: copy.agentsPage.title });
     expect(table.querySelectorAll('[data-agent-row]')).toHaveLength(5);
+    // The account cell carries the full string as its title: "email · plan" (the Codex verifier) is wider than the column.
+    const codexAccount = table.querySelector('[data-agent-row="codex"] [data-agent-account]');
+    expect(codexAccount?.textContent).toBe('nic@acme.dev · team');
+    expect(codexAccount?.getAttribute('title')).toBe('nic@acme.dev · team');
     expect(screen.getByText(copy.agentsPage.preferences)).toBeTruthy();
     expect(screen.getByRole('combobox', { name: copy.settings.rows.defaultAgent })).toBeTruthy();
     fireEvent.change(screen.getByRole('combobox', { name: copy.settings.rows.autoWorktree }), {

@@ -52,6 +52,34 @@ export const Controls: Story = {
   },
 };
 
+/** A Codex session: the same row with the catalogue's model label and a live Effort select (per turn). */
+export const CodexControls: Story = {
+  args: {
+    placeholder: 'Message Codex…',
+    controls: (
+      <>
+        <span>Permissions · Ask ▾</span>
+        <span>Model · GPT-6 Astra ▾</span>
+        <span>Effort · Medium ▾</span>
+        <button
+          type="button"
+          style={{
+            font: 'inherit',
+            letterSpacing: 'inherit',
+            textTransform: 'inherit',
+            color: 'inherit',
+            background: 'transparent',
+            border: 0,
+            padding: 0,
+          }}
+        >
+          Stop · esc
+        </button>
+      </>
+    ),
+  },
+};
+
 export const Matrix: Story = {
   render: (args) => (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: 740 }}>

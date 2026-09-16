@@ -319,6 +319,58 @@ describe('SessionService spawn + stream runner', () => {
     expect(a.sessions.get(session.id)?.state).toBe('done');
   });
 
+  it('auto-approve covers edits inside the worktree only: outside paths, a hidden policy file, a missing path and a titled ACP tool all ask', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn({
+      ...spawnInput('claude', ids.worktree.featPromo),
+      toggles: { autoApproveEdits: true, mayRequestTargets: true, notifyWhenNeedsMe: true },
+    });
+    const root = a.repos.worktrees.get(session.worktreeId)!.path;
+    const ask = (requestId: string, toolName: string, input: Record<string, unknown>) => {
+      stream.effect(session.id, { type: 'permission', requestId, toolName, input });
+      const auto = stream.permissions.some((p) => p.requestId === requestId && p.allow);
+      const open = a.repos.pendingAsks.openBySession(session.id);
+      const asked = open.length > 0;
+      for (const o of open) a.sessions.resolveAsk(o.id, { kind: 'decision', chosen: 'Deny' });
+      return auto ? 'auto' : asked ? 'asked' : 'nothing';
+    };
+    // Absolute and relative paths under the worktree pass; every path in a multi-file edit must.
+    expect(ask('in1', 'Edit', { file_path: `${root}/src/a.ts` })).toBe('auto');
+    expect(ask('in2', 'Edit', { file_path: 'src/b.ts', paths: ['src/b.ts', `${root}/src/c.ts`] })).toBe(
+      'auto',
+    );
+    // Outside the worktree (a Codex fileChange approval is by construction for such a path): ask.
+    expect(ask('out1', 'Edit', { file_path: '/Users/nic/.zshrc' })).toBe('asked');
+    expect(ask('out2', 'Edit', { file_path: '../other/x.ts' })).toBe('asked');
+    // The policy file smuggled in as the second path of one change set: ask.
+    expect(ask('pol', 'Edit', { file_path: 'README.md', paths: ['README.md', '.styx/project.json'] })).toBe(
+      'asked',
+    );
+    // No path at all (an approval whose item was never seen): ask.
+    expect(ask('none', 'Edit', { file_path: '' })).toBe('asked');
+    // An ACP tool whose agent-chosen title is "Write" is not an edit unless the runner says so by kind.
+    expect(ask('acp1', 'Write', { title: 'Write', styxEdit: false })).toBe('asked');
+    expect(ask('acp2', 'tool', { title: 'Write notes', file_path: `${root}/notes.md`, styxEdit: true })).toBe(
+      'auto',
+    );
+  });
+
+  it('Stop while an approval is open cancels the ask and declines it, so a later Allow cannot run it', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'b1',
+      toolName: 'Bash',
+      input: { command: 'rm x' },
+    });
+    expect(a.sessions.get(session.id)?.state).toBe('needs-you');
+    a.sessions.interrupt(session.id);
+    expect(a.repos.pendingAsks.openBySession(session.id)).toEqual([]);
+    expect(stream.permissions.at(-1)).toMatchObject({ id: session.id, requestId: 'b1', allow: false });
+    expect(a.sessions.get(session.id)?.state).toBe('idle');
+  });
+
   it('H-1: autoApproveEdits never auto-approves an edit to .styx/project.json', async () => {
     const { app: a } = app();
     const { session } = await a.sessions.spawn({

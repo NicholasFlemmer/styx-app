@@ -266,12 +266,13 @@ export interface SpawnForm extends SpawnSessionSettings {
   toggles: SessionToggles;
 }
 
-/** Settings an agent cannot take fall back to the CLI defaults (only Claude has modes/effort; Cursor takes a model). */
-export const sessionSettingsFor = (agent: Agent, s: SpawnSessionSettings): SpawnSessionSettings => ({
-  permissionMode: agent === 'claude' ? s.permissionMode : 'default',
-  model: agent === 'claude' || agent === 'cursor' ? s.model : null,
-  effort: agent === 'claude' ? s.effort : null,
-});
+/**
+ * Every agent but the shell takes a mode, a model and an effort (Claude over stream-json, Codex over its
+ * app-server, Gemini and Cursor over ACP; main maps a mode onto each CLI's own policy, discrepancy #83). The
+ * shell has nothing to configure and spawns with the defaults.
+ */
+export const sessionSettingsFor = (agent: Agent, s: SpawnSessionSettings): SpawnSessionSettings =>
+  agent === 'shell' ? { permissionMode: 'default', model: null, effort: null } : { ...s };
 
 export const spawnPayload = (
   model: ReadModel,
