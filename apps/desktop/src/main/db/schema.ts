@@ -77,7 +77,8 @@ export const sessions = sqliteTable(
     contextWindow: integer('context_window'),
     brokerTokenHash: text('broker_token_hash').notNull().default(''),
     /** 0012: set when Styx spawned the session for a job of its own (`learn-run` / `learn-deploy`). */
-    purpose: text('purpose', { enum: ['learn-run', 'learn-deploy'] }),
+    purpose: text('purpose', { enum: ['learn-run', 'learn-deploy', 'debt-audit'] }),
+    taskTargetId: text('task_target_id'),
     pid: integer('pid'),
     exitCode: integer('exit_code'),
     startedAt: integer('started_at').notNull(),

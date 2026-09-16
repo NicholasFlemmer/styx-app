@@ -164,7 +164,7 @@ describe('deployButtonState', () => {
       kind: 'learning',
       targetId: ids.target.infraAws,
       sessionId: learner.id,
-      label: `${copy.agentProducts.gemini} is deploying · AWS acme-prod prod`,
+      label: 'Deploying · AWS acme-prod prod',
     });
     // A finished session no longer counts; neither does one the model does not know.
     const finished: ReadModel = {

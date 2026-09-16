@@ -1,3 +1,4 @@
+import { TaskDialog } from '../features/tasks/TaskDialog';
 import { useEffect } from 'react';
 import { AuditDrawer } from '../features/audit-drawer/AuditDrawer';
 import { GrantSheet } from '../features/grant-sheet/GrantSheet';
@@ -17,6 +18,8 @@ import s from './OverlayHost.module.css';
 
 const render = (o: Overlay) => {
   switch (o.kind) {
+    case 'task':
+      return <TaskDialog key={o.id} id={o.id} selectedKey={o.taskKey} />;
     case 'palette':
       return <Palette key={o.id} id={o.id} />;
     case 'modal':
@@ -93,7 +96,7 @@ export function OverlayHost() {
   }, [trapping]);
 
   const regional = overlays.filter((o) => o.kind === 'sheet' || o.kind === 'drawer');
-  const global = overlays.filter((o) => o.kind === 'palette' || o.kind === 'modal');
+  const global = overlays.filter((o) => o.kind === 'palette' || o.kind === 'modal' || o.kind === 'task');
 
   return (
     <div

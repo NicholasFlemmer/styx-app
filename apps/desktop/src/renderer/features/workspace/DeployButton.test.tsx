@@ -77,6 +77,7 @@ describe('DeployButton', () => {
       projectId: acme,
       projectSession: {},
       learning: {},
+      taskLaunches: {},
     });
   });
   afterEach(() => {
@@ -115,17 +116,20 @@ describe('DeployButton', () => {
     expect(first).toContain('`sam deploy` (from template.yaml)');
     // The chat opens on the new session, and the button reports who is on it until the session ends.
     const ui = useUiStore.getState();
-    expect(ui.projectSession[ids.project.infraTools]).toBe('s-learn');
+    expect(ui.projectSession[ids.project.infraTools]).toBeUndefined();
+    expect(ui.overlays).toContainEqual(
+      expect.objectContaining({ kind: 'task', taskKey: `deploy:${ids.target.infraAws}` }),
+    );
     expect(ui.learning[`deploy:${ids.target.infraAws}`]).toBe('s-learn');
     useReadModel
       .getState()
       .replaceModel(withSession(fixtures.demoReadModel(), 's-learn', ids.project.infraTools), 'connected');
     const learning = await screen.findByRole('button', {
-      name: `${copy.agentProducts.gemini} is deploying · AWS acme-prod prod`,
+      name: 'Deploying · AWS acme-prod prod',
     });
     useUiStore.setState({ projectSession: {} });
     fireEvent.click(learning);
-    expect(useUiStore.getState().projectSession[ids.project.infraTools]).toBe('s-learn');
+    expect(useUiStore.getState().projectSession[ids.project.infraTools]).toBeUndefined();
   });
 
   it('no targets at all: an enabled "Connect a deploy target" that opens the connect modal', () => {

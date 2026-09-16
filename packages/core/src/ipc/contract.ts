@@ -365,6 +365,7 @@ export const commands = {
       effort: effortSchema.nullable().default(null),
       /** Set when Styx starts the session for a job of its own (Run locally / Deploy); gates `remember_command`. */
       purpose: sessionPurposeSchema.nullable().default(null),
+      taskTargetId: targetIdSchema.optional(),
     }),
     output: z.object({ sessionId: sessionIdSchema, worktreeId: worktreeIdSchema }),
   },

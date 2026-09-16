@@ -1,17 +1,16 @@
 import {
   copy,
   fill,
-  mainWorktreeOf,
   projectNameOf,
-  projectSettingsOfOrDefault,
   type ProjectId,
   type ReadModel,
   type SessionId,
   type Target,
   type TargetId,
+  activeTask,
 } from '@styx/core';
 import { command } from '../../state/commands';
-import { useUiStore } from '../../state/ui-store';
+import { launchTask } from '../tasks/task-launch';
 
 /** Keys of `ui.learning`: which session is working an ability out for a project (run) or a target (deploy). */
 export const learnKey = {
@@ -30,91 +29,58 @@ const guessText = (suggestions: readonly Suggestion[]): string =>
       });
 
 /**
- * The AI-native path for a button Styx cannot fulfil mechanically yet (owner principle): hand it to the project's
- * agent in chat with a task, let it ask what it needs, and let it teach Styx the result through the
- * `remember_command` MCP tool. From then on the button runs the remembered command itself. Same shape as the debt
- * audit: a real session in the main worktree; edits are not auto-approved.
- */
-const spawnFor = async (
-  model: ReadModel,
-  projectId: ProjectId,
-  firstMessage: string,
-  purpose: 'learn-run' | 'learn-deploy',
-): Promise<SessionId | null> => {
-  // Only a deploy may touch targets; and only a session with this purpose may `remember_command` (main enforces).
-  const mayRequestTargets = purpose === 'learn-deploy';
-  const worktree = mainWorktreeOf(model, projectId);
-  if (worktree === null) return null;
-  const settings = projectSettingsOfOrDefault(model, projectId);
-  const r = await command('session.spawn', {
-    projectId,
-    agent: settings.defaultAgent,
-    worktree: { kind: 'existing', worktreeId: worktree.id },
-    firstMessage,
-    toggles: { autoApproveEdits: false, mayRequestTargets, notifyWhenNeedsMe: settings.notifyWhenNeedsMe },
-    model: null,
-    permissionMode: 'default',
-    effort: null,
-    purpose,
-  });
-  return r.ok ? r.value.sessionId : null;
-};
-
-const remember = (projectId: ProjectId, key: string, sessionId: SessionId | null): void => {
-  if (!sessionId) return;
-  const ui = useUiStore.getState();
-  ui.setLearning(key, sessionId);
-  ui.openSession(projectId, sessionId);
-};
-
-/**
  * "Run this project locally": the agent works it out, Styx remembers the command and starts it. With `failed`,
- * the same session is asked to fix the remembered command instead (the output is in the run strip; the agent gets
+ * a new background task fixes the remembered command (the output is in the run strip; the agent gets
  * the command and what went wrong).
  */
 export const startLearnRun = async (
   model: ReadModel,
   projectId: ProjectId,
   failed?: { command: string; failure: string },
-): Promise<SessionId | null> => {
-  const project = projectNameOf(model, projectId);
-  let prompt: string;
-  if (failed === undefined) {
-    const detected = await command('run.detect', { projectId });
-    const hints = detected.ok ? guessText(detected.value.suggestions) : '';
-    prompt = fill(copy.agentPrompt.learnRun, { project, hints });
-  } else {
-    prompt = fill(copy.agentPrompt.fixRun, { project, command: failed.command, failure: failed.failure });
-  }
-  const sessionId = await spawnFor(model, projectId, prompt, 'learn-run');
-  remember(projectId, learnKey.run(projectId), sessionId);
-  return sessionId;
-};
+): Promise<SessionId | null> =>
+  launchTask(model, projectId, learnKey.run(projectId), 'learn-run', async () => {
+    const project = projectNameOf(model, projectId);
+    let prompt: string;
+    if (failed === undefined) {
+      const detected = await command('run.detect', { projectId });
+      const hints = detected.ok ? guessText(detected.value.suggestions) : '';
+      prompt = fill(copy.agentPrompt.learnRun, { project, hints });
+    } else {
+      prompt = fill(copy.agentPrompt.fixRun, { project, command: failed.command, failure: failed.failure });
+    }
+    return prompt;
+  });
 
 /** "Deploy": the agent works out the command for this target, deploys under a grant, and teaches Styx the command. */
-export const startLearnDeploy = async (model: ReadModel, target: Target): Promise<SessionId | null> => {
-  const project = projectNameOf(model, target.projectId);
-  const detected = await command('deploy.detect', { targetId: target.id });
-  // A committed `.styx/project.json` can seed target config: only a plain identifier goes into the message.
-  const providerProject = target.config['projectId'];
-  const hints = [
-    ...(typeof providerProject === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(providerProject)
-      ? [`, provider project ${providerProject}`]
-      : []),
-    ...(detected.ok ? [guessText(detected.value.suggestions)] : []),
-  ].join('');
-  const prompt = fill(copy.agentPrompt.learnDeploy, {
-    project,
-    target: `${target.name} ${target.env}`,
-    provider: copy.providers[target.provider],
-    env: target.env,
-    hints,
-    targetId: target.id,
-  });
-  const sessionId = await spawnFor(model, target.projectId, prompt, 'learn-deploy');
-  remember(target.projectId, learnKey.deploy(target.id), sessionId);
-  return sessionId;
-};
+export const startLearnDeploy = async (model: ReadModel, target: Target): Promise<SessionId | null> =>
+  launchTask(
+    model,
+    target.projectId,
+    learnKey.deploy(target.id),
+    'learn-deploy',
+    async () => {
+      const project = projectNameOf(model, target.projectId);
+      const detected = await command('deploy.detect', { targetId: target.id });
+      // A committed `.styx/project.json` can seed target config: only a plain identifier goes into the message.
+      const providerProject = target.config['projectId'];
+      const hints = [
+        ...(typeof providerProject === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(providerProject)
+          ? [`, provider project ${providerProject}`]
+          : []),
+        ...(detected.ok ? [guessText(detected.value.suggestions)] : []),
+      ].join('');
+      const prompt = fill(copy.agentPrompt.learnDeploy, {
+        project,
+        target: `${target.name} ${target.env}`,
+        provider: copy.providers[target.provider],
+        env: target.env,
+        hints,
+        targetId: target.id,
+      });
+      return prompt;
+    },
+    target.id,
+  );
 
 /** The session working `key` out, if it is still alive (the row exists and is not done); null otherwise. */
 export const learningSession = (
@@ -122,6 +88,8 @@ export const learningSession = (
   learning: Readonly<Record<string, SessionId>>,
   key: string,
 ): SessionId | null => {
+  const task = activeTask(model, key);
+  if (task) return task.id;
   const sessionId = learning[key];
   if (sessionId === undefined) return null;
   const session = model.sessions.byId[sessionId];

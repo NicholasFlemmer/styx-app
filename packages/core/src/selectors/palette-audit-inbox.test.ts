@@ -249,7 +249,7 @@ describe('paletteResults', () => {
       '■ Add from recent projects… · recents · scan this machine',
       '■ Open folder… · existing repo',
       '■ Clone URL… · git clone',
-      '▲ Audit debt · spawns an agent to review this repo',
+      '▲ Tech debt audit · review this repo in the background',
       '■ Open agent dock · all projects · always on top',
     ]);
     expect(groups[1]?.items.map((i) => `${i.glyph} ${i.label} · ${i.meta}`)).toEqual([

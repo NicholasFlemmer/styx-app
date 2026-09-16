@@ -1,5 +1,6 @@
 import {
   activeGrants,
+  backgroundTasks,
   copy,
   fill,
   inboxRows,
@@ -13,6 +14,8 @@ import {
 import { NavItem } from '@styx/ui';
 import { useCallback } from 'react';
 import { useModel, useNow, useUi } from '../state/hooks';
+import { startDebtAudit } from '../features/audit';
+import { openTask } from '../features/tasks/task-launch';
 import type { Screen } from '../state/ui-store';
 import s from './Shell.module.css';
 
@@ -40,6 +43,7 @@ export function Nav() {
       : rows(model.worktrees).filter((w) => w.projectId === projectId && w.archivedAt === null).length;
   const inbox = inboxRows(model, now).length;
   const grants = activeGrants(model, now).length;
+  const tasks = backgroundTasks(model).filter((t) => t.state !== 'done');
 
   const items: NavRow[] = [
     { screen: 'home', label: copy.nav.home, meta: String(projectCount(model)) },
@@ -63,6 +67,21 @@ export function Nav() {
           data-nav-item={it.screen}
         />
       ))}
+      <NavItem
+        label={copy.debtAudit.action}
+        disabled={projectId === null}
+        onClick={() => {
+          if (projectId) void startDebtAudit(model, projectId);
+        }}
+        data-nav-audit="true"
+      />
+      <NavItem
+        label={copy.tasks.title}
+        meta={String(tasks.length)}
+        on={tasks.some((t) => t.state === 'needs-you')}
+        onClick={() => openTask(null)}
+        data-nav-tasks="true"
+      />
       <div className={s['navFoot']}>
         {project?.path ?? copy.general.none}
         <br />

@@ -76,7 +76,7 @@ const COLUMN_STATES: Record<BoardColumnKey, readonly SessionState[]> = {
  * Cards keep read-model (spawn) order, as the prototype does — no recency sort (visual baseline, ADR-0012).
  */
 export const boardColumns = (model: ReadModel, now: number): BoardColumn[] => {
-  const sessions = liveSessions(model);
+  const sessions = liveSessions(model).filter((s) => !s.purpose);
   const column = (
     key: BoardColumnKey,
     label: string,

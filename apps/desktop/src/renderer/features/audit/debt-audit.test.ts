@@ -2,6 +2,7 @@
 import { copy, fixtures, mainWorktreeOf } from '@styx/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
+import { useUiStore } from '../../state/ui-store';
 import { startDebtAudit } from './debt-audit';
 
 const acme = fixtures.ids.project.acmeShop;
@@ -14,6 +15,7 @@ const commands: { name: string; input: unknown }[] = [];
 describe('startDebtAudit', () => {
   beforeEach(() => {
     commands.length = 0;
+    useUiStore.setState({ taskLaunches: {}, learning: {}, overlays: [], projectSession: {} });
     Object.assign(window, {
       styx: {
         platform: 'darwin',
@@ -41,6 +43,7 @@ describe('startDebtAudit', () => {
       worktree: { kind: 'existing', worktreeId: mainWorktreeOf(model, acme)?.id },
       firstMessage: copy.debtAudit.prompt,
       permissionMode: 'default',
+      purpose: 'debt-audit',
     });
   });
 

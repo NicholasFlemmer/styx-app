@@ -1,3 +1,4 @@
+import { openTask } from '../tasks/task-launch';
 import {
   PREVIEW_DEVICES,
   copy,
@@ -103,7 +104,6 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
   const runKey = learnKey.run(projectId);
   const learning = useUi((u) => u.learning);
   const setLearning = useUi((u) => u.setLearning);
-  const openSession = useUi((u) => u.openSession);
   const learnerId = useModel((m) => learningSession(m, learning, runKey));
   const agentName = useModel((m) => {
     const learner = learnerId === null ? undefined : m.sessions.byId[learnerId];
@@ -317,7 +317,7 @@ export function DesignPane({ projectId, devUrl, active, run, devCommand }: Desig
             <button
               type="button"
               className={cm['link']}
-              onClick={() => openSession(projectId, learnerId)}
+              onClick={() => openTask(runKey)}
               data-run-open-chat="true"
             >
               {copy.workspace.run.openChat}

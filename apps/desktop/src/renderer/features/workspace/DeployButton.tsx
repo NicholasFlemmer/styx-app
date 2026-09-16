@@ -3,6 +3,8 @@ import { Button, Icon, StatusDot, Tag } from '@styx/ui';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useModel, useUi } from '../../state/hooks';
 import { useReadModel } from '../../state/read-model';
+import { openTask } from '../tasks/task-launch';
+import { learnKey } from '../abilities/learn';
 import { startLearnDeploy } from '../abilities/learn';
 import { deployButtonState } from './deploy-button';
 import s from './DeployButton.module.css';
@@ -18,7 +20,7 @@ export interface DeployButtonProps {
  * output. Everything it shows comes from `model.deploys`, so closing the modal loses nothing.
  *
  * A target Styx has no command for yet is not greyed out (owner principle, AI-native): the click hands the first
- * deploy to the project's agent in chat, which deploys under a grant and teaches Styx the command for next time.
+ * deploy to a background task, which deploys under a grant and teaches Styx the command for next time.
  */
 export function DeployButton({ projectId }: DeployButtonProps) {
   const learning = useUi((u) => u.learning);
@@ -26,7 +28,6 @@ export function DeployButton({ projectId }: DeployButtonProps) {
     useCallback((m) => deployButtonState(m, projectId, learning), [projectId, learning]),
   );
   const pushOverlay = useUi((u) => u.pushOverlay);
-  const openSession = useUi((u) => u.openSession);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -91,7 +92,7 @@ export function DeployButton({ projectId }: DeployButtonProps) {
         pushOverlay({ kind: 'modal', modal: 'connect', projectId });
         return;
       case 'learning':
-        openSession(projectId, state.sessionId);
+        openTask(learnKey.deploy(state.targetId));
         return;
       case 'deploying':
         pushOverlay({ kind: 'modal', modal: 'deploy', targetId: state.targetId, deployId: state.deployId });

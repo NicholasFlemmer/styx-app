@@ -31,7 +31,7 @@ export const copy = {
       cloneUrl: 'Clone URL…',
       cloneUrlMeta: 'git clone',
       agentDockMeta: 'all projects · always on top',
-      debtAuditMeta: 'spawns an agent to review this repo',
+      debtAuditMeta: 'review this repo in the background',
       switchProject: 'Switch to {project}',
     },
     meta: {
@@ -205,7 +205,8 @@ export const copy = {
      */
     permissionModeHintsByAgent: {
       codex: {
-        default: 'Edits inside the worktree run; commands that need the network or leave the worktree ask you here.',
+        default:
+          'Edits inside the worktree run; commands that need the network or leave the worktree ask you here.',
         acceptEdits: 'Same as Ask each time for Codex: edits in its sandbox never ask.',
         plan: 'Read-only sandbox; the plan streams as Codex forms it.',
         bypassPermissions: 'Nothing asks and there is no sandbox. Only for machines you trust.',
@@ -312,15 +313,43 @@ export const copy = {
     /** Field hint when the command was pre-filled from the repo or the provider. */
     suggestedFrom: 'suggested from {source}',
     /** First deploy to a target: the agent works it out in chat and deploys under a grant. */
-    learning: '{agent} is deploying · {target}',
+    learning: 'Deploying · {target}',
   },
 
   /**
    * The tech-debt audit (owner addition: the handoff has no such surface). The prompt IS the feature — it is
    * sent verbatim as the first message of a real agent session in the project's main worktree.
    */
+  tasks: {
+    title: 'Tasks',
+    run: 'Run locally',
+    deploy: 'Deploy',
+    audit: 'Tech debt audit',
+    starting: 'Starting…',
+    working: 'Working…',
+    needsYou: 'Needs your input',
+    paused: 'Paused',
+    finished: 'Finished',
+    failed: 'Could not finish',
+    stopped: 'Stopped',
+    background: 'Continue in background',
+    progress: 'View progress',
+    hint: 'You can switch projects while this runs. Return to Tasks for progress and results.',
+    empty: 'No background tasks yet.',
+    stop: 'Stop task',
+    close: 'Close',
+    result: 'Result',
+    details: 'Recent activity',
+    retry: 'Try again',
+    again: 'Run again',
+    unsupported: 'Update the project’s agent to a version that supports background tasks, then try again.',
+    noWorktree: 'This project has no working folder. Reopen the project and try again.',
+    noResult: 'The task ended without a report. Check the activity below before trying again.',
+    reviewGrant: 'Review access request',
+    answer: 'Send answer',
+  },
   debtAudit: {
-    action: 'Audit debt',
+    action: 'Tech debt audit',
     /**
      * Sent verbatim as the session's first message. Written to survive contact with a real repo: it bounds its
      * own tool budget (an unbounded audit spends the user's tokens and then guesses to fill its template),
@@ -949,10 +978,10 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       statusBar: 'dev · {url}',
       statusBarNoUrl: 'dev · running',
       /** First run: the agent works it out in chat (owner principle: the button does what asking an agent does). */
-      learning: '{agent} is working out how to run this…',
-      firstTime: 'First time: {agent} works it out in chat, and Styx remembers.',
+      learning: 'Preparing local app…',
+      firstTime: 'Set up and start this project locally.',
       learningHint: 'It may ask you a question in the chat. Styx will remember the answer.',
-      openChat: 'Open chat',
+      openChat: 'View progress',
       askToFix: 'Ask {agent} to fix it',
       failureExit: 'exited with code {code}',
       failureNoUrl: 'never answered on a local URL',

@@ -35,8 +35,9 @@ test('first time it asks the agent; a learned command runs, surfaces the URL in 
 
   // Nothing learned yet: no command field, a hint that names the agent, and an enabled button (it would spawn the
   // agent with the task; not clicked here because it would launch a real CLI).
+  // The first click hands the job to a background task (ADR-0018): the hint no longer names the chat.
   await expect(page.locator('[data-run-first-time]')).toContainText(
-    'First time: Claude Code works it out in chat',
+    'Set up and start this project locally.',
     {
       timeout: 10_000,
     },

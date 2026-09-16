@@ -117,6 +117,7 @@ describe('DesignPane', () => {
       projectId: acme,
       projectSession: {},
       learning: {},
+      taskLaunches: {},
     });
   });
   afterEach(() => {
@@ -206,11 +207,14 @@ describe('DesignPane', () => {
       expect(first).toContain('run acme-shop locally');
       expect(first).toContain('`pnpm dev` (from package.json)');
       expect(first).toContain('remember_command');
-      expect(useUiStore.getState().projectSession[acme]).toBe('s-learn');
+      expect(useUiStore.getState().projectSession[acme]).toBeUndefined();
+      expect(useUiStore.getState().overlays).toContainEqual(
+        expect.objectContaining({ kind: 'task', taskKey: `run:${acme}` }),
+      );
       expect(useUiStore.getState().learning[`run:${acme}`]).toBe('s-learn');
     });
 
-    it('while the agent works it out the row says so and opens the chat; a learned command ends it', async () => {
+    it('while the agent works it out the row says so and opens progress; a learned command ends it', async () => {
       useReadModel.getState().replaceModel(withSession(fixtures.demoReadModel(), 's-learn'), 'connected');
       useUiStore.setState({ learning: { [`run:${acme}`]: 's-learn' as Session['id'] } });
       const { rerender } = render(pane({ devUrl: null }));
@@ -219,7 +223,10 @@ describe('DesignPane', () => {
         fill(copy.workspace.run.learning, { agent: copy.agentProducts.gemini }),
       );
       fireEvent.click(screen.getByRole('button', { name: copy.workspace.run.openChat }));
-      expect(useUiStore.getState().projectSession[acme]).toBe('s-learn');
+      expect(useUiStore.getState().projectSession[acme]).toBeUndefined();
+      expect(useUiStore.getState().overlays).toContainEqual(
+        expect.objectContaining({ kind: 'task', taskKey: `run:${acme}` }),
+      );
       // remember_command landed: the command shows in the field and Run is a plain button again.
       rerender(pane({ devUrl: null, devCommand: 'pnpm dev' }));
       await waitFor(() => expect(useUiStore.getState().learning[`run:${acme}`]).toBeUndefined());

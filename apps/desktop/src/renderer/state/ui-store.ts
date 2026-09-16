@@ -1,4 +1,7 @@
 import type { EventPayload, PaletteScope, ProjectId, ReadModel, SessionId } from '@styx/core';
+import { taskKey } from '@styx/core';
+import { useReadModel } from './read-model';
+import type { TaskLaunch } from '../features/tasks/task-launch';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import {
@@ -62,6 +65,7 @@ export interface UiState {
   dismissedBanners: string[];
   /** Sessions working an ability out for the Run locally / Deploy buttons: `run:<projectId>` / `deploy:<targetId>` → session. */
   learning: Record<string, SessionId>;
+  taskLaunches: Record<string, TaskLaunch>;
 }
 
 export interface UiActions {
@@ -91,6 +95,7 @@ export interface UiActions {
   setDiffFocusIndex(i: number): void;
   setApprovalsTab(tab: ApprovalsTab): void;
   setSettingsSection(section: string): void;
+  setTaskLaunch(key: string, launch: TaskLaunch): void;
   setLearning(key: string, sessionId: SessionId | null): void;
   setOnboardingStep(step: OnboardingStep): void;
   setEditorFile(file: string | null): void;
@@ -131,6 +136,7 @@ export const useUiStore = create<UiStore>()(
     approvalsTab: 'inbox',
     settingsSection: 'project:targets',
     learning: {},
+    taskLaunches: {},
     onboardingStep: initialFromEnv?.step ?? 1,
     editorFile: null,
     banners: {},
@@ -149,13 +155,19 @@ export const useUiStore = create<UiStore>()(
       set((s) => {
         s.projectSession[projectId] = sessionId;
       }),
-    openSession: (projectId, sessionId) =>
+    openSession: (projectId, sessionId) => {
+      const session = useReadModel.getState().model.sessions.byId[sessionId];
+      if (session?.purpose) {
+        get().pushOverlay({ kind: 'task', taskKey: taskKey(session) });
+        return;
+      }
       set((s) => {
         s.projectId = projectId;
         s.projectSession[projectId] = sessionId;
         s.screen = 'workspace';
         s.screenResolved = true;
-      }),
+      });
+    },
     hydratePersisted: (ui) =>
       set((s) => {
         if (s.projectId === null && ui.projectId !== null) s.projectId = ui.projectId;
@@ -248,6 +260,10 @@ export const useUiStore = create<UiStore>()(
     setSettingsSection: (section) =>
       set((s) => {
         s.settingsSection = section;
+      }),
+    setTaskLaunch: (key, launch) =>
+      set((s) => {
+        s.taskLaunches[key] = launch;
       }),
     setLearning: (key, sessionId) =>
       set((s) => {

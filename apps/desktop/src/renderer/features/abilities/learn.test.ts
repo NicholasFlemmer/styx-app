@@ -51,11 +51,12 @@ describe('learned abilities: the first Run locally / Deploy is a task for the pr
       projectId: null,
       projectSession: {},
       learning: {},
+      taskLaunches: {},
     });
   });
   afterEach(() => Object.assign(window, { styx: undefined }));
 
-  it('startLearnRun: spawns the default agent in the main worktree with the learn prompt (plus the detection as a hint), remembers the session and opens it', async () => {
+  it('startLearnRun: spawns the default agent in the main worktree with the learn prompt (plus the detection as a hint), remembers the session and opens progress without navigating', async () => {
     expect(await startLearnRun(model, acme)).toBe('s-learn');
     const settings = projectSettingsOfOrDefault(model, acme);
     expect(calls('session.spawn')).toEqual([
@@ -80,9 +81,12 @@ describe('learned abilities: the first Run locally / Deploy is a task for the pr
     ]);
     const ui = useUiStore.getState();
     expect(ui.learning).toEqual({ [learnKey.run(acme)]: 's-learn' });
-    expect(ui.screen).toBe('workspace');
-    expect(ui.projectId).toBe(acme);
-    expect(ui.projectSession[acme]).toBe('s-learn');
+    expect(ui.screen).toBe('home');
+    expect(ui.projectId).toBeNull();
+    expect(ui.projectSession[acme]).toBeUndefined();
+    expect(ui.overlays).toContainEqual(
+      expect.objectContaining({ kind: 'task', taskKey: learnKey.run(acme) }),
+    );
   });
 
   it('startLearnRun with a failure: the fix prompt carries the command and what went wrong; no detection', async () => {
@@ -118,7 +122,10 @@ describe('learned abilities: the first Run locally / Deploy is a task for the pr
       purpose: 'learn-deploy',
     });
     expect(useUiStore.getState().learning).toEqual({ [learnKey.deploy(gcp.id)]: 's-learn' });
-    expect(useUiStore.getState().projectSession[ids.project.infraTools]).toBe('s-learn');
+    expect(useUiStore.getState().projectSession[ids.project.infraTools]).toBeUndefined();
+    expect(useUiStore.getState().overlays).toContainEqual(
+      expect.objectContaining({ kind: 'task', taskKey: learnKey.deploy(gcp.id) }),
+    );
   });
 
   it('a spawn that fails leaves nothing behind', async () => {

@@ -1,0 +1,75 @@
+@layer screens {
+  .panel {
+    position: absolute;
+    top: calc(var(--h-titlebar) + var(--sp-4));
+    right: var(--sp-4);
+    width: var(--w-modal-connect);
+    max-height: calc(100% - var(--h-titlebar) - var(--sp-4) * 2);
+    display: flex;
+    flex-direction: column;
+    background: var(--s1);
+    border: 1px solid var(--tx);
+    color: var(--tx);
+    z-index: 5;
+  }
+  .header,
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-3) var(--sp-4);
+    flex-wrap: wrap;
+  }
+  .header {
+    justify-content: space-between;
+    border-bottom: 1px solid var(--ln);
+  }
+  .body {
+    padding: var(--sp-4);
+    overflow: auto;
+    min-height: 0;
+  }
+  .actions {
+    border-top: 1px solid var(--ln);
+  }
+  .status {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+  .panel[data-busy='true'] .status > span {
+    animation: styx-blink var(--motion-blink);
+  }
+  .hint {
+    color: var(--mu);
+  }
+  .result {
+    margin-block: var(--sp-4);
+    overflow-wrap: anywhere;
+  }
+  .activity {
+    font-family: var(--font-mono);
+    overflow-wrap: anywhere;
+    color: var(--mu);
+  }
+  .list {
+    display: flex;
+    flex-direction: column;
+  }
+  .entry {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    padding: var(--sp-3);
+    text-align: left;
+    font: inherit;
+    background: var(--s1);
+    color: var(--tx);
+    border: 0;
+    border-bottom: 1px solid var(--ln);
+    cursor: pointer;
+  }
+  .entry:hover {
+    background: var(--s2);
+  }
+}

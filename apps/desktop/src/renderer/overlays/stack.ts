@@ -1,7 +1,7 @@
 import type { Agent, AskId, AuditId, ProjectId, Provider, SessionId, TargetId } from '@styx/core';
 
 /** Overlay kinds and their z-order / behaviour (plan §8 Overlays). */
-export type OverlayKind = 'palette' | 'modal' | 'sheet' | 'drawer' | 'toast';
+export type OverlayKind = 'palette' | 'modal' | 'sheet' | 'drawer' | 'toast' | 'task';
 
 export type ToastPayload =
   | { kind: 'ask'; askId: AskId; sessionId: SessionId; projectId: ProjectId }
@@ -30,6 +30,7 @@ export type ModalPayload =
   | { modal: 'connect-agent'; agent: Agent; returnTo?: { modal: 'spawn'; projectId: ProjectId } };
 
 export type Overlay =
+  | { id: string; kind: 'task'; taskKey: string | null }
   | { id: string; kind: 'palette' }
   | ({ id: string; kind: 'modal' } & ModalPayload)
   | { id: string; kind: 'sheet'; sheet: 'grant'; sessionId: SessionId; askId: AskId }
@@ -51,6 +52,7 @@ export interface OverlayTraits {
 }
 
 export const OVERLAY_TRAITS: Record<OverlayKind, OverlayTraits> = {
+  task: { z: 5, trap: false, dim: false },
   palette: { z: 40, trap: true, dim: true },
   modal: { z: 30, trap: true, dim: true },
   toast: { z: 20, trap: false, dim: false },
@@ -64,6 +66,7 @@ export const overlayId = (kind: OverlayKind): string => `${kind}-${++counter}`;
 /** Push keeps the stack sorted by z (stable within a z); at most one modal and one palette. */
 export const pushOverlay = (stack: readonly Overlay[], overlay: Overlay): Overlay[] => {
   const base = stack.filter((o) => {
+    if (overlay.kind === 'task' && o.kind === 'task') return false;
     if (overlay.kind === 'modal' && o.kind === 'modal') return false;
     if (overlay.kind === 'palette' && o.kind === 'palette') return false;
     return true;

@@ -5,10 +5,7 @@ import { type CommandBus, fail } from '../bus';
 export function registerSessionCommands(bus: CommandBus, app: Container): void {
   const { sessions, repos, terminals } = app;
 
-  bus.register('session.spawn', async (input) => {
-    const { session, worktree } = await sessions.spawn(input);
-    return { sessionId: session.id, worktreeId: worktree.id };
-  });
+  bus.register('session.spawn', (input) => sessions.start(input));
 
   bus.register('session.sendMessage', async ({ sessionId, body, attachments }) => {
     await sessions.sendMessage(sessionId, body, attachments);

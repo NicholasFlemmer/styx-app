@@ -1897,3 +1897,77 @@ describe('SessionService attachments + slash commands', () => {
     expect(a.sessions.get(session.id)?.slashCommands).toEqual(['compact', 'model']);
   });
 });
+
+describe('background task lifecycle', () => {
+  it('persists task identity, publishes it, and releases the runner when its turn finishes', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn({
+      ...spawnInput('claude', ids.worktree.featPromo),
+      purpose: 'learn-deploy',
+      taskTargetId: ids.target.vercelPreview,
+    });
+    expect(a.repos.sessions.get(session.id)).toMatchObject({
+      purpose: 'learn-deploy',
+      taskTargetId: ids.target.vercelPreview,
+    });
+    stream.emit('effect', session.id, {
+      type: 'transcript',
+      body: 'Deployment finished.',
+      payload: { kind: 'agent' },
+    });
+    stream.emit('effect', session.id, { type: 'session', event: 'quiet' });
+    expect(a.repos.sessions.get(session.id)).toMatchObject({
+      state: 'done',
+      exitCode: 0,
+      purpose: 'learn-deploy',
+    });
+    expect(stream.has(session.id)).toBe(false);
+    expect(a.repos.transcripts.last(session.id, 10).at(-1)?.body).toBe('Deployment finished.');
+  });
+
+  it('keeps an unanswered permission alive and cancels it when the task is stopped', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn({
+      ...spawnInput('claude', ids.worktree.featPromo),
+      purpose: 'debt-audit',
+    });
+    stream.emit('effect', session.id, {
+      type: 'permission',
+      requestId: 'task-p',
+      toolName: 'Bash',
+      input: { command: 'npm test' },
+    });
+    stream.emit('effect', session.id, { type: 'session', event: 'quiet' });
+    expect(a.repos.sessions.get(session.id)?.state).toBe('needs-you');
+    expect(stream.has(session.id)).toBe(true);
+    a.sessions.stop(session.id);
+    expect(a.repos.sessions.get(session.id)).toMatchObject({ state: 'done', exitCode: null });
+    expect(a.repos.pendingAsks.openBySession(session.id)).toEqual([]);
+    expect(stream.permissions).toContainEqual(expect.objectContaining({ requestId: 'task-p', allow: false }));
+  });
+
+  it('preserves failure after the runner exits cleanly in response to being killed', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn({
+      ...spawnInput('claude', ids.worktree.featPromo),
+      purpose: 'learn-run',
+    });
+    stream.emit('effect', session.id, { type: 'error', message: 'Authentication failed' });
+    stream.emit('effect', session.id, { type: 'session', event: 'quiet' });
+    expect(a.repos.sessions.get(session.id)).toMatchObject({
+      state: 'done',
+      exitCode: 1,
+      note: 'Authentication failed',
+    });
+    expect(stream.has(session.id)).toBe(false);
+  });
+
+  it('deduplicates an active task through the command bus', async () => {
+    const { app: a } = app();
+    const input = { ...spawnInput('claude', ids.worktree.featPromo), purpose: 'debt-audit' };
+    const first = await a.bus.dispatch(sender, 'session.spawn', input);
+    const second = await a.bus.dispatch(sender, 'session.spawn', input);
+    expect(second).toEqual(first);
+    expect(stream.spawned).toHaveLength(1);
+  });
+});

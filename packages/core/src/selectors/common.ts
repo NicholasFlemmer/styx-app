@@ -11,7 +11,7 @@ export const liveSessions = (model: ReadModel): Session[] =>
   rows(model.sessions).filter((s) => s.archivedAt === null);
 
 export const sessionsInProject = (model: ReadModel, projectId: ProjectId): Session[] =>
-  liveSessions(model).filter((s) => s.projectId === projectId);
+  liveSessions(model).filter((s) => s.projectId === projectId && !s.purpose);
 
 export const worktreeOf = (model: ReadModel, session: Pick<Session, 'worktreeId'>): Worktree | null =>
   model.worktrees.byId[session.worktreeId] ?? null;

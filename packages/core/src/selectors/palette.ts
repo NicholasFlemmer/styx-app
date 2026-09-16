@@ -120,7 +120,7 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
         action: { kind: 'deploy', projectId, targetId: t.id },
       });
     }
-    for (const s of liveSessions(model)) {
+    for (const s of liveSessions(model).filter((s) => !s.purpose)) {
       if (s.projectId !== projectId || s.state !== 'needs-you') continue;
       const ask = headAskOf(model, s.id);
       if (ask === null || ask.kind !== 'grant' || ask.grantId === null) continue;
@@ -204,6 +204,7 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
 
 const agentItems = (model: ReadModel): PaletteItem[] =>
   liveSessions(model)
+    .filter((s) => !s.purpose)
     .filter((s) => s.state !== 'done')
     .map((s) => ({
       id: `session:${s.id}`,

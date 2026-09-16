@@ -109,8 +109,9 @@ export interface SpawnInput {
   model: string | null;
   permissionMode?: PermissionMode;
   effort?: Effort | null;
-  /** Why Styx started it (Run locally / Deploy hand-off); only such a session may `remember_command`. */
+  /** Background task identity; the matching run/deploy purpose gates `remember_command`. */
   purpose?: SessionPurpose | null;
+  taskTargetId?: Session['taskTargetId'];
 }
 
 export const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
@@ -362,6 +363,29 @@ export class SessionService {
 
   // --- spawn ---------------------------------------------------------------
 
+  /** Start from the UI. Reopening an active background task must not create another process. */
+  async start(input: SpawnInput): Promise<{ sessionId: SessionId; worktreeId: WorktreeId }> {
+    if (input.purpose) {
+      if (input.taskTargetId) {
+        const target = this.deps.repos.targets.get(input.taskTargetId);
+        if (!target || target.projectId !== input.projectId || input.purpose !== 'learn-deploy')
+          fail('not-found', 'Deploy target does not belong to this project');
+      }
+      const existing = this.deps.repos.sessions
+        .byProject(input.projectId)
+        .find(
+          (s) =>
+            s.purpose === input.purpose &&
+            s.taskTargetId === input.taskTargetId &&
+            s.state !== 'done' &&
+            s.archivedAt === null,
+        );
+      if (existing) return { sessionId: existing.id, worktreeId: existing.worktreeId };
+    }
+    const { session, worktree } = await this.spawn(input);
+    return { sessionId: session.id, worktreeId: worktree.id };
+  }
+
   async spawn(input: SpawnInput): Promise<{ session: Session; worktree: Worktree; token: string }> {
     const { repos, clock } = this.deps;
     const project =
@@ -413,6 +437,8 @@ export class SessionService {
       projectId: project.id,
       worktreeId: worktree.id,
       agent: input.agent,
+      ...(input.purpose ? { purpose: input.purpose } : {}),
+      ...(input.taskTargetId ? { taskTargetId: input.taskTargetId } : {}),
       runner: runnerFor(input.agent, repos.discovery.cli(input.agent)),
       model: input.model,
       permissionMode: input.permissionMode ?? 'default',
@@ -491,6 +517,11 @@ export class SessionService {
       return;
     }
     const runner = runnerFor(session.agent, cli);
+    if (session.purpose && runner !== 'stream') {
+      this.setNote(session.id, copy.tasks.unsupported);
+      this.applyEvent(session.id, { type: 'finish', exitCode: 1 });
+      return;
+    }
     if (runner !== session.runner) {
       repos.sessions.upsert({ ...session, runner });
       this.deps.publisher.upsert('sessions', [session.id]);
@@ -785,6 +816,7 @@ export class SessionService {
 
   stop(sessionId: string): void {
     const s = this.require(sessionId);
+    if (s.purpose && s.state !== 'done') this.applyEvent(s.id, { type: 'finish', exitCode: null });
     if (this.deps.stream.has(s.id)) {
       this.deps.stream.kill(s.id);
       return; // `finish` follows from the stream exit event
@@ -1076,7 +1108,7 @@ export class SessionService {
     }
     if (s.state === 'done') {
       // A SessionEnd hook already finished it; keep the real exit code.
-      if (s.exitCode === null && exitCode !== null) {
+      if (!s.purpose && s.exitCode === null && exitCode !== null) {
         this.deps.repos.sessions.upsert({ ...s, exitCode });
         this.deps.publisher.upsert('sessions', [s.id]);
       }
@@ -1158,9 +1190,15 @@ export class SessionService {
       case 'note':
         this.setNote(s.id, effect.note);
         return;
-      case 'session':
-        this.applyEvent(s.id, { type: effect.event });
+      case 'session': {
+        const next = this.applyEvent(s.id, { type: effect.event });
+        // A background job ends at the structured turn boundary. PTY quiet timers are not completion signals.
+        if (s.purpose && effect.event === 'quiet' && next?.state === 'idle') {
+          this.applyEvent(s.id, { type: 'finish', exitCode: 0 });
+          this.deps.stream.kill(s.id);
+        }
         return;
+      }
       case 'rescan':
         this.hooks?.rescanHunks(s.id);
         return;
@@ -1168,6 +1206,11 @@ export class SessionService {
         const outdated = parseCliOutdated(effect.message);
         if (outdated !== null) this.raiseOutdatedBanner(s, effect.message, outdated);
         else this.deps.transcript.system(s.id, redact(`error: ${effect.message}`));
+        if (s.purpose && s.state !== 'done') {
+          this.setNote(s.id, effect.message);
+          this.applyEvent(s.id, { type: 'finish', exitCode: 1 });
+          this.deps.stream.kill(s.id);
+        }
         return;
       }
       case 'permission':

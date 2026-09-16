@@ -1,4 +1,4 @@
-import { isDeployableTarget, type PaletteAction, type SessionId } from '@styx/core';
+import { isDeployableTarget, type PaletteAction } from '@styx/core';
 import { invokerOf, rememberInvoker } from '../../overlays/stack';
 import { command } from '../../state/commands';
 import { startLearnDeploy } from '../abilities/learn';
@@ -52,9 +52,7 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
       return;
     case 'debt-audit': {
       const projectId = action.projectId;
-      void startDebtAudit(model, projectId).then((r) => {
-        if (r !== null) ui.openSession(projectId, r.sessionId as SessionId);
-      });
+      void startDebtAudit(model, projectId);
       return;
     }
     case 'open-session': {

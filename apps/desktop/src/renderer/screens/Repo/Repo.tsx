@@ -1,5 +1,4 @@
 import {
-  type SessionId,
   copy,
   fixtures,
   repoHasGit,
@@ -16,8 +15,16 @@ import { startDebtAudit } from '../../features/audit';
 import { command } from '../../state/commands';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
 import { useReadModel } from '../../state/read-model';
-import { useUiStore } from '../../state/ui-store';
-import { defaultLane, laneDiffHeader, laneRows, nextWorktreeBranch, noGitLine, remoteLine, repoOfProject, type Lane } from './repo-data';
+import {
+  defaultLane,
+  laneDiffHeader,
+  laneRows,
+  nextWorktreeBranch,
+  noGitLine,
+  remoteLine,
+  repoOfProject,
+  type Lane,
+} from './repo-data';
 import s from './Repo.module.css';
 
 const identity = (m: ReadModel) => m;
@@ -99,13 +106,11 @@ export function Repo() {
   const fetch = useCallback(() => {
     if (projectId !== null) void command('worktree.fetch', { projectId });
   }, [projectId]);
-  /** Spawns the debt audit against this project and opens its chat, like any other agent session. */
+  /** Starts the debt audit as a background task. */
   const audit = useCallback(() => {
     if (projectId === null) return;
     const m = useReadModel.getState().model;
-    void startDebtAudit(m, projectId).then((r) => {
-      if (r !== null) useUiStore.getState().openSession(projectId, r.sessionId as SessionId);
-    });
+    void startDebtAudit(m, projectId);
   }, [projectId]);
 
   const create = useCallback(() => {
@@ -165,7 +170,13 @@ export function Repo() {
       <Table
         className={s['lanes']}
         columns={TABLE_COLUMNS.repo}
-        header={[copy.repo.columns.branch, copy.repo.columns.owner, copy.repo.columns.changes, copy.repo.columns.pr, '']}
+        header={[
+          copy.repo.columns.branch,
+          copy.repo.columns.owner,
+          copy.repo.columns.changes,
+          copy.repo.columns.pr,
+          '',
+        ]}
         aria-label={copy.repo.title}
       >
         {lanes.map((lane) => {
@@ -186,7 +197,12 @@ export function Repo() {
               <TableCell mono>{lane.changes}</TableCell>
               <TableCell mono>{lane.pr}</TableCell>
               <TableCell label align="end">
-                <button type="button" className={s['action']} onClick={onAction(lane)} data-action={lane.action}>
+                <button
+                  type="button"
+                  className={s['action']}
+                  onClick={onAction(lane)}
+                  data-action={lane.action}
+                >
                   {lane.actionLabel}
                 </button>
               </TableCell>
