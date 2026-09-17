@@ -98,7 +98,10 @@ describe('app rail + project nav (owner layout, discrepancies #85 / #87)', () =>
     expect(tile(copy.appRail.sections['app:general']).getAttribute('aria-current')).toBeNull();
     fireEvent.click(tile(copy.appRail.sections['app:keychain']));
     expect(useUiStore.getState().settingsSection).toBe('app:keychain');
-    fireEvent.click(screen.getByRole('button', { name: copy.nav.projectSettings }));
+    // The project's options are rows in its nav, no Settings tab in between (owner request #88).
+    fireEvent.click(screen.getByRole('button', { name: copy.settings.project.env }));
+    expect(useUiStore.getState()).toMatchObject({ screen: 'settings', settingsSection: 'project:env' });
+    fireEvent.click(screen.getByRole('button', { name: copy.settings.project.targets }));
     expect(useUiStore.getState()).toMatchObject({ screen: 'settings', settingsSection: 'project:targets' });
     expect(tile(copy.appRail.sections['app:keychain']).getAttribute('aria-current')).toBeNull();
     // A section set elsewhere (a banner's Agents link) lights the matching tile.
@@ -114,7 +117,14 @@ describe('app rail + project nav (owner layout, discrepancies #85 / #87)', () =>
     const rows = Array.from(nav.querySelectorAll('[data-nav-item]')).map((b) =>
       b.getAttribute('data-nav-item'),
     );
-    expect(rows).toEqual(['workspace', 'agents', 'repo', 'settings']);
+    expect(rows).toEqual([
+      'workspace',
+      'agents',
+      'repo',
+      'project:targets',
+      'project:agent-defaults',
+      'project:env',
+    ]);
     for (const b of nav.querySelectorAll('[data-nav-item], [data-nav-audit]'))
       expect(b.querySelector('svg')).not.toBeNull();
     expect(nav.querySelector('[data-nav-tasks]')).toBeNull();

@@ -31,7 +31,7 @@ test('grant flow propagates through chat, counters, approvals, audit and targets
   await page.getByRole('tab', { name: /audit log/i }).click();
   await expect(page.getByText(/granted read\+write to Codex · 1h/)).toBeVisible();
 
-  await page.getByRole('button', { name: /^project settings/i }).click();
+  await page.click('[data-nav-item="project:targets"]');
   await page.waitForSelector('[data-screen-ready="settings"]');
   const supabaseRow = page.getByRole('row', { name: /supabase/i }).first();
   await expect(supabaseRow.getByText(/open · (1h|\d+m) left/)).toBeVisible();

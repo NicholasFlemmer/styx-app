@@ -62,8 +62,6 @@ export const copy = {
     approvals: 'Approvals',
     settings: 'Settings',
     worktreesMeta: '{n} wt',
-    /** Project nav (owner layout, discrepancy #85): the group is the project; its Settings are the project's. */
-    projectSettings: 'Project settings',
   },
   /**
    * Global rail left of the project switcher (owner layout, discrepancies #85 / #87): app-level places and every

@@ -12,7 +12,6 @@ import {
   Button,
   Label,
   LabelValueRow,
-  NavItem,
   Select,
   Table,
   TableCell,
@@ -27,14 +26,7 @@ import { SkillsPane } from './SkillsPane';
 import { command } from '../../state/commands';
 import { useCopyPlatform, useModel, useNow, useUi } from '../../state/hooks';
 import { sectionRows, type SettingsRow } from './rows';
-import {
-  APP_SECTIONS,
-  isProjectSection,
-  PROJECT_SECTIONS,
-  resolveSection,
-  SECTION_LABEL,
-  type SettingsSection,
-} from './sections';
+import { isProjectSection, resolveSection, SECTION_LABEL, type SettingsSection } from './sections';
 import s from './Settings.module.css';
 
 const identity = (m: ReadModel): ReadModel => m;
@@ -45,11 +37,14 @@ const POLICY_OPTIONS = (['ask-mfa', 'ask', 'always'] as const).map((value) => ({
 }));
 const isPolicy = (v: string): v is TargetPolicy => v in copy.targets.policy;
 
-/** Settings (spec §4.6): 220px section nav · header · Targets table or label/value rows. */
+/**
+ * Settings (spec §4.6, owner layout #85 / #88): one section at a time — header, then the Targets table or the
+ * label/value rows. The section nav is gone: App sections are tiles on the app rail, project options are rows in
+ * the project nav, so nothing here is an extra click.
+ */
 export function Settings() {
   const projectId = useUi((u) => u.projectId);
   const rawSection = useUi((u) => u.settingsSection);
-  const setSettingsSection = useUi((u) => u.setSettingsSection);
   const model = useModel(identity);
 
   const section = resolveSection(rawSection);
@@ -58,52 +53,19 @@ export function Settings() {
     ? fill(copy.settings.scope.project, { project: projectName })
     : copy.settings.scope.app;
 
-  const navGroup = (ids: readonly SettingsSection[]) =>
-    ids.map((id) => (
-      <NavItem
-        key={id}
-        dense
-        label={SECTION_LABEL[id]}
-        inv={section === id}
-        onClick={() => setSettingsSection(id)}
-        data-settings-nav={id}
-      />
-    ));
-
   return (
     <div className={s['screen']} data-settings-section={section}>
-      {/* One group at a time (owner layout #85): the app rail opens the App group, the project nav the Project group. */}
-      <nav className={s['nav']} aria-label={copy.nav.settings}>
-        {isProjectSection(section) ? (
-          <>
-            <Label as="div" className={s['groupHead']}>
-              {fill(copy.settings.groups.project, { project: projectName })}
-            </Label>
-            {navGroup(PROJECT_SECTIONS)}
-          </>
-        ) : (
-          <>
-            <Label as="div" className={s['groupHead']}>
-              {copy.settings.groups.app}
-            </Label>
-            {navGroup(APP_SECTIONS)}
-          </>
-        )}
-        {/* The footer describes the project file; the App group has no file behind it. */}
-        {isProjectSection(section) ? (
-          <div className={s['navFoot']}>
-            {copy.settings.footer.file}
-            <br />
-            {copy.settings.footer.note}
-          </div>
-        ) : null}
-      </nav>
       <section className={s['main']} aria-labelledby="settings-title">
         <header className={s['header']}>
           <h2 id="settings-title" className={s['title']}>
             {SECTION_LABEL[section]}
           </h2>
           <Label data-settings-scope="true">{scope}</Label>
+          {isProjectSection(section) ? (
+            <span className={s['file']} data-settings-file="true">
+              {copy.settings.footer.file} · {copy.settings.footer.note}
+            </span>
+          ) : null}
         </header>
         {section === 'project:targets' ? (
           <Targets model={model} projectId={projectId} />

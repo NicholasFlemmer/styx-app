@@ -31,6 +31,9 @@ export type IconName =
   | 'workspace'
   | 'repo'
   | 'projectSettings'
+  | 'targets'
+  | 'agentDefaults'
+  | 'env'
   | 'audit';
 
 interface Part {
@@ -133,6 +136,26 @@ const GLYPHS: Record<IconName, Glyph> = {
   projectSettings: {
     box: 16,
     parts: [stroke('M1.5 3.5 H6 L7.5 5.5 H14.5 V13.5 H1.5 Z M4 9.5 H12'), square(8, 8, 3)],
+  },
+  /** Targets: concentric squares (where a deploy lands). */
+  targets: {
+    box: 16,
+    parts: [stroke('M1.5 1.5 H14.5 V14.5 H1.5 Z M4.5 4.5 H11.5 V11.5 H4.5 Z'), square(7, 7, 2)],
+  },
+  /** Agent defaults: a terminal window with its slider. */
+  agentDefaults: {
+    box: 16,
+    parts: [stroke('M1.5 2.5 H14.5 V10.5 H1.5 Z M4 5 L6 7 L4 9 M3 13.5 H13'), square(7, 12, 3)],
+  },
+  /** Env & secrets: key = value rows. */
+  env: {
+    box: 16,
+    parts: [
+      stroke('M2 4 H5.5 M8 4 H14 M2 8 H5.5 M8 8 H14 M2 12 H5.5 M8 12 H14'),
+      square(6, 3, 1.5),
+      square(6, 7, 1.5),
+      square(6, 11, 1.5),
+    ],
   },
   /** Tech debt audit: a magnifier over a page. */
   audit: {
