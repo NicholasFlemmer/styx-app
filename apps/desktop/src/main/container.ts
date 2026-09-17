@@ -25,7 +25,7 @@ import { PtyLog } from './services/pty-log';
 import { PtyService } from './services/pty-service';
 import { RefreshScheduler } from './services/refresh-scheduler';
 import { RetentionJob } from './services/retention-job';
-import { isLoopbackUrl, RunService } from './services/run-service';
+import { isLoopbackUrl, RunService, type ProbeAnswer } from './services/run-service';
 import { commandCarriesSecret } from './services/logger';
 import { SessionService } from './services/session-service';
 import { StreamRunner, type StreamRunnerLike } from './services/stream-runner';
@@ -141,7 +141,7 @@ export interface ContainerOptions {
   /** Runs a CLI status command for AgentService (`claude auth status --json` …); faked in tests. */
   exec?: (bin: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>;
   /** Does a dev-server URL answer? (RunService); faked in tests so nothing is ever probed for real. */
-  probe?: (url: string) => Promise<boolean>;
+  probe?: (url: string) => Promise<boolean | ProbeAnswer>;
 }
 
 export interface Container {
@@ -174,6 +174,19 @@ export interface Container {
   skills: SkillsService;
   agents: AgentService;
   runs: RunService;
+  /** Filled by their work packages (ADR-0020 checkpoints, publish, usage); optional until then. */
+  checkpoints?: {
+    diff(id: string): Promise<{ patch: string; files: { path: string; added: number; removed: number }[] }>;
+    revert(id: string): Promise<void>;
+  };
+  publish?: {
+    generateMessage(worktreeId: string, kind: 'commit' | 'pr'): Promise<{ title: string; body: string }>;
+    publish(
+      worktreeId: string,
+      opts: { through: 'commit' | 'push' | 'pr'; message: { title: string; body: string }; draft: boolean },
+    ): Promise<{ commit: string | null; pushed: boolean; pr: { number: number; url: string } | null }>;
+  };
+  usage?: { refreshLimits(): Promise<void> };
   terminals: TerminalService;
   broker: BrokerHost;
   windows: WindowsPort;

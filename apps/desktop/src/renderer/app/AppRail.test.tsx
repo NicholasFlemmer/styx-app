@@ -43,6 +43,7 @@ describe('app rail + project nav (owner layout, discrepancies #85 / #87)', () =>
       copy.appRail.agents.title,
       copy.appRail.approvals.title,
       copy.appRail.tasks.title,
+      copy.appRail.usage.title,
       ...Object.values(copy.appRail.sections),
     ]);
     // Every tile is an icon, not text: nothing hides behind a menu any more.

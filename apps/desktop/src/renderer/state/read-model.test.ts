@@ -26,6 +26,9 @@ const snapshotOf = (seq: number): ReadModelSnapshot => {
     activity: f.activity,
     runs: [],
     deploys: [],
+    checkpoints: {},
+    queues: {},
+    limits: {},
   };
 };
 

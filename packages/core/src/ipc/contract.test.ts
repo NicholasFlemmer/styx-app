@@ -20,6 +20,7 @@ describe('ipc contract', () => {
         'agent',
         'ask',
         'audit',
+        'checkpoint',
         'deploy',
         'detect',
         'dialog',
@@ -39,6 +40,7 @@ describe('ipc contract', () => {
         'settings',
         'store',
         'target',
+        'usage',
         'terminal',
         'ui',
         'window',
@@ -188,6 +190,9 @@ describe('ipc contract', () => {
       activity: m.activity,
       runs: Object.values(m.runs),
       deploys: Object.values(m.deploys),
+      checkpoints: m.checkpoints,
+      queues: m.queues,
+      limits: m.limits,
     };
     const r = commands['store.snapshot'].output.safeParse(snapshot);
     expect(r.success).toBe(true);

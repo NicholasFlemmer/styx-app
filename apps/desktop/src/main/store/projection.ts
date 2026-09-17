@@ -7,6 +7,8 @@ import {
   type ReadModelSnapshot,
   type SessionId,
   type TranscriptMessage,
+  type Checkpoint,
+  type QueuedMessage,
 } from '@styx/core';
 import type { Repos } from '../db/repos';
 
@@ -21,6 +23,8 @@ export interface ProjectionDeps {
   /** Main-owned in-memory rows (RunService / DeployService); absent in tests that only project SQLite. */
   runs?: () => ReadModelSnapshot['runs'];
   deploys?: () => ReadModelSnapshot['deploys'];
+  /** Latest rate limits per agent (UsageService); absent in tests. */
+  limits?: () => ReadModelSnapshot['limits'];
 }
 
 /** Effective per-project settings: builtin defaults ← app ← `.styx/project.json` overrides stored in `projects.settings_json`. */
@@ -38,6 +42,10 @@ export function buildSnapshot(deps: ProjectionDeps, seq: number): ReadModelSnaps
   const hunks: Record<string, AgentChange[]> = {};
   if (repos.settings.app().trackAgentEdits)
     for (const sid of repos.agentChanges.sessionIds()) hunks[sid] = repos.agentChanges.bySession(sid);
+  const checkpoints: Record<string, Checkpoint[]> = {};
+  for (const sid of repos.checkpoints.sessionIds()) checkpoints[sid] = repos.checkpoints.bySession(sid);
+  const queues: Record<string, QueuedMessage[]> = {};
+  for (const sid of repos.queuedMessages.sessionIds()) queues[sid] = repos.queuedMessages.bySession(sid);
   const project: Record<string, EffectiveProjectSettings> = {};
   const projects = repos.projects.all();
   for (const p of projects) project[p.id] = projectSettingsFor(repos, p.id);
@@ -66,6 +74,9 @@ export function buildSnapshot(deps: ProjectionDeps, seq: number): ReadModelSnaps
     popouts: deps.popouts() as SessionId[],
     activity: repos.activity.recent(ACTIVITY_WINDOW),
     runs: deps.runs?.() ?? [],
+    checkpoints,
+    queues,
+    limits: deps.limits?.() ?? {},
     deploys: deps.deploys?.() ?? [],
   };
 }

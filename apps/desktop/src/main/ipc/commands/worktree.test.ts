@@ -94,7 +94,10 @@ describe('worktree.openInIde', () => {
 
     // A file outside the worktree is refused before anything launches.
     expect(
-      await t.app.bus.dispatch(t.sender, 'worktree.openInIde', { worktreeId: wt.id, file: '../../etc/passwd' }),
+      await t.app.bus.dispatch(t.sender, 'worktree.openInIde', {
+        worktreeId: wt.id,
+        file: '../../etc/passwd',
+      }),
     ).toMatchObject({ ok: false, error: { code: 'fs-denied' } });
     expect(calls).toHaveLength(2);
 

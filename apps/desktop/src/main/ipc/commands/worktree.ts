@@ -41,6 +41,18 @@ export const rankFiles = (paths: readonly string[], query: string): string[] => 
 
 /** worktree.* · hunk.* · fs.* */
 export function registerWorktreeCommands(bus: CommandBus, app: Container): void {
+  // Commit / push / PR in one step: filled by the publish work package (PublishService).
+  bus.register('worktree.generateMessage', async ({ worktreeId, kind }) => {
+    const svc = app.publish;
+    if (!svc) fail('internal', 'publish unavailable');
+    return svc.generateMessage(worktreeId, kind);
+  });
+  bus.register('worktree.publish', async ({ worktreeId, through, message, draft }) => {
+    const svc = app.publish;
+    if (!svc) fail('internal', 'publish unavailable');
+    return svc.publish(worktreeId, { through, message, draft });
+  });
+
   const { repos, git, publisher, hunks, clock } = app;
 
   const requireWorktree = (id: string): Worktree =>

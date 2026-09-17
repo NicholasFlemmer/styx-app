@@ -84,7 +84,10 @@ describe('command contract', () => {
     const { app, sender } = makeTestApp();
     const n = fixtures.demoFixture().auditEntries.length;
     const page = await app.bus.dispatch(sender, 'audit.list', { limit: 2 });
-    expect(page).toMatchObject({ ok: true, value: { entries: [{ seq: n }, { seq: n - 1 }], nextCursor: n - 1 } });
+    expect(page).toMatchObject({
+      ok: true,
+      value: { entries: [{ seq: n }, { seq: n - 1 }], nextCursor: n - 1 },
+    });
     const next = await app.bus.dispatch(sender, 'audit.list', { cursor: n - 1, limit: 10 });
     expect(next).toMatchObject({
       ok: true,
@@ -113,17 +116,33 @@ describe('command contract', () => {
       imported: { recents: 0, keybindings: false, theme: false },
       detectedAt: app.clock.now(),
     });
-    const r = await app.bus.dispatch(sender, 'ide.import', { ideId: 'ide-vscode', keybindings: true, theme: true, recents: true });
+    const r = await app.bus.dispatch(sender, 'ide.import', {
+      ideId: 'ide-vscode',
+      keybindings: true,
+      theme: true,
+      recents: true,
+    });
     expect(r).toEqual({ ok: true, value: { recents: [], keybindingsImported: 3, themeImported: true } });
     expect(app.repos.settings.kv.get('editor.importedKeybindings')).toEqual([
       { key: 'cmd+shift+p', command: 'workbench.action.showCommands' },
       { key: 'ctrl+k ctrl+t', command: 'workbench.action.selectTheme', when: 'editorTextFocus' },
       { key: 'alt+z', command: '-editor.action.toggleWordWrap' },
     ]);
-    expect(app.repos.settings.kv.get('editor.importedTheme')).toEqual({ colorTheme: 'GitHub Dark Default', fontFamily: 'JetBrains Mono, Menlo, monospace', from: 'vscode' });
+    expect(app.repos.settings.kv.get('editor.importedTheme')).toEqual({
+      colorTheme: 'GitHub Dark Default',
+      fontFamily: 'JetBrains Mono, Menlo, monospace',
+      from: 'vscode',
+    });
     expect(app.repos.discovery.ides()[0]?.imported).toEqual({ recents: 0, keybindings: true, theme: true });
     expect(app.repos.settings.app()).not.toHaveProperty('editor.importedTheme'); // extra keys never leak into AppSettings
-    expect(await app.bus.dispatch(sender, 'ide.import', { ideId: 'nope', keybindings: true, theme: true, recents: true })).toEqual({
+    expect(
+      await app.bus.dispatch(sender, 'ide.import', {
+        ideId: 'nope',
+        keybindings: true,
+        theme: true,
+        recents: true,
+      }),
+    ).toEqual({
       ok: true,
       value: { recents: [], keybindingsImported: 0, themeImported: false },
     });
@@ -170,9 +189,15 @@ describe('command contract', () => {
     const after = await app.bus.dispatch(sender, 'store.snapshot', {});
     if (!after.ok) throw new Error('snapshot');
     expect(after.value.repos.find((r) => r.projectId === projectId)).toMatchObject({ defaultBranch: 'main' });
-    expect(after.value.worktrees.find((w) => w.projectId === projectId)).toMatchObject({ branch: 'main', isMain: true });
+    expect(after.value.worktrees.find((w) => w.projectId === projectId)).toMatchObject({
+      branch: 'main',
+      isMain: true,
+    });
     expect(
-      win.batches().flatMap((b) => b.deltas).some((d) => d.op === 'upsert' && (d as { table?: string }).table === 'worktrees'),
+      win
+        .batches()
+        .flatMap((b) => b.deltas)
+        .some((d) => d.op === 'upsert' && (d as { table?: string }).table === 'worktrees'),
     ).toBe(true);
   });
 
@@ -243,7 +268,10 @@ describe('command contract', () => {
       expect(await app.bus.dispatch(sender, 'fs.find', { worktreeId, query: '  a.ts ' })).toEqual({
         ok: true,
         // exact basename, then the basename prefix (a.tsx), then subsequence hits in ls-files order
-        value: { paths: ['src/a.ts', 'src/components/a.tsx', 'src/ab.ts', 'src/components/a.test.tsx'], truncated: false },
+        value: {
+          paths: ['src/a.ts', 'src/components/a.tsx', 'src/ab.ts', 'src/components/a.test.tsx'],
+          truncated: false,
+        },
       });
       expect(await app.bus.dispatch(sender, 'fs.find', { worktreeId, query: 'a.ts', limit: 2 })).toEqual({
         ok: true,

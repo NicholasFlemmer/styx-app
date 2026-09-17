@@ -12,6 +12,7 @@ import { MemoryVault } from './services/credential-vault';
 import type { DetectService } from './services/detect-service';
 import { FakeMfaProvider, type MfaResult } from './services/mfa-service';
 import type { PtyService } from './services/pty-service';
+import type { ProbeAnswer } from './services/run-service';
 import type { StreamRunnerLike } from './services/stream-runner';
 import { EVENT_CHANNEL, type WindowLike } from './store/publisher';
 
@@ -66,7 +67,7 @@ export interface TestAppOptions {
   /** AgentService's CLI status runner (`claude auth status --json` …); tests fake it so no real CLI runs. */
   exec?: (bin: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>;
   /** RunService's URL probe; tests answer it so nothing is ever connected to for real. */
-  probe?: (url: string) => Promise<boolean>;
+  probe?: (url: string) => Promise<boolean | ProbeAnswer>;
 }
 
 /** An in-memory app: SQLite `:memory:`, MemoryVault, FakeMfa, no Electron, one registered fake window. */

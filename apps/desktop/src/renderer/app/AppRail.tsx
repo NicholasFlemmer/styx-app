@@ -84,6 +84,14 @@ export function AppRail() {
         onClick={() => openTask(null)}
         data-app-rail-item="tasks"
       />
+      <RailTile
+        icon="usage"
+        title={copy.appRail.usage.title}
+        active={screen === 'usage'}
+        current="page"
+        onClick={() => setScreen('usage')}
+        data-app-rail-item="usage"
+      />
       <div className={s['appRailDivider']} role="presentation" />
       {APP_SECTIONS.map((id) => (
         <RailTile

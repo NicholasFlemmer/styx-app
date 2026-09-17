@@ -98,6 +98,9 @@ export interface SessionHooks {
   unwatchWorktree: (worktreeId: WorktreeId) => void;
   /** `PostToolUse Edit|Write` and stream tool results re-diff the worktree. */
   rescanHunks: (sessionId: SessionId) => void;
+  /** Turn boundaries for checkpoints (docs/adr/0020): a user turn is about to start / the agent went quiet. */
+  turnStarted?: (sessionId: SessionId, messageId: string) => void;
+  turnSettled?: (sessionId: SessionId) => void;
 }
 
 export interface SpawnInput {
@@ -645,10 +648,12 @@ export class SessionService {
             attachments,
           );
     const shown = body !== '' ? body : prepared.meta.map(attachmentName).join(', ');
-    this.deps.transcript.append(s.id, shown, {
+    const userRow = this.deps.transcript.append(s.id, shown, {
       kind: 'user',
       ...(prepared.meta.length > 0 ? { attachments: prepared.meta } : {}),
     });
+    // The workspace as it is before this turn is the turn's baseline (checkpoints, ADR-0020).
+    this.hooks?.turnStarted?.(s.id, userRow.id);
     if (!this.isRunning(s.id) && s.state !== 'paused') {
       const ok = await this.relaunch(s);
       if (!ok) return;
@@ -793,6 +798,22 @@ export class SessionService {
       this.deps.transcript.system(s.id, copy.chat.controls.interrupted);
       this.applyEvent(s.id, { type: 'quiet' });
     }
+  }
+
+  /** Queue (Claude Code has no steer): send a held message now / drop it. Filled by the queue work package. */
+  async sendQueued(sessionId: string, messageId: string): Promise<void> {
+    const m = this.deps.repos.queuedMessages.get(messageId);
+    if (!m || m.sessionId !== sessionId) fail('not-found', 'queued message not found');
+    this.deps.repos.queuedMessages.remove(m.id);
+    this.deps.publisher.queueReplace(m.sessionId, this.deps.repos.queuedMessages.bySession(m.sessionId));
+    await this.sendMessage(sessionId, m.body);
+  }
+
+  unqueue(sessionId: string, messageId: string): void {
+    const m = this.deps.repos.queuedMessages.get(messageId);
+    if (!m || m.sessionId !== sessionId) return;
+    this.deps.repos.queuedMessages.remove(m.id);
+    this.deps.publisher.queueReplace(m.sessionId, this.deps.repos.queuedMessages.bySession(m.sessionId));
   }
 
   /** Raw bytes from the terminal pane. Stream sessions have no TTY, so typed input is ignored there. */
@@ -1192,6 +1213,7 @@ export class SessionService {
         return;
       case 'session': {
         const next = this.applyEvent(s.id, { type: effect.event });
+        if (effect.event === 'quiet' && next?.state === 'idle') this.hooks?.turnSettled?.(s.id);
         // A background job ends at the structured turn boundary. PTY quiet timers are not completion signals.
         if (s.purpose && effect.event === 'quiet' && next?.state === 'idle') {
           this.applyEvent(s.id, { type: 'finish', exitCode: 0 });
@@ -1568,11 +1590,13 @@ export class SessionService {
           if (EDIT_TOOL.test(String(p['tool_name'] ?? ''))) this.hooks?.rescanHunks(s.id);
           return;
         }
-        case 'Stop':
+        case 'Stop': {
           this.agentMovedOn(s);
           this.hooks?.rescanHunks(s.id);
-          this.applyEvent(s.id, { type: 'quiet' });
+          const next = this.applyEvent(s.id, { type: 'quiet' });
+          if (next?.state === 'idle') this.hooks?.turnSettled?.(s.id);
           return;
+        }
         case 'SubagentStop':
           this.applyEvent(s.id, { type: 'activity' });
           return;
@@ -1604,8 +1628,9 @@ export class SessionService {
       if (/turn-complete|agent-turn-complete/.test(type)) {
         const msg = typeof p['last-assistant-message'] === 'string' ? p['last-assistant-message'] : null;
         if (msg) this.setNote(s.id, msg.slice(0, 200));
-        this.applyEvent(s.id, { type: 'quiet' });
+        const next = this.applyEvent(s.id, { type: 'quiet' });
         this.hooks?.rescanHunks(s.id);
+        if (next?.state === 'idle') this.hooks?.turnSettled?.(s.id);
       } else this.applyEvent(s.id, { type: 'activity' });
       return;
     }

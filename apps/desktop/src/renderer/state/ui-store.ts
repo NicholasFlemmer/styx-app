@@ -24,6 +24,7 @@ export const SCREENS = [
   'home',
   'workspace',
   'agents',
+  'usage',
   'repo',
   'approvals',
   'settings',

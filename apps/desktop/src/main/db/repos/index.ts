@@ -3,6 +3,8 @@ import { KvStore, WindowStateStore } from '../kv';
 import type { Db } from '../open';
 import { ActivityRepo } from './activity';
 import { AgentChangesRepo } from './agent-changes';
+import { CheckpointsRepo } from './checkpoints';
+import { QueuedMessagesRepo } from './queued-messages';
 import { AuditRepo } from './audit';
 import { DiscoveryRepo } from './discovery';
 import { GitReposRepo } from './git-repos';
@@ -48,6 +50,8 @@ export class Repos {
   readonly policies: PoliciesRepo;
   readonly notifications: NotificationsRepo;
   readonly agentChanges: AgentChangesRepo;
+  readonly checkpoints: CheckpointsRepo;
+  readonly queuedMessages: QueuedMessagesRepo;
   readonly activity: ActivityRepo;
   readonly discovery: DiscoveryRepo;
   readonly settings: SettingsRepo;
@@ -71,6 +75,8 @@ export class Repos {
     this.policies = new PoliciesRepo(db);
     this.notifications = new NotificationsRepo(db);
     this.agentChanges = new AgentChangesRepo(db);
+    this.checkpoints = new CheckpointsRepo(db);
+    this.queuedMessages = new QueuedMessagesRepo(db);
     this.activity = new ActivityRepo(db);
     this.discovery = new DiscoveryRepo(db);
     this.settings = new SettingsRepo(db, now);

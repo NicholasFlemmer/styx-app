@@ -8,7 +8,9 @@ import type { Notification } from './model/notification';
 import type { Policy } from './model/policy';
 import type { Project, Repo, Worktree } from './model/project';
 import type { Deploy, DevRun } from './model/run';
-import type { PendingAsk, Session, TranscriptMessage } from './model/session';
+import type { PendingAsk, QueuedMessage, Session, TranscriptMessage } from './model/session';
+import type { Checkpoint } from './model/checkpoint';
+import type { AgentLimits } from './model/usage';
 import type { AppSettings, EffectiveProjectSettings } from './model/settings';
 import type { Target } from './model/target';
 
@@ -110,6 +112,12 @@ export interface ReadModel extends ReadModelTables {
   runs: Readonly<Record<string, DevRun>>;
   /** Deploys Styx started this session, keyed by deploy id (main keeps the latest per target). */
   deploys: Readonly<Record<string, Deploy>>;
+  /** Per-session turn checkpoints (hidden git refs), oldest first. */
+  checkpoints: Readonly<Record<string, readonly Checkpoint[]>>;
+  /** Per-session messages held back while the agent is mid-turn, oldest first. */
+  queues: Readonly<Record<string, readonly QueuedMessage[]>>;
+  /** Latest rate limits per agent, from the CLIs' own reports. */
+  limits: Readonly<Record<string, AgentLimits>>;
 }
 
 export const TABLE_NAMES: readonly TableName[] = [
@@ -145,6 +153,9 @@ export const emptyReadModel = (app: AppSettings): ReadModel => ({
   activity: [],
   runs: {},
   deploys: {},
+  checkpoints: {},
+  queues: {},
+  limits: {},
 });
 
 export const projectSettingsOf = (model: ReadModel, projectId: ProjectId): EffectiveProjectSettings | null =>

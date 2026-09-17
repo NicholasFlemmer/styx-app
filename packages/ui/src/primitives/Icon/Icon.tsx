@@ -27,6 +27,7 @@ export type IconName =
   | 'keychain'
   | 'policies'
   | 'shortcuts'
+  | 'usage'
   // project nav
   | 'workspace'
   | 'repo'
@@ -120,6 +121,11 @@ const GLYPHS: Record<IconName, Glyph> = {
     ],
   },
 
+  /** Usage: a bar chart. */
+  usage: {
+    box: 16,
+    parts: [stroke('M1.5 14.5 H14.5'), square(3, 8, 2.5), square(7, 4, 2.5), square(11, 10, 2.5)],
+  },
   /** Workspace: the three-pane window. */
   workspace: { box: 16, parts: [stroke('M1.5 2.5 H14.5 V13.5 H1.5 Z M6 2.5 V13.5 M6 8.5 H14.5')] },
   /** Repo: a branch fork with square commits. */

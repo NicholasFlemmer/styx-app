@@ -6,6 +6,9 @@ import {
   type CliInstall,
   type Delta,
   type Deploy,
+  type Checkpoint,
+  type QueuedMessage,
+  type AgentLimits,
   type DevRun,
   type EffectiveProjectSettings,
   type EventName,
@@ -174,12 +177,29 @@ export class Publisher {
     this.emit({ op: 'deploys.set', deploy });
   }
 
+  checkpointsReplace(sessionId: SessionId, checkpoints: Checkpoint[]): void {
+    this.emit({ op: 'checkpoints.replace', sessionId, checkpoints });
+  }
+
+  queueReplace(sessionId: SessionId, messages: QueuedMessage[]): void {
+    this.emit({ op: 'queue.replace', sessionId, messages });
+  }
+
+  limitsSet(limits: AgentLimits): void {
+    this.emit({ op: 'limits.set', limits });
+  }
+
   // --- snapshot ------------------------------------------------------------
 
   snapshot(): ReadModelSnapshot {
     this.flush();
     return buildSnapshot(
-      { repos: this.deps.repos, popouts: this.deps.popouts, runs: this.extras.runs, deploys: this.extras.deploys },
+      {
+        repos: this.deps.repos,
+        popouts: this.deps.popouts,
+        runs: this.extras.runs,
+        deploys: this.extras.deploys,
+      },
       this.seqNo,
     );
   }

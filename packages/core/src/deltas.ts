@@ -10,7 +10,14 @@ import { policySchema } from './model/policy';
 import { projectSchema, repoSchema, worktreeSchema } from './model/project';
 import { deploySchema, devRunSchema } from './model/run';
 import { projectIdSchema } from './model/common';
-import { pendingAskSchema, sessionSchema, transcriptMessageSchema } from './model/session';
+import {
+  pendingAskSchema,
+  queuedMessageSchema,
+  sessionSchema,
+  transcriptMessageSchema,
+} from './model/session';
+import { checkpointSchema } from './model/checkpoint';
+import { agentLimitsSchema } from './model/usage';
 import { appSettingsSchema, projectSettingsSchema, settingsSourceSchema } from './model/settings';
 import { targetSchema } from './model/target';
 import type { ReadModel, ReadModelTables, TableName } from './read-model';
@@ -97,6 +104,17 @@ export const deltaSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('runs.set'), projectId: projectIdSchema, run: devRunSchema.nullable() }),
   /** A deploy row by id; every phase change re-sends the whole row. */
   z.object({ op: z.literal('deploys.set'), deploy: deploySchema }),
+  z.object({
+    op: z.literal('checkpoints.replace'),
+    sessionId: sessionIdSchema,
+    checkpoints: z.array(checkpointSchema),
+  }),
+  z.object({
+    op: z.literal('queue.replace'),
+    sessionId: sessionIdSchema,
+    messages: z.array(queuedMessageSchema),
+  }),
+  z.object({ op: z.literal('limits.set'), limits: agentLimitsSchema }),
 ]);
 export type Delta = z.infer<typeof deltaSchema>;
 
@@ -143,6 +161,12 @@ export const applyDelta = (model: ReadModel, delta: Delta): ReadModel => {
       return { ...model, transcripts: { ...model.transcripts, [delta.sessionId]: delta.messages } };
     case 'hunks.replace':
       return { ...model, hunks: { ...model.hunks, [delta.sessionId]: delta.hunks } };
+    case 'checkpoints.replace':
+      return { ...model, checkpoints: { ...model.checkpoints, [delta.sessionId]: delta.checkpoints } };
+    case 'queue.replace':
+      return { ...model, queues: { ...model.queues, [delta.sessionId]: delta.messages } };
+    case 'limits.set':
+      return { ...model, limits: { ...model.limits, [delta.limits.agent]: delta.limits } };
     case 'discovery.set':
       return { ...model, discovery: { ides: delta.ides, clis: delta.clis } };
     case 'settings.set':

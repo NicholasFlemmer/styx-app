@@ -119,6 +119,18 @@ export const sessionSchema = z
   });
 export type Session = z.infer<typeof sessionSchema>;
 
+/**
+ * A user message held back while the agent is mid-turn (Claude Code has no steer): sent when the turn settles, or
+ * sent now / taken back into the composer by the user. Persisted, so a restart does not lose it.
+ */
+export const queuedMessageSchema = z.object({
+  id: z.string().min(1),
+  sessionId: sessionIdSchema,
+  body: z.string().min(1),
+  createdAt: timestampSchema,
+});
+export type QueuedMessage = z.infer<typeof queuedMessageSchema>;
+
 // --- Transcript -----------------------------------------------------------
 
 export const messageKindSchema = z.enum([

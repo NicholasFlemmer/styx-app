@@ -28,6 +28,9 @@ import {
   skillSummarySchema,
 } from '../model/discovery';
 import { deploySchema, devRunSchema } from '../model/run';
+import { checkpointSchema } from '../model/checkpoint';
+import { agentLimitsSchema } from '../model/usage';
+import { queuedMessageSchema } from '../model/session';
 import { policyRuleSchema, policySchema } from '../model/policy';
 import { targetNameSchema } from '../project-file';
 import {
@@ -91,7 +94,8 @@ const scannedRepoSchema = z.object({
   branch: z.string().nullable(),
   /** False for a plain folder (IDE recents list those too); it is added as-is, meta reads `no git`. */
   hasGit: z.boolean(),
-  source: z.enum(['scan', 'ide-recent']),
+  /** `claude` / `codex`: a directory the CLI's own session history shows it has worked in (welcome wizard import). */
+  source: z.enum(['scan', 'ide-recent', 'claude', 'codex']),
   lastModifiedAt: z.number().int().nullable(),
   /** Unchecked by default when no remote and stale (spec §4.9). */
   suggested: z.boolean(),
@@ -127,6 +131,9 @@ const readModelSnapshotSchema = z.object({
   activity: z.array(activityRowSchema),
   runs: z.array(devRunSchema),
   deploys: z.array(deploySchema),
+  checkpoints: z.record(z.string(), z.array(checkpointSchema)),
+  queues: z.record(z.string(), z.array(queuedMessageSchema)),
+  limits: z.record(z.string(), agentLimitsSchema),
 });
 export type ReadModelSnapshot = z.infer<typeof readModelSnapshotSchema>;
 
@@ -384,6 +391,29 @@ export const commands = {
   },
   /** Stops the current turn without ending the session (stream `interrupt`; Ctrl+C on a pty). */
   'session.interrupt': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
+  /**
+   * Messages held back while the agent is mid-turn (queue; Claude Code has no steer). `sendQueued` sends one now;
+   * `unqueue` drops it (the renderer puts the text back into the composer).
+   */
+  'session.sendQueued': {
+    input: z.object({ sessionId: sessionIdSchema, messageId: z.string().min(1) }),
+    output: ok,
+  },
+  'session.unqueue': {
+    input: z.object({ sessionId: sessionIdSchema, messageId: z.string().min(1) }),
+    output: ok,
+  },
+  /** Turn checkpoints (hidden git refs): the turn's diff, and restoring the workspace to before the turn. */
+  'checkpoint.diff': {
+    input: z.object({ checkpointId: z.string().min(1) }),
+    output: z.object({
+      patch: z.string(),
+      files: z.array(z.object({ path: z.string(), added: z.number().int(), removed: z.number().int() })),
+    }),
+  },
+  'checkpoint.revert': { input: z.object({ checkpointId: z.string().min(1) }), output: ok },
+  /** Re-reads every CLI's rate limits (Usage page refresh). */
+  'usage.refreshLimits': { input: z.object({}), output: ok },
   'session.sendMessage': {
     input: z.object({
       sessionId: sessionIdSchema,
@@ -569,6 +599,30 @@ export const commands = {
   'worktree.openInIde': {
     input: z.object({ worktreeId: worktreeIdSchema, file: z.string().optional() }),
     output: ok,
+  },
+  /**
+   * Commit, push and pull request in one step for a worktree (owner request after t3code): `generateMessage` asks
+   * the project's default agent, headless, for a commit message or PR title + body from the diff; `publish` runs
+   * the steps up to `through` (commit → push → pr), reusing what is already done (a clean tree skips the commit,
+   * an existing PR is returned rather than duplicated). Push and `gh pr create` go through the GitHub shim, so the
+   * grant flow applies as it would for an agent.
+   */
+  'worktree.generateMessage': {
+    input: z.object({ worktreeId: worktreeIdSchema, kind: z.enum(['commit', 'pr']) }),
+    output: z.object({ title: z.string(), body: z.string() }),
+  },
+  'worktree.publish': {
+    input: z.object({
+      worktreeId: worktreeIdSchema,
+      through: z.enum(['commit', 'push', 'pr']),
+      message: z.object({ title: z.string().min(1), body: z.string() }),
+      draft: z.boolean().default(false),
+    }),
+    output: z.object({
+      commit: z.string().nullable(),
+      pushed: z.boolean(),
+      pr: z.object({ number: z.number().int().positive(), url: z.string() }).nullable(),
+    }),
   },
 
   // --- hunks ---

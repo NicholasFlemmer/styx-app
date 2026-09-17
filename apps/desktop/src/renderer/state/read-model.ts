@@ -52,6 +52,9 @@ export const snapshotToModel = (snapshot: ReadModelSnapshot): ReadModel => ({
   activity: snapshot.activity,
   runs: Object.fromEntries(snapshot.runs.map((r) => [r.projectId, r])),
   deploys: Object.fromEntries(snapshot.deploys.map((d) => [d.deployId, d])),
+  checkpoints: snapshot.checkpoints,
+  queues: snapshot.queues,
+  limits: snapshot.limits,
 });
 
 export const useReadModel = create<ReadModelStore>()(
