@@ -7,7 +7,15 @@ import type { Session } from '../model/session';
 import type { ReadModel } from '../read-model';
 import { rows, upsertRows } from '../read-model';
 import { boardCard, boardColumns } from './board';
-import { chatMeta, composerPlaceholder, formatCost, queuedLabel, usageLabel } from './chat';
+import {
+  chatMeta,
+  composerPlaceholder,
+  deliveryWhileWorking,
+  formatCost,
+  isMidTurn,
+  queuedLabel,
+  usageLabel,
+} from './chat';
 import {
   branchOf,
   byRecentActivity,
@@ -339,6 +347,30 @@ describe('chat', () => {
     expect(queuedLabel(queued, ids.session.codex)).toBe('+1 queued');
     expect(composerPlaceholder(model, ids.session.codex)).toBe('Message Codex…');
     expect(composerPlaceholder(model, idFrom<'SessionId'>('nope') as SessionId)).toBe('Message …');
+  });
+  it('mid-turn delivery: only Codex over the app-server steers; everything else queues', () => {
+    const cases: [Session['agent'], Session['runner'], 'steer' | 'queue'][] = [
+      ['codex', 'stream', 'steer'],
+      ['codex', 'pty', 'queue'],
+      ['claude', 'stream', 'queue'],
+      ['claude', 'pty', 'queue'],
+      ['gemini', 'stream', 'queue'],
+      ['cursor', 'stream', 'queue'],
+      ['shell', 'pty', 'queue'],
+    ];
+    for (const [agent, runner, want] of cases)
+      expect(deliveryWhileWorking({ agent, runner }), agent).toBe(want);
+  });
+  it('a turn is running while working or blocked on an ask; never for a shell', () => {
+    const states: [Session['state'], boolean][] = [
+      ['working', true],
+      ['needs-you', true],
+      ['idle', false],
+      ['paused', false],
+      ['done', false],
+    ];
+    for (const [state, want] of states) expect(isMidTurn({ agent: 'claude', state }), state).toBe(want);
+    expect(isMidTurn({ agent: 'shell', state: 'working' })).toBe(false);
   });
 });
 

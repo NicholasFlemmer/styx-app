@@ -34,6 +34,7 @@ import {
   statusBarTargets,
 } from '../../features/editor/status-bar';
 import { DeployButton } from '../../features/workspace/DeployButton';
+import { PublishButton } from '../../features/workspace/PublishButton';
 import { StatusBar } from '../../features/editor/StatusBar';
 import { TerminalPane } from '../../features/terminal/TerminalPane';
 import { command } from '../../state/commands';
@@ -240,6 +241,7 @@ export function Workspace() {
               data-workspace-mode="design"
             />
           </div>
+          <PublishButton projectId={projectId} />
           <DeployButton projectId={projectId} />
         </div>
         {mode === 'design' ? (

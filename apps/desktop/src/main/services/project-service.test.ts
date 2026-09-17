@@ -14,6 +14,7 @@ import {
   advisoryRules,
   byLastActivity,
   isSuggested,
+  isTransientPath,
   mergeCandidates,
   policyDiff,
   policyHashOf,
@@ -39,22 +40,63 @@ describe('project.scan merge + suggestion logic', () => {
     expect(isSuggested(remote, mtime, NOW)).toBe(expected);
   });
 
-  it('merges filesystem hits with IDE recents; scan wins on overlap, known projects drop, sorted by path', () => {
+  it('merges filesystem hits, IDE recents and agent history; first-listed source wins on overlap, known paths drop, sorted by path', () => {
     const known = new Set(['/h/code/known']);
     expect(
       mergeCandidates(
         ['/h/code/zeta', '/h/code/alpha', '/h/code/known'],
         ['/h/work/ide-only', '/h/code/alpha', '/h/code/known'],
+        [
+          { path: '/h/code/alpha', source: 'claude' },
+          { path: '/h/work/ide-only', source: 'codex' },
+          { path: '/h/agent-only', source: 'codex' },
+          { path: '/h/code/known', source: 'claude' },
+        ],
         known,
       ),
     ).toEqual([
+      { path: '/h/agent-only', source: 'codex' },
       { path: '/h/code/alpha', source: 'scan' },
       { path: '/h/code/zeta', source: 'scan' },
       { path: '/h/work/ide-only', source: 'ide-recent' },
     ]);
-    expect(mergeCandidates([], [], known)).toEqual([]);
+    expect(mergeCandidates([], [], [], known)).toEqual([]);
+  });
+
+  it('isTransientPath: the home, .styx worktrees and OS temp scratch dirs are never candidates', () => {
+    const home = '/Users/me';
+    expect(isTransientPath(home, home, '/tmp')).toBe(true);
+    expect(isTransientPath('/Users/me/.styx/worktrees/app/agent-claude-1', home, '/tmp')).toBe(true);
+    expect(isTransientPath('/Users/me/code/app/.styx/worktrees/lane', home, '/tmp')).toBe(true);
+    expect(isTransientPath('/tmp/claude-501/scratchpad', home, '/tmp')).toBe(true);
+    expect(isTransientPath('/tmp/claude-501/scratchpad', home, '/tmp/')).toBe(true);
+    expect(isTransientPath('/Users/me/code/app', home, '/tmp')).toBe(false);
+    expect(isTransientPath('/Users/me/.styxy/app', home, '/tmp')).toBe(false);
+    expect(isTransientPath('/tmpfs/app', home, '/tmp')).toBe(false);
+    // A home under the temp dir (tests) keeps its own folders.
+    expect(isTransientPath('/tmp/home-x/code/app', '/tmp/home-x', '/tmp')).toBe(false);
   });
 });
+
+const DAY_MS = 24 * 3_600_000;
+const writeAt = (file: string, text: string, mtime: number): void => {
+  mkdirSync(join(file, '..'), { recursive: true });
+  writeFileSync(file, text);
+  utimesSync(file, new Date(mtime), new Date(mtime));
+};
+/** A Claude Code session under an encoded name that never matches the cwd it records. */
+const claudeSession = (home: string, n: number, cwd: string, mtime: number): void =>
+  writeAt(
+    join(home, '.claude', 'projects', `-enc-${n}`, 's.jsonl'),
+    JSON.stringify({ type: 'queue-operation' }) + '\n' + JSON.stringify({ cwd, type: 'user' }) + '\n',
+    mtime,
+  );
+const codexSession = (home: string, n: number, cwd: string, mtime: number): void =>
+  writeAt(
+    join(home, '.codex', 'sessions', '2026', '09', '10', `rollout-${n}.jsonl`),
+    JSON.stringify({ type: 'session_meta', payload: { cwd } }) + '\n',
+    mtime,
+  );
 
 /** `home/<rel>` as a repo: a `.git` dir, or a `.git` file for worktrees. */
 const repoAt = (home: string, rel: string, worktree = false): string => {
@@ -150,11 +192,12 @@ describe('ProjectService.scan / clone', () => {
       git: t.app.git,
       platform: 'darwin',
       home,
+      env: {},
       templatesDir: null,
       ideRecents: async () => ideRecents,
     });
 
-  it('scan merges IDE recents without ide.import, drops known projects, sorts by last activity desc', async () => {
+  it('scan merges IDE recents without ide.import, drops known projects, sorts git first then by last activity desc', async () => {
     const t = makeTestApp({ fixture: 'empty' });
     const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
     const older = repoAt(home, 'code/older');
@@ -186,8 +229,8 @@ describe('ProjectService.scan / clone', () => {
       [newer, 'scan', true],
       [ideOnly, 'ide-recent', true],
       [recent, 'scan', true],
-      [plain, 'ide-recent', false],
       [older, 'scan', true],
+      [plain, 'ide-recent', false],
     ]);
     expect(rows.find((r) => r.path === plain)).toMatchObject({
       remote: null,
@@ -215,6 +258,73 @@ describe('ProjectService.scan / clone', () => {
         .map((x) => x.path),
     ).toEqual(['c', 'a', 'a2', 'b']);
     rmSync(home, { recursive: true, force: true });
+  });
+
+  it('scan adds where Claude Code and Codex worked: first-listed source, max activity, real git check, exclusions', async () => {
+    const t = makeTestApp({ fixture: 'empty' });
+    const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+    const scratch = mkdtempSync(join(tmpdir(), 'styx-scratch-'));
+    // Found by the walker and by Claude Code: the walker's row, dated by the newer of `.git` and the session.
+    const both = repoAt(home, 'code/both');
+    utimesSync(join(both, '.git'), new Date(NOW - 10 * DAY_MS), new Date(NOW - 10 * DAY_MS));
+    claudeSession(home, 1, both, NOW - DAY_MS);
+    // Past the walker's depth: only the agents know these.
+    const claudeRepo = repoAt(home, 'deep/a/b/claude-repo');
+    utimesSync(join(claudeRepo, '.git'), new Date(NOW - 20 * DAY_MS), new Date(NOW - 20 * DAY_MS));
+    claudeSession(home, 2, claudeRepo, NOW - 4 * DAY_MS);
+    const codexPlain = join(home, 'deep', 'a', 'b', 'notes');
+    mkdirSync(codexPlain, { recursive: true });
+    codexSession(home, 1, codexPlain, NOW - 6 * DAY_MS);
+    // The IDE opened it, Codex ran in it later: the IDE's row, the later date.
+    const ideAndCodex = join(home, 'deep', 'a', 'b', 'ide-plain');
+    mkdirSync(ideAndCodex, { recursive: true });
+    codexSession(home, 2, ideAndCodex, NOW - 3 * DAY_MS);
+    // A folder inside a real repo (the CLI was started there): the real git check says repo, no `.git` entry to date it.
+    const real = join(home, 'deep', 'a', 'b', 'real');
+    mkdirSync(real, { recursive: true });
+    await t.app.git.init(real);
+    const inRepo = join(real, 'packages', 'web');
+    mkdirSync(inRepo, { recursive: true });
+    claudeSession(home, 3, inRepo, NOW - 2 * DAY_MS);
+    // Never candidates: the home, Styx's own worktrees, temp scratch dirs, a known project and its worktrees, gone dirs.
+    claudeSession(home, 4, home, NOW);
+    const styxLane = join(home, '.styx', 'worktrees', 'app', 'agent-claude-1');
+    mkdirSync(styxLane, { recursive: true });
+    claudeSession(home, 5, styxLane, NOW);
+    claudeSession(home, 6, scratch, NOW);
+    claudeSession(home, 7, join(home, 'gone'), NOW);
+    const svc = service(t, home, [{ path: ideAndCodex, openedAt: NOW - 5 * DAY_MS }]);
+    const known = join(home, 'known');
+    mkdirSync(known);
+    const project = await svc.add(known);
+    const lane = join(home, 'lanes', 'agent-1');
+    mkdirSync(lane, { recursive: true });
+    const main = t.app.repos.worktrees.mainOf(project.id);
+    if (!main) throw new Error('main worktree missing');
+    t.app.repos.worktrees.upsert({ ...main, id: 'wt-lane' as never, isMain: false, path: lane });
+    codexSession(home, 3, known, NOW);
+    codexSession(home, 4, lane, NOW);
+
+    const rows = await svc.scan(true);
+    expect(rows.map((r) => [r.path, r.source, r.hasGit, r.lastModifiedAt])).toEqual([
+      [both, 'scan', true, NOW - DAY_MS],
+      [inRepo, 'claude', true, NOW - 2 * DAY_MS],
+      [claudeRepo, 'claude', true, NOW - 4 * DAY_MS],
+      [ideAndCodex, 'ide-recent', false, NOW - 3 * DAY_MS],
+      [codexPlain, 'codex', false, NOW - 6 * DAY_MS],
+    ]);
+    expect(rows.find((r) => r.path === inRepo)).toMatchObject({
+      remote: null,
+      branch: 'main',
+      suggested: true,
+    });
+    // Agent history off: the walker and the IDE only, dated by what they know.
+    expect((await svc.scan(true, false)).map((r) => [r.path, r.source, r.lastModifiedAt])).toEqual([
+      [both, 'scan', NOW - 10 * DAY_MS],
+      [ideAndCodex, 'ide-recent', NOW - 5 * DAY_MS],
+    ]);
+    rmSync(home, { recursive: true, force: true });
+    rmSync(scratch, { recursive: true, force: true });
   });
 
   it('clone reports cloning → done with the project id, adds the project, and refuses a non-empty destination', async () => {
@@ -324,7 +434,7 @@ describe('plain folders: add without git, gitInit upgrades', () => {
     const repo = repoAt(home, 'code/repo');
     const svc = service(t, home);
     const rows = await svc.describeRepos([
-      { path: plain, source: 'ide-recent', openedAt: NOW - STALE_MS - DAY },
+      { path: plain, source: 'ide-recent', activityAt: NOW - STALE_MS - DAY },
       { path: repo, source: 'scan' },
     ]);
     expect(rows.map((r) => [r.path, r.hasGit, r.suggested])).toEqual([

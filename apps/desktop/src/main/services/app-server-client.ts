@@ -1,6 +1,6 @@
 import { spawn as spawnChild } from 'node:child_process';
 import type { Readable, Writable } from 'node:stream';
-import { effortSchema, type Effort, type ModelInfo } from '@styx/core';
+import { copy, effortSchema, fill, type AgentLimits, type Effort, type ModelInfo } from '@styx/core';
 import { z } from 'zod';
 import { logger } from './logger';
 
@@ -214,19 +214,88 @@ export const accountLabel = (result: unknown): { signedIn: boolean; account: str
   return { signedIn: true, account: null };
 };
 
+// --- Rate limits (Usage page) --------------------------------------------------
+
+/** One `RateLimitWindow` of `account/rateLimits/*`: `usedPercent` 0–100, `windowDurationMins`, `resetsAt` epoch seconds. */
+const rateLimitWindowSchema = z
+  .object({
+    usedPercent: z.number(),
+    windowDurationMins: z.number().nullish(),
+    resetsAt: z.number().nullish(),
+  })
+  .nullish();
+/** `account/rateLimits/read` result and `account/rateLimits/updated` params share this shape. */
+export const codexRateLimitsSchema = z.object({
+  rateLimits: z.object({
+    primary: rateLimitWindowSchema,
+    secondary: rateLimitWindowSchema,
+    planType: z.string().nullish(),
+  }),
+});
+export type CodexRateLimits = z.infer<typeof codexRateLimitsSchema>;
+
+/** "5 h" · "7 d" · "90 min" from a window's duration; empty when Codex gave none. */
+export const windowLabel = (mins: number | null | undefined): string => {
+  if (mins === null || mins === undefined) return '';
+  if (mins % 1440 === 0) return fill(copy.codexRunner.windowDays, { n: mins / 1440 });
+  if (mins % 60 === 0) return fill(copy.codexRunner.windowHours, { n: mins / 60 });
+  return fill(copy.codexRunner.windowMinutes, { n: mins });
+};
+
+/** Codex reports resets in epoch seconds; tolerate milliseconds. */
+const epochMs = (t: number): number => Math.round(t * (t < 1e12 ? 1000 : 1));
+
+/**
+ * `{rateLimits: {primary, secondary, planType}}` → the account's limits for the Usage page (primary first), or null
+ * when the payload has no window. A window without a duration is labelled by position ("primary").
+ */
+export const codexLimits = (raw: unknown, now: number): AgentLimits | null => {
+  const r = codexRateLimitsSchema.safeParse(raw);
+  if (!r.success) return null;
+  const { primary, secondary, planType } = r.data.rateLimits;
+  const windows: AgentLimits['windows'] = [];
+  for (const [w, fallback] of [
+    [primary, 'primary'],
+    [secondary, 'secondary'],
+  ] as const) {
+    if (!w) continue;
+    const label = windowLabel(w.windowDurationMins) || fallback;
+    windows.push({
+      label,
+      usedPercent: Math.min(100, Math.max(0, w.usedPercent)),
+      resetsAt: w.resetsAt === null || w.resetsAt === undefined ? null : epochMs(w.resetsAt),
+    });
+  }
+  if (windows.length === 0) return null;
+  return {
+    agent: 'codex',
+    plan: planType === null || planType === undefined || planType === '' ? null : planType,
+    windows,
+    updatedAt: now,
+  };
+};
+
 export const CLIENT_INFO = { name: 'styx', title: 'Styx', version: '0.1.0' } as const;
 export const CLIENT_CAPABILITIES = { experimentalApi: true, requestAttestation: false } as const;
 
+export interface ShortLivedOptions {
+  env?: NodeJS.ProcessEnv;
+  timeoutMs?: number;
+}
+
+/** A request bounded by the short-lived server's deadline and exit: null when either wins. */
+export type BoundedRequest = <T>(p: Promise<T>) => Promise<T | null>;
+
 /**
- * Asks a Codex build who it is signed in as and which models it offers, through a short-lived `codex app-server`
- * (`initialize` → `account/read` → `model/list`, then kill). Resolves null when the binary has no working
- * app-server (spawn failure, no `initialize` answer within the timeout), so the caller can fall back to
- * `codex login status`; rejects when the server answered `initialize` but then failed, so the row can say why.
+ * Runs `body` against a short-lived `codex app-server` (`initialize` → body → kill). Resolves null when the binary
+ * has no working app-server (spawn failure, no `initialize` answer within the timeout); rejects when the server
+ * answered `initialize` but `body` then failed, so the caller can say why.
  */
-export async function probeCodexAppServer(
+export async function withCodexAppServer<T>(
   bin: string,
-  opts: { env?: NodeJS.ProcessEnv; timeoutMs?: number } = {},
-): Promise<AppServerIdentity | null> {
+  opts: ShortLivedOptions,
+  body: (client: AppServerClient, bounded: BoundedRequest) => Promise<T | null>,
+): Promise<T | null> {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(opts.env ?? process.env))
     if (v !== undefined && k !== 'ELECTRON_RUN_AS_NODE') env[k] = v;
@@ -274,8 +343,25 @@ export async function probeCodexAppServer(
     if (init !== true) return null;
     client.notify('initialized');
     // Every step races the same deadline and the process's exit: an app-server that answers `initialize` and
-    // then hangs must not leave the Agents row "verifying" for good.
-    const bounded = <T>(p: Promise<T>): Promise<T | null> => Promise.race([p, timeout, failed]);
+    // then hangs must not leave the caller waiting for good.
+    const bounded: BoundedRequest = (p) => Promise.race([p, timeout, failed]);
+    return await body(client, bounded);
+  } finally {
+    done();
+  }
+}
+
+/**
+ * Asks a Codex build who it is signed in as and which models it offers, through a short-lived `codex app-server`
+ * (`initialize` → `account/read` → `model/list`, then kill). Resolves null when the binary has no working
+ * app-server, so the caller can fall back to `codex login status`; rejects when the server answered `initialize`
+ * but then failed, so the row can say why.
+ */
+export const probeCodexAppServer = (
+  bin: string,
+  opts: ShortLivedOptions = {},
+): Promise<AppServerIdentity | null> =>
+  withCodexAppServer(bin, opts, async (client, bounded) => {
     const accountRes = await bounded(client.request('account/read', { refreshToken: false }));
     if (accountRes === null) return null;
     const account = accountLabel(accountRes);
@@ -287,7 +373,19 @@ export async function probeCodexAppServer(
       logger.warn('codex app-server: model/list failed during verification', { error: (e as Error).message });
     }
     return { authState: account.signedIn ? 'signed-in' : 'signed-out', account: account.account, models };
-  } finally {
-    done();
-  }
-}
+  });
+
+/**
+ * Usage › Refresh: reads the account's rate limits through a short-lived app-server (`account/rateLimits/read`).
+ * Null when the binary has no app-server or reported no window; only percentages, durations and reset times
+ * cross this call, never a token.
+ */
+export const readCodexRateLimits = (
+  bin: string,
+  now: () => number,
+  opts: ShortLivedOptions = {},
+): Promise<AgentLimits | null> =>
+  withCodexAppServer(bin, opts, async (client, bounded) => {
+    const res = await bounded(client.request('account/rateLimits/read'));
+    return res === null ? null : codexLimits(res, now());
+  });

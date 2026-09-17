@@ -36,10 +36,11 @@ export interface PublisherDeps {
   tickMs?: number;
 }
 
-/** In-memory slices that ride in the snapshot (main-owned processes: local runs and deploys). Bound after the services exist. */
+/** In-memory slices that ride in the snapshot (main-owned processes: local runs and deploys; the latest CLI limits). Bound after the services exist. */
 export interface SnapshotExtras {
   runs: () => DevRun[];
   deploys: () => Deploy[];
+  limits: () => Record<string, AgentLimits>;
 }
 
 /** The single `styx:evt` channel carries every main → renderer event as `{ name, payload }`. */
@@ -58,7 +59,7 @@ export class Publisher {
   private readonly ptySeq = new Map<string, number>();
   private ptyTimer: NodeJS.Timeout | null = null;
   private readonly tickMs: number;
-  private extras: SnapshotExtras = { runs: () => [], deploys: () => [] };
+  private extras: SnapshotExtras = { runs: () => [], deploys: () => [], limits: () => ({}) };
 
   constructor(private readonly deps: PublisherDeps) {
     this.tickMs = deps.tickMs ?? 16;
@@ -199,6 +200,7 @@ export class Publisher {
         popouts: this.deps.popouts,
         runs: this.extras.runs,
         deploys: this.extras.deploys,
+        limits: this.extras.limits,
       },
       this.seqNo,
     );

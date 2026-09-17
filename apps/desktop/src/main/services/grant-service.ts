@@ -163,6 +163,9 @@ export class GrantService {
     if (caller) {
       if (grant.sessionId !== null && grant.sessionId !== caller.sessionId)
         fail('forbidden', 'grant belongs to another session');
+      // An app-minted transient grant (Publish, Deploy) is not an agent's to use; only `always` is shared.
+      if (grant.sessionId === null && grant.duration !== 'always')
+        fail('forbidden', 'grant belongs to the app, not to a session');
       if (target.projectId !== caller.projectId) fail('forbidden', 'grant belongs to another project');
     }
     const cached = this.issued.get(grantId);
@@ -281,14 +284,22 @@ export class GrantService {
     );
   }
 
-  /** Any live grant of this session (or persistent on the target) covering `scope`. */
+  /**
+   * Any live grant covering `scope` that this caller may use: its own session's, or a session-less grant when that
+   * grant is persistent (`always`). A session-less *transient* grant is one the app minted for its own step
+   * (Publish, Deploy) and is never shared with an agent — that would hand every session in the project a token
+   * without the policy ever seeing it. The app itself (caller `null`) still finds its own transient grant.
+   */
   covering(target: Target, sessionId: string | null, scope: readonly Scope[]): Grant | null {
     const now = this.deps.clock.now();
     return (
       this.deps.repos.grants
         .byTarget(target.id)
         .find(
-          (g) => isLive(g, now) && covers(g, scope) && (g.sessionId === null || g.sessionId === sessionId),
+          (g) =>
+            isLive(g, now) &&
+            covers(g, scope) &&
+            (g.sessionId === sessionId || (g.sessionId === null && g.duration === 'always')),
         ) ?? null
     );
   }

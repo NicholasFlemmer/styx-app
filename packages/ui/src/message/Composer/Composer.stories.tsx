@@ -80,6 +80,18 @@ export const CodexControls: Story = {
   },
 };
 
+/** Mid-turn (queue): the send hint reads Queue with the agent's hint as its tooltip; Codex reads Steer. */
+export const QueueSend: Story = {
+  args: { sendLabel: 'Queue', sendTitle: 'Claude Code takes it after this turn.' },
+};
+export const SteerSend: Story = {
+  args: { placeholder: 'Message Codex…', sendLabel: 'Steer', sendTitle: 'Codex takes it mid-turn.' },
+};
+/** A queued message taken back (or returned by Stop) lands in the draft with the caret at its end. */
+export const Prefilled: Story = {
+  args: { prefill: { text: 'Also run the tests before you finish.', seq: 1 } },
+};
+
 export const Matrix: Story = {
   render: (args) => (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: 740 }}>

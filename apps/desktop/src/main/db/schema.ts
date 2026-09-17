@@ -443,6 +443,8 @@ export const queuedMessages = sqliteTable(
       .notNull()
       .references(() => sessions.id, { onDelete: 'cascade' }),
     body: text('body').notNull(),
+    /** Attachment paths (relative to the worktree), re-read when the message goes out. */
+    filesJson: text('files_json').notNull().default('[]'),
     createdAt: integer('created_at').notNull(),
   },
   (t) => [index('queued_messages_session').on(t.sessionId, t.createdAt)],

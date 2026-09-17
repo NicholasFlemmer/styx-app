@@ -8,6 +8,7 @@ import { ConnectModal } from '../features/modals/ConnectModal';
 import { DeployModal } from '../features/modals/DeployModal';
 import { DeploySetupModal } from '../features/modals/DeploySetupModal';
 import { NewProjectModal } from '../features/modals/NewProjectModal';
+import { PublishModal } from '../features/modals/PublishModal';
 import { SpawnModal } from '../features/modals/SpawnModal';
 import { Palette } from '../features/palette/Palette';
 import { SkillDrawer } from '../features/skills/SkillDrawer';
@@ -41,6 +42,8 @@ const render = (o: Overlay) => {
           );
         case 'deploy-setup':
           return <DeploySetupModal key={o.id} id={o.id} projectId={o.projectId} />;
+        case 'publish':
+          return <PublishModal key={o.id} id={o.id} worktreeId={o.worktreeId} />;
         case 'connect-agent':
           return (
             <ConnectAgentModal

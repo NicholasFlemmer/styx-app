@@ -250,6 +250,8 @@ describe('paletteResults', () => {
       '■ Open folder… · existing repo',
       '■ Clone URL… · git clone',
       '▲ Tech debt audit · review this repo in the background',
+      // Commit, push and PR for the branch the project is on (ADR-0021).
+      '▲ Publish acme-shop · fix/checkout · commit · push · pull request',
       '■ Open agent dock · all projects · always on top',
     ]);
     expect(groups[1]?.items.map((i) => `${i.glyph} ${i.label} · ${i.meta}`)).toEqual([
@@ -285,9 +287,14 @@ describe('paletteResults', () => {
     expect(all[9]?.action).toEqual({ kind: 'open-folder' });
     expect(all[10]?.action).toEqual({ kind: 'clone-url' });
     expect(all[11]?.action).toEqual({ kind: 'debt-audit', projectId: ids.project.acmeShop });
-    expect(all[12]?.action).toEqual({ kind: 'agent-dock' });
-    expect(all[13]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
-    expect(all[19]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
+    expect(all[12]?.action).toEqual({
+      kind: 'publish',
+      projectId: ids.project.acmeShop,
+      worktreeId: ids.worktree.fixCheckout,
+    });
+    expect(all[13]?.action).toEqual({ kind: 'agent-dock' });
+    expect(all[14]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
+    expect(all[20]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
   });
 
   it('fuzzy on label + meta, best first; the first visible row is flagged; empty groups dropped', () => {
@@ -309,7 +316,7 @@ describe('paletteResults', () => {
   it('scope filtering (⇥) and scope cycling', () => {
     expect(paletteResults(model, ui, '', 'agents', NOW).map((g) => g.label)).toEqual(['Agents']);
     expect(paletteResults(model, ui, '', 'projects', NOW)[0]?.items[0]?.first).toBe(true);
-    expect(flat(model, '', 'actions')).toHaveLength(13);
+    expect(flat(model, '', 'actions')).toHaveLength(14);
     expect(nextPaletteScope('all')).toBe('actions');
     expect(nextPaletteScope('actions')).toBe('agents');
     expect(nextPaletteScope('agents')).toBe('projects');

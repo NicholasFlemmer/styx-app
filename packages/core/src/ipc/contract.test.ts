@@ -54,6 +54,7 @@ describe('ipc contract', () => {
     expect(isEventName('nope')).toBe(false);
     expect(EVENT_NAMES).toContain('theme.resolved');
     expect(EVENT_NAMES).toContain('nav.go');
+    expect(EVENT_NAMES).toContain('queue.returned');
     expect(isCommandName('project.templates')).toBe(true);
     // CLI-first connect: status / login terminal / save, plus the health refresh.
     for (const n of [

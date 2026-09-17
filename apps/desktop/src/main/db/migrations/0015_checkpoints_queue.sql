@@ -22,6 +22,7 @@ CREATE TABLE queued_messages (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
   body TEXT NOT NULL,
+  files_json TEXT NOT NULL DEFAULT '[]',
   created_at INTEGER NOT NULL
 );
 CREATE INDEX queued_messages_session ON queued_messages(session_id, created_at);

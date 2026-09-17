@@ -54,23 +54,25 @@ describe('AddExistingModal', () => {
     Object.assign(window, { styx: undefined });
   });
 
-  it('scans on open (recents included), lists rows with onboarding meta, nothing pre-checked', async () => {
+  it('scans on open (recents and agent history included), lists rows with onboarding meta, nothing pre-checked', async () => {
     render(<AddExistingModal id="modal-1" />);
     expect(screen.getByRole('status').textContent).toBe(copy.addExisting.scanning);
     await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(3));
-    expect(calls('project.scan').map((c) => c[1])).toEqual([{ includeIdeRecents: true }]);
+    expect(calls('project.scan').map((c) => c[1])).toEqual([
+      { includeIdeRecents: true, includeAgentHistory: true },
+    ]);
     const rows = screen.getAllByRole('row');
     expect(rows.map((r) => within(r).getAllByRole('cell')[2]?.textContent)).toEqual([
       'github · main',
       'no remote · 1y old',
-      copy.workspace.noGit,
+      `${copy.workspace.noGit} · ${copy.addExisting.sourceRecents}`,
     ]);
     // Owner request: every row used to arrive checked, so adding two meant unticking the rest first.
     const boxes = screen.getAllByRole('checkbox');
     expect(boxes.map((b) => (b as HTMLInputElement).checked)).toEqual([false, false, false]);
-    expect((screen.getByRole('button', { name: copy.addExisting.addNone }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    expect(
+      (screen.getByRole('button', { name: copy.addExisting.addNone }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   it('Add n adds every checked row, closes, and enters the project only when exactly one was added', async () => {
@@ -97,9 +99,9 @@ describe('AddExistingModal', () => {
     fireEvent.click(boxes[2] as HTMLElement);
     expect(screen.getByRole('button', { name: 'Add 1' })).toBeTruthy();
     fireEvent.click(boxes[2] as HTMLElement);
-    expect((screen.getByRole('button', { name: copy.addExisting.addNone }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    expect(
+      (screen.getByRole('button', { name: copy.addExisting.addNone }) as HTMLButtonElement).disabled,
+    ).toBe(true);
     fireEvent.click(boxes[1] as HTMLElement);
     fireEvent.click(screen.getByRole('button', { name: 'Add 1' }));
     await waitFor(() => expect(useUiStore.getState().screen).toBe('workspace'));
@@ -127,6 +129,22 @@ describe('AddExistingModal', () => {
     await waitFor(() => expect(useUiStore.getState().screen).toBe('workspace'));
     expect(useUiStore.getState().overlays).toHaveLength(0);
     expect(calls('project.add').map((c) => c[1])).toEqual([{ path: '/Users/me/picked' }]);
+  });
+
+  it('rows from where Claude Code and Codex worked name the CLI in the meta (#93)', async () => {
+    scanned = [
+      repo('/Users/me/code/from-claude', true, { source: 'claude', branch: 'feat/x' }),
+      repo('/Users/me/scratch', true, { source: 'codex', hasGit: false, remote: null, branch: null }),
+    ];
+    render(<AddExistingModal id="modal-1" />);
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(2));
+    const rows = screen.getAllByRole('row');
+    expect(rows.map((r) => r.getAttribute('data-repo-source'))).toEqual(['claude', 'codex']);
+    expect(rows.map((r) => within(r).getAllByRole('cell')[2]?.textContent)).toEqual([
+      `github · feat/x · ${copy.agentProducts.claude}`,
+      `${copy.workspace.noGit} · ${copy.agentProducts.codex}`,
+    ]);
+    scanned = [repo('/Users/me/code/shop', true)];
   });
 
   it('Cancel closes without adding', async () => {

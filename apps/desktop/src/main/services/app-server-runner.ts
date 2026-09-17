@@ -19,8 +19,11 @@ import {
   AppServerClient,
   CLIENT_CAPABILITIES,
   CLIENT_INFO,
+  codexLimits,
+  codexRateLimitsSchema,
   METHOD_NOT_FOUND,
   modelCatalogue,
+  windowLabel,
   type JsonRpcId,
 } from './app-server-client';
 import { logger } from './logger';
@@ -126,16 +129,6 @@ const tokenUsageSchema = z.object({
     modelContextWindow: z.number().nullish(),
   }),
 });
-const rateLimitWindowSchema = z
-  .object({
-    usedPercent: z.number(),
-    windowDurationMins: z.number().nullish(),
-    resetsAt: z.number().nullish(),
-  })
-  .nullish();
-const rateLimitsSchema = z.object({
-  rateLimits: z.object({ primary: rateLimitWindowSchema, secondary: rateLimitWindowSchema }),
-});
 const errorNotificationSchema = z.object({
   error: z.object({ message: z.string() }),
   willRetry: z.boolean().default(false),
@@ -201,13 +194,6 @@ const diffCounts = (diff: string): { added: number; removed: number } => {
     else if (line.startsWith('-')) removed += 1;
   }
   return { added, removed };
-};
-
-const windowLabel = (mins: number | null | undefined): string => {
-  if (mins === null || mins === undefined) return '';
-  if (mins % 1440 === 0) return fill(copy.codexRunner.windowDays, { n: mins / 1440 });
-  if (mins % 60 === 0) return fill(copy.codexRunner.windowHours, { n: mins / 60 });
-  return fill(copy.codexRunner.windowMinutes, { n: mins });
 };
 
 /** `resetsAt` is epoch seconds; shown as local HH:MM. */
@@ -808,8 +794,11 @@ export class AppServerRunner extends EventEmitter<StreamEvents> implements Strea
         return;
       }
       case 'account/rateLimits/updated': {
-        const p = rateLimitsSchema.safeParse(params);
+        const p = codexRateLimitsSchema.safeParse(params);
         if (!p.success) return;
+        // The Usage page keeps the whole report; the chat only hears about a window that is nearly used up.
+        const limits = codexLimits(p.data, Date.now());
+        if (limits !== null) this.emit('effect', id, { type: 'limits', limits });
         const note = rateLimitNote(p.data.rateLimits.primary) ?? rateLimitNote(p.data.rateLimits.secondary);
         if (note !== null) {
           this.emit('effect', id, { type: 'note', note });

@@ -128,6 +128,26 @@ describe('Repo screen', () => {
     expect(rowOf('feat/promo').getAttribute('data-inv')).toBeNull();
   });
 
+  it('each lane offers Commit & push / Open PR, which opens the publish modal for that worktree', () => {
+    render(<Repo />);
+    expect(within(rowOf('main')).getByRole('button', { name: 'Commit & push' })).toBeTruthy();
+    expect(within(rowOf('fix/checkout')).getByRole('button', { name: 'Commit & push' })).toBeTruthy();
+    expect(within(rowOf('feat/promo')).queryByRole('button', { name: /Commit & push|Open PR/ })).toBeNull();
+    fireEvent.click(within(rowOf('test/flaky')).getByRole('button', { name: 'Open PR' }));
+    expect(useUiStore.getState().overlays).toMatchObject([
+      { kind: 'modal', modal: 'publish', worktreeId: fixtures.ids.worktree.testFlaky },
+    ]);
+    // The verb click does not select the lane.
+    expect(rowOf('test/flaky').getAttribute('data-inv')).toBeNull();
+  });
+
+  it('a lane with a PR page shows the PR as a link that opens it in the browser', () => {
+    render(<Repo />);
+    fireEvent.click(within(rowOf('fix/checkout')).getByRole('button', { name: '#214 draft' }));
+    expect(commandMock).toHaveBeenCalledWith('link.open', { url: 'https://github.com/acme/shop/pull/214' });
+    expect(within(rowOf('main')).queryByRole('button', { name: '—' })).toBeNull();
+  });
+
   it('error fixture: conflict lane reads CONFLICT, Resolve opens the conflicting file in the editor', () => {
     useReadModel.getState().replaceModel(fixtures.errorReadModel(), 'connected');
     render(<Repo />);

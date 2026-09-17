@@ -55,6 +55,10 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
       void startDebtAudit(model, projectId);
       return;
     }
+    case 'publish':
+      ui.setProject(action.projectId);
+      open({ kind: 'modal', modal: 'publish', worktreeId: action.worktreeId });
+      return;
     case 'open-session': {
       const session = model.sessions.byId[action.sessionId];
       if (session === undefined) return;

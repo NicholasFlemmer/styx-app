@@ -12,15 +12,17 @@ import { BrokerHost } from './broker/host';
 import { ActivityService } from './services/activity-service';
 import { AgentService } from './services/agent-service';
 import { AuditService } from './services/audit-service';
+import { CheckpointService } from './services/checkpoint-service';
 import type { CredentialVault } from './services/credential-vault';
 import { DetectService, defaultDeps as defaultDetectDeps } from './services/detect-service';
-import { GitService } from './services/git';
+import { ExecaGitRunner, GitService } from './services/git';
 import { GrantService } from './services/grant-service';
 import { HunkService, type WatchFactory } from './services/hunk-service';
 import { IdeImportService } from './services/ide-import-service';
 import { MfaService, type MfaProvider } from './services/mfa-service';
 import type { NotificationService } from './services/notification-service';
 import { ProjectService } from './services/project-service';
+import { execaPublishExec, PublishService } from './services/publish-service';
 import { PtyLog } from './services/pty-log';
 import { PtyService } from './services/pty-service';
 import { RefreshScheduler } from './services/refresh-scheduler';
@@ -37,6 +39,8 @@ import { SkillsService } from './services/skills-service';
 import { TargetService } from './services/target-service';
 import { TerminalService } from './services/terminal-service';
 import { TranscriptService } from './services/transcript-service';
+import { UsageService } from './services/usage-service';
+import { projectSettingsFor } from './store/projection';
 import { Publisher } from './store/publisher';
 
 /** The window-manager surface commands need; implemented over WindowService in `index.ts`, faked in tests. */
@@ -174,19 +178,12 @@ export interface Container {
   skills: SkillsService;
   agents: AgentService;
   runs: RunService;
-  /** Filled by their work packages (ADR-0020 checkpoints, publish, usage); optional until then. */
-  checkpoints?: {
-    diff(id: string): Promise<{ patch: string; files: { path: string; added: number; removed: number }[] }>;
-    revert(id: string): Promise<void>;
-  };
-  publish?: {
-    generateMessage(worktreeId: string, kind: 'commit' | 'pr'): Promise<{ title: string; body: string }>;
-    publish(
-      worktreeId: string,
-      opts: { through: 'commit' | 'push' | 'pr'; message: { title: string; body: string }; draft: boolean },
-    ): Promise<{ commit: string | null; pushed: boolean; pr: { number: number; url: string } | null }>;
-  };
-  usage?: { refreshLimits(): Promise<void> };
+  /** Turn checkpoints (ADR-0020): hidden git refs per agent turn, diff and revert. */
+  checkpoints: CheckpointService;
+  /** Commit, push and PR in one step (ADR-0021); the message draft comes from the project's default agent. */
+  publish: PublishService;
+  /** Usage page: the latest rate limits per CLI and the on-demand Codex refresh. */
+  usage: UsageService;
   terminals: TerminalService;
   broker: BrokerHost;
   windows: WindowsPort;
@@ -215,7 +212,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     isRegistered: (id) => publisher.isRegistered(id),
     allowedOrigins: runtime.rendererOrigins,
   });
-  const git = new GitService();
+  const gitRunner = new ExecaGitRunner();
+  const git = new GitService(gitRunner);
   const pty = opts.pty ?? new PtyService(runtime.platform);
   // One door, several protocols (docs/research/agent-parity.md): Claude's NDJSON now; the Codex app-server and
   // ACP backends register here as they land.
@@ -328,6 +326,22 @@ export function buildContainer(opts: ContainerOptions): Container {
     shell: () => pty.defaultShell(),
     platform: runtime.platform,
   });
+  const publish = new PublishService({
+    repos,
+    publisher,
+    clock,
+    git,
+    grants,
+    activity,
+    audit,
+    exec: execaPublishExec(() => pty.resolveLoginPath()),
+    projectSettings: (projectId) => {
+      const s = projectSettingsFor(repos, projectId);
+      return { defaultAgent: s.defaultAgent.value, baseBranch: s.baseBranch.value };
+    },
+    loginPath: () => pty.resolveLoginPath(),
+    platform: runtime.platform,
+  });
   const skills = new SkillsService({
     repos,
     fetch: opts.fetch ?? fetch,
@@ -356,7 +370,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     platform: runtime.platform,
     ...(opts.probe !== undefined ? { probe: opts.probe } : {}),
   });
-  publisher.bindExtras({ runs: () => runs.all(), deploys: () => deploys.all() });
+  const usage = new UsageService({ repos, publisher, clock, env: process.env });
+  publisher.bindExtras({ runs: () => runs.all(), deploys: () => deploys.all(), limits: () => usage.all() });
   const refresh = new RefreshScheduler({
     repos,
     clock,
@@ -437,6 +452,16 @@ export function buildContainer(opts: ContainerOptions): Container {
     },
   });
 
+  const checkpoints = new CheckpointService({
+    repos,
+    publisher,
+    clock,
+    git: gitRunner,
+    transcript,
+    rescanHunks: (id) => hunks.rescan(id),
+    ...(opts.retentionMs !== undefined ? { pruneMs: opts.retentionMs } : {}),
+  });
+
   const retention = new RetentionJob({
     repos,
     publisher,
@@ -451,6 +476,9 @@ export function buildContainer(opts: ContainerOptions): Container {
     watchWorktree: (s, w) => void hunks.watch(s, w),
     unwatchWorktree: (id) => void hunks.unwatch(id),
     rescanHunks: (id) => void hunks.rescan(id).catch(() => undefined),
+    turnStarted: (id, messageId) => checkpoints.onTurnStarted(id, messageId),
+    turnSettled: (id) => checkpoints.onTurnSettled(id),
+    limitsReported: (limits) => usage.report(limits),
   });
 
   const container: Container = {
@@ -483,6 +511,9 @@ export function buildContainer(opts: ContainerOptions): Container {
     skills,
     agents,
     runs,
+    checkpoints,
+    publish,
+    usage,
     terminals,
     broker,
     windows: opts.windows,
@@ -495,6 +526,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     async start() {
       grants.start();
       retention.start();
+      checkpoints.start();
       if (opts.disableRefresh) refresh.disable();
       else refresh.start();
       await broker.listen();
@@ -502,6 +534,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     async shutdown() {
       for (const s of repos.sessions.live()) broker.notifyStopping(s.id);
       retention.stop();
+      checkpoints.stop();
       refresh.stop();
       sessions.killAll();
       runs.stopAll();

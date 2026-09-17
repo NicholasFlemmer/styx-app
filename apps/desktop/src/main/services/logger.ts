@@ -10,6 +10,7 @@ const SECRET_ENV_KEYS =
   /(token|secret|password|passphrase|private[_-]?key|authorization|cookie|access_key|api[_-]?key|[_-]key$)/i;
 /** `scheme://user:password@host` — a connection string with credentials (`DATABASE_URL=postgres://u:p@…`). */
 const URL_USERINFO = /^[a-z][a-z0-9+.-]*:\/\/[^\s/@:]+:[^\s/@]+@/i;
+const URL_USERINFO_ANYWHERE = /[a-z][a-z0-9+.-]*:\/\/[^\s/@:]+:[^\s/@]+@/i;
 const SECRET_SHAPES = [
   /AKIA[0-9A-Z]{16}/g,
   /gh[pousr]_[A-Za-z0-9]{36}/g,
@@ -103,6 +104,37 @@ export function redactArgv(argv: readonly string[]): string[] {
  * `.styx/project.json` or the target row, and be echoed in transcripts and audit rows. Compared token by token,
  * so spacing never counts as a difference.
  */
+/**
+ * Files whose whole content is a secret by convention: never shown to a drafting model, never staged by an
+ * app-driven commit (an agent's own `git add` is its business; Publish is Styx's).
+ */
+const SECRET_FILE =
+  /(^|\/)(\.env(\.[^/]*)?|\.npmrc|\.netrc|\.pgpass|credentials\.json|service[-_]?account[^/]*\.json|id_(rsa|ed25519|ecdsa|dsa)(\.pub)?)$|\.(pem|key|p12|pfx|jks|keystore)$/i;
+const SECRET_FILE_ALLOW = /(^|\/)\.env\.(example|sample|template)$/i;
+export const isSecretFile = (path: string): boolean =>
+  SECRET_FILE.test(path) && !SECRET_FILE_ALLOW.test(path);
+
+/**
+ * Masks secret-bearing lines in a unified diff before it leaves for a drafting model: `KEY=value` lines whose key
+ * names a secret, and connection strings with credentials, on top of the token shapes `redact()` knows.
+ */
+export function redactPatch(patch: string): string {
+  return redact(patch)
+    .split('\n')
+    .map((line) => {
+      const m = /^([+-]\s*(?:export\s+)?)([A-Za-z_][A-Za-z0-9_.-]*)\s*[=:]\s*(.*)$/.exec(line);
+      if (
+        m?.[2] !== undefined &&
+        m[3] !== undefined &&
+        (SECRET_ENV_KEYS.test(m[2]) || SECRET_FLAGS.test(m[2]) || URL_USERINFO_ANYWHERE.test(m[3]))
+      )
+        return `${m[1]}${m[2]}=[redacted]`;
+      if (/^[+-]/.test(line) && URL_USERINFO_ANYWHERE.test(line)) return `${line.slice(0, 1)} [redacted]`;
+      return line;
+    })
+    .join('\n');
+}
+
 export function commandCarriesSecret(command: string): boolean {
   const tokens = command.split(/\s+/).filter((t) => t !== '');
   const masked = redactArgv(tokens);

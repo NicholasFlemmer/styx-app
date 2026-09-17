@@ -1,17 +1,11 @@
 import type { Container } from '../../container';
-import { type CommandBus, fail } from '../bus';
+import type { CommandBus } from '../bus';
 
-/** Turn checkpoints (ADR-0020): the turn's diff and restoring the workspace to before it. Filled by CheckpointService. */
+/** Turn checkpoints (ADR-0020): the turn's diff and restoring the workspace to before it (CheckpointService). */
 export function registerCheckpointCommands(bus: CommandBus, app: Container): void {
-  bus.register('checkpoint.diff', async ({ checkpointId }) => {
-    const svc = app.checkpoints;
-    if (!svc) fail('internal', 'checkpoints unavailable');
-    return svc.diff(checkpointId);
-  });
+  bus.register('checkpoint.diff', ({ checkpointId }) => app.checkpoints.diff(checkpointId));
   bus.register('checkpoint.revert', async ({ checkpointId }) => {
-    const svc = app.checkpoints;
-    if (!svc) fail('internal', 'checkpoints unavailable');
-    await svc.revert(checkpointId);
+    await app.checkpoints.revert(checkpointId);
     return {};
   });
 }

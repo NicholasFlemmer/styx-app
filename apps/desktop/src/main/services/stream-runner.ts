@@ -5,6 +5,7 @@ import {
   fill,
   copy,
   type Agent,
+  type AgentLimits,
   type Effort,
   type MessagePayload,
   type ModelInfo,
@@ -61,6 +62,8 @@ export type StreamEffect =
   /** `message_delta.usage.output_tokens` for the message in flight (a running total, not a delta). */
   | { type: 'streamUsage'; outputTokens: number }
   | { type: 'note'; note: string }
+  /** The CLI's latest account rate limits (Claude `rate_limit_event`, Codex `account/rateLimits/*`); UsageService keeps them. */
+  | { type: 'limits'; limits: AgentLimits }
   /** The CLI's model list (Codex `model/list`), stored on the CLI row so the composer's pickers fit the agent. */
   | { type: 'catalogue'; models: ModelInfo[] }
   | { type: 'rescan' }
@@ -169,7 +172,17 @@ export class StreamParser {
   /** Streamed text / thinking keys per message id, consumed by the complete `assistant` event(s) of that message. */
   private readonly streamed = new Map<string, StreamedMessage>();
 
-  constructor(private readonly worktreePath: string) {}
+  private readonly agent: Agent;
+  private readonly now: () => number;
+
+  /** `agent` names whose limits a `rate_limit_event` reports (cursor-agent shares the format); `now` stamps them. */
+  constructor(
+    private readonly worktreePath: string,
+    opts: { agent?: Agent; now?: () => number } = {},
+  ) {
+    this.agent = opts.agent ?? 'claude';
+    this.now = opts.now ?? Date.now;
+  }
 
   parseLine(line: string): StreamEffect[] {
     const trimmed = line.trim();
@@ -482,24 +495,74 @@ export class StreamParser {
     ];
   }
 
-  /** `rate_limit_info: {status, rateLimitType, resetsAt}`; only a non-`allowed` status is worth a terminal line. */
+  /**
+   * `rate_limit_info: {status, rateLimitType?, resetsAt?, utilization?, unifiedWindows?}` (claude 2.1.263): the
+   * per-window utilisation becomes a `limits` effect for the Usage page; only a non-`allowed` status is worth a
+   * terminal line.
+   */
   private rateLimit(e: Json): StreamEffect[] {
     const info = obj(e['rate_limit_info']);
+    const out: StreamEffect[] = [];
+    const limits = claudeLimits(info, this.agent, this.now());
+    if (limits !== null) out.push({ type: 'limits', limits });
     const status = str(info?.['status']) ?? 'unknown';
-    if (status === 'allowed') return [];
+    if (status === 'allowed') return out;
     const kind = str(info?.['rateLimitType']);
     const resetsAt = num(info?.['resetsAt']);
-    const resets = resetsAt !== null ? new Date(resetsAt * (resetsAt < 1e12 ? 1000 : 1)).toISOString() : null;
-    return [
-      {
-        type: 'render',
-        text: crlf(
-          `· rate limit: ${status}${kind ? ` (${kind})` : ''}${resets ? ` · resets ${resets}` : ''}`,
-        ),
-      },
-    ];
+    const resets = resetsAt !== null ? new Date(epochMs(resetsAt)).toISOString() : null;
+    out.push({
+      type: 'render',
+      text: crlf(`· rate limit: ${status}${kind ? ` (${kind})` : ''}${resets ? ` · resets ${resets}` : ''}`),
+    });
+    return out;
   }
 }
+
+/** CLIs report resets in epoch seconds (Claude, Codex); tolerate milliseconds. */
+export const epochMs = (t: number): number => Math.round(t * (t < 1e12 ? 1000 : 1));
+
+/** The two account windows Claude Code reports, by `rateLimitType` / `unifiedWindows` key (labels shared with Codex). */
+const CLAUDE_WINDOWS: readonly { key: string; label: string }[] = [
+  { key: 'five_hour', label: fill(copy.codexRunner.windowHours, { n: 5 }) },
+  { key: 'seven_day', label: fill(copy.codexRunner.windowDays, { n: 7 }) },
+];
+
+/** 0–1 utilisation (the API's unified rate-limit headers) → a clamped percentage. */
+const percentOf = (utilization: number | null): number | null =>
+  utilization === null ? null : Math.min(100, Math.max(0, utilization * 100));
+
+/**
+ * `rate_limit_info` → the account's limits, or null when the event names no window. `unifiedWindows` carries every
+ * window (`{utilization: 0–1, resetsAt: epoch s}`); an event without it names one window in `rateLimitType` with
+ * an optional `utilization`, which a `rejected` status pins at 100%. Per-model overage buckets are not windows and
+ * are left out; Claude never names a plan here.
+ */
+export const claudeLimits = (info: Json | null, agent: Agent, now: number): AgentLimits | null => {
+  if (info === null) return null;
+  const windows: AgentLimits['windows'] = [];
+  const unified = obj(info['unifiedWindows']);
+  if (unified !== null) {
+    for (const { key, label } of CLAUDE_WINDOWS) {
+      const w = obj(unified[key]);
+      const used = percentOf(num(w?.['utilization']));
+      if (w === null || used === null) continue;
+      const resetsAt = num(w['resetsAt']);
+      windows.push({ label, usedPercent: used, resetsAt: resetsAt === null ? null : epochMs(resetsAt) });
+    }
+  }
+  if (windows.length === 0) {
+    const named = CLAUDE_WINDOWS.find((w) => w.key === str(info['rateLimitType']));
+    const used = percentOf(num(info['utilization'])) ?? (info['status'] === 'rejected' ? 100 : null);
+    if (named === undefined || used === null) return null;
+    const resetsAt = num(info['resetsAt']);
+    windows.push({
+      label: named.label,
+      usedPercent: used,
+      resetsAt: resetsAt === null ? null : epochMs(resetsAt),
+    });
+  }
+  return { agent, plan: null, windows, updatedAt: now };
+};
 
 /** A base64 image block placed before the text of a user turn (Messages API shape). */
 export interface ImageBlock {
@@ -601,6 +664,8 @@ interface Entry {
   buffer: string;
   /** Pending `can_use_tool` inputs by request id (echoed back as `updatedInput` on allow). */
   permissions: Map<string, Record<string, unknown>>;
+  /** argv runner: turns sent while a process was still running, started one by one as each process exits. */
+  pending: string[];
   killed: boolean;
 }
 
@@ -617,9 +682,10 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
     const entry: Entry = {
       opts,
       proc: null,
-      parser: new StreamParser(opts.worktreePath),
+      parser: new StreamParser(opts.worktreePath, opts.session ? { agent: opts.session.agent } : {}),
       buffer: '',
       permissions: new Map(),
+      pending: [],
       killed: false,
     };
     this.entries.set(opts.id, entry);
@@ -693,7 +759,14 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
     entry.buffer = '';
     entry.proc = null;
     if (entry.opts.input.kind === 'argv' && !entry.killed) {
-      // One process per turn: the exit ends the turn, not the session.
+      // One process per turn: the exit ends the turn, not the session. A turn sent while this one ran (Send now)
+      // opens the next process straight away, so the session never reports idle in between.
+      const next = entry.pending.shift();
+      if (next !== undefined) {
+        this.emit('effect', entry.opts.id, { type: 'session', event: 'activity' });
+        this.startTurn(entry, next);
+        return;
+      }
       this.emit('effect', entry.opts.id, { type: 'session', event: 'quiet' });
       return;
     }
@@ -714,10 +787,18 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
         count: blocks.length,
       });
     if (entry.proc) {
-      // A turn is still running: cursor-agent has no stdin protocol, so the message waits for the next turn.
-      logger.warn('stream runner: turn in progress, message dropped', { id });
+      // A turn is still running: cursor-agent has no stdin protocol, so the message is held until this process
+      // exits and then goes as the next turn (the session service normally queues before it gets here).
+      logger.info('stream runner: turn in progress, message held for the next turn', { id });
+      entry.pending.push(text);
       return;
     }
+    this.startTurn(entry, text);
+  }
+
+  /** argv runner: one process per turn, resuming the CLI's own chat once it has told us its id. */
+  private startTurn(entry: Entry, text: string): void {
+    const id = entry.opts.id;
     const chatId = entry.parser.chatId;
     const resumeFlag = entry.opts.input.kind === 'argv' ? entry.opts.input.resumeFlag : null;
     const args =

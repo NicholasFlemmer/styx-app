@@ -6,19 +6,24 @@ import {
   AGENT_LABEL,
   MODEL_ALIASES,
   copy,
+  deliveryWhileWorking,
   fill,
   headAsk,
+  isMidTurn,
   newId,
   repoHasGit,
   openAskCount,
   sessionTransition,
   type Agent,
+  type AgentLimits,
   type AskId,
   type AskQuestion,
   type CliInstall,
   type MessagePayload,
+  type MidTurnDelivery,
   type PendingAsk,
   type Project,
+  type QueuedMessage,
   type Runner,
   type Session,
   type SessionPurpose,
@@ -101,6 +106,8 @@ export interface SessionHooks {
   /** Turn boundaries for checkpoints (docs/adr/0020): a user turn is about to start / the agent went quiet. */
   turnStarted?: (sessionId: SessionId, messageId: string) => void;
   turnSettled?: (sessionId: SessionId) => void;
+  /** A CLI reported its account rate limits (UsageService keeps the latest per agent). */
+  limitsReported?: (limits: AgentLimits) => void;
 }
 
 export interface SpawnInput {
@@ -569,6 +576,12 @@ export class SessionService {
     const launch = await buildAgentLaunch(ctx);
     this.launches.set(session.id, launch);
     this.liveTokens.set(session.id, token);
+    // The first turn goes out with the launch, not through `sendMessage`: its baseline is captured here
+    // (checkpoints, ADR-0020), keyed to the user row `spawn` already appended.
+    if (firstMessage) {
+      const userRow = repos.transcripts.last(session.id).findLast((m) => m.payload.kind === 'user');
+      if (userRow) this.hooks?.turnStarted?.(session.id, userRow.id);
+    }
     try {
       let pid: number;
       if (launch.stream) {
@@ -630,11 +643,18 @@ export class SessionService {
    * dropped with a `system` line); files are read inside the worktree and inlined after the text as
    * `<file path="…">` sections for either runner. The transcript row keeps metadata only — never bytes or contents
    * — and its body is the typed text, or the attachment names when nothing was typed.
+   *
+   * Mid-turn (the agent is working, or blocked on an ask): Codex over its app-server takes the message into the
+   * running turn (`turn/steer`); every other runner has no such channel, so the message is held in the session's
+   * queue — no user row yet — and goes out through this same path when the turn settles (`drainQueue`), or when the
+   * user sends it now (`sendQueued`, `opts.now`) or takes it back (`unqueue`). Only text queues: files are inlined
+   * into the held text, images are dropped with a `system` line.
    */
   async sendMessage(
     sessionId: string,
     body: string,
     attachments: readonly AttachmentInput[] = [],
+    opts: { now?: boolean } = {},
   ): Promise<void> {
     const s = this.require(sessionId);
     if (s.state === 'done') fail('invalid-transition', 'session has finished');
@@ -648,6 +668,21 @@ export class SessionService {
             attachments,
           );
     const shown = body !== '' ? body : prepared.meta.map(attachmentName).join(', ');
+    if (opts.now !== true && this.queuesNow(s)) {
+      if (prepared.images.length > 0)
+        this.deps.transcript.system(
+          s.id,
+          `${prepared.images.length === 1 ? 'Image' : 'Images'} dropped: only text can wait for the next turn.`,
+        );
+      // Paths, not contents: the files are read again, confined, when the message goes out (and the typed text
+      // is scrubbed like any transcript row, since the row is persisted and mirrored to the renderer).
+      this.enqueue(
+        s,
+        redact(shown),
+        attachments.flatMap((a) => (a.kind === 'file' ? [a.path] : [])),
+      );
+      return;
+    }
     const userRow = this.deps.transcript.append(s.id, shown, {
       kind: 'user',
       ...(prepared.meta.length > 0 ? { attachments: prepared.meta } : {}),
@@ -776,6 +811,8 @@ export class SessionService {
    */
   interrupt(sessionId: string): void {
     const s = this.require(sessionId);
+    // Stop returns what was waiting for the next turn to the composer: nothing held goes out behind a stop.
+    this.returnQueue(s);
     if (this.deps.stream.has(s.id)) {
       // Stop means stop: an approval still open would otherwise let a later Allow run what the user interrupted.
       for (const ask of this.deps.repos.pendingAsks.openBySession(s.id)) {
@@ -800,20 +837,101 @@ export class SessionService {
     }
   }
 
-  /** Queue (Claude Code has no steer): send a held message now / drop it. Filled by the queue work package. */
+  // --- queue (messages sent mid-turn) ----------------------------------------
+
+  /** `steer` for Codex over its app-server (`turn/steer`); `queue` for every other runner. */
+  deliveryWhileWorking(session: Pick<Session, 'agent' | 'runner'>): MidTurnDelivery {
+    return deliveryWhileWorking(session);
+  }
+
+  /**
+   * A message sent now waits: a turn is running (or the CLI is blocked on an ask), the process is actually attached
+   * — a session whose process is gone relaunches and delivers instead — and the runner cannot steer.
+   */
+  private queuesNow(s: Session): boolean {
+    return isMidTurn(s) && this.isRunning(s.id) && this.deliveryWhileWorking(s) === 'queue';
+  }
+
+  private enqueue(s: Session, body: string, files: string[] = []): QueuedMessage {
+    // Rows order by `createdAt` then id; two sent in the same tick (ULIDs are not monotonic) keep arrival order.
+    const last = this.deps.repos.queuedMessages.bySession(s.id).at(-1);
+    const m: QueuedMessage = {
+      id: newId<'MessageId'>(),
+      sessionId: s.id,
+      body,
+      files,
+      createdAt: Math.max(this.deps.clock.now(), last === undefined ? 0 : last.createdAt + 1),
+    };
+    this.deps.repos.queuedMessages.insert(m);
+    this.publishQueue(s.id);
+    return m;
+  }
+
+  private publishQueue(sessionId: SessionId): void {
+    this.deps.publisher.queueReplace(sessionId, this.deps.repos.queuedMessages.bySession(sessionId));
+  }
+
+  /**
+   * The turn settled: the oldest held message goes out as the next turn through the normal path, which appends its
+   * user row. One per settle; the next waits for this turn to end. A stream session settles on its own end-of-turn
+   * event (Claude's `result`, Codex `turn/completed`) and nowhere else — Claude's Stop hook fires for the same turn,
+   * and draining on both would send two held messages for one turn end. A pty session has only its hooks and the
+   * quiet timer.
+   */
+  private drainQueue(sessionId: SessionId): void {
+    const s = this.deps.repos.sessions.get(sessionId);
+    if (!s || s.state !== 'idle' || !this.isRunning(s.id)) return;
+    const next = this.deps.repos.queuedMessages.bySession(s.id)[0];
+    if (next === undefined) return;
+    this.deps.repos.queuedMessages.remove(next.id);
+    this.publishQueue(s.id);
+    void this.sendMessage(
+      s.id,
+      next.body,
+      next.files.map((path) => ({ kind: 'file' as const, path })),
+    ).catch((e: Error) =>
+      logger.warn('queue: held message failed to send', { sessionId: s.id, error: e.message }),
+    );
+  }
+
+  /**
+   * Send now: a steering session steers it; a queueing session mid-turn writes it to the CLI anyway (Claude Code
+   * buffers stdin turns until the current one ends; the argv runner holds it for the next process). Either way the
+   * user row appears now and the message leaves the queue.
+   */
   async sendQueued(sessionId: string, messageId: string): Promise<void> {
     const m = this.deps.repos.queuedMessages.get(messageId);
     if (!m || m.sessionId !== sessionId) fail('not-found', 'queued message not found');
     this.deps.repos.queuedMessages.remove(m.id);
-    this.deps.publisher.queueReplace(m.sessionId, this.deps.repos.queuedMessages.bySession(m.sessionId));
-    await this.sendMessage(sessionId, m.body);
+    this.publishQueue(m.sessionId);
+    await this.sendMessage(
+      sessionId,
+      m.body,
+      m.files.map((path) => ({ kind: 'file' as const, path })),
+      { now: true },
+    );
   }
 
+  /** Take back: the row goes; the renderer puts the text back into the composer. */
   unqueue(sessionId: string, messageId: string): void {
     const m = this.deps.repos.queuedMessages.get(messageId);
     if (!m || m.sessionId !== sessionId) return;
     this.deps.repos.queuedMessages.remove(m.id);
-    this.deps.publisher.queueReplace(m.sessionId, this.deps.repos.queuedMessages.bySession(m.sessionId));
+    this.publishQueue(m.sessionId);
+  }
+
+  /**
+   * Stop / session end: every held message leaves the queue and goes back to the composer (`queue.returned`), with
+   * a `system` line saying so. Nothing queued is ever sent behind the user's back after a stop.
+   */
+  private returnQueue(s: Session): void {
+    const held = this.deps.repos.queuedMessages.bySession(s.id);
+    if (held.length === 0) return;
+    for (const m of held) this.deps.repos.queuedMessages.remove(m.id);
+    this.publishQueue(s.id);
+    const n = held.length;
+    this.deps.transcript.system(s.id, fill(n === 1 ? copy.queue.stopped : copy.queue.stoppedMany, { n }));
+    this.deps.publisher.sendEvent('queue.returned', { sessionId: s.id, bodies: held.map((m) => m.body) });
   }
 
   /** Raw bytes from the terminal pane. Stream sessions have no TTY, so typed input is ignored there. */
@@ -1105,7 +1223,9 @@ export class SessionService {
     if (prev) clearTimeout(prev);
     const t = setTimeout(() => {
       this.quietTimers.delete(id);
-      this.applyEvent(id, { type: 'quiet' });
+      const next = this.applyEvent(id, { type: 'quiet' });
+      // Not a turn boundary for checkpoints, but the only end-of-turn a TUI without hooks (gemini, cursor) has.
+      if (next?.state === 'idle') this.drainQueue(next.id);
     }, QUIET_MS);
     t.unref?.();
     this.quietTimers.set(id, t);
@@ -1211,13 +1331,22 @@ export class SessionService {
       case 'note':
         this.setNote(s.id, effect.note);
         return;
+      case 'limits':
+        this.hooks?.limitsReported?.(effect.limits);
+        return;
       case 'session': {
         const next = this.applyEvent(s.id, { type: effect.event });
-        if (effect.event === 'quiet' && next?.state === 'idle') this.hooks?.turnSettled?.(s.id);
         // A background job ends at the structured turn boundary. PTY quiet timers are not completion signals.
         if (s.purpose && effect.event === 'quiet' && next?.state === 'idle') {
+          this.hooks?.turnSettled?.(s.id);
           this.applyEvent(s.id, { type: 'finish', exitCode: 0 });
           this.deps.stream.kill(s.id);
+          return;
+        }
+        if (effect.event === 'quiet' && next?.state === 'idle') {
+          this.hooks?.turnSettled?.(s.id);
+          // Whatever order Claude's Stop hook and its `result` arrive in, the queue drains here and only here.
+          this.drainQueue(s.id);
         }
         return;
       }
@@ -1594,7 +1723,10 @@ export class SessionService {
           this.agentMovedOn(s);
           this.hooks?.rescanHunks(s.id);
           const next = this.applyEvent(s.id, { type: 'quiet' });
-          if (next?.state === 'idle') this.hooks?.turnSettled?.(s.id);
+          if (next?.state === 'idle') {
+            this.hooks?.turnSettled?.(s.id);
+            if (!this.deps.stream.has(s.id)) this.drainQueue(s.id); // a stream session drains on its `result`
+          }
           return;
         }
         case 'SubagentStop':
@@ -1630,7 +1762,10 @@ export class SessionService {
         if (msg) this.setNote(s.id, msg.slice(0, 200));
         const next = this.applyEvent(s.id, { type: 'quiet' });
         this.hooks?.rescanHunks(s.id);
-        if (next?.state === 'idle') this.hooks?.turnSettled?.(s.id);
+        if (next?.state === 'idle') {
+          this.hooks?.turnSettled?.(s.id);
+          if (!this.deps.stream.has(s.id)) this.drainQueue(s.id); // app-server sessions drain on turn/completed
+        }
       } else this.applyEvent(s.id, { type: 'activity' });
       return;
     }
@@ -1707,6 +1842,7 @@ export class SessionService {
     for (const effect of t.effects) this.runEffect(effect, next);
     if (t.state === 'done' && s.state !== 'done') {
       this.hookAsks.delete(s.id);
+      this.returnQueue(next);
       const project = repos.projects.get(next.projectId);
       this.deps.activity.append({
         who: AGENT_LABEL[next.agent],

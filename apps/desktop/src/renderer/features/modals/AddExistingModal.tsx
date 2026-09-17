@@ -13,9 +13,9 @@ export interface AddExistingModalProps {
 
 /**
  * "Add existing projects" (owner addition, docs/handoff-discrepancies #53): the onboarding step-2 list — editor
- * recents plus repos found on this machine, known projects hidden — with checkboxes, reachable any time from the
- * rail "+", Home and the palette. Scans on open; `Add n` runs `project.add` per checked row and lands in the
- * Workspace when exactly one project was added.
+ * recents, where Claude Code and Codex have worked (#93) plus repos found on this machine, known projects hidden —
+ * with checkboxes, reachable any time from the rail "+", Home and the palette. Scans on open; `Add n` runs
+ * `project.add` per checked row and lands in the Workspace when exactly one project was added.
  */
 export function AddExistingModal({ id }: AddExistingModalProps) {
   const popOverlay = useUi((u) => u.popOverlay);
@@ -29,7 +29,8 @@ export function AddExistingModal({ id }: AddExistingModalProps) {
 
   useEffect(() => {
     let cancelled = false;
-    void command('project.scan', { includeIdeRecents: true }).then((r) => {
+    // Editor recents and the agent CLIs' history are always in here (the onboarding toggles are step 1's).
+    void command('project.scan', { includeIdeRecents: true, includeAgentHistory: true }).then((r) => {
       if (cancelled) return;
       if (!r.ok) {
         setResult({
@@ -140,7 +141,7 @@ export function AddExistingModal({ id }: AddExistingModalProps) {
               aria-label={copy.addExisting.title}
             >
               {repos.map((r) => (
-                <TableRow key={r.path} data-repo-path={r.path}>
+                <TableRow key={r.path} data-repo-path={r.path} data-repo-source={r.source}>
                   <TableCell>
                     <Checkbox
                       tone="accent"

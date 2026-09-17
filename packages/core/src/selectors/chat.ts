@@ -56,3 +56,20 @@ export const composerPlaceholder = (model: ReadModel, sessionId: SessionId): str
   const agent = session === undefined ? '' : copy.agents[session.agent];
   return fill(copy.chat.composerPlaceholder, { agent });
 };
+
+export type MidTurnDelivery = 'steer' | 'queue';
+
+/**
+ * What happens to a message sent while the agent is mid-turn. Codex over its app-server can take input into the
+ * running turn (`turn/steer`); every other runner — Claude Code's stdin, ACP, print mode, a TUI on a pty — holds
+ * it in the session queue until the turn settles.
+ */
+export const deliveryWhileWorking = (session: Pick<Session, 'agent' | 'runner'>): MidTurnDelivery =>
+  session.agent === 'codex' && session.runner === 'stream' ? 'steer' : 'queue';
+
+/**
+ * A session takes a chat message into its queue (or steers) only while a turn is running: `working`, or blocked
+ * on an ask (`needs-you`) — the CLI does not read a new turn until the ask is answered. A shell has no turns.
+ */
+export const isMidTurn = (session: Pick<Session, 'agent' | 'state'>): boolean =>
+  session.agent !== 'shell' && (session.state === 'working' || session.state === 'needs-you');

@@ -39,12 +39,15 @@ const flush = () => new Promise<void>((r) => setTimeout(r, 0));
 interface FakeBridge {
   snapshot: ReturnType<typeof vi.fn>;
   onDelta: (cb: (b: DeltaBatch) => void) => () => void;
-  onEvent: () => () => void;
+  onEvent: (name: string, cb: (payload: unknown) => void) => () => void;
   emit: (b: DeltaBatch) => void;
+  /** Fires a main → renderer event at every listener registered under `name`. */
+  event: (name: string, payload: unknown) => void;
 }
 
 const install = (seqs: number[]): FakeBridge => {
   let listener: ((b: DeltaBatch) => void) | null = null;
+  const events = new Map<string, ((payload: unknown) => void)[]>();
   const queue = [...seqs];
   const fake: FakeBridge = {
     snapshot: vi.fn(async () => snapshotOf(queue.shift() ?? 1)),
@@ -54,8 +57,18 @@ const install = (seqs: number[]): FakeBridge => {
         listener = null;
       };
     },
-    onEvent: () => () => {},
+    onEvent: (name, cb) => {
+      events.set(name, [...(events.get(name) ?? []), cb]);
+      return () =>
+        events.set(
+          name,
+          (events.get(name) ?? []).filter((f) => f !== cb),
+        );
+    },
     emit: (b) => listener?.(b),
+    event: (name, payload) => {
+      for (const cb of events.get(name) ?? []) cb(payload);
+    },
   };
   Object.assign(window, { styx: { platform: 'darwin', env: {}, ...fake } });
   return fake;
@@ -99,6 +112,25 @@ describe('connectSync', () => {
     await flush();
     expect(useReadModel.getState().seq).toBe(7);
     off();
+  });
+
+  it("queue.returned puts the returned bodies into that session's composer draft, blank-line separated", async () => {
+    const fake = install([1]);
+    useUiStore.setState({ drafts: {} });
+    const off = connectSync();
+    await flush();
+    const sessionId = fixtures.ids.session.claude;
+    fake.event('queue.returned', { sessionId, bodies: ['alpha', 'beta'] });
+    expect(useUiStore.getState().drafts[sessionId]).toMatchObject({ text: 'alpha\n\nbeta' });
+    const seq = useUiStore.getState().drafts[sessionId]?.seq ?? 0;
+    // A later return lands after what is already waiting, under a fresh seq so the composer applies it.
+    fake.event('queue.returned', { sessionId, bodies: ['gamma'] });
+    expect(useUiStore.getState().drafts[sessionId]).toEqual({ text: 'alpha\n\nbeta\n\ngamma', seq: seq + 1 });
+    fake.event('queue.returned', { sessionId: fixtures.ids.session.codex, bodies: [] });
+    expect(useUiStore.getState().drafts[fixtures.ids.session.codex]).toBeUndefined();
+    off();
+    fake.event('queue.returned', { sessionId, bodies: ['late'] });
+    expect(useUiStore.getState().drafts[sessionId]?.text).toBe('alpha\n\nbeta\n\ngamma');
   });
 
   it('falls back to the demo fixture when main is not attached (dev only)', () => {

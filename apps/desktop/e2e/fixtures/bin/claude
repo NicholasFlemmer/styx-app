@@ -1,0 +1,69 @@
+#!/usr/bin/env node
+'use strict';
+/**
+ * Fake Claude Code CLI for e2e (apps/desktop/e2e/launch.ts prepends this directory to PATH; detection keeps the
+ * highest version, so this one wins over a real install and no test ever spends the owner's usage).
+ *
+ *   claude --version                      → `99.0.0 (Claude Code)`
+ *   claude --help                         → names -p / --print, --output-format stream-json, --mcp-config …
+ *   claude -p --output-format json <prompt>  (diff on stdin) → one `result` JSON: a commit message or a PR
+ *                                           title + body, depending on the prompt (publish.spec.ts)
+ */
+const args = process.argv.slice(2);
+
+const HELP = `Usage: claude [options] [command] [prompt]
+
+Options:
+  -p, --print                      Print response and exit
+  --output-format <format>         Output format (only works with --print): "text", "json", "stream-json"
+  --mcp-config <configs...>        Load MCP servers from JSON files
+  --settings <file-or-json>        Path to a settings JSON file
+  --tools <tools...>               Specify the list of available tools; "" disables all
+  -h, --help                       Display help for command
+`;
+
+if (args.includes('--version') || args.includes('-v')) {
+  process.stdout.write('99.0.0 (Claude Code)\n');
+  process.exit(0);
+}
+if (args.includes('--help') || args.includes('-h') || args.length === 0) {
+  process.stdout.write(HELP);
+  process.exit(0);
+}
+if (args[0] === 'auth' && args[1] === 'status') {
+  process.stdout.write(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', email: 'fake@example.com' }) + '\n');
+  process.exit(0);
+}
+if (args.includes('-p') || args.includes('--print')) {
+  const prompt = args[args.length - 1] ?? '';
+  let stdin = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (chunk) => {
+    stdin += chunk;
+  });
+  process.stdin.on('end', () => {
+    const files = stdin
+      .split('\n')
+      .filter((l) => /^\S+ \+\d+ -\d+$/.test(l))
+      .map((l) => l.split(' ')[0]);
+    const named = files.length > 0 ? files.join(', ') : 'the changed files';
+    const result = /pull request/i.test(prompt)
+      ? `Cover order retries in the flaky test\n\n## Summary\n- ${named}: adds a retry case\n\n## Test plan\n- run the orders tests`
+      : `Cover order retries in the flaky test\n\nExtends ${named} with a retry case so the flake is reproducible.`;
+    process.stdout.write(
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        duration_ms: 12,
+        num_turns: 1,
+        result,
+        session_id: 'fake-session',
+      }) + '\n',
+    );
+    process.exit(0);
+  });
+} else {
+  process.stderr.write(`fake claude: ${args.join(' ')} is not supported\n`);
+  process.exit(2);
+}

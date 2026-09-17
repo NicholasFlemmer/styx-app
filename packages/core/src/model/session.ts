@@ -126,7 +126,9 @@ export type Session = z.infer<typeof sessionSchema>;
 export const queuedMessageSchema = z.object({
   id: z.string().min(1),
   sessionId: sessionIdSchema,
+  /** The typed text only: file attachments are kept as paths and re-read when the message goes out. */
   body: z.string().min(1),
+  files: z.array(z.string().min(1)).default([]),
   createdAt: timestampSchema,
 });
 export type QueuedMessage = z.infer<typeof queuedMessageSchema>;

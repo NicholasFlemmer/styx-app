@@ -161,9 +161,39 @@ describe('StreamParser', () => {
         f.type === 'transcript' && f.payload.kind === 'tool',
     );
     expect(tools.map((t) => [t.body, t.payload])).toEqual([
-      ['Edit checkout.ts', { kind: 'tool', tool: 'Edit', hint: 'checkout.ts', toolUseId: 'toolu_1', status: 'running', detail: null }],
-      ['Write validate.ts', { kind: 'tool', tool: 'Write', hint: 'validate.ts', toolUseId: 'toolu_2', status: 'running', detail: null }],
-      ['Bash pnpm test', { kind: 'tool', tool: 'Bash', hint: 'pnpm test', toolUseId: 'toolu_3', status: 'running', detail: null }],
+      [
+        'Edit checkout.ts',
+        {
+          kind: 'tool',
+          tool: 'Edit',
+          hint: 'checkout.ts',
+          toolUseId: 'toolu_1',
+          status: 'running',
+          detail: null,
+        },
+      ],
+      [
+        'Write validate.ts',
+        {
+          kind: 'tool',
+          tool: 'Write',
+          hint: 'validate.ts',
+          toolUseId: 'toolu_2',
+          status: 'running',
+          detail: null,
+        },
+      ],
+      [
+        'Bash pnpm test',
+        {
+          kind: 'tool',
+          tool: 'Bash',
+          hint: 'pnpm test',
+          toolUseId: 'toolu_3',
+          status: 'running',
+          detail: null,
+        },
+      ],
     ]);
   });
 
@@ -199,15 +229,41 @@ describe('StreamParser', () => {
     );
     expect(fx).toEqual([
       { type: 'session', event: 'activity' },
-      { type: 'transcript', body: 'Grep foo', payload: { kind: 'tool', tool: 'Grep', hint: 'foo', toolUseId: 'toolu_g', status: 'running', detail: null } },
+      {
+        type: 'transcript',
+        body: 'Grep foo',
+        payload: {
+          kind: 'tool',
+          tool: 'Grep',
+          hint: 'foo',
+          toolUseId: 'toolu_g',
+          status: 'running',
+          detail: null,
+        },
+      },
       { type: 'render', text: '▸ Grep foo\r\n' },
-      { type: 'transcript', body: 'Read b.ts', payload: { kind: 'tool', tool: 'Read', hint: 'b.ts', toolUseId: 'toolu_r', status: 'running', detail: null } },
+      {
+        type: 'transcript',
+        body: 'Read b.ts',
+        payload: {
+          kind: 'tool',
+          tool: 'Read',
+          hint: 'b.ts',
+          toolUseId: 'toolu_r',
+          status: 'running',
+          detail: null,
+        },
+      },
       { type: 'render', text: '▸ Read b.ts\r\n' },
     ]);
     const ok = p.parseLine(
       JSON.stringify({
         type: 'user',
-        message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_g', content: [{ type: 'text', text: 'a.ts:1' }] }] },
+        message: {
+          content: [
+            { type: 'tool_result', tool_use_id: 'toolu_g', content: [{ type: 'text', text: 'a.ts:1' }] },
+          ],
+        },
       }),
     );
     expect(ok).toEqual([
@@ -250,18 +306,98 @@ describe('StreamParser', () => {
     ]);
   });
 
+  const NOW = 1_700_000_000_000;
+  const rateLimitEvent = (info: unknown, agent: 'claude' | 'cursor' = 'claude') =>
+    new StreamParser(WT, { agent, now: () => NOW }).parseLine(
+      JSON.stringify({ type: 'rate_limit_event', rate_limit_info: info, session_id: 'x' }),
+    );
+  const limits = (windows: { label: string; usedPercent: number; resetsAt: number | null }[]) => ({
+    type: 'limits',
+    limits: { agent: 'claude', plan: null, windows, updatedAt: NOW },
+  });
+
   it.each([
     [
       { status: 'rejected', rateLimitType: 'five_hour', resetsAt: 1_800_000_000 },
-      [{ type: 'render', text: '· rate limit: rejected (five_hour) · resets 2027-01-15T08:00:00.000Z\r\n' }],
+      [
+        // No utilisation in the event: a rejection means the named window is used up.
+        limits([{ label: '5 h', usedPercent: 100, resetsAt: 1_800_000_000_000 }]),
+        { type: 'render', text: '· rate limit: rejected (five_hour) · resets 2027-01-15T08:00:00.000Z\r\n' },
+      ],
     ],
     [{ status: 'allowed_warning' }, [{ type: 'render', text: '· rate limit: allowed_warning\r\n' }]],
     [{ status: 'allowed', rateLimitType: 'five_hour' }, []],
     [undefined, [{ type: 'render', text: '· rate limit: unknown\r\n' }]],
-  ])('rate_limit_event %j → render line only', (info, expected) => {
-    expect(parseAll([JSON.stringify({ type: 'rate_limit_event', rate_limit_info: info, session_id: 'x' })])).toEqual(
-      expected,
+    // claude 2.1.263: `unifiedWindows` carries every window as a 0–1 utilisation with an epoch-second reset.
+    [
+      {
+        status: 'allowed',
+        rateLimitType: 'five_hour',
+        utilization: 0.424,
+        unifiedWindows: {
+          five_hour: { utilization: 0.424, resetsAt: 1_700_007_800 },
+          seven_day: { utilization: 0.12, resetsAt: 1_700_259_200 },
+          seven_day_overage_included: { utilization: 0.5, resetsAt: 1_700_259_200 },
+        },
+      },
+      [
+        limits([
+          { label: '5 h', usedPercent: 42.4, resetsAt: 1_700_007_800_000 },
+          { label: '7 d', usedPercent: 12, resetsAt: 1_700_259_200_000 },
+        ]),
+      ],
+    ],
+    // A warning names one window with its utilisation; the terminal line follows the limits.
+    [
+      { status: 'allowed_warning', rateLimitType: 'seven_day', utilization: 0.91, resetsAt: 1_700_259_200 },
+      [
+        limits([{ label: '7 d', usedPercent: 91, resetsAt: 1_700_259_200_000 }]),
+        {
+          type: 'render',
+          text: '· rate limit: allowed_warning (seven_day) · resets 2023-11-17T22:13:20.000Z\r\n',
+        },
+      ],
+    ],
+    // Utilisation over 1 (or a millisecond reset) is tolerated; an overage bucket alone is no window.
+    [
+      { status: 'allowed', rateLimitType: 'five_hour', utilization: 1.4, resetsAt: 1_700_007_800_000 },
+      [limits([{ label: '5 h', usedPercent: 100, resetsAt: 1_700_007_800_000 }])],
+    ],
+    [{ status: 'allowed', rateLimitType: 'overage', utilization: 0.2 }, []],
+    [
+      {
+        status: 'allowed',
+        unifiedWindows: { seven_day_overage_included: { utilization: 0.2, resetsAt: 1 } },
+      },
+      [],
+    ],
+  ])(
+    'rate_limit_event %j → limits for the Usage page, then a render line when not allowed',
+    (info, expected) => {
+      expect(rateLimitEvent(info)).toEqual(expected);
+    },
+  );
+
+  it('attributes rate limits to the parser agent (cursor-agent shares the format)', () => {
+    const [fx] = rateLimitEvent(
+      { status: 'allowed', unifiedWindows: { five_hour: { utilization: 0.1, resetsAt: 1_700_000_100 } } },
+      'cursor',
     );
+    expect(fx).toMatchObject({ type: 'limits', limits: { agent: 'cursor' } });
+    // `parseAll` (no options) stamps with the wall clock and reports as claude.
+    const [live] = parseAll([
+      JSON.stringify({
+        type: 'rate_limit_event',
+        rate_limit_info: {
+          status: 'allowed',
+          unifiedWindows: { five_hour: { utilization: 0.1, resetsAt: 1 } },
+        },
+      }),
+    ]);
+    expect(live).toMatchObject({
+      type: 'limits',
+      limits: { agent: 'claude', updatedAt: expect.any(Number) },
+    });
   });
 
   it('result after unresolved edits still rescans', () => {
@@ -298,10 +434,12 @@ describe('StreamParser', () => {
   });
 
   it.each([
-    ['claude 2.1.263 init: terminal-only commands are dropped, the rest sorted',
+    [
+      'claude 2.1.263 init: terminal-only commands are dropped, the rest sorted',
       ['compact', 'model', 'doctor', 'context', 'my-skill', 'color'],
       ['doctor', 'color', 'reload-plugins'],
-      ['compact', 'context', 'model', 'my-skill']],
+      ['compact', 'context', 'model', 'my-skill'],
+    ],
     ['duplicates collapse', ['b', 'a', 'b', 'a'], [], ['a', 'b']],
     ['absent lists → empty', undefined, undefined, []],
     ['non-string entries are ignored', ['ok', 1, null, ''], 'not-a-list', ['ok']],
@@ -324,7 +462,10 @@ describe('StreamParser', () => {
     });
     expect(userTurnLine('x').endsWith('\n')).toBe(true);
     // image blocks go before the text block (Messages API user content)
-    const img = { type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/png', data: 'AAAA' } };
+    const img = {
+      type: 'image' as const,
+      source: { type: 'base64' as const, media_type: 'image/png', data: 'AAAA' },
+    };
     expect(JSON.parse(userTurnLine('what is this?', [img]))).toEqual({
       type: 'user',
       message: { role: 'user', content: [img, { type: 'text', text: 'what is this?' }] },
@@ -401,7 +542,11 @@ const jsonDelta = (index: number): string =>
   se({ type: 'content_block_delta', index, delta: { type: 'input_json_delta', partial_json: '{"co' } });
 const blockStop = (index: number, parent: string | null = null): string =>
   se({ type: 'content_block_stop', index }, parent);
-const MSG_DELTA = se({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 42 } });
+const MSG_DELTA = se({
+  type: 'message_delta',
+  delta: { stop_reason: 'end_turn' },
+  usage: { output_tokens: 42 },
+});
 const MSG_STOP = se({ type: 'message_stop' });
 const final = (content: unknown[], id: string | null = 'msg_1', parent: string | null = null): string =>
   JSON.stringify({
@@ -417,7 +562,9 @@ describe('StreamParser partial messages (--include-partial-messages)', () => {
     const p = new StreamParser(WT);
     const fx = (line: string) => p.parseLine(line);
     expect(fx(msgStart())).toEqual([]);
-    expect(fx(blockStart(0, 'thinking'))).toEqual([{ type: 'streamStart', key: 'msg_1:0', kind: 'thinking' }]);
+    expect(fx(blockStart(0, 'thinking'))).toEqual([
+      { type: 'streamStart', key: 'msg_1:0', kind: 'thinking' },
+    ]);
     expect(fx(thinkDelta(0, 'Let me '))).toEqual([{ type: 'streamDelta', key: 'msg_1:0', text: 'Let me ' }]);
     expect(fx(thinkDelta(0, 'think'))).toEqual([{ type: 'streamDelta', key: 'msg_1:0', text: 'think' }]);
     expect(fx(sigDelta(0))).toEqual([]);
@@ -447,7 +594,13 @@ describe('StreamParser partial messages (--include-partial-messages)', () => {
 
   it('tool_use blocks in a streamed message still become tool lines; their input deltas are ignored', () => {
     const p = new StreamParser(WT);
-    const lines = [msgStart(), blockStart(0, 'text'), textDelta(0, 'Running'), blockStop(0), blockStart(1, 'tool_use')];
+    const lines = [
+      msgStart(),
+      blockStart(0, 'text'),
+      textDelta(0, 'Running'),
+      blockStop(0),
+      blockStart(1, 'tool_use'),
+    ];
     const fx = lines.flatMap((l) => p.parseLine(l));
     expect(fx.filter((f) => f.type === 'streamStart')).toHaveLength(1);
     expect(p.parseLine(jsonDelta(1))).toEqual([]);
@@ -465,7 +618,14 @@ describe('StreamParser partial messages (--include-partial-messages)', () => {
       {
         type: 'transcript',
         body: 'Bash pnpm test',
-        payload: { kind: 'tool', tool: 'Bash', hint: 'pnpm test', toolUseId: 'toolu_9', status: 'running', detail: null },
+        payload: {
+          kind: 'tool',
+          tool: 'Bash',
+          hint: 'pnpm test',
+          toolUseId: 'toolu_9',
+          status: 'running',
+          detail: null,
+        },
       },
       { type: 'render', text: '▸ Bash pnpm test\r\n' },
       { type: 'note', note: 'Running' },
@@ -531,21 +691,13 @@ describe('StreamParser partial messages (--include-partial-messages)', () => {
   });
 
   it.each<[string, string[], StreamEffect[]]>([
-    [
-      'a delta with no message / block open',
-      [textDelta(0, 'partial')],
-      [],
-    ],
+    ['a delta with no message / block open', [textDelta(0, 'partial')], []],
     [
       'a delta for an index that never started',
       [msgStart(), blockStart(0, 'text'), textDelta(3, 'x')],
       [{ type: 'streamStart', key: 'msg_1:0', kind: 'text' }],
     ],
-    [
-      'a stop for an index that never started',
-      [msgStart(), blockStop(4)],
-      [],
-    ],
+    ['a stop for an index that never started', [msgStart(), blockStop(4)], []],
     [
       'redacted_thinking and tool_use blocks',
       [msgStart(), blockStart(0, 'redacted_thinking'), blockStart(1, 'tool_use'), blockStop(0), blockStop(1)],
@@ -553,7 +705,12 @@ describe('StreamParser partial messages (--include-partial-messages)', () => {
     ],
     [
       'subagent output (parent_tool_use_id set)',
-      [msgStart('msg_sub', 'toolu_task'), blockStart(0, 'text', '', 'toolu_task'), textDelta(0, 'sub', 'toolu_task'), blockStop(0, 'toolu_task')],
+      [
+        msgStart('msg_sub', 'toolu_task'),
+        blockStart(0, 'text', '', 'toolu_task'),
+        textDelta(0, 'sub', 'toolu_task'),
+        blockStop(0, 'toolu_task'),
+      ],
       [],
     ],
     [
@@ -573,7 +730,9 @@ describe('StreamParser partial messages (--include-partial-messages)', () => {
   it("a subagent's complete assistant event is a plain transcript row, never a streamFinal", () => {
     const p = new StreamParser(WT);
     for (const l of [msgStart(), blockStart(0, 'text'), textDelta(0, 'parent'), blockStop(0)]) p.parseLine(l);
-    expect(p.parseLine(final([{ type: 'text', text: 'from the subagent' }], 'msg_sub', 'toolu_task'))).toEqual([
+    expect(
+      p.parseLine(final([{ type: 'text', text: 'from the subagent' }], 'msg_sub', 'toolu_task')),
+    ).toEqual([
       ACTIVITY,
       { type: 'transcript', body: 'from the subagent', payload: { kind: 'agent' } },
       { type: 'note', note: 'from the subagent' },
@@ -605,8 +764,12 @@ describe('StreamParser partial messages (--include-partial-messages)', () => {
     });
     // A block without any message_start opens a message of its own; a later block joins the current message.
     const q = new StreamParser(WT);
-    expect(q.parseLine(blockStart(0, 'text'))).toEqual([{ type: 'streamStart', key: 'msg-1:0', kind: 'text' }]);
-    expect(q.parseLine(blockStart(1, 'text'))).toEqual([{ type: 'streamStart', key: 'msg-1:1', kind: 'text' }]);
+    expect(q.parseLine(blockStart(0, 'text'))).toEqual([
+      { type: 'streamStart', key: 'msg-1:0', kind: 'text' },
+    ]);
+    expect(q.parseLine(blockStart(1, 'text'))).toEqual([
+      { type: 'streamStart', key: 'msg-1:1', kind: 'text' },
+    ]);
   });
 
   it('a final assistant event whose id was never streamed is a plain transcript row', () => {
@@ -646,12 +809,14 @@ describe('StreamParser partial messages (--include-partial-messages)', () => {
     });
   });
 
-  it('the observed claude 2.1.263 order: each block\'s complete assistant event precedes its content_block_stop', () => {
+  it("the observed claude 2.1.263 order: each block's complete assistant event precedes its content_block_stop", () => {
     // Recorded with `claude -p --output-format stream-json --verbose --include-partial-messages` (haiku, thinking on).
     const p = new StreamParser(WT);
     const fx = (line: string) => p.parseLine(line);
     expect(fx(msgStart('msg_011'))).toEqual([]);
-    expect(fx(blockStart(0, 'thinking'))).toEqual([{ type: 'streamStart', key: 'msg_011:0', kind: 'thinking' }]);
+    expect(fx(blockStart(0, 'thinking'))).toEqual([
+      { type: 'streamStart', key: 'msg_011:0', kind: 'thinking' },
+    ]);
     expect(fx(thinkDelta(0, ''))).toEqual([]); // an empty thinking delta carries nothing
     expect(fx(sigDelta(0))).toEqual([]);
     expect(fx(final([{ type: 'thinking', thinking: '', signature: 'sig' }], 'msg_011'))).toEqual([
@@ -660,7 +825,9 @@ describe('StreamParser partial messages (--include-partial-messages)', () => {
     ]);
     expect(fx(blockStop(0))).toEqual([{ type: 'streamStop', key: 'msg_011:0' }]);
     expect(fx(blockStart(1, 'text'))).toEqual([{ type: 'streamStart', key: 'msg_011:1', kind: 'text' }]);
-    expect(fx(textDelta(1, 'hello there'))).toEqual([{ type: 'streamDelta', key: 'msg_011:1', text: 'hello there' }]);
+    expect(fx(textDelta(1, 'hello there'))).toEqual([
+      { type: 'streamDelta', key: 'msg_011:1', text: 'hello there' },
+    ]);
     expect(fx(final([{ type: 'text', text: 'hello there' }], 'msg_011'))).toEqual([
       ACTIVITY,
       { type: 'streamFinal', key: 'msg_011:1', body: 'hello there' },
@@ -717,7 +884,10 @@ describe('StreamRunner (child_process pipes)', () => {
     runner.respondPermission('s1', 'req-9', true, undefined, { answers: { q: 'a' } });
     await until(() => effects.filter((x) => x.type === 'session' && x.event === 'quiet').length === 2);
     // the CLI echoed our control_response back: the updatedInput override (not the stored input) went down stdin
-    const ctl = () => effects.filter((e) => e.type === 'transcript' && e.body.startsWith('ctl:')).map((e) => (e as { body: string }).body);
+    const ctl = () =>
+      effects
+        .filter((e) => e.type === 'transcript' && e.body.startsWith('ctl:'))
+        .map((e) => (e as { body: string }).body);
     expect(ctl().at(-1)).toBe('ctl:{"behavior":"allow","updatedInput":{"answers":{"q":"a"}}}');
     runner.send('s1', 'danger');
     await until(() => effects.filter((e) => e.type === 'permission').length === 2);
@@ -798,6 +968,60 @@ describe('StreamRunner (child_process pipes)', () => {
     });
     const exited = new Promise<number | null>((resolve) => runner.on('exit', (_id, code) => resolve(code)));
     runner.kill('s3');
+    expect(await exited).toBeNull();
+  });
+
+  it('argv input: a message sent while a turn runs is held and goes as the next turn once the process exits', async () => {
+    const runner = new StreamRunner();
+    const effects: StreamEffect[] = [];
+    runner.on('effect', (_id, e) => effects.push(e));
+    // The fake CLI lingers 150 ms after its result so a send lands while the process is still alive.
+    const script = `
+      const args = process.argv.slice(1);
+      const out = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
+      out({ type: 'system', subtype: 'init', session_id: 'chat-8' });
+      out({ type: 'assistant', message: { content: [{ type: 'text', text: 'argv:' + args.join('|') }] } });
+      out({ type: 'result', subtype: 'success', is_error: false, result: 'ok' });
+      setTimeout(() => process.exit(0), 150);
+    `;
+    await runner.spawn({
+      id: 's4',
+      command: process.execPath,
+      args: ['-e', script, '--', '--print'],
+      cwd: process.cwd(),
+      env: {},
+      input: { kind: 'argv', resumeFlag: '--resume' },
+      worktreePath: WT,
+      firstMessage: 'first',
+    });
+    const bodies = () =>
+      effects.filter((e) => e.type === 'transcript').map((e) => (e as { body: string }).body);
+    const untilBody = (b: string) =>
+      new Promise<void>((resolve, reject) => {
+        const t0 = Date.now();
+        const tick = () =>
+          bodies().includes(b)
+            ? resolve()
+            : Date.now() - t0 > 5000
+              ? reject(new Error('timeout'))
+              : setTimeout(tick, 10);
+        tick();
+      });
+    await untilBody('argv:--print|first');
+    // The process is still alive (its exit is 150 ms out): the message is held, not dropped.
+    runner.send('s4', 'held');
+    await untilBody('argv:--print|--resume|chat-8|held');
+    // The held turn opened straight off the exit: activity, never a quiet between the two processes.
+    const between = effects.slice(
+      effects.findIndex((e) => e.type === 'transcript' && e.body === 'argv:--print|first') + 1,
+      effects.findIndex((e) => e.type === 'transcript' && e.body.endsWith('|held')),
+    );
+    const events = between.filter((e) => e.type === 'session').map((e) => (e as { event: string }).event);
+    expect(events[0]).toBe('quiet'); // the first turn's result
+    expect(events.slice(1)).not.toContain('quiet'); // the held turn opened off the exit; the parser's own activity follows
+    expect(events.slice(1)).toContain('activity');
+    const exited = new Promise<number | null>((resolve) => runner.on('exit', (_id, code) => resolve(code)));
+    runner.kill('s4');
     expect(await exited).toBeNull();
   });
 });

@@ -60,10 +60,14 @@ export const projectBranch = (model: ReadModel, projectId: ProjectId): string =>
   projectBranchOrNull(model, projectId) ?? '—';
 
 /** Same, but null when the project is on no branch (plain folder, or no worktree yet); the project nav shows no branch line. */
-export const projectBranchOrNull = (model: ReadModel, projectId: ProjectId): string | null => {
+export const projectBranchOrNull = (model: ReadModel, projectId: ProjectId): string | null =>
+  projectWorktreeOf(model, projectId)?.branch ?? null;
+
+/** The worktree a project is "on" (what `projectBranch` reads): the default session tab's worktree, else main. */
+export const projectWorktreeOf = (model: ReadModel, projectId: ProjectId): Worktree | null => {
   const first = sessionsInProject(model, projectId)
     .filter((s) => s.state !== 'done')
     .sort((a, b) => a.startedAt - b.startedAt)[0];
-  if (first !== undefined) return worktreeOf(model, first)?.branch ?? null;
-  return mainWorktreeOf(model, projectId)?.branch ?? null;
+  if (first !== undefined) return worktreeOf(model, first) ?? null;
+  return mainWorktreeOf(model, projectId);
 };

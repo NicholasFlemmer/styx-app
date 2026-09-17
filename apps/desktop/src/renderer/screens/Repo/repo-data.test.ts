@@ -7,6 +7,7 @@ import {
   laneRows,
   mergedWhen,
   nextWorktreeBranch,
+  publishLabelOf,
   remoteLabel,
   remoteLine,
   repoOfProject,
@@ -27,6 +28,25 @@ describe('Repo lanes (prototype `lanes`)', () => {
   ])('%s → %s · %s · %s · %s · %s', (branch, owner, dot, changes, pr, action) => {
     const lane = lanes.find((l) => l.branch === branch);
     expect(lane).toMatchObject({ owner, dot, changes, pr, actionLabel: action });
+  });
+
+  it.each([
+    ['main', 'Commit & push', null],
+    ['fix/checkout', 'Commit & push', 'https://github.com/acme/shop/pull/214'],
+    ['test/flaky', 'Open PR', null],
+    ['feat/promo', null, 'https://github.com/acme/shop/pull/212'],
+  ])('%s publishes as %s; PR link %s', (branch, publishLabel, prUrl) => {
+    expect(lanes.find((l) => l.branch === branch)).toMatchObject({ publishLabel, prUrl });
+  });
+
+  it('publishLabelOf: a merged or closed PR gets a new one; conflict, merged and branchless lanes offer nothing', () => {
+    const base = { branch: 'x', isMain: false, conflict: null, mergedAt: null };
+    expect(publishLabelOf({ ...base, pr: { number: 1, state: 'merged', url: null } })).toBe('Open PR');
+    expect(publishLabelOf({ ...base, pr: { number: 1, state: 'closed', url: null } })).toBe('Open PR');
+    expect(publishLabelOf({ ...base, pr: { number: 1, state: 'open', url: null } })).toBe('Commit & push');
+    expect(publishLabelOf({ ...base, pr: null, conflict: { file: 'a', against: 'main' } })).toBeNull();
+    expect(publishLabelOf({ ...base, pr: null, mergedAt: 1 })).toBeNull();
+    expect(publishLabelOf({ ...base, pr: null, branch: null })).toBeNull();
   });
 
   it('lists every non-archived worktree of the project: main first, merged last', () => {

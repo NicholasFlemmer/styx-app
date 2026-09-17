@@ -1,14 +1,15 @@
 import { queuedMessageSchema, type QueuedMessage } from '@styx/core';
 import type { Db } from '../open';
-import { placeholders, type Raw } from './mappers';
+import { asJson, placeholders, type Raw } from './mappers';
 
-const COLS = 'id, session_id, body, created_at';
+const COLS = 'id, session_id, body, files_json, created_at';
 
 export const queuedMessageFromRow = (r: Raw): QueuedMessage =>
   queuedMessageSchema.parse({
     id: String(r['id']),
     sessionId: String(r['session_id']),
     body: String(r['body']),
+    files: asJson<string[]>(r['files_json'], []),
     createdAt: Number(r['created_at']),
   });
 
@@ -21,7 +22,7 @@ export class QueuedMessagesRepo {
   private readonly delStmt;
 
   constructor(db: Db) {
-    this.insertStmt = db.prepare(`INSERT INTO queued_messages (${COLS}) VALUES (${placeholders(4)})`);
+    this.insertStmt = db.prepare(`INSERT INTO queued_messages (${COLS}) VALUES (${placeholders(5)})`);
     this.getStmt = db.prepare(`SELECT ${COLS} FROM queued_messages WHERE id = ?`);
     this.bySessionStmt = db.prepare(
       `SELECT ${COLS} FROM queued_messages WHERE session_id = ? ORDER BY created_at ASC, id ASC`,
@@ -31,7 +32,7 @@ export class QueuedMessagesRepo {
   }
 
   insert(m: QueuedMessage): void {
-    this.insertStmt.run(m.id, m.sessionId, m.body, m.createdAt);
+    this.insertStmt.run(m.id, m.sessionId, m.body, JSON.stringify(m.files), m.createdAt);
   }
 
   get(id: string): QueuedMessage | null {

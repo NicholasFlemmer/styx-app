@@ -28,7 +28,7 @@ import { useCopyPlatform, useModel, useNow, useUi } from '../../state/hooks';
 import type { OnboardingStep } from '../../state/ui-store';
 import { harnessReposEnabled, harnessScannedRepos } from './harness-repos';
 import s from './Onboarding.module.css';
-import { DEFAULT_IDE_IMPORTS, STEPS, repoMeta, type IdeImports, type RepoRow } from './onboarding-rows';
+import { DEFAULT_IDE_IMPORTS, STEPS, rowMeta, type IdeImports, type RepoRow } from './onboarding-rows';
 
 const selectIdes = (m: ReadModel) => m.discovery.ides;
 const selectClis = (m: ReadModel) => m.discovery.clis;
@@ -69,11 +69,14 @@ export function Onboarding() {
     ides.find((i) => i.kind === fallbackKind) ??
     ides[0];
 
-  // Step 2 scans once (IDE recents included when the toggle was on).
+  // Step 2 scans once (IDE recents and the agent CLIs' history included when their toggles were on).
   useEffect(() => {
     if (step !== 2 || repos !== null) return;
     let cancelled = false;
-    void command('project.scan', { includeIdeRecents: imports.recents }).then((r) => {
+    void command('project.scan', {
+      includeIdeRecents: imports.recents,
+      includeAgentHistory: imports.agents,
+    }).then((r) => {
       if (cancelled) return;
       const found = r.ok ? r.value.repos : [];
       setRepos(found);
@@ -82,7 +85,7 @@ export function Onboarding() {
     return () => {
       cancelled = true;
     };
-  }, [step, repos, imports.recents]);
+  }, [step, repos, imports.recents, imports.agents]);
 
   const finish = async () => {
     await command('onboarding.complete', {});
@@ -231,6 +234,11 @@ export function Onboarding() {
               label={copy.onboarding.editor.importRecents}
             />
             <Checkbox
+              checked={imports.agents}
+              onChange={(v) => setImports({ ...imports, agents: v })}
+              label={copy.onboarding.editor.importAgentDirs}
+            />
+            <Checkbox
               checked={imports.installOpenIn}
               onChange={(v) => setImports({ ...imports, installOpenIn: v })}
               label={copy.onboarding.editor.installOpenIn}
@@ -256,7 +264,7 @@ export function Onboarding() {
               aria-label={copy.onboarding.steps.projects}
             >
               {(repos ?? []).map((r) => (
-                <TableRow key={r.path} data-repo-path={r.path}>
+                <TableRow key={r.path} data-repo-path={r.path} data-repo-source={r.source}>
                   <TableCell>
                     <Checkbox
                       tone="accent"
@@ -267,7 +275,7 @@ export function Onboarding() {
                   </TableCell>
                   <TableCell className={s['monoCell']}>{r.path}</TableCell>
                   <TableCell muted className={s['monoCell']}>
-                    {r.picked === true ? copy.general.none : repoMeta(r, now)}
+                    {rowMeta(r, now)}
                   </TableCell>
                 </TableRow>
               ))}

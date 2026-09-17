@@ -1,7 +1,14 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fixtures, targetDerivedState, tableFrom, type ProjectFileV1, type ReadModel, type ReadModelSnapshot } from '@styx/core';
+import {
+  fixtures,
+  targetDerivedState,
+  tableFrom,
+  type ProjectFileV1,
+  type ReadModel,
+  type ReadModelSnapshot,
+} from '@styx/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
 
@@ -279,10 +286,20 @@ describe('GrantService security regressions', () => {
     if (a.kind !== 'pending' || b.kind !== 'pending') return;
     expect(b.grant.id).toBe(a.grant.id);
     expect(b.ask.id).toBe(a.ask.id);
-    expect(t.app.repos.grants.bySession(ids.session.gemini).filter((g) => g.state === 'requested' && g.targetId === ids.target.supabaseProd)).toHaveLength(1);
+    expect(
+      t.app.repos.grants
+        .bySession(ids.session.gemini)
+        .filter((g) => g.state === 'requested' && g.targetId === ids.target.supabaseProd),
+    ).toHaveLength(1);
     expect(t.app.repos.pendingAsks.openBySession(ids.session.gemini)).toHaveLength(1);
     // A different scope set is a new ask (queued behind the first).
-    const c = await t.app.grants.request({ sessionId: ids.session.gemini, targetId: ids.target.supabaseProd, scope: ['read'], reason: 'x', triggeredBy: 'mcp:request_access' });
+    const c = await t.app.grants.request({
+      sessionId: ids.session.gemini,
+      targetId: ids.target.supabaseProd,
+      scope: ['read'],
+      reason: 'x',
+      triggeredBy: 'mcp:request_access',
+    });
     expect(c.kind).toBe('pending');
     if (c.kind === 'pending') expect(c.grant.id).not.toBe(a.grant.id);
   });
@@ -292,15 +309,30 @@ describe('GrantService security regressions', () => {
     const target = t.app.repos.targets.get(ids.target.supabaseProd);
     if (!target?.credentialRef) throw new Error('fixture target');
     await t.vault.set(target.credentialRef, JSON.stringify({ token: 'sbp_test' }));
-    const out = await t.app.grants.request({ sessionId: ids.session.gemini, targetId: ids.target.supabaseProd, scope: ['read'], reason: 'peek', triggeredBy: 'mcp:request_access' });
+    const out = await t.app.grants.request({
+      sessionId: ids.session.gemini,
+      targetId: ids.target.supabaseProd,
+      scope: ['read'],
+      reason: 'peek',
+      triggeredBy: 'mcp:request_access',
+    });
     if (out.kind !== 'pending') throw new Error('expected pending');
     await expect(t.app.grants.approve(out.grant.id, '1h')).rejects.toMatchObject({ code: 'mfa-failed' });
     expect(t.app.repos.grants.get(out.grant.id)?.state).toBe('requested');
     const ok = makeTestApp({ mfa: 'ok' });
     await ok.vault.set(target.credentialRef, JSON.stringify({ token: 'sbp_test' }));
-    const out2 = await ok.app.grants.request({ sessionId: ids.session.gemini, targetId: ids.target.supabaseProd, scope: ['read'], reason: 'peek', triggeredBy: 'mcp:request_access' });
+    const out2 = await ok.app.grants.request({
+      sessionId: ids.session.gemini,
+      targetId: ids.target.supabaseProd,
+      scope: ['read'],
+      reason: 'peek',
+      triggeredBy: 'mcp:request_access',
+    });
     if (out2.kind !== 'pending') throw new Error('expected pending');
-    expect(await ok.app.grants.approve(out2.grant.id, '1h')).toMatchObject({ state: 'active', mfaVerified: true });
+    expect(await ok.app.grants.approve(out2.grant.id, '1h')).toMatchObject({
+      state: 'active',
+      mfaVerified: true,
+    });
   });
 
   it('M2: an auto policy on a prod target with an unscoped adapter downgrades to ask + MFA', async () => {
@@ -309,7 +341,13 @@ describe('GrantService security regressions', () => {
     if (!target?.credentialRef) throw new Error('fixture target');
     t.app.repos.targets.upsert({ ...target, policy: 'always' });
     await t.vault.set(target.credentialRef, JSON.stringify({ token: 'sbp_test' }));
-    const out = await t.app.grants.request({ sessionId: ids.session.gemini, targetId: ids.target.supabaseProd, scope: ['read'], reason: 'peek', triggeredBy: 'mcp:request_access' });
+    const out = await t.app.grants.request({
+      sessionId: ids.session.gemini,
+      targetId: ids.target.supabaseProd,
+      scope: ['read'],
+      reason: 'peek',
+      triggeredBy: 'mcp:request_access',
+    });
     expect(out.kind).toBe('pending'); // not auto-issued
     if (out.kind !== 'pending') return;
     await expect(t.app.grants.approve(out.grant.id, '1h')).rejects.toMatchObject({ code: 'mfa-failed' });
@@ -317,17 +355,33 @@ describe('GrantService security regressions', () => {
     const preview = t.app.repos.targets.get(ids.target.vercelPreview);
     if (!preview?.credentialRef) throw new Error('fixture target');
     await t.vault.set(preview.credentialRef, JSON.stringify({ token: 'vt' }));
-    const auto = await t.app.grants.request({ sessionId: ids.session.gemini, targetId: ids.target.vercelPreview, scope: ['write'], reason: 'x', triggeredBy: 'mcp:request_access' });
+    const auto = await t.app.grants.request({
+      sessionId: ids.session.gemini,
+      targetId: ids.target.vercelPreview,
+      scope: ['write'],
+      reason: 'x',
+      triggeredBy: 'mcp:request_access',
+    });
     expect(auto.kind).toBe('active');
   });
 
   it('M1: reasons and triggers are redacted on request', async () => {
     const t = makeTestApp();
     const ghp = `ghp_${'d'.repeat(36)}`;
-    const out = await t.app.grants.request({ sessionId: ids.session.gemini, targetId: ids.target.supabaseProd, scope: ['read'], reason: `use ${ghp}`, triggeredBy: `$ x --token ${ghp}` });
+    const out = await t.app.grants.request({
+      sessionId: ids.session.gemini,
+      targetId: ids.target.supabaseProd,
+      scope: ['read'],
+      reason: `use ${ghp}`,
+      triggeredBy: `$ x --token ${ghp}`,
+    });
     if (out.kind !== 'pending') throw new Error('expected pending');
     expect(out.grant.reason).toBe('use [redacted]');
-    const dump = JSON.stringify([t.app.repos.audit.all(), t.app.repos.transcripts.last(ids.session.gemini), t.app.repos.grants.get(out.grant.id)]);
+    const dump = JSON.stringify([
+      t.app.repos.audit.all(),
+      t.app.repos.transcripts.last(ids.session.gemini),
+      t.app.repos.grants.get(out.grant.id),
+    ]);
     expect(dump).not.toContain(ghp);
   });
 });
@@ -342,7 +396,12 @@ describe('GrantService project-file trust gate (H-1)', () => {
         extra: [
           {
             id: 'gh-all',
-            rule: { kind: 'auto-approve', match: { provider: ['github'] }, scopes: ['read', 'write'], duration: 'always' },
+            rule: {
+              kind: 'auto-approve',
+              match: { provider: ['github'] },
+              scopes: ['read', 'write'],
+              duration: 'always',
+            },
             ruleText: 'Auto-approve GitHub',
           },
         ],
@@ -372,7 +431,9 @@ describe('GrantService project-file trust gate (H-1)', () => {
     const first = await req();
     expect(first.kind).toBe('pending');
     if (first.kind !== 'pending') return;
-    const requested = t.app.repos.audit.all().find((e) => e.action === 'requested' && e.grantId === first.grant.id);
+    const requested = t.app.repos.audit
+      .all()
+      .find((e) => e.action === 'requested' && e.grantId === first.grant.id);
     expect(requested?.detail).toMatchObject({ projectRule: 'project:gh-all' }); // still cited, downgraded to ask
     t.app.grants.deny(first.grant.id);
 
@@ -381,12 +442,19 @@ describe('GrantService project-file trust gate (H-1)', () => {
     expect(r).toEqual({ ok: true, value: {} });
     expect(t.app.projects.projectPolicyTrusted(project.id)).toBe(true);
     const second = await req();
-    expect(second).toMatchObject({ kind: 'active', decidedBy: 'policy', grant: { state: 'active', duration: 'always' } });
+    expect(second).toMatchObject({
+      kind: 'active',
+      decidedBy: 'policy',
+      grant: { state: 'active', duration: 'always' },
+    });
 
     // Editing the file (new hash) drops back to untrusted until accepted again.
     writeFileSync(
       join(dir, '.styx', 'project.json'),
-      JSON.stringify({ ...file, policies: { extra: [{ ...file.policies!.extra![0]!, ruleText: 'changed' }] } }),
+      JSON.stringify({
+        ...file,
+        policies: { extra: [{ ...file.policies!.extra![0]!, ruleText: 'changed' }] },
+      }),
     );
     expect(t.app.projects.projectPolicyTrusted(project.id)).toBe(false);
   });
@@ -474,5 +542,37 @@ describe('GrantService project-file trust gate (H-1)', () => {
       await expect(t.app.grants.credentialFor(grant.id)).rejects.toThrow();
     });
   });
+});
 
+describe('GrantService app-minted transient grants (publish / deploy)', () => {
+  it('a session-less grant is shared with agents only when it is persistent; a transient one belongs to the app', async () => {
+    const t = makeTestApp();
+    const svc = t.app.grants;
+    const target = t.app.repos.targets.get(ids.target.vercelPreview)!;
+    const persistent = t.app.repos.grants.get(ids.grant.vercelPreviewAlways)!;
+    expect(persistent).toMatchObject({ sessionId: null, duration: 'always', state: 'active' });
+    // Publish / Deploy mint a bounded, session-less grant for one step.
+    const transient = {
+      ...persistent,
+      id: 'grant:transient' as typeof persistent.id,
+      duration: '1h' as const,
+      expiresAt: t.clock.now() + HOUR,
+    };
+    t.app.repos.grants.upsert(transient);
+    // An agent session sees the persistent one, never the app's transient one.
+    expect(svc.covering(target, ids.session.gemini, ['deploy'])?.id).toBe(persistent.id);
+    t.app.repos.grants.upsert({
+      ...persistent,
+      state: 'revoked',
+      revokedAt: t.clock.now(),
+      revokeReason: 'user',
+    });
+    expect(svc.covering(target, ids.session.gemini, ['deploy'])).toBeNull();
+    // The app itself (no session) still finds what it minted.
+    expect(svc.covering(target, null, ['deploy'])?.id).toBe(transient.id);
+    // And an agent cannot fetch its credential by id either.
+    await expect(
+      svc.credentialFor(transient.id, { sessionId: ids.session.gemini, projectId: ids.project.acmeShop }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+  });
 });

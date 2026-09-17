@@ -22,6 +22,10 @@ export const TABLE_COLUMNS = {
   agents: '1.1fr 1.5fr 1.2fr 1fr .8fr',
   /** Settings › App › Skills: skill (+ description) · for · where · actions (owner addition). */
   skills: '2.2fr 1.1fr .7fr .5fr',
+  /** Usage › By agent / By project: name · sessions · turns · tokens · cost (owner addition). */
+  usage: '1.6fr .8fr .8fr 1fr 1fr',
+  /** Usage › Limits: agent · plan · windows (stacked bars) · reported (owner addition). */
+  usageLimits: '1.2fr .8fr 2.6fr .8fr',
 } as const;
 
 /** Name for visually blank (action) header cells: rendered visually hidden (axe `empty-table-header` needs DOM text). */

@@ -148,8 +148,12 @@ const windowTarget = z.object({
  */
 export const commands = {
   // --- project ---
+  /** `includeAgentHistory`: also the directories Claude Code and Codex have worked in (their own session history). */
   'project.scan': {
-    input: z.object({ includeIdeRecents: z.boolean().default(true) }),
+    input: z.object({
+      includeIdeRecents: z.boolean().default(true),
+      includeAgentHistory: z.boolean().default(true),
+    }),
     output: z.object({ repos: z.array(scannedRepoSchema) }),
   },
   /** Any readable directory; a folder without `.git` becomes a plain-folder project (`Repo.defaultBranch: null`). */
@@ -876,6 +880,8 @@ export const events = {
     reason: pausedReasonSchema.nullable(),
   }),
   'banner.clear': z.object({ bannerKey: z.string().min(1) }),
+  /** Stop returned the session's queued messages (oldest first): the renderer puts them back into the composer. */
+  'queue.returned': z.object({ sessionId: sessionIdSchema, bodies: z.array(z.string().min(1)) }),
   'hunks.changed': z.object({
     sessionId: sessionIdSchema,
     worktreeId: worktreeIdSchema,

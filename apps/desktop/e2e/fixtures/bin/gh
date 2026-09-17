@@ -1,0 +1,38 @@
+#!/usr/bin/env node
+'use strict';
+/**
+ * Fake GitHub CLI for e2e (apps/desktop/e2e/launch.ts prepends this directory to PATH; PublishService looks `gh`
+ * up on the process PATH first, so a publish in a test lands here and never reaches github.com).
+ *
+ *   gh --version                       → `gh version 2.86.0 (fake)`
+ *   gh auth status                     → logged in as `fake`
+ *   gh pr view <branch> --json …       → exit 1, "no pull requests found" (no PR exists yet)
+ *   gh pr create … --title … --body …  → prints https://github.com/acme/shop/pull/7 like the real one
+ *   anything else                      → exit 2
+ */
+const args = process.argv.slice(2);
+
+if (args[0] === '--version') {
+  process.stdout.write('gh version 2.86.0 (fake)\nhttps://github.com/cli/cli/releases/tag/v2.86.0\n');
+  process.exit(0);
+}
+if (args[0] === 'auth' && args[1] === 'status') {
+  process.stdout.write('github.com\n  ✓ Logged in to github.com account fake (keyring)\n');
+  process.exit(0);
+}
+if (args[0] === 'pr' && args[1] === 'view') {
+  const branch = args[2] ?? '';
+  process.stderr.write(`no pull requests found for branch "${branch}"\n`);
+  process.exit(1);
+}
+if (args[0] === 'pr' && args[1] === 'create') {
+  const title = args[args.indexOf('--title') + 1] ?? '';
+  if (title === '') {
+    process.stderr.write('fake gh: --title is required\n');
+    process.exit(1);
+  }
+  process.stdout.write('https://github.com/acme/shop/pull/7\n');
+  process.exit(0);
+}
+process.stderr.write(`fake gh: ${args.join(' ')} is not supported\n`);
+process.exit(2);

@@ -7,8 +7,8 @@ import { type CommandBus, fail } from '../bus';
 export function registerProjectCommands(bus: CommandBus, app: Container): void {
   const { projects, repos } = app;
 
-  bus.register('project.scan', async ({ includeIdeRecents }) => ({
-    repos: await projects.scan(includeIdeRecents),
+  bus.register('project.scan', async ({ includeIdeRecents, includeAgentHistory }) => ({
+    repos: await projects.scan(includeIdeRecents, includeAgentHistory),
   }));
 
   bus.register('project.add', async ({ path, name }) => ({ projectId: (await projects.add(path, name)).id }));

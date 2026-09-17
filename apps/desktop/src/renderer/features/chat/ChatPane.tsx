@@ -3,13 +3,16 @@ import {
   chatMeta,
   composerPlaceholder,
   copy,
+  deliveryWhileWorking,
   fill,
   headAskOf,
+  isMidTurn,
   modelCatalogueFor,
   sessionTabs,
   type CommandInput,
   type ModelInfo,
   type ProjectId,
+  type QueuedMessage,
   type ReadModel,
   type Session,
   type SessionId,
@@ -63,6 +66,7 @@ import {
   withMention,
   type Pending,
 } from './chat-attachments';
+import { CheckpointRow } from './CheckpointRow';
 import { mentionItems as toMentionItems, slashItems } from './slash-commands';
 import { thinkingLabel, wholeSeconds, workingLine } from './stream-state';
 import { inlineSegments, transcriptItems, type TranscriptItem } from './transcript-items';
@@ -208,6 +212,8 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const sessionId = pinnedId ?? activeSessionId;
   const setSession = useUi((u) => u.setSession);
   const pushOverlay = useUi((u) => u.pushOverlay);
+  const setScreen = useUi((u) => u.setScreen);
+  const setDiffCheckpoint = useUi((u) => u.setDiffCheckpoint);
   const [menuOpen, setMenuOpen] = useState(false);
   /** Attachments waiting to go with the next message (images read to base64, `@`-mentioned worktree files). */
   const [pending, setPending] = useState<Pending[]>([]);
@@ -242,6 +248,32 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
     session !== null && env().e2e !== true && hasControls(sessionControls(session)) ? (
       <SessionControlsRow session={session} catalogue={catalogue} />
     ) : undefined;
+  // Mid-turn the send hint says what happens to the message: Steer (Codex takes it into the running turn) or
+  // Queue (held until the turn settles). Hidden under the harness like the controls: the baked `workspace`
+  // baseline shows the fixture's working Claude session with the prototype's static `⏎ send`.
+  const delivery =
+    session !== null && env().e2e !== true && isMidTurn(session) ? deliveryWhileWorking(session) : null;
+  const sendLabel = delivery === null ? copy.chat.composer.send : copy.queue.send[delivery];
+  const sendTitle =
+    delivery === 'steer' ? copy.queue.steerHint : delivery === 'queue' ? copy.queue.queueHint : undefined;
+  // Messages held while the agent is mid-turn (queue): dashed bubbles under the transcript, oldest first.
+  const queued: readonly QueuedMessage[] = activeId === null ? [] : (model.queues[activeId] ?? []);
+  // Text handed back to this composer (Take back, or Stop returning the queue): applied once, then cleared.
+  const draft = useUi((u) => (activeId === null ? null : (u.drafts[activeId] ?? null)));
+  const clearDraft = useUi((u) => u.clearDraft);
+  const prefillDraft = useUi((u) => u.prefillDraft);
+  useEffect(() => {
+    // The Composer applies the prefill in its own (child) effect first; clearing here keeps a remount from
+    // applying it again.
+    if (draft !== null && activeId !== null) clearDraft(activeId);
+  }, [draft, activeId, clearDraft]);
+  const sendNow = (m: QueuedMessage) => {
+    void command('session.sendQueued', { sessionId: m.sessionId, messageId: m.id });
+  };
+  const takeBack = (m: QueuedMessage) => {
+    prefillDraft(m.sessionId, m.body);
+    void command('session.unqueue', { sessionId: m.sessionId, messageId: m.id });
+  };
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -313,6 +345,16 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const decidePlan = (item: Extract<TranscriptItem, { kind: 'plan' }>, outcome: 'approved' | 'rejected') => {
     if (item.askId === null) return;
     void command('ask.respond', { askId: item.askId, resolution: { kind: 'plan', outcome, note: null } });
+  };
+
+  /** Review opens the Diff screen on the turn's patch; Revert (confirmed in the row) restores the workspace. */
+  const reviewCheckpoint = (checkpointId: string) => {
+    setDiffCheckpoint(checkpointId);
+    setScreen('diff');
+  };
+  /** A refused revert (the agent is still working) surfaces as the command wrapper's error toast. */
+  const revertCheckpoint = (checkpointId: string) => {
+    void command('checkpoint.revert', { checkpointId });
   };
 
   const send = (text: string) => {
@@ -437,6 +479,21 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
         );
       case 'system':
         return <Message key={item.id} kind="system" text={item.text} compact={compact} />;
+      case 'checkpoint':
+        return (
+          <CheckpointRow
+            key={item.id}
+            turn={item.turn}
+            files={item.files}
+            added={item.added}
+            removed={item.removed}
+            reverted={item.reverted}
+            busy={session !== null && (session.state === 'working' || session.state === 'needs-you')}
+            onReview={() => reviewCheckpoint(item.checkpointId)}
+            onRevert={() => revertCheckpoint(item.checkpointId)}
+            compact={compact}
+          />
+        );
       case 'peer':
         // Deliberately not a user bubble: a peer's words must never read as the operator's.
         return (
@@ -658,6 +715,22 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
               compact={compact}
             />
           )}
+          {queued.map((m) => (
+            <div key={m.id} className={s['queued']} data-queued={m.id}>
+              <div className={s['queuedBody']}>{m.body}</div>
+              <div className={s['queuedMeta']}>
+                <span className={s['queuedLabel']}>
+                  {copy.queue.queued} · {copy.queue.hint}
+                </span>
+                <Button variant="ghost" className={s['queuedAction']} onClick={() => sendNow(m)}>
+                  {copy.queue.sendNow}
+                </Button>
+                <Button variant="ghost" className={s['queuedAction']} onClick={() => takeBack(m)}>
+                  {copy.queue.takeBack}
+                </Button>
+              </div>
+            </div>
+          ))}
         </Transcript>
       )}
       <div data-keyscope="composer">
@@ -684,7 +757,9 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           hints={[copy.chat.composer.file, copy.chat.composer.command]}
           modelLabel={MODEL_LABEL}
           {...(controls !== undefined ? { controls } : {})}
-          sendLabel={copy.chat.composer.send}
+          sendLabel={sendLabel}
+          {...(sendTitle !== undefined ? { sendTitle } : {})}
+          prefill={draft}
           compact={compact}
           disabled={activeId === null || (popped && !compact)}
           attachments={composerChips(pending)}

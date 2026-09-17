@@ -50,6 +50,23 @@
     position: absolute;
     inset: -9px -6px;
   }
+  /* Two verbs in the action cell (Open PR · Diff …): one line each, a gap their extended hit areas (±6px) just fill. */
+  .actions {
+    gap: var(--sp-3);
+    white-space: nowrap;
+  }
+  /* PR cell as a link when the PR's page is known: the mono text stays, underline says it opens. */
+  .prLink {
+    all: unset;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .prLink:focus-visible {
+    outline: 1px solid var(--tx);
+  }
   .diffHead {
     padding: 14px 20px 6px;
     flex: none;

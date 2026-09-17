@@ -13,3 +13,4 @@ export * from './home';
 export * from './discovery';
 
 export * from './tasks';
+export * from './usage';

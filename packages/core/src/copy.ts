@@ -32,6 +32,9 @@ export const copy = {
       cloneUrlMeta: 'git clone',
       agentDockMeta: 'all projects · always on top',
       debtAuditMeta: 'review this repo in the background',
+      /** Commit, push and PR in one step for the branch the project is on (owner request, ADR-0021). */
+      publish: 'Publish {project} · {branch}',
+      publishMeta: 'commit · push · pull request',
       switchProject: 'Switch to {project}',
     },
     meta: {
@@ -693,6 +696,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       importKeybindings: 'Import keybindings',
       importTheme: 'Import theme & font',
       importRecents: 'Import recent folders (feeds next step)',
+      /** Owner addition (#93): the next step also lists where the agent CLIs' own session history says they ran. */
+      importAgentDirs: 'Also look where Claude Code and Codex have worked',
       installOpenIn: 'Install "Open in Styx" command',
       roleFallback: 'Fallback · Open in',
       roleDetected: 'Detected',
@@ -1159,7 +1164,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
    */
   addExisting: {
     title: 'Add from recent projects',
-    lead: 'Recent folders from your editor and repos found on this machine. Projects already in Styx are hidden.',
+    lead: 'Recent folders from your editor, folders where Claude Code and Codex have worked, and repos found on this machine. Projects already in Styx are hidden.',
     scanning: 'Scanning this machine…',
     empty: 'Nothing new to add. Every recent folder and repo found here is already a project.',
     failed: 'Scan failed: {message}',
@@ -1167,6 +1172,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     openFolder: 'Open folder…',
     add: 'Add {n}',
     addNone: 'Add',
+    /** Row meta for where a folder came from (#93): the CLIs use `agentProducts`; the walker's rows carry none. */
+    sourceRecents: 'editor recents',
   },
 
   window: { popout: '⤢', dock: 'Dock', minimize: '─', maximize: '☐', close: '✕' },
@@ -1211,15 +1218,23 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       turns: 'Turns',
       tokens: 'Tokens',
       cost: 'Cost',
+      plan: 'Plan',
+      windows: 'Windows',
+      reported: 'Reported',
     },
     byAgent: 'By agent',
     byProject: 'By project',
     limits: 'Limits',
     limitsLead: 'What each CLI reports about its account, refreshed when a session runs or on demand.',
+    /** Who Refresh can ask: Codex has `account/rateLimits/read`; Claude Code only reports mid-session. */
+    refreshNote: 'Refresh asks Codex now. Claude Code reports its limits as its sessions run.',
     noLimits: 'No limits reported yet. Start a session, or refresh.',
     refresh: 'Refresh',
+    refreshing: 'Refreshing…',
     window: '{label} · {used}% used',
     resets: 'resets {when}',
+    /** `{when}` of `resets`: a countdown ("in 2h 10m"). */
+    resetsIn: 'in {t}',
     plan: 'plan {plan}',
     empty: 'No sessions yet.',
     total: 'Total',
@@ -1231,7 +1246,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     noChanges: 'no file changes',
     revert: 'Revert this turn',
     reverted: 'Reverted',
-    revertConfirm: 'Restore the workspace to before turn {n}? Later turns are undone too.',
+    revertConfirm:
+      'Restore the workspace to before turn {n}? Later turns are undone too, along with any edits you made since, and files created since then are deleted.',
     revertDone: 'Workspace restored to before turn {n}.',
     revertFailed: 'Could not revert: {error}',
     review: 'Review',
@@ -1261,6 +1277,16 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     failed: '{step} failed: {error}',
     openPr: 'Open PR #{number}',
     activity: '{who} published {branch} ({step})',
+    /** Step words for the activity row / progress: `commit abc1234` · `push` · `PR #7`. */
+    steps: { commit: 'commit {commit}', push: 'push', pr: 'PR #{number}' },
+    /** The grant `gh` runs under (sheet, audit); the branch names what it is for. */
+    grantReason: 'Publish {branch} from Styx: push and open a pull request',
+    denied: 'Access to GitHub was denied by policy.',
+    needsApproval: 'GitHub access needs your approval before publishing.',
+    /** No GitHub target connected: `gh` ran with the user's own login, and the activity row says so. */
+    ownAuth: 'your own gh login',
+    noBranch: 'The worktree is on no branch.',
+    mainNoPr: 'The main branch cannot open a pull request against itself.',
   },
   /** Messages held back while the agent is mid-turn. */
   queue: {

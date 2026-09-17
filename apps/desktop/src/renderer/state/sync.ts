@@ -84,6 +84,10 @@ export const connectSync = (): (() => void) => {
   );
   // Tray left-click / dock-menu items (spec §4.14) route the main window to a screen.
   const offNavGo = onEvent('nav.go', ({ screen }) => useUiStore.getState().setScreen(screen));
+  // Stop returned the session's queued messages: they go back into its composer, oldest first, blank-line separated.
+  const offQueueReturned = onEvent('queue.returned', ({ sessionId, bodies }) => {
+    if (bodies.length > 0) useUiStore.getState().prefillDraft(sessionId, bodies.join('\n\n'));
+  });
   // A card in the agent dock: bring that session forward here. Only the main window acts on it — a pop-out
   // shows one fixed session and the dock is the sender.
   const offFocusSession = onEvent('session.focus', ({ sessionId }) => {
@@ -102,5 +106,6 @@ export const connectSync = (): (() => void) => {
     offBannerSet();
     offBannerClear();
     offNavGo();
+    offQueueReturned();
   };
 };

@@ -70,4 +70,37 @@ describe('Composer', () => {
     expect(screen.queryByText('@file')).not.toBeInTheDocument();
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
+
+  it('prefill puts text back into the draft once per seq, after what is already typed, and focuses the box', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<Composer {...strings} onSend={() => {}} prefill={null} />);
+    const box = screen.getByRole('textbox');
+    rerender(<Composer {...strings} onSend={() => {}} prefill={{ text: 'taken back', seq: 1 }} />);
+    expect(box).toHaveValue('taken back');
+    expect(box).toHaveFocus();
+    expect((box as HTMLTextAreaElement).selectionStart).toBe('taken back'.length);
+    // The same prefill again (a re-render, the host clearing it) does not apply twice.
+    rerender(<Composer {...strings} onSend={() => {}} prefill={{ text: 'taken back', seq: 1 }} />);
+    rerender(<Composer {...strings} onSend={() => {}} prefill={null} />);
+    expect(box).toHaveValue('taken back');
+    // A new one lands after the current draft, separated by a blank line: nothing typed is lost.
+    await user.type(box, ' and more');
+    rerender(<Composer {...strings} onSend={() => {}} prefill={{ text: 'second', seq: 2 }} />);
+    expect(box).toHaveValue('taken back and more\n\nsecond');
+    expect(screen.getByRole('button', { name: '⏎ send' })).toBeEnabled();
+  });
+
+  it('sendTitle is the send button tooltip (the queue / steer hint mid-turn)', () => {
+    render(
+      <Composer
+        {...strings}
+        onSend={() => {}}
+        sendLabel="Queue"
+        sendTitle="Claude Code takes it after this turn."
+      />,
+    );
+    const send = screen.getByRole('button', { name: 'Queue' });
+    expect(send).toHaveAttribute('title', 'Claude Code takes it after this turn.');
+    expect(send).toHaveAttribute('data-composer-send', 'true');
+  });
 });
