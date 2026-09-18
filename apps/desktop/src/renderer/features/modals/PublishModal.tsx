@@ -58,6 +58,12 @@ export function PublishModal({ id, worktreeId }: PublishModalProps) {
     ),
   );
   const branch = wt?.branch ?? copy.general.none;
+  const baseBranch = useModel(
+    useCallback(
+      (m: ReadModel) => (wt === null ? 'main' : projectSettingsOfOrDefault(m, wt.projectId).baseBranch),
+      [wt],
+    ),
+  );
   const [through, setThrough] = useState<PublishThrough>(() => defaultThrough(wt));
   const [message, setMessage] = useState('');
   const [prTitle, setPrTitle] = useState('');
@@ -161,7 +167,11 @@ export function PublishModal({ id, worktreeId }: PublishModalProps) {
           r.value.commit === null
             ? copy.publish.nothingToCommit
             : fill(copy.publish.done.commit, { commit: r.value.commit.slice(0, 7) });
-      else if (step === 'push') line.text = fill(copy.publish.done.push, { branch });
+      else if (step === 'push')
+        line.text =
+          (r.value.synced !== undefined && r.value.synced > 0
+            ? fill(copy.publish.synced, { n: r.value.synced, base: baseBranch })
+            : '') + fill(copy.publish.done.push, { branch });
       else if (r.value.pr !== null) {
         line.text =
           r.value.pr.number === priorPr
@@ -172,7 +182,7 @@ export function PublishModal({ id, worktreeId }: PublishModalProps) {
       show();
     }
     setPhase('done');
-  }, [canRun, wt, through, prTitle, prBody, commitMessage, isDraft, worktreeId, branch]);
+  }, [canRun, wt, through, prTitle, prBody, commitMessage, isDraft, worktreeId, branch, baseBranch]);
 
   const throughOptions = (['commit', 'push', 'pr'] as const).map((v) => ({
     value: v,

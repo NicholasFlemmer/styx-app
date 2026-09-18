@@ -11,6 +11,8 @@ export interface RefreshSchedulerDeps {
   checkHealth: (target: Target, reason: RefreshReason) => Promise<void>;
   /** SessionService.refreshClis: re-detect agent CLIs on focus / wake / manual runs (cheap: cached per binary). */
   refreshClis?: () => Promise<unknown>;
+  /** LaneSyncService.refreshAll: how far each lane is behind its base, on focus / wake / manual runs (ADR-0023). */
+  refreshLanes?: () => Promise<unknown>;
   clock: Clock;
   /** Every 30 min by default. */
   intervalMs?: number;
@@ -72,6 +74,13 @@ export class RefreshScheduler {
         await this.deps.refreshClis();
       } catch (e) {
         logger.warn('refresh: cli detection failed', { error: (e as Error).message });
+      }
+    }
+    if (targetId === undefined && reason !== 'interval' && this.deps.refreshLanes !== undefined) {
+      try {
+        await this.deps.refreshLanes();
+      } catch (e) {
+        logger.warn('refresh: lane sync failed', { error: (e as Error).message });
       }
     }
     const now = this.deps.clock.now();

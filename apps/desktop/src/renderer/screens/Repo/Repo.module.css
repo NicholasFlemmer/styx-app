@@ -71,4 +71,19 @@
     padding: 14px 20px 6px;
     flex: none;
   }
+  /* Keep lanes current (ADR-0023): `↓3 main` after the changes text; the click brings the base in. */
+  .syncAction {
+    position: relative;
+    font: inherit;
+    color: var(--act);
+    text-underline-offset: 3px;
+  }
+  .syncAction:hover {
+    text-decoration: underline;
+  }
+  .syncAction::after {
+    content: '';
+    position: absolute;
+    inset: -8px -6px;
+  }
 }

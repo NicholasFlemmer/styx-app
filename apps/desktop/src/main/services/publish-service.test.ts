@@ -80,7 +80,15 @@ interface Rig {
  * and an untracked one, and — unless `remote: false` — a bare `origin` under the temp dir so pushes succeed.
  * `gh` is an executable stub on a temp PATH so the lookup resolves; the fake exec never runs it.
  */
-const rig = async (opts: { remote?: boolean; agent?: Agent; dirty?: boolean } = {}): Promise<Rig> => {
+const rig = async (
+  opts: {
+    remote?: boolean;
+    agent?: Agent;
+    dirty?: boolean;
+    /** Keep lanes current (ADR-0023): a scripted `laneSync` and the setting that turns the step on. */
+    laneSync?: (worktreeId: string) => Promise<{ merged: number; conflict: { file: string; against: string } | null }>;
+  } = {},
+): Promise<Rig> => {
   const t = makeTestApp();
   const root = mkdtempSync(join(tmpdir(), 'styx-publish-'));
   const repo = join(root, 'acme-shop');
@@ -120,7 +128,11 @@ const rig = async (opts: { remote?: boolean; agent?: Agent; dirty?: boolean } = 
   const gh = t.app.repos.targets.get(ids.target.github);
   if (gh?.credentialRef) await t.vault.set(gh.credentialRef, JSON.stringify({ token: 'ghp_grant' }));
 
-  const settings = { defaultAgent: opts.agent ?? 'claude', baseBranch: 'main' };
+  const settings = {
+    defaultAgent: opts.agent ?? 'claude',
+    baseBranch: 'main',
+    ...(opts.laneSync ? { syncBeforePublish: true } : {}),
+  };
   const exec = new FakeExec();
   const svc = new PublishService({
     repos: t.app.repos,
@@ -132,6 +144,7 @@ const rig = async (opts: { remote?: boolean; agent?: Agent; dirty?: boolean } = 
     audit: t.app.audit,
     exec: exec.fn,
     projectSettings: () => settings,
+    ...(opts.laneSync ? { laneSync: opts.laneSync } : {}),
     loginPath: async () => '',
     env: { PATH: bin },
     platform: 'darwin',
@@ -353,6 +366,36 @@ describe('PublishService.publish', () => {
     expect(again).toEqual({ commit: null, pushed: true, pr: null });
     expect(t.app.repos.grantUses.byGrant(grants[0]?.id ?? '')).toHaveLength(1);
     expect(activityRows(t)).toHaveLength(1);
+  });
+
+  it('keep lanes current: push merges the base in after the commit and reports it; a conflict stops before the push', async () => {
+    const synced: string[] = [];
+    const { t, svc, bare } = await rig({
+      laneSync: async (id) => {
+        synced.push(id);
+        return { merged: 2, conflict: null };
+      },
+    });
+    const r = await svc.publish(fixCheckout, { through: 'push', message: { title: 'Validate', body: '' }, draft: false });
+    expect(synced).toEqual([fixCheckout]);
+    expect(r).toMatchObject({ pushed: true, synced: 2 });
+    expect(await sh(['rev-parse', 'refs/heads/fix/checkout'], bare)).toBe(r.commit);
+    expect(activityRows(t)[0]).toMatch(/^acme-shop · published fix\/checkout \(commit [0-9a-f]{7} · merged main \(2\) · push\)$/);
+
+    const blocked = await rig({ laneSync: async () => ({ merged: 0, conflict: { file: 'pay.ts', against: 'main' } }) });
+    await expect(
+      blocked.svc.publish(fixCheckout, { through: 'push', message: { title: 'Validate', body: '' }, draft: false }),
+    ).rejects.toMatchObject({
+      code: 'git-error',
+      message: 'Bringing in main hit a conflict in pay.ts. The merge was undone; resolve it, then publish again.',
+    });
+    // The commit happened (step 1) but nothing was pushed.
+    await expect(sh(['rev-parse', '--verify', 'refs/heads/fix/checkout'], blocked.bare)).rejects.toThrow();
+
+    // A `commit`-only publish never touches the base.
+    const quiet = await rig({ laneSync: async () => { throw new Error('must not run'); } });
+    const c = await quiet.svc.publish(fixCheckout, { through: 'commit', message: { title: 'Validate', body: '' }, draft: false });
+    expect(c.synced).toBeUndefined();
   });
 
   it('pr: looks for an open PR first, then creates one under the grant with the token in env (never argv)', async () => {

@@ -219,6 +219,16 @@ export class GitService {
     await this.git.run(['fetch', '--prune', '--quiet'], path, { reject: false });
   }
 
+  /** `git merge --no-edit <ref>` in a worktree; a conflict returns `ok: false` with the tree mid-merge (see `mergeAbort`). */
+  async merge(path: string, ref: string): Promise<{ ok: boolean; output: string }> {
+    const r = await this.git.run(['merge', '--no-edit', ref], path, { reject: false });
+    return { ok: r.exitCode === 0, output: (r.stderr || r.stdout).trim() };
+  }
+
+  async mergeAbort(path: string): Promise<void> {
+    await this.git.run(['merge', '--abort'], path, { reject: false });
+  }
+
   async branches(path: string): Promise<string[]> {
     const { stdout } = await this.git.run(['for-each-ref', '--format=%(refname:short)', 'refs/heads'], path);
     return stdout.split('\n').filter(Boolean);

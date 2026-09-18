@@ -8,8 +8,10 @@ import {
   targetDerivedState,
   type DevRun,
   type DeviceSession,
+  projectSettingsOfOrDefault,
   type ProjectId,
   type ReadModel,
+  type WorktreeId,
 } from '@styx/core';
 
 /**
@@ -42,6 +44,15 @@ export const statusBarTargets = (model: ReadModel, projectId: ProjectId, now: nu
     }
   }
   return out;
+};
+
+/** Keep lanes current (ADR-0023): `↓3 main` for the lane in the editor when its base has moved on; nothing for main. */
+export const statusBarLane = (model: ReadModel, projectId: ProjectId, worktreeId: WorktreeId | null): string[] => {
+  if (worktreeId === null) return [];
+  const wt = model.worktrees.byId[worktreeId];
+  if (wt === undefined || wt.isMain || wt.behindBase === 0) return [];
+  const base = projectSettingsOfOrDefault(model, projectId).baseBranch;
+  return [fill(copy.sync.statusBar, { n: wt.behindBase, base })];
 };
 
 /**

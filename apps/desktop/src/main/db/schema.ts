@@ -114,6 +114,8 @@ export const worktrees = sqliteTable(
     prUrl: text('pr_url'),
     conflictFile: text('conflict_file'),
     conflictAgainst: text('conflict_against'),
+    /** ADR-0023: commits on the base branch not yet merged into this lane. */
+    behindBase: integer('behind_base').notNull().default(0),
     mergedAt: integer('merged_at'),
     createdAt: integer('created_at').notNull(),
     archivedAt: integer('archived_at'),

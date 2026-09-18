@@ -128,7 +128,19 @@ describe('sectionRows', () => {
       ['autoApproveEdits', false],
       ['permissionMode', false],
       ['effort', false],
+      ['syncOnSpawn', false],
+      ['syncBeforePublish', false],
     ]);
+  });
+
+  it('Agent defaults: keep-lanes-current rows are on by default and patch the project settings (ADR-0023)', () => {
+    const rows = sectionRows(model, 'project:agent-defaults', ctx);
+    const spawn = rows.find((r) => r.id === 'syncOnSpawn');
+    const publish = rows.find((r) => r.id === 'syncBeforePublish');
+    expect(spawn).toMatchObject({ label: 'Fetch before cutting a lane', value: 'on' });
+    expect(publish).toMatchObject({ label: 'Bring in the base branch before publishing', value: 'on' });
+    expect(spawn?.options.map((o) => o.label)).toEqual(['On', 'Off']);
+    expect(publish?.change.kind === 'project' && publish.change.patch('off')).toEqual({ syncBeforePublish: false });
   });
 
   it('Agent defaults: Model lists the CLI aliases; Permission mode / Effort rows patch project settings (discrepancy #54)', () => {
@@ -260,6 +272,8 @@ describe('sectionRows', () => {
       'model',
       'autoApproveEdits',
       'permissionMode',
+      'syncOnSpawn',
+      'syncBeforePublish',
     ]);
     expect(geminiRows.find((r) => r.id === 'model')?.options.map((o) => o.value)).toEqual(['default']);
   });
@@ -284,6 +298,8 @@ describe('sectionRows', () => {
       'Off',
       'Ask each time',
       'Default effort',
+      'On',
+      'On',
     ]);
     expect(values('project:env')).toEqual(['Keychain', 'Per grant', '.styx/project.json']);
   });

@@ -186,6 +186,7 @@ const worktree = (
   changes: { added: 0, removed: 0, files: 0 },
   pr: null,
   conflict: null,
+  behindBase: 0,
   mergedAt: null,
   createdAt: ago(3 * DAY),
   archivedAt: null,

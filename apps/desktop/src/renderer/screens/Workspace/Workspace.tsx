@@ -31,6 +31,7 @@ import {
   editorStatusLabel,
   statusBarDeploy,
   statusBarDevice,
+  statusBarLane,
   statusBarRun,
   statusBarTargets,
 } from '../../features/editor/status-bar';
@@ -169,6 +170,7 @@ export function Workspace() {
       ? []
       : [
           ...statusBarTargets(model, projectId, now),
+          ...statusBarLane(model, projectId, worktreeId),
           ...statusBarRun(model.runs[projectId] ?? null),
           ...statusBarDevice(model.devices[projectId] ?? null),
           ...statusBarDeploy(model, projectId),

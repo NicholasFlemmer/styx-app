@@ -55,7 +55,9 @@ import {
 import { appSettingsSchema, previewDeviceSchema, projectSettingsSchema } from '../model/settings';
 import { pendingAskSchema } from '../model/session';
 import { notificationSchema } from '../model/notification';
-import { projectSchema, repoSchema, worktreeSchema } from '../model/project';
+import { projectSchema, repoSchema, worktreeSchema,
+  worktreeConflictSchema,
+} from '../model/project';
 import { sessionSchema } from '../model/session';
 import { targetSchema } from '../model/target';
 import { grantSchema } from '../model/grant';
@@ -679,6 +681,14 @@ export const commands = {
     input: z.object({ projectId: projectIdSchema }),
     output: z.object({ ahead: z.number().int(), behind: z.number().int() }),
   },
+  /**
+   * Keep lanes current (ADR-0023): merge the project's base branch into a lane. A conflict undoes the merge, marks
+   * the lane and pauses its session; the agent that owns the lane must not be mid-turn.
+   */
+  'worktree.sync': {
+    input: z.object({ worktreeId: worktreeIdSchema }),
+    output: z.object({ merged: z.number().int().nonnegative(), conflict: worktreeConflictSchema.nullable() }),
+  },
   'worktree.diff': {
     input: z.object({ worktreeId: worktreeIdSchema, file: z.string().optional() }),
     output: z.object({ diff: z.string() }),
@@ -709,6 +719,8 @@ export const commands = {
       commit: z.string().nullable(),
       pushed: z.boolean(),
       pr: z.object({ number: z.number().int().positive(), url: z.string() }).nullable(),
+      /** Commits merged in from the base branch before the push (ADR-0023); absent when nothing was behind. */
+      synced: z.number().int().nonnegative().optional(),
     }),
   },
 

@@ -7,6 +7,7 @@ import {
   statusBarDevice,
   statusBarRun,
   statusBarTargets,
+  statusBarLane,
 } from './status-bar';
 
 const { ids, DEMO_NOW } = fixtures;
@@ -134,5 +135,21 @@ describe('editor readout', () => {
       copy.workspace.editorReadOnly.large,
     ]);
     expect(editorReadoutItems({ cursor: null, wrap: false, readOnly: null })).toEqual([]);
+  });
+});
+
+describe('statusBarLane (keep lanes current, ADR-0023)', () => {
+  it('reads ↓N base for a lane behind its base, nothing for main or a current lane', () => {
+    const m = fixtures.demoReadModel();
+    const acme = fixtures.ids.project.acmeShop;
+    const lane = fixtures.ids.worktree.fixCheckout;
+    const behind: ReadModel = {
+      ...m,
+      worktrees: { ...m.worktrees, byId: { ...m.worktrees.byId, [lane]: { ...m.worktrees.byId[lane]!, behindBase: 3 } } },
+    };
+    expect(statusBarLane(behind, acme, lane)).toEqual(['↓3 main']);
+    expect(statusBarLane(m, acme, lane)).toEqual([]); // current
+    expect(statusBarLane(behind, acme, fixtures.ids.worktree.acmeMain)).toEqual([]); // main is the base
+    expect(statusBarLane(behind, acme, null)).toEqual([]);
   });
 });

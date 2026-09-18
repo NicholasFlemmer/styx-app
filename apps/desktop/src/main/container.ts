@@ -23,6 +23,7 @@ import { IdeImportService } from './services/ide-import-service';
 import { MfaService, type MfaProvider } from './services/mfa-service';
 import type { NotificationService } from './services/notification-service';
 import { ProjectService } from './services/project-service';
+import { LaneSyncService } from './services/lane-sync-service';
 import { execaPublishExec, PublishService } from './services/publish-service';
 import { PtyLog } from './services/pty-log';
 import { PtyService } from './services/pty-service';
@@ -220,6 +221,8 @@ export interface Container {
   checkpoints: CheckpointService;
   /** Commit, push and PR in one step (ADR-0021); the message draft comes from the project's default agent. */
   publish: PublishService;
+  /** Keep lanes current (ADR-0023): behind-base counts, `worktree.sync`, the publish gate. */
+  laneSync: LaneSyncService;
   /** Usage page: the latest rate limits per CLI and the on-demand Codex refresh. */
   usage: UsageService;
   terminals: TerminalService;
@@ -364,6 +367,15 @@ export function buildContainer(opts: ContainerOptions): Container {
     shell: () => pty.defaultShell(),
     platform: runtime.platform,
   });
+  const laneSync = new LaneSyncService({
+    repos,
+    git,
+    publisher,
+    clock,
+    transcript,
+    activity,
+    sessionEvent: (sessionId, event) => sessions.applyEvent(sessionId, event),
+  });
   const publish = new PublishService({
     repos,
     publisher,
@@ -375,8 +387,13 @@ export function buildContainer(opts: ContainerOptions): Container {
     exec: execaPublishExec(() => pty.resolveLoginPath()),
     projectSettings: (projectId) => {
       const s = projectSettingsFor(repos, projectId);
-      return { defaultAgent: s.defaultAgent.value, baseBranch: s.baseBranch.value };
+      return {
+        defaultAgent: s.defaultAgent.value,
+        baseBranch: s.baseBranch.value,
+        syncBeforePublish: s.syncBeforePublish.value,
+      };
     },
+    laneSync: (worktreeId) => laneSync.sync(worktreeId),
     loginPath: () => pty.resolveLoginPath(),
     platform: runtime.platform,
   });
@@ -436,6 +453,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     clock,
     checkHealth: (t, reason) => targets.checkHealth(t, reason),
     ...((opts.redetectClis ?? true) ? { refreshClis: () => sessions.refreshClis() } : {}),
+    ...((opts.redetectClis ?? true) ? { refreshLanes: () => laneSync.refreshAll() } : {}),
     ...(opts.refreshMs !== undefined ? { intervalMs: opts.refreshMs } : {}),
   });
   const broker = new BrokerHost({
@@ -613,6 +631,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     screens,
     checkpoints,
     publish,
+    laneSync,
     usage,
     terminals,
     broker,

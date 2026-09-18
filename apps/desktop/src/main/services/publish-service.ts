@@ -35,7 +35,10 @@ export interface PublishMessage {
 export interface PublishResult {
   commit: string | null;
   pushed: boolean;
-  pr: { number: number; url: string } | null;
+  pr: { number: number; url: string
+} | null;
+  /** Commits merged in from the base branch before the push (ADR-0023); absent when nothing was behind. */
+  synced?: number;
 }
 
 export interface ExecResult {
@@ -71,7 +74,9 @@ export interface PublishServiceDeps {
   audit: AuditService;
   exec: PublishExec;
   /** The project's effective default agent and base branch (projection `projectSettingsFor`). */
-  projectSettings: (projectId: string) => { defaultAgent: Agent; baseBranch: string };
+  projectSettings: (projectId: string) => { defaultAgent: Agent; baseBranch: string; syncBeforePublish?: boolean };
+  /** LaneSyncService.sync: merge the base branch in before pushing (ADR-0023); absent = skip the step. */
+  laneSync?: (worktreeId: string) => Promise<{ merged: number; conflict: { file: string; against: string } | null }>;
   /** Where `gh` is looked up: the process PATH first (e2e's fake bin dir), then the login shell's. */
   loginPath: () => Promise<string>;
   /** The process env whose PATH is searched first (default `process.env`; tests point it at a temp bin). */
@@ -204,6 +209,7 @@ export class PublishService {
     const project = repos.projects.get(wt.projectId) ?? fail('not-found', 'project not found');
     const settings = this.deps.projectSettings(wt.projectId);
     const result: PublishResult = { commit: null, pushed: false, pr: null };
+    const baseBranch = settings.baseBranch;
     let access: GhAccess | null = null;
     const done: string[] = [];
     // What cannot work is refused before anything is committed: no remote to push to, main asked for a PR.
@@ -240,6 +246,20 @@ export class PublishService {
     if (opts.through === 'commit') {
       this.noteActivity(project.id, project.name, branch, done, null);
       return result;
+    }
+
+    // 1b. keep the lane current (ADR-0023): the base branch comes in before anything leaves the machine, so the
+    // push and the PR carry code that merges cleanly. A conflict undoes the merge and stops here.
+    if (settings.syncBeforePublish && !wt.isMain && branch !== baseBranch && this.deps.laneSync !== undefined) {
+      const synced = await this.deps.laneSync(wt.id);
+      if (synced.conflict !== null)
+        fail('git-error', fill(copy.publish.syncConflict, { base: baseBranch, file: synced.conflict.file }));
+      if (synced.merged > 0) {
+        result.synced = synced.merged;
+        result.commit ??= await git.headCommit(wt.path);
+        await this.refreshHead(wt);
+        done.push(fill(copy.publish.steps.sync, { base: baseBranch, n: synced.merged }));
+      }
     }
 
     // 2. push — `-u origin <branch>`; skipped when the upstream already has everything.

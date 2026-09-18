@@ -420,6 +420,10 @@ export class SessionService {
         settings.worktreeLocation.value === 'inside'
           ? join(project.path, '.styx', 'worktrees', branch.replace(/[^A-Za-z0-9._-]+/g, '-'))
           : worktreeLocation(project.path, branch);
+      // Keep lanes current (ADR-0023): a lane is cut from a base the remote has just been asked about, so the
+      // agent starts on the latest code rather than on whatever the last fetch left behind.
+      if (settings.syncOnSpawn.value && (await this.deps.git.remotes(project.path)).length > 0)
+        await this.deps.git.fetch(project.path).catch(() => undefined);
       await this.deps.git.worktreeAdd(project.path, { branch, base: input.worktree.base, path });
       const head = await this.deps.git.headCommit(path);
       worktree = {
@@ -435,6 +439,7 @@ export class SessionService {
         changes: { added: 0, removed: 0, files: 0 },
         pr: null,
         conflict: null,
+        behindBase: 0,
         mergedAt: null,
         createdAt: now,
         archivedAt: null,
@@ -568,6 +573,10 @@ export class SessionService {
       effort: session.effort,
       // A relaunch resumes the CLI's own conversation (`--resume`); the first launch has no id yet.
       resumeSessionId: session.cliSessionId,
+      // Keep lanes current (ADR-0023): the agent is told the lane's base is Styx's job, not its own.
+      ...(worktree.branch !== null && !worktree.isMain
+        ? { lane: { branch: worktree.branch, base: projectSettingsFor(repos, project.id).baseBranch.value } }
+        : {}),
       configDir: join(runtime.userData, 'agents', session.id),
       shimDir: runtime.shimDir,
       platform: runtime.platform,

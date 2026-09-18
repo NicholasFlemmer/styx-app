@@ -4,6 +4,7 @@ import { newId, repoHasGit, type Worktree } from '@styx/core';
 import type { Container } from '../../container';
 import { confine } from '../../services/confine';
 import { worktreeLocation } from '../../services/git';
+import { projectSettingsFor } from '../../store/projection';
 import { type CommandBus, fail } from '../bus';
 
 /** Subsequence match (`srcchk` hits `src/components/checkout.ts`), the `@` picker's cheap fuzzy filter. */
@@ -60,6 +61,8 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
     const repo = repos.repos.byProject(project.id) ?? fail('not-found', 'project has no repo');
     if (!repoHasGit(repo)) fail('git-error', `${project.name} is not a git repository`);
     const path = worktreeLocation(project.path, branch);
+    if (projectSettingsFor(repos, project.id).syncOnSpawn.value && (await git.remotes(project.path)).length > 0)
+      await git.fetch(project.path).catch(() => undefined);
     await git.worktreeAdd(project.path, { branch, base, path });
     const head = await git.headCommit(path);
     const wt: Worktree = {
@@ -75,6 +78,7 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
       changes: { added: 0, removed: 0, files: 0 },
       pr: null,
       conflict: null,
+      behindBase: 0,
       mergedAt: null,
       createdAt: clock.now(),
       archivedAt: null,
@@ -97,36 +101,9 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
     return {};
   });
 
-  bus.register('worktree.fetch', async ({ projectId }) => {
-    const project = repos.projects.get(projectId) ?? fail('not-found', `project ${projectId} not found`);
-    const repo = repos.repos.byProject(project.id) ?? fail('not-found', 'project has no repo');
-    if (!repoHasGit(repo)) return { ahead: 0, behind: 0 }; // plain folder: nothing to fetch
-    await git.fetch(project.path);
-    const status = await git.status(project.path);
-    const ab = status.upstream
-      ? await git.aheadBehind(project.path, status.branch, status.upstream)
-      : { ahead: status.ahead, behind: status.behind };
-    repos.repos.upsert({ ...repo, ahead: ab.ahead, behind: ab.behind, fetchedAt: clock.now() });
-    publisher.upsert('repos', [repo.id]);
-    const ids: string[] = [];
-    for (const wt of repos.worktrees.byProject(project.id)) {
-      if (wt.isMain || wt.archivedAt !== null || wt.branch === null) continue;
-      const conflict = await git
-        .detectConflict(project.path, wt.branch, repo.defaultBranch ?? 'main')
-        .catch(() => null);
-      if ((conflict?.file ?? null) !== (wt.conflict?.file ?? null)) {
-        repos.worktrees.upsert({ ...wt, conflict });
-        ids.push(wt.id);
-        const owner = wt.owner.kind === 'session' ? repos.sessions.get(wt.owner.sessionId) : null;
-        if (owner && conflict && owner.state !== 'done')
-          app.sessions.applyEvent(owner.id, { type: 'error', reason: 'conflict' });
-        if (owner && !conflict && owner.state === 'paused' && owner.pausedReason === 'conflict')
-          app.sessions.applyEvent(owner.id, { type: 'resolve' });
-      }
-    }
-    publisher.upsert('worktrees', ids);
-    return ab;
-  });
+  // Keep lanes current (ADR-0023): fetch, ahead/behind, every lane's distance from the base and its conflict state.
+  bus.register('worktree.fetch', ({ projectId }) => app.laneSync.refresh(projectId));
+  bus.register('worktree.sync', ({ worktreeId }) => app.laneSync.sync(worktreeId));
 
   bus.register('worktree.diff', async ({ worktreeId, file }) => {
     const wt = requireWorktree(worktreeId);

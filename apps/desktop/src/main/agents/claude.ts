@@ -1,4 +1,4 @@
-import { copy } from '@styx/core';
+import { copy, fill } from '@styx/core';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { styxBin, styxMcpServer, type AgentLaunch, type AgentLaunchContext } from './types';
@@ -71,7 +71,9 @@ export async function claudeLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch
   if (ctx.effort) args.push('--effort', ctx.effort);
   if (ctx.resumeSessionId) args.push('--resume', ctx.resumeSessionId);
   // Steers deploys through the shims (docs/handoff-discrepancies #56): a system-prompt line, not sandboxing.
-  args.push('--append-system-prompt', `${copy.agentPrompt.shims}\n\n${copy.agentPrompt.peers}`);
+  const prompt: string[] = [copy.agentPrompt.shims, copy.agentPrompt.peers];
+  if (ctx.lane) prompt.push(fill(copy.agentPrompt.lane, { branch: ctx.lane.branch, base: ctx.lane.base }));
+  args.push('--append-system-prompt', prompt.join('\n\n'));
   const cleanup = () => rm(ctx.configDir, { recursive: true, force: true });
   if (ctx.runner === 'stream') {
     args.push(

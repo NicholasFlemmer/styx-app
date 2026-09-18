@@ -1,4 +1,5 @@
 import {
+  projectSettingsOfOrDefault,
   agentLabel,
   copy,
   diffTotals,
@@ -32,6 +33,8 @@ export interface Lane {
   prUrl: string | null;
   action: LaneAction;
   actionLabel: string;
+  /** Keep lanes current (ADR-0023): commits on the base branch this lane has not merged in; null when current. */
+  sync: { n: number; base: string; label: string } | null;
   /**
    * Commit / push / PR in one step (ADR-0021): `Open PR` for a lane without an open PR, `Commit & push` for one
    * that has it (or main); none for merged or conflicted lanes, or a lane on no branch.
@@ -108,6 +111,7 @@ export const laneRows = (model: ReadModel, projectId: ProjectId, now: number): L
   const worktrees = rows(model.worktrees)
     .filter((w) => w.projectId === projectId && w.archivedAt === null)
     .sort((a, b) => laneRank(a) - laneRank(b));
+  const base = projectSettingsOfOrDefault(model, projectId).baseBranch;
   return worktrees.map((w): Lane => {
     const session = w.owner.kind === 'session' ? (model.sessions.byId[w.owner.sessionId] ?? null) : null;
     const owner = session === null ? copy.repo.you : agentLabel(session);
@@ -149,6 +153,10 @@ export const laneRows = (model: ReadModel, projectId: ProjectId, now: number): L
       prUrl: w.pr?.url ?? null,
       action,
       actionLabel: ACTION_LABEL[action],
+      sync:
+        !w.isMain && !merged && w.conflict === null && w.behindBase > 0
+          ? { n: w.behindBase, base, label: fill(copy.repo.actions.sync, { base }) }
+          : null,
       publishLabel: publishLabelOf(w),
       sessionId: session?.id ?? null,
       isMain: w.isMain,

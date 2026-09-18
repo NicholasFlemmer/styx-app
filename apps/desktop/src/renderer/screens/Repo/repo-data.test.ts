@@ -39,6 +39,21 @@ describe('Repo lanes (prototype `lanes`)', () => {
     expect(lanes.find((l) => l.branch === branch)).toMatchObject({ publishLabel, prUrl });
   });
 
+  it('a lane behind its base carries `sync` (↓N main → Bring in main); main, merged and conflicting lanes do not', () => {
+    const m = fixtures.demoReadModel();
+    const behind = {
+      ...m.worktrees.byId,
+      [fixtures.ids.worktree.fixCheckout]: { ...m.worktrees.byId[fixtures.ids.worktree.fixCheckout]!, behindBase: 3 },
+      [fixtures.ids.worktree.acmeMain]: { ...m.worktrees.byId[fixtures.ids.worktree.acmeMain]!, behindBase: 2 },
+      [fixtures.ids.worktree.featPromo]: { ...m.worktrees.byId[fixtures.ids.worktree.featPromo]!, behindBase: 4 },
+    };
+    const rows = laneRows({ ...m, worktrees: { ...m.worktrees, byId: behind } }, acme, NOW);
+    expect(rows.find((l) => l.branch === 'fix/checkout')?.sync).toEqual({ n: 3, base: 'main', label: 'Bring in main' });
+    expect(rows.find((l) => l.branch === 'main')?.sync).toBeNull();
+    expect(rows.find((l) => l.branch === 'feat/promo')?.sync).toBeNull(); // merged
+    expect(lanes.every((l) => l.sync === null)).toBe(true); // the fixture's lanes are current
+  });
+
   it('publishLabelOf: a merged or closed PR gets a new one; conflict, merged and branchless lanes offer nothing', () => {
     const base = { branch: 'x', isMain: false, conflict: null, mergedAt: null };
     expect(publishLabelOf({ ...base, pr: { number: 1, state: 'merged', url: null } })).toBe('Open PR');

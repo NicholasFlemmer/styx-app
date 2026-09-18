@@ -67,6 +67,9 @@ export const projectSettingsSchema = z.object({
   mayRequestTargets: z.boolean(),
   notifyWhenNeedsMe: z.boolean(),
   baseBranch: z.string().min(1),
+  /** Keep lanes current (ADR-0023): fetch before cutting a lane; merge the base branch in before push / PR. */
+  syncOnSpawn: z.boolean(),
+  syncBeforePublish: z.boolean(),
   branchPrefix: z.string(),
   worktreeLocation: worktreeLocationSchema,
   shellWindows: windowsShellSchema,
@@ -98,6 +101,8 @@ export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   mayRequestTargets: true,
   notifyWhenNeedsMe: true,
   baseBranch: 'main',
+  syncOnSpawn: true,
+  syncBeforePublish: true,
   branchPrefix: 'agent/',
   worktreeLocation: 'sibling',
   shellWindows: 'powershell',

@@ -1,4 +1,5 @@
 import {
+  fill,
   copy,
   fixtures,
   repoHasGit,
@@ -209,7 +210,27 @@ export function Repo() {
                 <StatusDot size={7} tone={lane.dot} />
                 {lane.owner}
               </TableCell>
-              <TableCell mono>{lane.changes}</TableCell>
+              <TableCell mono>
+                {lane.changes}
+                {lane.sync !== null ? (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      className={s['syncAction']}
+                      title={lane.sync.label}
+                      aria-label={`${lane.sync.label} · ${lane.branch}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void command('worktree.sync', { worktreeId: lane.worktreeId });
+                      }}
+                      data-action="sync"
+                    >
+                      {fill(copy.repo.changes.behind, { n: lane.sync.n, base: lane.sync.base })}
+                    </button>
+                  </>
+                ) : null}
+              </TableCell>
               <TableCell mono>
                 {lane.prUrl !== null ? (
                   <button type="button" className={s['prLink']} onClick={onOpenPr(lane)} data-lane-pr="true">

@@ -438,6 +438,9 @@ const agentDefaultsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => 
       true,
     ),
     ...effortRow,
+    // Keep lanes current (ADR-0023): fetch before cutting a lane; merge the base in before push / PR.
+    projectRow(model, ctx, 'syncOnSpawn', r.syncOnSpawn, 'syncOnSpawn', onOff, isOn, ON_OFF, true),
+    projectRow(model, ctx, 'syncBeforePublish', r.syncBeforePublish, 'syncBeforePublish', onOff, isOn, ON_OFF, true),
   ];
 };
 
