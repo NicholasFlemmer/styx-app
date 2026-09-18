@@ -15,6 +15,7 @@ import {
   shell,
   systemPreferences,
   Tray,
+  webContents,
 } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -429,7 +430,18 @@ async function boot(): Promise<void> {
   // never the whole screen. Anything else asking is refused.
   session.defaultSession.setDisplayMediaRequestHandler(
     (request, callback) => {
-      const source = request.videoRequested ? (container?.devices.takeArmedSource() ?? null) : null;
+      // Only Styx's own renderer, in a registered window, gets the armed window; the design window's page lives
+      // on its own partition and never reaches this handler at all.
+      const c = container;
+      const frame = request.frame;
+      const wc = frame === null ? undefined : webContents.fromFrame(frame);
+      const ours =
+        c !== null &&
+        request.videoRequested &&
+        wc !== undefined &&
+        c.publisher.isRegistered(wc.id) &&
+        c.bus.originAllowed(request.securityOrigin);
+      const source = ours ? c.devices.takeArmedSource() : null;
       if (source === null) {
         callback({});
         return;

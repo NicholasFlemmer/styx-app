@@ -236,6 +236,9 @@ const PROJECT_KEYS: (keyof ProjectSettings)[] = [
   'envShareWithAgents',
   'devUrl',
   'devCommand',
+  'devPlatform',
+  'devDevice',
+  'devAppId',
 ];
 
 /**

@@ -13,7 +13,7 @@ import { BrokerHost } from './broker/host';
 import { ActivityService } from './services/activity-service';
 import { AgentService } from './services/agent-service';
 import { AuditService } from './services/audit-service';
-import { CheckpointService } from './services/checkpoint-service';
+import { CheckpointService, screenshotSourceFor } from './services/checkpoint-service';
 import type { CredentialVault } from './services/credential-vault';
 import { DetectService, defaultDeps as defaultDetectDeps } from './services/detect-service';
 import { ExecaGitRunner, GitService } from './services/git';
@@ -76,6 +76,7 @@ export interface WindowsPort {
  */
 export interface PreviewPort {
   set(input: {
+    projectId: string;
     visible: boolean;
     bounds: { x: number; y: number; width: number; height: number };
     url: string;
@@ -86,6 +87,8 @@ export interface PreviewPort {
   detach(): void;
   /** A PNG of the loaded page (checkpoint screenshots); null when nothing is loaded. */
   capture(): Promise<Buffer | null>;
+  /** The loaded page's URL and the project it was set for; null when nothing is loaded. */
+  loaded(): { url: string; projectId: string } | null;
 }
 
 const NO_PREVIEW: PreviewPort = {
@@ -94,6 +97,7 @@ const NO_PREVIEW: PreviewPort = {
   openExternal: async () => undefined,
   detach: () => undefined,
   capture: async () => null,
+  loaded: () => null,
 };
 
 /** What the device mirror needs from the OS: capturable windows, the Screen Recording permission, which(1). */
@@ -534,6 +538,25 @@ export function buildContainer(opts: ContainerOptions): Container {
     git: gitRunner,
     transcript,
     rescanHunks: (id) => hunks.rescan(id),
+    screens,
+    // The running app's picture for a turn: the mirrored device when one is up, else the design window's page —
+    // and only when that page is this project's (a live web run, or its saved dev URL when nothing runs).
+    screenshot: async (projectId) => {
+      const preview = opts.preview ?? NO_PREVIEW;
+      // The page counts only when the window was set for this very project (two projects on the same port
+      // must never trade pictures).
+      const loaded = preview.loaded();
+      const source = screenshotSourceFor({
+        projectId,
+        devices: devices.all(),
+        runs: runs.all(),
+        devUrl: repos.projects.settings(projectId).devUrl ?? null,
+        loadedUrl: loaded !== null && loaded.projectId === projectId ? loaded.url : null,
+      });
+      if (source === 'device') return devices.screenshot(projectId);
+      if (source === 'preview') return preview.capture();
+      return null;
+    },
     ...(opts.retentionMs !== undefined ? { pruneMs: opts.retentionMs } : {}),
   });
 

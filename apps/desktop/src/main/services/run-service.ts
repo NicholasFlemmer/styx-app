@@ -85,6 +85,9 @@ export type RunSuggestion = {
   platform?: DevPlatform;
 };
 
+/** An Xcode project / workspace name that may be spliced into a suggested command line. */
+const XCODE_NAME = /^[\w .+-]+\.(xcworkspace|xcodeproj)$/;
+
 /** What `run.detect` learned about the folder: commands to try and the platforms the app can run on. */
 export type RunDetection = { suggestions: RunSuggestion[]; platforms: DevPlatform[] };
 
@@ -201,13 +204,15 @@ export async function detectPlatforms(
     } catch {
       /* unreadable folder */
     }
+    // The name goes into a suggested shell line: plain names only, and quoted (a cloned repo names its folders).
     const xcode =
-      entries.find((e) => /\.xcworkspace$/.test(e)) ?? entries.find((e) => /\.xcodeproj$/.test(e));
+      entries.find((e) => XCODE_NAME.test(e) && /\.xcworkspace$/.test(e)) ??
+      entries.find((e) => XCODE_NAME.test(e) && /\.xcodeproj$/.test(e));
     if (xcode !== undefined) {
       add('ios');
       const flag = /\.xcworkspace$/.test(xcode) ? '-workspace' : '-project';
       suggestions.push({
-        command: `xcodebuild ${flag} ${xcode} -scheme <scheme> -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build`,
+        command: `xcodebuild ${flag} '${xcode}' -scheme <scheme> -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build`,
         source: 'xcode',
         platform: 'ios',
       });

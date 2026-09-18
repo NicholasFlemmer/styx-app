@@ -344,6 +344,12 @@ export class BrokerHost {
       // Only a session Styx itself started for this (the Run locally / Deploy buttons) may teach it: an ordinary
       // session, or one steered by a peer or by the repo, cannot plant a command Styx would later run.
       const purpose = deps.repos.sessions.purposeOf(ctx.session.sessionId);
+      // Each call rewrites the project file and writes to the chat and the Home feed: metered like a request.
+      if (!server.allow(ctx.session.sessionId))
+        throw new BrokerError(
+          ErrorCode.rateLimited,
+          'too many remember_command calls; try again in a minute',
+        );
       if (p.kind === 'run') {
         if (purpose !== 'learn-run') throw new BrokerError(ErrorCode.notAllowed, copy.abilities.notLearning);
         await deps.abilities.rememberRun(ctx.session.sessionId, p.command, p.url ?? null, {

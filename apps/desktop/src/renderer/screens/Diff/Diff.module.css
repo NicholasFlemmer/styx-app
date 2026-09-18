@@ -103,4 +103,50 @@
     padding: 1px 6px;
     border-color: transparent;
   }
+  /* Checkpoint mode: Before / After pictures of the running app under the header (owner addition, no prototype
+     recipe; the boxes borrow the hunk header's surface and the files pane's hairline). */
+  .screens {
+    flex: none;
+    padding: var(--sp-3) var(--sp-5);
+    border-bottom: 1px solid var(--ln);
+  }
+  .screensLabel {
+    display: block;
+    margin-bottom: 6px;
+  }
+  .screensRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-3);
+  }
+  .screenFigure {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    margin: 0;
+    min-width: 0;
+  }
+  .screenBox {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* A portrait phone shot must leave the hunk list room at the 680px window minimum: cap by the screen. */
+    min-height: 120px;
+    max-height: min(360px, 40vh);
+    border: 1px solid var(--ln);
+    background: var(--s1);
+    overflow: hidden;
+  }
+  .screenImg {
+    display: block;
+    max-width: 100%;
+    max-height: min(360px, 40vh);
+    object-fit: contain;
+  }
+  .screenMissing {
+    padding: var(--sp-3);
+    font-size: 11px;
+    color: var(--mu);
+    text-align: center;
+  }
 }

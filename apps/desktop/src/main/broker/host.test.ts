@@ -556,6 +556,51 @@ describe('BrokerHost learned abilities (remember_command)', () => {
     );
   });
 
+  it('kind "run" for a mobile app: platform, device name and app id are kept as identifiers and the run starts on that platform', async () => {
+    const { app, client } = await learner('learn-run');
+    expect(
+      await client.call('remember_command', {
+        kind: 'run',
+        command: 'npx expo run:ios --device "iPhone 17 Pro"',
+        platform: 'ios',
+        device: 'iPhone 17 Pro',
+        appId: 'com.acme.shop',
+      }),
+    ).toEqual({ ok: true });
+    expect(app.repos.projects.settings(acme)).toMatchObject({
+      devCommand: 'npx expo run:ios --device "iPhone 17 Pro"',
+      devPlatform: 'ios',
+      devDevice: 'iPhone 17 Pro',
+      devAppId: 'com.acme.shop',
+    });
+    expect(systemLines(app)).toContain(
+      fill(copy.abilities.learnedRunDevice, {
+        command: 'npx expo run:ios --device "iPhone 17 Pro"',
+        platform: copy.workspace.device.platforms.ios,
+        device: fill(copy.abilities.learnedRunDeviceName, { device: 'iPhone 17 Pro' }),
+      }),
+    );
+    // A device run boots the simulator first; with no tooling in this rig the run fails closed and nothing spawns.
+    await vi.waitFor(() => expect(app.runs.all()).toEqual([]));
+  });
+
+  it('kind "run": a device name or app id that is not a plain identifier is dropped', async () => {
+    const { app, client } = await learner('learn-run');
+    await client.call('remember_command', {
+      kind: 'run',
+      command: 'flutter run',
+      platform: 'android',
+      device: 'Pixel; rm -rf /',
+      appId: 'not an id',
+    });
+    expect(app.repos.projects.settings(acme)).toMatchObject({
+      devCommand: 'flutter run',
+      devPlatform: 'android',
+    });
+    expect(app.repos.projects.settings(acme).devDevice ?? null).toBeNull();
+    expect(app.repos.projects.settings(acme).devAppId ?? null).toBeNull();
+  });
+
   it('kind "run": a URL that is not loopback is dropped, and the command alone is remembered', async () => {
     const { app, client } = await learner('learn-run');
     const before = app.repos.projects.settings(acme).devUrl;

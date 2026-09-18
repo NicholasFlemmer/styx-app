@@ -30,6 +30,7 @@ import {
   editorReadoutItems,
   editorStatusLabel,
   statusBarDeploy,
+  statusBarDevice,
   statusBarRun,
   statusBarTargets,
 } from '../../features/editor/status-bar';
@@ -169,6 +170,7 @@ export function Workspace() {
       : [
           ...statusBarTargets(model, projectId, now),
           ...statusBarRun(model.runs[projectId] ?? null),
+          ...statusBarDevice(model.devices[projectId] ?? null),
           ...statusBarDeploy(model, projectId),
         ];
   const editorStatus = editorStatusLabel(fileState?.eol ?? 'lf', fileState?.lang ?? 'TS');
@@ -251,6 +253,9 @@ export function Workspace() {
             active
             run={model.runs[projectId] ?? null}
             devCommand={model.settings.project[projectId]?.devCommand.value ?? null}
+            device={model.devices[projectId] ?? null}
+            devPlatform={model.settings.project[projectId]?.devPlatform.value ?? null}
+            devDevice={model.settings.project[projectId]?.devDevice.value ?? null}
           />
         ) : (
           <>

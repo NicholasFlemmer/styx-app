@@ -1,4 +1,4 @@
-import { WebContentsView, net, shell, type BrowserWindow } from 'electron';
+import { WebContentsView, net, session, shell, type BrowserWindow } from 'electron';
 import { PREVIEW_VIEWPORTS, type PreviewDevice, isLocalDevUrl } from '@styx/core';
 import { logger } from './logger';
 import { PreviewProbe, type PreviewStatus } from './preview-probe';
@@ -15,6 +15,9 @@ const netProbe = async (url: string): Promise<boolean> => {
     return false;
   }
 };
+
+/** The design window's own (in-memory) session; nothing Styx registers on the default session reaches it. */
+export const PREVIEW_PARTITION = 'styx-preview';
 
 export interface PreviewBounds {
   x: number;
@@ -38,7 +41,12 @@ export interface PreviewBounds {
 export class PreviewService {
   private view: WebContentsView | null = null;
   private window: BrowserWindow | null = null;
-  private loaded: string | null = null;
+  private loadedUrl: string | null = null;
+  /** Whose page `loadedUrl` is: `preview.set` names the project, so a screenshot is only ever that project's. */
+  private wantedProject: string | null = null;
+  private loadedProject: string | null = null;
+  /** The page's zoom: 1, or the frame's scale when the pane is smaller than the device (see `viewZoom`). */
+  private zoom = 1;
   private readonly probe: PreviewProbe;
 
   constructor(
@@ -55,10 +63,14 @@ export class PreviewService {
       onReady: (url) => {
         const view = this.view;
         if (view === null) return;
-        this.loaded = url;
-        void view.webContents.loadURL(url).catch((e: Error) => {
-          logger.warn('preview: load failed', { url, error: e.message });
-        });
+        this.loadedUrl = url;
+        this.loadedProject = this.wantedProject;
+        void view.webContents
+          .loadURL(url)
+          .then(() => this.applyZoom())
+          .catch((e: Error) => {
+            logger.warn('preview: load failed', { url, error: e.message });
+          });
       },
     });
   }
@@ -67,7 +79,14 @@ export class PreviewService {
    * The one entry point: where the hole in the renderer's layout is, what to show in it, and whether to show it
    * at all. Called on layout changes, so it must be cheap and idempotent.
    */
-  set(input: { visible: boolean; bounds: PreviewBounds; url: string; device: PreviewDevice }): void {
+  set(input: {
+    projectId: string;
+    visible: boolean;
+    bounds: PreviewBounds;
+    url: string;
+    device: PreviewDevice;
+  }): void {
+    this.wantedProject = input.projectId;
     const url = input.url.trim() === '' ? null : normaliseUrl(input.url);
     if (url === null) {
       this.detach();
@@ -80,17 +99,25 @@ export class PreviewService {
     // and nothing reloads every time the palette opens.
     const visible = input.visible && input.bounds.width > 0 && input.bounds.height > 0;
     view.setVisible(visible);
-    if (visible) view.setBounds(deviceBounds(input.bounds, input.device));
+    if (visible) {
+      const content = win.getContentBounds();
+      const bounds = deviceBounds(input.bounds, { width: content.width, height: content.height });
+      view.setBounds(bounds);
+      // From the bounds the view actually got, not the reported ones: a pixel lost to rounding would otherwise
+      // become two CSS pixels at half scale, and the page would measure 391 instead of 393.
+      this.zoom = viewZoom(bounds, input.device);
+      this.applyZoom();
+    }
     // A new URL is probed until it answers, then loaded; the same URL never reloads on a layout change.
     if (url !== this.probe.current()) {
-      this.loaded = null;
+      this.loadedUrl = null;
       this.probe.start(url);
     }
   }
 
   /** Reload the page; if it never loaded (server not up yet, or gave up), probe again instead. */
   reload(): void {
-    if (this.loaded !== null && this.view !== null) this.view.webContents.reload();
+    if (this.loadedUrl !== null && this.view !== null) this.view.webContents.reload();
     else this.probe.restart();
   }
 
@@ -101,10 +128,16 @@ export class PreviewService {
     await shell.openExternal(safe);
   }
 
+  /** What the view has actually loaded (the probe answered, the page opened) and for which project; null otherwise. */
+  loaded(): { url: string; projectId: string } | null {
+    if (this.view === null || this.loadedUrl === null || this.loadedProject === null) return null;
+    return { url: this.loadedUrl, projectId: this.loadedProject };
+  }
+
   /** A PNG of the loaded page (checkpoint screenshots); null when nothing is loaded or the capture fails. */
   async capture(): Promise<Buffer | null> {
     const view = this.view;
-    if (view === null || this.loaded === null) return null;
+    if (view === null || this.loadedUrl === null) return null;
     try {
       const image = await view.webContents.capturePage();
       return image.isEmpty() ? null : image.toPNG();
@@ -117,7 +150,8 @@ export class PreviewService {
   /** Detaches on window close / app teardown. Kept separate from `set` so teardown never needs bounds. */
   detach(): void {
     this.probe.reset();
-    this.loaded = null;
+    this.loadedUrl = null;
+    this.loadedProject = null;
     if (this.view === null) return;
     const win = this.window;
     if (win !== null && !win.isDestroyed()) win.contentView.removeChildView(this.view);
@@ -126,9 +160,23 @@ export class PreviewService {
     this.window = null;
   }
 
+  /** Chromium keeps zoom per origin and forgets it across loads, so it is re-applied after every load too. */
+  private applyZoom(): void {
+    const view = this.view;
+    if (view === null || view.webContents.isDestroyed()) return;
+    if (view.webContents.getZoomFactor() !== this.zoom) view.webContents.setZoomFactor(this.zoom);
+  }
+
   private ensure(win: BrowserWindow): WebContentsView {
     if (this.view !== null && this.window === win) return this.view;
     this.detach();
+    // Its own session: the page never shares the default session's protocol handlers (`styx-device://`) or its
+    // display-media handler, and gets no permission at all — the design window could otherwise ask for the
+    // simulator's capture the way the renderer does, or read the checkpoint pictures by URL.
+    const ses = session.fromPartition(PREVIEW_PARTITION);
+    ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+    ses.setPermissionCheckHandler(() => false);
+    ses.setDisplayMediaRequestHandler((_request, callback) => callback({}));
     const view = new WebContentsView({
       webPreferences: {
         // The previewed page is the user's own app, but it is still web content Styx does not control:
@@ -136,6 +184,7 @@ export class PreviewService {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
+        partition: PREVIEW_PARTITION,
       },
     });
     // A preview must never become a way to navigate Styx itself or spawn windows.
@@ -146,7 +195,7 @@ export class PreviewService {
     // The server went away after loading (a dev server restart): back to probing rather than an error page.
     view.webContents.on('did-fail-load', (_e, code, _desc, _url, isMainFrame) => {
       if (!isMainFrame || !CONNECTION_ERRORS.has(code)) return;
-      this.loaded = null;
+      this.loadedUrl = null;
       this.probe.restart();
     });
     win.contentView.addChildView(view);
@@ -157,23 +206,42 @@ export class PreviewService {
 }
 
 /**
- * Where the view actually sits. A preset makes the view genuinely that wide rather than emulating a viewport:
- * `enableDeviceEmulation`'s `viewSize` does not change the page's layout viewport once the view is resized, so
- * the page kept reporting the pane's width. Sizing the view for real means media queries, `innerWidth` and
- * anything else the page measures all agree, and the surrounding pane reads as the device's frame.
- * The device box is centred and clamped, so a narrow pane still shows as much as it can.
+ * Where the view actually sits: the rectangle the renderer reported, trusted. The renderer owns the layout — a
+ * preset draws a device frame around a screen slot at the device's real size and reports that slot — so main
+ * only clamps to the window's content area, and a narrow window still shows as much as it can.
  */
-export const deviceBounds = (pane: PreviewBounds, device: PreviewDevice): PreviewBounds => {
-  if (device === 'desktop') return { ...pane };
-  const want = PREVIEW_VIEWPORTS[device];
-  const width = Math.min(want.width, pane.width);
-  const height = Math.min(want.height, pane.height);
+export const deviceBounds = (
+  reported: PreviewBounds,
+  content: { width: number; height: number },
+): PreviewBounds => {
+  const x = Math.max(0, Math.min(Math.round(reported.x), content.width));
+  const y = Math.max(0, Math.min(Math.round(reported.y), content.height));
   return {
-    x: Math.round(pane.x + (pane.width - width) / 2),
-    y: Math.round(pane.y + (pane.height - height) / 2),
-    width: Math.round(width),
-    height: Math.round(height),
+    x,
+    y,
+    width: Math.max(0, Math.min(Math.round(reported.x + reported.width), content.width) - x),
+    height: Math.max(0, Math.min(Math.round(reported.y + reported.height), content.height) - y),
   };
+};
+
+/**
+ * A preset makes the view genuinely that wide rather than emulating a viewport: `enableDeviceEmulation`'s
+ * `viewSize` does not change the page's layout viewport once the view is resized, so the page kept reporting the
+ * pane's width. When the pane is smaller than the device the renderer shrinks the frame with a transform and
+ * reports the scaled slot; zooming the page by the same factor keeps its layout viewport at the device's size,
+ * so media queries, `innerWidth` and anything else the page measures still agree — a simulator at 50%.
+ * The larger side maps to the larger side, so a rotated frame gets the same factor.
+ */
+export const viewZoom = (bounds: PreviewBounds, device: PreviewDevice): number => {
+  if (device === 'desktop') return 1;
+  const want = PREVIEW_VIEWPORTS[device];
+  // Portrait or rotated: the view's width is the device's width or its height. The factor is exact (no rounding),
+  // so `width / zoom` is the device width to the pixel — Chromium rounds `innerWidth`, and ±1 view pixel at
+  // half scale would otherwise read as ±2 CSS pixels.
+  const landscape = bounds.width > bounds.height;
+  const shownWidth = landscape ? want.height : want.width;
+  if (bounds.width <= 0 || bounds.width >= shownWidth) return 1;
+  return bounds.width / shownWidth;
 };
 
 /** http/https only, and only a URL that parses: a preview must never be a file:// or app:// navigation. */

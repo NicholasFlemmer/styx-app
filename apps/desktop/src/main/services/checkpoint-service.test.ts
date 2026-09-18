@@ -1,15 +1,71 @@
-import { fixtures, type Checkpoint, type SessionId, type WorktreeId } from '@styx/core';
+import { fixtures, type Checkpoint, type ProjectId, type SessionId, type WorktreeId } from '@styx/core';
 import { execa } from 'execa';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
-import { CHECKPOINT_REF_ROOT, checkpointRef, parseNumstat, sumNumstat } from './checkpoint-service';
+import {
+  CHECKPOINT_REF_ROOT,
+  CheckpointService,
+  checkpointRef,
+  parseNumstat,
+  screenshotSourceFor,
+  sumNumstat,
+  withScreen,
+  SCREENS_KEEP_TURNS,
+} from './checkpoint-service';
+import { ExecaGitRunner } from './git';
+import { ScreensStore } from './screens-store';
 
 const { ids } = fixtures;
 const claude = ids.session.claude as SessionId;
 const fixCheckout = ids.worktree.fixCheckout as WorktreeId;
+const acme = ids.project.acmeShop as ProjectId;
+
+const PNG = Buffer.from('89504e470d0a1a0a', 'hex');
+
+/**
+ * The service with a screenshot source of the test's choosing and a real on-disk ScreensStore in a temp dir
+ * (the container's own instance answers null for both: no device, no design window in tests).
+ */
+const withScreens = (
+  t: TestApp,
+  screenshot: (projectId: ProjectId) => Promise<Buffer | null>,
+  opts: { captureTimeoutMs?: number } = {},
+): { service: CheckpointService; screens: ScreensStore; dir: string } => {
+  const dir = join(mkdtempSync(join(tmpdir(), 'styx-cp-screens-')), 'screens');
+  const screens = new ScreensStore(dir);
+  const service = new CheckpointService({
+    repos: t.app.repos,
+    publisher: t.app.publisher,
+    clock: t.clock,
+    git: new ExecaGitRunner(),
+    transcript: t.app.transcript,
+    rescanHunks: async () => undefined,
+    screens,
+    screenshot,
+    ...opts,
+  });
+  return { service, screens, dir };
+};
+
+/** A turn through a given service instance: start on `messageId`, mutate, settle. */
+const turnOn = async (
+  service: CheckpointService,
+  t: TestApp,
+  messageId: string,
+  mutate: () => void,
+): Promise<Checkpoint> => {
+  service.onTurnStarted(claude, messageId);
+  await service.settled(claude);
+  mutate();
+  service.onTurnSettled(claude);
+  await service.settled(claude);
+  const row = t.app.repos.checkpoints.bySession(claude).at(-1);
+  if (row === undefined) throw new Error('no checkpoint row');
+  return row;
+};
 
 const GIT_ENV = {
   ...process.env,
@@ -319,5 +375,287 @@ describe('CheckpointService', () => {
     await sh(['update-ref', `${CHECKPOINT_REF_ROOT}/ghost/1/base`, 'HEAD'], repo);
     await t.app.checkpoints.prune();
     expect(await refs(repo)).toEqual([]);
+  });
+
+  describe('screens (the running app before and after each turn)', () => {
+    const shot = (n: number): Buffer => Buffer.concat([PNG, Buffer.from([n])]);
+
+    it("screenshotSourceFor: a device session owns the picture; else the page, but only when the design window has this project's URL loaded", () => {
+      const p = 'p1';
+      const L = 'http://localhost:3000/';
+      const web = { projectId: p, phase: 'running', platform: 'web', url: 'http://localhost:3000' } as const;
+      const webNoUrl = { projectId: p, phase: 'running', platform: 'web', url: null } as const;
+      const ios = { projectId: p, phase: 'running', platform: 'ios', url: null } as const;
+      const gone = { projectId: p, phase: 'exited', platform: 'web', url: 'http://localhost:3000' } as const;
+      const other = {
+        projectId: 'p2',
+        phase: 'running',
+        platform: 'web',
+        url: 'http://localhost:4000',
+      } as const;
+      const table: [Parameters<typeof screenshotSourceFor>[0], ReturnType<typeof screenshotSourceFor>][] = [
+        // Device sessions win, ready or still booting (the device answers null until it is ready; the page never stands in).
+        [
+          {
+            projectId: p,
+            devices: [{ projectId: p, phase: 'ready' }],
+            runs: [web],
+            devUrl: null,
+            loadedUrl: L,
+          },
+          'device',
+        ],
+        [
+          {
+            projectId: p,
+            devices: [{ projectId: p, phase: 'booting' }],
+            runs: [ios],
+            devUrl: 'http://localhost:3000',
+            loadedUrl: null,
+          },
+          'device',
+        ],
+        // A stopped / failed device session no longer counts.
+        [
+          {
+            projectId: p,
+            devices: [{ projectId: p, phase: 'stopped' }],
+            runs: [web],
+            devUrl: null,
+            loadedUrl: L,
+          },
+          'preview',
+        ],
+        [
+          {
+            projectId: p,
+            devices: [{ projectId: p, phase: 'failed' }],
+            runs: [],
+            devUrl: null,
+            loadedUrl: L,
+          },
+          null,
+        ],
+        // Another project's device is not this project's picture.
+        [
+          {
+            projectId: p,
+            devices: [{ projectId: 'p2', phase: 'ready' }],
+            runs: [web],
+            devUrl: null,
+            loadedUrl: L,
+          },
+          'preview',
+        ],
+        // Live web run: the page, when it is the one the window loaded (`localhost:3000` and `…/` are the same page).
+        [{ projectId: p, devices: [], runs: [web], devUrl: null, loadedUrl: 'localhost:3000' }, 'preview'],
+        [{ projectId: p, devices: [], runs: [web], devUrl: null, loadedUrl: 'http://localhost:4000/' }, null],
+        [{ projectId: p, devices: [], runs: [web], devUrl: null, loadedUrl: null }, null],
+        [{ projectId: p, devices: [], runs: [webNoUrl], devUrl: null, loadedUrl: L }, null],
+        // A device platform without a device session → nothing, even with a saved URL loaded.
+        [{ projectId: p, devices: [], runs: [ios], devUrl: 'http://localhost:3000', loadedUrl: L }, null],
+        // No live run for this project: the saved dev URL decides (the user runs the server themselves) — if loaded.
+        [
+          { projectId: p, devices: [], runs: [gone, other], devUrl: 'http://localhost:3000', loadedUrl: L },
+          'preview',
+        ],
+        [
+          {
+            projectId: p,
+            devices: [],
+            runs: [gone, other],
+            devUrl: 'http://localhost:3000',
+            loadedUrl: 'http://localhost:4000/',
+          },
+          null,
+        ],
+        [{ projectId: p, devices: [], runs: [gone, other], devUrl: '  ', loadedUrl: L }, null],
+        [{ projectId: p, devices: [], runs: [], devUrl: null, loadedUrl: L }, null],
+      ];
+      for (const [input, want] of table) expect(screenshotSourceFor(input), JSON.stringify(input)).toBe(want);
+    });
+
+    it('withScreen keeps the canonical before → after order whichever side landed first, without duplicates', () => {
+      expect(withScreen([], 'before')).toEqual(['before']);
+      expect(withScreen([], 'after')).toEqual(['after']);
+      expect(withScreen(['before'], 'after')).toEqual(['before', 'after']);
+      expect(withScreen(['after'], 'before')).toEqual(['before', 'after']);
+      expect(withScreen(['before', 'after'], 'after')).toEqual(['before', 'after']);
+    });
+
+    it('a source that answers keeps before and after on disk and names them on the row, in order, published each time', async () => {
+      const t = makeTestApp();
+      const repo = await realWorktree(t);
+      const asked: ProjectId[] = [];
+      let n = 0;
+      const { service, screens } = withScreens(t, async (projectId) => {
+        asked.push(projectId);
+        return shot(++n);
+      });
+      t.app.publisher.flush();
+      t.win.sent.length = 0;
+      const row = await turnOn(service, t, 'm1', () => writeFileSync(join(repo, 'checkout.ts'), 'a\nB\nc\n'));
+      expect(row.screens).toEqual(['before', 'after']);
+      expect(row).toMatchObject({ turn: 1, files: 1, ref: row.ref });
+      // The pictures are the source's, kept per side; the source was asked for the session's project, twice.
+      expect(await screens.screen(row.id, 'before')).toEqual(shot(1));
+      expect(await screens.screen(row.id, 'after')).toEqual(shot(2));
+      expect(asked).toEqual([acme, acme]);
+      // Published four times: open, before landed, settled, after landed — the renderer sees each side as it arrives.
+      t.app.publisher.flush();
+      const deltas = t.win
+        .batches()
+        .flatMap((b) => b.deltas as { op: string; checkpoints?: Checkpoint[] }[])
+        .filter((d) => d.op === 'checkpoints.replace');
+      expect(deltas.map((d) => d.checkpoints?.[0]?.screens)).toEqual([
+        [],
+        ['before'],
+        ['before'],
+        ['before', 'after'],
+      ]);
+      // Revert leaves the pictures as they are: the turn can still be looked at.
+      await service.revert(row.id);
+      expect(rows(t)[0]?.screens).toEqual(['before', 'after']);
+      expect(await screens.screen(row.id, 'after')).toEqual(shot(2));
+    });
+
+    it('a source that answers null (nothing running) changes nothing: no files, empty screens, the turn settles as usual', async () => {
+      const t = makeTestApp();
+      const repo = await realWorktree(t);
+      const { service, dir } = withScreens(t, async () => null);
+      const row = await turnOn(service, t, 'm1', () => writeFileSync(join(repo, 'checkout.ts'), 'a\nB\nc\n'));
+      expect(row).toMatchObject({ turn: 1, files: 1, screens: [] });
+      expect(row.ref).not.toBeNull();
+      expect(existsSync(dir)).toBe(false);
+    });
+
+    it('a throwing source and one slower than the timeout are tolerated: the turn is unaffected and the missing side stays missing', async () => {
+      const t = makeTestApp();
+      const repo = await realWorktree(t);
+      // Turn 1: the source throws on both sides.
+      const throwing = withScreens(t, async () => {
+        throw new Error('simctl: device not booted');
+      });
+      const one = await turnOn(throwing.service, t, 'm1', () =>
+        writeFileSync(join(repo, 'checkout.ts'), 'a\nB\nc\n'),
+      );
+      expect(one).toMatchObject({ turn: 1, files: 1, screens: [] });
+      expect(existsSync(throwing.dir)).toBe(false);
+      // Turn 2: `before` never resolves (abandoned after the timeout), `after` answers: only `after` lands, and the
+      // settle was never held up by the hanging capture beyond the timeout.
+      let calls = 0;
+      const slow = withScreens(
+        t,
+        () => (++calls === 1 ? new Promise<Buffer | null>(() => undefined) : Promise.resolve(shot(2))),
+        { captureTimeoutMs: 30 },
+      );
+      const two = await turnOn(slow.service, t, 'm2', () => writeFileSync(join(repo, 'pay.ts'), 'one\n'));
+      expect(two).toMatchObject({ turn: 2, files: 1, screens: ['after'] });
+      expect(await slow.screens.screen(two.id, 'before')).toBeNull();
+      expect(await slow.screens.screen(two.id, 'after')).toEqual(shot(2));
+      expect(t.app.repos.transcripts.last(claude).at(-1)?.body).toBe('Turn 2: 1 files changed.');
+    });
+
+    it('a slow before never lets after overtake it: captures run in the session chain, one after the other', async () => {
+      const t = makeTestApp();
+      const repo = await realWorktree(t);
+      const order: string[] = [];
+      let n = 0;
+      const { service, screens } = withScreens(t, async () => {
+        const i = ++n;
+        // The first capture (before) is the slow one; the settle is queued behind it and waits.
+        if (i === 1) await new Promise((r) => setTimeout(r, 60));
+        order.push(i === 1 ? 'before' : 'after');
+        return shot(i);
+      });
+      service.onTurnStarted(claude, 'm1');
+      writeFileSync(join(repo, 'checkout.ts'), 'a\nB\nc\n');
+      service.onTurnSettled(claude);
+      await service.settled(claude);
+      const row = rows(t)[0];
+      expect(order).toEqual(['before', 'after']);
+      expect(row?.screens).toEqual(['before', 'after']);
+      expect(await screens.screen(row?.id ?? '', 'before')).toEqual(shot(1));
+      expect(await screens.screen(row?.id ?? '', 'after')).toEqual(shot(2));
+    });
+
+    it('a turn left open gets its after from the next start: the same picture as the new turn takes for before', async () => {
+      const t = makeTestApp();
+      const repo = await realWorktree(t);
+      let n = 0;
+      const { service, screens } = withScreens(t, async () => shot(++n));
+      service.onTurnStarted(claude, 'm1');
+      await service.settled(claude);
+      writeFileSync(join(repo, 'checkout.ts'), 'a\nB\nc\n');
+      service.onTurnStarted(claude, 'm2'); // no settle signal came (a pty session)
+      await service.settled(claude);
+      const [one, two] = rows(t);
+      expect(one?.screens).toEqual(['before', 'after']);
+      expect(two?.screens).toEqual(['before']);
+      // Two captures in all: turn 1's before, then one picture shared by turn 1's after and turn 2's before.
+      expect(n).toBe(2);
+      expect(await screens.screen(one?.id ?? '', 'after')).toEqual(shot(2));
+      expect(await screens.screen(two?.id ?? '', 'before')).toEqual(shot(2));
+    });
+
+    it('prune keeps pictures for the newest SCREENS_KEEP_TURNS turns of a live session only', async () => {
+      const t = makeTestApp();
+      await realWorktree(t);
+      const { service, screens, dir } = withScreens(t, async () => PNG);
+      // Rows straight into the repo (a real turn each would take minutes): every one with both pictures on disk.
+      const base = t.app.repos.checkpoints.bySession(claude);
+      expect(base).toEqual([]);
+      const ids: string[] = [];
+      for (let turn = 1; turn <= SCREENS_KEEP_TURNS + 3; turn += 1) {
+        const id = `cp-cap-${turn}`;
+        ids.push(id);
+        t.app.repos.checkpoints.upsert({
+          id,
+          sessionId: claude,
+          worktreeId: fixCheckout,
+          turn,
+          messageId: null,
+          baseRef: `refs/styx/checkpoints/${claude}/${turn}/base`,
+          ref: `refs/styx/checkpoints/${claude}/${turn}/after`,
+          files: 1,
+          added: 1,
+          removed: 0,
+          createdAt: t.clock.now(),
+          settledAt: t.clock.now(),
+          revertedAt: null,
+          screens: ['before', 'after'],
+        });
+        await screens.putScreen(id, 'before', PNG);
+        await screens.putScreen(id, 'after', PNG);
+      }
+      await service.prune();
+      const after = t.app.repos.checkpoints.bySession(claude);
+      expect(after).toHaveLength(SCREENS_KEEP_TURNS + 3);
+      // The three oldest lost their pictures (files and row), the rest kept both; rows and refs stay for Review.
+      for (const [i, row] of after.entries()) {
+        const kept = i >= 3;
+        expect(row.screens, row.id).toEqual(kept ? ['before', 'after'] : []);
+        expect(existsSync(join(dir, `${row.id}-before.png`)), row.id).toBe(kept);
+      }
+    });
+
+    it('prune drops the pictures with the rows', async () => {
+      const t = makeTestApp();
+      const repo = await realWorktree(t);
+      const { service, screens, dir } = withScreens(t, async () => PNG);
+      const row = await turnOn(service, t, 'm1', () => writeFileSync(join(repo, 'checkout.ts'), 'a\nB\nc\n'));
+      expect(existsSync(join(dir, `${row.id}-before.png`))).toBe(true);
+      expect(existsSync(join(dir, `${row.id}-after.png`))).toBe(true);
+      await service.prune(); // live session: kept
+      expect(existsSync(join(dir, `${row.id}-after.png`))).toBe(true);
+      const s = t.app.repos.sessions.get(claude);
+      if (!s) throw new Error('session');
+      t.app.repos.sessions.upsert({ ...s, archivedAt: t.clock.now() });
+      await service.prune();
+      expect(rows(t)).toEqual([]);
+      expect(existsSync(join(dir, `${row.id}-before.png`))).toBe(false);
+      expect(existsSync(join(dir, `${row.id}-after.png`))).toBe(false);
+      expect(await screens.screen(row.id, 'before')).toBeNull();
+    });
   });
 });

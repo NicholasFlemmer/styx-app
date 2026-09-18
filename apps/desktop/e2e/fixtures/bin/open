@@ -1,0 +1,7 @@
+#!/usr/bin/env node
+'use strict';
+/**
+ * Fake `open` for e2e: DeviceService runs `open -a Simulator …` to show the simulator's window. There is no
+ * Simulator.app on a Mac without Xcode, and a real `open` would put up an error dialog; this one just says yes.
+ */
+process.exit(0);

@@ -1,0 +1,5 @@
+#!/usr/bin/env node
+'use strict';
+/** Fake Android `emulator` for e2e: absent (see `adb` next to it). */
+process.stderr.write('fake emulator: no Android SDK in e2e\n');
+process.exit(127);

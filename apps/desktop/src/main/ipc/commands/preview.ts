@@ -3,8 +3,8 @@ import type { Container } from '../../container';
 
 /** Design-window commands. The renderer owns where and whether; main owns the native view. */
 export function registerPreviewCommands(bus: CommandBus, app: Container): void {
-  bus.register('preview.set', ({ visible, bounds, url, device }) => {
-    app.preview.set({ visible, bounds, url, device });
+  bus.register('preview.set', ({ projectId, visible, bounds, url, device }) => {
+    app.preview.set({ projectId, visible, bounds, url, device });
     return {};
   });
 

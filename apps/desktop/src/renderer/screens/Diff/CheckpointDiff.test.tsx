@@ -2,10 +2,19 @@
 import { fixtures, type Checkpoint, type ProjectId, type ReadModel, type SessionId } from '@styx/core';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { keys } from '../../keys';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
-import { checkpointSummary, patchFiles } from './CheckpointDiff';
+import { checkpointSummary, patchFiles, screenUrl } from './CheckpointDiff';
 import { Diff } from './Diff';
+
+const route = (e: KeyboardEvent) => {
+  keys.dispatch(e);
+};
+const press = (init: KeyboardEventInit) => {
+  const target = document.activeElement ?? document.body;
+  target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+};
 
 const acme = fixtures.ids.project.acmeShop as ProjectId;
 const claude = fixtures.ids.session.claude as SessionId;
@@ -30,7 +39,7 @@ const PATCH = [
   '',
 ].join('\n');
 
-const withCheckpoint = (): ReadModel => {
+const withCheckpoint = (screens: Checkpoint['screens'] = []): ReadModel => {
   const model = fixtures.demoReadModel();
   const row: Checkpoint = {
     id: 'cp-1',
@@ -46,7 +55,7 @@ const withCheckpoint = (): ReadModel => {
     createdAt: fixtures.DEMO_NOW,
     settledAt: fixtures.DEMO_NOW,
     revertedAt: null,
-    screens: [],
+    screens,
   };
   return { ...model, checkpoints: { [claude]: [row] } };
 };
@@ -88,6 +97,7 @@ describe('Diff screen · checkpoint mode', () => {
     });
   });
   afterEach(() => {
+    document.removeEventListener('keydown', route, true);
     cleanup();
     Object.assign(window, { styx: undefined });
   });
@@ -122,6 +132,58 @@ describe('Diff screen · checkpoint mode', () => {
     expect(useUiStore.getState().diffCheckpointId).toBeNull();
     // Nothing was marked reviewed: the checkpoint review never touches hunks.
     expect(commands.map((c) => c.name)).toEqual(['checkpoint.diff']);
+  });
+
+  it('Screens: with both pictures, Before / After figures under the header, served from styx-device://, nothing focusable', async () => {
+    useReadModel.getState().replaceModel(withCheckpoint(['before', 'after']), 'connected');
+    document.addEventListener('keydown', route, true);
+    render(<Diff />);
+    const block = document.querySelector('[data-checkpoint-screens]');
+    if (block === null) throw new Error('no screens block');
+    const block$ = within(block as HTMLElement);
+    expect(block$.getByText('Screens')).toBeTruthy();
+    const imgs = block$.getAllByRole('img');
+    expect(imgs.map((i) => [i.getAttribute('src'), i.getAttribute('alt')])).toEqual([
+      ['styx-device://checkpoint/cp-1/before', 'Screenshot of the app before turn 2'],
+      ['styx-device://checkpoint/cp-1/after', 'Screenshot of the app after turn 2'],
+    ]);
+    expect(screenUrl('cp-1', 'after')).toBe('styx-device://checkpoint/cp-1/after');
+    // Captions read the side and the turn; the block sits between the header and the files pane.
+    const captions = [...block.querySelectorAll('figcaption')].map((c) => c.textContent);
+    expect(captions).toEqual(['Before turn 2', 'After turn 2']);
+    expect(block$.queryByText('No screenshot: the app was not running.')).toBeNull();
+    expect(block.previousElementSibling?.querySelector('[data-diff-meta]')).not.toBeNull();
+    await waitFor(() =>
+      expect(block.nextElementSibling?.querySelector('[data-file="checkout.ts"]') ?? null).not.toBeNull(),
+    );
+    // Nothing in the block takes focus, and Done's chord still lands from the screen root.
+    expect([...block.querySelectorAll('[tabindex], button, a, input')]).toEqual([]);
+    expect(document.activeElement).toBe(document.querySelector('[data-diff-checkpoint="cp-1"]'));
+    press({ key: 'Enter', metaKey: true });
+    expect(useUiStore.getState().screen).toBe('workspace');
+    expect(useUiStore.getState().diffCheckpointId).toBeNull();
+  });
+
+  it('Screens: a missing side says so in its box instead of an image', () => {
+    useReadModel.getState().replaceModel(withCheckpoint(['after']), 'connected');
+    render(<Diff />);
+    const block = document.querySelector('[data-checkpoint-screens]');
+    if (block === null) throw new Error('no screens block');
+    const block$ = within(block as HTMLElement);
+    expect(block$.getAllByRole('img').map((i) => i.getAttribute('alt'))).toEqual([
+      'Screenshot of the app after turn 2',
+    ]);
+    const before = block.querySelector('[data-screen-side="before"]');
+    expect(before?.getAttribute('data-screen-missing')).toBe('true');
+    expect(before?.textContent).toContain('No screenshot: the app was not running.');
+    expect(before?.querySelector('figcaption')?.textContent).toBe('Before turn 2');
+    expect(block.querySelector('[data-screen-side="after"]')?.getAttribute('data-screen-missing')).toBeNull();
+  });
+
+  it('Screens: no pictures at all, no block', () => {
+    render(<Diff />);
+    expect(document.querySelector('[data-checkpoint-screens]')).toBeNull();
+    expect(screen.queryByRole('img')).toBeNull();
   });
 
   it('a failed fetch shows the error in place of the patch', async () => {

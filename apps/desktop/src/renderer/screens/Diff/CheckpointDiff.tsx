@@ -25,6 +25,66 @@ export const checkpointOf = (model: ReadModel, checkpointId: string): Checkpoint
 export const checkpointSummary = (c: Pick<Checkpoint, 'turn' | 'files' | 'added' | 'removed'>): string =>
   `${fill(copy.checkpoints.turn, { n: c.turn })} · ${fill(copy.checkpoints.changes, c)}`;
 
+type ScreenSide = Checkpoint['screens'][number];
+const SCREEN_SIDES: readonly ScreenSide[] = ['before', 'after'];
+
+/** Where main serves a checkpoint screenshot from (`ScreensStore`; the CSP allows this scheme for images). */
+export const screenUrl = (checkpointId: string, side: ScreenSide): string =>
+  `styx-device://checkpoint/${checkpointId}/${side}`;
+
+/**
+ * Before / After pictures of the running app around the turn (owner request: the design window as a simulator).
+ * Rendered only when at least one side exists; a missing side says so in its box. Nothing here takes focus, so
+ * the screen's key bindings are untouched.
+ */
+function Screens({ checkpoint }: { checkpoint: Checkpoint }) {
+  const caption = (side: ScreenSide): string =>
+    fill(side === 'before' ? copy.checkpoints.screensBefore : copy.checkpoints.screensAfter, {
+      n: checkpoint.turn,
+    });
+  return (
+    <section className={s['screens']} aria-label={copy.checkpoints.screens} data-checkpoint-screens="true">
+      <Label as="div" className={s['screensLabel']}>
+        {copy.checkpoints.screens}
+      </Label>
+      <div className={s['screensRow']}>
+        {SCREEN_SIDES.map((side) => {
+          const present = checkpoint.screens.includes(side);
+          return (
+            <figure
+              key={side}
+              className={s['screenFigure']}
+              data-screen-side={side}
+              data-screen-missing={present ? undefined : 'true'}
+            >
+              <div className={s['screenBox']}>
+                {present ? (
+                  <img
+                    className={s['screenImg']}
+                    src={screenUrl(checkpoint.id, side)}
+                    alt={fill(
+                      side === 'before'
+                        ? copy.checkpoints.screensAltBefore
+                        : copy.checkpoints.screensAltAfter,
+                      { n: checkpoint.turn },
+                    )}
+                  />
+                ) : (
+                  <span className={s['screenMissing']}>{copy.checkpoints.screensMissing}</span>
+                )}
+              </div>
+              {/* The image carries the name (`alt`); the visible caption repeats it for sighted readers only. */}
+              <figcaption className="t-meta" aria-hidden="true">
+                {caption(side)}
+              </figcaption>
+            </figure>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 interface PatchFile {
   path: string;
   added: number;
@@ -114,6 +174,7 @@ export function CheckpointDiff({ checkpointId }: { checkpointId: string }) {
           {copy.diff.done}
         </Button>
       </div>
+      {checkpoint !== null && checkpoint.screens.length > 0 && <Screens checkpoint={checkpoint} />}
       {error !== null ? (
         <EmptyState headline={copy.checkpoints.noChanges} body={error} />
       ) : (

@@ -1030,10 +1030,19 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       mirrorWindow: 'live',
       mirrorScreenshots: 'screenshots',
       mirrorNone: 'no picture',
+      /** Accessible name of the mirrored picture, and why a live capture could not start in this window. */
+      mirrorLabel: 'Screen of {device}',
+      /** The mirror is an application region: what the keys do there (assistive tech reads it on focus). */
+      surfaceRole: 'device screen',
+      surfaceHint: 'Keys you type go to the device; use the pointer to tap.',
+      noCapture: 'Live capture is not available in this window.',
       screenAccess:
         'Styx needs Screen Recording to mirror the simulator live. It falls back to screenshots until then.',
       screenAccessOpen: 'Open System Settings',
       noInput: 'Taps do not reach this device yet; open the simulator to interact.',
+      /** Input refusals (`device.input`). */
+      outsideScreen: '({x}, {y}) is outside the {width}×{height} screen.',
+      textNotAllowed: 'Only letters, digits, spaces and plain punctuation can be typed here.',
       noInputIos:
         'Install idb (brew install idb-companion) to tap and type here; until then, open the simulator.',
       /** Tooling missing on this machine. */
@@ -1318,6 +1327,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     screensBefore: 'Before turn {n}',
     screensAfter: 'After turn {n}',
     screensMissing: 'No screenshot: the app was not running.',
+    screensAltBefore: 'Screenshot of the app before turn {n}',
+    screensAltAfter: 'Screenshot of the app after turn {n}',
   },
   /** Commit, push and pull request in one step (owner request after t3code). */
   publish: {

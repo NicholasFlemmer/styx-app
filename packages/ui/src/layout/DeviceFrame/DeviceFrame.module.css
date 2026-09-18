@@ -1,0 +1,80 @@
+@layer components {
+  /* The bezel: a floating surface, so a 1px text-colour border on --s1; square, like everything else. */
+  .frame {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    flex-direction: column;
+    box-sizing: border-box;
+    border: 1px solid var(--tx);
+    border-radius: 0;
+    background: var(--s1);
+    color: var(--tx);
+    padding: var(--sp-3);
+  }
+  /* The tablet's bezel is thinner and it has no island. */
+  .frame[data-kind='tablet'] {
+    padding: var(--sp-2);
+  }
+  /* Status strip: clock at the leading edge, the island in the middle, the radios at the trailing edge. */
+  .status {
+    flex: none;
+    height: var(--h-statusbar);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    /* Chrome, not content: the meta recipe (mono 11 / 400 / --mu) so the app on the screen is what reads. */
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--mu);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .clock {
+    justify-self: start;
+    padding-left: var(--sp-2);
+  }
+  .island {
+    justify-self: center;
+    width: 96px;
+    height: var(--sp-5);
+    border: 1px solid var(--ln);
+    background: var(--bg);
+  }
+  .glyphs {
+    justify-self: end;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+    padding-right: var(--sp-2);
+  }
+  .glyph {
+    display: block;
+  }
+  /* The screen: exactly the size given (content-box), a hairline around it, the app's page on top. */
+  .screen {
+    position: relative;
+    flex: none;
+    box-sizing: content-box;
+    overflow: hidden;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+  }
+  .homeRow {
+    flex: none;
+    height: var(--sp-5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* The home indicator: a line, not a pill. */
+  .home {
+    width: 30%;
+    height: var(--sp-1);
+    background: var(--tx);
+  }
+  .frame[data-kind='tablet'] .home {
+    width: 20%;
+  }
+}

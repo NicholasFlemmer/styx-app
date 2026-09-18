@@ -1,4 +1,13 @@
-import { copy, fill, newId, type Checkpoint, type SessionId } from '@styx/core';
+import {
+  copy,
+  fill,
+  newId,
+  type Checkpoint,
+  type DeviceSession,
+  type DevRun,
+  type ProjectId,
+  type SessionId,
+} from '@styx/core';
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,6 +19,7 @@ import type { Publisher } from '../store/publisher';
 import { confine } from './confine';
 import type { GitRunner } from './git';
 import { logger } from './logger';
+import type { ScreenSide, ScreensStore } from './screens-store';
 import type { TranscriptService } from './transcript-service';
 
 /** Every checkpoint ref lives here, out of `refs/heads` and `refs/tags`: nothing lands on the user's branch. */
@@ -19,6 +29,12 @@ export const checkpointRef = (sessionId: string, turn: number, which: 'base' | '
   `${CHECKPOINT_REF_ROOT}/${sessionId}/${turn}/${which}`;
 
 export const PRUNE_INTERVAL_MS = 60 * 60 * 1000;
+
+/** A screenshot source that hangs (a simulator mid-boot) must never hold the session's chain: give up after this. */
+export const SCREEN_CAPTURE_TIMEOUT_MS = 5000;
+
+/** Canonical order of a checkpoint's screenshots, whichever side landed first. */
+export const SCREEN_SIDES: readonly ScreenSide[] = ['before', 'after'];
 
 /** Commits are written with a fixed identity and never signed: a signing prompt would hang the capture. */
 const COMMIT_CONFIG = [
@@ -49,9 +65,75 @@ export interface CheckpointServiceDeps {
   transcript: TranscriptService;
   /** Re-diffs the session's worktree once a revert has rewritten it (HunkService). */
   rescanHunks: (sessionId: SessionId) => Promise<unknown>;
+  /** Where the before / after pictures live (served as `styx-device://checkpoint/<id>/<side>`). */
+  screens: ScreensStore;
+  /**
+   * A PNG of the running app for the project right now — the mirrored device, else the design window's page —
+   * or null when nothing is running (normal, not an error). The container decides the source (`screenshotSourceFor`).
+   */
+  screenshot: (projectId: ProjectId) => Promise<Buffer | null>;
   /** Retention pass period (hourly by default). */
   pruneMs?: number;
+  /** How long a screenshot may take before the turn goes on without it. */
+  captureTimeoutMs?: number;
 }
+
+/** How many of a session's newest turns keep their Before / After pictures on disk. */
+export const SCREENS_KEEP_TURNS = 40;
+
+/** Which picture the design window can give for a project: the mirrored device, the loaded web page, or none. */
+export type ScreenshotSource = 'device' | 'preview' | null;
+
+/**
+ * The design window is one window showing one thing, so a checkpoint screenshot is only taken when what it shows
+ * is this project's app: a device session (its mirror owns the picture; the device answers null until it is
+ * ready, and the page under it is never a stand-in for a mobile app), else a live *web* run (a device-platform run
+ * without a device session has no page), else the project's saved dev URL when nothing runs (the user runs the
+ * server themselves). Pure so the rule is testable; the container wires it.
+ */
+export const screenshotSourceFor = (input: {
+  projectId: string;
+  devices: readonly { projectId: string; phase: DeviceSession['phase'] }[];
+  runs: readonly {
+    projectId: string;
+    phase: DevRun['phase'];
+    platform: DevRun['platform'];
+    url: string | null;
+  }[];
+  devUrl: string | null;
+  /** What the (single) design window has loaded right now; the page is only this project's when it matches. */
+  loadedUrl: string | null;
+}): ScreenshotSource => {
+  const device = input.devices.find(
+    (d) => d.projectId === input.projectId && (d.phase === 'booting' || d.phase === 'ready'),
+  );
+  if (device !== undefined) return 'device';
+  if (input.loadedUrl === null) return null;
+  const live = input.runs.find((r) => r.projectId === input.projectId && r.phase !== 'exited');
+  if (live !== undefined)
+    return live.platform === 'web' && sameUrl(live.url, input.loadedUrl) ? 'preview' : null;
+  return sameUrl(input.devUrl, input.loadedUrl) ? 'preview' : null;
+};
+
+/** `localhost:3000` and `http://localhost:3000/` are the same page; anything unparsable is not. */
+const sameUrl = (a: string | null, b: string | null): boolean => {
+  if (a === null || b === null) return false;
+  const norm = (raw: string): string | null => {
+    const text = raw.trim();
+    if (text === '') return null;
+    try {
+      return new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `http://${text}`).href;
+    } catch {
+      return null;
+    }
+  };
+  const x = norm(a);
+  return x !== null && x === norm(b);
+};
+
+/** `screens` with `side` added, in canonical order (before → after) whichever landed first. */
+export const withScreen = (screens: readonly ScreenSide[], side: ScreenSide): ScreenSide[] =>
+  SCREEN_SIDES.filter((s) => s === side || screens.includes(s));
 
 /** `--numstat` lines → per-file counts; a binary file counts as a file with no lines. */
 export const parseNumstat = (stdout: string): CheckpointFile[] => {
@@ -84,6 +166,13 @@ export const sumNumstat = (
  *
  * Turn hooks arrive fire-and-forget from SessionService; per session they run in order through a promise chain
  * so a settle never overlaps the next turn's base capture. Capture failures are logged and never break a turn.
+ *
+ * Screens: at each turn's start and settle a picture of the running app (`deps.screenshot`) is kept beside the
+ * refs (`ScreensStore`) and named on the row (`screens`). The picture is taken inside the same queued operation,
+ * after the row is inserted and published: a capture costs about what the git snapshot costs and the chain is
+ * already off the turn's critical path, so awaiting it keeps a strict before → after order (and `settled()`
+ * honest) with no extra bookkeeping. An app that is not running answers null, which is the normal case and
+ * changes nothing; a slow source is abandoned after `captureTimeoutMs`.
  */
 /** Pathspec magic that keeps secret files out of a capture (see `isSecretFile` in logger.ts for the same list). */
 const SECRET_PATHSPECS = [
@@ -172,9 +261,10 @@ export class CheckpointService {
     if (!worktree || !(await this.isRepo(worktree.path))) return; // plain folder: nothing to snapshot
     const rows = repos.checkpoints.bySession(sessionId);
     const last = rows.at(-1);
-    // A turn still open when the next one starts (no settle signal came) settles now, on the same snapshot.
-    let carried: string | null = null;
-    if (last !== undefined && last.ref === null) carried = await this.settleRow(last, worktree.path);
+    // A turn still open when the next one starts (no settle signal came) settles now, on the same snapshot; its
+    // `after` picture is this turn's `before`, taken once below.
+    const open = last !== undefined && last.ref === null ? last : null;
+    const carried = open === null ? null : await this.settleRow(open, worktree.path, { snap: false });
     const turn = (last?.turn ?? 0) + 1;
     const baseRef = checkpointRef(sessionId, turn, 'base');
     try {
@@ -184,7 +274,7 @@ export class CheckpointService {
       logger.warn('checkpoint: base capture failed', { sessionId, turn, error: (e as Error).message });
       return;
     }
-    repos.checkpoints.upsert({
+    const row: Checkpoint = {
       id: newId<'CheckpointId'>(),
       sessionId,
       worktreeId: worktree.id,
@@ -199,8 +289,12 @@ export class CheckpointService {
       settledAt: null,
       revertedAt: null,
       screens: [],
-    });
+    };
+    repos.checkpoints.upsert(row);
     this.publish(sessionId);
+    const shot = await this.snap(session.projectId);
+    if (open !== null && carried !== null) await this.attach(open, 'after', shot);
+    await this.attach(row, 'before', shot);
   }
 
   private async settleTurn(sessionId: SessionId): Promise<void> {
@@ -212,8 +306,15 @@ export class CheckpointService {
     await this.settleRow(open, worktree.path);
   }
 
-  /** Captures `after`, fills the numstat and publishes; returns the after commit (null when the capture failed). */
-  private async settleRow(row: Checkpoint, worktreePath: string): Promise<string | null> {
+  /**
+   * Captures `after`, fills the numstat and publishes, then keeps the `after` picture (unless the caller takes it:
+   * a carried turn shares the next turn's `before`); returns the after commit (null when the capture failed).
+   */
+  private async settleRow(
+    row: Checkpoint,
+    worktreePath: string,
+    opts: { snap: boolean } = { snap: true },
+  ): Promise<string | null> {
     const { repos, clock, transcript } = this.deps;
     const ref = checkpointRef(row.sessionId, row.turn, 'after');
     let sha: string;
@@ -234,7 +335,60 @@ export class CheckpointService {
     this.publish(row.sessionId);
     if (files.length > 0)
       transcript.system(row.sessionId, fill(copy.checkpoints.settled, { n: row.turn, files: files.length }));
+    if (opts.snap) {
+      const session = repos.sessions.get(row.sessionId);
+      if (session) await this.attach(row, 'after', await this.snap(session.projectId));
+    }
     return sha;
+  }
+
+  // --- screens -----------------------------------------------------------------
+
+  /** The app's picture right now, or null: nothing running (normal), a failing source, or one slower than the timeout. */
+  private async snap(projectId: ProjectId): Promise<Buffer | null> {
+    let timer: NodeJS.Timeout | undefined;
+    // A source that rejects after the timeout has passed would otherwise surface as an unhandled rejection.
+    const pending = Promise.resolve().then(() => this.deps.screenshot(projectId));
+    pending.catch(() => undefined);
+    try {
+      const png = await Promise.race([
+        pending,
+        new Promise<null>((resolve) => {
+          timer = setTimeout(() => resolve(null), this.deps.captureTimeoutMs ?? SCREEN_CAPTURE_TIMEOUT_MS);
+          timer.unref?.();
+        }),
+      ]);
+      return png === null || png.length === 0 ? null : png;
+    } catch (e) {
+      logger.debug('checkpoint: screenshot skipped', { projectId, error: (e as Error).message });
+      return null;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  }
+
+  /** Keeps `png` as the row's `side` and names it on the row; nothing changes when there is no picture. */
+  private async attach(row: Checkpoint, side: ScreenSide, png: Buffer | null): Promise<void> {
+    if (png === null) return;
+    const { repos, screens } = this.deps;
+    try {
+      await screens.putScreen(row.id, side, png);
+    } catch (e) {
+      logger.warn('checkpoint: could not keep screenshot', {
+        checkpointId: row.id,
+        side,
+        error: (e as Error).message,
+      });
+      return;
+    }
+    // Re-read: the row was settled since `row` was taken, or pruned (then the file must not outlive it).
+    const fresh = repos.checkpoints.get(row.id);
+    if (fresh === null) {
+      await screens.dropScreens(row.id).catch(() => undefined);
+      return;
+    }
+    repos.checkpoints.upsert({ ...fresh, screens: withScreen(fresh.screens, side) });
+    this.publish(fresh.sessionId);
   }
 
   // --- commands ----------------------------------------------------------------
@@ -309,9 +463,9 @@ export class CheckpointService {
     await this.deps.rescanHunks(cp.sessionId).catch(() => undefined);
   }
 
-  /** Drops refs (and rows) of sessions that are gone or archived, or whose worktree no longer exists. */
+  /** Drops refs, rows and screenshots of sessions that are gone or archived, or whose worktree no longer exists. */
   async prune(): Promise<void> {
-    const { repos } = this.deps;
+    const { repos, screens } = this.deps;
     const dropped = new Set<string>();
     const keep = (sessionId: string): boolean => {
       const session = repos.sessions.get(sessionId);
@@ -336,11 +490,29 @@ export class CheckpointService {
     }
     for (const sessionId of repos.checkpoints.sessionIds()) {
       if (keep(sessionId)) continue;
-      for (const row of repos.checkpoints.bySession(sessionId)) repos.checkpoints.remove(row.id);
+      for (const row of repos.checkpoints.bySession(sessionId)) {
+        repos.checkpoints.remove(row.id);
+        await screens.dropScreens(row.id);
+      }
       dropped.add(sessionId);
     }
     for (const sessionId of dropped) this.publish(sessionId as SessionId);
     if (dropped.size > 0) logger.info('checkpoint: pruned sessions', { count: dropped.size });
+    // Pictures are the bulk (a Retina phone shot is megabytes): a live session keeps them for its newest turns
+    // only; the rows and refs of older turns stay, so Review still shows the patch.
+    for (const sessionId of repos.checkpoints.sessionIds()) {
+      const withScreens = repos.checkpoints
+        .bySession(sessionId)
+        .filter((c) => c.screens.length > 0)
+        .sort((a, b) => b.turn - a.turn);
+      let trimmed = false;
+      for (const row of withScreens.slice(SCREENS_KEEP_TURNS)) {
+        await screens.dropScreens(row.id);
+        repos.checkpoints.upsert({ ...row, screens: [] });
+        trimmed = true;
+      }
+      if (trimmed) this.publish(sessionId as SessionId);
+    }
   }
 
   // --- git mechanics -----------------------------------------------------------

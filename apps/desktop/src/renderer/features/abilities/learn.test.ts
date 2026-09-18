@@ -34,7 +34,10 @@ describe('learned abilities: the first Run locally / Deploy is a task for the pr
               ? { ok: true, value: { sessionId: 's-learn' } }
               : { ok: false, error: { code: 'cli-missing' } };
           if (name === 'run.detect')
-            return { ok: true, value: { suggestions: [{ command: 'pnpm dev', source: 'package.json' }] } };
+            return {
+              ok: true,
+              value: { suggestions: [{ command: 'pnpm dev', source: 'package.json' }], platforms: ['web'] },
+            };
           if (name === 'deploy.detect')
             return {
               ok: true,
