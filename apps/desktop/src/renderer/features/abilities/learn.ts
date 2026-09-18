@@ -45,6 +45,20 @@ export const startLearnRun = async (
       const detected = await command('run.detect', { projectId });
       const hints = detected.ok ? guessText(detected.value.suggestions) : '';
       prompt = fill(copy.agentPrompt.learnRun, { project, hints });
+      // A mobile app: the agent runs it on a simulator and reports platform, device and app id.
+      const platforms = detected.ok ? detected.value.platforms : [];
+      const first = platforms[0];
+      if (first !== undefined && first !== 'web') {
+        const kinds = detected.ok
+          ? [...new Set(detected.value.suggestions.map((s) => s.source))]
+              .filter((s) => ['expo', 'react-native', 'flutter', 'xcode', 'gradle'].includes(s))
+              .join(', ')
+          : '';
+        prompt += fill(copy.agentPrompt.learnRunDevice, {
+          platform: first,
+          kinds: kinds === '' ? '' : ` (${kinds})`,
+        });
+      }
     } else {
       prompt = fill(copy.agentPrompt.fixRun, { project, command: failed.command, failure: failed.failure });
     }

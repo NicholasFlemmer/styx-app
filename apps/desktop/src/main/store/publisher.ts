@@ -10,6 +10,7 @@ import {
   type QueuedMessage,
   type AgentLimits,
   type DevRun,
+  type DeviceSession,
   type EffectiveProjectSettings,
   type EventName,
   type EventPayload,
@@ -39,6 +40,7 @@ export interface PublisherDeps {
 /** In-memory slices that ride in the snapshot (main-owned processes: local runs and deploys; the latest CLI limits). Bound after the services exist. */
 export interface SnapshotExtras {
   runs: () => DevRun[];
+  devices: () => DeviceSession[];
   deploys: () => Deploy[];
   limits: () => Record<string, AgentLimits>;
 }
@@ -59,7 +61,12 @@ export class Publisher {
   private readonly ptySeq = new Map<string, number>();
   private ptyTimer: NodeJS.Timeout | null = null;
   private readonly tickMs: number;
-  private extras: SnapshotExtras = { runs: () => [], deploys: () => [], limits: () => ({}) };
+  private extras: SnapshotExtras = {
+    runs: () => [],
+    devices: () => [],
+    deploys: () => [],
+    limits: () => ({}),
+  };
 
   constructor(private readonly deps: PublisherDeps) {
     this.tickMs = deps.tickMs ?? 16;
@@ -174,6 +181,10 @@ export class Publisher {
     this.emit({ op: 'runs.set', projectId: projectId as DevRun['projectId'], run });
   }
 
+  devicesSet(projectId: string, device: DeviceSession | null): void {
+    this.emit({ op: 'devices.set', projectId: projectId as DeviceSession['projectId'], device });
+  }
+
   deploysSet(deploy: Deploy): void {
     this.emit({ op: 'deploys.set', deploy });
   }
@@ -199,6 +210,7 @@ export class Publisher {
         repos: this.deps.repos,
         popouts: this.deps.popouts,
         runs: this.extras.runs,
+        devices: this.extras.devices,
         deploys: this.extras.deploys,
         limits: this.extras.limits,
       },

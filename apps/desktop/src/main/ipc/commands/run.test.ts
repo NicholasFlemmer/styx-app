@@ -55,7 +55,7 @@ describe('run.* commands', () => {
     expect(commandResultSchema('run.detect').safeParse(r).success).toBe(true);
     expect(r).toEqual({
       ok: true,
-      value: { suggestions: [{ command: 'pnpm dev', source: 'package.json' }] },
+      value: { suggestions: [{ command: 'pnpm dev', source: 'package.json' }], platforms: ['web'] },
     });
   });
 

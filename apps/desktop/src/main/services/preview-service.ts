@@ -101,6 +101,19 @@ export class PreviewService {
     await shell.openExternal(safe);
   }
 
+  /** A PNG of the loaded page (checkpoint screenshots); null when nothing is loaded or the capture fails. */
+  async capture(): Promise<Buffer | null> {
+    const view = this.view;
+    if (view === null || this.loaded === null) return null;
+    try {
+      const image = await view.webContents.capturePage();
+      return image.isEmpty() ? null : image.toPNG();
+    } catch (e) {
+      logger.warn('preview: capture failed', { error: (e as Error).message });
+      return null;
+    }
+  }
+
   /** Detaches on window close / app teardown. Kept separate from `set` so teardown never needs bounds. */
   detach(): void {
     this.probe.reset();

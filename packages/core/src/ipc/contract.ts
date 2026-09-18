@@ -27,7 +27,16 @@ import {
   skillHostSchema,
   skillSummarySchema,
 } from '../model/discovery';
-import { deploySchema, devRunSchema } from '../model/run';
+import {
+  deploySchema,
+  devPlatformSchema,
+  devRunSchema,
+  deviceInputSchema,
+  deviceMirrorSchema,
+  devicePlatformSchema,
+  deviceSessionSchema,
+  deviceSummarySchema,
+} from '../model/run';
 import { checkpointSchema } from '../model/checkpoint';
 import { agentLimitsSchema } from '../model/usage';
 import { queuedMessageSchema } from '../model/session';
@@ -130,6 +139,7 @@ const readModelSnapshotSchema = z.object({
   popouts: z.array(sessionIdSchema),
   activity: z.array(activityRowSchema),
   runs: z.array(devRunSchema),
+  devices: z.array(deviceSessionSchema),
   deploys: z.array(deploySchema),
   checkpoints: z.record(z.string(), z.array(checkpointSchema)),
   queues: z.record(z.string(), z.array(queuedMessageSchema)),
@@ -286,14 +296,36 @@ export const commands = {
       suggestions: z.array(
         z.object({
           command: z.string().min(1),
-          source: z.enum(['package.json', 'makefile', 'django', 'cargo', 'go']),
+          source: z.enum([
+            'package.json',
+            'makefile',
+            'django',
+            'cargo',
+            'go',
+            'expo',
+            'react-native',
+            'flutter',
+            'xcode',
+            'gradle',
+          ]),
+          /** What the suggestion runs on; absent = web. */
+          platform: devPlatformSchema.optional(),
         }),
       ),
+      /** Every platform the repo can run on, most likely first (`web` for a plain web app; `ios`/`android` for a mobile app). */
+      platforms: z.array(devPlatformSchema),
     }),
   },
-  /** Starts (or restarts) the project's local run in its main worktree; the row lands in `model.runs`. */
+  /**
+   * Starts (or restarts) the project's local run in its main worktree; the row lands in `model.runs`. With a device
+   * platform the simulator / emulator is booted first (`model.devices`) and the design window mirrors it.
+   */
   'run.start': {
-    input: z.object({ projectId: projectIdSchema, command: z.string().min(1) }),
+    input: z.object({
+      projectId: projectIdSchema,
+      command: z.string().min(1),
+      platform: devPlatformSchema.optional(),
+    }),
     output: z.object({ runId: z.string().min(1), terminalId: z.string().min(1) }),
   },
   'run.stop': { input: z.object({ projectId: projectIdSchema }), output: ok },
@@ -333,6 +365,57 @@ export const commands = {
     output: ok,
   },
   'preview.reload': { input: z.object({}), output: ok },
+  // --- device.* — the simulator / emulator the design window mirrors (owner request: a simulator in the design tab) ---
+  /** Which tooling this machine has: Xcode's simctl, the Android SDK's adb / emulator, and input bridges (idb). */
+  'device.tooling': {
+    input: z.object({}),
+    output: z.object({
+      ios: z.boolean(),
+      android: z.boolean(),
+      /** Taps and typing can be forwarded: adb for Android; idb for iOS. */
+      iosInput: z.boolean(),
+      androidInput: z.boolean(),
+      /** macOS Screen Recording permission for the live window mirror; `n/a` elsewhere. */
+      screenAccess: z.enum(['granted', 'denied', 'not-determined', 'restricted', 'unknown', 'n/a']),
+    }),
+  },
+  /** Simulators / emulators on this machine, booted ones first. */
+  'device.list': {
+    input: z.object({ platform: devicePlatformSchema.optional() }),
+    output: z.object({ devices: z.array(deviceSummarySchema) }),
+  },
+  /**
+   * Boots a simulator / emulator for the project (by name, else the project's remembered device, else the first
+   * booted or available one) and starts mirroring it into the design window. The session lands in `model.devices`.
+   */
+  'device.boot': {
+    input: z.object({
+      projectId: projectIdSchema,
+      platform: devicePlatformSchema,
+      device: z.string().min(1).max(120).optional(),
+    }),
+    output: z.object({ deviceId: z.string().min(1), deviceName: z.string().min(1) }),
+  },
+  /** Stops mirroring and, when asked, shuts the simulator / emulator down; the row goes. */
+  'device.stop': {
+    input: z.object({ projectId: projectIdSchema, shutdown: z.boolean().default(false) }),
+    output: ok,
+  },
+  /**
+   * How the renderer should show the device: `window` arms a one-shot display-media request for the simulator's
+   * window (the pane then calls `getDisplayMedia`); `screenshots` means frames arrive as `device.frame` events and
+   * are read from `styx-device://frame/<projectId>?seq=n`; `none` with a reason otherwise.
+   */
+  'device.mirror': {
+    input: z.object({ projectId: projectIdSchema }),
+    output: z.object({ mode: deviceMirrorSchema, reason: z.string().nullable() }),
+  },
+  /** Forwards a tap / swipe / text / key to the mirrored device (adb; idb on iOS). Refused when input is unavailable. */
+  'device.input': { input: z.object({ projectId: projectIdSchema, event: deviceInputSchema }), output: ok },
+  /** Brings the simulator's own window to the front (interaction without an input bridge). */
+  'device.focus': { input: z.object({ projectId: projectIdSchema }), output: ok },
+  /** Opens the OS's Screen Recording privacy pane, where the live mirror gets its permission. */
+  'device.openScreenAccess': { input: z.object({}), output: ok },
   /** Hands the current URL to the OS browser. */
   'preview.openExternal': { input: z.object({ url: z.string() }), output: ok },
   'project.templates': {
@@ -839,6 +922,8 @@ export const events = {
     status: z.enum(['running', 'exited']),
     exitCode: z.number().int().nullable().optional(),
   }),
+  /** A new frame of the mirrored device is readable at `styx-device://frame/<projectId>?seq=<seq>` (screenshots mode). */
+  'device.frame': z.object({ projectId: projectIdSchema, seq: z.number().int().nonnegative() }),
   /** The design window's page: probed until the server answers, then loaded; `failed` after two minutes of silence. */
   'preview.status': z.object({
     url: z.string(),

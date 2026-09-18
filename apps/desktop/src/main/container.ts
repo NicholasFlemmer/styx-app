@@ -1,5 +1,6 @@
 import { homedir } from 'node:os';
-import { copy, fill, type AppSettings } from '@styx/core';
+import { join } from 'node:path';
+import { APP_ID, DEVICE_NAME, copy, fill, type AppSettings } from '@styx/core';
 import type { Clock } from './clock';
 import type { Db } from './db/open';
 import { Repos } from './db/repos';
@@ -27,7 +28,16 @@ import { PtyLog } from './services/pty-log';
 import { PtyService } from './services/pty-service';
 import { RefreshScheduler } from './services/refresh-scheduler';
 import { RetentionJob } from './services/retention-job';
+import {
+  DeviceService,
+  execaDeviceExec,
+  execaWhich,
+  type DeviceExec,
+  type ScreenAccess,
+  type WindowSource,
+} from './services/device-service';
 import { isLoopbackUrl, RunService, type ProbeAnswer } from './services/run-service';
+import { ScreensStore } from './services/screens-store';
 import { commandCarriesSecret } from './services/logger';
 import { SessionService } from './services/session-service';
 import { StreamRunner, type StreamRunnerLike } from './services/stream-runner';
@@ -74,6 +84,8 @@ export interface PreviewPort {
   reload(): void;
   openExternal(url: string): Promise<void>;
   detach(): void;
+  /** A PNG of the loaded page (checkpoint screenshots); null when nothing is loaded. */
+  capture(): Promise<Buffer | null>;
 }
 
 const NO_PREVIEW: PreviewPort = {
@@ -81,6 +93,19 @@ const NO_PREVIEW: PreviewPort = {
   reload: () => undefined,
   openExternal: async () => undefined,
   detach: () => undefined,
+  capture: async () => null,
+};
+
+/** What the device mirror needs from the OS: capturable windows, the Screen Recording permission, which(1). */
+export interface DeviceHooks {
+  windowSources: () => Promise<WindowSource[]>;
+  screenAccess: () => ScreenAccess;
+  openScreenAccess: () => Promise<void>;
+}
+const NO_DEVICE_HOOKS: DeviceHooks = {
+  windowSources: async () => [],
+  screenAccess: () => 'n/a',
+  openScreenAccess: async () => undefined,
 };
 
 /** Native file/folder pickers (Electron `dialog`), parented to the main window; `null` when the user cancels. */
@@ -116,6 +141,11 @@ export interface ContainerOptions {
   runtime: Runtime;
   windows: WindowsPort;
   preview?: PreviewPort;
+  /** The simulator / emulator mirror's OS hooks; faked in tests (`NO_DEVICE_HOOKS`). */
+  deviceHooks?: DeviceHooks;
+  /** Device tooling runner (`xcrun simctl`, `adb`) and lookup; faked in tests. */
+  deviceExec?: DeviceExec;
+  deviceWhich?: (bin: string) => Promise<string | null>;
   /** Native pickers; omitted in tests (`NO_DIALOGS`). */
   dialogs?: DialogsPort;
   notifications: NotificationService | null;
@@ -178,6 +208,10 @@ export interface Container {
   skills: SkillsService;
   agents: AgentService;
   runs: RunService;
+  /** The simulator / emulator mirrored in the design window (owner request). */
+  devices: DeviceService;
+  /** Pictures of the running app served over `styx-device://` (live frames, checkpoint screenshots). */
+  screens: ScreensStore;
   /** Turn checkpoints (ADR-0020): hidden git refs per agent turn, diff and revert. */
   checkpoints: CheckpointService;
   /** Commit, push and PR in one step (ADR-0021); the message draft comes from the project's default agent. */
@@ -371,7 +405,28 @@ export function buildContainer(opts: ContainerOptions): Container {
     ...(opts.probe !== undefined ? { probe: opts.probe } : {}),
   });
   const usage = new UsageService({ repos, publisher, clock, env: process.env });
-  publisher.bindExtras({ runs: () => runs.all(), deploys: () => deploys.all(), limits: () => usage.all() });
+  const screens = new ScreensStore(join(runtime.userData, 'screens'));
+  const deviceHooks = opts.deviceHooks ?? NO_DEVICE_HOOKS;
+  const devices = new DeviceService({
+    repos,
+    publisher,
+    clock,
+    screens,
+    exec: opts.deviceExec ?? execaDeviceExec(() => pty.resolveLoginPath()),
+    which: opts.deviceWhich ?? execaWhich(() => pty.resolveLoginPath(), runtime.platform),
+    platform: runtime.platform,
+    windowSources: deviceHooks.windowSources,
+    screenAccess: deviceHooks.screenAccess,
+    openScreenAccess: deviceHooks.openScreenAccess,
+    onFrame: (projectId, seq) => publisher.sendEvent('device.frame', { projectId, seq }),
+  });
+  runs.bindDevices(devices);
+  publisher.bindExtras({
+    runs: () => runs.all(),
+    devices: () => devices.all(),
+    deploys: () => deploys.all(),
+    limits: () => usage.all(),
+  });
   const refresh = new RefreshScheduler({
     repos,
     clock,
@@ -390,7 +445,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     abilities: {
       // The agent worked out how to run the project: keep the command (and URL), say so in its chat and on Home,
       // and start the managed run so the design window shows the app straight away.
-      rememberRun: async (sessionId, command, url) => {
+      rememberRun: async (sessionId, command, url, device) => {
         const session = repos.sessions.get(sessionId);
         if (!session) return;
         const cmd = command.trim();
@@ -400,16 +455,36 @@ export function buildContainer(opts: ContainerOptions): Container {
         }
         // Stored in its parsed form: the parser strips stray whitespace and control characters.
         const safeUrl = url !== null && isLoopbackUrl(url) ? new URL(url).href : null;
+        // A device name and an app id are identifiers (the same rule a committed project file gets).
+        const platform = device.platform ?? 'web';
+        const deviceName =
+          platform !== 'web' && device.device !== null && DEVICE_NAME.test(device.device)
+            ? device.device
+            : null;
+        const appId =
+          platform !== 'web' && device.appId !== null && APP_ID.test(device.appId) ? device.appId : null;
         await projects.setSettings(session.projectId, {
           devCommand: cmd,
+          devPlatform: platform === 'web' ? null : platform,
+          devDevice: deviceName,
+          devAppId: appId,
           ...(safeUrl !== null ? { devUrl: safeUrl } : {}),
         });
         transcript.system(
           session.id,
-          fill(copy.abilities.learnedRun, {
-            command: cmd,
-            url: safeUrl === null ? '' : fill(copy.abilities.learnedRunUrl, { url: safeUrl }),
-          }),
+          platform === 'web'
+            ? fill(copy.abilities.learnedRun, {
+                command: cmd,
+                url: safeUrl === null ? '' : fill(copy.abilities.learnedRunUrl, { url: safeUrl }),
+              })
+            : fill(copy.abilities.learnedRunDevice, {
+                command: cmd,
+                platform: copy.workspace.device.platforms[platform],
+                device:
+                  deviceName === null
+                    ? ''
+                    : fill(copy.abilities.learnedRunDeviceName, { device: deviceName }),
+              }),
         );
         const project = repos.projects.get(session.projectId);
         activity.append({
@@ -422,7 +497,7 @@ export function buildContainer(opts: ContainerOptions): Container {
           sessionId: session.id,
         });
         const live = runs.all().find((r) => r.projectId === session.projectId && r.phase !== 'exited');
-        if (live === undefined) await runs.start(session.projectId, cmd).catch(() => undefined);
+        if (live === undefined) await runs.start(session.projectId, cmd, { platform }).catch(() => undefined);
       },
       rememberDeploy: async (sessionId, targetId, command) => {
         const session = repos.sessions.get(sessionId);
@@ -511,6 +586,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     skills,
     agents,
     runs,
+    devices,
+    screens,
     checkpoints,
     publish,
     usage,
@@ -538,6 +615,7 @@ export function buildContainer(opts: ContainerOptions): Container {
       refresh.stop();
       sessions.killAll();
       runs.stopAll();
+      devices.shutdown();
       await hunks.closeAll();
       await broker.close();
       await grants.stop();

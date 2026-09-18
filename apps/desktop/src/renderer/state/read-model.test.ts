@@ -25,6 +25,7 @@ const snapshotOf = (seq: number): ReadModelSnapshot => {
     ui: { screen: null, projectId: null, projectSession: {}, paneSizes: {} },
     activity: f.activity,
     runs: [],
+    devices: [],
     deploys: [],
     checkpoints: {},
     queues: {},

@@ -34,6 +34,7 @@ const checkpoint = (over: Partial<Checkpoint> = {}): Checkpoint => ({
   createdAt: fixtures.DEMO_NOW - 60_000,
   settledAt: fixtures.DEMO_NOW - 30_000,
   revertedAt: null,
+  screens: [],
   ...over,
 });
 

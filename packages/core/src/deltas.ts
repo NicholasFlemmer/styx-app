@@ -8,7 +8,7 @@ import { agentChangeSchema } from './model/hunk';
 import { notificationSchema } from './model/notification';
 import { policySchema } from './model/policy';
 import { projectSchema, repoSchema, worktreeSchema } from './model/project';
-import { deploySchema, devRunSchema } from './model/run';
+import { deploySchema, devRunSchema, deviceSessionSchema } from './model/run';
 import { projectIdSchema } from './model/common';
 import {
   pendingAskSchema,
@@ -102,6 +102,11 @@ export const deltaSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('activity.append'), rows: z.array(activityRowSchema) }),
   /** The project's local run; `null` clears it (stopped and dismissed). */
   z.object({ op: z.literal('runs.set'), projectId: projectIdSchema, run: devRunSchema.nullable() }),
+  z.object({
+    op: z.literal('devices.set'),
+    projectId: projectIdSchema,
+    device: deviceSessionSchema.nullable(),
+  }),
   /** A deploy row by id; every phase change re-sends the whole row. */
   z.object({ op: z.literal('deploys.set'), deploy: deploySchema }),
   z.object({
@@ -194,6 +199,14 @@ export const applyDelta = (model: ReadModel, delta: Delta): ReadModel => {
         delete runs[delta.projectId];
       } else runs[delta.projectId] = delta.run;
       return { ...model, runs };
+    }
+    case 'devices.set': {
+      const devices = { ...model.devices };
+      if (delta.device === null) {
+        if (!(delta.projectId in devices)) return model;
+        delete devices[delta.projectId];
+      } else devices[delta.projectId] = delta.device;
+      return { ...model, devices };
     }
     case 'deploys.set':
       return { ...model, deploys: { ...model.deploys, [delta.deploy.deployId]: delta.deploy } };

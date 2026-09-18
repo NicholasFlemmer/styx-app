@@ -1206,6 +1206,7 @@ export interface DemoFixture {
   appSettings: AppSettings;
   projectSettings: Record<string, EffectiveProjectSettings>;
   runs: Record<string, DevRun>;
+  devices: ReadModel['devices'];
   deploys: Record<string, Deploy>;
   checkpoints: Record<string, Checkpoint[]>;
   queues: Record<string, QueuedMessage[]>;
@@ -1246,6 +1247,7 @@ export const demoFixture = (): DemoFixture => ({
   },
   projectSettings: { [ids.project.acmeShop]: acmeProjectSettings() },
   runs: {},
+  devices: {},
   deploys: {},
   checkpoints: {},
   queues: {},
@@ -1371,6 +1373,7 @@ export const fixtureReadModel = (f: DemoFixture): ReadModel => ({
   popouts: [],
   activity: f.activity,
   runs: f.runs,
+  devices: f.devices,
   deploys: f.deploys,
   checkpoints: f.checkpoints,
   queues: f.queues,

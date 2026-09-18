@@ -18,6 +18,7 @@ const HOUR = 3_600_000;
 const modelOf = (snap: ReadModelSnapshot): ReadModel => ({
   ...snap,
   runs: Object.fromEntries(snap.runs.map((r) => [r.projectId, r])),
+  devices: Object.fromEntries(snap.devices.map((d) => [d.projectId, d])),
   deploys: Object.fromEntries(snap.deploys.map((d) => [d.deployId, d])),
   projects: tableFrom(snap.projects),
   repos: tableFrom(snap.repos),

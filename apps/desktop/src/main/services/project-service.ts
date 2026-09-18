@@ -1152,16 +1152,24 @@ export const applySettingsToFile = (file: ProjectFileV1, s: Partial<ProjectSetti
   else delete out.lineEndings;
   // `devUrl` / `devCommand` are flattened from `dev.url` / `dev.command`; null means "cleared" (the key goes), and
   // the block goes once it is empty rather than storing nulls.
-  if (s.devUrl !== undefined || s.devCommand !== undefined) {
+  if (
+    s.devUrl !== undefined ||
+    s.devCommand !== undefined ||
+    s.devPlatform !== undefined ||
+    s.devDevice !== undefined ||
+    s.devAppId !== undefined
+  ) {
     const dev: Record<string, unknown> = { ...(file.dev ?? {}) };
-    if (s.devUrl !== undefined) {
-      if (s.devUrl === null) delete dev['url'];
-      else dev['url'] = s.devUrl;
-    }
-    if (s.devCommand !== undefined) {
-      if (s.devCommand === null) delete dev['command'];
-      else dev['command'] = s.devCommand;
-    }
+    const put = (key: string, value: string | null | undefined) => {
+      if (value === undefined) return;
+      if (value === null) delete dev[key];
+      else dev[key] = value;
+    };
+    put('url', s.devUrl);
+    put('command', s.devCommand);
+    put('platform', s.devPlatform);
+    put('device', s.devDevice);
+    put('appId', s.devAppId);
     if (Object.keys(dev).length > 0) out.dev = dev as ProjectFileV1['dev'];
     else delete out.dev;
   }

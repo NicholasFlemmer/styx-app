@@ -11,6 +11,7 @@ import {
 } from './model/common';
 import { policyRuleSchema } from './model/policy';
 import { lineEndingsSchema } from './model/project';
+import { devPlatformSchema } from './model/run';
 import type { EffectiveProjectSettings, ProjectSettings, SettingsSource } from './model/settings';
 import { envShareSchema, windowsShellSchema, worktreeLocationSchema } from './model/settings';
 
@@ -94,7 +95,17 @@ export const projectFileV1Schema = z
     shell: z.object({ windows: windowsShellSchema.optional() }).passthrough().optional(),
     lineEndings: lineEndingsSchema.optional(),
     /** Dev-server URL and run command for the design window; they describe the project, so they travel with the repo. */
-    dev: z.object({ url: z.string().optional(), command: z.string().optional() }).passthrough().optional(),
+    dev: z
+      .object({
+        url: z.string().optional(),
+        command: z.string().optional(),
+        /** `web` | `ios` | `android`: what the command runs on; a device name and app id for the simulator. */
+        platform: devPlatformSchema.optional(),
+        device: z.string().max(120).optional(),
+        appId: z.string().max(200).optional(),
+      })
+      .passthrough()
+      .optional(),
     env: z
       .object({
         files: z.array(z.string()).optional(),
@@ -203,6 +214,10 @@ export const serializeProjectFile = (file: ProjectFileV1): string => {
   return `${JSON.stringify(orderKeys(base, KEY_ORDER), null, 2)}\n`;
 };
 
+/** A simulator / emulator name (`iPhone 17 Pro`, `Pixel_8_API_35`) and an app id (`com.acme.shop`): identifiers, not commands. */
+export const DEVICE_NAME = /^[A-Za-z0-9][A-Za-z0-9 ._()+-]{0,119}$/;
+export const APP_ID = /^[A-Za-z][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+)+$/;
+
 /** The subset of ProjectSettings a project file sets explicitly. */
 export const projectSettingsFromFile = (file: ProjectFileV1): Partial<ProjectSettings> => {
   const out: Partial<ProjectSettings> = {};
@@ -223,6 +238,10 @@ export const projectSettingsFromFile = (file: ProjectFileV1): Partial<ProjectSet
   // A committed file must not be able to point the design window at a remote page (it renders as the local app).
   if (file.dev?.url !== undefined && isLocalDevUrl(file.dev.url)) out.devUrl = file.dev.url;
   if (file.dev?.command !== undefined) out.devCommand = file.dev.command;
+  if (file.dev?.platform !== undefined) out.devPlatform = file.dev.platform;
+  // A device name and a bundle id / package are plain identifiers; anything else stays out of the settings.
+  if (file.dev?.device !== undefined && DEVICE_NAME.test(file.dev.device)) out.devDevice = file.dev.device;
+  if (file.dev?.appId !== undefined && APP_ID.test(file.dev.appId)) out.devAppId = file.dev.appId;
   if (file.env?.files !== undefined) out.envFiles = file.env.files;
   if (file.env?.shareWithAgents !== undefined) out.envShareWithAgents = file.env.shareWithAgents;
   return out;

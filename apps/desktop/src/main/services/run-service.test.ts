@@ -231,7 +231,10 @@ describe('sniffLocalUrl', () => {
 describe('RunService', () => {
   it('detect reads the project folder', async () => {
     const { t } = setup({ 'package.json': pkg({ dev: 'next dev' }), 'yarn.lock': '' });
-    expect(await t.app.runs.detect(acme)).toEqual([{ command: 'yarn dev', source: 'package.json' }]);
+    expect(await t.app.runs.detect(acme)).toEqual({
+      suggestions: [{ command: 'yarn dev', source: 'package.json' }],
+      platforms: ['web'],
+    });
     await expect(t.app.runs.detect('proj:nope' as ProjectId)).rejects.toMatchObject({ code: 'not-found' });
   });
 

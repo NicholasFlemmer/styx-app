@@ -198,6 +198,7 @@ export class CheckpointService {
       createdAt: clock.now(),
       settledAt: null,
       revertedAt: null,
+      screens: [],
     });
     this.publish(sessionId);
   }

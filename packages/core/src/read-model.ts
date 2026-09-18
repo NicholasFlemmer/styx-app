@@ -7,7 +7,7 @@ import type { AgentChange } from './model/hunk';
 import type { Notification } from './model/notification';
 import type { Policy } from './model/policy';
 import type { Project, Repo, Worktree } from './model/project';
-import type { Deploy, DevRun } from './model/run';
+import type { Deploy, DevRun, DeviceSession } from './model/run';
 import type { PendingAsk, QueuedMessage, Session, TranscriptMessage } from './model/session';
 import type { Checkpoint } from './model/checkpoint';
 import type { AgentLimits } from './model/usage';
@@ -110,6 +110,8 @@ export interface ReadModel extends ReadModelTables {
   activity: readonly ActivityRow[];
   /** The local dev-server run per project ("Run locally"), while one exists. */
   runs: Readonly<Record<string, DevRun>>;
+  /** The simulator / emulator mirrored per project (`device.*`), main-owned, in memory. */
+  devices: Readonly<Record<string, DeviceSession>>;
   /** Deploys Styx started this session, keyed by deploy id (main keeps the latest per target). */
   deploys: Readonly<Record<string, Deploy>>;
   /** Per-session turn checkpoints (hidden git refs), oldest first. */
@@ -152,6 +154,7 @@ export const emptyReadModel = (app: AppSettings): ReadModel => ({
   popouts: [],
   activity: [],
   runs: {},
+  devices: {},
   deploys: {},
   checkpoints: {},
   queues: {},

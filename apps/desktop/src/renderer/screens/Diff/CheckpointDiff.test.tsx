@@ -46,6 +46,7 @@ const withCheckpoint = (): ReadModel => {
     createdAt: fixtures.DEMO_NOW,
     settledAt: fixtures.DEMO_NOW,
     revertedAt: null,
+    screens: [],
   };
   return { ...model, checkpoints: { [claude]: [row] } };
 };

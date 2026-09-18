@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { devPlatformSchema } from './run';
 import { effortSchema, permissionModeSchema } from './session';
 import { agentSchema } from './common';
 import { ideKindSchema } from './discovery';
@@ -79,6 +80,12 @@ export const projectSettingsSchema = z.object({
   devUrl: z.string().nullable(),
   /** The command "Run locally" runs in the main worktree (`pnpm dev` …); detected from the repo when unset. */
   devCommand: z.string().nullable(),
+  /** What the command runs on: a web server (design window loads `devUrl`) or a simulator the window mirrors. Null = web. */
+  devPlatform: devPlatformSchema.nullable(),
+  /** The simulator / emulator by name (`iPhone 17 Pro`), resolved per machine; null = Styx picks one. */
+  devDevice: z.string().nullable(),
+  /** The app's bundle id / package name, for launching and screenshots of the right app; null = whatever the command started. */
+  devAppId: z.string().nullable(),
 });
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 
@@ -99,6 +106,9 @@ export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   envShareWithAgents: 'per-grant',
   devUrl: null,
   devCommand: null,
+  devPlatform: null,
+  devDevice: null,
+  devAppId: null,
 };
 
 export const settingsSourceSchema = z.enum(['default', 'app', 'project']);

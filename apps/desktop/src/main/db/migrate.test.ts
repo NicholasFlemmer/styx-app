@@ -67,6 +67,7 @@ describe('migrations', () => {
       '0013_session_tokens',
       '0014_background_tasks',
       '0015_checkpoints_queue',
+      '0016_checkpoint_screens',
     ]);
     // Seed at 0001: a project, two targets and an active grant that cascades on the target.
     migrate(db, all.slice(0, 2));
@@ -160,8 +161,9 @@ describe('migrations', () => {
         '0013_session_tokens',
         '0014_background_tasks',
         '0015_checkpoints_queue',
+        '0016_checkpoint_screens',
       ],
-      version: 16,
+      version: 17,
     });
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT id, project_id, default_branch, remotes_json FROM repos').all()).toEqual([

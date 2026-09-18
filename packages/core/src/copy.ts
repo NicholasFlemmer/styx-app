@@ -200,6 +200,12 @@ export const copy = {
      */
     learnRun:
       'Work out how to run {project} locally for development and get it serving.{hints} Inspect the repo (package manager, scripts, env files, services it needs). If anything is ambiguous — which app, which port, a missing env value — ask me with the ask_user tool rather than guessing, and never invent secrets. If the project has more than one server (a backend and a frontend, say), the command must start all of them together — a script the repo already has, or one line with `concurrently` or `&` — because Styx runs exactly one command, and the URL must be the frontend\u2019s: the page a person opens, not the API. Start it, confirm the local URL answers, then stop it and call the styx `remember_command` tool with kind "run", the exact command that starts everything from the project root, and that URL. Styx runs it itself from then on. Keep the chat short.',
+    /**
+     * Appended to `learnRun` when the repo looks like a mobile app (Expo / React Native / Flutter / Xcode / Gradle):
+     * the command must build and run on a simulator, and remember_command reports platform, device and app id.
+     */
+    learnRunDevice:
+      ' This looks like a mobile app{kinds}. Run it on the {platform} simulator / emulator rather than the web: pick a device that exists on this machine (`xcrun simctl list devices available` / `emulator -list-avds`), build and launch the app on it, confirm it is showing, then call `remember_command` with kind "run", the exact command that builds and launches it from the project root (including the device, e.g. `npx expo run:ios --device "iPhone 17 Pro"`), platform "{platform}", the device name, and the app\u2019s bundle id / package name as appId. Leave url out unless there is also a web build.',
     fixRun:
       'Styx runs `{command}` to start {project} locally, but it {failure}. Work out what is wrong and fix it (ask me with ask_user if you need a decision or a value; never invent secrets). When it starts and its URL answers, stop it and call the styx `remember_command` tool with kind "run", the working command and the URL.',
     /** Appended to a learn prompt when Styx has a detection of its own; the agent verifies rather than trusts it. */
@@ -448,6 +454,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   abilities: {
     learnedRun: 'Styx will start this project with `{command}`{url} from now on.',
     learnedRunUrl: ' and open {url}',
+    learnedRunDevice:
+      'Styx will build and run this app with `{command}` on the {platform} simulator{device} from now on.',
+    learnedRunDeviceName: ' ({device})',
     learnedDeploy: 'Styx will deploy to {target} with `{command}` from now on.',
     activityRun: '{agent} worked out how to run {project}',
     activityDeploy: '{agent} worked out how to deploy {project} to {target}',
@@ -994,6 +1003,51 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       waitingHint: 'The page opens as soon as the server answers.',
       unreachable: 'Nothing is answering at {url}.',
       retry: 'Retry',
+      /** The device frame around a phone / tablet preset and the mirrored simulator (owner addition). */
+      rotate: 'Rotate',
+      frameLabel: '{device} frame',
+    },
+    /**
+     * The simulator / emulator mirrored in the design window (owner request: the design tab shows the app being
+     * built, like Xcode's Simulator beside the editor). Owner addition; not in §10.
+     */
+    device: {
+      platforms: { web: 'Web', ios: 'iOS', android: 'Android' },
+      platformLabel: 'Runs on',
+      pick: 'Device',
+      pickAny: 'Any device',
+      boot: 'Boot simulator',
+      booting: 'Booting {device}…',
+      ready: 'Mirroring · {device}',
+      stopped: 'Simulator stopped',
+      failed: 'Simulator failed: {error}',
+      stop: 'Stop simulator',
+      shutdown: 'Shut down',
+      focus: 'Open the simulator',
+      /** Status bar item while a device is mirrored. */
+      statusBar: '{platform} · {device}',
+      /** Mirror modes and their explanations. */
+      mirrorWindow: 'live',
+      mirrorScreenshots: 'screenshots',
+      mirrorNone: 'no picture',
+      screenAccess:
+        'Styx needs Screen Recording to mirror the simulator live. It falls back to screenshots until then.',
+      screenAccessOpen: 'Open System Settings',
+      noInput: 'Taps do not reach this device yet; open the simulator to interact.',
+      noInputIos:
+        'Install idb (brew install idb-companion) to tap and type here; until then, open the simulator.',
+      /** Tooling missing on this machine. */
+      noToolingIos: 'Xcode and its iOS Simulator are not installed.',
+      noToolingAndroid: 'The Android SDK (adb, emulator) is not installed.',
+      noToolingIosHint:
+        'Install Xcode from the App Store, then open it once to install the simulator runtime.',
+      noToolingAndroidHint: 'Install Android Studio and add its SDK tools to your PATH.',
+      /** Empty state of the design window for a device platform before anything is mirrored. */
+      empty: 'Run locally to build the app and mirror the simulator here.',
+      noDevices: 'No {platform} simulators are set up on this machine.',
+      /** `Screens` on a checkpoint: before / after the turn. */
+      before: 'Before',
+      after: 'After',
     },
     /** "Run locally" (owner addition): the dev server started from the design window. */
     run: {
@@ -1019,6 +1073,11 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       askToFix: 'Ask {agent} to fix it',
       failureExit: 'exited with code {code}',
       failureNoUrl: 'never answered on a local URL',
+      /** Device runs: the row reads the platform, not a URL. */
+      runningDevice: 'Running · {platform}',
+      firstTimeDevice: 'Set up and run this app on a simulator.',
+      commandPlaceholderIos: 'npx expo run:ios',
+      commandPlaceholderAndroid: 'npx expo run:android',
     },
     openIn: 'Open in {ide}',
     terminal: 'TERMINAL · {branch}',
@@ -1254,6 +1313,11 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     settling: 'capturing…',
     /** Transcript system line when a turn settles with changes. */
     settled: 'Turn {n}: {files} files changed.',
+    /** Screenshots of the running app around the turn, on the Review screen (owner addition). */
+    screens: 'Screens',
+    screensBefore: 'Before turn {n}',
+    screensAfter: 'After turn {n}',
+    screensMissing: 'No screenshot: the app was not running.',
   },
   /** Commit, push and pull request in one step (owner request after t3code). */
   publish: {

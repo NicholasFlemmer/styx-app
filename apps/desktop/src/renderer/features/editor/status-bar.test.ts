@@ -16,6 +16,7 @@ const run = (over: Partial<DevRun> = {}): DevRun => ({
   runId: 'run:1',
   terminalId: 'term:1',
   command: 'pnpm dev',
+  platform: 'web',
   phase: 'running',
   url: null,
   exitCode: null,

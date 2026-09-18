@@ -430,6 +430,8 @@ export const checkpoints = sqliteTable(
     createdAt: integer('created_at').notNull(),
     settledAt: integer('settled_at'),
     revertedAt: integer('reverted_at'),
+    /** 0016: which screenshots exist for the turn (`['before','after']`). */
+    screensJson: text('screens_json').notNull().default('[]'),
   },
   (t) => [index('checkpoints_session').on(t.sessionId, t.turn)],
 );

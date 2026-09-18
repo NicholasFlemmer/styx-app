@@ -1,9 +1,9 @@
 import { checkpointSchema, type Checkpoint } from '@styx/core';
 import type { Db } from '../open';
-import { asNum, asStr, placeholders, type Raw } from './mappers';
+import { asJson, asNum, asStr, placeholders, type Raw } from './mappers';
 
 const COLS =
-  'id, session_id, worktree_id, turn, message_id, base_ref, ref, files, added, removed, created_at, settled_at, reverted_at';
+  'id, session_id, worktree_id, turn, message_id, base_ref, ref, files, added, removed, created_at, settled_at, reverted_at, screens_json';
 
 export const checkpointFromRow = (r: Raw): Checkpoint =>
   checkpointSchema.parse({
@@ -20,6 +20,7 @@ export const checkpointFromRow = (r: Raw): Checkpoint =>
     createdAt: Number(r['created_at']),
     settledAt: asNum(r['settled_at']),
     revertedAt: asNum(r['reverted_at']),
+    screens: asJson(r['screens_json'], []),
   });
 
 /** `checkpoints` table (0015): one row per agent turn, hidden git refs behind it. */
@@ -32,9 +33,10 @@ export class CheckpointsRepo {
 
   constructor(db: Db) {
     this.upsertStmt = db.prepare(
-      `INSERT INTO checkpoints (${COLS}) VALUES (${placeholders(13)})
+      `INSERT INTO checkpoints (${COLS}) VALUES (${placeholders(14)})
        ON CONFLICT(id) DO UPDATE SET message_id = excluded.message_id, base_ref = excluded.base_ref, ref = excluded.ref, files = excluded.files,
-         added = excluded.added, removed = excluded.removed, settled_at = excluded.settled_at, reverted_at = excluded.reverted_at`,
+         added = excluded.added, removed = excluded.removed, settled_at = excluded.settled_at, reverted_at = excluded.reverted_at,
+         screens_json = excluded.screens_json`,
     );
     this.getStmt = db.prepare(`SELECT ${COLS} FROM checkpoints WHERE id = ?`);
     this.bySessionStmt = db.prepare(`SELECT ${COLS} FROM checkpoints WHERE session_id = ? ORDER BY turn ASC`);
@@ -57,6 +59,7 @@ export class CheckpointsRepo {
       c.createdAt,
       c.settledAt,
       c.revertedAt,
+      JSON.stringify(c.screens),
     );
   }
 

@@ -22,6 +22,7 @@ export interface ProjectionDeps {
   popouts: () => string[];
   /** Main-owned in-memory rows (RunService / DeployService); absent in tests that only project SQLite. */
   runs?: () => ReadModelSnapshot['runs'];
+  devices?: () => ReadModelSnapshot['devices'];
   deploys?: () => ReadModelSnapshot['deploys'];
   /** Latest rate limits per agent (UsageService); absent in tests. */
   limits?: () => ReadModelSnapshot['limits'];
@@ -74,6 +75,7 @@ export function buildSnapshot(deps: ProjectionDeps, seq: number): ReadModelSnaps
     popouts: deps.popouts() as SessionId[],
     activity: repos.activity.recent(ACTIVITY_WINDOW),
     runs: deps.runs?.() ?? [],
+    devices: deps.devices?.() ?? [],
     checkpoints,
     queues,
     limits: deps.limits?.() ?? {},

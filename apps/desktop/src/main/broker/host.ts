@@ -36,7 +36,12 @@ export interface BrokerHostDeps {
   endpoint: string;
   /** What an agent teaches Styx (`remember_command`): persisted on the project / target by the container. */
   abilities: {
-    rememberRun(sessionId: string, command: string, url: string | null): Promise<void>;
+    rememberRun(
+      sessionId: string,
+      command: string,
+      url: string | null,
+      device: { platform: 'web' | 'ios' | 'android' | null; device: string | null; appId: string | null },
+    ): Promise<void>;
     rememberDeploy(sessionId: string, targetId: string, command: string): Promise<void>;
   };
 }
@@ -341,7 +346,11 @@ export class BrokerHost {
       const purpose = deps.repos.sessions.purposeOf(ctx.session.sessionId);
       if (p.kind === 'run') {
         if (purpose !== 'learn-run') throw new BrokerError(ErrorCode.notAllowed, copy.abilities.notLearning);
-        await deps.abilities.rememberRun(ctx.session.sessionId, p.command, p.url ?? null);
+        await deps.abilities.rememberRun(ctx.session.sessionId, p.command, p.url ?? null, {
+          platform: p.platform ?? null,
+          device: p.device ?? null,
+          appId: p.appId ?? null,
+        });
         return { ok: true };
       }
       if (purpose !== 'learn-deploy') throw new BrokerError(ErrorCode.notAllowed, copy.abilities.notLearning);

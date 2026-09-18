@@ -24,5 +24,10 @@ export const checkpointSchema = z.object({
   settledAt: timestampSchema.nullable(),
   /** Set when the user reverted this turn; the workspace was restored to `baseRef`. */
   revertedAt: timestampSchema.nullable(),
+  /**
+   * Which screenshots of the running app exist for this turn (the design window's page or the mirrored device,
+   * captured at turn start and settle); served as `styx-device://checkpoint/<id>/<which>`.
+   */
+  screens: z.array(z.enum(['before', 'after'])).default([]),
 });
 export type Checkpoint = z.infer<typeof checkpointSchema>;

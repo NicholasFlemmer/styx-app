@@ -1,6 +1,6 @@
-import type { DevRun, ProjectId } from '@styx/core';
+import type { DevPlatform, DevRun, ProjectId } from '@styx/core';
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import * as http from 'node:http';
 import * as https from 'node:https';
 import { join } from 'node:path';
@@ -71,8 +71,22 @@ export const httpProbe = (url: string): Promise<ProbeAnswer> =>
 
 export type RunSuggestion = {
   command: string;
-  source: 'package.json' | 'makefile' | 'django' | 'cargo' | 'go';
+  source:
+    | 'package.json'
+    | 'makefile'
+    | 'django'
+    | 'cargo'
+    | 'go'
+    | 'expo'
+    | 'react-native'
+    | 'flutter'
+    | 'xcode'
+    | 'gradle';
+  platform?: DevPlatform;
 };
+
+/** What `run.detect` learned about the folder: commands to try and the platforms the app can run on. */
+export type RunDetection = { suggestions: RunSuggestion[]; platforms: DevPlatform[] };
 
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
 /** The first URL a dev server prints for itself: `http://localhost:5173/`, `http://127.0.0.1:8000`, `http://0.0.0.0:3000`. */
@@ -123,6 +137,98 @@ export const isLoopbackUrl = (text: string): boolean => {
 };
 
 /**
+ * Is this a mobile app, and on which platforms? Expo (`app.json` / `app.config.*` with an `expo` dependency),
+ * bare React Native (`react-native` dependency with `ios/` or `android/`), Flutter (`pubspec.yaml`), an Xcode
+ * project / workspace, a Gradle Android project. A web `dev` script alongside keeps `web` in the list.
+ */
+export async function detectPlatforms(
+  dir: string,
+): Promise<{ platforms: DevPlatform[]; suggestions: RunSuggestion[] }> {
+  const has = (file: string) => existsSync(join(dir, file));
+  const platforms: DevPlatform[] = [];
+  const suggestions: RunSuggestion[] = [];
+  const add = (p: DevPlatform) => {
+    if (!platforms.includes(p)) platforms.push(p);
+  };
+  let deps: Record<string, unknown> = {};
+  let scripts: Record<string, unknown> = {};
+  if (has('package.json')) {
+    try {
+      const pkg = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8')) as {
+        dependencies?: Record<string, unknown>;
+        devDependencies?: Record<string, unknown>;
+        scripts?: Record<string, unknown>;
+      };
+      deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+      scripts = pkg.scripts ?? {};
+    } catch {
+      /* unparsable package.json */
+    }
+  }
+  const expo = 'expo' in deps && (has('app.json') || has('app.config.js') || has('app.config.ts'));
+  const reactNative = !expo && 'react-native' in deps && (has('ios') || has('android'));
+  if (expo) {
+    add('ios');
+    add('android');
+    suggestions.push({ command: 'npx expo run:ios', source: 'expo', platform: 'ios' });
+    suggestions.push({ command: 'npx expo run:android', source: 'expo', platform: 'android' });
+    if ('react-native-web' in deps || typeof scripts['web'] === 'string') add('web');
+  } else if (reactNative) {
+    if (has('ios')) {
+      add('ios');
+      suggestions.push({ command: 'npx react-native run-ios', source: 'react-native', platform: 'ios' });
+    }
+    if (has('android')) {
+      add('android');
+      suggestions.push({
+        command: 'npx react-native run-android',
+        source: 'react-native',
+        platform: 'android',
+      });
+    }
+  }
+  if (has('pubspec.yaml')) {
+    add('ios');
+    add('android');
+    suggestions.push({ command: 'flutter run -d iphone', source: 'flutter', platform: 'ios' });
+    suggestions.push({ command: 'flutter run -d android', source: 'flutter', platform: 'android' });
+    if (has('web')) add('web');
+  }
+  if (!expo && !reactNative && !has('pubspec.yaml')) {
+    let entries: string[] = [];
+    try {
+      entries = await readdir(dir);
+    } catch {
+      /* unreadable folder */
+    }
+    const xcode =
+      entries.find((e) => /\.xcworkspace$/.test(e)) ?? entries.find((e) => /\.xcodeproj$/.test(e));
+    if (xcode !== undefined) {
+      add('ios');
+      const flag = /\.xcworkspace$/.test(xcode) ? '-workspace' : '-project';
+      suggestions.push({
+        command: `xcodebuild ${flag} ${xcode} -scheme <scheme> -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build`,
+        source: 'xcode',
+        platform: 'ios',
+      });
+    }
+    if (
+      has('settings.gradle') ||
+      has('settings.gradle.kts') ||
+      has('build.gradle') ||
+      has('build.gradle.kts')
+    ) {
+      add('android');
+      suggestions.push({ command: './gradlew installDebug', source: 'gradle', platform: 'android' });
+    }
+  }
+  if (platforms.length === 0 || ['dev', 'start', 'serve'].some((s) => typeof scripts[s] === 'string'))
+    add('web');
+  // A plain web app lists web first; a mobile app lists its device platforms first (the button's default).
+  return { platforms, suggestions };
+}
+
+/**
  * Suggests run commands from what is in the folder, most specific first: `package.json` scripts (`dev` > `start` >
  * `serve`) through the package manager the lockfile names, a `Makefile` target, Django's `manage.py`, Cargo, Go.
  */
@@ -162,6 +268,15 @@ export async function detectRunCommands(dir: string): Promise<RunSuggestion[]> {
   return out.filter((s) => (seen.has(s.command) ? false : (seen.add(s.command), true)));
 }
 
+/** The part of DeviceService a run needs: boot (and mirror) the device a platform run targets. */
+export interface DeviceLauncher {
+  boot(
+    projectId: ProjectId,
+    platform: Exclude<DevPlatform, 'web'>,
+    device: string | null,
+  ): Promise<{ deviceId: string; deviceName: string }>;
+}
+
 interface Attached {
   runId: string;
   terminalId: string;
@@ -189,18 +304,41 @@ export class RunService {
     return [...this.runs.values()];
   }
 
-  async detect(projectId: ProjectId): Promise<RunSuggestion[]> {
+  /** The simulator / emulator side of a device run (set once by the container; tests may leave it out). */
+  bindDevices(devices: DeviceLauncher): void {
+    this.devices = devices;
+  }
+  private devices: DeviceLauncher | null = null;
+
+  async detect(projectId: ProjectId): Promise<RunDetection> {
     const project = this.deps.repos.projects.get(projectId) ?? fail('not-found', 'project not found');
-    return detectRunCommands(project.path);
+    const [web, mobile] = await Promise.all([detectRunCommands(project.path), detectPlatforms(project.path)]);
+    // Device suggestions first for a mobile app, web ones first otherwise, in the platforms' order.
+    const suggestions =
+      mobile.platforms[0] === 'web' ? [...web, ...mobile.suggestions] : [...mobile.suggestions, ...web];
+    return { suggestions, platforms: mobile.platforms };
   }
 
-  async start(projectId: ProjectId, command: string): Promise<{ runId: string; terminalId: string }> {
+  async start(
+    projectId: ProjectId,
+    command: string,
+    opts: { platform?: DevPlatform } = {},
+  ): Promise<{ runId: string; terminalId: string }> {
     const { repos, publisher, clock, pty, terminals } = this.deps;
     const cmd = command.trim();
     if (cmd === '') fail('invalid-input', 'command is empty');
     const project = repos.projects.get(projectId) ?? fail('not-found', 'project not found');
+    const settings = repos.projects.settings(projectId);
+    const platform: DevPlatform = opts.platform ?? settings.devPlatform ?? 'web';
     // One run per project: the previous one goes first, listeners and all, so its exit cannot land on this row.
     this.detach(projectId, { kill: true });
+
+    // A device run boots the simulator / emulator first so the design window can mirror it while the app builds;
+    // a boot that fails is the run's failure (nothing to show the app on).
+    if (platform !== 'web') {
+      if (this.devices === null) fail('cli-missing', 'no simulator support in this build');
+      await this.devices.boot(projectId, platform, settings.devDevice ?? null);
+    }
 
     const runId = `run:${ulid()}`;
     const terminalId = `term:${ulid()}`;
@@ -209,6 +347,7 @@ export class RunService {
       runId,
       terminalId,
       command: cmd,
+      platform,
       phase: 'starting',
       url: null,
       exitCode: null,
@@ -224,8 +363,9 @@ export class RunService {
     // (an API) is shown provisionally while the search goes on, and is replaced the moment a page answers within
     // the probe window. Candidates are probed as they appear and again every second, because a server prints its
     // address before it accepts connections.
+    // A device run's output URLs are Metro's / the dev client's, not a page: nothing is adopted or saved.
     let tail = '';
-    const known = this.deps.repos.projects.settings(projectId).devUrl ?? null;
+    const known = platform === 'web' ? (settings.devUrl ?? null) : null;
     const candidates: string[] = known !== null && isLoopbackUrl(known) ? [known] : [];
     let probeTimer: NodeJS.Timeout | null = null;
     let probing = false;
@@ -286,7 +426,7 @@ export class RunService {
       probeTimer = null;
     };
     const onData = (id: string, data: string) => {
-      if (id !== terminalId || adopted || current() === undefined) return;
+      if (id !== terminalId || adopted || platform !== 'web' || current() === undefined) return;
       tail = (tail + data).slice(-TAIL);
       let fresh = false;
       for (const url of sniffLocalUrls(tail)) {
@@ -338,6 +478,7 @@ export class RunService {
       this.publish({ ...cur, phase: 'running' });
     logger.info('run: started', { project: project.name, command: redactArgv(cmd.split(/\s+/)).join(' ') });
     await this.rememberCommand(projectId, cmd);
+    await this.rememberPlatform(projectId, platform);
     return { runId, terminalId };
   }
 
@@ -404,6 +545,15 @@ export class RunService {
     await this.deps.projects
       .setSettings(projectId, { devCommand: command })
       .catch((e: Error) => logger.warn('run: could not save devCommand', { error: e.message }));
+  }
+
+  /** The platform the user last ran on, so the next Run locally (and the button's label) start there. */
+  private async rememberPlatform(projectId: ProjectId, platform: DevPlatform): Promise<void> {
+    const saved = this.deps.repos.projects.settings(projectId).devPlatform ?? 'web';
+    if (saved === platform) return;
+    await this.deps.projects
+      .setSettings(projectId, { devPlatform: platform === 'web' ? null : platform })
+      .catch((e: Error) => logger.warn('run: could not save devPlatform', { error: e.message }));
   }
 
   /**

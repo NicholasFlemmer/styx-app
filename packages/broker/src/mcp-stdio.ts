@@ -163,16 +163,32 @@ export function createStyxMcpServer(client: BrokerClient): McpServer {
     'remember_command',
     {
       description:
-        'Teach Styx an ability you have just worked out, so its buttons can do it directly from now on. kind "run": the exact command that starts this project locally from the project root, plus the local URL it serves (Styx will start it itself after you stop yours). kind "deploy": the exact command that deploys this project to one target (targetId from list_targets). Only call it once the command has actually worked.',
+        'Teach Styx an ability you have just worked out, so its buttons can do it directly from now on. kind "run": the exact command that starts this project locally from the project root, plus the local URL it serves (Styx will start it itself after you stop yours). For a mobile app, the command that builds and launches it on a simulator / emulator instead, with platform "ios" or "android", the device name and the app\'s bundle id / package (appId); Styx boots that device and mirrors it in its design window. kind "deploy": the exact command that deploys this project to one target (targetId from list_targets). Only call it once the command has actually worked.',
       inputSchema: {
         kind: z.enum(['run', 'deploy']),
         command: z.string().min(1).max(2000),
         targetId: z.string().optional().describe('deploy only: the target id from list_targets'),
         url: z.string().max(500).optional().describe('run only: the local URL the server answers on'),
+        platform: z
+          .enum(['web', 'ios', 'android'])
+          .optional()
+          .describe('run only: what the command runs on; omit for a web server'),
+        device: z
+          .string()
+          .max(120)
+          .optional()
+          .describe(
+            'run only, ios/android: the simulator / emulator name, e.g. "iPhone 17 Pro" or the AVD name',
+          ),
+        appId: z
+          .string()
+          .max(200)
+          .optional()
+          .describe('run only, ios/android: the bundle id / package name, e.g. com.acme.shop'),
         note: z.string().max(200).optional(),
       },
     },
-    async ({ kind, command, targetId, url, note }) => {
+    async ({ kind, command, targetId, url, platform, device, appId, note }) => {
       try {
         return text(
           await client.call('remember_command', {
@@ -180,6 +196,9 @@ export function createStyxMcpServer(client: BrokerClient): McpServer {
             command,
             ...(targetId !== undefined ? { targetId } : {}),
             ...(url !== undefined ? { url } : {}),
+            ...(platform !== undefined ? { platform } : {}),
+            ...(device !== undefined ? { device } : {}),
+            ...(appId !== undefined ? { appId } : {}),
             ...(note !== undefined ? { note } : {}),
           }),
         );
