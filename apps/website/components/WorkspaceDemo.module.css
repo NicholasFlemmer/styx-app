@@ -1,0 +1,84 @@
+.figure {
+  margin: 0;
+}
+
+/* Step controls, outside the mock: real buttons, keyboard reachable. */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--ln);
+}
+.steps li + li {
+  border-left: 1px solid var(--ln);
+}
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 32px;
+  padding: 0 var(--sp-3);
+  font: 600 var(--fs-11) / 1 var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mu);
+}
+.step:hover {
+  background: var(--s2);
+  color: var(--tx);
+}
+.step[data-on='true'] {
+  color: var(--tx);
+}
+.stepNo {
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+.chrome {
+  display: inline-flex;
+  border: 1px solid var(--ln);
+}
+.chromeBtn {
+  height: 32px;
+  padding: 0 var(--sp-3);
+  font: 600 var(--fs-11) / 1 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mu);
+}
+.chromeBtn + .chromeBtn {
+  border-left: 1px solid var(--ln);
+}
+.chromeBtn:hover {
+  background: var(--s2);
+  color: var(--tx);
+}
+.chromeBtn[data-inv='true'] {
+  background: var(--tx);
+  color: var(--bg);
+}
+.play {
+  margin-left: auto;
+  height: 32px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--ln);
+  font: 600 var(--fs-11) / 1 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mu);
+}
+.play:hover {
+  background: var(--s2);
+  color: var(--tx);
+}
+@media (max-width: 760px) {
+  .stepLabel {
+    display: none;
+  }
+}

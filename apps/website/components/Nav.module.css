@@ -1,0 +1,42 @@
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: var(--nav-h);
+  background: var(--bg);
+  border-bottom: 1px solid var(--ln);
+}
+.inner {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+}
+.wordmark {
+  font: 700 13px / 1 var(--font-ui);
+  letter-spacing: 0.22em;
+  text-decoration: none;
+}
+.links {
+  display: flex;
+  gap: var(--sp-5);
+}
+.links a {
+  font-size: var(--fs-13);
+  color: var(--mu);
+  text-decoration: none;
+}
+.links a:hover {
+  color: var(--tx);
+}
+.right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+@media (max-width: 900px) {
+  .links {
+    display: none;
+  }
+}

@@ -1,0 +1,69 @@
+.tableWrap {
+  position: relative; /* contains the visually-hidden header text, which is absolutely positioned */
+  overflow-x: auto;
+}
+.lanes {
+  width: 100%;
+  min-width: 640px;
+  border: 1px solid var(--ln);
+  border-collapse: collapse;
+  font-size: var(--fs-13);
+}
+.lanes th {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ln);
+  text-align: left;
+  font: 600 10px / 1 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mu);
+}
+.lanes td {
+  padding: 12px 14px;
+  border-top: 1px solid var(--ln);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.lanes td:global(.mono) {
+  font-size: var(--fs-12);
+}
+.lanes td:nth-child(3),
+.lanes td:nth-child(4) {
+  color: var(--mu);
+}
+.lanes td:last-child {
+  text-align: right;
+}
+.miniBtn {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--ln);
+  font: 600 10px / 1 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.miniBtn[data-inv='true'] {
+  background: var(--tx);
+  color: var(--bg);
+  border-color: var(--tx);
+}
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: var(--gutter);
+  row-gap: var(--sp-5);
+  padding-block: var(--sp-8) var(--sp-12);
+  color: var(--mu);
+}
+.facts strong {
+  display: block;
+  color: var(--tx);
+  font-weight: 600;
+}
+@media (max-width: 860px) {
+  .facts {
+    grid-template-columns: 1fr;
+  }
+}

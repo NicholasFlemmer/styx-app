@@ -1,0 +1,58 @@
+.hero {
+  padding-block: var(--sp-16) var(--sp-12);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gutter);
+  row-gap: var(--sp-10);
+  align-items: start;
+}
+.copy {
+  grid-column: 1 / span 5;
+  padding-top: var(--sp-2);
+}
+.demo {
+  grid-column: 6 / span 7;
+  min-width: 0;
+}
+.h1 {
+  font-size: var(--fs-display);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: var(--lh-tight);
+}
+.h1 span {
+  display: inline-block; /* each sentence breaks as a unit, so the chant stacks cleanly */
+}
+.lede {
+  margin-top: var(--sp-6);
+  font-size: var(--fs-18);
+  line-height: 1.5;
+  max-width: 30em;
+}
+.ctas {
+  margin-top: var(--sp-8);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-6);
+}
+.secondary {
+  font-size: var(--fs-15);
+}
+.micro {
+  margin-top: var(--sp-5);
+  font-size: var(--fs-13);
+  color: var(--mu);
+  max-width: 34em;
+}
+@media (max-width: 1023px) {
+  .hero {
+    padding-block: var(--sp-12) var(--sp-10);
+  }
+  .copy,
+  .demo {
+    grid-column: 1 / -1;
+  }
+}

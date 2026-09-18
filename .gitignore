@@ -27,3 +27,7 @@ CLAUDE.local.md
 apps/desktop/test-results/
 apps/desktop/e2e/test-results/
 apps/desktop/resources/cli/
+.next/
+next-env.d.ts
+.playwright-mcp/
+*.tsbuildinfo
