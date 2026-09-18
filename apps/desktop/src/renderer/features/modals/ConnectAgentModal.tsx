@@ -1,4 +1,5 @@
 import {
+  cliIsManual,
   cliConnectionState,
   cliVersionLabel,
   copy,
@@ -117,13 +118,30 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
   }, [login?.terminalId]);
 
   const installGuide = () => void command('agent.installGuide', { agent });
-  /** OS file picker → `detect.setBinary`; the `discovery.set` delta fills the status row, then the CLI is checked. */
+  /**
+   * OS file picker → `detect.setBinary`; the `discovery.set` delta fills the status row, then the CLI is checked.
+   * A refused pick (a folder, a file that does not run, another agent's CLI) says why, right here, and remembers
+   * nothing, so the user can pick again instead of being stuck with a binary that cannot sign in.
+   */
+  const [locateError, setLocateError] = useState<string | null>(null);
   const locateBinary = async () => {
     const r = await command('dialog.pickFile', { title: copy.errors.locateBinary });
     if (!r.ok || r.value.path === null) return;
     const set = await command('detect.setBinary', { agent, path: r.value.path });
+    setLocateError(set.ok ? null : set.error.message);
     if (set.ok) await verify();
   };
+  /** Undo a located binary: detection is trusted again and the row follows the `discovery.set` delta. */
+  const forgetBinary = async () => {
+    setLocateError(null);
+    const r = await command('detect.clearBinary', { agent });
+    if (!r.ok) {
+      setLocateError(r.error.message);
+      return;
+    }
+    await verify();
+  };
+  const located = installed && cli !== undefined && cliIsManual(cli);
 
   const c = copy.agentsPage.connect;
   const identity: Identity = checking
@@ -205,7 +223,17 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
                 </button>
               </>
             )}
+            {located ? (
+              <button type="button" className={s['link']} onClick={() => void forgetBinary()} data-agent-forget="true">
+                {copy.agentsPage.actions.forget}
+              </button>
+            ) : null}
           </div>
+          {locateError !== null ? (
+            <div className={s['locateError']} role="alert" data-locate-error="true">
+              {locateError}
+            </div>
+          ) : null}
           {installed ? (
             <>
               <div className={s['identity']} aria-live="polite" data-agent-identity={identity}>

@@ -693,6 +693,15 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     spawnNotConnected: "{cli} isn't connected.",
     fixConnection: 'Fix connection',
     locateBinary: 'Locate binary',
+    /**
+     * Why a "Locate binary" pick was refused (owner addition after a tester picked the wrong file and got stuck).
+     * The picked path is probed before it is remembered, so a bad pick never hides the real detection.
+     */
+    locateBinaryFailed: {
+      directory: '{path} is a folder, not the {cli} program. Pick the {cli} executable itself.',
+      notRunnable: '{path} did not run as {cli} (no version reported). Pick the {cli} executable itself.',
+      otherAgent: '{path} is the {other} CLI, not {cli}.',
+    },
   },
 
   onboarding: {
@@ -869,6 +878,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       signIn: 'Sign in',
       locate: 'Locate binary',
       installGuide: 'Install guide',
+      /** Undo a Locate binary pick (`detect.clearBinary`); detection is trusted again. */
+      forget: 'Forget binary',
     },
     preferences: 'Preferences',
     connect: {
@@ -1165,6 +1176,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       envSource: 'Keychain',
       shareWithAgents: { 'per-grant': 'Per grant', always: 'Always', never: 'Never' },
       committedFile: '.styx/project.json',
+      /** `{cli} binary` Select: drop a manual "Locate binary" pick and trust detection again. */
+      cliAutoDetect: 'Detected automatically',
     },
     reset: 'Reset',
   },

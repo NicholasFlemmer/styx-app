@@ -2,9 +2,9 @@ import { chmodSync, existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } 
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { execa } from 'execa';
-import { cliAlternatives, type IdeInstall } from '@styx/core';
+import { cliAlternatives, copy, fill, type Agent, type IdeInstall } from '@styx/core';
 import type { Container } from '../../container';
-import { toCliInstall } from '../../services/detect-service';
+import { toCliInstall, type CliProblem } from '../../services/detect-service';
 import { installOpenIn, type OpenInInstallDeps } from '../../services/ide-import-service';
 import { logger } from '../../services/logger';
 import { cliBinaryKey } from '../../services/session-service';
@@ -25,6 +25,21 @@ const RECENTS_SOURCE = {
   jetbrains: 'recent-projects',
   neovim: 'shada',
 } as const;
+
+/** The human reason a "Locate binary" pick was refused; shown inline where the pick was made. */
+const locateFailure = (agent: Exclude<Agent, 'shell'>, path: string, problem: CliProblem | undefined): string => {
+  const cli = copy.agentProducts[agent];
+  const f = copy.errors.locateBinaryFailed;
+  switch (problem?.kind) {
+    case 'directory':
+      return fill(f.directory, { path, cli });
+    case 'other-agent':
+      return fill(f.otherAgent, { path, cli, other: copy.agentProducts[problem.agent] });
+    case 'not-runnable':
+    case undefined:
+      return fill(f.notRunnable, { path, cli });
+  }
+};
 
 /** detect.* · ide.* */
 export function registerIdeCommands(bus: CommandBus, app: Container): void {
@@ -70,17 +85,35 @@ export function registerIdeCommands(bus: CommandBus, app: Container): void {
     if (agent === 'shell') fail('invalid-input', 'the shell agent has no binary to locate');
     if (!isAbsolute(path)) fail('invalid-input', 'the binary path must be absolute');
     if (!existsSync(path)) fail('not-found', `${path} does not exist`);
+    // The pick has to run, report a version and be this agent's CLI, or it is refused with the reason: a file that
+    // merely exists would otherwise hide detection and leave nothing to retry with.
     const probed = await detect.probe(agent, path);
-    if (!probed.found) fail('invalid-input', `${path} is not a runnable ${agent} CLI`);
-    repos.settings.kv.set(cliBinaryKey(agent), path);
+    if (!probed.found)
+      fail('invalid-input', locateFailure(agent, path, probed.problem), { problem: probed.problem ?? null });
+    const file = probed.binary ?? path; // an .app bundle resolves to the CLI inside it
+    repos.settings.kv.set(cliBinaryKey(agent), file);
     // The other candidates stay listed so the Settings Select can switch back to them.
     const previous = repos.discovery.cli(agent);
-    const rest = (previous === null ? [] : cliAlternatives(previous)).filter((c) => c.binary !== path);
+    const rest = (previous === null ? [] : cliAlternatives(previous)).filter(
+      (c) => c.binary !== file && c.source !== 'manual',
+    );
     const cli = toCliInstall(
-      { ...probed, alternatives: [{ binary: path, version: probed.version, source: 'manual' }, ...rest] },
+      { ...probed, alternatives: [{ binary: file, version: probed.version, source: 'manual' }, ...rest] },
       clock.now(),
     );
     repos.discovery.saveCli(cli);
+    publisher.discoverySet(repos.discovery.ides(), repos.discovery.clis());
+    return { cli };
+  });
+
+  /** Undo "Locate binary": the manual pick is forgotten and detection runs again on PATH and the bundles. */
+  bus.register('detect.clearBinary', async ({ agent }) => {
+    if (agent === 'shell') fail('invalid-input', 'the shell agent has no binary to forget');
+    repos.settings.kv.delete(cliBinaryKey(agent));
+    detect.invalidate();
+    const clis = await app.sessions.refreshClis();
+    const cli = clis.find((c) => c.agent === agent) ?? fail('not-found', `${agent} was not detected`);
+    // refreshClis only publishes on change; the manual → detected switch always is one, but be explicit.
     publisher.discoverySet(repos.discovery.ides(), repos.discovery.clis());
     return { cli };
   });

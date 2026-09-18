@@ -3,6 +3,7 @@ import {
   PERMISSION_MODES,
   cliAlternatives,
   cliCandidateLabel,
+  cliIsManual,
   cliLocationLabel,
   cliSourceOf,
   copy,
@@ -74,6 +75,8 @@ const ON_OFF: readonly RowOption[] = [
 
 const MODEL_DEFAULT = 'default';
 const NO_IDE = 'none';
+/** `{cli} binary` option that forgets a "Locate binary" pick (`detect.clearBinary`); binaries are absolute paths, so no clash. */
+export const CLI_BINARY_AUTO = 'auto';
 
 const fixed = (id: string, label: string, value: string): SettingsRow => ({
   id,
@@ -225,15 +228,19 @@ const agentsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
   const v = copy.settings.values;
   const clis = model.discovery.clis.filter((c) => c.found && c.agent !== 'shell');
   // One Select per CLI with more than one runnable binary (PATH vs an IDE extension bundle …); value = binary path.
+  // A located binary always gets the Select, with "Detected automatically" to undo the pick.
   const binaryRows: SettingsRow[] = clis.flatMap((c) => {
     const alternatives = cliAlternatives(c);
-    if (alternatives.length < 2 || c.binary === null) return [];
+    const manual = cliIsManual(c);
+    if ((alternatives.length < 2 && !manual) || c.binary === null) return [];
+    const options: RowOption[] = alternatives.map((a) => ({ value: a.binary, label: cliCandidateLabel(c.agent, a) }));
+    if (manual) options.push({ value: CLI_BINARY_AUTO, label: v.cliAutoDetect });
     return [
       {
         id: `cliBinary:${c.agent}`,
         label: fill(r.cliBinary, { cli: copy.agentProducts[c.agent] }),
         value: c.binary,
-        options: alternatives.map((a) => ({ value: a.binary, label: cliCandidateLabel(c.agent, a) })),
+        options,
         change: { kind: 'cli-binary', agent: c.agent },
         overridden: false,
       },

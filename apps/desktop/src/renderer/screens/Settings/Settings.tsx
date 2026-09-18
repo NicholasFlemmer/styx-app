@@ -25,7 +25,7 @@ import { AgentsPane } from './AgentsPane';
 import { SkillsPane } from './SkillsPane';
 import { command } from '../../state/commands';
 import { useCopyPlatform, useModel, useNow, useUi } from '../../state/hooks';
-import { sectionRows, type SettingsRow } from './rows';
+import { CLI_BINARY_AUTO, sectionRows, type SettingsRow } from './rows';
 import { isProjectSection, resolveSection, SECTION_LABEL, type SettingsSection } from './sections';
 import s from './Settings.module.css';
 
@@ -246,7 +246,8 @@ function Rows({
         void command('policy.toggle', { policyId: change.policyId, enabled: value === 'on' });
         return;
       case 'cli-binary':
-        void command('detect.setBinary', { agent: change.agent, path: value });
+        if (value === CLI_BINARY_AUTO) void command('detect.clearBinary', { agent: change.agent });
+        else void command('detect.setBinary', { agent: change.agent, path: value });
         return;
     }
   };

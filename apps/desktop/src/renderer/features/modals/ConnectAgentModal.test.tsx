@@ -29,8 +29,13 @@ const emit = (name: string, payload: unknown) => {
 
 let verifyOk = true;
 let pickedPath: string | null = '/opt/homebrew/bin/gemini';
+let setBinaryError: string | null = null;
 const commandMock = vi.fn(async (name: string, _input?: unknown) => {
   switch (name) {
+    case 'detect.setBinary':
+      return setBinaryError === null
+        ? { ok: true as const, value: {} }
+        : { ok: false as const, error: { code: 'invalid-input', message: setBinaryError } };
     case 'agent.verify':
       return verifyOk
         ? { ok: true as const, value: { cli: fixtures.demoClis()[0] } }
@@ -64,6 +69,7 @@ describe('ConnectAgentModal', () => {
     listeners.clear();
     verifyOk = true;
     pickedPath = '/opt/homebrew/bin/gemini';
+    setBinaryError = null;
     Object.assign(window, {
       styx: {
         platform: 'darwin',
@@ -212,6 +218,44 @@ describe('ConnectAgentModal', () => {
     fireEvent.click(screen.getByRole('button', { name: copy.agentsPage.actions.locate }));
     await waitFor(() => expect(calls('dialog.pickFile')).toHaveLength(2));
     expect(calls('detect.setBinary')).toHaveLength(1);
+  });
+
+  it('a refused Locate binary pick says why and remembers nothing; a retry that works clears it', async () => {
+    seed(fixtures.errorReadModel());
+    render(<ConnectAgentModal id="modal-1" agent="codex" />);
+    await waitFor(() => expect(calls('agent.verify')).toHaveLength(1));
+    pickedPath = '/Users/me/.codex/config.toml';
+    setBinaryError = '/Users/me/.codex/config.toml did not run as Codex (no version reported). Pick the Codex executable itself.';
+    fireEvent.click(screen.getByRole('button', { name: copy.agentsPage.actions.locate }));
+    expect((await screen.findByRole('alert')).textContent).toBe(setBinaryError);
+    expect(calls('agent.verify')).toHaveLength(1); // nothing to verify: the pick was refused
+    setBinaryError = null;
+    pickedPath = '/opt/homebrew/bin/codex';
+    fireEvent.click(screen.getByRole('button', { name: copy.agentsPage.actions.locate }));
+    await waitFor(() => expect(calls('agent.verify')).toHaveLength(2));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('a located binary offers Forget binary → detect.clearBinary, then a verify', async () => {
+    seed(
+      withCli('gemini', {
+        capabilities: {
+          streamJson: true,
+          source: 'manual',
+          alternatives: [{ binary: '/Users/me/Downloads/gemini', version: '1.2.0', source: 'manual' }],
+        },
+      }),
+    );
+    render(<ConnectAgentModal id="modal-1" agent="gemini" />);
+    await waitFor(() => expect(calls('agent.verify')).toHaveLength(1));
+    fireEvent.click(screen.getByRole('button', { name: copy.agentsPage.actions.forget }));
+    await waitFor(() => expect(calls('detect.clearBinary')).toEqual([['detect.clearBinary', { agent: 'gemini' }]]));
+    await waitFor(() => expect(calls('agent.verify')).toHaveLength(2));
+    // A detected (not located) binary has no Forget action.
+    cleanup();
+    seed();
+    render(<ConnectAgentModal id="modal-2" agent="gemini" />);
+    expect(screen.queryByRole('button', { name: copy.agentsPage.actions.forget })).toBeNull();
   });
 
   it('shell needs no sign-in: just the note and Done, no verify', () => {

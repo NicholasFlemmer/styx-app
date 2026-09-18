@@ -17,6 +17,12 @@ export type AgentKind = 'claude' | 'codex' | 'gemini' | 'cursor' | 'shell';
 export type AuthState = 'signed-in' | 'signed-out' | 'unknown' | 'n/a';
 export type { CliCandidate, CliSource };
 
+/** Why a "Locate binary" pick was refused (`probe` → `detect.setBinary`): the file exists but is not this CLI. */
+export type CliProblem =
+  | { kind: 'directory' }
+  | { kind: 'not-runnable' }
+  | { kind: 'other-agent'; agent: Exclude<AgentKind, 'shell'> };
+
 export interface CliDetection {
   agent: AgentKind;
   label: string;
@@ -29,6 +35,8 @@ export interface CliDetection {
   source: CliSource | null;
   /** Every runnable binary found for the agent, the chosen one included (Settings "Detected CLIs" Select). */
   alternatives: CliCandidate[];
+  /** Set on a `found: false` probe of an existing path: what was wrong with it. */
+  problem?: CliProblem;
 }
 
 /** Manual "Locate binary" picks per agent (`cli.binary.<agent>` in app_settings); a pick that vanished is ignored. */
@@ -63,7 +71,11 @@ export interface DetectDeps {
   applicationsDir?: string;
   /** Windows `%PROGRAMFILES%` (per-machine VS Code / JetBrains installs); defaults to the env var; injectable for tests. */
   programFilesDir?: string;
+  /** Where editor launchers land when they are not on PATH (Homebrew, /usr/local). `defaultDeps` fills it; tests leave it empty. */
+  launcherDirs?: readonly string[];
 }
+
+const DEFAULT_LAUNCHER_DIRS: readonly string[] = ['/usr/local/bin', '/opt/homebrew/bin'];
 
 const CLIS: { agent: AgentKind; label: string; bins: string[] }[] = [
   { agent: 'claude', label: 'Claude Code', bins: ['claude'] },
@@ -81,6 +93,30 @@ const CLAUDE_EXTENSION_BUNDLES: { dir: string[]; source: CliSource }[] = [
 const CLAUDE_EXTENSION_PREFIX = 'anthropic.claude-code-';
 const BUNDLE_SEARCH_DEPTH = 4;
 
+/** What each CLI's `--version` output names itself; a pick whose output names a different agent is refused. */
+const AGENT_MARKERS: Readonly<Record<Exclude<AgentKind, 'shell'>, RegExp>> = {
+  claude: /claude/i,
+  codex: /codex/i,
+  gemini: /gemini/i,
+  cursor: /cursor/i,
+};
+
+const otherAgentIn = (agent: Exclude<AgentKind, 'shell'>, output: string): Exclude<AgentKind, 'shell'> | null => {
+  if (AGENT_MARKERS[agent].test(output)) return null;
+  for (const [other, re] of Object.entries(AGENT_MARKERS) as [Exclude<AgentKind, 'shell'>, RegExp][]) {
+    if (other !== agent && re.test(output)) return other;
+  }
+  return null;
+};
+
+const isDirectory = (p: string): boolean => {
+  try {
+    return statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+};
+
 const SOURCE_RANK: Record<CliSource, number> = {
   manual: 0,
   path: 1,
@@ -95,6 +131,7 @@ export function defaultDeps(pathEnv: string = process.env['PATH'] ?? ''): Detect
     home: homedir(),
     pathEnv,
     env: process.env,
+    launcherDirs: DEFAULT_LAUNCHER_DIRS,
     exec: async (bin, args) => {
       const r = await execa(bin, args, {
         reject: false,
@@ -242,6 +279,9 @@ export const toCliInstall = (c: CliDetection, checkedAt: number): CliInstall => 
 interface ProbeCache {
   key: string;
   version: string | null;
+  /** `--version` exit code and combined output, so a pick can be judged runnable and as the right agent. */
+  exitCode: number;
+  output: string;
   help: string | null;
 }
 
@@ -345,7 +385,24 @@ export class DetectService {
     const source = opts.source ?? 'manual';
     const alternatives = opts.alternatives ?? [];
     if (!existsSync(binary)) return { ...notFound(agent, label), binary };
-    const version = opts.version === undefined ? await this.versionOf(binary) : opts.version;
+    // A folder (the Claude.app bundle, ~/.claude/local …) resolves to the CLI inside it; any other folder is refused.
+    if (isDirectory(binary)) {
+      const inner = this.executableIn(agent, binary);
+      if (inner === null) return { ...notFound(agent, label), binary, problem: { kind: 'directory' } };
+      binary = inner;
+    }
+    let version: string | null;
+    if (opts.version === undefined) {
+      // A manual pick (or a remembered one) has to prove itself: run, report a version, and be this agent's CLI.
+      const v = await this.versionProbe(binary);
+      const other = otherAgentIn(agent, v.output);
+      if (other !== null) return { ...notFound(agent, label), binary, problem: { kind: 'other-agent', agent: other } };
+      if (v.version === null && v.exitCode !== 0)
+        return { ...notFound(agent, label), binary, problem: { kind: 'not-runnable' } };
+      version = v.version;
+    } else {
+      version = opts.version;
+    }
     const help = await this.helpOf(binary);
     const capabilities: Record<string, boolean> = {
       mcpConfigFlag: /--mcp-config/.test(help),
@@ -386,13 +443,18 @@ export class DetectService {
   }
 
   private async versionOf(binary: string): Promise<string | null> {
+    return (await this.versionProbe(binary)).version;
+  }
+
+  private async versionProbe(binary: string): Promise<{ version: string | null; exitCode: number; output: string }> {
     const key = this.statKey(binary);
     const hit = this.cache.get(binary);
-    if (key !== null && hit !== undefined && hit.key === key) return hit.version;
+    if (key !== null && hit !== undefined && hit.key === key)
+      return { version: hit.version, exitCode: hit.exitCode, output: hit.output };
     const v = await this.deps.exec(binary, ['--version']);
     const version = parseVersion(v.stdout);
-    if (key !== null) this.cache.set(binary, { key, version, help: null });
-    return version;
+    if (key !== null) this.cache.set(binary, { key, version, exitCode: v.exitCode, output: v.stdout, help: null });
+    return { version, exitCode: v.exitCode, output: v.stdout };
   }
 
   private async helpOf(binary: string): Promise<string> {
@@ -400,8 +462,26 @@ export class DetectService {
     const hit = this.cache.get(binary);
     if (key !== null && hit !== undefined && hit.key === key && hit.help !== null) return hit.help;
     const help = (await this.deps.exec(binary, ['--help'])).stdout;
-    if (key !== null) this.cache.set(binary, { key, version: hit?.key === key ? hit.version : null, help });
+    if (key !== null) {
+      const same = hit?.key === key ? hit : null;
+      this.cache.set(binary, {
+        key,
+        version: same?.version ?? null,
+        exitCode: same?.exitCode ?? 0,
+        output: same?.output ?? '',
+        help,
+      });
+    }
     return help;
+  }
+
+  /** The agent's CLI inside a picked folder: an `.app` bundle is searched under Contents, any other folder one level. */
+  private executableIn(agent: Exclude<AgentKind, 'shell'>, dir: string): string | null {
+    const bins = CLIS.find((c) => c.agent === agent)?.bins ?? [agent];
+    const names = bins.flatMap((b) => exeNames(b, this.deps.platform));
+    const bundle = /\.app$/i.test(dir);
+    const root = bundle ? join(dir, 'Contents') : dir;
+    return findExecutables(root, names, bundle ? BUNDLE_SEARCH_DEPTH : 1)[0] ?? null;
   }
 
   private async detectShell(): Promise<CliDetection> {
@@ -518,41 +598,83 @@ export class DetectService {
     );
   }
 
+  /** The main build if it is here, else the alternate (Insiders), else the main build's not-found row. */
   private async detectVscodeLike(spec: VscodeLikeSpec): Promise<IdeDetection> {
+    const main = await this.detectVscodeBuild(spec.kind, spec);
+    if (main.found || spec.alternate === undefined) return main;
+    const alt = await this.detectVscodeBuild(spec.kind, spec.alternate);
+    return alt.found ? alt : main;
+  }
+
+  /**
+   * One build: the bundle in the usual places or anywhere Spotlight knows it, the CLI shim on PATH or in the
+   * Homebrew / /usr/local dirs GUI apps often miss, or a User folder the editor has written to. Any one of the
+   * three proves the editor is installed (a tester's VS Code was missed when only the first two were checked).
+   */
+  private async detectVscodeBuild(kind: VscodeLikeSpec['kind'], b: VscodeBuild): Promise<IdeDetection> {
     const { platform: p, home: h } = this.deps;
     const location =
       p === 'darwin'
-        ? this.macBundle(spec.macApp)
+        ? (this.macBundle(b.macApp) ?? (await this.spotlightBundle(b.bundleId)))
         : p === 'win32'
-          ? ([join(this.localAppData, 'Programs', spec.winDir), join(this.programFilesDir, spec.winDir)].find(
-              existsSync,
-            ) ?? null)
+          ? ([
+              join(this.localAppData, 'Programs', b.winDir),
+              join(this.programFilesDir, b.winDir),
+              ...(this.deps.env['ProgramFiles(x86)'] ? [join(this.deps.env['ProgramFiles(x86)'], b.winDir)] : []),
+            ].find(existsSync) ?? null)
           : null;
     const configDir =
       p === 'darwin'
-        ? join(h, 'Library', 'Application Support', spec.userDirName, 'User')
+        ? join(h, 'Library', 'Application Support', b.userDirName, 'User')
         : p === 'win32'
-          ? join(this.appData, spec.userDirName, 'User')
-          : join(this.xdgConfig, spec.userDirName, 'User');
-    const bin = findOnPath(spec.launcher, this.deps.pathEnv, p);
+          ? join(this.appData, b.userDirName, 'User')
+          : join(this.xdgConfig, b.userDirName, 'User');
+    const hasConfig = existsSync(configDir);
+    const bin =
+      findOnPath(b.launcher, this.deps.pathEnv, p) ??
+      (p === 'darwin'
+        ? ((this.deps.launcherDirs ?? []).map((d) => join(d, b.launcher)).find(isExecutableFile) ?? null)
+        : null);
     let version = location ? readVscodeVersion(location, p) : null;
     if (version === null && bin) version = parseVersion((await this.deps.exec(bin, ['--version'])).stdout);
-    const found = !!location || !!bin;
-    // Bundle without the CLI shim: macOS opens it by name; a Windows install ships `bin\<launcher>.cmd`.
-    const shim = location && p === 'win32' ? join(location, 'bin', `${spec.launcher}.cmd`) : null;
+    const found = !!location || !!bin || hasConfig;
+    // Bundle without the CLI shim: macOS opens it by name (or by bundle id when only the User folder was found);
+    // a Windows install ships `bin\<launcher>.cmd`.
+    const shim = location && p === 'win32' ? join(location, 'bin', `${b.launcher}.cmd`) : null;
     const launcher =
       bin ??
-      (location && p === 'darwin' ? `open -a "${spec.macApp}"` : shim && existsSync(shim) ? shim : null);
+      (location && p === 'darwin'
+        ? `open -a "${b.macApp}"`
+        : shim && existsSync(shim)
+          ? shim
+          : !location && hasConfig && p === 'darwin'
+            ? `open -b ${b.bundleId}`
+            : null);
     return {
-      kind: spec.kind,
-      product: spec.product,
+      kind,
+      product: b.product,
       version,
       location,
       launcher,
-      configDir: existsSync(configDir) ? configDir : null,
+      configDir: hasConfig ? configDir : null,
       imports: found ? this.vscodeImports(configDir) : noImports(),
       found,
     };
+  }
+
+  /** Spotlight by bundle id: an app dragged to Downloads or an external volume still has a Launch Services record. */
+  private async spotlightBundle(bundleId: string): Promise<string | null> {
+    try {
+      const r = await this.deps.exec('/usr/bin/mdfind', [`kMDItemCFBundleIdentifier == "${bundleId}"`]);
+      return (
+        r.stdout
+          .split('\n')
+          .map((line) => line.trim())
+          .find((line) => /\.app$/.test(line) && existsSync(line)) ?? null
+      );
+    } catch {
+      return null;
+    }
   }
 
   private vscodeImports(userDir: string): { recents: number; keybindings: boolean; theme: boolean } {
@@ -750,11 +872,13 @@ export class DetectService {
   }
 }
 
-interface VscodeLikeSpec {
-  kind: 'vscode' | 'cursor' | 'windsurf';
+/** One build of a VS Code-like editor (stable, or an alternate such as Insiders). */
+interface VscodeBuild {
   product: string;
   /** `<macApp>.app` under /Applications or ~/Applications. */
   macApp: string;
+  /** Launch Services bundle id: Spotlight finds the app wherever it was dragged, and `open -b` launches it. */
+  bundleId: string;
   /** `%LOCALAPPDATA%\Programs\<winDir>` (user setup) or `%PROGRAMFILES%\<winDir>` (system setup). */
   winDir: string;
   /** `<userDirName>/User` under Application Support, %APPDATA% or ~/.config. */
@@ -763,19 +887,35 @@ interface VscodeLikeSpec {
   launcher: string;
 }
 
+interface VscodeLikeSpec extends VscodeBuild {
+  kind: 'vscode' | 'cursor' | 'windsurf';
+  /** Tried when the main build is absent (VS Code Insiders); reported under the same kind. */
+  alternate?: VscodeBuild;
+}
+
 const VSCODE_LIKE_IDES: readonly VscodeLikeSpec[] = [
   {
     kind: 'vscode',
     product: 'VS Code',
     macApp: 'Visual Studio Code',
+    bundleId: 'com.microsoft.VSCode',
     winDir: 'Microsoft VS Code',
     userDirName: 'Code',
     launcher: 'code',
+    alternate: {
+      product: 'VS Code Insiders',
+      macApp: 'Visual Studio Code - Insiders',
+      bundleId: 'com.microsoft.VSCodeInsiders',
+      winDir: 'Microsoft VS Code Insiders',
+      userDirName: 'Code - Insiders',
+      launcher: 'code-insiders',
+    },
   },
   {
     kind: 'cursor',
     product: 'Cursor',
     macApp: 'Cursor',
+    bundleId: 'com.todesktop.230313mzl4w4u92',
     winDir: 'cursor',
     userDirName: 'Cursor',
     launcher: 'cursor',
@@ -784,6 +924,7 @@ const VSCODE_LIKE_IDES: readonly VscodeLikeSpec[] = [
     kind: 'windsurf',
     product: 'Windsurf',
     macApp: 'Windsurf',
+    bundleId: 'com.exafunction.windsurf',
     winDir: 'Windsurf',
     userDirName: 'Windsurf',
     launcher: 'windsurf',

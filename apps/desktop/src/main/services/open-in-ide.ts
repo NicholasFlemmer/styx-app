@@ -18,12 +18,12 @@ export interface LaunchSpec {
   detached: boolean;
 }
 
-const OPEN_A = /^open\s+-a\s+"?(.+?)"?\s*$/;
+const OPEN_A = /^open\s+-(a|b)\s+"?(.+?)"?\s*$/;
 
 export function launchArgs(launcher: string, path: string, platform: NodeJS.Platform): LaunchSpec {
   const bundle = OPEN_A.exec(launcher);
-  if (bundle?.[1] !== undefined)
-    return { file: 'open', args: ['-a', bundle[1], path], shell: false, detached: false };
+  if (bundle?.[1] !== undefined && bundle[2] !== undefined)
+    return { file: 'open', args: [`-${bundle[1]}`, bundle[2], path], shell: false, detached: false };
   if (platform === 'win32' && /\.(cmd|bat)$/i.test(launcher))
     return { file: `"${launcher}" "${path}"`, args: [], shell: true, detached: true };
   return { file: launcher, args: [path], shell: false, detached: true };

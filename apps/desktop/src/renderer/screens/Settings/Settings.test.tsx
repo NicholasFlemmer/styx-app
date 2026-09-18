@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
-import { sectionRows } from './rows';
+import { CLI_BINARY_AUTO, sectionRows } from './rows';
 import { resolveSection } from './sections';
 import { Settings } from './Settings';
 
@@ -92,6 +92,32 @@ describe('sectionRows', () => {
     ]);
     // Only one candidate → no Select row.
     expect(sectionRows(model, 'app:agents', ctx).some((r) => r.id.startsWith('cliBinary:'))).toBe(false);
+  });
+
+  it('a located binary always gets the Select, with "Detected automatically" to undo the pick', () => {
+    const picked = '/Users/nic/Downloads/claude';
+    const m = fixtures.demoReadModel();
+    const clis = m.discovery.clis.map((c) =>
+      c.agent === 'claude'
+        ? {
+            ...c,
+            binary: picked,
+            version: '2.0.0',
+            capabilities: {
+              streamJson: true,
+              source: 'manual',
+              alternatives: [{ binary: picked, version: '2.0.0', source: 'manual' }],
+            },
+          }
+        : c,
+    );
+    const rows = sectionRows({ ...m, discovery: { ...m.discovery, clis } }, 'app:agents', ctx);
+    const pick = rows.find((r) => r.id === 'cliBinary:claude');
+    expect(pick).toMatchObject({ value: picked, change: { kind: 'cli-binary', agent: 'claude' } });
+    expect(pick?.options).toEqual([
+      { value: picked, label: 'claude 2.0.0 · located manually' },
+      { value: CLI_BINARY_AUTO, label: copy.settings.values.cliAutoDetect },
+    ]);
   });
 
   it('project rows mark `source === "project"` keys as overridden', () => {

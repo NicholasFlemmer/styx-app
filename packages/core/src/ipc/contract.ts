@@ -802,6 +802,11 @@ export const commands = {
     input: z.object({ agent: agentSchema, path: z.string().min(1) }),
     output: z.object({ cli: cliInstallSchema }),
   },
+  /** Undo "Locate binary": forget the manual pick and re-detect, so a wrong file never traps the user. */
+  'detect.clearBinary': {
+    input: z.object({ agent: agentSchema }),
+    output: z.object({ cli: cliInstallSchema }),
+  },
   'ide.import': {
     input: z.object({
       ideId: z.string().min(1),
