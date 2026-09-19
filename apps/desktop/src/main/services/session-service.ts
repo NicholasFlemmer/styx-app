@@ -36,7 +36,13 @@ import {
   type Effort,
   type PermissionMode,
 } from '@styx/core';
-import { buildAgentLaunch, type AgentLaunch, type AgentLaunchContext } from '../agents';
+import {
+  agentPreamble,
+  buildAgentLaunch,
+  PREAMBLE_AGENTS,
+  type AgentLaunch,
+  type AgentLaunchContext,
+} from '../agents';
 import { styxMcpServer } from '../agents/types';
 import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
@@ -321,6 +327,8 @@ export class SessionService {
    * waits for this first or the old cleanup deletes the new files from under it.
    */
   private readonly cleanups = new Map<string, Promise<void>>();
+  /** Lines Styx owes an agent with its next turn (ADR-0025): the launch preamble, notes that arrived while it was not working. */
+  private readonly notes = new Map<string, string[]>();
   /** Live broker tokens by session, for scrubbing the terminal view; dropped when the process exits. */
   private readonly liveTokens = new Map<string, string>();
   /** Asks opened from a CLI hook (`permission_prompt` / `agent_needs_input`), cancelled once the agent moves on. */
@@ -571,13 +579,22 @@ export class SessionService {
     };
     // What the other lanes of the project are doing (ADR-0025), for the system prompt; empty when alone.
     const others = (await this.deps.laneLedger?.promptBlock(session.id).catch(() => '')) ?? '';
+    const lane =
+      worktree.branch !== null && !worktree.isMain
+        ? { branch: worktree.branch, base: projectSettingsFor(repos, project.id).baseBranch.value, others }
+        : undefined;
+    // CLIs without a system-prompt flag get the same lines as text ahead of the first turn (or the next one when
+    // the session starts blank), together with anything Styx owed the agent while it was not working.
+    if (PREAMBLE_AGENTS.includes(session.agent))
+      this.notes.set(session.id, [agentPreamble(lane), ...(this.notes.get(session.id) ?? [])]);
+    const outgoing = firstMessage === null ? null : this.withNotes(session.id, firstMessage);
     const ctx: AgentLaunchContext = {
       agent: session.agent,
       binary: binary ?? '',
       sessionId: session.id,
       worktreePath: worktree.path,
       projectPath: project.path,
-      firstMessage,
+      firstMessage: outgoing,
       model: session.model,
       runner,
       capabilities: Object.fromEntries(
@@ -591,15 +608,7 @@ export class SessionService {
       // A relaunch resumes the CLI's own conversation (`--resume`); the first launch has no id yet.
       resumeSessionId: session.cliSessionId,
       // Keep lanes current (ADR-0023): the agent is told the lane's base is Styx's job, not its own.
-      ...(worktree.branch !== null && !worktree.isMain
-        ? {
-            lane: {
-              branch: worktree.branch,
-              base: projectSettingsFor(repos, project.id).baseBranch.value,
-              others,
-            },
-          }
-        : {}),
+      ...(lane !== undefined ? { lane } : {}),
       configDir: join(runtime.userData, 'agents', session.id),
       shimDir: runtime.shimDir,
       platform: runtime.platform,
@@ -625,7 +634,7 @@ export class SessionService {
           env: { ...env, ...launch.env },
           input: launch.stream,
           worktreePath: worktree.path,
-          firstMessage,
+          firstMessage: outgoing,
           session: {
             agent: session.agent,
             model: session.model,
@@ -653,8 +662,8 @@ export class SessionService {
       repos.sessions.upsert({ ...s, pid });
       this.deps.publisher.upsert('sessions', [s.id]);
       this.applyEvent(session.id, { type: 'start' });
-      if (!launch.stream && launch.typeFirstMessage && firstMessage) {
-        setTimeout(() => this.typeIntoPty(session.id, firstMessage), 400).unref?.();
+      if (!launch.stream && launch.typeFirstMessage && outgoing) {
+        setTimeout(() => this.typeIntoPty(session.id, outgoing), 400).unref?.();
       }
     } catch (e) {
       logger.error('session spawn failed', { sessionId: session.id, error: (e as Error).message });
@@ -730,7 +739,7 @@ export class SessionService {
       const ok = await this.relaunch(s);
       if (!ok) return;
     }
-    const text = inlineFiles(body, prepared.files);
+    const text = this.withNotes(s.id, inlineFiles(body, prepared.files));
     if (this.deps.stream.has(s.id)) {
       this.deps.stream.send(s.id, text, prepared.images);
       this.render(s.id, `> ${shown}\r\n`); // the terminal (and its log) never sees file contents
@@ -743,6 +752,30 @@ export class SessionService {
       this.typeIntoPty(s.id, text);
     }
     this.applyEvent(s.id, { type: 'activity' });
+  }
+
+  /**
+   * A Styx line for the agent (ADR-0025: another lane changed the same file, a landing, …): shown in the chat now;
+   * sent to the CLI now while it is working, otherwise owed and sent ahead of its next turn. Never a turn of its
+   * own — an idle agent is not woken up to read a note.
+   */
+  tell(sessionId: string, text: string): void {
+    const s = this.require(sessionId);
+    this.deps.transcript.system(s.id, text);
+    if (s.state === 'done') return;
+    if (s.state === 'working' && this.isRunning(s.id)) {
+      if (this.deps.stream.has(s.id)) this.deps.stream.send(s.id, text, []);
+      else this.typeIntoPty(s.id, text);
+      return;
+    }
+    this.notes.set(s.id, [...(this.notes.get(s.id) ?? []), text]);
+  }
+
+  /** The text the CLI gets: what Styx owed the agent, then the message. */
+  private withNotes(sessionId: string, text: string): string {
+    const notes = this.notes.get(sessionId) ?? [];
+    this.notes.delete(sessionId);
+    return notes.length === 0 ? text : `${notes.join('\n\n')}\n\n${text}`;
   }
 
   /** Spawns the CLI again for a live session whose process is gone (replays nothing). True when a process is attached. */

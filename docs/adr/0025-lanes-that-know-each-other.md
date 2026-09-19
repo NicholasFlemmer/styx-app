@@ -82,11 +82,29 @@ Repo lane in auto mode and a `Merge into {base}` button in review mode (Publish 
    chat gets one plain line; Home gets a row.
 5. **One at a time per project.** Landings queue per project; the next brings the freshly moved base into its lane
    before it merges — the serialised, gated merging the research recommends over parallel merges racing each other.
-6. **Trust is earned.** `ProjectSettings.autoLand` (off by default, auto mode only, owner decision): a session that
-   ends cleanly (exit 0, not a hidden task) lands its lane by itself with the file-list summary — never a prompt
-   spent silently — and a refusal is one line in the chat, with Land still on the Repo row. Landing needs the
-   lane's agent quiet; a lane mid-turn, mid-resolution, already landed, or with nothing the base lacks is refused
-   before anything is touched.
+6. **Trust is earned.** `ProjectSettings.autoLand` (off by default, auto mode only, owner decision): when the
+   agent goes quiet (the turn boundary the resolver and the turn-end sync already use) or its CLI ends cleanly,
+   the lane lands by itself with the file-list summary — never a prompt spent silently — and a refusal is one
+   line in the chat per standing reason, with Land still on the Repo row. A lane mid-turn, mid-resolution, or
+   with nothing the base lacks is refused before anything is touched.
+7. **Landed lanes settle themselves** (`LandService.settle`, at every turn end, after every landing, on every
+   lane refresh). One with new work on it — uncommitted, or commits the base lacks — is live again: the ordinary
+   row, Land on offer, its landing kept for the record, and it can land again. One with nothing new whose landing
+   is no longer the base's HEAD (Undo is over) is tidied away: archived through the same `WorktreeService.archive`
+   the command uses, its session ended, one line in the chat, a Home row — unless its agent is mid-turn. The chat
+   line after a landing says so ("Undo … until {base} moves on; after that the lane is tidied away by itself").
+
+Two things the phases before it left open are closed here too:
+
+- **Every agent gets the lane lines.** Codex, Gemini and Cursor have no system-prompt flag; they now receive the
+  same text Claude Code gets in `--append-system-prompt` (shims, peers, the lane, the other lanes right now) as a
+  preamble ahead of their first message — or the next one, when the session starts blank (`agentPreamble`,
+  `PREAMBLE_AGENTS`, `SessionService` notes). The transcript keeps the human's words; only the CLI sees the
+  preamble.
+- **Overlap warnings reach the agent.** `transcript.system` is display-only; the ledger's write-time warnings
+  were seen by the human and never by the agent. They now go through `SessionService.tell`: in the chat at
+  once; to the CLI at once while it is working (a steer, not a new turn); otherwise owed and sent ahead of the
+  agent's next turn. An idle agent is never woken up to read a note.
 
 ## Consequences
 
@@ -102,5 +120,12 @@ Repo lane in auto mode and a `Merge into {base}` button in review mode (Publish 
   `GitService.mergeNoFf` / `revertMerge` / `numstatFiles`, `SessionHooks.sessionFinished`, the Land modal.
 - `LaneSyncService.save` now writes only the fields it owns onto the row as it is (head, conflict, behind), so a
   landing or resolution set meanwhile survives a refresh — the same rule `HunkService` and the resolver follow.
-- Not yet: archiving a landed lane by itself (Archive stays a click), and a landing across a lane whose agent is
-  Codex, Gemini or Cursor gets the same chat lines but no launch-time instructions (the phase A gap).
+- `WorktreeService.archive` is the one archive path (command and tidy-up). `SessionService.tell` / notes are the
+  one way Styx speaks to an agent outside a turn; the Codex app-server's `developerInstructions` and the
+  context files Gemini and Cursor read would be native routes for the preamble, unverified on this machine and
+  left for later.
+- Found on the way: the grant machine's `cancel` (a request withdrawn at session end or target removal) produced
+  `revoked` with no `issuedAt`, which the grants table's CHECK rejects — so ending a session with a pending
+  grant threw inside the finish effects. `cancel` now ends as `denied`, the audit row unchanged.
+- Not yet: a landed lane's session card still offers Reopen after the tidy-up and refuses with "the lane was
+  removed" (as after a manual Archive).

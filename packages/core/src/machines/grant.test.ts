@@ -69,7 +69,7 @@ const EVENTS: Record<GrantEventType, GrantEvent> = {
 };
 
 const EXPECTED: Record<GrantState, Record<GrantEventType, GrantState | null>> = {
-  requested: { issue: 'active', deny: 'denied', cancel: 'revoked', use: null, revoke: null, expire: null },
+  requested: { issue: 'active', deny: 'denied', cancel: 'denied', use: null, revoke: null, expire: null },
   active: { issue: null, deny: null, cancel: null, use: 'active', revoke: 'revoked', expire: 'expired' },
   denied: { issue: null, deny: null, cancel: null, use: null, revoke: null, expire: null },
   revoked: { issue: null, deny: null, cancel: null, use: null, revoke: null, expire: null },
@@ -234,8 +234,9 @@ describe('deny / cancel', () => {
       'resolveAsk',
     ]);
   });
-  it('cancel on session end revokes the request and cancels the ask', () => {
+  it('cancel on session end ends the request as denied (nothing was issued) and cancels the ask', () => {
     const r = transition('requested', EVENTS.cancel, ctx());
+    expect(r?.state).toBe('denied');
     expect(r?.patch).toEqual({ revokedAt: NOW, revokeReason: 'session-end' });
     expect(r?.effects[1]).toEqual({ type: 'resolveAsk', grantId, outcome: 'cancelled' });
   });

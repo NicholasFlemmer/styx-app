@@ -645,13 +645,84 @@ describe('SessionService relaunch + re-detect', () => {
   });
 });
 
+describe('SessionService.tell + the launch preamble (ADR-0025)', () => {
+  const system = (a: TestApp['app'], id: string) =>
+    a.repos.transcripts
+      .last(id)
+      .filter((m) => m.payload.kind === 'system')
+      .map((m) => m.body);
+
+  it('a Styx line reaches a working agent at once, an idle one ahead of its next message; the chat shows it either way', async () => {
+    const { app: a } = app();
+    const cursor = a.repos.sessions.get(ids.session.cursor)!;
+    a.repos.sessions.upsert({ ...cursor, state: 'done', endedAt: DEMO_NOW, pid: null, exitCode: 0 });
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    expect(a.sessions.get(session.id)?.state).toBe('working');
+    a.sessions.tell(session.id, 'Codex on test/flaky also changed a.ts.');
+    expect(stream.sent).toEqual([{ id: session.id, text: 'Codex on test/flaky also changed a.ts.' }]);
+    expect(system(a, session.id).at(-1)).toBe('Codex on test/flaky also changed a.ts.');
+    // Idle: owed, not sent — the agent is not woken up — and it rides the next message, ahead of it.
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    a.sessions.tell(session.id, 'Shared file: package.json should have one owner.');
+    expect(stream.sent).toHaveLength(1);
+    expect(system(a, session.id).at(-1)).toBe('Shared file: package.json should have one owner.');
+    await a.sessions.sendMessage(session.id, 'Now add tests');
+    expect(stream.sent.at(-1)).toEqual({
+      id: session.id,
+      text: 'Shared file: package.json should have one owner.\n\nNow add tests',
+    });
+    // The transcript keeps the human's words only.
+    expect(
+      a.repos.transcripts
+        .last(session.id)
+        .filter((m) => m.payload.kind === 'user')
+        .map((m) => m.body),
+    ).toEqual(['Fix it', 'Now add tests']);
+    // Done: shown, never sent.
+    a.sessions.stop(session.id);
+    a.sessions.tell(session.id, 'late');
+    expect(system(a, session.id).at(-1)).toBe('late');
+    expect(stream.sent).toHaveLength(2);
+  });
+
+  it('a session started blank on a CLI without a system-prompt flag gets the preamble ahead of its first message', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky, ''));
+    expect(pty.spawned[0]!.args.at(-1)).not.toContain('From Styx');
+    // `start` is `working` until the CLI goes quiet; the TUI's prompt is the notify hook's job.
+    a.sessions.onHook(session.id, 'codex', 'notify', {
+      type: 'agent-turn-complete',
+      'last-assistant-message': '',
+    });
+    expect(a.sessions.get(session.id)?.state).toBe('idle');
+    await a.sessions.sendMessage(session.id, 'Start with the flaky test');
+    const typed = pty.writes.find((w) => w.id === session.id && w.data.includes('Start with the flaky test'));
+    expect(typed?.data.startsWith('From Styx, the app running this session')).toBe(true);
+    expect(typed?.data).toContain('Your worktree is the branch test/flaky, cut from main.');
+    expect(typed?.data.endsWith('\n\nStart with the flaky test')).toBe(true);
+    // Claude Code gets its lines in the system prompt instead: nothing rides its messages.
+    const cursor = a.repos.sessions.get(ids.session.cursor)!;
+    a.repos.sessions.upsert({ ...cursor, state: 'done', endedAt: DEMO_NOW, pid: null, exitCode: 0 });
+    const claude = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo, ''));
+    stream.effect(claude.session.id, { type: 'session', event: 'quiet' });
+    await a.sessions.sendMessage(claude.session.id, 'hello');
+    expect(stream.sent.at(-1)).toEqual({ id: claude.session.id, text: 'hello' });
+  });
+});
+
 describe('SessionService pty runner + CLI hooks', () => {
   it('spawns codex on a pty, typing routes to the pty, and hooks drive the state', async () => {
     const { app: a } = app();
     const { session } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
     expect(session.runner).toBe('pty');
     expect(pty.spawned[0]).toMatchObject({ id: session.id, shell: '/opt/homebrew/bin/codex' });
-    expect(pty.spawned[0]!.args).toEqual(expect.arrayContaining(['-c', 'Fix it']));
+    // No system-prompt flag: the lines Claude Code gets go ahead of the first message (ADR-0025).
+    const prompt = pty.spawned[0]!.args.at(-1) ?? '';
+    expect(prompt.startsWith('From Styx, the app running this session')).toBe(true);
+    expect(prompt).toContain(copy.agentPrompt.shims);
+    expect(prompt).toContain('Your worktree is the branch test/flaky, cut from main.');
+    expect(prompt.endsWith('\n\nFix it')).toBe(true);
+    expect(pty.spawned[0]!.args).toEqual(expect.arrayContaining(['-c']));
     expect(session.state).toBe('working');
 
     a.sessions.onHook(session.id, 'codex', 'notify', {

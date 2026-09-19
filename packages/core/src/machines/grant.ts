@@ -199,8 +199,12 @@ const deny: Cell<Extract<GrantEvent, { type: 'deny' }>> = (event, ctx) => {
   return { state: 'denied', patch: { revokedAt: ctx.now }, effects };
 };
 
+/**
+ * A request withdrawn before anyone answered it (session ended, target removed) ends as `denied`, not `revoked`:
+ * nothing was ever issued, and the store's invariant (`revoked`/`active`/`expired` ⇔ `issuedAt` set) holds.
+ */
 const cancel: Cell<Extract<GrantEvent, { type: 'cancel' }>> = (event, ctx) => ({
-  state: 'revoked',
+  state: 'denied',
   patch: { revokedAt: ctx.now, revokeReason: event.reason },
   effects: [
     audit(ctx, 'revoked', systemActor, { detail: { reason: event.reason } }),

@@ -1,4 +1,4 @@
-import type { Agent, Effort, PermissionMode, Runner } from '@styx/core';
+import { copy, fill, type Agent, type Effort, type PermissionMode, type Runner } from '@styx/core';
 
 /** The styx MCP server as an agent protocol takes it in-band (`session/new.mcpServers`, Codex `-c mcp_servers.*`). */
 export interface McpServerEntry {
@@ -73,6 +73,20 @@ export interface AgentLaunch {
   stream?: StreamInput;
   cleanup(): Promise<void>;
 }
+
+/** CLIs with no system-prompt flag: what Claude Code gets in `--append-system-prompt` goes ahead of their first turn. */
+export const PREAMBLE_AGENTS: readonly Agent[] = ['codex', 'gemini', 'cursor'];
+
+/**
+ * The lines every agent should start with (ADR-0025): the shims, peers, the lane and the other lanes right now —
+ * for `PREAMBLE_AGENTS`, sent as text ahead of the first message (or the next one, when the session starts blank).
+ */
+export const agentPreamble = (lane: AgentLaunchContext['lane']): string => {
+  const parts: string[] = [copy.agentPrompt.preamble, copy.agentPrompt.shims, copy.agentPrompt.peers];
+  if (lane) parts.push(fill(copy.agentPrompt.lane, { branch: lane.branch, base: lane.base }));
+  if (lane?.others) parts.push(lane.others);
+  return parts.join('\n\n');
+};
 
 /** The `styx` shim on PATH (absolute so MCP configs work regardless of the agent's own PATH handling). */
 export const styxBin = (ctx: Pick<AgentLaunchContext, 'shimDir' | 'platform'>): string =>

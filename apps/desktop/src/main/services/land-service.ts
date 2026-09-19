@@ -39,6 +39,8 @@ export interface LandDeps {
     ): Promise<PublishResult>;
   };
   runChecks: (cwd: string, command: string) => Promise<ChecksResult>;
+  /** Removes a lane's checkout and marks it archived (`WorktreeService.archive`): the tidy-up after a landing. */
+  archive: (worktreeId: string) => Promise<void>;
 }
 
 export interface LandFile {
@@ -73,6 +75,8 @@ export interface LandResult {
  */
 export class LandService {
   private readonly queues = new Map<string, Promise<unknown>>();
+  /** The last reason an automatic landing was refused, per lane: a standing reason is said once, not every turn. */
+  private readonly refused = new Map<string, string>();
 
   constructor(private readonly deps: LandDeps) {}
 
@@ -108,8 +112,6 @@ export class LandService {
     if (wt.isMain) fail('invalid-input', 'the main worktree is the base; nothing to land');
     if (wt.archivedAt !== null) fail('invalid-input', 'the lane is archived');
     const branch = wt.branch ?? fail('invalid-input', copy.publish.noBranch);
-    if (wt.landing !== null && wt.landing.undoneAt === null)
-      fail('invalid-transition', fill(copy.land.alreadyLanded, { branch }));
     const project = repos.projects.get(wt.projectId) ?? fail('not-found', 'project not found');
     const base = this.deps.baseOf(project.id);
     const owner = wt.owner.kind === 'session' ? repos.sessions.get(wt.owner.sessionId) : null;
@@ -188,7 +190,71 @@ export class LandService {
       sessionId: owner?.id ?? null,
     });
     logger.info('land: landed', { branch, base, commit, pushed, auto });
+    this.refused.delete(wt.id);
+    // The base moved: earlier landings of this project are past their Undo window.
+    await this.settle(project.id).catch((e: Error) => logger.warn('land: tidy failed', { error: e.message }));
     return { commit, pushed, steps };
+  }
+
+  /**
+   * Landed lanes, settled: one with new work on it (uncommitted, or commits the base lacks) is live again — the
+   * ordinary row, Land on offer, its landing kept for the record; one with nothing new whose landing is no longer
+   * the base's HEAD (Undo is over) is tidied away — archived, its session ended — unless its agent is mid-turn.
+   */
+  async settle(projectId: string): Promise<void> {
+    const { repos, git } = this.deps;
+    const project = repos.projects.get(projectId);
+    if (!project) return;
+    const landed = repos.worktrees
+      .byProject(projectId)
+      .filter(
+        (w) =>
+          !w.isMain &&
+          w.archivedAt === null &&
+          w.branch !== null &&
+          w.mergedAt !== null &&
+          w.landing !== null &&
+          w.landing.undoneAt === null,
+      );
+    if (landed.length === 0) return;
+    const base = this.deps.baseOf(project.id);
+    const head = await git.headCommit(project.path).catch(() => null);
+    for (const wt of landed) {
+      const branch = wt.branch ?? '';
+      const dirty = !(await git.status(wt.path).catch(() => ({ clean: true }))).clean;
+      const ahead = (await git.aheadBehind(project.path, branch, base).catch(() => null))?.ahead ?? 0;
+      if (dirty || ahead > 0) {
+        this.patch(wt.id, (w) => ({ ...w, mergedAt: null }));
+        logger.info('land: lane live again after landing', { branch });
+        continue;
+      }
+      if (head === null || head === wt.landing?.commit) continue;
+      const owner = wt.owner.kind === 'session' ? repos.sessions.get(wt.owner.sessionId) : null;
+      if (owner !== null && (owner.state === 'working' || owner.state === 'needs-you')) continue;
+      if (owner !== null && owner.state !== 'done')
+        this.deps.transcript.system(owner.id, fill(copy.land.archived, { branch, base }));
+      await this.deps.archive(wt.id);
+      this.deps.activity.append({
+        who: copy.repo.you,
+        what: `${project.name} · ${fill(copy.land.activity.archived, { branch })}`,
+        projectId: project.id,
+        sessionId: owner?.id ?? null,
+      });
+      logger.info('land: landed lane tidied away', { branch, base });
+    }
+  }
+
+  /** The agent went quiet: landed lanes settle, then the lane may land on its own. */
+  async onTurnSettled(sessionId: string): Promise<void> {
+    const session = this.deps.repos.sessions.get(sessionId);
+    if (!session || session.purpose) return;
+    await this.settle(session.projectId);
+    await this.maybeAutoLand(sessionId);
+  }
+
+  /** The session reached `done`: the same, for a CLI that ended by itself. */
+  async onSessionFinished(sessionId: string): Promise<void> {
+    return this.onTurnSettled(sessionId);
   }
 
   /** Takes a landing back out of the base while it is the base's HEAD: a revert commit, pushed again if the landing was. */
@@ -234,13 +300,15 @@ export class LandService {
   }
 
   /**
-   * `autoLand` (auto mode): the session ended by itself — land its lane if it has anything for the base. A refusal
-   * is a line in the chat, never a crash: the human can still land from Repo.
+   * `autoLand` (auto mode): the agent went quiet, or its CLI ended cleanly — land its lane if it has anything for
+   * the base. A refusal is a line in the chat (once per standing reason), never a crash: Land stays on the Repo
+   * row.
    */
   async maybeAutoLand(sessionId: string): Promise<void> {
     const { repos, git } = this.deps;
     const session = repos.sessions.get(sessionId);
-    if (!session || session.purpose || session.exitCode !== 0) return;
+    if (!session || session.purpose) return;
+    if (session.state === 'done' ? session.exitCode !== 0 : session.state !== 'idle') return;
     const settings = this.deps.settingsOf(session.projectId);
     if (settings.integration !== 'auto' || !settings.autoLand) return;
     const wt = repos.worktrees.get(session.worktreeId);
@@ -256,6 +324,8 @@ export class LandService {
       await this.land(wt.id, message, { auto: true });
     } catch (e) {
       const reason = ((e as Error).message.split('\n')[0] ?? '').trim();
+      if (this.refused.get(wt.id) === reason) return;
+      this.refused.set(wt.id, reason);
       this.deps.transcript.system(session.id, fill(copy.land.failed, { error: reason }));
       logger.info('land: automatic landing did not happen', { branch: wt.branch, reason });
     }

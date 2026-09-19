@@ -1,5 +1,5 @@
 import { execa } from 'execa';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fixtures } from '@styx/core';
@@ -132,7 +132,8 @@ const systemLines = (t: TestApp, sessionId: string): string[] =>
     .filter((m) => m.payload.kind === 'system')
     .map((m) => m.body);
 
-describe('LandService (ADR-0025 phase C)', () => {
+// Real repos and several landings per case: room under a fully parallel run.
+describe('LandService (ADR-0025 phase C)', { timeout: 30_000 }, () => {
   it("preview: the lane's files against the base, committed and not, and whether the base is pushed", async () => {
     const { t } = await rig();
     expect(await t.app.land.preview(fixCheckout)).toEqual({
@@ -182,15 +183,15 @@ describe('LandService (ADR-0025 phase C)', () => {
     });
     expect(t.app.repos.worktrees.get(acmeMain)?.headCommit).toBe(r.commit);
     expect(systemLines(t, claude).at(-1)).toBe(
-      'Your work on fix/checkout is now in main and on origin. Undo is on the Repo lane.',
+      'Your work on fix/checkout is now in main and on origin. Undo is on the Repo lane until main moves on; after that the lane is tidied away by itself.',
     );
     expect(t.app.repos.activity.recent(1)[0]).toMatchObject({
       who: 'you',
       what: 'acme-shop · landed fix/checkout into main',
     });
-    // Landing it again is refused; so is undoing after the base moved on.
+    // Landing it again with nothing new is refused; so is undoing after the base moved on.
     await expect(t.app.land.land(fixCheckout, { title: 'x', body: '' })).rejects.toThrow(
-      'fix/checkout has already landed.',
+      'Nothing to land: fix/checkout has no changes main does not already have.',
     );
 
     await t.app.land.undo(fixCheckout);
@@ -263,7 +264,7 @@ describe('LandService (ADR-0025 phase C)', () => {
     expect(t.app.repos.worktrees.get(fixCheckout)?.mergedAt).not.toBeNull();
     expect(await sh(['log', '-1', '--format=%s', 'main'], repo)).toBe('Update a.ts and b.ts');
     expect(systemLines(t, claude).at(-1)).toBe(
-      'Your work on fix/checkout is now in main and on origin — landed on its own once the checks passed. Undo is on the Repo lane.',
+      'Your work on fix/checkout is now in main and on origin — landed on its own once the checks passed. Undo is on the Repo lane until main moves on; after that the lane is tidied away by itself.',
     );
     expect(t.app.repos.activity.recent(1)[0]).toMatchObject({
       who: 'Claude Code',
@@ -291,6 +292,59 @@ describe('LandService (ADR-0025 phase C)', () => {
     finished(t4, codex, 0);
     await t4.app.land.maybeAutoLand(codex);
     expect(await sh(['log', '-1', '--format=%s', 'main'], r4)).toBe('main: add c');
+  });
+
+  it('autoLand at turn end: an idle agent that went quiet lands; a standing refusal is said once, not every turn', async () => {
+    const { t, repo, wt2 } = await rig({ autoLand: true, checksCommand: null });
+    // Claude's lane lands when its turn settles.
+    await t.app.land.onTurnSettled(claude);
+    expect(t.app.repos.worktrees.get(fixCheckout)?.landing).not.toBeNull();
+    expect(await sh(['log', '-1', '--format=%s', 'main'], repo)).toBe('Update a.ts and b.ts');
+    // Codex's lane: main is dirty → refused once; the same reason at the next turn end says nothing new.
+    writeFileSync(join(wt2, 'd.ts'), 'd\n');
+    writeFileSync(join(repo, 'a.ts'), 'dirty\n');
+    const before = systemLines(t, codex).length;
+    await t.app.land.onTurnSettled(codex);
+    await t.app.land.onTurnSettled(codex);
+    expect(systemLines(t, codex).slice(before)).toEqual([
+      'Not landed: The main folder has uncommitted changes on main. Commit or discard them first.',
+    ]);
+    // A working agent is left alone; a hidden task never lands.
+    const s = t.app.repos.sessions.get(codex);
+    if (!s) throw new Error('session');
+    t.app.repos.sessions.upsert({ ...s, state: 'working' });
+    await sh(['checkout', '-q', '--', 'a.ts'], repo);
+    await t.app.land.onTurnSettled(codex);
+    expect(t.app.repos.worktrees.get(testFlaky)?.landing).toBeNull();
+  });
+
+  it('settle: a landed lane with new work is live again; one with nothing new is tidied away once the base moves on', async () => {
+    const { t, repo, wt1, wt2 } = await rig({ checksCommand: null });
+    await t.app.land.land(fixCheckout, { title: 'checkout', body: '' });
+    // Still the base's HEAD: nothing happens.
+    await t.app.land.settle(acme);
+    expect(t.app.repos.worktrees.get(fixCheckout)).toMatchObject({ archivedAt: null });
+    // New work on the landed lane: live again (mergedAt cleared, the landing kept).
+    writeFileSync(join(wt1, 'e.ts'), 'e\n');
+    await t.app.land.settle(acme);
+    expect(t.app.repos.worktrees.get(fixCheckout)).toMatchObject({ mergedAt: null, archivedAt: null });
+    expect(t.app.repos.worktrees.get(fixCheckout)?.landing).not.toBeNull();
+    // Landed again (the new file included), then the other lane lands: the first lane's Undo window is over.
+    await t.app.land.land(fixCheckout, { title: 'checkout again', body: '' });
+    expect(t.app.repos.worktrees.get(fixCheckout)?.mergedAt).not.toBeNull();
+    writeFileSync(join(wt2, 'd.ts'), 'd\n');
+    await t.app.land.land(testFlaky, { title: 'flaky', body: '' });
+    const lane1 = t.app.repos.worktrees.get(fixCheckout);
+    expect(lane1?.archivedAt).toBe(t.clock.now());
+    expect(existsSync(wt1)).toBe(false);
+    expect(t.app.repos.sessions.get(claude)?.state).toBe('done');
+    expect(systemLines(t, claude).at(-1)).toBe(
+      'fix/checkout was tidied away: its work is in main, and main has moved on.',
+    );
+    expect(t.app.repos.activity.recent(1)[0]?.what).toBe('acme-shop · tidied away fix/checkout (landed)');
+    // The second lane is the base's HEAD now: it stays, with Undo.
+    expect(t.app.repos.worktrees.get(testFlaky)).toMatchObject({ archivedAt: null });
+    expect(await sh(['show', 'HEAD:e.ts'], repo)).toBe('e');
   });
 
   it('autoLand: a refusal is one line in the chat, never a crash', async () => {

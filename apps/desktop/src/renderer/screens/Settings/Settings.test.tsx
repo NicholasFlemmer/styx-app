@@ -162,7 +162,7 @@ describe('sectionRows', () => {
     });
     // Phase C: landing by itself is opt-in.
     const autoLand = rows.find((r) => r.id === 'autoLand');
-    expect(autoLand).toMatchObject({ label: 'Land finished lanes by themselves', value: 'off' });
+    expect(autoLand).toMatchObject({ label: 'Land on its own when the agent goes quiet and the checks pass', value: 'off' });
     expect(autoLand?.change.kind === 'project' && autoLand.change.patch('on')).toEqual({ autoLand: true });
   });
 

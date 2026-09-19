@@ -13,14 +13,14 @@ import type { Repos } from '../db/repos';
 import type { Publisher } from '../store/publisher';
 import type { GitService } from './git';
 import { logger } from './logger';
-import type { TranscriptService } from './transcript-service';
 
 export interface LaneLedgerDeps {
   repos: Repos;
   git: GitService;
   publisher: Publisher;
   clock: Clock;
-  transcript: TranscriptService;
+  /** A Styx line for the agent: in the chat now, to the CLI now or with its next turn (`SessionService.tell`). */
+  tell: (sessionId: string, text: string) => void;
   /** The project's base branch (`ProjectSettings.baseBranch`). */
   baseOf: (projectId: string) => string;
   /** The project's hotspot globs ([] = `DEFAULT_HOTSPOTS`). */
@@ -178,12 +178,12 @@ export class LaneLedgerService {
       task: taskOf(b.session) || copy.lanes.noTask,
     };
     if (plain.length > 0)
-      this.deps.transcript.system(
+      this.deps.tell(
         a.session.id,
         fill(copy.lanes.overlap, { ...vars, files: listOf(plain, WARN_FILES_MAX) }),
       );
     if (hot.length > 0)
-      this.deps.transcript.system(
+      this.deps.tell(
         a.session.id,
         fill(copy.lanes.overlapHotspot, { ...vars, files: listOf(hot, WARN_FILES_MAX) }),
       );

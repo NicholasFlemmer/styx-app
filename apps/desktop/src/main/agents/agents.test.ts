@@ -8,7 +8,7 @@ import { claudeLaunch } from './claude';
 import { codexLaunch, codexTrustKey } from './codex';
 import { cursorLaunch } from './cursor';
 import { geminiLaunch } from './gemini';
-import type { AgentLaunchContext } from './types';
+import { agentPreamble, PREAMBLE_AGENTS, type AgentLaunchContext } from './types';
 
 const ctx = (agent: 'gemini' | 'cursor' | 'claude', worktreePath: string): AgentLaunchContext => ({
   agent,
@@ -166,5 +166,29 @@ describe('claude launch flags (verified against claude 2.1.263)', () => {
   it('pty launch keeps the first message as the last argument; stream launch never puts it in argv', async () => {
     expect((await launch({ runner: 'pty', firstMessage: 'Fix it' })).at(-1)).toBe('Fix it');
     expect(await launch({ runner: 'stream', firstMessage: 'Fix it' })).not.toContain('Fix it');
+  });
+});
+
+describe('agentPreamble (ADR-0025): CLIs without a system-prompt flag get the same lines ahead of their first turn', () => {
+  it('leads with the Styx line, then shims, peers, the lane and the other lanes; alone on main it is shims and peers', () => {
+    const full = agentPreamble({
+      branch: 'fix/checkout',
+      base: 'main',
+      others: 'Other lanes in this project right now:\n- Codex on test/flaky',
+    });
+    expect(full.split('\n\n')).toEqual([
+      copy.agentPrompt.preamble,
+      copy.agentPrompt.shims,
+      copy.agentPrompt.peers,
+      'Your worktree is the branch fix/checkout, cut from main. Styx keeps it current: it fetches before a session starts, merges main in before Publish, and shows how far behind the lane is. Do not rebase, merge or switch branches yourself. If a merge conflict appears in the tree, resolve it in place and tell the user.',
+      'Other lanes in this project right now:\n- Codex on test/flaky',
+    ]);
+    expect(agentPreamble(undefined).split('\n\n')).toEqual([
+      copy.agentPrompt.preamble,
+      copy.agentPrompt.shims,
+      copy.agentPrompt.peers,
+    ]);
+    expect(agentPreamble({ branch: 'x', base: 'main', others: '' }).split('\n\n')).toHaveLength(4);
+    expect(PREAMBLE_AGENTS).toEqual(['codex', 'gemini', 'cursor']);
   });
 });

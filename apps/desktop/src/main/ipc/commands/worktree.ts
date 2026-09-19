@@ -92,15 +92,7 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
   });
 
   bus.register('worktree.archive', async ({ worktreeId }) => {
-    const wt = requireWorktree(worktreeId);
-    if (wt.isMain) fail('forbidden', 'the main worktree cannot be archived');
-    const project = repos.projects.get(wt.projectId) ?? fail('not-found', 'project not found');
-    for (const s of repos.sessions.byProject(project.id))
-      if (s.worktreeId === wt.id && s.state !== 'done') app.sessions.stop(s.id);
-    await hunks.unwatch(wt.id);
-    await git.worktreeRemove(project.path, wt.path, true).catch(() => undefined);
-    repos.worktrees.upsert({ ...wt, archivedAt: clock.now() });
-    publisher.upsert('worktrees', [wt.id]);
+    await app.worktrees.archive(worktreeId);
     return {};
   });
 

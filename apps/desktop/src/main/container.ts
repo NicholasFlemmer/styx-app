@@ -26,6 +26,7 @@ import type { NotificationService } from './services/notification-service';
 import { ProjectService } from './services/project-service';
 import { LaneLedgerService } from './services/lane-ledger-service';
 import { LandService } from './services/land-service';
+import { WorktreeService } from './services/worktree-service';
 import { LaneSyncService } from './services/lane-sync-service';
 import {
   MergeResolveService,
@@ -233,8 +234,10 @@ export interface Container {
   checkpoints: CheckpointService;
   /** Styx finishes the merge (ADR-0025 phase B). */
   resolver: MergeResolveService;
-  /** Landing (ADR-0025 phase C): a lane into the base, pushed, undoable. */
+  /** Landing (ADR-0025 phase C): a lane into the base, pushed, undoable; landed lanes tidied away. */
   land: LandService;
+  /** Lane lifecycle (archive) shared by the command and the tidy-up. */
+  worktrees: WorktreeService;
   /** Commit, push and PR in one step (ADR-0021); the message draft comes from the project's default agent. */
   publish: PublishService;
   /** Keep lanes current (ADR-0023): behind-base counts, `worktree.sync`, the publish gate. */
@@ -313,7 +316,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     git,
     publisher,
     clock,
-    transcript,
+    tell: (sessionId, text) => sessions.tell(sessionId, text),
     baseOf: (projectId) => projectSettingsFor(repos, projectId).baseBranch.value,
     hotspotsOf: (projectId) => projectSettingsFor(repos, projectId).hotspots.value,
   });
@@ -354,6 +357,14 @@ export function buildContainer(opts: ContainerOptions): Container {
     git,
     ...(opts.watch ? { watch: opts.watch } : {}),
     onRescanned: (worktreeId) => void ledger.laneChanged(worktreeId),
+  });
+  const worktrees = new WorktreeService({
+    repos,
+    git,
+    publisher,
+    clock,
+    stopSession: (id) => sessions.stop(id),
+    unwatch: (id) => hunks.unwatch(id),
   });
   const githubAdapter = providers.get('github');
   const projects = new ProjectService({
@@ -418,7 +429,12 @@ export function buildContainer(opts: ContainerOptions): Container {
     activity,
     sessionEvent: (sessionId, event) => sessions.applyEvent(sessionId, event),
     autoSyncOf: (projectId) => projectSettingsFor(repos, projectId).autoSync.value,
-    onRefreshed: (projectId) => void ledger.refreshProject(projectId),
+    onRefreshed: (projectId) => {
+      void ledger.refreshProject(projectId);
+      void land
+        .settle(projectId)
+        .catch((e: Error) => logger.warn('land: tidy after refresh failed', { projectId, error: e.message }));
+    },
     onSynced: (worktreeId) => void ledger.laneChanged(worktreeId),
     integrationOf: (projectId) => projectSettingsFor(repos, projectId).integration.value,
     resolveConflict: (worktreeId) => resolver.resolve(worktreeId),
@@ -713,6 +729,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     laneSync,
     resolver,
     publish,
+    archive: (worktreeId) => worktrees.archive(worktreeId),
     runChecks:
       opts.runChecks ??
       checksInLoginShell(
@@ -736,16 +753,17 @@ export function buildContainer(opts: ContainerOptions): Container {
         .onTurnSettled(id)
         .catch((e: Error) => logger.warn('merge resolve: verify failed', { sessionId: id, error: e.message }))
         .then(() => laneSync.autoSync(id))
-        .catch((e: Error) => logger.warn('lane sync: auto sync failed', { sessionId: id, error: e.message }));
+        .catch((e: Error) => logger.warn('lane sync: auto sync failed', { sessionId: id, error: e.message }))
+        // Phase C: landed lanes settle (tidied away, or live again), then the lane may land on its own.
+        .then(() => land.onTurnSettled(id))
+        .catch((e: Error) => logger.warn('land: turn end failed', { sessionId: id, error: e.message }));
     },
     limitsReported: (limits) => usage.report(limits),
     // ADR-0025 phase C: a finished lane lands by itself when the project asked for that.
     sessionFinished: (id) =>
       void land
-        .maybeAutoLand(id)
-        .catch((e: Error) =>
-          logger.warn('land: automatic landing failed', { sessionId: id, error: e.message }),
-        ),
+        .onSessionFinished(id)
+        .catch((e: Error) => logger.warn('land: session end failed', { sessionId: id, error: e.message })),
   });
 
   const container: Container = {
@@ -786,6 +804,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     ledger,
     resolver,
     land,
+    worktrees,
     usage,
     terminals,
     broker,
