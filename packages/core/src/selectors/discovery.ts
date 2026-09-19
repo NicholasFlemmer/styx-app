@@ -59,6 +59,12 @@ export const cliSourceOf = (cli: Pick<CliInstall, 'capabilities'>): CliSource | 
   return r.success ? r.data : null;
 };
 
+/** The folders the last detection scanned for this agent (`capabilities.searched`): the not-installed row's "Show where". */
+export const cliSearchedDirs = (cli: Pick<CliInstall, 'capabilities'>): string[] => {
+  const r = z.array(z.string()).safeParse(cli.capabilities['searched']);
+  return r.success ? r.data : [];
+};
+
 /** Every runnable binary detection found for the agent (`capabilities.alternatives`), the chosen one included. */
 export const cliAlternatives = (cli: Pick<CliInstall, 'capabilities'>): CliCandidate[] => {
   const r = z.array(cliCandidateSchema).safeParse(cli.capabilities['alternatives']);

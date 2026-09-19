@@ -29,9 +29,16 @@ export type IdeInstall = z.infer<typeof ideInstallSchema>;
 export const cliAuthStateSchema = z.enum(['signed-in', 'signed-out', 'unknown', 'n/a']);
 export type CliAuthState = z.infer<typeof cliAuthStateSchema>;
 
-/** Where a CLI binary came from (`capabilities.source`); `manual` = picked with "Locate binary" (`detect.setBinary`). */
+/**
+ * Where a CLI binary came from (`capabilities.source`); `manual` = picked with "Locate binary" (`detect.setBinary`).
+ * `shell` = the user's login shell answered `command -v` with it (an alias or a version-manager shim the PATH scan
+ * cannot see); `well-known` = one of the folders the vendors' installers write to that is not on the PATH at all
+ * (owner addition, docs/handoff-discrepancies #89).
+ */
 export const cliSourceSchema = z.enum([
   'path',
+  'shell',
+  'well-known',
   'vscode-extension',
   'cursor-extension',
   'desktop-app',

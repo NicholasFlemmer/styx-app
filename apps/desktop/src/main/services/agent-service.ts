@@ -1,4 +1,12 @@
-import { copy, type Agent, type CliInstall, type ModelInfo } from '@styx/core';
+import {
+  copy,
+  fill,
+  installRecipes,
+  type Agent,
+  type CliInstall,
+  type InstallRecipe,
+  type ModelInfo,
+} from '@styx/core';
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { z } from 'zod';
@@ -6,7 +14,9 @@ import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
 import { fail } from '../ipc/bus';
 import type { Publisher } from '../store/publisher';
+import type { ActivityService } from './activity-service';
 import { probeCodexAppServer, type AppServerIdentity } from './app-server-client';
+import { findOnPath } from './detect-service';
 import { logger } from './logger';
 import type { PtyService } from './pty-service';
 import type { TerminalService } from './terminal-service';
@@ -31,6 +41,14 @@ export interface AgentServiceDeps {
   openExternal: (url: string) => Promise<void>;
   home: string;
   env: NodeJS.ProcessEnv;
+  /** Install from the modal (#89): the platform picks the recipe, the login PATH says which tools it may need. */
+  platform: NodeJS.Platform;
+  loginPath: () => Promise<string>;
+  /** The user's login shell (`-ilc <command>`), so `brew` / `npm` resolve as they do in a terminal. */
+  shell: () => string;
+  /** Re-detects every CLI once an installer exits, before the row is re-verified. */
+  refreshClis: () => Promise<unknown>;
+  activity: ActivityService;
 }
 
 type ConnectableAgent = Exclude<Agent, 'shell'>;
@@ -192,6 +210,79 @@ export class AgentService {
     logger.info('agent: login started', { agent, bin: basename(binary), args, terminalId });
     publisher.sendEvent('agent.login', { terminalId, agent, status: 'running' });
     return { terminalId, command: [basename(binary), ...args].join(' ') };
+  }
+
+  /**
+   * Installs a CLI that is not on the machine with the vendor's own documented command (core `installRecipes`:
+   * the native installer where one exists, else Homebrew or npm when the login shell has them), in a pty the
+   * renderer attaches to. The command is a constant chosen by agent and platform — nothing from the renderer is
+   * interpolated — and it runs in the user's login shell so the installer edits the same rc file a terminal would.
+   * On exit the CLIs are re-detected (the new binary is found in its install folder before any PATH edit takes
+   * effect), the row is re-verified, and only then does `agent.install` report `exited`.
+   */
+  async install(agent: Agent): Promise<{ terminalId: string; command: string }> {
+    if (agent === 'shell') fail('invalid-input', copy.agentsPage.connect.shell);
+    const product = copy.agentProducts[agent];
+    const row = this.deps.repos.discovery.cli(agent);
+    if (row !== null && row.found && row.binary !== null)
+      fail('invalid-transition', `${product} is already installed (${row.binary})`);
+    const recipe = await this.pickRecipe(agent);
+    if (recipe === null) fail('not-found', fill(copy.agentsPage.connect.installNone, { cli: product }));
+    const spawn =
+      recipe.shell === 'powershell'
+        ? {
+            file: findOnPath('powershell', await this.deps.loginPath(), 'win32') ?? 'powershell.exe',
+            args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', recipe.command],
+          }
+        : { file: this.deps.shell(), args: ['-ilc', recipe.command] };
+    const terminalId = await this.deps.terminals
+      .spawnCommand({ ...spawn, cwd: this.deps.home })
+      .catch((e: Error) => fail('internal', `could not start the ${product} installer: ${e.message}`));
+    const { publisher, pty } = this.deps;
+    const onExit = (id: string, exitCode: number) => {
+      if (id !== terminalId) return;
+      pty.off('exit', onExit);
+      void this.afterInstall(agent, recipe, exitCode)
+        .catch((e: Error) =>
+          logger.warn('agent: re-detect after install failed', { agent, error: e.message }),
+        )
+        .finally(() =>
+          publisher.sendEvent('agent.install', { terminalId, agent, status: 'exited', exitCode }),
+        );
+    };
+    pty.on('exit', onExit);
+    logger.info('agent: install started', { agent, command: recipe.command, terminalId });
+    publisher.sendEvent('agent.install', { terminalId, agent, status: 'running' });
+    return { terminalId, command: recipe.command };
+  }
+
+  /** The first recipe for this platform whose required tool the login shell has; null when none applies. */
+  private async pickRecipe(agent: Exclude<Agent, 'shell'>): Promise<InstallRecipe | null> {
+    const recipes = installRecipes(agent, this.deps.platform);
+    if (recipes.length === 0) return null;
+    const path = await this.deps.loginPath();
+    for (const r of recipes) {
+      if (r.requires === null || findOnPath(r.requires, path, this.deps.platform) !== null) return r;
+    }
+    return null;
+  }
+
+  private async afterInstall(
+    agent: Exclude<Agent, 'shell'>,
+    recipe: InstallRecipe,
+    exitCode: number,
+  ): Promise<void> {
+    await this.deps.refreshClis();
+    const row = this.deps.repos.discovery.cli(agent);
+    if (exitCode === 0 && row !== null && row.found) {
+      this.deps.activity.append({
+        who: 'you',
+        what: `${copy.agentProducts[agent]} · installed (${recipe.command})`,
+        projectId: null,
+        sessionId: null,
+      });
+      await this.verify(agent);
+    }
   }
 
   /** Opens the CLI's install documentation in the OS browser. */

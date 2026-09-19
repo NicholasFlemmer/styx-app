@@ -301,6 +301,12 @@ export class SessionService {
   private hooks: SessionHooks | null = null;
   private readonly quietTimers = new Map<string, NodeJS.Timeout>();
   private readonly launches = new Map<string, AgentLaunch>();
+  /**
+   * A finished launch's config-dir removal, still running. A relaunch right behind an exit (Reopen on the board, a
+   * message into a session whose CLI just died) writes its settings into the same `<userData>/agents/<id>`, so it
+   * waits for this first or the old cleanup deletes the new files from under it.
+   */
+  private readonly cleanups = new Map<string, Promise<void>>();
   /** Live broker tokens by session, for scrubbing the terminal view; dropped when the process exits. */
   private readonly liveTokens = new Map<string, string>();
   /** Asks opened from a CLI hook (`permission_prompt` / `agent_needs_input`), cancelled once the agent moves on. */
@@ -507,6 +513,7 @@ export class SessionService {
     opts: { replayFirstMessage: boolean } = { replayFirstMessage: true },
   ): Promise<void> {
     const { repos, runtime } = this.deps;
+    await this.cleanups.get(session.id);
     if (this.deps.redetectClis === true && session.agent !== 'shell') await this.refreshClis();
     const cli = repos.discovery.cli(session.agent);
     // A relaunch (process gone, user sent another message) replays nothing: the CLI starts clean at the next turn.
@@ -611,7 +618,7 @@ export class SessionService {
     } catch (e) {
       logger.error('session spawn failed', { sessionId: session.id, error: (e as Error).message });
       this.launches.delete(session.id);
-      void launch.cleanup().catch(() => undefined);
+      this.trackCleanup(session.id, launch);
       this.applyEvent(session.id, { type: 'error', reason: 'cli-missing' });
     }
   }
@@ -980,7 +987,8 @@ export class SessionService {
   }
 
   /**
-   * Re-detects every agent CLI (PATH, IDE extension bundles, manual picks) and persists the rows; `discovery.set` goes
+   * Re-detects every agent CLI (the login shell's PATH and `command -v` answers, the vendors' install folders, IDE
+   * extension bundles, manual picks — #89) and persists the rows; `discovery.set` goes
    * out only when something other than `checkedAt` changed. A `cli-outdated:<agent>` banner clears once the detected
    * version satisfies the release the CLI asked for. Cheap after the first run: DetectService caches per binary.
    */
@@ -1147,7 +1155,7 @@ export class SessionService {
     this.liveTokens.delete(s.id);
     const launch = this.launches.get(s.id);
     if (launch) {
-      void launch.cleanup().catch(() => undefined);
+      this.trackCleanup(s.id, launch);
       this.launches.delete(s.id);
     }
     if (s.state === 'done') {
@@ -1159,6 +1167,15 @@ export class SessionService {
       return;
     }
     this.applyEvent(s.id, { type: 'finish', exitCode });
+  }
+
+  /** Runs a launch's cleanup and remembers it until it settles, so the next `launch` for the session can wait. */
+  private trackCleanup(sessionId: string, launch: AgentLaunch): void {
+    const done = launch.cleanup().catch(() => undefined);
+    this.cleanups.set(sessionId, done);
+    void done.finally(() => {
+      if (this.cleanups.get(sessionId) === done) this.cleanups.delete(sessionId);
+    });
   }
 
   // --- stream events -------------------------------------------------------

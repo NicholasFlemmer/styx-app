@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -127,6 +127,40 @@ const fakeDetect = (home: string) =>
   } satisfies DetectDeps);
 
 describe('detect.setBinary (Locate binary)', () => {
+  it('a bare command name resolves on the login shell PATH; an unknown one says so; a relative path is refused (#89)', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+    const tools = join(home, 'tools');
+    mkdirSync(tools);
+    const bin = join(tools, 'codex');
+    writeFileSync(bin, '#!/bin/sh\necho 0.42.0\n');
+    chmodSync(bin, 0o755);
+    const detect = new DetectService({
+      platform: 'darwin',
+      home,
+      pathEnv: '',
+      env: { SHELL: '/bin/sh' },
+      login: async () => ({ path: tools, which: {} }),
+      exec: async (b, args) => {
+        if (args[0] === '--version')
+          return { stdout: b.includes('codex') ? 'codex-cli 0.42.0' : 'sh 3.2', exitCode: 0 };
+        return { stdout: 'usage: --config <f> -c', exitCode: 0 };
+      },
+    });
+    const t = makeTestApp({ fixture: 'empty', detect });
+    const r = await t.app.bus.dispatch(t.sender, 'detect.setBinary', { agent: 'codex', path: 'codex' });
+    expect(r).toMatchObject({ ok: true, value: { cli: { binary: bin, found: true, version: '0.42.0' } } });
+    expect(t.app.repos.settings.kv.get<string>(cliBinaryKey('codex'))).toBe(bin);
+    expect(
+      await t.app.bus.dispatch(t.sender, 'detect.setBinary', { agent: 'codex', path: 'nope' }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: 'not-found', message: "Couldn't find nope on your shell PATH." },
+    });
+    expect(
+      await t.app.bus.dispatch(t.sender, 'detect.setBinary', { agent: 'codex', path: 'tools/codex' }),
+    ).toMatchObject({ ok: false, error: { code: 'invalid-input' } });
+  });
+
   it('probes the picked path, stores it in cli_installs + app_settings, and survives a re-detect until the file goes', async () => {
     const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
     const bin = join(home, 'codex');

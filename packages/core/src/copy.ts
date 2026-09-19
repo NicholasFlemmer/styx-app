@@ -861,7 +861,13 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       signIn: 'Sign in',
       locate: 'Locate binary',
       installGuide: 'Install guide',
+      /** Owner addition (#89): the vendor installer from the modal; a page-level re-detect; the path field's action. */
+      install: 'Install',
+      rescan: 'Rescan',
+      use: 'Use',
     },
+    /** Rescan in flight (aria-live on the lead line). */
+    rescanning: 'rescanning…',
     preferences: 'Preferences',
     connect: {
       title: 'Connect agent · {agent}',
@@ -881,6 +887,22 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       verify: 'Verify',
       done: 'Done',
       shell: 'The shell needs no sign-in.',
+      /** Install from the modal (owner addition #89): the vendor's own command, shown before it runs. */
+      install: 'Install {cli}…',
+      installRuns: 'Runs {command}',
+      installing: 'Running {command}…',
+      installFailed: '{command} exited with code {code}.',
+      installNone:
+        'No installer for {cli} on this machine: install it with your package manager, then rescan.',
+      /** Paste a path or a command name instead of hunting through hidden folders in the file picker. */
+      pathField: 'Path or command',
+      pathPlaceholder: '/absolute/path, ~/.local/bin/…, or a command name',
+      notOnPath: "Couldn't find {name} on your shell PATH.",
+      /** Where detection looked, so "not installed" is never a mystery. */
+      searched: 'Looked in {n} folders: your shell PATH and the usual install locations.',
+      searchedNone: 'Nothing has been scanned yet.',
+      showWhere: 'Show where',
+      hideWhere: 'Hide',
     },
   },
 
@@ -1106,6 +1128,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   /** Where a detected CLI binary lives (Settings › Agents & CLIs, onboarding step 3). */
   cliSources: {
     path: 'PATH',
+    /** The login shell answered `command -v` (alias / version-manager shim) · a vendor install folder off the PATH. */
+    shell: 'shell',
+    'well-known': 'install folder',
     'vscode-extension': 'VS Code extension',
     'cursor-extension': 'Cursor extension',
     'desktop-app': 'Claude app',

@@ -37,6 +37,14 @@ const commandMock = vi.fn(async (name: string, _input?: unknown) => {
         : { ok: false as const, error: { code: 'internal', message: 'main went away' } };
     case 'agent.login':
       return { ok: true as const, value: { terminalId: 'term-login-1', command: 'gemini' } };
+    case 'agent.install':
+      return {
+        ok: true as const,
+        value: {
+          terminalId: 'term-install-1',
+          command: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh',
+        },
+      };
     case 'dialog.pickFile':
       return { ok: true as const, value: { path: pickedPath } };
     default:
@@ -212,6 +220,85 @@ describe('ConnectAgentModal', () => {
     fireEvent.click(screen.getByRole('button', { name: copy.agentsPage.actions.locate }));
     await waitFor(() => expect(calls('dialog.pickFile')).toHaveLength(2));
     expect(calls('detect.setBinary')).toHaveLength(1);
+  });
+
+  it('Install runs agent.install in the inline terminal; a clean exit re-verifies (main re-detected first) (#89)', async () => {
+    seed(fixtures.errorReadModel());
+    render(<ConnectAgentModal id="modal-1" agent="codex" />);
+    await waitFor(() => expect(calls('agent.verify')).toHaveLength(1));
+    const install = screen.getByRole('button', { name: 'Install codex…' });
+    expect(install.getAttribute('title')).toBe('Runs curl -fsSL https://chatgpt.com/codex/install.sh | sh');
+    fireEvent.click(install);
+    await waitFor(() => expect(calls('agent.install')).toEqual([['agent.install', { agent: 'codex' }]]));
+    await waitFor(() =>
+      expect(document.querySelector('[data-login-terminal="term-install-1"]')).toBeTruthy(),
+    );
+    expect(screen.getByText('Running curl -fsSL https://chatgpt.com/codex/install.sh | sh…')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Install codex…' }) as HTMLButtonElement).disabled).toBe(true);
+    // A failed installer keeps the terminal with the exit code in its label; Install is offered again.
+    emit('agent.install', { terminalId: 'term-install-1', agent: 'codex', status: 'exited', exitCode: 2 });
+    expect(
+      screen.getByText('curl -fsSL https://chatgpt.com/codex/install.sh | sh exited with code 2.'),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Install codex…' }));
+    await waitFor(() => expect(calls('agent.install')).toHaveLength(2));
+    // A clean exit drops the terminal and verifies; main re-detected before saying so, so the row is already there.
+    emit('agent.install', { terminalId: 'term-install-1', agent: 'codex', status: 'exited', exitCode: 0 });
+    await waitFor(() => expect(document.querySelector('[data-login-terminal]')).toBeNull());
+    await waitFor(() => expect(calls('agent.verify')).toHaveLength(2));
+    seed(
+      withCli('codex', {
+        found: true,
+        binary: '/Users/nic/.local/bin/codex',
+        version: '0.5.0',
+        authState: 'signed-out',
+        verifiedAt: null,
+      }),
+    );
+    expect(document.querySelector('[data-cli-installed]')?.getAttribute('data-cli-installed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Sign in with codex…' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Install codex/ })).toBeNull();
+  });
+
+  it('the path field sends what was typed to detect.setBinary then verifies; Show where lists the scanned folders (#89)', async () => {
+    const m = fixtures.errorReadModel();
+    const clis = m.discovery.clis.map((c) =>
+      c.agent === 'codex'
+        ? {
+            ...c,
+            capabilities: { ...c.capabilities, searched: ['/Users/nic/.local/bin', '/opt/homebrew/bin'] },
+          }
+        : c,
+    );
+    seed({ ...m, discovery: { ...m.discovery, clis } });
+    render(<ConnectAgentModal id="modal-1" agent="codex" />);
+    await waitFor(() => expect(calls('agent.verify')).toHaveLength(1));
+    expect(
+      screen.getByText('Looked in 2 folders: your shell PATH and the usual install locations.'),
+    ).toBeTruthy();
+    expect(document.querySelector('[data-agent-searched]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: copy.agentsPage.connect.showWhere }));
+    expect([...document.querySelectorAll('[data-agent-searched] li')].map((li) => li.textContent)).toEqual([
+      '/Users/nic/.local/bin',
+      '/opt/homebrew/bin',
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: copy.agentsPage.connect.hideWhere }));
+    expect(document.querySelector('[data-agent-searched]')).toBeNull();
+    const use = screen.getByRole('button', { name: copy.agentsPage.actions.use }) as HTMLButtonElement;
+    expect(use.disabled).toBe(true);
+    const field = screen.getByLabelText(copy.agentsPage.connect.pathField) as HTMLInputElement;
+    fireEvent.change(field, { target: { value: '  codex ' } });
+    expect(use.disabled).toBe(false);
+    fireEvent.keyDown(field, { key: 'Enter' });
+    await waitFor(() =>
+      expect(calls('detect.setBinary')).toEqual([['detect.setBinary', { agent: 'codex', path: 'codex' }]]),
+    );
+    await waitFor(() => expect(calls('agent.verify')).toHaveLength(2));
+    expect(field.value).toBe('');
+    // A row that was never scanned says so, without a Show where.
+    seed(fixtures.errorReadModel());
+    expect(screen.getByText(copy.agentsPage.connect.searchedNone)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: copy.agentsPage.connect.showWhere })).toBeNull();
   });
 
   it('shell needs no sign-in: just the note and Done, no verify', () => {

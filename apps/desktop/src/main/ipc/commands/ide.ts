@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } 
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { execa } from 'execa';
-import { cliAlternatives, type IdeInstall } from '@styx/core';
+import { cliAlternatives, copy, fill, type IdeInstall } from '@styx/core';
 import type { Container } from '../../container';
 import { toCliInstall } from '../../services/detect-service';
 import { installOpenIn, type OpenInInstallDeps } from '../../services/ide-import-service';
@@ -66,9 +66,17 @@ export function registerIdeCommands(bus: CommandBus, app: Container): void {
   /** Every candidate (PATH, IDE extension bundles, manual pick) is probed; a located binary outranks the best one. */
   bus.register('detect.clis', async () => ({ clis: await app.sessions.refreshClis() }));
 
-  bus.register('detect.setBinary', async ({ agent, path }) => {
+  bus.register('detect.setBinary', async ({ agent, path: given }) => {
     if (agent === 'shell') fail('invalid-input', 'the shell agent has no binary to locate');
-    if (!isAbsolute(path)) fail('invalid-input', 'the binary path must be absolute');
+    // `~/…` and a bare command name are typed into the Connect modal's path field (#89): the shell's PATH resolves
+    // the name; anything else must already be absolute.
+    const expanded = given === '~' || given.startsWith('~/') ? join(homedir(), given.slice(2)) : given;
+    const path = isAbsolute(expanded)
+      ? expanded
+      : /[\\/]/.test(expanded)
+        ? fail('invalid-input', 'the binary path must be absolute')
+        : ((await detect.resolveName(expanded)) ??
+          fail('not-found', fill(copy.agentsPage.connect.notOnPath, { name: expanded })));
     if (!existsSync(path)) fail('not-found', `${path} does not exist`);
     const probed = await detect.probe(agent, path);
     if (!probed.found) fail('invalid-input', `${path} is not a runnable ${agent} CLI`);

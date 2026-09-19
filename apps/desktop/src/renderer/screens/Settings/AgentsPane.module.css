@@ -8,6 +8,41 @@
     line-height: 1.5;
     max-width: 460px;
   }
+  /* Lead line with Rescan at its end (owner addition #89): the t-label link recipe, 28px hit target (spec §9). */
+  .leadRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    padding-right: var(--sp-5);
+  }
+  .leadAction {
+    position: relative;
+    flex: none;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--mu);
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .leadAction::after {
+    content: '';
+    position: absolute;
+    inset: -8px -4px;
+  }
+  .leadAction:hover {
+    color: var(--tx);
+  }
+  .leadAction[aria-disabled='true'] {
+    cursor: default;
+    opacity: 0.5;
+  }
   /* Account column: "email · plan" from the Codex verifier outgrows 1.2fr; clip with an ellipsis (title = full). */
   .account {
     min-width: 0;

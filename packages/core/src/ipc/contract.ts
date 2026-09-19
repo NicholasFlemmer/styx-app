@@ -266,6 +266,15 @@ export const commands = {
   },
   /** Opens the CLI's install documentation in the OS browser. */
   'agent.installGuide': { input: z.object({ agent: agentSchema }), output: ok },
+  /**
+   * Runs the vendor's own install command for a CLI that is not on the machine (core `installRecipes`, chosen by
+   * platform and by which tools the login shell has) in a pty the renderer attaches to; `agent.install` events
+   * report running/exited, and main re-detects and re-verifies the row when it exits. Owner addition (#89).
+   */
+  'agent.install': {
+    input: z.object({ agent: agentSchema }),
+    output: z.object({ terminalId: z.string().min(1), command: z.string().min(1) }),
+  },
 
   // --- run locally (the design window's dev server) ---
   /** Suggests run commands from the repo (`package.json` scripts and the lockfile, Makefile, manage.py, Cargo.toml, go.mod). */
@@ -662,7 +671,10 @@ export const commands = {
   // --- detection & IDE ---
   'detect.ides': { input: z.object({}), output: z.object({ ides: z.array(ideInstallSchema) }) },
   'detect.clis': { input: z.object({}), output: z.object({ clis: z.array(cliInstallSchema) }) },
-  /** "Locate binary" (spec §4.11 CLI-missing row): a hand-picked CLI path, probed and remembered across re-detects. */
+  /**
+   * "Locate binary" (spec §4.11 CLI-missing row): a hand-picked CLI path, probed and remembered across re-detects.
+   * `path` may also be `~/…` or a bare command name (`claude`), resolved on the login shell's PATH (#89).
+   */
   'detect.setBinary': {
     input: z.object({ agent: agentSchema, path: z.string().min(1) }),
     output: z.object({ cli: cliInstallSchema }),
@@ -795,6 +807,13 @@ export const events = {
   }),
   /** Progress of an `agent.login` terminal; main re-verifies the connection when it exits. */
   'agent.login': z.object({
+    terminalId: z.string().min(1),
+    agent: agentSchema,
+    status: z.enum(['running', 'exited']),
+    exitCode: z.number().int().nullable().optional(),
+  }),
+  /** Progress of an `agent.install` terminal; on exit main re-detects the CLIs and re-verifies the row first. */
+  'agent.install': z.object({
     terminalId: z.string().min(1),
     agent: agentSchema,
     status: z.enum(['running', 'exited']),

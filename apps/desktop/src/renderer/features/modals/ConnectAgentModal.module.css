@@ -73,4 +73,38 @@
   .signIn {
     align-self: flex-start;
   }
+  /* Not installed (owner addition #89): a path-or-command field with Use beside it … */
+  .pathRow {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+  }
+  .pathInput {
+    flex: 1;
+    min-width: 0;
+  }
+  /* … and "Looked in n folders" with Show where; the list is one folder per mono line, scrolling past eight. */
+  .where {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    color: var(--mu);
+    font-size: 12px;
+  }
+  .whereText {
+    flex: 1;
+    min-width: 0;
+  }
+  .whereList {
+    margin: 0;
+    padding: var(--sp-2) var(--sp-3);
+    list-style: none;
+    border: 1px solid var(--ln);
+    color: var(--mu);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.6;
+    max-height: 160px;
+    overflow: auto;
+  }
 }

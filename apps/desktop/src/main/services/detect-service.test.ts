@@ -20,8 +20,10 @@ import {
   findOnPath,
   parseVersion,
   pickBest,
+  systemBinDirs,
   toCliInstall,
   versionSatisfies,
+  wellKnownBinDirs,
   type DetectDeps,
   type IdeDetection,
 } from './detect-service';
@@ -105,6 +107,101 @@ describe('DetectService', () => {
       ]),
     ).toEqual({ binary: '/b', version: '2.1.261', source: 'vscode-extension' });
     expect(pickBest([])).toBeNull();
+  });
+
+  describe('what the terminal sees (#89)', () => {
+    it('unions the login PATH, the shell answer and the install folders; PATH > shell > well-known; searched lists the folders', async () => {
+      const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+      const loginDir = join(home, 'login-bin');
+      const local = join(home, '.local', 'bin');
+      const nvm = join(home, '.nvm', 'versions', 'node', 'v22.1.0', 'bin');
+      const shims = join(home, 'shims');
+      for (const d of [loginDir, local, nvm, shims]) mkdirSync(d, { recursive: true });
+      const onLogin = bin(loginDir, 'codex'); // on the login PATH only — the Dock-launched process never had it
+      const inLocal = bin(local, 'claude'); // the native installer's folder, on no PATH at all
+      const inNvm = bin(nvm, 'gemini'); // an npm global under nvm
+      const shim = bin(shims, 'agent'); // Cursor's `agent`, known to the shell alone (alias / shim)
+      const versions: Record<string, string> = {
+        [onLogin]: 'codex-cli 0.5.0',
+        [inLocal]: 'claude 2.1.300',
+        [inNvm]: 'gemini 1.0.0',
+        [shim]: 'cursor-agent 1.2.0',
+      };
+      const execPaths: string[] = [];
+      const deps: DetectDeps = {
+        platform: 'darwin',
+        home,
+        pathEnv: '/nonexistent/bin',
+        env: { SHELL: '/bin/sh' },
+        login: async () => ({ path: `${loginDir}:/nonexistent/bin`, which: { agent: shim } }),
+        exec: async (b, args, opts) => {
+          if (opts !== undefined) execPaths.push(opts.PATH);
+          if (args[0] === '--version') return { stdout: versions[b] ?? 'sh 3.2', exitCode: 0 };
+          return { stdout: 'usage', exitCode: 0 };
+        },
+      };
+      const reported: string[][] = [];
+      const svc = new DetectService(deps);
+      svc.onSearched = (dirs) => reported.push(dirs);
+      const by = Object.fromEntries((await svc.detectClis()).map((c) => [c.agent, c]));
+      expect(by['codex']).toMatchObject({ found: true, binary: onLogin, source: 'path', version: '0.5.0' });
+      expect(by['claude']).toMatchObject({ found: true, binary: inLocal, source: 'well-known' });
+      expect(by['gemini']).toMatchObject({ found: true, binary: inNvm, source: 'well-known' });
+      expect(by['cursor']).toMatchObject({ found: true, binary: shim, source: 'shell', version: '1.2.0' });
+      // The folders that exist, login PATH first; every row carries them and the watcher hears about them.
+      expect(by['claude']?.searched).toEqual([loginDir, local, nvm]);
+      expect(by['shell']?.searched).toEqual([loginDir, local, nvm]);
+      expect(reported).toEqual([[loginDir, local, nvm]]);
+      expect(toCliInstall(by['claude']!, 1).capabilities['searched']).toEqual([loginDir, local, nvm]);
+      // Version probes run with the whole search space on PATH, so a shim that needs its manager's dir can answer.
+      expect(execPaths[0]).toBe(`${loginDir}:/nonexistent/bin:${local}:${nvm}`);
+      // A bare name typed into the modal resolves the same way: the shell's answer first, then the search space.
+      expect(await svc.resolveName('agent')).toBe(shim);
+      expect(await svc.resolveName('claude')).toBe(inLocal);
+      expect(await svc.resolveName('nope')).toBeNull();
+      // A login shell that does not answer leaves the process PATH and the install folders in play.
+      const quiet = new DetectService({
+        ...deps,
+        login: async () => {
+          throw new Error('shell timed out');
+        },
+      });
+      const again = await quiet.detectClis();
+      expect(again.find((c) => c.agent === 'claude')).toMatchObject({
+        binary: inLocal,
+        source: 'well-known',
+      });
+      expect(again.find((c) => c.agent === 'codex')).toMatchObject({ found: false, searched: [local, nvm] });
+    });
+
+    it("install folders: the vendors' and package managers' dirs under home, plus injected machine-wide ones", () => {
+      const home = '/Users/nic';
+      const posix = wellKnownBinDirs(home, 'darwin', {}, ['/opt/homebrew/bin']);
+      expect(posix.slice(0, 3)).toEqual([
+        '/Users/nic/.local/bin',
+        '/opt/homebrew/bin',
+        '/Users/nic/.npm-global/bin',
+      ]);
+      expect(posix).toContain('/Users/nic/.claude/local');
+      expect(posix).toContain('/Users/nic/.local/share/mise/shims');
+      expect(wellKnownBinDirs(home, 'darwin', {})).not.toContain('/opt/homebrew/bin');
+      const winHome = 'C:\\Users\\nic';
+      const win = wellKnownBinDirs(
+        winHome,
+        'win32',
+        { APPDATA: 'C:\\Users\\nic\\AppData\\Roaming', LOCALAPPDATA: 'C:\\Users\\nic\\AppData\\Local' },
+        systemBinDirs('win32', { ProgramFiles: 'C:\\Program Files' }),
+      );
+      expect(win).toContain(join(winHome, '.local', 'bin'));
+      expect(win).toContain(join('C:\\Users\\nic\\AppData\\Roaming', 'npm'));
+      expect(win).toContain(join('C:\\Program Files', 'nodejs'));
+      expect(systemBinDirs('darwin', {})).toEqual([
+        '/opt/homebrew/bin',
+        '/usr/local/bin',
+        '/home/linuxbrew/.linuxbrew/bin',
+      ]);
+      expect(defaultDeps().systemBinDirs).toEqual(systemBinDirs(process.platform, process.env));
+    });
   });
 
   describe('claude candidates', () => {
@@ -235,6 +332,7 @@ describe('DetectService', () => {
         capabilities: {},
         source: null,
         alternatives: [],
+        searched: expect.any(Array) as string[],
       });
     });
 

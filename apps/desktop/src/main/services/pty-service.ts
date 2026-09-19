@@ -18,6 +18,59 @@ export interface PtyEvents {
   exit: [id: string, exitCode: number, signal: number | undefined];
 }
 
+/** The login shell's answer: its PATH and the absolute file each agent CLI name resolves to (`command -v`). */
+export interface LoginEnv {
+  path: string;
+  which: Record<string, string>;
+  resolvedAt: number;
+}
+
+/** Every agent CLI binary name DetectService knows, asked of the shell in the same call that reads PATH. */
+export const SHELL_WHICH_NAMES: readonly string[] = ['claude', 'codex', 'gemini', 'agent', 'cursor-agent'];
+
+const PATH_MARK = '__STYX_PATH__';
+const POSIX_LOGIN_SCRIPT = `echo ${PATH_MARK}$PATH; for n in ${SHELL_WHICH_NAMES.join(' ')}; do command -v -- "$n" 2>/dev/null; done`;
+const WIN_LOGIN_SCRIPT = [
+  `'${PATH_MARK}' + [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')`,
+  `foreach ($n in ${SHELL_WHICH_NAMES.map((n) => `'${n}'`).join(',')}) { $c = Get-Command $n -ErrorAction SilentlyContinue | Select-Object -First 1; if ($c -and $c.Source) { $c.Source } }`,
+].join('; ');
+
+/**
+ * Splits the login script's output: the `__STYX_PATH__` line is the PATH; every other line that is an absolute
+ * path is a `command -v` hit, keyed by its base name (`claude.exe` → `claude`). Alias and function answers
+ * (`claude: aliased to …`, a bare name) are not files and are dropped.
+ */
+export function parseLoginEnv(stdout: string, platform: NodeJS.Platform): { path: string; which: Record<string, string> } {
+  let path = '';
+  const which: Record<string, string> = {};
+  const absolute = platform === 'win32' ? /^[A-Za-z]:[\\/]/ : /^\//;
+  for (const raw of stdout.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line.startsWith(PATH_MARK)) {
+      path = line.slice(PATH_MARK.length).trim();
+      continue;
+    }
+    if (!absolute.test(line)) continue;
+    const base = (line.split(/[\\/]/).pop() ?? '').replace(/\.(exe|cmd|bat)$/i, '');
+    if (base !== '' && !(base in which)) which[base] = line;
+  }
+  return { path, which };
+}
+
+/** Login PATH first, then whatever the process had that the shell did not list; no duplicates. */
+export function mergePaths(primary: string, secondary: string, platform: NodeJS.Platform): string {
+  const sep = platform === 'win32' ? ';' : ':';
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const dir of [...primary.split(sep), ...secondary.split(sep)]) {
+    const key = platform === 'win32' ? dir.toLowerCase() : dir;
+    if (dir === '' || seen.has(key)) continue;
+    seen.add(key);
+    out.push(dir);
+  }
+  return out.join(sep);
+}
+
 interface PtyModule {
   spawn(file: string, args: string[], opts: { name: string; cols: number; rows: number; cwd: string; env: Record<string, string> }): IPty;
 }
@@ -26,7 +79,8 @@ interface PtyModule {
 export class PtyService extends EventEmitter<PtyEvents> {
   private readonly ptys = new Map<string, IPty>();
   private mod: PtyModule | null = null;
-  private loginPath: string | null = null;
+  private loginEnv: LoginEnv | null = null;
+  private loginInflight: Promise<LoginEnv> | null = null;
 
   constructor(readonly platform: NodeJS.Platform = process.platform) {
     super();
@@ -37,19 +91,52 @@ export class PtyService extends EventEmitter<PtyEvents> {
     return this.mod;
   }
 
-  /** GUI apps on macOS get a stripped PATH; resolve the login shell's PATH once. */
-  async resolveLoginPath(): Promise<string> {
-    if (this.loginPath) return this.loginPath;
-    if (this.platform === 'win32') return (this.loginPath = process.env['PATH'] ?? '');
-    const shell = this.defaultShell();
+  /** GUI apps on macOS get a stripped PATH; the login shell's PATH, cached (see `resolveLoginEnv` for refreshing). */
+  async resolveLoginPath(opts: { maxAgeMs?: number } = {}): Promise<string> {
+    return (await this.resolveLoginEnv(opts)).path;
+  }
+
+  /**
+   * What the user's terminal would see: the login shell's PATH and where it resolves each agent CLI name
+   * (`command -v`, so aliases and version-manager shims count). One shell per call, cached; `maxAgeMs` lets a
+   * re-detect (focus, spawn, a watcher event) ask again after an install edited the shell's rc file, while spawns
+   * keep using the cached answer. Windows reads the machine + user `Path` from the environment store, since a
+   * running process only ever sees the PATH it started with.
+   */
+  async resolveLoginEnv(opts: { maxAgeMs?: number } = {}): Promise<LoginEnv> {
+    const cached = this.loginEnv;
+    if (cached !== null && (opts.maxAgeMs === undefined || Date.now() - cached.resolvedAt <= opts.maxAgeMs))
+      return cached;
+    if (this.loginInflight !== null) return this.loginInflight;
+    this.loginInflight = this.queryLoginEnv().finally(() => {
+      this.loginInflight = null;
+    });
+    return this.loginInflight;
+  }
+
+  private async queryLoginEnv(): Promise<LoginEnv> {
+    const processPath = process.env['PATH'] ?? '';
+    const fallback: LoginEnv = { path: processPath, which: {}, resolvedAt: Date.now() };
     try {
-      const r = await execa(shell, ['-ilc', 'echo __STYX_PATH__$PATH'], { timeout: 5000, reject: false, env: { ...process.env, TERM: 'dumb' } });
-      const m = /__STYX_PATH__(.*)$/m.exec(String(r.stdout ?? ''));
-      this.loginPath = m?.[1]?.trim() || (process.env['PATH'] ?? '');
+      const r =
+        this.platform === 'win32'
+          ? await execa('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WIN_LOGIN_SCRIPT], {
+              timeout: 5000,
+              reject: false,
+              windowsHide: true,
+            })
+          : await execa(this.defaultShell(), ['-ilc', POSIX_LOGIN_SCRIPT], {
+              timeout: 5000,
+              reject: false,
+              env: { ...process.env, TERM: 'dumb' },
+            });
+      const parsed = parseLoginEnv(String(r.stdout ?? ''), this.platform);
+      const path = parsed.path === '' ? processPath : mergePaths(parsed.path, processPath, this.platform);
+      this.loginEnv = { path, which: parsed.which, resolvedAt: Date.now() };
     } catch {
-      this.loginPath = process.env['PATH'] ?? '';
+      this.loginEnv = fallback;
     }
-    return this.loginPath;
+    return this.loginEnv;
   }
 
   defaultShell(): string {

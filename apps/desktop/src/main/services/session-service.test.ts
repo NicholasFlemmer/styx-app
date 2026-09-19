@@ -505,6 +505,7 @@ describe('SessionService CLI-outdated (model needs a newer CLI)', () => {
         capabilities: { streamJson: true },
         source: 'vscode-extension' as const,
         alternatives: [],
+        searched: [],
       },
     ];
     a.detect.detectClis = detected('2.1.199');
@@ -535,6 +536,7 @@ describe('SessionService CLI-outdated (model needs a newer CLI)', () => {
         capabilities: { streamJson: true },
         source: 'path' as const,
         alternatives: [],
+        searched: [],
       },
     ];
     // The CLI itself said nobody is signed in (`agent.verify`), while its credentials file still exists on disk.
@@ -625,6 +627,7 @@ describe('SessionService relaunch + re-detect', () => {
         capabilities: { streamJson: true },
         source: 'path' as const,
         alternatives: [],
+        searched: [],
       },
     ];
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
@@ -801,6 +804,7 @@ describe('SessionService pty runner + CLI hooks', () => {
         capabilities: {},
         source: 'path',
         alternatives: [],
+        searched: [],
       },
     ];
     await expect(a.sessions.resume(session.id)).rejects.toMatchObject({ code: 'cli-missing' });
@@ -816,6 +820,7 @@ describe('SessionService pty runner + CLI hooks', () => {
         capabilities: {},
         source: 'path',
         alternatives: [],
+        searched: [],
       },
     ];
     await a.sessions.resume(session.id);

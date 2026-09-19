@@ -5,6 +5,7 @@ import {
   cliAuthLabel,
   cliConnectionLabel,
   cliConnectionState,
+  cliSearchedDirs,
   cliVersionLabel,
   ideImportsLabel,
   ideVersionLabel,
@@ -140,5 +141,19 @@ describe('model catalogue (discrepancy #83)', () => {
     expect(modelCatalogueFor({ discovery }, 'codex').map((m) => m.label)).toEqual(['GPT-6 Astra']);
     expect(modelCatalogueFor({ discovery }, 'claude')).toEqual([]);
     expect(modelCatalogueFor({ discovery: { ides: [], clis: [] } }, 'codex')).toEqual([]);
+  });
+});
+
+describe('cliSearchedDirs (#89)', () => {
+  it('reads the folders detection scanned off the row; a row without them (older or never scanned) reads []', () => {
+    const codex = demoClis().find((c) => c.agent === 'codex');
+    if (codex === undefined) throw new Error('fixture');
+    expect(cliSearchedDirs(codex)).toEqual([]);
+    expect(
+      cliSearchedDirs({
+        capabilities: { ...codex.capabilities, searched: ['/Users/nic/.local/bin', '/opt/homebrew/bin'] },
+      }),
+    ).toEqual(['/Users/nic/.local/bin', '/opt/homebrew/bin']);
+    expect(cliSearchedDirs({ capabilities: { searched: 'nope' } })).toEqual([]);
   });
 });

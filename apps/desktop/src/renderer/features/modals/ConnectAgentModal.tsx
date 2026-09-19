@@ -1,15 +1,17 @@
 import {
   cliConnectionState,
+  cliSearchedDirs,
   cliVersionLabel,
   copy,
   fill,
+  installRecipes,
   type Agent,
   type CliInstall,
   type EventPayload,
   type ProjectId,
   type ReadModel,
 } from '@styx/core';
-import { Button, Modal, StatusDot } from '@styx/ui';
+import { Button, Input, Modal, StatusDot } from '@styx/ui';
 import { useEffect, useRef, useState } from 'react';
 import { onEvent } from '../../state/bridge';
 import { command } from '../../state/commands';
@@ -24,9 +26,10 @@ export interface ConnectAgentModalProps {
   returnTo?: { modal: 'spawn'; projectId: ProjectId };
 }
 
-interface Login {
+/** A CLI command running in the inline terminal: the sign-in (`claude auth login`) or the installer (`curl … | bash`). */
+interface Run {
   terminalId: string;
-  /** `claude auth login` — what the terminal label names. */
+  /** What the terminal label names. */
   command: string;
   status: EventPayload<'agent.login'>['status'];
   exitCode: number | null;
@@ -45,19 +48,25 @@ const cliNameOf = (agent: Agent, cli: CliInstall | undefined): string => {
 
 /**
  * Connect agent (owner addition; modal 560): verify / sign in for one agent CLI, app-wide. Opens with a fresh
- * `agent.verify`; the status row says where the CLI lives (or offers the install guide / Locate binary), the
- * identity row says who it is signed in as, and `Sign in with <cli>…` runs the CLI's own login inline
- * (`agent.login`, the pty in a LoginTerminal). Main re-verifies when that exits, so the row here just follows
- * the model. Shell needs nothing. Done returns to the Spawn modal when `returnTo` is set.
+ * `agent.verify`; the status row says where the CLI lives — or, for a CLI that is not on the machine, offers
+ * `Install <cli>…` (the vendor's own command in the inline terminal, `agent.install`; #89), the install guide and
+ * Locate binary, with a path-or-command field and the list of folders detection looked in underneath. The identity
+ * row says who it is signed in as, and `Sign in with <cli>…` runs the CLI's own login inline (`agent.login`, the
+ * pty in a LoginTerminal). Main re-detects / re-verifies when either exits, so the row here just follows the
+ * model. Shell needs nothing. Done returns to the Spawn modal when `returnTo` is set.
  */
 export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
   const popOverlay = useUi((u) => u.popOverlay);
+  const platform = useUi((u) => u.platform);
   const cli = useModel((m: ReadModel) => m.discovery.clis.find((c) => c.agent === agent));
   // Opens checking: the page may be hours old, the CLI may have been signed in elsewhere.
   const [checking, setChecking] = useState(agent !== 'shell');
   /** The `agent.verify` command itself failing (main unreachable …); the CLI's own failure sits on the row. */
   const [commandError, setCommandError] = useState<string | null>(null);
-  const [login, setLogin] = useState<Login | null>(null);
+  const [login, setLogin] = useState<Run | null>(null);
+  const [install, setInstall] = useState<Run | null>(null);
+  const [pathText, setPathText] = useState('');
+  const [showWhere, setShowWhere] = useState(false);
   const [busy, setBusy] = useState(false);
   const heading = useRef<HTMLDivElement>(null);
 
@@ -124,6 +133,47 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
     const set = await command('detect.setBinary', { agent, path: r.value.path });
     if (set.ok) await verify();
   };
+  /** The path field: an absolute or `~/` path, or a bare command name main resolves on the shell PATH. */
+  const applyPath = async () => {
+    const value = pathText.trim();
+    if (value === '' || busy) return;
+    setBusy(true);
+    const set = await command('detect.setBinary', { agent, path: value });
+    setBusy(false);
+    if (!set.ok) return;
+    setPathText('');
+    await verify();
+  };
+  /** `agent.install`: main runs the vendor's command in a pty; on exit it re-detects and re-verifies before `exited`. */
+  const startInstall = async (): Promise<void> => {
+    if (shell || installed || busy) return;
+    setBusy(true);
+    const r = await command('agent.install', { agent });
+    setBusy(false);
+    if (!r.ok) return;
+    setInstall({
+      terminalId: r.value.terminalId,
+      command: r.value.command,
+      status: 'running',
+      exitCode: null,
+    });
+  };
+  useEffect(() => {
+    if (install === null) return;
+    return onEvent('agent.install', (e) => {
+      if (e.terminalId !== install.terminalId || e.status !== 'exited') return;
+      const exitCode = e.exitCode ?? null;
+      setInstall(exitCode === 0 ? null : { ...install, status: 'exited', exitCode });
+      if (exitCode === 0) {
+        heading.current?.focus();
+        void verify();
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [install?.terminalId]);
+  /** The command Install would run on this platform (tooltip); null when no recipe applies here. */
+  const recipe = installRecipes(agent, platform)[0] ?? null;
+  const searched = cli === undefined ? [] : cliSearchedDirs(cli);
 
   const c = copy.agentsPage.connect;
   const identity: Identity = checking
@@ -153,6 +203,12 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
       : login.status === 'running'
         ? fill(c.waiting, { command: login.command })
         : fill(c.loginFailed, { command: login.command, code: login.exitCode ?? copy.general.none });
+  const installLabel =
+    install === null
+      ? null
+      : install.status === 'running'
+        ? fill(c.installing, { command: install.command })
+        : fill(c.installFailed, { command: install.command, code: install.exitCode ?? copy.general.none });
 
   return (
     <Modal
@@ -197,6 +253,16 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
             </span>
             {installed ? null : (
               <>
+                <button
+                  type="button"
+                  className={s['link']}
+                  disabled={busy || checking || install?.status === 'running'}
+                  title={recipe === null ? undefined : fill(c.installRuns, { command: recipe.command })}
+                  onClick={() => void startInstall()}
+                  data-agent-install="true"
+                >
+                  {fill(c.install, { cli: cliName })}
+                </button>
                 <button type="button" className={s['link']} onClick={installGuide}>
                   {copy.agentsPage.actions.installGuide}
                 </button>
@@ -206,6 +272,60 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
               </>
             )}
           </div>
+          {installed ? null : (
+            <>
+              {install !== null && installLabel !== null ? (
+                <LoginTerminal terminalId={install.terminalId} label={installLabel} />
+              ) : null}
+              <div className={s['pathRow']}>
+                <Input
+                  mono
+                  {...(s['pathInput'] === undefined ? {} : { className: s['pathInput'] })}
+                  aria-label={c.pathField}
+                  placeholder={c.pathPlaceholder}
+                  value={pathText}
+                  disabled={busy || checking}
+                  onChange={(e) => setPathText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    void applyPath();
+                  }}
+                  data-agent-path="true"
+                />
+                <button
+                  type="button"
+                  className={s['link']}
+                  disabled={busy || checking || pathText.trim() === ''}
+                  onClick={() => void applyPath()}
+                >
+                  {copy.agentsPage.actions.use}
+                </button>
+              </div>
+              <div className={s['where']}>
+                <span className={s['whereText']}>
+                  {searched.length === 0 ? c.searchedNone : fill(c.searched, { n: searched.length })}
+                </span>
+                {searched.length > 0 ? (
+                  <button
+                    type="button"
+                    className={s['link']}
+                    aria-expanded={showWhere}
+                    onClick={() => setShowWhere((v) => !v)}
+                  >
+                    {showWhere ? c.hideWhere : c.showWhere}
+                  </button>
+                ) : null}
+              </div>
+              {showWhere ? (
+                <ul className={s['whereList']} data-agent-searched="true">
+                  {searched.map((dir) => (
+                    <li key={dir}>{dir}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </>
+          )}
           {installed ? (
             <>
               <div className={s['identity']} aria-live="polite" data-agent-identity={identity}>

@@ -29,6 +29,19 @@ export interface CliDetection {
   source: CliSource | null;
   /** Every runnable binary found for the agent, the chosen one included (Settings "Detected CLIs" Select). */
   alternatives: CliCandidate[];
+  /** The folders this detection scanned (login PATH + install folders that exist): the not-installed row's "Show where". */
+  searched: string[];
+}
+
+/** One detection run's search space, computed once and shared by every agent (`DetectService.search`). */
+export interface SearchSpace {
+  /** Login-shell PATH first, then whatever the process had; PATH-separator joined. */
+  pathEnv: string;
+  /** Vendor / package-manager install folders that exist and are not already on `pathEnv`. */
+  wellKnown: string[];
+  /** The shell's `command -v` answer per CLI name (aliases resolved, shims included). */
+  which: Record<string, string>;
+  searched: string[];
 }
 
 /** Manual "Locate binary" picks per agent (`cli.binary.<agent>` in app_settings); a pick that vanished is ignored. */
@@ -58,7 +71,23 @@ export interface DetectDeps {
   home: string;
   pathEnv: string;
   env: NodeJS.ProcessEnv;
-  exec: (bin: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>;
+  /** `opts.PATH` is the run's search space (login PATH + install folders), so version-manager shims can answer. */
+  exec: (
+    bin: string,
+    args: string[],
+    opts?: { PATH: string },
+  ) => Promise<{ stdout: string; exitCode: number }>;
+  /**
+   * What the user's terminal sees (PtyService.resolveLoginEnv): the login shell's PATH and its `command -v` answer
+   * per CLI name. Absent (tests, fixtures) = the process PATH only, which for a Dock-launched app is nearly empty.
+   */
+  login?: () => Promise<{ path: string; which: Record<string, string> }>;
+  /**
+   * Machine-wide install folders off the PATH (`/opt/homebrew/bin`, `/usr/local/bin`, Linuxbrew; `Program Files\nodejs`)
+   * — everything else `wellKnownBinDirs` lists sits under `home`. Injectable so a test with a temp home never
+   * scans the developer's real Homebrew.
+   */
+  systemBinDirs?: readonly string[];
   /** macOS `/Applications` (the Claude desktop app and every IDE bundle are looked up there); injectable for tests. */
   applicationsDir?: string;
   /** Windows `%PROGRAMFILES%` (per-machine VS Code / JetBrains installs); defaults to the env var; injectable for tests. */
@@ -84,27 +113,107 @@ const BUNDLE_SEARCH_DEPTH = 4;
 const SOURCE_RANK: Record<CliSource, number> = {
   manual: 0,
   path: 1,
-  'vscode-extension': 2,
-  'cursor-extension': 3,
-  'desktop-app': 4,
+  shell: 2,
+  'well-known': 3,
+  'vscode-extension': 4,
+  'cursor-extension': 5,
+  'desktop-app': 6,
 };
 
-export function defaultDeps(pathEnv: string = process.env['PATH'] ?? ''): DetectDeps {
+export function defaultDeps(
+  pathEnv: string = process.env['PATH'] ?? '',
+  login?: DetectDeps['login'],
+): DetectDeps {
   return {
     platform: process.platform,
     home: homedir(),
     pathEnv,
     env: process.env,
-    exec: async (bin, args) => {
+    ...(login === undefined ? {} : { login }),
+    systemBinDirs: systemBinDirs(process.platform, process.env),
+    exec: async (bin, args, opts) => {
       const r = await execa(bin, args, {
         reject: false,
         timeout: 8000,
-        env: { ...process.env, PATH: pathEnv, NO_COLOR: '1' },
+        env: { ...process.env, PATH: opts?.PATH ?? pathEnv, NO_COLOR: '1' },
       });
       return { stdout: String(r.stdout ?? '') + '\n' + String(r.stderr ?? ''), exitCode: r.exitCode ?? 1 };
     },
   };
 }
+
+/**
+ * Folders the vendors' installers and the usual package / version managers write CLIs to, whether or not the
+ * shell's PATH lists them (#89): Claude's and Cursor's native installers → `~/.local/bin`; the Homebrew casks
+ * (claude-code, codex, gemini-cli) → `/opt/homebrew/bin` or `/usr/local/bin`; npm globals under nvm / fnm / volta /
+ * bun / pnpm / yarn; asdf and mise shims; the old `claude migrate-installer` dir. Windows: `%USERPROFILE%\.local\bin`
+ * (the native installers), `%APPDATA%\npm`, WinGet's links, scoop shims, pnpm, bun, volta. Names only — the caller
+ * keeps the ones that exist. nvm / fnm versions are listed newest first so a tie on CLI version stays deterministic.
+ */
+export function systemBinDirs(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): string[] {
+  if (platform === 'win32') return [join(env['ProgramFiles'] ?? 'C:\\Program Files', 'nodejs')];
+  return ['/opt/homebrew/bin', '/usr/local/bin', '/home/linuxbrew/.linuxbrew/bin'];
+}
+
+export function wellKnownBinDirs(
+  home: string,
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv,
+  system: readonly string[] = [],
+): string[] {
+  const under = (root: string, ...sub: string[]): string[] => {
+    try {
+      return readdirSync(root)
+        .sort((a, b) => compareVersions(parseVersion(b.replace(/^v/, '')), parseVersion(a.replace(/^v/, ''))))
+        .map((v) => join(root, v, ...sub));
+    } catch {
+      return [];
+    }
+  };
+  if (platform === 'win32') {
+    const appData = env['APPDATA'] ?? join(home, 'AppData', 'Roaming');
+    const local = env['LOCALAPPDATA'] ?? join(home, 'AppData', 'Local');
+    return [
+      join(home, '.local', 'bin'),
+      join(appData, 'npm'),
+      join(local, 'Microsoft', 'WinGet', 'Links'),
+      join(local, 'pnpm'),
+      join(home, '.bun', 'bin'),
+      join(home, '.volta', 'bin'),
+      join(home, 'scoop', 'shims'),
+      ...system,
+    ];
+  }
+  return [
+    join(home, '.local', 'bin'),
+    ...system,
+    join(home, '.npm-global', 'bin'),
+    join(home, '.volta', 'bin'),
+    join(home, '.bun', 'bin'),
+    join(home, '.asdf', 'shims'),
+    join(home, '.local', 'share', 'mise', 'shims'),
+    join(home, '.claude', 'local'),
+    join(home, 'Library', 'pnpm'),
+    join(home, '.local', 'share', 'pnpm'),
+    join(home, '.config', 'yarn', 'global', 'node_modules', '.bin'),
+    ...under(join(home, '.nvm', 'versions', 'node'), 'bin'),
+    ...under(join(home, '.local', 'share', 'fnm', 'node-versions'), 'installation', 'bin'),
+    ...under(join(home, '.fnm', 'node-versions'), 'installation', 'bin'),
+  ];
+}
+
+/** PATH entries in order, blanks and repeats dropped (case-insensitively on Windows). */
+const uniqueDirs = (dirs: readonly string[], platform: NodeJS.Platform): string[] => {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const d of dirs) {
+    const key = platform === 'win32' ? d.toLowerCase() : d;
+    if (d === '' || seen.has(key)) continue;
+    seen.add(key);
+    out.push(d);
+  }
+  return out;
+};
 
 const isExecutableFile = (p: string): boolean => {
   try {
@@ -218,9 +327,10 @@ const notFound = (agent: AgentKind, label: string): CliDetection => ({
   capabilities: {},
   source: null,
   alternatives: [],
+  searched: [],
 });
 
-/** The persisted row for a detection: `source` and `alternatives` ride along in `capabilities_json` (no migration). */
+/** The persisted row for a detection: `source`, `alternatives` and `searched` ride along in `capabilities_json` (no migration). */
 export const toCliInstall = (c: CliDetection, checkedAt: number): CliInstall => ({
   agent: c.agent,
   binary: c.binary,
@@ -231,6 +341,7 @@ export const toCliInstall = (c: CliDetection, checkedAt: number): CliInstall => 
     ...c.capabilities,
     ...(c.source === null ? {} : { source: c.source }),
     ...(c.alternatives.length === 0 ? {} : { alternatives: c.alternatives }),
+    ...(c.searched.length === 0 ? {} : { searched: c.searched }),
   },
   checkedAt,
   // Connection fields belong to AgentService (`agent.verify`); a fresh detection knows nothing about them.
@@ -246,38 +357,95 @@ interface ProbeCache {
 }
 
 /**
- * Detects agent CLIs — every PATH hit (`which -a`), the VS Code / Cursor extension bundles and the Claude desktop app
- * for `claude` — with version and auth state; the highest version wins. Sign-in stays the CLI's own flow.
- * `--version` / `--help` results are cached per binary (mtime + size), so re-detecting before a spawn or on window
- * focus is a handful of stats once the binaries have been probed.
+ * Detects agent CLIs the way the user's terminal would (#89): every hit on the login shell's PATH (`which -a`), the
+ * shell's own `command -v` answers (aliases, version-manager shims), the vendors' install folders that are not on
+ * the PATH (`wellKnownBinDirs`), the VS Code / Cursor extension bundles and the Claude desktop app for `claude` —
+ * with version and auth state; the highest version wins. Sign-in stays the CLI's own flow. `--version` / `--help`
+ * results are cached per binary (mtime + size), so re-detecting before a spawn or on window focus is a handful of
+ * stats once the binaries have been probed. Every run reports the folders it scanned (`onSearched`) so the
+ * CliWatchService can watch exactly those.
  */
 export class DetectService {
   private readonly cache = new Map<string, ProbeCache>();
+  /** Told the folders each run scanned (the CLI watcher); set by the container. */
+  onSearched: ((dirs: string[]) => void) | null = null;
+  private lastSearched: string[] = [];
+  private execPath = '';
 
   constructor(private readonly deps: DetectDeps = defaultDeps()) {}
 
   async detectClis(overrides: CliOverrides = {}): Promise<CliDetection[]> {
+    const space = await this.search();
     const out: CliDetection[] = [];
     for (const c of CLIS) {
       if (c.agent === 'shell') {
         out.push(await this.detectShell());
         continue;
       }
-      out.push(await this.detectAgent(c.agent, overrides[c.agent] ?? null));
+      out.push(await this.detectAgent(c.agent, overrides[c.agent] ?? null, space));
     }
     return out;
+  }
+
+  /**
+   * The run's search space: the login shell's PATH (then whatever the process had), the install folders that exist
+   * off that PATH, and the shell's `command -v` answers. The folders scanned are remembered for `probe` and handed
+   * to `onSearched`.
+   */
+  async search(): Promise<SearchSpace> {
+    const login = this.deps.login === undefined ? null : await this.deps.login().catch(() => null);
+    const sep = this.deps.platform === 'win32' ? ';' : ':';
+    const pathDirs = uniqueDirs(
+      [...(login?.path ?? '').split(sep), ...this.deps.pathEnv.split(sep)],
+      this.deps.platform,
+    );
+    const onPath = new Set(pathDirs.map(realKey));
+    const wellKnown = wellKnownBinDirs(
+      this.deps.home,
+      this.deps.platform,
+      this.deps.env,
+      this.deps.systemBinDirs ?? [],
+    ).filter((d) => existsSync(d) && !onPath.has(realKey(d)));
+    const searched = [...pathDirs.filter((d) => existsSync(d)), ...wellKnown];
+    this.execPath = [...pathDirs, ...wellKnown].join(sep);
+    this.lastSearched = searched;
+    this.onSearched?.(searched);
+    return { pathEnv: pathDirs.join(sep), wellKnown, which: login?.which ?? {}, searched };
+  }
+
+  /** The folders the last detection scanned. */
+  searchedDirs(): readonly string[] {
+    return this.lastSearched;
+  }
+
+  /**
+   * A bare command name typed into the Connect modal's path field (#89): the shell's own answer first, then the
+   * search space. Null when nothing runnable carries that name.
+   */
+  async resolveName(name: string): Promise<string | null> {
+    const space = await this.search();
+    const hit = space.which[name];
+    if (hit !== undefined && isExecutableFile(hit)) return hit;
+    const sep = this.deps.platform === 'win32' ? ';' : ':';
+    return findOnPath(name, [space.pathEnv, ...space.wellKnown].join(sep), this.deps.platform);
   }
 
   /** One agent: candidates → highest version, unless a still-existing manual pick overrides it. */
   async detectAgent(
     agent: Exclude<AgentKind, 'shell'>,
     override: string | null = null,
+    given?: SearchSpace,
   ): Promise<CliDetection> {
+    const space = given ?? (await this.search());
     const spec = CLIS.find((c) => c.agent === agent) ?? { agent, label: agent, bins: [agent] };
-    const candidates = await this.candidates(agent, spec.bins);
+    const candidates = await this.candidates(agent, spec.bins, space);
     if (override !== null && existsSync(override)) {
       const manual: CliCandidate = { binary: override, version: null, source: 'manual' };
-      const probed = await this.probe(agent, override, { source: 'manual', alternatives: [] });
+      const probed = await this.probe(agent, override, {
+        source: 'manual',
+        alternatives: [],
+        searched: space.searched,
+      });
       if (probed.found) {
         manual.version = probed.version;
         const key = realKey(override);
@@ -286,16 +454,25 @@ export class DetectService {
       }
     }
     const best = pickBest(candidates);
-    if (best === null) return notFound(agent, spec.label);
+    if (best === null) return { ...notFound(agent, spec.label), searched: space.searched };
     return this.probe(agent, best.binary, {
       version: best.version,
       source: best.source,
       alternatives: candidates,
+      searched: space.searched,
     });
   }
 
-  /** Every runnable binary for the agent with its `--version` (cached), in discovery order. */
-  async candidates(agent: Exclude<AgentKind, 'shell'>, bins: readonly string[]): Promise<CliCandidate[]> {
+  /**
+   * Every runnable binary for the agent with its `--version` (cached), in discovery order: PATH, the shell's own
+   * answer, install folders off the PATH, then the bundles. A binary reached two ways keeps the first source.
+   */
+  async candidates(
+    agent: Exclude<AgentKind, 'shell'>,
+    bins: readonly string[],
+    given?: SearchSpace,
+  ): Promise<CliCandidate[]> {
+    const space = given ?? (await this.search());
     const found: { binary: string; source: CliSource }[] = [];
     const seen = new Set<string>();
     const add = (binary: string, source: CliSource) => {
@@ -304,8 +481,15 @@ export class DetectService {
       seen.add(key);
       found.push({ binary, source });
     };
-    for (const b of bins)
-      for (const p of findAllOnPath(b, this.deps.pathEnv, this.deps.platform)) add(p, 'path');
+    const sep = this.deps.platform === 'win32' ? ';' : ':';
+    for (const b of bins) for (const p of findAllOnPath(b, space.pathEnv, this.deps.platform)) add(p, 'path');
+    for (const b of bins) {
+      const hit = space.which[b];
+      if (hit !== undefined && isExecutableFile(hit)) add(hit, 'shell');
+    }
+    if (space.wellKnown.length > 0)
+      for (const b of bins)
+        for (const p of findAllOnPath(b, space.wellKnown.join(sep), this.deps.platform)) add(p, 'well-known');
     if (agent === 'claude') {
       const names = exeNames('claude', this.deps.platform);
       for (const bundle of CLAUDE_EXTENSION_BUNDLES) {
@@ -339,12 +523,18 @@ export class DetectService {
   async probe(
     agent: Exclude<AgentKind, 'shell'>,
     binary: string,
-    opts: { version?: string | null; source?: CliSource; alternatives?: CliCandidate[] } = {},
+    opts: {
+      version?: string | null;
+      source?: CliSource;
+      alternatives?: CliCandidate[];
+      searched?: string[];
+    } = {},
   ): Promise<CliDetection> {
     const label = CLIS.find((c) => c.agent === agent)?.label ?? agent;
     const source = opts.source ?? 'manual';
     const alternatives = opts.alternatives ?? [];
-    if (!existsSync(binary)) return { ...notFound(agent, label), binary };
+    const searched = opts.searched ?? this.lastSearched;
+    if (!existsSync(binary)) return { ...notFound(agent, label), binary, searched };
     const version = opts.version === undefined ? await this.versionOf(binary) : opts.version;
     const help = await this.helpOf(binary);
     const capabilities: Record<string, boolean> = {
@@ -368,6 +558,7 @@ export class DetectService {
       capabilities,
       source,
       alternatives: alternatives.length === 0 ? [{ binary, version, source }] : alternatives,
+      searched,
     };
   }
 
@@ -389,7 +580,7 @@ export class DetectService {
     const key = this.statKey(binary);
     const hit = this.cache.get(binary);
     if (key !== null && hit !== undefined && hit.key === key) return hit.version;
-    const v = await this.deps.exec(binary, ['--version']);
+    const v = await this.deps.exec(binary, ['--version'], { PATH: this.execPath || this.deps.pathEnv });
     const version = parseVersion(v.stdout);
     if (key !== null) this.cache.set(binary, { key, version, help: null });
     return version;
@@ -399,7 +590,8 @@ export class DetectService {
     const key = this.statKey(binary);
     const hit = this.cache.get(binary);
     if (key !== null && hit !== undefined && hit.key === key && hit.help !== null) return hit.help;
-    const help = (await this.deps.exec(binary, ['--help'])).stdout;
+    const help = (await this.deps.exec(binary, ['--help'], { PATH: this.execPath || this.deps.pathEnv }))
+      .stdout;
     if (key !== null) this.cache.set(binary, { key, version: hit?.key === key ? hit.version : null, help });
     return help;
   }
@@ -426,6 +618,7 @@ export class DetectService {
         capabilities: { wsl: !!wsl },
         source: null,
         alternatives: [],
+        searched: this.lastSearched,
       };
     }
     const shell = this.deps.env['SHELL'] || '/bin/zsh';
@@ -441,6 +634,7 @@ export class DetectService {
       capabilities: {},
       source: null,
       alternatives: [],
+      searched: this.lastSearched,
     };
   }
 

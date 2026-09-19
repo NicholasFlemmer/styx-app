@@ -121,6 +121,27 @@ describe('<AgentsPane />', () => {
     await waitFor(() => expect(cells('gemini')[3]).toBe(copy.agentsPage.state.signedOut));
   });
 
+  it('Rescan re-detects every CLI (detect.clis) and reads rescanning… meanwhile (#89)', async () => {
+    const gate: { settle: (() => void) | null } = { settle: null };
+    commandMock.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        gate.settle = resolve;
+      });
+      return { ok: true as const, value: {} };
+    });
+    render(<AgentsPane />);
+    fireEvent.click(screen.getByRole('button', { name: copy.agentsPage.actions.rescan }));
+    expect(calls('detect.clis')).toEqual([['detect.clis', {}]]);
+    await waitFor(() => expect(screen.getByText(copy.agentsPage.rescanning)).toBeTruthy());
+    // A second click while it runs does nothing.
+    fireEvent.click(screen.getByText(copy.agentsPage.rescanning));
+    expect(calls('detect.clis')).toHaveLength(1);
+    gate.settle?.();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: copy.agentsPage.actions.rescan })).toBeTruthy(),
+    );
+  });
+
   it('a failed check reads check failed', () => {
     const m = fixtures.demoReadModel();
     const clis = m.discovery.clis.map((c) =>

@@ -45,6 +45,14 @@ export function AgentsPane({ children }: { children?: ReactNode }) {
   const [checking, setChecking] = useState<readonly Agent[]>([]);
 
   const rows = AGENT_ORDER.map((agent) => clis.find((c) => c.agent === agent) ?? undetected(agent));
+  const [rescanning, setRescanning] = useState(false);
+  /** Re-detects every CLI now (#89): the login shell's PATH, install folders, bundles — the same run focus triggers. */
+  const rescan = async () => {
+    if (rescanning) return;
+    setRescanning(true);
+    await command('detect.clis', {});
+    setRescanning(false);
+  };
 
   const verify = async (agent: Agent) => {
     if (checking.includes(agent)) return;
@@ -58,7 +66,19 @@ export function AgentsPane({ children }: { children?: ReactNode }) {
   const a = copy.agentsPage.actions;
   return (
     <>
-      <p className={s['lead']}>{copy.agentsPage.lead}</p>
+      <div className={s['leadRow']}>
+        <p className={s['lead']}>{copy.agentsPage.lead}</p>
+        <button
+          type="button"
+          className={s['leadAction']}
+          aria-disabled={rescanning || undefined}
+          aria-live="polite"
+          onClick={() => void rescan()}
+          data-agent-rescan="true"
+        >
+          {rescanning ? copy.agentsPage.rescanning : copy.agentsPage.actions.rescan}
+        </button>
+      </div>
       <Table
         columns={TABLE_COLUMNS.agents}
         header={[c.agent, c.version, c.account, c.state, '']}

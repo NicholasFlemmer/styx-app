@@ -1,5 +1,5 @@
 import type { Agent, CliInstall } from '@styx/core';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -72,6 +72,8 @@ function setup(
   exec: ExecFake = async () => ({ stdout: '', exitCode: 0 }),
   env: NodeJS.ProcessEnv = {},
   appServer: AppServerFake = NO_APP_SERVER,
+  /** What the login shell's PATH holds for the install recipes' `requires` (`brew`, `npm`). */
+  loginPath = '/usr/bin',
 ) {
   const pty = new FakePty();
   const t = makeTestApp({ pty });
@@ -79,6 +81,7 @@ function setup(
   const execSpy = vi.fn(exec);
   const appServerSpy = vi.fn(appServer);
   const openExternal = vi.fn(async (_url: string) => undefined);
+  const refreshClis = vi.fn(async () => t.app.repos.discovery.clis());
   const agents = new AgentService({
     repos: t.app.repos,
     publisher: t.app.publisher,
@@ -90,8 +93,13 @@ function setup(
     openExternal,
     home,
     env,
+    platform: 'darwin',
+    loginPath: async () => loginPath,
+    shell: () => '/bin/zsh',
+    refreshClis,
+    activity: t.app.activity,
   });
-  return { ...t, pty, home, agents, exec: execSpy, appServer: appServerSpy, openExternal };
+  return { ...t, pty, home, agents, exec: execSpy, appServer: appServerSpy, openExternal, refreshClis };
 }
 
 const row = (app: ReturnType<typeof setup>['app'], agent: Agent): CliInstall => {
@@ -468,6 +476,114 @@ describe('AgentService.login', () => {
     await expect(agents.login('shell')).rejects.toMatchObject({ code: 'invalid-input' });
     app.repos.discovery.saveCli({ ...row(app, 'codex'), found: false, binary: null });
     await expect(agents.login('codex')).rejects.toMatchObject({ code: 'cli-missing' });
+    expect(pty.spawned).toHaveLength(0);
+  });
+});
+
+describe('AgentService.install (#89)', () => {
+  const missing = (app: ReturnType<typeof setup>['app'], agent: Agent) =>
+    app.repos.discovery.saveCli({ ...row(app, agent), found: false, binary: null });
+  const CLAUDE_INSTALL = 'curl -fsSL https://claude.ai/install.sh | bash';
+
+  it('runs the vendor command in the login shell from home and reports running', async () => {
+    const { agents, app, pty, win, home } = setup();
+    missing(app, 'claude');
+    const r = await agents.install('claude');
+    expect(r).toEqual({ terminalId: expect.stringMatching(/^term:/), command: CLAUDE_INSTALL });
+    expect(app.terminals.isTerminal(r.terminalId)).toBe(true);
+    expect(pty.spawned).toEqual([
+      { id: r.terminalId, shell: '/bin/zsh', args: ['-ilc', CLAUDE_INSTALL], cwd: home, env: {} },
+    ]);
+    expect(win.events('agent.install')).toEqual([
+      { terminalId: r.terminalId, agent: 'claude', status: 'running' },
+    ]);
+  });
+
+  it('gemini: Homebrew when the login PATH has brew, npm otherwise, a clear refusal with neither', async () => {
+    const tools = mkdtempSync(join(tmpdir(), 'styx-tools-'));
+    const tool = (name: string) => {
+      writeFileSync(join(tools, name), '#!/bin/sh\n');
+      chmodSync(join(tools, name), 0o755);
+    };
+    tool('npm');
+    const npmOnly = setup(undefined, {}, NO_APP_SERVER, tools);
+    missing(npmOnly.app, 'gemini');
+    expect((await npmOnly.agents.install('gemini')).command).toBe('npm install -g @google/gemini-cli');
+    tool('brew');
+    const both = setup(undefined, {}, NO_APP_SERVER, tools);
+    missing(both.app, 'gemini');
+    expect((await both.agents.install('gemini')).command).toBe('brew install gemini-cli');
+    const neither = setup(undefined, {}, NO_APP_SERVER, mkdtempSync(join(tmpdir(), 'styx-empty-')));
+    missing(neither.app, 'gemini');
+    await expect(neither.agents.install('gemini')).rejects.toMatchObject({
+      code: 'not-found',
+      message:
+        'No installer for Gemini CLI on this machine: install it with your package manager, then rescan.',
+    });
+    expect(neither.pty.spawned).toHaveLength(0);
+  });
+
+  it('exit re-detects, re-verifies the now-installed row, logs the activity, and only then reports exited', async () => {
+    const { agents, app, pty, win, exec, refreshClis } = setup(async () => ({
+      stdout: CLAUDE_OK,
+      exitCode: 0,
+    }));
+    missing(app, 'claude');
+    // The re-detect finds the fresh binary in its install folder (the fake writes the row the detector would).
+    refreshClis.mockImplementation(async () => {
+      app.repos.discovery.saveCli({
+        ...row(app, 'claude'),
+        found: true,
+        binary: '/Users/nic/.local/bin/claude',
+        version: '2.1.300',
+      });
+      return app.repos.discovery.clis();
+    });
+    const { terminalId } = await agents.install('claude');
+    pty.exit(terminalId, 0);
+    await vi.waitFor(() =>
+      expect(win.events('agent.install').at(-1)).toEqual({
+        terminalId,
+        agent: 'claude',
+        status: 'exited',
+        exitCode: 0,
+      }),
+    );
+    expect(refreshClis).toHaveBeenCalledTimes(1);
+    expect(exec).toHaveBeenCalledWith('/Users/nic/.local/bin/claude', ['auth', 'status', '--json']);
+    expect(row(app, 'claude')).toMatchObject({
+      found: true,
+      authState: 'signed-in',
+      account: 'nic@acme.dev',
+    });
+    expect(app.repos.activity.recent(1)[0]).toMatchObject({
+      who: 'you',
+      what: `Claude Code · installed (${CLAUDE_INSTALL})`,
+      projectId: null,
+      sessionId: null,
+    });
+    pty.exit(terminalId, 1); // a second exit for the same id is ignored (listener removed)
+    expect(win.events('agent.install')).toHaveLength(2);
+  });
+
+  it('a failed installer still re-detects, but verifies nothing and logs nothing', async () => {
+    const { agents, app, pty, win, exec, refreshClis } = setup();
+    missing(app, 'codex');
+    const before = app.repos.activity.recent(100).length;
+    const { terminalId } = await agents.install('codex');
+    pty.exit(terminalId, 1);
+    await vi.waitFor(() =>
+      expect(win.events('agent.install').at(-1)).toMatchObject({ status: 'exited', exitCode: 1 }),
+    );
+    expect(refreshClis).toHaveBeenCalledTimes(1);
+    expect(exec).not.toHaveBeenCalled();
+    expect(app.repos.activity.recent(100)).toHaveLength(before);
+  });
+
+  it('shell has nothing to install; an installed CLI is refused; nothing spawns either way', async () => {
+    const { agents, pty } = setup();
+    await expect(agents.install('shell')).rejects.toMatchObject({ code: 'invalid-input' });
+    await expect(agents.install('claude')).rejects.toMatchObject({ code: 'invalid-transition' });
     expect(pty.spawned).toHaveLength(0);
   });
 });

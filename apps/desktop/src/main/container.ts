@@ -11,6 +11,7 @@ import { GitHubAdapter } from './providers/github';
 import { BrokerHost } from './broker/host';
 import { ActivityService } from './services/activity-service';
 import { AgentService } from './services/agent-service';
+import { CliWatchService } from './services/cli-watch-service';
 import { AuditService } from './services/audit-service';
 import type { CredentialVault } from './services/credential-vault';
 import { DetectService, defaultDeps as defaultDetectDeps } from './services/detect-service';
@@ -213,7 +214,18 @@ export function buildContainer(opts: ContainerOptions): Container {
       .register(['app-server'], new AppServerRunner())
       .register(['acp'], new AcpRunner());
   const ptyLog = new PtyLog(`${runtime.userData}/logs/pty`);
-  const detect = opts.detect ?? new DetectService();
+  // Detection sees what the terminal sees (#89): the login shell's PATH and `command -v` answers, re-asked at most
+  // every 10 s when a re-detect runs. Fixture and test containers (`redetectClis: false`) keep the process PATH so
+  // their rows stay deterministic.
+  const redetect = opts.redetectClis ?? true;
+  const detect =
+    opts.detect ??
+    new DetectService(
+      defaultDetectDeps(
+        process.env['PATH'] ?? '',
+        redetect ? () => pty.resolveLoginEnv({ maxAgeMs: 10_000 }) : undefined,
+      ),
+    );
   const ideImport =
     opts.ideImport ?? new IdeImportService({ platform: runtime.platform, home: homedir(), env: process.env });
   const cli =
@@ -331,7 +343,16 @@ export function buildContainer(opts: ContainerOptions): Container {
     openExternal: opts.openExternal,
     home: homedir(),
     env: process.env,
+    platform: runtime.platform,
+    loginPath: () => pty.resolveLoginPath(),
+    shell: () => pty.defaultShell(),
+    refreshClis: () => sessions.refreshClis(),
+    activity,
   });
+  // An install in a terminal shows up within a second: the folders each detection scanned are watched (#89).
+  const cliWatch = new CliWatchService({ onChange: () => sessions.refreshClis() });
+  detect.onSearched = (dirs) => cliWatch.update(dirs);
+  if (redetect) cliWatch.start();
   const runs = new RunService({
     repos,
     publisher,
@@ -490,6 +511,7 @@ export function buildContainer(opts: ContainerOptions): Container {
       for (const s of repos.sessions.live()) broker.notifyStopping(s.id);
       retention.stop();
       refresh.stop();
+      cliWatch.stop();
       sessions.killAll();
       runs.stopAll();
       await hunks.closeAll();
