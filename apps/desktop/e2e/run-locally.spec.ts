@@ -12,8 +12,9 @@ import { launchStyx } from './launch';
 
 test('first time it asks the agent; a learned command runs, surfaces the URL in the status bar, and Stop ends it', async () => {
   const { app, page, userData } = await launchStyx({ screen: 'workspace', fixture: 'demo', theme: 'dark' });
-  // The harness materialises the demo repos under userData at boot; the script is written after that.
-  const repo = join(userData, 'demo-repos', 'acme-shop');
+  // The harness materialises the demo repos under userData at boot; the script is written after that — into the
+  // lane the workspace shows (Claude's fix/checkout): Run locally looks and runs there (discrepancy #103).
+  const repo = join(userData, 'demo-repos', '.styx', 'worktrees', 'acme-shop', 'fix-checkout');
   writeFileSync(
     join(repo, 'package.json'),
     JSON.stringify(

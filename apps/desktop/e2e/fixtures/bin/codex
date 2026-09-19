@@ -166,7 +166,8 @@ async function runTurn(m) {
   note('item/completed', { item: { type: 'agentMessage', id: msgId, text: 'pong', phase: 'final_answer' }, turnId, completedAtMs: now() });
 
   const cmdId = `cmd_${turnCount}`;
-  const writes = /^write (\S+)$/.exec(text.trim());
+  // Styx sends its lane preamble ahead of the person's message (ADR-0025); the message is the last line.
+  const writes = /^write (\S+)$/.exec(text.trim().split('\n').at(-1) ?? '');
   const command = writes ? `echo hi > ${writes[1]}` : 'echo hi';
   const cmd = (extra) => ({
     type: 'commandExecution',

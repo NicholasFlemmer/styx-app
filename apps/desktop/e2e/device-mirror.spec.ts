@@ -16,7 +16,7 @@ import { launchStyx } from './launch';
 
 /** The seeded acme-shop repo made to look like an Expo app, so `run.detect` offers the device platforms. */
 const seedExpoApp = (userData: string) => {
-  const repo = join(userData, 'demo-repos', 'acme-shop');
+  const repo = join(userData, 'demo-repos', '.styx', 'worktrees', 'acme-shop', 'fix-checkout');
   writeFileSync(
     join(repo, 'package.json'),
     JSON.stringify({ name: 'acme-shop', private: true, dependencies: { expo: '^54.0.0' } }, null, 2),

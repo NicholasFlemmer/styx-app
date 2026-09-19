@@ -318,13 +318,13 @@ export class RunService {
   /**
    * Where Run locally looks and runs (discrepancy #103): the lane the design window is looking at — its files as
    * they are, committed or not, which is what the person sees in the editor — else the main checkout. A lane of
-   * another project is refused; an archived one falls back to main.
+   * another project is refused; an archived one, or one whose folder is gone, falls back to main.
    */
   private laneOf(project: Project, worktreeId: string | undefined): Worktree | null {
     if (worktreeId === undefined) return null;
     const wt = this.deps.repos.worktrees.get(worktreeId);
     if (wt === null || wt.projectId !== project.id) fail('invalid-input', 'that lane is not in this project');
-    return wt.archivedAt === null && !wt.isMain ? wt : null;
+    return wt.archivedAt === null && !wt.isMain && existsSync(wt.path) ? wt : null;
   }
 
   async detect(projectId: ProjectId, worktreeId?: string): Promise<RunDetection> {

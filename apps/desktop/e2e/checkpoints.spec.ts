@@ -122,7 +122,7 @@ test('a turn keeps the design window page before and after; Review shows Before 
     chrome: 'mac',
   });
   try {
-    const repo = join(userData, 'demo-repos', 'acme-shop');
+    const repo = join(userData, 'demo-repos', '.styx', 'worktrees', 'acme-shop', 'fix-checkout');
     writeFileSync(
       join(repo, 'package.json'),
       JSON.stringify({ name: 'acme-shop', private: true, scripts: { dev: DEV_SCRIPT } }, null, 2),

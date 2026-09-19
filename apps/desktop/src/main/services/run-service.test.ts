@@ -343,6 +343,11 @@ describe('RunService', () => {
     expect((await t.app.runs.detect(acme, lane.id)).suggestions).toEqual([
       { command: 'npm run dev', source: 'package.json' },
     ]);
+    // A lane whose folder is gone (removed outside Styx) falls back to main too.
+    t.app.repos.worktrees.upsert({ ...lane, path: join(laneDir, 'gone') });
+    expect((await t.app.runs.detect(acme, lane.id)).suggestions).toEqual([
+      { command: 'npm run dev', source: 'package.json' },
+    ]);
   });
 
   it('start spawns the command through the login shell in the project folder and publishes starting → running', async () => {
