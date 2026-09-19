@@ -36,7 +36,12 @@ export interface AgentLaunchContext {
    */
   resumeSessionId: string | null;
   /** Keep lanes current (ADR-0023): the lane's branch and the base it was cut from, for the system-prompt line. */
-  lane?: { branch: string; base: string };
+  lane?: {
+    branch: string;
+    base: string;
+    /** The "other lanes right now" block (ADR-0025); '' when alone. */
+    others?: string;
+  };
   /** Per-session scratch dir for temp config files (`<userData>/agents/<sessionId>`). */
   configDir: string;
   shimDir: string;

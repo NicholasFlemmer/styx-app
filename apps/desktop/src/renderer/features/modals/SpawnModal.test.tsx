@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { copy, fixtures, type ModelInfo } from '@styx/core';
+import { activeLanes, activeLanesLabel, laneLine, copy, fixtures, type ModelInfo } from '@styx/core';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
@@ -321,5 +321,14 @@ describe('SpawnModal', () => {
     fireEvent.click(screen.getByRole('button', { name: copy.spawn.cancel }));
     expect(useUiStore.getState().overlays).toHaveLength(0);
     expect(commandMock).not.toHaveBeenCalled();
+  });
+  it('lists the lanes already running in the project, one line each (ADR-0025)', () => {
+    render(<SpawnModal id="modal-1" projectId={acme} />);
+    const lanes = activeLanes(useReadModel.getState().model, acme);
+    expect(lanes.length).toBeGreaterThan(0);
+    const block = document.querySelector('[data-spawn-lanes]');
+    expect(block?.getAttribute('data-spawn-lanes')).toBe(String(lanes.length));
+    expect(screen.getByText(activeLanesLabel(lanes.length))).toBeTruthy();
+    for (const lane of lanes) expect(screen.getByText(laneLine(lane))).toBeTruthy();
   });
 });

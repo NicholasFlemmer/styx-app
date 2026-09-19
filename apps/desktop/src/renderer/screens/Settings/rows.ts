@@ -72,6 +72,14 @@ const ON_OFF: readonly RowOption[] = [
   { value: ON, label: copy.settings.values.on },
   { value: OFF, label: copy.settings.values.off },
 ];
+/** ADR-0025: when the base branch comes into a lane by itself. */
+const AUTO_SYNC_VALUES = ['turn', 'publish', 'off'] as const;
+const AUTO_SYNC_OPTIONS: readonly RowOption[] = AUTO_SYNC_VALUES.map((v) => ({
+  value: v,
+  label: copy.settings.values.autoSync[v],
+}));
+const isAutoSync = (v: string): v is (typeof AUTO_SYNC_VALUES)[number] =>
+  (AUTO_SYNC_VALUES as readonly string[]).includes(v);
 
 const MODEL_DEFAULT = 'default';
 const NO_IDE = 'none';
@@ -441,6 +449,17 @@ const agentDefaultsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => 
     // Keep lanes current (ADR-0023): fetch before cutting a lane; merge the base in before push / PR.
     projectRow(model, ctx, 'syncOnSpawn', r.syncOnSpawn, 'syncOnSpawn', onOff, isOn, ON_OFF, true),
     projectRow(model, ctx, 'syncBeforePublish', r.syncBeforePublish, 'syncBeforePublish', onOff, isOn, ON_OFF, true),
+    projectRow(
+      model,
+      ctx,
+      'autoSync',
+      r.autoSync,
+      'autoSync',
+      (v) => v,
+      (v) => (isAutoSync(v) ? v : 'turn'),
+      AUTO_SYNC_OPTIONS,
+      true,
+    ),
   ];
 };
 

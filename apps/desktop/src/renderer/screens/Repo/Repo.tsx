@@ -230,6 +230,18 @@ export function Repo() {
                     </button>
                   </>
                 ) : null}
+                {lane.overlaps !== null ? (
+                  <>
+                    {' '}
+                    <span
+                      className={s['overlapTag']}
+                      title={fill(copy.lanes.tagTitle, { files: lane.overlaps.files.join(', ') })}
+                      data-lane-overlaps={lane.overlaps.branches.join(' ')}
+                    >
+                      {lane.overlaps.branches.map((b) => fill(copy.lanes.tag, { branch: b })).join(' · ')}
+                    </span>
+                  </>
+                ) : null}
               </TableCell>
               <TableCell mono>
                 {lane.prUrl !== null ? (

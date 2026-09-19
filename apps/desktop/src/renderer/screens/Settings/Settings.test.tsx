@@ -130,6 +130,7 @@ describe('sectionRows', () => {
       ['effort', false],
       ['syncOnSpawn', false],
       ['syncBeforePublish', false],
+      ['autoSync', false],
     ]);
   });
 
@@ -141,6 +142,12 @@ describe('sectionRows', () => {
     expect(publish).toMatchObject({ label: 'Bring in the base branch before publishing', value: 'on' });
     expect(spawn?.options.map((o) => o.label)).toEqual(['On', 'Off']);
     expect(publish?.change.kind === 'project' && publish.change.patch('off')).toEqual({ syncBeforePublish: false });
+    // ADR-0025: the base comes in after every turn unless told otherwise.
+    const auto = rows.find((r) => r.id === 'autoSync');
+    expect(auto).toMatchObject({ label: 'Bring in the base branch', value: 'turn' });
+    expect(auto?.options.map((o) => o.label)).toEqual(['After every turn', 'Before publishing', 'Only when I ask']);
+    expect(auto?.change.kind === 'project' && auto.change.patch('off')).toEqual({ autoSync: 'off' });
+    expect(auto?.change.kind === 'project' && auto.change.patch('bogus')).toEqual({ autoSync: 'turn' });
   });
 
   it('Agent defaults: Model lists the CLI aliases; Permission mode / Effort rows patch project settings (discrepancy #54)', () => {
@@ -274,6 +281,7 @@ describe('sectionRows', () => {
       'permissionMode',
       'syncOnSpawn',
       'syncBeforePublish',
+      'autoSync',
     ]);
     expect(geminiRows.find((r) => r.id === 'model')?.options.map((o) => o.value)).toEqual(['default']);
   });
@@ -300,6 +308,7 @@ describe('sectionRows', () => {
       'Default effort',
       'On',
       'On',
+      'After every turn',
     ]);
     expect(values('project:env')).toEqual(['Keychain', 'Per grant', '.styx/project.json']);
   });

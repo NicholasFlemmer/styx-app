@@ -393,6 +393,29 @@ describe('BrokerHost agent-to-agent messaging', () => {
     expect(projectIds).toEqual(new Set([ids.project.acmeShop]));
     expect(peers.filter((p) => p.self).map((p) => p.sessionId)).toEqual([ids.session.gemini]);
     expect(peers.length).toBeGreaterThan(1);
+    // ADR-0025: every peer carries its task and files; the caller's own row never "overlaps with you".
+    for (const p of peers) {
+      expect(typeof p.task).toBe('string');
+      expect(Array.isArray(p.files)).toBe(true);
+      expect(Array.isArray(p.overlapsWithYou)).toBe(true);
+    }
+    expect(peers.find((p) => p.self)?.overlapsWithYou).toEqual([]);
+    const codexRow = peers.find((p) => p.sessionId === ids.session.codex);
+    expect(codexRow?.task).toBe(
+      app.app.repos.sessions.get(ids.session.codex)?.firstMessage?.split('\n')[0]?.trim() ?? '',
+    );
+    client.close();
+  });
+
+  it('project_activity answers with the base, the commits not merged, the other lanes and the overlaps (ADR-0025)', async () => {
+    const { client } = await connectedClient(ids.session.gemini);
+    const a = await client.call('project_activity', {});
+    expect(a.base).toBe('main');
+    expect(a.lanes.map((l) => l.sessionId)).not.toContain(ids.session.gemini);
+    for (const l of a.lanes) expect(l).toMatchObject({ task: expect.any(String), files: expect.any(Array) });
+    // Fixture worktrees have no folders on disk: nothing to diff, nothing overlaps, no base history to list.
+    expect(a).toMatchObject({ behind: expect.any(Number), baseCommits: [], overlaps: [] });
+    client.close();
   });
 
   it('delivers to a peer as a `peer` row in both chats, never as a user message', async () => {

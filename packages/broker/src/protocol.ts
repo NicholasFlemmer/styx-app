@@ -114,8 +114,56 @@ export const methods = {
         state: z.string(),
         note: z.string(),
         self: z.boolean(),
+        /** ADR-0025: the lane's task, the files it changed against the base, and which of those the caller changed too. */
+        task: z.string(),
+        files: z.array(z.string()),
+        overlapsWithYou: z.array(z.string()),
       }),
     ),
+  },
+  /**
+   * What the project did beyond the caller's worktree (ADR-0025): the base commits this lane has not merged, each
+   * with its files and the Styx lane it came from when it was one; the other live lanes with task and files; and
+   * every file of the caller's that another lane changed too.
+   */
+  project_activity: {
+    params: z.object({}),
+    result: z.object({
+      base: z.string(),
+      behind: z.number().int().nonnegative(),
+      baseCommits: z.array(
+        z.object({
+          sha: z.string(),
+          subject: z.string(),
+          when: z.number(),
+          files: z.array(z.string()),
+          lane: z.object({ agent: z.string(), branch: z.string(), task: z.string() }).nullable(),
+        }),
+      ),
+      lanes: z.array(
+        z.object({
+          sessionId: z.string(),
+          agent: z.string(),
+          branch: z.string().nullable(),
+          state: z.string(),
+          task: z.string(),
+          files: z.array(z.string()),
+        }),
+      ),
+      overlaps: z.array(
+        z.object({
+          file: z.string(),
+          with: z.array(
+            z.object({
+              sessionId: z.string(),
+              agent: z.string(),
+              branch: z.string().nullable(),
+              task: z.string(),
+            }),
+          ),
+        }),
+      ),
+    }),
   },
   /**
    * Send a message to another agent in the same project. It lands in that session's chat as a peer message —

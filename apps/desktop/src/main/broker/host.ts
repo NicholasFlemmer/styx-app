@@ -17,12 +17,14 @@ import {
   type Scope,
   type Target,
   copy,
+  taskOf,
 } from '@styx/core';
 import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
 import type { IssuedCredential, ProviderRegistry } from '../providers';
 import type { GrantOutcome, GrantService } from '../services/grant-service';
 import type { HunkService } from '../services/hunk-service';
+import type { LaneLedgerService } from '../services/lane-ledger-service';
 import { logger, redact, redactArgv } from '../services/logger';
 import { sha256, type SessionService } from '../services/session-service';
 
@@ -31,6 +33,8 @@ export interface BrokerHostDeps {
   grants: GrantService;
   sessions: SessionService;
   hunks: Pick<HunkService, 'rescan'>;
+  /** Lanes that know about each other (ADR-0025): files per lane, and the project_activity answer. */
+  ledger: Pick<LaneLedgerService, 'filesOf' | 'activity'>;
   providers: ProviderRegistry;
   clock: Clock;
   endpoint: string;
@@ -384,18 +388,34 @@ export class BrokerHost {
 
     /** Peers in the caller's project. Discovery must exist before messaging: ids are ULIDs, never names. */
     server.on('list_sessions', async (_p, ctx) => {
-      return deps.repos.sessions
-        .byProject(ctx.session.projectId)
-        .filter((x) => x.archivedAt === null)
-        .map((x) => ({
+      // ADR-0025: each peer's task and files, and which of those the caller changed too, so an agent can keep to
+      // its own files or talk to the right peer before touching shared ones.
+      const me = deps.repos.sessions.get(ctx.session.sessionId);
+      const myWorktree = me ? deps.repos.worktrees.get(me.worktreeId) : null;
+      const mine = new Set(myWorktree ? await deps.ledger.filesOf(myWorktree) : []);
+      const out = [];
+      for (const x of deps.repos.sessions.byProject(ctx.session.projectId)) {
+        if (x.archivedAt !== null) continue;
+        const worktree = deps.repos.worktrees.get(x.worktreeId);
+        const self = x.id === ctx.session.sessionId;
+        const files = worktree && x.state !== 'done' ? await deps.ledger.filesOf(worktree) : [];
+        out.push({
           sessionId: x.id,
           agent: x.agent,
-          branch: deps.repos.worktrees.get(x.worktreeId)?.branch ?? null,
+          branch: worktree?.branch ?? null,
           state: x.state,
           note: x.note ?? '',
-          self: x.id === ctx.session.sessionId,
-        }));
+          self,
+          task: taskOf(x),
+          files,
+          overlapsWithYou: self ? [] : files.filter((f) => mine.has(f)),
+        });
+      }
+      return out;
     });
+
+    /** What the project did beyond the caller's worktree (ADR-0025). */
+    server.on('project_activity', async (_p, ctx) => deps.ledger.activity(ctx.session.sessionId));
 
     /**
      * Agent-to-agent messaging. This is a deliberate, narrow exception to an invariant enforced everywhere else

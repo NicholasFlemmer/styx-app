@@ -92,12 +92,28 @@ export function createStyxMcpServer(client: BrokerClient): McpServer {
     'list_sessions',
     {
       description:
-        'List the other agents working in this project, with their branch and current status. Use this to find the session id of a peer before messaging it.',
+        'List the other agents working in this project: branch, status, their task, the files they changed, and which of those files you changed too (overlapsWithYou). Use it to find a peer before messaging it and to avoid working on the same files.',
       inputSchema: {},
     },
     async () => {
       try {
         return text(await client.call('list_sessions', {}));
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'project_activity',
+    {
+      description:
+        'What changed in this project beyond your worktree: commits on the base branch you have not merged yet (with their files and which agent lane they came from), the other lanes with their tasks and files, and every file of yours another lane changed too. Read it before touching a file another agent has changed, and before starting on shared files.',
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        return text(await client.call('project_activity', {}));
       } catch (e) {
         return fail(e);
       }

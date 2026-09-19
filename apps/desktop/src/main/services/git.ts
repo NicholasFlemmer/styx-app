@@ -215,6 +215,44 @@ export class GitService {
     return m ? { ahead: Number(m[1]), behind: Number(m[2]) } : { ahead: 0, behind: 0 };
   }
 
+  /** Paths that differ between two refs in the merge-base form (`from...to`), relative to the repo root. */
+  async diffNames(path: string, from: string, to: string): Promise<string[]> {
+    const r = await this.git.run(['diff', '--name-only', `${from}...${to}`], path, { reject: false });
+    if (r.exitCode !== 0) return [];
+    return r.stdout
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l !== '');
+  }
+
+  /** Commits reachable from `to` but not from `from` (`from..to`), newest first, each with the files it touched. */
+  async logRange(
+    path: string,
+    from: string,
+    to: string,
+    limit = 50,
+  ): Promise<{ sha: string; subject: string; when: number; files: string[] }[]> {
+    const r = await this.git.run(
+      ['log', `--max-count=${limit}`, '--name-only', '--format=%x01%H%x00%s%x00%ct', `${from}..${to}`],
+      path,
+      { reject: false },
+    );
+    if (r.exitCode !== 0) return [];
+    const out: { sha: string; subject: string; when: number; files: string[] }[] = [];
+    for (const block of r.stdout.split('\u0001').slice(1)) {
+      const [header = '', ...rest] = block.split('\n');
+      const [sha = '', subject = '', ct = '0'] = header.split('\u0000');
+      if (sha === '') continue;
+      out.push({
+        sha,
+        subject,
+        when: Number(ct) * 1000,
+        files: rest.map((l) => l.trim()).filter((l) => l !== ''),
+      });
+    }
+    return out;
+  }
+
   async fetch(path: string): Promise<void> {
     await this.git.run(['fetch', '--prune', '--quiet'], path, { reject: false });
   }

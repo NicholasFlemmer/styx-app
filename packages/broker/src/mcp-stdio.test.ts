@@ -37,6 +37,7 @@ describe('styx MCP server', () => {
       'get_credential',
       'list_sessions',
       'list_targets',
+      'project_activity',
       'remember_command',
       'report_status',
       'request_access',

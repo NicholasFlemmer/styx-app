@@ -79,6 +79,7 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
       pr: null,
       conflict: null,
       behindBase: 0,
+      overlaps: [],
       mergedAt: null,
       createdAt: clock.now(),
       archivedAt: null,

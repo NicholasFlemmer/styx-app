@@ -5,9 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { CliWatchService } from './cli-watch-service';
 
 const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// fs.watch on macOS can take seconds to deliver under a full parallel test run; the budget is generous on purpose.
 
 describe('CliWatchService (#98)', () => {
-  it('re-detects once per burst of changes in a watched folder; released and stopped folders are quiet', async () => {
+  it('re-detects once per burst of changes in a watched folder; released and stopped folders are quiet', { timeout: 30_000 }, async () => {
     const a = mkdtempSync(join(tmpdir(), 'styx-watch-a-'));
     const b = mkdtempSync(join(tmpdir(), 'styx-watch-b-'));
     const onChange = vi.fn(async () => undefined);
@@ -19,14 +20,14 @@ describe('CliWatchService (#98)', () => {
     expect(svc.size).toBe(1);
     writeFileSync(join(a, 'claude'), '');
     writeFileSync(join(a, 'codex'), '');
-    await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(1), { timeout: 15_000 });
     await settle(150);
     expect(onChange).toHaveBeenCalledTimes(1); // both writes fell into one debounce window
 
     svc.update([b]); // a released, b watched
     expect(svc.size).toBe(1);
     writeFileSync(join(b, 'gemini'), '');
-    await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(2), { timeout: 15_000 });
     writeFileSync(join(a, 'gemini'), '');
     await settle(150);
     expect(onChange).toHaveBeenCalledTimes(2);
@@ -38,7 +39,7 @@ describe('CliWatchService (#98)', () => {
     expect(onChange).toHaveBeenCalledTimes(2);
   });
 
-  it('a re-detect that throws is logged, not raised into the fs callback', async () => {
+  it('a re-detect that throws is logged, not raised into the fs callback', { timeout: 30_000 }, async () => {
     const a = mkdtempSync(join(tmpdir(), 'styx-watch-c-'));
     const onChange = vi.fn(async () => {
       throw new Error('detect blew up');
@@ -47,7 +48,7 @@ describe('CliWatchService (#98)', () => {
     svc.start();
     svc.update([a]);
     writeFileSync(join(a, 'claude'), '');
-    await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(1), { timeout: 15_000 });
     await settle(60);
     svc.stop();
   });

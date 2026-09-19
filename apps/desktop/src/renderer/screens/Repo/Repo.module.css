@@ -86,4 +86,9 @@
     position: absolute;
     inset: -8px -6px;
   }
+  /* Another live lane changed the same files (ADR-0025): accent-as-text after the changes cell; files in the title. */
+  .overlapTag {
+    color: var(--act);
+    white-space: nowrap;
+  }
 }

@@ -50,6 +50,8 @@ export interface HunkServiceDeps {
   clock: Clock;
   git: GitService;
   watch?: WatchFactory;
+  /** A worktree's hunks were re-read (ADR-0025): the lane ledger refreshes that project's overlaps. */
+  onRescanned?: (worktreeId: string, sessionId: string) => void;
 }
 
 /**
@@ -216,6 +218,7 @@ export class HunkService {
       });
       this.publish(sessionId, worktree.id);
       publisher.upsert('worktrees', [worktree.id]);
+      this.deps.onRescanned?.(worktree.id, sessionId);
     } finally {
       this.scanning.delete(worktreeId);
       if (this.dirty.delete(worktreeId)) void this.rescanWorktree(worktreeId, sessionIdHint);

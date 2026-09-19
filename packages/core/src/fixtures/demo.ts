@@ -187,6 +187,7 @@ const worktree = (
   pr: null,
   conflict: null,
   behindBase: 0,
+  overlaps: [],
   mergedAt: null,
   createdAt: ago(3 * DAY),
   archivedAt: null,

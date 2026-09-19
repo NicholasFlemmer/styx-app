@@ -116,6 +116,7 @@ export const worktrees = sqliteTable(
     conflictAgainst: text('conflict_against'),
     /** ADR-0023: commits on the base branch not yet merged into this lane. */
     behindBase: integer('behind_base').notNull().default(0),
+    overlapsJson: text('overlaps_json').notNull().default('[]'),
     mergedAt: integer('merged_at'),
     createdAt: integer('created_at').notNull(),
     archivedAt: integer('archived_at'),

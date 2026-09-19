@@ -62,6 +62,16 @@ export type WorktreePr = z.infer<typeof worktreePrSchema>;
 export const worktreeConflictSchema = z.object({ file: z.string(), against: z.string() });
 export type WorktreeConflict = z.infer<typeof worktreeConflictSchema>;
 
+/**
+ * Another live lane that changed the same files (owner addition, ADR-0025 "lanes that know about each other").
+ * Advisory: refreshed by the lane ledger on every hunk rescan and lane refresh; never a lock.
+ */
+export const worktreeOverlapSchema = z.object({
+  worktreeId: worktreeIdSchema,
+  files: z.array(z.string().min(1)),
+});
+export type WorktreeOverlap = z.infer<typeof worktreeOverlapSchema>;
+
 export const worktreeSchema = z.object({
   id: worktreeIdSchema,
   repoId: repoIdSchema,
@@ -82,6 +92,8 @@ export const worktreeSchema = z.object({
   conflict: worktreeConflictSchema.nullable(),
   /** Commits on the project's base branch this lane has not merged in yet (`worktree.fetch` / `worktree.sync`). */
   behindBase: z.number().int().nonnegative().default(0),
+  /** Other live lanes that changed files this lane changed too (ADR-0025). */
+  overlaps: z.array(worktreeOverlapSchema).default([]),
   mergedAt: timestampSchema.nullable(),
   createdAt: timestampSchema,
   archivedAt: timestampSchema.nullable(),

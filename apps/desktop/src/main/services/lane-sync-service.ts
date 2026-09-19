@@ -18,6 +18,11 @@ export interface LaneSyncDeps {
   activity: ActivityService;
   /** SessionService.applyEvent: pause the owner on a conflict, resume it once the lane is clean again. */
   sessionEvent: (sessionId: string, event: { type: 'error'; reason: 'conflict' } | { type: 'resolve' }) => void;
+  /** `ProjectSettings.autoSync` (ADR-0025): whether a turn boundary brings the base in by itself. */
+  autoSyncOf?: (projectId: string) => 'turn' | 'publish' | 'off';
+  /** The lane ledger: a project's lanes were re-read / a lane's tree changed under a merge. */
+  onRefreshed?: (projectId: string) => void;
+  onSynced?: (worktreeId: string) => void;
 }
 
 export interface SyncResult {
@@ -80,7 +85,37 @@ export class LaneSyncService {
       }
     }
     publisher.upsert('worktrees', ids);
+    this.deps.onRefreshed?.(project.id);
     return ab;
+  }
+
+  /**
+   * Brings the base in on its own at a turn boundary (`autoSync: 'turn'`, ADR-0025): the agent has just gone
+   * quiet, so nothing lands under a write, and small frequent merges are what keeps conflicts rare. A lane that
+   * is current is left alone; one that would conflict is marked as `refresh` marks it and left for the resolution
+   * flow — an automatic merge never leaves markers behind.
+   */
+  async autoSync(sessionId: string): Promise<void> {
+    const { repos, git } = this.deps;
+    const session = repos.sessions.get(sessionId);
+    if (!session || session.purpose) return;
+    const wt = repos.worktrees.get(session.worktreeId);
+    if (!wt || wt.isMain || wt.archivedAt !== null || wt.branch === null || wt.conflict !== null) return;
+    if ((this.deps.autoSyncOf?.(wt.projectId) ?? 'turn') !== 'turn') return;
+    const project = repos.projects.get(wt.projectId);
+    if (!project) return;
+    const base = this.baseOf(project.id);
+    const behind = (await git.aheadBehind(project.path, wt.branch, base).catch(() => null))?.behind ?? 0;
+    if (behind === 0) return;
+    const conflict = await git.detectConflict(project.path, wt.branch, base).catch(() => null);
+    if (conflict !== null) {
+      this.save({ ...wt, conflict, behindBase: behind });
+      this.deps.transcript.system(session.id, fill(copy.sync.conflict, { base, file: conflict.file }));
+      if (session.state !== 'paused') this.deps.sessionEvent(session.id, { type: 'error', reason: 'conflict' });
+      return;
+    }
+    const r = await this.sync(wt.id);
+    if (r.merged > 0) this.deps.transcript.system(session.id, fill(copy.sync.autoSynced, { base, n: r.merged }));
   }
 
   /** Every git project, for the refresh scheduler (focus / wake / manual). Never throws. */
@@ -150,6 +185,7 @@ export class LaneSyncService {
       sessionId: live?.id ?? null,
     });
     publisher.upsert('worktrees', [wt.id]);
+    this.deps.onSynced?.(wt.id);
     logger.info('lane sync: merged', { branch, base, commits: behind });
     return { merged: behind, conflict: null };
   }

@@ -17,6 +17,10 @@ export type WindowsShell = z.infer<typeof windowsShellSchema>;
 export const worktreeLocationSchema = z.enum(['sibling', 'inside']);
 export type WorktreeLocation = z.infer<typeof worktreeLocationSchema>;
 
+/** When Styx brings the base branch into a lane by itself (ADR-0025): after every turn, only before publishing, or never. */
+export const autoSyncSchema = z.enum(['turn', 'publish', 'off']);
+export type AutoSync = z.infer<typeof autoSyncSchema>;
+
 export const envShareSchema = z.enum(['per-grant', 'always', 'never']);
 export type EnvShare = z.infer<typeof envShareSchema>;
 
@@ -70,6 +74,13 @@ export const projectSettingsSchema = z.object({
   /** Keep lanes current (ADR-0023): fetch before cutting a lane; merge the base branch in before push / PR. */
   syncOnSpawn: z.boolean(),
   syncBeforePublish: z.boolean(),
+  /**
+   * Lanes that know about each other (ADR-0025): `autoSync` brings the base in at every turn boundary (small
+   * merges, few conflicts) — the agent is idle then, so nothing lands under a write; `hotspots` are files one
+   * lane should own at a time (globs; [] = the built-in list, `DEFAULT_HOTSPOTS`), warned about more loudly.
+   */
+  autoSync: autoSyncSchema,
+  hotspots: z.array(z.string()),
   branchPrefix: z.string(),
   worktreeLocation: worktreeLocationSchema,
   shellWindows: windowsShellSchema,
@@ -103,6 +114,8 @@ export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   baseBranch: 'main',
   syncOnSpawn: true,
   syncBeforePublish: true,
+  autoSync: 'turn',
+  hotspots: [],
   branchPrefix: 'agent/',
   worktreeLocation: 'sibling',
   shellWindows: 'powershell',

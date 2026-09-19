@@ -135,3 +135,48 @@ describe('LaneSyncService (keep lanes current, ADR-0023)', () => {
     expect(copy.sync.conflict.length).toBeGreaterThan(0);
   });
 });
+
+describe('LaneSyncService.autoSync (ADR-0025)', () => {
+  it('brings the base in at a turn boundary when clean, says so, and leaves a conflicting lane marked and paused', async () => {
+    const { t, repo, wt } = await rig();
+    const { app } = t;
+    writeFileSync(join(repo, 'b.ts'), 'b\n');
+    await sh(['add', '.'], repo);
+    await sh(['commit', '-q', '-m', 'main adds b'], repo);
+    await app.laneSync.autoSync(claude);
+    expect(existsSync(join(wt, 'b.ts'))).toBe(true);
+    expect(app.repos.worktrees.get(fixCheckout)?.behindBase).toBe(0);
+    expect(lastSystemLine(t, claude)).toBe('Brought in main after this turn: 1 commits.');
+    // Current → nothing to do, nothing said.
+    const before = app.repos.transcripts.last(claude).length;
+    await app.laneSync.autoSync(claude);
+    expect(app.repos.transcripts.last(claude)).toHaveLength(before);
+
+    // The setting turns it off; a lane owned by a hidden task is never touched either.
+    const project = app.repos.projects.get(acme);
+    if (!project) throw new Error('project');
+    app.repos.projects.setSettings(acme, { ...app.repos.projects.settings(acme), autoSync: 'off' }, null);
+    writeFileSync(join(repo, 'c.ts'), 'c\n');
+    await sh(['add', '.'], repo);
+    await sh(['commit', '-q', '-m', 'main adds c'], repo);
+    await app.laneSync.autoSync(claude);
+    expect(existsSync(join(wt, 'c.ts'))).toBe(false);
+    app.repos.projects.setSettings(acme, { ...app.repos.projects.settings(acme), autoSync: 'turn' }, null);
+
+    // A merge that would conflict is not attempted: the lane is marked, the session pauses, the tree is untouched.
+    writeFileSync(join(repo, 'a.ts'), 'main version\n');
+    await sh(['add', '.'], repo);
+    await sh(['commit', '-q', '-m', 'main edits a'], repo);
+    writeFileSync(join(wt, 'a.ts'), 'lane version\n');
+    await sh(['add', '.'], wt);
+    await sh(['commit', '-q', '-m', 'lane edits a'], wt);
+    await app.laneSync.autoSync(claude);
+    expect(app.repos.worktrees.get(fixCheckout)?.conflict).toEqual({ file: 'a.ts', against: 'main' });
+    expect(app.repos.sessions.get(claude)).toMatchObject({ state: 'paused', pausedReason: 'conflict' });
+    expect(readFileSync(join(wt, 'a.ts'), 'utf8')).toBe('lane version\n');
+    expect(existsSync(join(wt, 'c.ts'))).toBe(false);
+    expect(lastSystemLine(t, claude)).toBe(
+      'Could not bring in main: conflict in a.ts. The merge was undone; resolve it to continue.',
+    );
+  });
+});

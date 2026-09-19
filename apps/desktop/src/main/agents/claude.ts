@@ -73,6 +73,7 @@ export async function claudeLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch
   // Steers deploys through the shims (docs/handoff-discrepancies #56): a system-prompt line, not sandboxing.
   const prompt: string[] = [copy.agentPrompt.shims, copy.agentPrompt.peers];
   if (ctx.lane) prompt.push(fill(copy.agentPrompt.lane, { branch: ctx.lane.branch, base: ctx.lane.base }));
+  if (ctx.lane?.others) prompt.push(ctx.lane.others);
   args.push('--append-system-prompt', prompt.join('\n\n'));
   const cleanup = () => rm(ctx.configDir, { recursive: true, force: true });
   if (ctx.runner === 'stream') {

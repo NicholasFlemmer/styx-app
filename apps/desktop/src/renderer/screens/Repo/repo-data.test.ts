@@ -113,3 +113,27 @@ describe('Repo lanes (prototype `lanes`)', () => {
     expect(nextWorktreeBranch(model, acme)).toBe('wt-1');
   });
 });
+
+describe('lane overlaps (ADR-0025)', () => {
+  it('a lane that shares files with another live lane names its branch and files; merged lanes never do', () => {
+    const model = fixtures.demoReadModel();
+    const w = model.worktrees.byId[fixtures.ids.worktree.fixCheckout];
+    const merged = model.worktrees.byId[fixtures.ids.worktree.featPromo];
+    if (w === undefined || merged === undefined) throw new Error('fixture');
+    const overlap = [{ worktreeId: fixtures.ids.worktree.testFlaky, files: ['src/checkout.ts'] }];
+    const withOverlaps = {
+      ...model,
+      worktrees: {
+        ...model.worktrees,
+        byId: { ...model.worktrees.byId, [w.id]: { ...w, overlaps: overlap }, [merged.id]: { ...merged, overlaps: overlap } },
+      },
+    };
+    const lanes = laneRows(withOverlaps, acme, NOW);
+    expect(lanes.find((l) => l.branch === 'fix/checkout')?.overlaps).toEqual({
+      branches: ['test/flaky'],
+      files: ['src/checkout.ts'],
+    });
+    expect(lanes.find((l) => l.branch === 'feat/promo')?.overlaps).toBeNull();
+    expect(laneRows(model, acme, NOW).every((l) => l.overlaps === null)).toBe(true);
+  });
+});

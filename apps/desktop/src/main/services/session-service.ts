@@ -82,6 +82,8 @@ export interface SessionServiceDeps {
    * the machine now (`claude update` mid-session). Off for fixture profiles and most tests, whose rows are fake.
    */
   redetectClis?: boolean;
+  /** The lane ledger's spawn-prompt block (ADR-0025); absent in tests that do not care. */
+  laneLedger?: { promptBlock(sessionId: string): Promise<string> };
   /** Broker endpoint + paths injected into every agent pty (plan §6). */
   runtime: {
     brokerEndpoint: string;
@@ -446,6 +448,7 @@ export class SessionService {
         pr: null,
         conflict: null,
         behindBase: 0,
+        overlaps: [],
         mergedAt: null,
         createdAt: now,
         archivedAt: null,
@@ -561,6 +564,8 @@ export class SessionService {
       MCP_TIMEOUT: '60000',
       PATH: `${runtime.shimDir}${runtime.platform === 'win32' ? ';' : ':'}${await this.deps.pty.resolveLoginPath()}`,
     };
+    // What the other lanes of the project are doing (ADR-0025), for the system prompt; empty when alone.
+    const others = (await this.deps.laneLedger?.promptBlock(session.id).catch(() => '')) ?? '';
     const ctx: AgentLaunchContext = {
       agent: session.agent,
       binary: binary ?? '',
@@ -582,7 +587,13 @@ export class SessionService {
       resumeSessionId: session.cliSessionId,
       // Keep lanes current (ADR-0023): the agent is told the lane's base is Styx's job, not its own.
       ...(worktree.branch !== null && !worktree.isMain
-        ? { lane: { branch: worktree.branch, base: projectSettingsFor(repos, project.id).baseBranch.value } }
+        ? {
+            lane: {
+              branch: worktree.branch,
+              base: projectSettingsFor(repos, project.id).baseBranch.value,
+              others,
+            },
+          }
         : {}),
       configDir: join(runtime.userData, 'agents', session.id),
       shimDir: runtime.shimDir,

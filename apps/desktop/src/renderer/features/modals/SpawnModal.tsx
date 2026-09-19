@@ -1,4 +1,7 @@
 import {
+  activeLanes,
+  activeLanesLabel,
+  laneLine,
   copy,
   fill,
   modelCatalogueFor,
@@ -162,6 +165,8 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
 
   const worktrees = projectWorktrees(model, projectId);
   const choices = worktreeChoices(model, projectId);
+  /** What is already running in this project (ADR-0025), so a second lane on the same files is a choice, not a surprise. */
+  const lanes = activeLanes(model, projectId);
   const agentName = copy.agentProducts[form.agent];
   const settings = spawnControlsFor(form.agent);
 
@@ -208,6 +213,16 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
               </button>
             ))}
           </div>
+          {lanes.length > 0 ? (
+            <div className={s['lanes']} data-spawn-lanes={lanes.length}>
+              <span className={s['lanesHead']}>{activeLanesLabel(lanes.length)}</span>
+              {lanes.map((l) => (
+                <span key={l.sessionId} className={s['lane']}>
+                  {laneLine(l)}
+                </span>
+              ))}
+            </div>
+          ) : null}
           {missing || notConnected ? (
             <div className={s['error']} role="status" data-spawn-cli={missing ? 'missing' : 'not-connected'}>
               <StatusDot tone="accent" />

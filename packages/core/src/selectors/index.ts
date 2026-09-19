@@ -11,6 +11,7 @@ export * from './inbox';
 export * from './palette';
 export * from './home';
 export * from './discovery';
+export * from './lanes';
 
 export * from './tasks';
 export * from './usage';

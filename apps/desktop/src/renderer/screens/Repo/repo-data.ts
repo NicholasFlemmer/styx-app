@@ -1,4 +1,5 @@
 import {
+  laneOverlapSummary,
   projectSettingsOfOrDefault,
   agentLabel,
   copy,
@@ -43,6 +44,8 @@ export interface Lane {
   sessionId: SessionId | null;
   isMain: boolean;
   conflict: Worktree['conflict'];
+  /** Other live lanes that changed the same files (ADR-0025): their branches, and the files (for the title). */
+  overlaps: { branches: string[]; files: string[] } | null;
 }
 
 const ACTION_LABEL: Record<LaneAction, string> = {
@@ -161,6 +164,7 @@ export const laneRows = (model: ReadModel, projectId: ProjectId, now: number): L
       sessionId: session?.id ?? null,
       isMain: w.isMain,
       conflict: w.conflict,
+      overlaps: merged ? null : laneOverlapSummary(model, w),
     };
   });
 };

@@ -45,6 +45,30 @@
     font-size: 10.5px;
     opacity: 0.7;
   }
+  /* Lanes already running in the project (ADR-0025): a label and one mono line per lane, under the tiles. */
+  .lanes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--ln);
+    color: var(--mu);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+  .lanesHead {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .lane {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   /* CLI missing: accent square · text · Install guide / Locate binary. */
   .error {
     display: flex;

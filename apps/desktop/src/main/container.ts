@@ -24,6 +24,7 @@ import { IdeImportService } from './services/ide-import-service';
 import { MfaService, type MfaProvider } from './services/mfa-service';
 import type { NotificationService } from './services/notification-service';
 import { ProjectService } from './services/project-service';
+import { LaneLedgerService } from './services/lane-ledger-service';
 import { LaneSyncService } from './services/lane-sync-service';
 import { execaPublishExec, PublishService } from './services/publish-service';
 import { PtyLog } from './services/pty-log';
@@ -40,7 +41,7 @@ import {
 } from './services/device-service';
 import { isLoopbackUrl, RunService, type ProbeAnswer } from './services/run-service';
 import { ScreensStore } from './services/screens-store';
-import { commandCarriesSecret } from './services/logger';
+import { commandCarriesSecret, logger } from './services/logger';
 import { SessionService } from './services/session-service';
 import { StreamRunner, type StreamRunnerLike } from './services/stream-runner';
 import { RunnerMux } from './services/runner-mux';
@@ -224,6 +225,8 @@ export interface Container {
   publish: PublishService;
   /** Keep lanes current (ADR-0023): behind-base counts, `worktree.sync`, the publish gate. */
   laneSync: LaneSyncService;
+  /** Lanes that know about each other (ADR-0025). */
+  ledger: LaneLedgerService;
   /** Usage page: the latest rate limits per CLI and the on-demand Codex refresh. */
   usage: UsageService;
   terminals: TerminalService;
@@ -289,6 +292,17 @@ export function buildContainer(opts: ContainerOptions): Container {
   const mfa = new MfaService(opts.mfaProvider);
   const transcript = new TranscriptService(repos, publisher, clock);
   const activity = new ActivityService(repos, publisher, clock);
+  // Lanes that know about each other (ADR-0025): what every live lane is doing, for agents, the Spawn modal and
+  // the Repo rows; warns both agents when two lanes change the same file.
+  const ledger = new LaneLedgerService({
+    repos,
+    git,
+    publisher,
+    clock,
+    transcript,
+    baseOf: (projectId) => projectSettingsFor(repos, projectId).baseBranch.value,
+    hotspotsOf: (projectId) => projectSettingsFor(repos, projectId).hotspots.value,
+  });
   const sessions = new SessionService({
     repos,
     publisher,
@@ -302,6 +316,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     activity,
     notifications: opts.notifications,
     redetectClis: opts.redetectClis ?? true,
+    laneLedger: ledger,
     runtime,
   });
   const grants = new GrantService({
@@ -324,6 +339,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     clock,
     git,
     ...(opts.watch ? { watch: opts.watch } : {}),
+    onRescanned: (worktreeId) => void ledger.laneChanged(worktreeId),
   });
   const githubAdapter = providers.get('github');
   const projects = new ProjectService({
@@ -387,6 +403,9 @@ export function buildContainer(opts: ContainerOptions): Container {
     transcript,
     activity,
     sessionEvent: (sessionId, event) => sessions.applyEvent(sessionId, event),
+    autoSyncOf: (projectId) => projectSettingsFor(repos, projectId).autoSync.value,
+    onRefreshed: (projectId) => void ledger.refreshProject(projectId),
+    onSynced: (worktreeId) => void ledger.laneChanged(worktreeId),
   });
   const publish = new PublishService({
     repos,
@@ -482,6 +501,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     grants,
     sessions,
     hunks,
+    ledger,
     providers,
     clock,
     endpoint: runtime.brokerEndpoint,
@@ -614,7 +634,13 @@ export function buildContainer(opts: ContainerOptions): Container {
     unwatchWorktree: (id) => void hunks.unwatch(id),
     rescanHunks: (id) => void hunks.rescan(id).catch(() => undefined),
     turnStarted: (id, messageId) => checkpoints.onTurnStarted(id, messageId),
-    turnSettled: (id) => checkpoints.onTurnSettled(id),
+    turnSettled: (id) => {
+      checkpoints.onTurnSettled(id);
+      // ADR-0025: the agent is idle now, so the base can come in without landing under a write.
+      void laneSync
+        .autoSync(id)
+        .catch((e: Error) => logger.warn('lane sync: auto sync failed', { sessionId: id, error: e.message }));
+    },
     limitsReported: (limits) => usage.report(limits),
   });
 
@@ -653,6 +679,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     checkpoints,
     publish,
     laneSync,
+    ledger,
     usage,
     terminals,
     broker,
