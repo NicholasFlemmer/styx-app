@@ -136,6 +136,11 @@ export const methods = {
       command: z.string().min(1).max(2000),
       targetId: z.string().optional(),
       url: z.string().max(500).optional(),
+      /** run only: a mobile app runs on a simulator the design window mirrors instead of a web server. */
+      platform: z.enum(['web', 'ios', 'android']).optional(),
+      /** run only: the simulator / emulator by name (`iPhone 17 Pro`) and the app's bundle id / package. */
+      device: z.string().max(120).optional(),
+      appId: z.string().max(200).optional(),
       note: z.string().max(200).optional(),
     }),
     result: z.object({ ok: z.literal(true) }),

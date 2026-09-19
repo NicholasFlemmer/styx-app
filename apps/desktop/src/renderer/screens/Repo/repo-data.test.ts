@@ -7,6 +7,7 @@ import {
   laneRows,
   mergedWhen,
   nextWorktreeBranch,
+  publishLabelOf,
   remoteLabel,
   remoteLine,
   repoOfProject,
@@ -27,6 +28,40 @@ describe('Repo lanes (prototype `lanes`)', () => {
   ])('%s → %s · %s · %s · %s · %s', (branch, owner, dot, changes, pr, action) => {
     const lane = lanes.find((l) => l.branch === branch);
     expect(lane).toMatchObject({ owner, dot, changes, pr, actionLabel: action });
+  });
+
+  it.each([
+    ['main', 'Commit & push', null],
+    ['fix/checkout', 'Commit & push', 'https://github.com/acme/shop/pull/214'],
+    ['test/flaky', 'Open PR', null],
+    ['feat/promo', null, 'https://github.com/acme/shop/pull/212'],
+  ])('%s publishes as %s; PR link %s', (branch, publishLabel, prUrl) => {
+    expect(lanes.find((l) => l.branch === branch)).toMatchObject({ publishLabel, prUrl });
+  });
+
+  it('a lane behind its base carries `sync` (↓N main → Bring in main); main, merged and conflicting lanes do not', () => {
+    const m = fixtures.demoReadModel();
+    const behind = {
+      ...m.worktrees.byId,
+      [fixtures.ids.worktree.fixCheckout]: { ...m.worktrees.byId[fixtures.ids.worktree.fixCheckout]!, behindBase: 3 },
+      [fixtures.ids.worktree.acmeMain]: { ...m.worktrees.byId[fixtures.ids.worktree.acmeMain]!, behindBase: 2 },
+      [fixtures.ids.worktree.featPromo]: { ...m.worktrees.byId[fixtures.ids.worktree.featPromo]!, behindBase: 4 },
+    };
+    const rows = laneRows({ ...m, worktrees: { ...m.worktrees, byId: behind } }, acme, NOW);
+    expect(rows.find((l) => l.branch === 'fix/checkout')?.sync).toEqual({ n: 3, base: 'main', label: 'Bring in main' });
+    expect(rows.find((l) => l.branch === 'main')?.sync).toBeNull();
+    expect(rows.find((l) => l.branch === 'feat/promo')?.sync).toBeNull(); // merged
+    expect(lanes.every((l) => l.sync === null)).toBe(true); // the fixture's lanes are current
+  });
+
+  it('publishLabelOf: a merged or closed PR gets a new one; conflict, merged and branchless lanes offer nothing', () => {
+    const base = { branch: 'x', isMain: false, conflict: null, mergedAt: null };
+    expect(publishLabelOf({ ...base, pr: { number: 1, state: 'merged', url: null } })).toBe('Open PR');
+    expect(publishLabelOf({ ...base, pr: { number: 1, state: 'closed', url: null } })).toBe('Open PR');
+    expect(publishLabelOf({ ...base, pr: { number: 1, state: 'open', url: null } })).toBe('Commit & push');
+    expect(publishLabelOf({ ...base, pr: null, conflict: { file: 'a', against: 'main' } })).toBeNull();
+    expect(publishLabelOf({ ...base, pr: null, mergedAt: 1 })).toBeNull();
+    expect(publishLabelOf({ ...base, pr: null, branch: null })).toBeNull();
   });
 
   it('lists every non-archived worktree of the project: main first, merged last', () => {

@@ -20,7 +20,9 @@ describe('ipc contract', () => {
         'agent',
         'ask',
         'audit',
+        'checkpoint',
         'deploy',
+        'device',
         'detect',
         'dialog',
         'fs',
@@ -39,6 +41,7 @@ describe('ipc contract', () => {
         'settings',
         'store',
         'target',
+        'usage',
         'terminal',
         'ui',
         'window',
@@ -52,6 +55,7 @@ describe('ipc contract', () => {
     expect(isEventName('nope')).toBe(false);
     expect(EVENT_NAMES).toContain('theme.resolved');
     expect(EVENT_NAMES).toContain('nav.go');
+    expect(EVENT_NAMES).toContain('queue.returned');
     expect(isCommandName('project.templates')).toBe(true);
     // CLI-first connect: status / login terminal / save, plus the health refresh.
     for (const n of [
@@ -187,7 +191,11 @@ describe('ipc contract', () => {
       ui: { screen: null, projectId: null, projectSession: {}, paneSizes: {} },
       activity: m.activity,
       runs: Object.values(m.runs),
+      devices: Object.values(m.devices),
       deploys: Object.values(m.deploys),
+      checkpoints: m.checkpoints,
+      queues: m.queues,
+      limits: m.limits,
     };
     const r = commands['store.snapshot'].output.safeParse(snapshot);
     expect(r.success).toBe(true);

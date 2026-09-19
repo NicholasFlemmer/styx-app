@@ -1,5 +1,6 @@
 import { homedir } from 'node:os';
-import { copy, fill, type AppSettings } from '@styx/core';
+import { join } from 'node:path';
+import { APP_ID, DEVICE_NAME, copy, fill, type AppSettings } from '@styx/core';
 import type { Clock } from './clock';
 import type { Db } from './db/open';
 import { Repos } from './db/repos';
@@ -13,20 +14,32 @@ import { ActivityService } from './services/activity-service';
 import { AgentService } from './services/agent-service';
 import { CliWatchService } from './services/cli-watch-service';
 import { AuditService } from './services/audit-service';
+import { CheckpointService, screenshotSourceFor } from './services/checkpoint-service';
 import type { CredentialVault } from './services/credential-vault';
 import { DetectService, defaultDeps as defaultDetectDeps } from './services/detect-service';
-import { GitService } from './services/git';
+import { ExecaGitRunner, GitService } from './services/git';
 import { GrantService } from './services/grant-service';
 import { HunkService, type WatchFactory } from './services/hunk-service';
 import { IdeImportService } from './services/ide-import-service';
 import { MfaService, type MfaProvider } from './services/mfa-service';
 import type { NotificationService } from './services/notification-service';
 import { ProjectService } from './services/project-service';
+import { LaneSyncService } from './services/lane-sync-service';
+import { execaPublishExec, PublishService } from './services/publish-service';
 import { PtyLog } from './services/pty-log';
 import { PtyService } from './services/pty-service';
 import { RefreshScheduler } from './services/refresh-scheduler';
 import { RetentionJob } from './services/retention-job';
+import {
+  DeviceService,
+  execaDeviceExec,
+  execaWhich,
+  type DeviceExec,
+  type ScreenAccess,
+  type WindowSource,
+} from './services/device-service';
 import { isLoopbackUrl, RunService, type ProbeAnswer } from './services/run-service';
+import { ScreensStore } from './services/screens-store';
 import { commandCarriesSecret } from './services/logger';
 import { SessionService } from './services/session-service';
 import { StreamRunner, type StreamRunnerLike } from './services/stream-runner';
@@ -38,6 +51,8 @@ import { SkillsService } from './services/skills-service';
 import { TargetService } from './services/target-service';
 import { TerminalService } from './services/terminal-service';
 import { TranscriptService } from './services/transcript-service';
+import { UsageService } from './services/usage-service';
+import { projectSettingsFor } from './store/projection';
 import { Publisher } from './store/publisher';
 
 /** The window-manager surface commands need; implemented over WindowService in `index.ts`, faked in tests. */
@@ -63,6 +78,7 @@ export interface WindowsPort {
  */
 export interface PreviewPort {
   set(input: {
+    projectId: string;
     visible: boolean;
     bounds: { x: number; y: number; width: number; height: number };
     url: string;
@@ -71,6 +87,10 @@ export interface PreviewPort {
   reload(): void;
   openExternal(url: string): Promise<void>;
   detach(): void;
+  /** A PNG of the loaded page (checkpoint screenshots); null when nothing is loaded. */
+  capture(): Promise<Buffer | null>;
+  /** The loaded page's URL and the project it was set for; null when nothing is loaded. */
+  loaded(): { url: string; projectId: string } | null;
 }
 
 const NO_PREVIEW: PreviewPort = {
@@ -78,6 +98,20 @@ const NO_PREVIEW: PreviewPort = {
   reload: () => undefined,
   openExternal: async () => undefined,
   detach: () => undefined,
+  capture: async () => null,
+  loaded: () => null,
+};
+
+/** What the device mirror needs from the OS: capturable windows, the Screen Recording permission, which(1). */
+export interface DeviceHooks {
+  windowSources: () => Promise<WindowSource[]>;
+  screenAccess: () => ScreenAccess;
+  openScreenAccess: () => Promise<void>;
+}
+const NO_DEVICE_HOOKS: DeviceHooks = {
+  windowSources: async () => [],
+  screenAccess: () => 'n/a',
+  openScreenAccess: async () => undefined,
 };
 
 /** Native file/folder pickers (Electron `dialog`), parented to the main window; `null` when the user cancels. */
@@ -113,6 +147,11 @@ export interface ContainerOptions {
   runtime: Runtime;
   windows: WindowsPort;
   preview?: PreviewPort;
+  /** The simulator / emulator mirror's OS hooks; faked in tests (`NO_DEVICE_HOOKS`). */
+  deviceHooks?: DeviceHooks;
+  /** Device tooling runner (`xcrun simctl`, `adb`) and lookup; faked in tests. */
+  deviceExec?: DeviceExec;
+  deviceWhich?: (bin: string) => Promise<string | null>;
   /** Native pickers; omitted in tests (`NO_DIALOGS`). */
   dialogs?: DialogsPort;
   notifications: NotificationService | null;
@@ -175,6 +214,18 @@ export interface Container {
   skills: SkillsService;
   agents: AgentService;
   runs: RunService;
+  /** The simulator / emulator mirrored in the design window (owner request). */
+  devices: DeviceService;
+  /** Pictures of the running app served over `styx-device://` (live frames, checkpoint screenshots). */
+  screens: ScreensStore;
+  /** Turn checkpoints (ADR-0020): hidden git refs per agent turn, diff and revert. */
+  checkpoints: CheckpointService;
+  /** Commit, push and PR in one step (ADR-0021); the message draft comes from the project's default agent. */
+  publish: PublishService;
+  /** Keep lanes current (ADR-0023): behind-base counts, `worktree.sync`, the publish gate. */
+  laneSync: LaneSyncService;
+  /** Usage page: the latest rate limits per CLI and the on-demand Codex refresh. */
+  usage: UsageService;
   terminals: TerminalService;
   broker: BrokerHost;
   windows: WindowsPort;
@@ -203,7 +254,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     isRegistered: (id) => publisher.isRegistered(id),
     allowedOrigins: runtime.rendererOrigins,
   });
-  const git = new GitService();
+  const gitRunner = new ExecaGitRunner();
+  const git = new GitService(gitRunner);
   const pty = opts.pty ?? new PtyService(runtime.platform);
   // One door, several protocols (docs/research/agent-parity.md): Claude's NDJSON now; the Codex app-server and
   // ACP backends register here as they land.
@@ -214,7 +266,7 @@ export function buildContainer(opts: ContainerOptions): Container {
       .register(['app-server'], new AppServerRunner())
       .register(['acp'], new AcpRunner());
   const ptyLog = new PtyLog(`${runtime.userData}/logs/pty`);
-  // Detection sees what the terminal sees (#89): the login shell's PATH and `command -v` answers, re-asked at most
+  // Detection sees what the terminal sees (#98): the login shell's PATH and `command -v` answers, re-asked at most
   // every 10 s when a re-detect runs. Fixture and test containers (`redetectClis: false`) keep the process PATH so
   // their rows stay deterministic.
   const redetect = opts.redetectClis ?? true;
@@ -327,6 +379,36 @@ export function buildContainer(opts: ContainerOptions): Container {
     shell: () => pty.defaultShell(),
     platform: runtime.platform,
   });
+  const laneSync = new LaneSyncService({
+    repos,
+    git,
+    publisher,
+    clock,
+    transcript,
+    activity,
+    sessionEvent: (sessionId, event) => sessions.applyEvent(sessionId, event),
+  });
+  const publish = new PublishService({
+    repos,
+    publisher,
+    clock,
+    git,
+    grants,
+    activity,
+    audit,
+    exec: execaPublishExec(() => pty.resolveLoginPath()),
+    projectSettings: (projectId) => {
+      const s = projectSettingsFor(repos, projectId);
+      return {
+        defaultAgent: s.defaultAgent.value,
+        baseBranch: s.baseBranch.value,
+        syncBeforePublish: s.syncBeforePublish.value,
+      };
+    },
+    laneSync: (worktreeId) => laneSync.sync(worktreeId),
+    loginPath: () => pty.resolveLoginPath(),
+    platform: runtime.platform,
+  });
   const skills = new SkillsService({
     repos,
     fetch: opts.fetch ?? fetch,
@@ -349,7 +431,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     refreshClis: () => sessions.refreshClis(),
     activity,
   });
-  // An install in a terminal shows up within a second: the folders each detection scanned are watched (#89).
+  // An install in a terminal shows up within a second: the folders each detection scanned are watched (#98).
   const cliWatch = new CliWatchService({ onChange: () => sessions.refreshClis() });
   detect.onSearched = (dirs) => cliWatch.update(dirs);
   if (redetect) cliWatch.start();
@@ -364,12 +446,35 @@ export function buildContainer(opts: ContainerOptions): Container {
     platform: runtime.platform,
     ...(opts.probe !== undefined ? { probe: opts.probe } : {}),
   });
-  publisher.bindExtras({ runs: () => runs.all(), deploys: () => deploys.all() });
+  const usage = new UsageService({ repos, publisher, clock, env: process.env });
+  const screens = new ScreensStore(join(runtime.userData, 'screens'));
+  const deviceHooks = opts.deviceHooks ?? NO_DEVICE_HOOKS;
+  const devices = new DeviceService({
+    repos,
+    publisher,
+    clock,
+    screens,
+    exec: opts.deviceExec ?? execaDeviceExec(() => pty.resolveLoginPath()),
+    which: opts.deviceWhich ?? execaWhich(() => pty.resolveLoginPath(), runtime.platform),
+    platform: runtime.platform,
+    windowSources: deviceHooks.windowSources,
+    screenAccess: deviceHooks.screenAccess,
+    openScreenAccess: deviceHooks.openScreenAccess,
+    onFrame: (projectId, seq) => publisher.sendEvent('device.frame', { projectId, seq }),
+  });
+  runs.bindDevices(devices);
+  publisher.bindExtras({
+    runs: () => runs.all(),
+    devices: () => devices.all(),
+    deploys: () => deploys.all(),
+    limits: () => usage.all(),
+  });
   const refresh = new RefreshScheduler({
     repos,
     clock,
     checkHealth: (t, reason) => targets.checkHealth(t, reason),
     ...((opts.redetectClis ?? true) ? { refreshClis: () => sessions.refreshClis() } : {}),
+    ...((opts.redetectClis ?? true) ? { refreshLanes: () => laneSync.refreshAll() } : {}),
     ...(opts.refreshMs !== undefined ? { intervalMs: opts.refreshMs } : {}),
   });
   const broker = new BrokerHost({
@@ -383,7 +488,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     abilities: {
       // The agent worked out how to run the project: keep the command (and URL), say so in its chat and on Home,
       // and start the managed run so the design window shows the app straight away.
-      rememberRun: async (sessionId, command, url) => {
+      rememberRun: async (sessionId, command, url, device) => {
         const session = repos.sessions.get(sessionId);
         if (!session) return;
         const cmd = command.trim();
@@ -393,16 +498,36 @@ export function buildContainer(opts: ContainerOptions): Container {
         }
         // Stored in its parsed form: the parser strips stray whitespace and control characters.
         const safeUrl = url !== null && isLoopbackUrl(url) ? new URL(url).href : null;
+        // A device name and an app id are identifiers (the same rule a committed project file gets).
+        const platform = device.platform ?? 'web';
+        const deviceName =
+          platform !== 'web' && device.device !== null && DEVICE_NAME.test(device.device)
+            ? device.device
+            : null;
+        const appId =
+          platform !== 'web' && device.appId !== null && APP_ID.test(device.appId) ? device.appId : null;
         await projects.setSettings(session.projectId, {
           devCommand: cmd,
+          devPlatform: platform === 'web' ? null : platform,
+          devDevice: deviceName,
+          devAppId: appId,
           ...(safeUrl !== null ? { devUrl: safeUrl } : {}),
         });
         transcript.system(
           session.id,
-          fill(copy.abilities.learnedRun, {
-            command: cmd,
-            url: safeUrl === null ? '' : fill(copy.abilities.learnedRunUrl, { url: safeUrl }),
-          }),
+          platform === 'web'
+            ? fill(copy.abilities.learnedRun, {
+                command: cmd,
+                url: safeUrl === null ? '' : fill(copy.abilities.learnedRunUrl, { url: safeUrl }),
+              })
+            : fill(copy.abilities.learnedRunDevice, {
+                command: cmd,
+                platform: copy.workspace.device.platforms[platform],
+                device:
+                  deviceName === null
+                    ? ''
+                    : fill(copy.abilities.learnedRunDeviceName, { device: deviceName }),
+              }),
         );
         const project = repos.projects.get(session.projectId);
         activity.append({
@@ -415,7 +540,7 @@ export function buildContainer(opts: ContainerOptions): Container {
           sessionId: session.id,
         });
         const live = runs.all().find((r) => r.projectId === session.projectId && r.phase !== 'exited');
-        if (live === undefined) await runs.start(session.projectId, cmd).catch(() => undefined);
+        if (live === undefined) await runs.start(session.projectId, cmd, { platform }).catch(() => undefined);
       },
       rememberDeploy: async (sessionId, targetId, command) => {
         const session = repos.sessions.get(sessionId);
@@ -445,6 +570,35 @@ export function buildContainer(opts: ContainerOptions): Container {
     },
   });
 
+  const checkpoints = new CheckpointService({
+    repos,
+    publisher,
+    clock,
+    git: gitRunner,
+    transcript,
+    rescanHunks: (id) => hunks.rescan(id),
+    screens,
+    // The running app's picture for a turn: the mirrored device when one is up, else the design window's page —
+    // and only when that page is this project's (a live web run, or its saved dev URL when nothing runs).
+    screenshot: async (projectId) => {
+      const preview = opts.preview ?? NO_PREVIEW;
+      // The page counts only when the window was set for this very project (two projects on the same port
+      // must never trade pictures).
+      const loaded = preview.loaded();
+      const source = screenshotSourceFor({
+        projectId,
+        devices: devices.all(),
+        runs: runs.all(),
+        devUrl: repos.projects.settings(projectId).devUrl ?? null,
+        loadedUrl: loaded !== null && loaded.projectId === projectId ? loaded.url : null,
+      });
+      if (source === 'device') return devices.screenshot(projectId);
+      if (source === 'preview') return preview.capture();
+      return null;
+    },
+    ...(opts.retentionMs !== undefined ? { pruneMs: opts.retentionMs } : {}),
+  });
+
   const retention = new RetentionJob({
     repos,
     publisher,
@@ -459,6 +613,9 @@ export function buildContainer(opts: ContainerOptions): Container {
     watchWorktree: (s, w) => void hunks.watch(s, w),
     unwatchWorktree: (id) => void hunks.unwatch(id),
     rescanHunks: (id) => void hunks.rescan(id).catch(() => undefined),
+    turnStarted: (id, messageId) => checkpoints.onTurnStarted(id, messageId),
+    turnSettled: (id) => checkpoints.onTurnSettled(id),
+    limitsReported: (limits) => usage.report(limits),
   });
 
   const container: Container = {
@@ -491,6 +648,12 @@ export function buildContainer(opts: ContainerOptions): Container {
     skills,
     agents,
     runs,
+    devices,
+    screens,
+    checkpoints,
+    publish,
+    laneSync,
+    usage,
     terminals,
     broker,
     windows: opts.windows,
@@ -503,6 +666,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     async start() {
       grants.start();
       retention.start();
+      checkpoints.start();
       if (opts.disableRefresh) refresh.disable();
       else refresh.start();
       await broker.listen();
@@ -510,10 +674,12 @@ export function buildContainer(opts: ContainerOptions): Container {
     async shutdown() {
       for (const s of repos.sessions.live()) broker.notifyStopping(s.id);
       retention.stop();
+      checkpoints.stop();
       refresh.stop();
       cliWatch.stop();
       sessions.killAll();
       runs.stopAll();
+      devices.shutdown();
       await hunks.closeAll();
       await broker.close();
       await grants.stop();

@@ -24,7 +24,7 @@ describe.skipIf(!available)('PtyService', () => {
     const pty = new PtyService();
     const p = await pty.resolveLoginPath();
     expect(p.length).toBeGreaterThan(0);
-    // The login env is cached; `maxAgeMs` forces a fresh shell (#89).
+    // The login env is cached; `maxAgeMs` forces a fresh shell (#98).
     const env = await pty.resolveLoginEnv();
     expect(env.path).toBe(p);
     expect(await pty.resolveLoginEnv()).toBe(env);
@@ -32,7 +32,7 @@ describe.skipIf(!available)('PtyService', () => {
   });
 });
 
-describe('parseLoginEnv / mergePaths (#89)', () => {
+describe('parseLoginEnv / mergePaths (#98)', () => {
   it('reads the PATH line and absolute `command -v` answers keyed by base name; aliases and functions are dropped', () => {
     const out = [
       '__STYX_PATH__/opt/homebrew/bin:/Users/nic/.local/bin:/usr/bin',

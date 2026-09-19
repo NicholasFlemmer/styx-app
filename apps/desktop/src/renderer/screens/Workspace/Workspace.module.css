@@ -14,13 +14,17 @@
     border-bottom: 1px solid var(--ln);
     background: var(--s1);
   }
-  /* The tabs are their own tablist (a tablist may only own tabs); the deploy button is a sibling that hugs the right edge. */
+  /* The tabs are their own tablist (a tablist may only own tabs); the publish and deploy buttons are siblings that hug the right edge. */
   .tabs {
     display: flex;
     align-items: stretch;
   }
+  .modes > [data-publish-button],
   .modes > [data-deploy-button] {
     margin-left: auto;
+  }
+  .modes > [data-publish-button] + [data-deploy-button] {
+    margin-left: 0;
   }
   .column {
     flex: 1;

@@ -12,9 +12,9 @@ import { MemoryVault } from './services/credential-vault';
 import type { DetectService } from './services/detect-service';
 import { FakeMfaProvider, type MfaResult } from './services/mfa-service';
 import type { PtyService } from './services/pty-service';
+import type { ProbeAnswer } from './services/run-service';
 import type { StreamRunnerLike } from './services/stream-runner';
 import { EVENT_CHANNEL, type WindowLike } from './store/publisher';
-import type { ProbeAnswer } from './services/run-service';
 
 /** Records everything main would `webContents.send`. */
 export class FakeWindow implements WindowLike {

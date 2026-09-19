@@ -1,4 +1,5 @@
 import {
+  cliIsManual,
   cliConnectionState,
   cliSearchedDirs,
   cliVersionLabel,
@@ -49,7 +50,7 @@ const cliNameOf = (agent: Agent, cli: CliInstall | undefined): string => {
 /**
  * Connect agent (owner addition; modal 560): verify / sign in for one agent CLI, app-wide. Opens with a fresh
  * `agent.verify`; the status row says where the CLI lives — or, for a CLI that is not on the machine, offers
- * `Install <cli>…` (the vendor's own command in the inline terminal, `agent.install`; #89), the install guide and
+ * `Install <cli>…` (the vendor's own command in the inline terminal, `agent.install`; #98), the install guide and
  * Locate binary, with a path-or-command field and the list of folders detection looked in underneath. The identity
  * row says who it is signed in as, and `Sign in with <cli>…` runs the CLI's own login inline (`agent.login`, the
  * pty in a LoginTerminal). Main re-detects / re-verifies when either exits, so the row here just follows the
@@ -126,11 +127,17 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
   }, [login?.terminalId]);
 
   const installGuide = () => void command('agent.installGuide', { agent });
-  /** OS file picker → `detect.setBinary`; the `discovery.set` delta fills the status row, then the CLI is checked. */
+  /**
+   * OS file picker → `detect.setBinary`; the `discovery.set` delta fills the status row, then the CLI is checked.
+   * A refused pick (a folder, a file that does not run, another agent's CLI) says why, right here, and remembers
+   * nothing, so the user can pick again instead of being stuck with a binary that cannot sign in.
+   */
+  const [locateError, setLocateError] = useState<string | null>(null);
   const locateBinary = async () => {
     const r = await command('dialog.pickFile', { title: copy.errors.locateBinary });
     if (!r.ok || r.value.path === null) return;
     const set = await command('detect.setBinary', { agent, path: r.value.path });
+    setLocateError(set.ok ? null : set.error.message);
     if (set.ok) await verify();
   };
   /** The path field: an absolute or `~/` path, or a bare command name main resolves on the shell PATH. */
@@ -174,6 +181,17 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
   /** The command Install would run on this platform (tooltip); null when no recipe applies here. */
   const recipe = installRecipes(agent, platform)[0] ?? null;
   const searched = cli === undefined ? [] : cliSearchedDirs(cli);
+  /** Undo a located binary: detection is trusted again and the row follows the `discovery.set` delta. */
+  const forgetBinary = async () => {
+    setLocateError(null);
+    const r = await command('detect.clearBinary', { agent });
+    if (!r.ok) {
+      setLocateError(r.error.message);
+      return;
+    }
+    await verify();
+  };
+  const located = installed && cli !== undefined && cliIsManual(cli);
 
   const c = copy.agentsPage.connect;
   const identity: Identity = checking
@@ -271,6 +289,16 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
                 </button>
               </>
             )}
+            {located ? (
+              <button
+                type="button"
+                className={s['link']}
+                onClick={() => void forgetBinary()}
+                data-agent-forget="true"
+              >
+                {copy.agentsPage.actions.forget}
+              </button>
+            ) : null}
           </div>
           {installed ? null : (
             <>
@@ -326,6 +354,11 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
               ) : null}
             </>
           )}
+          {locateError !== null ? (
+            <div className={s['locateError']} role="alert" data-locate-error="true">
+              {locateError}
+            </div>
+          ) : null}
           {installed ? (
             <>
               <div className={s['identity']} aria-live="polite" data-agent-identity={identity}>

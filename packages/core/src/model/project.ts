@@ -80,6 +80,8 @@ export const worktreeSchema = z.object({
   }),
   pr: worktreePrSchema.nullable(),
   conflict: worktreeConflictSchema.nullable(),
+  /** Commits on the project's base branch this lane has not merged in yet (`worktree.fetch` / `worktree.sync`). */
+  behindBase: z.number().int().nonnegative().default(0),
   mergedAt: timestampSchema.nullable(),
   createdAt: timestampSchema,
   archivedAt: timestampSchema.nullable(),

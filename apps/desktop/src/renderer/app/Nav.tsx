@@ -13,9 +13,21 @@ import { NavItem, type IconName } from '@styx/ui';
 import { useCallback } from 'react';
 import { useModel, useNow, useUi } from '../state/hooks';
 import { startDebtAudit } from '../features/audit';
-import { isProjectSection, resolveSection } from '../screens/Settings/sections';
+import {
+  PROJECT_SECTIONS,
+  SECTION_LABEL,
+  resolveSection,
+  type ProjectSection,
+} from '../screens/Settings/sections';
 import type { Screen } from '../state/ui-store';
 import s from './Shell.module.css';
+
+/** The icon each project option wears. */
+const PROJECT_SECTION_ICON: Record<ProjectSection, IconName> = {
+  'project:targets': 'targets',
+  'project:agent-defaults': 'agentDefaults',
+  'project:env': 'env',
+};
 
 interface NavRow {
   screen: Screen;
@@ -26,8 +38,9 @@ interface NavRow {
 
 /**
  * Project nav (spec §3, owner layout #85): everything here belongs to the selected project. The head is the
- * project's details (name, branch), the rows its places (Workspace, Agents, Repo, Project settings), then the
- * project's own actions (Tech debt audit), and the footer its path and active grants. App-level places (All
+ * project's details (name, branch), the rows its places (Workspace, Agents, Repo) and its options (Targets, Agent
+ * defaults, Env — rows, not a Settings tab), then its own action (Tech debt audit), and the footer its path and
+ * active grants. App-level places (All
  * projects, Approvals, Tasks, App settings) live on the app rail to the left of the project switcher.
  */
 export function Nav() {
@@ -51,7 +64,7 @@ export function Nav() {
       ? 0
       : rows(model.worktrees).filter((w) => w.projectId === projectId && w.archivedAt === null).length;
   const grants = activeGrants(model, now).length;
-  const onProjectSettings = screen === 'settings' && isProjectSection(resolveSection(settingsSection));
+  const section = resolveSection(settingsSection);
 
   const items: NavRow[] = [
     { screen: 'workspace', icon: 'workspace', label: copy.nav.workspace, meta: null },
@@ -63,12 +76,6 @@ export function Nav() {
       meta: fill(copy.nav.worktreesMeta, { n: worktrees }),
     },
   ];
-
-  const openProjectSettings = () => {
-    // The nav's Settings are the project's: an app section left over from the app rail is swapped for Targets.
-    if (!isProjectSection(resolveSection(settingsSection))) setSettingsSection('project:targets');
-    setScreen('settings');
-  };
 
   return (
     <nav className={s['nav']} aria-label="Sections" data-nav="true">
@@ -94,13 +101,20 @@ export function Nav() {
           data-nav-item={it.screen}
         />
       ))}
-      <NavItem
-        icon="projectSettings"
-        label={copy.nav.projectSettings}
-        inv={onProjectSettings}
-        onClick={openProjectSettings}
-        data-nav-item="settings"
-      />
+      {/* The project's options are rows here, not a tab (owner request #88): Targets · Agent defaults · Env. */}
+      {PROJECT_SECTIONS.map((id) => (
+        <NavItem
+          key={id}
+          icon={PROJECT_SECTION_ICON[id]}
+          label={SECTION_LABEL[id]}
+          inv={screen === 'settings' && section === id}
+          onClick={() => {
+            setSettingsSection(id);
+            setScreen('settings');
+          }}
+          data-nav-item={id}
+        />
+      ))}
       <NavItem
         icon="audit"
         label={copy.debtAudit.action}

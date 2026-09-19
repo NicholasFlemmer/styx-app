@@ -23,6 +23,18 @@ describe('launchArgs (Open in {IDE})', () => {
       },
     ],
     [
+      'editor known only by its User folder → open -b <bundle id>',
+      'open -b com.microsoft.VSCode',
+      '/Users/me/code/acme-shop',
+      'darwin',
+      {
+        file: 'open',
+        args: ['-b', 'com.microsoft.VSCode', '/Users/me/code/acme-shop'],
+        shell: false,
+        detached: false,
+      },
+    ],
+    [
       'code on PATH → detached binary',
       'code',
       '/Users/me/code/acme-shop/src/index.ts',

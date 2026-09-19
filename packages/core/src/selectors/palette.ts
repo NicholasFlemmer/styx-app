@@ -1,4 +1,4 @@
-import type { AskId, ProjectId, SessionId, TargetId } from '../ids';
+import type { AskId, ProjectId, SessionId, TargetId, WorktreeId } from '../ids';
 import { copy, fill } from '../copy';
 import type { Provider } from '../model/common';
 import type { Target } from '../model/target';
@@ -10,8 +10,10 @@ import {
   headAskOf,
   liveSessions,
   projectBranch,
+  projectHasGit,
   projectNameOf,
   projectSettingsOfOrDefault,
+  projectWorktreeOf,
 } from './common-settings';
 import { formatCountdown } from './format';
 import { fuzzyBest } from './fuzzy';
@@ -40,6 +42,8 @@ export type PaletteAction =
   | { kind: 'clone-url' }
   | { kind: 'agent-dock' }
   | { kind: 'debt-audit'; projectId: ProjectId }
+  /** Commit, push and PR in one step for the worktree the project is on (ADR-0021). */
+  | { kind: 'publish'; projectId: ProjectId; worktreeId: WorktreeId }
   | { kind: 'open-session'; sessionId: SessionId }
   | { kind: 'switch-project'; projectId: ProjectId };
 
@@ -190,6 +194,20 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
       meta: copy.palette.actions.debtAuditMeta,
       first: false,
       action: { kind: 'debt-audit', projectId },
+    });
+  // Publish the branch the project is on (a plain folder has no branch to push).
+  const wt = projectId === null ? null : projectWorktreeOf(model, projectId);
+  if (projectId !== null && wt !== null && wt.branch !== null && projectHasGit(model, projectId))
+    items.push({
+      id: `publish:${wt.id}`,
+      glyph: '▲',
+      label: fill(copy.palette.actions.publish, {
+        project: projectNameOf(model, projectId),
+        branch: wt.branch,
+      }),
+      meta: copy.palette.actions.publishMeta,
+      first: false,
+      action: { kind: 'publish', projectId, worktreeId: wt.id },
     });
   items.push({
     id: 'agent-dock',

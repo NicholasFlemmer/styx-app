@@ -1,0 +1,15 @@
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 32px;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-13);
+  color: var(--mu);
+}
+.toggle:hover {
+  color: var(--tx);
+}
+.toggle :global(.sq) {
+  background: var(--tx);
+}

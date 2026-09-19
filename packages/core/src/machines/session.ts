@@ -3,7 +3,7 @@ import type { PausedReason, PendingAsk, Session, SessionState } from '../model/s
 
 /**
  * Spec §1: idle ─start─▶ working ─ask─▶ needs-you ─ask-resolved─▶ working; finish → done; error → paused ─resolve─▶ working.
- * Owner addition (docs/handoff-discrepancies #88): done ─reopen─▶ idle, so a finished session can be picked up again.
+ * Owner addition (docs/handoff-discrepancies #97): done ─reopen─▶ idle, so a finished session can be picked up again.
  */
 export type SessionEvent =
   | { type: 'start' }

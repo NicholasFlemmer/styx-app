@@ -22,6 +22,7 @@ Decisions with rationale: `docs/adr/`. Progress: `.planning/STATE.md` (owned by 
 ## Monorepo map (pnpm workspaces)
 
 - `apps/desktop` — Electron: `src/main` (source of truth: SQLite, git, pty, keychain, broker), `src/preload` (typed bridge), `src/renderer` (React 19)
+- `apps/website` — Next.js 16 marketing site (static export, port 3100). Same tokens, same copy; plan in `apps/website/DESIGN.md`.
 - `packages/core` — domain types, zod schemas, session/grant machines, policy engine, selectors, IPC contract. No Electron, DOM, I/O.
 - `packages/ui` — component library + Storybook. Plain CSS Modules, tokens only.
 - `packages/tokens` — tokens css/json + bundled fonts. `packages/broker` — broker protocol + `styx mcp`. `packages/cli` — `styx` CLI + provider shims.
@@ -32,6 +33,7 @@ Decisions with rationale: `docs/adr/`. Progress: `.planning/STATE.md` (owned by 
 - `pnpm test` · `pnpm test -F @styx/core` · `pnpm e2e` · `pnpm visual` (screenshots vs prototype) · `pnpm visual:baseline`
 - `pnpm typecheck` · `pnpm lint` · `pnpm format` · `pnpm storybook` · `pnpm storybook:test` · `pnpm tokens:build`
 - `pnpm db:generate` / `db:migrate` / `db:seed`
+- `pnpm -F @styx/website dev` / `build` (static export to `apps/website/out`)
 
 ## Architecture rules
 

@@ -119,15 +119,17 @@ const fakeDetect = (home: string) =>
     pathEnv: '', // nothing on PATH: only a located binary can make an agent `found`
     env: { SHELL: '/bin/sh' },
     exec: async (bin, args) => {
-      if (args[0] === '--version')
+      if (args[0] === '--version') {
+        if (bin.endsWith('settings.json')) return { stdout: 'exec format error', exitCode: 126 };
         return { stdout: bin.includes('codex') ? 'codex-cli 0.42.0' : 'sh 3.2', exitCode: 0 };
+      }
       if (args[0] === '--help') return { stdout: 'usage: --config <f> -c', exitCode: 0 };
       return { stdout: '', exitCode: 0 };
     },
   } satisfies DetectDeps);
 
 describe('detect.setBinary (Locate binary)', () => {
-  it('a bare command name resolves on the login shell PATH; an unknown one says so; a relative path is refused (#89)', async () => {
+  it('a bare command name resolves on the login shell PATH; an unknown one says so; a relative path is refused (#98)', async () => {
     const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
     const tools = join(home, 'tools');
     mkdirSync(tools);
@@ -214,6 +216,68 @@ describe('detect.setBinary (Locate binary)', () => {
     if (!gone.ok) throw new Error(gone.error.message);
     expect(gone.value.clis.find((c) => c.agent === 'codex')).toMatchObject({ binary: null, found: false });
     expect(app.repos.settings.kv.get<string>(cliBinaryKey('codex'))).toBeUndefined();
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('refuses a pick that is not this CLI, with a human reason, and remembers nothing', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+    const t = makeTestApp({ fixture: 'empty', detect: fakeDetect(home) });
+    const { app, sender } = t;
+    const folder = join(home, '.claude');
+    mkdirSync(folder);
+    expect(await app.bus.dispatch(sender, 'detect.setBinary', { agent: 'claude', path: folder })).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid-input',
+        message: `${folder} is a folder, not the Claude Code program. Pick the Claude Code executable itself.`,
+      },
+    });
+    const settings = join(folder, 'settings.json');
+    writeFileSync(settings, '{}');
+    expect(await app.bus.dispatch(sender, 'detect.setBinary', { agent: 'claude', path: settings })).toMatchObject({
+      ok: false,
+      error: { message: `${settings} did not run as Claude Code (no version reported). Pick the Claude Code executable itself.` },
+    });
+    const codex = join(home, 'codex');
+    writeFileSync(codex, '#!/bin/sh\necho 0.42.0\n');
+    chmodSync(codex, 0o755);
+    expect(await app.bus.dispatch(sender, 'detect.setBinary', { agent: 'claude', path: codex })).toMatchObject({
+      ok: false,
+      error: { message: `${codex} is the Codex CLI, not Claude Code.` },
+    });
+    expect(app.repos.settings.kv.get<string>(cliBinaryKey('claude'))).toBeUndefined();
+    expect(app.repos.discovery.cli('claude')?.binary ?? null).not.toBe(codex);
+    const honest = await app.bus.dispatch(sender, 'detect.clis', {});
+    if (!honest.ok) throw new Error(honest.error.message);
+    expect(honest.value.clis.find((c) => c.agent === 'claude')).toMatchObject({ binary: null, found: false });
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('clearBinary forgets a located binary and detection is honest again', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+    const bin = join(home, 'codex');
+    writeFileSync(bin, '#!/bin/sh\necho 0.42.0\n');
+    chmodSync(bin, 0o755);
+    const t = makeTestApp({ fixture: 'empty', detect: fakeDetect(home) });
+    const { app, sender } = t;
+    await app.bus.dispatch(sender, 'detect.setBinary', { agent: 'codex', path: bin });
+    expect(app.repos.discovery.cli('codex')).toMatchObject({ binary: bin, found: true });
+
+    const r = await app.bus.dispatch(sender, 'detect.clearBinary', { agent: 'codex' });
+    expect(r).toMatchObject({ ok: true, value: { cli: { agent: 'codex', binary: null, found: false } } });
+    expect(app.repos.settings.kv.get<string>(cliBinaryKey('codex'))).toBeUndefined();
+    expect(app.repos.discovery.cli('codex')?.found).toBe(false);
+    app.publisher.flush();
+    expect(
+      t.win
+        .batches()
+        .at(-1)
+        ?.deltas.some((d) => d.op === 'discovery.set'),
+    ).toBe(true);
+    expect(await app.bus.dispatch(sender, 'detect.clearBinary', { agent: 'shell' })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-input' },
+    });
     rmSync(home, { recursive: true, force: true });
   });
 });

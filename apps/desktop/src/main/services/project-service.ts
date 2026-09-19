@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync, type Dirent } from 'node:fs';
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
-import { homedir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { homedir, tmpdir } from 'node:os';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import {
   copy,
   fill,
@@ -32,6 +32,7 @@ import type { GitHubRepoApi } from '../providers/github';
 import { projectSettingsFor } from '../store/projection';
 import type { Publisher } from '../store/publisher';
 import type { ActivityService } from './activity-service';
+import { agentHistoryDirs, agentHistoryFs, type AgentHistoryDir } from './agent-history';
 import type { AuditService } from './audit-service';
 import type { GitService } from './git';
 import type { RecentFolder } from './ide-import-service';
@@ -45,6 +46,8 @@ export interface ProjectServiceDeps {
   git: GitService;
   platform: NodeJS.Platform;
   home?: string;
+  /** `$CLAUDE_CONFIG_DIR` / `$CODEX_HOME` for the agent-history part of `scan`; defaults to `process.env`. */
+  env?: NodeJS.ProcessEnv;
   /** `resources/templates/<name>` for `project.create` templates. */
   templatesDir: string | null;
   audit?: AuditService;
@@ -64,12 +67,15 @@ export interface ScannedRepo {
   path: string;
   remote: string | null;
   branch: string | null;
-  /** False for a plain folder (only IDE recents surface those; the walker looks for `.git`). */
+  /** False for a plain folder (IDE recents and agent history surface those; the walker looks for `.git`). */
   hasGit: boolean;
-  source: 'scan' | 'ide-recent';
+  /** Where the folder came from, first listed wins: the walker, an editor's recents, Claude Code's or Codex's history. */
+  source: ScanSource;
   lastModifiedAt: number | null;
   suggested: boolean;
 }
+
+export type ScanSource = 'scan' | 'ide-recent' | 'claude' | 'codex';
 
 /** "Stale" for the onboarding default (spec §4.9): no commit activity in a year. */
 export const STALE_MS = 365 * 24 * 3_600_000;
@@ -222,6 +228,8 @@ const PROJECT_KEYS: (keyof ProjectSettings)[] = [
   'mayRequestTargets',
   'notifyWhenNeedsMe',
   'baseBranch',
+  'syncOnSpawn',
+  'syncBeforePublish',
   'branchPrefix',
   'worktreeLocation',
   'shellWindows',
@@ -230,6 +238,9 @@ const PROJECT_KEYS: (keyof ProjectSettings)[] = [
   'envShareWithAgents',
   'devUrl',
   'devCommand',
+  'devPlatform',
+  'devDevice',
+  'devAppId',
 ];
 
 /**
@@ -405,10 +416,11 @@ export class ProjectService {
   // --- scan ------------------------------------------------------------------
 
   /**
-   * Repos on this machine (walker roots) plus every existing folder the detected IDEs opened recently — git or not —
-   * known projects dropped, most recently active first.
+   * Repos on this machine (walker roots), every existing folder the detected IDEs opened recently and every
+   * directory Claude Code or Codex has worked in (their own session history; docs/handoff-discrepancies #93) —
+   * git or not — known projects and worktrees dropped; git repos first, then most recently active first.
    */
-  async scan(includeIdeRecents: boolean): Promise<ScannedRepo[]> {
+  async scan(includeIdeRecents: boolean, includeAgentHistory = true): Promise<ScannedRepo[]> {
     const started = performance.now();
     const walk = await walkForRepos(scanRoots(this.home, this.deps.platform), this.deps.scanBudget ?? {});
     if (walk.truncated) {
@@ -426,24 +438,51 @@ export class ProjectService {
         logger.warn('project.scan: IDE recents unreadable', { error: (e as Error).message });
       }
     }
-    const known = new Set(this.deps.repos.projects.all().map((p) => p.path));
-    const openedAt = new Map(ideRecents.map((r) => [r.path, r.openedAt]));
+    let agentDirs: AgentHistoryDir[] = [];
+    if (includeAgentHistory) {
+      try {
+        agentDirs = (
+          await agentHistoryDirs({
+            home: this.home,
+            env: this.deps.env ?? process.env,
+            now: this.deps.clock.now(),
+            ...agentHistoryFs(),
+          })
+        ).filter((d) => !isTransientPath(d.path, this.home));
+      } catch (e) {
+        logger.warn('project.scan: agent history unreadable', { error: (e as Error).message });
+      }
+    }
+    // Known projects and their worktrees (Styx's own agent worktrees are where the CLIs run most) are not candidates.
+    const known = new Set([
+      ...this.deps.repos.projects.all().map((p) => p.path),
+      ...this.deps.repos.worktrees.all().map((w) => w.path),
+    ]);
+    const activityAt = new Map<string, number>();
+    const bump = (path: string, at: number | null) => {
+      if (at !== null) activityAt.set(path, Math.max(activityAt.get(path) ?? -Infinity, at));
+    };
+    for (const r of ideRecents) bump(r.path, r.openedAt);
+    for (const d of agentDirs) bump(d.path, d.lastActivityAt);
     const candidates = mergeCandidates(
       walk.repos,
       ideRecents.map((r) => r.path),
+      agentDirs,
       known,
-    ).map((c) => ({ ...c, openedAt: openedAt.get(c.path) ?? null }));
+    ).map((c) => ({ ...c, activityAt: activityAt.get(c.path) ?? null }));
     const described = await this.describeRepos(candidates);
     return described.sort(byLastActivity);
   }
 
   /**
-   * Remote / branch / activity for candidate folders (known projects are dropped); `suggested` per spec §4.9. A folder
-   * without git is listed as-is (`hasGit: false`, meta `no git`): its activity is when the IDE last opened it
-   * (`openedAt`), else the folder's mtime, and it is suggested when that is within the staleness window.
+   * Remote / branch / activity for candidate folders (known projects are dropped); `suggested` per spec §4.9.
+   * `activityAt` is what the source knows (the IDE's last open, the agent's last session) and only ever moves the
+   * activity later: a git repo's activity is the newer of its `.git` mtime and that; a folder without git is listed
+   * as-is (`hasGit: false`, meta `no git`) with `activityAt`, else the folder's mtime, and is suggested when that is
+   * within the staleness window.
    */
   async describeRepos(
-    candidates: readonly { path: string; source: 'scan' | 'ide-recent'; openedAt?: number | null }[],
+    candidates: readonly { path: string; source: ScanSource; activityAt?: number | null }[],
   ): Promise<ScannedRepo[]> {
     const known = new Set(this.deps.repos.projects.all().map((p) => p.path));
     const out: ScannedRepo[] = [];
@@ -454,19 +493,27 @@ export class ProjectService {
       let branch: string | null = null;
       let lastModifiedAt: number | null = null;
       // Same test as the walker (a `.git` entry): no git process per candidate; an unreadable repo is still listed.
-      const hasGit = existsSync(join(c.path, '.git'));
+      // A directory only an agent's history names may be a folder inside a repo (the CLI was started there), which
+      // `project.add` would treat as a repo too, so that one gets the real git check.
+      const hasGitEntry = existsSync(join(c.path, '.git'));
+      const hasGit =
+        hasGitEntry ||
+        ((c.source === 'claude' || c.source === 'codex') &&
+          (await this.deps.git.isRepo(c.path).catch(() => false)));
+      const activityAt = c.activityAt ?? null;
       if (hasGit) {
         try {
           const rs = await this.deps.git.remotes(c.path);
           remote = rs.find((r) => r.name === 'origin')?.url ?? rs[0]?.url ?? null;
           branch = await this.deps.git.currentBranch(c.path);
-          lastModifiedAt = Math.round((await stat(join(c.path, '.git'))).mtimeMs);
+          if (hasGitEntry) lastModifiedAt = Math.round((await stat(join(c.path, '.git'))).mtimeMs);
         } catch {
           /* unreadable repo: still listed */
         }
+        if (activityAt !== null) lastModifiedAt = Math.max(lastModifiedAt ?? -Infinity, activityAt);
       } else {
         lastModifiedAt =
-          c.openedAt ??
+          activityAt ??
           (await stat(c.path)
             .then((s) => Math.round(s.mtimeMs))
             .catch(() => null));
@@ -538,6 +585,7 @@ export class ProjectService {
       changes: { added: 0, removed: 0, files: 0 },
       pr: null,
       conflict: null,
+      behindBase: 0,
       mergedAt: null,
       createdAt: now,
       archivedAt: null,
@@ -1110,16 +1158,24 @@ export const applySettingsToFile = (file: ProjectFileV1, s: Partial<ProjectSetti
   else delete out.lineEndings;
   // `devUrl` / `devCommand` are flattened from `dev.url` / `dev.command`; null means "cleared" (the key goes), and
   // the block goes once it is empty rather than storing nulls.
-  if (s.devUrl !== undefined || s.devCommand !== undefined) {
+  if (
+    s.devUrl !== undefined ||
+    s.devCommand !== undefined ||
+    s.devPlatform !== undefined ||
+    s.devDevice !== undefined ||
+    s.devAppId !== undefined
+  ) {
     const dev: Record<string, unknown> = { ...(file.dev ?? {}) };
-    if (s.devUrl !== undefined) {
-      if (s.devUrl === null) delete dev['url'];
-      else dev['url'] = s.devUrl;
-    }
-    if (s.devCommand !== undefined) {
-      if (s.devCommand === null) delete dev['command'];
-      else dev['command'] = s.devCommand;
-    }
+    const put = (key: string, value: string | null | undefined) => {
+      if (value === undefined) return;
+      if (value === null) delete dev[key];
+      else dev[key] = value;
+    };
+    put('url', s.devUrl);
+    put('command', s.devCommand);
+    put('platform', s.devPlatform);
+    put('device', s.devDevice);
+    put('appId', s.devAppId);
     if (Object.keys(dev).length > 0) out.dev = dev as ProjectFileV1['dev'];
     else delete out.dev;
   }
@@ -1163,23 +1219,42 @@ const isDirectory = (p: string): boolean => {
   }
 };
 
-/** Most recent activity first; unknown activity last; path breaks ties so the list is stable. */
+/** Git repos first; within each, most recent activity first, unknown activity last; path breaks ties so the list is stable. */
 export const byLastActivity = (a: ScannedRepo, b: ScannedRepo): number =>
-  (b.lastModifiedAt ?? -Infinity) - (a.lastModifiedAt ?? -Infinity) || a.path.localeCompare(b.path);
+  Number(b.hasGit) - Number(a.hasGit) ||
+  (b.lastModifiedAt ?? -Infinity) - (a.lastModifiedAt ?? -Infinity) ||
+  a.path.localeCompare(b.path);
 
 /**
- * Filesystem hits and IDE recents merged into one candidate list: known projects drop out, a folder found by both
- * keeps `source: 'scan'`, and the result is sorted by path (scan re-sorts by activity once repos are described).
+ * Filesystem hits, IDE recents and agent history merged into one candidate list: known paths drop out, a folder found
+ * by several sources keeps the first-listed one (scan → ide-recent → claude → codex; the agent list is already one
+ * row per path), and the result is sorted by path (scan re-sorts by activity once repos are described).
  */
 export const mergeCandidates = (
   fsPaths: readonly string[],
   ideRecents: readonly string[],
+  agentDirs: readonly { path: string; source: 'claude' | 'codex' }[],
   known: ReadonlySet<string>,
-): { path: string; source: 'scan' | 'ide-recent' }[] => {
-  const byPath = new Map<string, 'scan' | 'ide-recent'>();
-  for (const p of fsPaths) if (!known.has(p)) byPath.set(p, 'scan');
-  for (const p of ideRecents) if (!known.has(p) && !byPath.has(p)) byPath.set(p, 'ide-recent');
+): { path: string; source: ScanSource }[] => {
+  const byPath = new Map<string, ScanSource>();
+  const put = (path: string, source: ScanSource) => {
+    if (!known.has(path) && !byPath.has(path)) byPath.set(path, source);
+  };
+  for (const p of fsPaths) put(p, 'scan');
+  for (const p of ideRecents) put(p, 'ide-recent');
+  for (const d of agentDirs) put(d.path, d.source);
   return [...byPath.entries()]
     .map(([path, source]) => ({ path, source }))
     .sort((a, b) => a.path.localeCompare(b.path));
 };
+
+const under = (p: string, dir: string): boolean =>
+  p === dir || p.startsWith(dir.endsWith(sep) ? dir : dir + sep);
+
+/**
+ * Agent-history directories that are never projects: the home itself, anything with a `.styx` segment (Styx's own
+ * agent worktrees, `<repo>/.styx/…`) and scratch directories under the OS temp dir (Claude Code's
+ * `/tmp/claude-<uid>/…/scratchpad`) — unless the temp dir is where the home lives (tests).
+ */
+export const isTransientPath = (path: string, home: string, tmp: string = tmpdir()): boolean =>
+  path === home || path.split(sep).includes('.styx') || (under(path, tmp) && !under(path, home));

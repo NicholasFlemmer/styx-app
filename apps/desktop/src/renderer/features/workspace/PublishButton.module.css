@@ -1,0 +1,18 @@
+@layer components {
+  /* Sits at the right end of the workspace mode strip, before the Deploy button (Workspace.module.css places it). */
+  .wrap {
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+  }
+  .button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  /* ↑ before the text: the push glyph, the Deploy button's ▲ at the same size. */
+  .glyph {
+    font-size: 10px;
+  }
+}

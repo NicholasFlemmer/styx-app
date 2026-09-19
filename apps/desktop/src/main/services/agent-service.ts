@@ -41,7 +41,7 @@ export interface AgentServiceDeps {
   openExternal: (url: string) => Promise<void>;
   home: string;
   env: NodeJS.ProcessEnv;
-  /** Install from the modal (#89): the platform picks the recipe, the login PATH says which tools it may need. */
+  /** Install from the modal (#98): the platform picks the recipe, the login PATH says which tools it may need. */
   platform: NodeJS.Platform;
   loginPath: () => Promise<string>;
   /** The user's login shell (`-ilc <command>`), so `brew` / `npm` resolve as they do in a terminal. */

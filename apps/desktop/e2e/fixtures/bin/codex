@@ -11,8 +11,12 @@
  *                          model/list, account/read, thread/start|resume; every turn/start replays a scripted
  *                          turn — `pong` streamed in two deltas, then a command that asks for approval
  *                          (server request id 100+) and only finishes after the client answers, token usage,
- *                          turn/completed.
+ *                          turn/completed. `turn/steer` mid-turn answers with an agent message `steered: <text>`.
+ *                          A prompt `write <name>` makes the scripted command `echo hi > <name>` and, once
+ *                          allowed, really writes the file into the thread's cwd (e2e/checkpoints.spec.ts).
  */
+const fs = require('node:fs');
+const path = require('node:path');
 const args = process.argv.slice(2);
 
 const HELP = `Codex CLI (fake for e2e)
@@ -162,7 +166,8 @@ async function runTurn(m) {
   note('item/completed', { item: { type: 'agentMessage', id: msgId, text: 'pong', phase: 'final_answer' }, turnId, completedAtMs: now() });
 
   const cmdId = `cmd_${turnCount}`;
-  const command = 'echo hi';
+  const writes = /^write (\S+)$/.exec(text.trim());
+  const command = writes ? `echo hi > ${writes[1]}` : 'echo hi';
   const cmd = (extra) => ({
     type: 'commandExecution',
     id: cmdId,
@@ -197,6 +202,7 @@ async function runTurn(m) {
   note('thread/status/changed', { status: { type: 'active', activeFlags: [] } });
   const decision = answer && answer.decision;
   if (decision === 'accept' || decision === 'acceptForSession') {
+    if (writes) fs.writeFileSync(path.join(cwd, writes[1]), 'hi\n');
     note('item/commandExecution/outputDelta', { turnId, itemId: cmdId, delta: 'hi\n' });
     note('item/completed', {
       item: cmd({ status: 'completed', aggregatedOutput: 'hi\n', exitCode: 0, durationMs: 3 }),
@@ -257,6 +263,10 @@ function onMessage(m) {
     case 'getAuthStatus':
       send({ id: m.id, result: { authMethod: 'chatgpt', requiresOpenaiAuth: true } });
       return;
+    case 'account/rateLimits/read':
+      // Same shape as the `account/rateLimits/updated` notification above (Usage › Refresh).
+      send({ id: m.id, result: { rateLimits: { primary: { usedPercent: 3, windowDurationMins: 300, resetsAt: Math.floor(now() / 1000) + 3600 }, secondary: { usedPercent: 1, windowDurationMins: 10080, resetsAt: Math.floor(now() / 1000) + 86400 }, planType: 'team' } } });
+      return;
     case 'thread/start':
     case 'thread/resume':
       threadId = m.method === 'thread/resume' ? params.threadId : 'thr_fake';
@@ -268,9 +278,16 @@ function onMessage(m) {
       if (threadId === null) return send({ id: m.id, error: { code: -32000, message: 'no thread' } });
       void runTurn(m);
       return;
-    case 'turn/steer':
+    case 'turn/steer': {
+      // The steered input joins the running turn: the fake answers it with an agent message naming the text, so a
+      // test can see the message reached the turn rather than a queue.
       send({ id: m.id, result: { turnId: `turn_${turnCount}` } });
+      const steered = (params.input || []).map((i) => i.text || '').join(' ');
+      const item = { type: 'agentMessage', id: `steer_${turnCount}_${requestId++}`, text: `steered: ${steered}`, phase: 'final_answer' };
+      send({ method: 'item/started', params: { threadId, item: { ...item, text: '' }, turnId: `turn_${turnCount}`, startedAtMs: now() }, emittedAtMs: now() });
+      send({ method: 'item/completed', params: { threadId, item, turnId: `turn_${turnCount}`, completedAtMs: now() }, emittedAtMs: now() });
       return;
+    }
     case 'turn/interrupt':
       send({ id: m.id, result: {} });
       return;

@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
-import { sectionRows } from './rows';
+import { CLI_BINARY_AUTO, sectionRows } from './rows';
 import { resolveSection } from './sections';
 import { Settings } from './Settings';
 
@@ -94,6 +94,32 @@ describe('sectionRows', () => {
     expect(sectionRows(model, 'app:agents', ctx).some((r) => r.id.startsWith('cliBinary:'))).toBe(false);
   });
 
+  it('a located binary always gets the Select, with "Detected automatically" to undo the pick', () => {
+    const picked = '/Users/nic/Downloads/claude';
+    const m = fixtures.demoReadModel();
+    const clis = m.discovery.clis.map((c) =>
+      c.agent === 'claude'
+        ? {
+            ...c,
+            binary: picked,
+            version: '2.0.0',
+            capabilities: {
+              streamJson: true,
+              source: 'manual',
+              alternatives: [{ binary: picked, version: '2.0.0', source: 'manual' }],
+            },
+          }
+        : c,
+    );
+    const rows = sectionRows({ ...m, discovery: { ...m.discovery, clis } }, 'app:agents', ctx);
+    const pick = rows.find((r) => r.id === 'cliBinary:claude');
+    expect(pick).toMatchObject({ value: picked, change: { kind: 'cli-binary', agent: 'claude' } });
+    expect(pick?.options).toEqual([
+      { value: picked, label: 'claude 2.0.0 · located manually' },
+      { value: CLI_BINARY_AUTO, label: copy.settings.values.cliAutoDetect },
+    ]);
+  });
+
   it('project rows mark `source === "project"` keys as overridden', () => {
     const rows = sectionRows(model, 'project:agent-defaults', ctx);
     expect(rows.map((r) => [r.id, r.overridden])).toEqual([
@@ -102,7 +128,19 @@ describe('sectionRows', () => {
       ['autoApproveEdits', false],
       ['permissionMode', false],
       ['effort', false],
+      ['syncOnSpawn', false],
+      ['syncBeforePublish', false],
     ]);
+  });
+
+  it('Agent defaults: keep-lanes-current rows are on by default and patch the project settings (ADR-0023)', () => {
+    const rows = sectionRows(model, 'project:agent-defaults', ctx);
+    const spawn = rows.find((r) => r.id === 'syncOnSpawn');
+    const publish = rows.find((r) => r.id === 'syncBeforePublish');
+    expect(spawn).toMatchObject({ label: 'Fetch before cutting a lane', value: 'on' });
+    expect(publish).toMatchObject({ label: 'Bring in the base branch before publishing', value: 'on' });
+    expect(spawn?.options.map((o) => o.label)).toEqual(['On', 'Off']);
+    expect(publish?.change.kind === 'project' && publish.change.patch('off')).toEqual({ syncBeforePublish: false });
   });
 
   it('Agent defaults: Model lists the CLI aliases; Permission mode / Effort rows patch project settings (discrepancy #54)', () => {
@@ -234,6 +272,8 @@ describe('sectionRows', () => {
       'model',
       'autoApproveEdits',
       'permissionMode',
+      'syncOnSpawn',
+      'syncBeforePublish',
     ]);
     expect(geminiRows.find((r) => r.id === 'model')?.options.map((o) => o.value)).toEqual(['default']);
   });
@@ -258,6 +298,8 @@ describe('sectionRows', () => {
       'Off',
       'Ask each time',
       'Default effort',
+      'On',
+      'On',
     ]);
     expect(values('project:env')).toEqual(['Keychain', 'Per grant', '.styx/project.json']);
   });
@@ -401,21 +443,17 @@ describe('<Settings />', () => {
     render(<Settings />);
     expect(screen.getByText(copy.empty.targets)).toBeTruthy();
     expect(screen.getByText('project · No project')).toBeTruthy();
-    expect(screen.getByText('Project · No project')).toBeTruthy();
   });
 
-  it('nav switches sections within one group; app sections carry the app scope (owner layout #85)', () => {
+  it('the section comes from the store (the app rail and the project nav own the navigation, #85 / #88); app sections carry the app scope', () => {
     render(<Settings />);
-    // Project group is showing (Targets): the App group's rows are not in this nav, the app rail opens them.
+    // Nothing navigates inside Settings any more: no section rows, only the section itself.
     expect(screen.queryByRole('button', { name: 'General' })).toBeNull();
-    expect(screen.getByRole('button', { name: copy.settings.project.agentDefaults })).toBeTruthy();
-    act(() => useUiStore.getState().setSettingsSection('app:general'));
     expect(screen.queryByRole('button', { name: copy.settings.project.agentDefaults })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'General' }));
-    expect(useUiStore.getState().settingsSection).toBe('app:general');
+    expect(screen.getByRole('heading', { name: copy.settings.project.targets })).toBeTruthy();
+    act(() => useUiStore.getState().setSettingsSection('app:general'));
     expect(screen.getByRole('heading', { name: 'General' })).toBeTruthy();
     expect(screen.getByText('app')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'General' }).getAttribute('aria-current')).toBe('page');
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Theme' }), { target: { value: 'dark' } });
     expect(commandMock).toHaveBeenCalledWith('settings.set', { patch: { theme: 'dark' } });
@@ -460,7 +498,6 @@ describe('<Settings />', () => {
     });
     render(<Settings />);
     act(() => useUiStore.getState().setSettingsSection('app:agents'));
-    fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
     expect(screen.getByRole('heading', { name: 'Agents' })).toBeTruthy();
     expect(screen.getByText(copy.agentsPage.lead)).toBeTruthy();
     const table = screen.getByRole('table', { name: copy.agentsPage.title });
@@ -484,7 +521,6 @@ describe('<Settings />', () => {
   it('Editor · Screen reader mode dispatches settings.set { screenReader } (spec §9)', () => {
     render(<Settings />);
     act(() => useUiStore.getState().setSettingsSection('app:editor'));
-    fireEvent.click(screen.getByRole('button', { name: 'Editor' }));
     const select = screen.getByRole('combobox', { name: copy.settings.rows.screenReader });
     expect((select as HTMLSelectElement).value).toBe('off');
     fireEvent.change(select, { target: { value: 'on' } });
@@ -493,7 +529,7 @@ describe('<Settings />', () => {
 
   it('project rows: change → project.settings.set, Reset → project.settings.reset', () => {
     render(<Settings />);
-    fireEvent.click(screen.getByRole('button', { name: 'Agent defaults' }));
+    act(() => useUiStore.getState().setSettingsSection('project:agent-defaults'));
     fireEvent.change(screen.getByRole('combobox', { name: 'Auto-approve edits' }), {
       target: { value: 'on' },
     });
@@ -522,10 +558,12 @@ describe('<Settings />', () => {
     });
   });
 
-  it('footer names the committed file', () => {
+  it('a project section names the committed file in its header; an app section does not', () => {
     render(<Settings />);
-    const nav = screen.getByRole('navigation', { name: copy.nav.settings });
-    expect(nav.textContent).toContain(copy.settings.footer.file);
-    expect(nav.textContent).toContain(copy.settings.footer.note);
+    const file = () => document.querySelector('[data-settings-file]');
+    expect(file()?.textContent).toContain(copy.settings.footer.file);
+    expect(file()?.textContent).toContain(copy.settings.footer.note);
+    act(() => useUiStore.getState().setSettingsSection('app:general'));
+    expect(file()).toBeNull();
   });
 });

@@ -86,7 +86,19 @@ export type TranscriptItem =
       branch: string | null;
       inbound: boolean;
     }
-  | { id: string; kind: 'system'; text: string };
+  | { id: string; kind: 'system'; text: string }
+  | {
+      /** A settled turn with changes (ADR-0020): sits after the turn's last row, before the next user message. */
+      id: string;
+      kind: 'checkpoint';
+      checkpointId: string;
+      turn: number;
+      files: number;
+      added: number;
+      removed: number;
+      /** The workspace was restored to before this turn (by reverting it or an earlier one). */
+      reverted: boolean;
+    };
 
 /** "read schema" · "write" · "delete / drop" · "deploy" (spec §10 access-request card, lowercase). */
 export const scopeLabel = (scope: Scope): string => copy.grantSheet.scopes[scope].toLowerCase();
@@ -110,11 +122,32 @@ export const askOpen = (model: ReadModel, askId: AskId | null): boolean =>
 export const transcriptItems = (model: ReadModel, sessionId: SessionId): TranscriptItem[] => {
   const messages: readonly TranscriptMessage[] = model.transcripts[sessionId] ?? [];
   const out: TranscriptItem[] = [];
+  // Settled turns with changes, by the user row that started them; the row lands before the next user message.
+  const checkpoints = new Map<string, Extract<TranscriptItem, { kind: 'checkpoint' }>>();
+  for (const c of model.checkpoints[sessionId] ?? []) {
+    if (c.messageId === null || c.ref === null || c.files === 0) continue;
+    checkpoints.set(c.messageId, {
+      id: `checkpoint:${c.id}`,
+      kind: 'checkpoint',
+      checkpointId: c.id,
+      turn: c.turn,
+      files: c.files,
+      added: c.added,
+      removed: c.removed,
+      reverted: c.revertedAt !== null,
+    });
+  }
+  let turnRow: Extract<TranscriptItem, { kind: 'checkpoint' }> | null = null;
   for (const m of [...messages].sort((a, b) => a.seq - b.seq)) {
     const p = m.payload;
+    if (p.kind === 'user' && turnRow !== null) {
+      out.push(turnRow);
+      turnRow = null;
+    }
     switch (p.kind) {
       case 'user':
         out.push({ id: m.id, kind: 'user', text: m.body, attachments: p.attachments ?? [] });
+        turnRow = checkpoints.get(m.id) ?? null;
         break;
       case 'agent': {
         // Rows written before question sets existed carry an ask but render as prose, which left the session
@@ -222,6 +255,7 @@ export const transcriptItems = (model: ReadModel, sessionId: SessionId): Transcr
       }
     }
   }
+  if (turnRow !== null) out.push(turnRow);
   return out;
 };
 

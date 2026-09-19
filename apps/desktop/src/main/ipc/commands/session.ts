@@ -7,6 +7,16 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
 
   bus.register('session.spawn', (input) => sessions.start(input));
 
+  // Queue (Claude Code has no steer): filled by the queue work package in SessionService.
+  bus.register('session.sendQueued', async ({ sessionId, messageId }) => {
+    await sessions.sendQueued(sessionId, messageId);
+    return {};
+  });
+  bus.register('session.unqueue', ({ sessionId, messageId }) => {
+    sessions.unqueue(sessionId, messageId);
+    return {};
+  });
+
   bus.register('session.sendMessage', async ({ sessionId, body, attachments }) => {
     await sessions.sendMessage(sessionId, body, attachments);
     return {};

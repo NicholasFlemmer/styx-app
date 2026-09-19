@@ -6,3 +6,4 @@ export * from './EmptyState';
 export * from './Tab';
 export * from './NavItem';
 export * from './RailTile';
+export * from './DeviceFrame';

@@ -1,0 +1,54 @@
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+  }
+  .lead {
+    margin: 0;
+    color: var(--mu);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  /* Progress: one row per step, a square dot that goes accent while running and text-colour once done. */
+  .steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+  .step {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-2);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--tx);
+  }
+  .dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    background: var(--tx);
+    align-self: center;
+  }
+  .step[data-state='running'] .dot {
+    background: var(--ac);
+    animation: styx-blink var(--motion-blink);
+  }
+  .step[data-state='running'] .stepText {
+    color: var(--mu);
+  }
+  .step[data-state='failed'] .dot {
+    background: var(--mu);
+  }
+  .step[data-state='failed'] .stepText {
+    user-select: text;
+  }
+  .stepText {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+}

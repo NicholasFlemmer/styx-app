@@ -1,4 +1,5 @@
 import {
+  projectSettingsOfOrDefault,
   agentLabel,
   copy,
   diffTotals,
@@ -28,8 +29,17 @@ export interface Lane {
   dot: DotTone;
   changes: string;
   pr: string;
+  /** The PR's page, when known: the PR cell opens it in the browser. */
+  prUrl: string | null;
   action: LaneAction;
   actionLabel: string;
+  /** Keep lanes current (ADR-0023): commits on the base branch this lane has not merged in; null when current. */
+  sync: { n: number; base: string; label: string } | null;
+  /**
+   * Commit / push / PR in one step (ADR-0021): `Open PR` for a lane without an open PR, `Commit & push` for one
+   * that has it (or main); none for merged or conflicted lanes, or a lane on no branch.
+   */
+  publishLabel: string | null;
   sessionId: SessionId | null;
   isMain: boolean;
   conflict: Worktree['conflict'];
@@ -81,6 +91,17 @@ export const remoteLine = (repo: Repo | null): string =>
 const prLabel = (pr: Worktree['pr']): string =>
   pr === null ? copy.repo.pr.none : fill(copy.repo.pr[pr.state], { n: pr.number });
 
+const hasOpenPr = (pr: Worktree['pr']): boolean =>
+  pr !== null && (pr.state === 'open' || pr.state === 'draft');
+
+/** Which publish verb a lane offers (see `Lane.publishLabel`). */
+export const publishLabelOf = (
+  w: Pick<Worktree, 'branch' | 'isMain' | 'pr' | 'conflict' | 'mergedAt'>,
+): string | null => {
+  if (w.branch === null || w.conflict !== null || w.mergedAt !== null) return null;
+  return w.isMain || hasOpenPr(w.pr) ? copy.publish.button : copy.publish.buttonPr;
+};
+
 /** Lane order (prototype): main, then live worktrees in model order, merged ones last (they only await Archive). */
 const laneRank = (w: Worktree): number => (w.isMain ? 0 : w.mergedAt === null ? 1 : 2);
 
@@ -90,6 +111,7 @@ export const laneRows = (model: ReadModel, projectId: ProjectId, now: number): L
   const worktrees = rows(model.worktrees)
     .filter((w) => w.projectId === projectId && w.archivedAt === null)
     .sort((a, b) => laneRank(a) - laneRank(b));
+  const base = projectSettingsOfOrDefault(model, projectId).baseBranch;
   return worktrees.map((w): Lane => {
     const session = w.owner.kind === 'session' ? (model.sessions.byId[w.owner.sessionId] ?? null) : null;
     const owner = session === null ? copy.repo.you : agentLabel(session);
@@ -128,8 +150,14 @@ export const laneRows = (model: ReadModel, projectId: ProjectId, now: number): L
       dot,
       changes,
       pr: prLabel(w.pr),
+      prUrl: w.pr?.url ?? null,
       action,
       actionLabel: ACTION_LABEL[action],
+      sync:
+        !w.isMain && !merged && w.conflict === null && w.behindBase > 0
+          ? { n: w.behindBase, base, label: fill(copy.repo.actions.sync, { base }) }
+          : null,
+      publishLabel: publishLabelOf(w),
       sessionId: session?.id ?? null,
       isMain: w.isMain,
       conflict: w.conflict,
@@ -141,7 +169,12 @@ export const laneRows = (model: ReadModel, projectId: ProjectId, now: number): L
 export const defaultLane = (lanes: readonly Lane[], activeSessionId: SessionId | null): Lane | null => {
   if (lanes.length === 0) return null;
   const active = activeSessionId === null ? undefined : lanes.find((l) => l.sessionId === activeSessionId);
-  return active ?? lanes.find((l) => !l.isMain && (l.action === 'diff' || l.action === 'resolve')) ?? lanes[0] ?? null;
+  return (
+    active ??
+    lanes.find((l) => !l.isMain && (l.action === 'diff' || l.action === 'resolve')) ??
+    lanes[0] ??
+    null
+  );
 };
 
 /** `fix/checkout · checkout.ts · +2 −0` — branch, first file, and that file's line counts. */
@@ -149,12 +182,15 @@ export const laneDiffHeader = (branch: string, diff: UnifiedDiff): string => {
   const first = diff.files[0];
   if (first === undefined) return branch;
   const totals = diff.files.length === 1 ? { added: first.added, removed: first.removed } : diffTotals(diff);
-  const file = diff.files.length === 1 ? first.path : fill(copy.repo.changes.summary, {
-    added: totals.added,
-    removed: totals.removed,
-    files: diff.files.length,
-    filesWord: diff.files.length === 1 ? 'file' : 'files',
-  });
+  const file =
+    diff.files.length === 1
+      ? first.path
+      : fill(copy.repo.changes.summary, {
+          added: totals.added,
+          removed: totals.removed,
+          files: diff.files.length,
+          filesWord: diff.files.length === 1 ? 'file' : 'files',
+        });
   return diff.files.length === 1
     ? `${branch} · ${file} · +${totals.added} −${totals.removed}`
     : `${branch} · ${file}`;
@@ -162,7 +198,11 @@ export const laneDiffHeader = (branch: string, diff: UnifiedDiff): string => {
 
 /** Next free `wt-<n>` branch for `+ Worktree` (user worktrees have no agent prefix). */
 export const nextWorktreeBranch = (model: ReadModel, projectId: ProjectId): string => {
-  const taken = new Set(rows(model.worktrees).filter((w) => w.projectId === projectId).map((w) => w.branch));
+  const taken = new Set(
+    rows(model.worktrees)
+      .filter((w) => w.projectId === projectId)
+      .map((w) => w.branch),
+  );
   let n = 1;
   while (taken.has(`wt-${n}`)) n += 1;
   return `wt-${n}`;

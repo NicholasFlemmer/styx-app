@@ -24,6 +24,7 @@ export const SCREENS = [
   'home',
   'workspace',
   'agents',
+  'usage',
   'repo',
   'approvals',
   'settings',
@@ -58,6 +59,8 @@ export interface UiState {
   paneSizes: Record<string, number>;
   palette: PaletteUiState;
   diffFocusIndex: number;
+  /** The Diff screen shows this turn checkpoint's patch (read-only) instead of the session's hunks (ADR-0020). */
+  diffCheckpointId: string | null;
   approvalsTab: ApprovalsTab;
   settingsSection: string;
   onboardingStep: OnboardingStep;
@@ -69,6 +72,11 @@ export interface UiState {
   /** What the Agents board shows: every project's sessions (the default, and the app rail's tile) or the current project's (the project nav's row). */
   boardScope: 'all' | 'project';
   taskLaunches: Record<string, TaskLaunch>;
+  /**
+   * Text handed back to a session's composer (a queued message taken back, or Stop returning the queue), by
+   * session. The chat pane applies it once and clears it; `seq` tells the composer a new one arrived.
+   */
+  drafts: Record<string, { text: string; seq: number }>;
 }
 
 export interface UiActions {
@@ -96,6 +104,7 @@ export interface UiActions {
   popOverlay(id?: string): void;
   closeOverlays(kind?: OverlayKind): void;
   setDiffFocusIndex(i: number): void;
+  setDiffCheckpoint(checkpointId: string | null): void;
   setApprovalsTab(tab: ApprovalsTab): void;
   setSettingsSection(section: string): void;
   setTaskLaunch(key: string, launch: TaskLaunch): void;
@@ -106,6 +115,9 @@ export interface UiActions {
   setBanner(banner: BannerEvent): void;
   clearBanner(bannerKey: string): void;
   dismissBanner(bannerKey: string): void;
+  /** Puts `text` into the session's composer draft (after anything already waiting there, blank-line separated). */
+  prefillDraft(sessionId: SessionId, text: string): void;
+  clearDraft(sessionId: SessionId): void;
 }
 
 export type UiStore = UiState & UiActions;
@@ -125,6 +137,9 @@ export const screenFromEnv = (
 
 const initialFromEnv = screenFromEnv(env().screen);
 
+/** Ever-increasing across sessions and clears, so a composer never mistakes a new prefill for one it applied. */
+let draftSeq = 0;
+
 export const useUiStore = create<UiStore>()(
   immer((set, get) => ({
     screen: initialFromEnv?.screen ?? 'home',
@@ -137,6 +152,7 @@ export const useUiStore = create<UiStore>()(
     paneSizes: {},
     palette: { query: '', scope: 'all', activeId: null },
     diffFocusIndex: 0,
+    diffCheckpointId: null,
     approvalsTab: 'inbox',
     settingsSection: 'project:targets',
     learning: {},
@@ -146,6 +162,7 @@ export const useUiStore = create<UiStore>()(
     editorFile: null,
     banners: {},
     dismissedBanners: [],
+    drafts: {},
 
     setScreen: (screen) =>
       set((s) => {
@@ -268,6 +285,10 @@ export const useUiStore = create<UiStore>()(
       set((s) => {
         s.diffFocusIndex = i;
       }),
+    setDiffCheckpoint: (checkpointId) =>
+      set((s) => {
+        s.diffCheckpointId = checkpointId;
+      }),
     setApprovalsTab: (tab) =>
       set((s) => {
         s.approvalsTab = tab;
@@ -309,6 +330,16 @@ export const useUiStore = create<UiStore>()(
     dismissBanner: (bannerKey) =>
       set((s) => {
         if (!s.dismissedBanners.includes(bannerKey)) s.dismissedBanners.push(bannerKey);
+      }),
+    prefillDraft: (sessionId, text) =>
+      set((s) => {
+        const cur = s.drafts[sessionId];
+        draftSeq += 1;
+        s.drafts[sessionId] = { text: cur === undefined ? text : `${cur.text}\n\n${text}`, seq: draftSeq };
+      }),
+    clearDraft: (sessionId) =>
+      set((s) => {
+        delete s.drafts[sessionId];
       }),
   })),
 );

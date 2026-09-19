@@ -17,12 +17,14 @@ import type { AuditEntry } from '../model/audit';
 import type { Agent, Env, Provider, Scope, TargetPolicy } from '../model/common';
 import type { CliInstall, IdeInstall, SkillSummary } from '../model/discovery';
 import type { Deploy, DevRun } from '../model/run';
+import type { Checkpoint } from '../model/checkpoint';
+import type { AgentLimits } from '../model/usage';
 import type { Grant } from '../model/grant';
 import type { AgentChange } from '../model/hunk';
 import type { Notification } from '../model/notification';
 import type { Policy } from '../model/policy';
 import type { Project, Repo, Worktree } from '../model/project';
-import type { PendingAsk, Session, SessionState, TranscriptMessage } from '../model/session';
+import type { PendingAsk, Session, SessionState, TranscriptMessage, QueuedMessage } from '../model/session';
 import { DEFAULT_APP_SETTINGS, DEFAULT_PROJECT_SETTINGS } from '../model/settings';
 import type { AppSettings, EffectiveProjectSettings } from '../model/settings';
 import type { Target } from '../model/target';
@@ -184,6 +186,7 @@ const worktree = (
   changes: { added: 0, removed: 0, files: 0 },
   pr: null,
   conflict: null,
+  behindBase: 0,
   mergedAt: null,
   createdAt: ago(3 * DAY),
   archivedAt: null,
@@ -1204,7 +1207,11 @@ export interface DemoFixture {
   appSettings: AppSettings;
   projectSettings: Record<string, EffectiveProjectSettings>;
   runs: Record<string, DevRun>;
+  devices: ReadModel['devices'];
   deploys: Record<string, Deploy>;
+  checkpoints: Record<string, Checkpoint[]>;
+  queues: Record<string, QueuedMessage[]>;
+  limits: Record<string, AgentLimits>;
 }
 
 const acmeProjectSettings = (): EffectiveProjectSettings =>
@@ -1233,10 +1240,19 @@ export const demoFixture = (): DemoFixture => ({
   skills: demoSkills(),
   activity: demoActivity(),
   // The demo keeps tracking on: its hunks are what the prototype's editor bands, hunk bar and Diff review show.
-  appSettings: { ...DEFAULT_APP_SETTINGS, fallbackIde: 'vscode', onboardingDone: true, trackAgentEdits: true },
+  appSettings: {
+    ...DEFAULT_APP_SETTINGS,
+    fallbackIde: 'vscode',
+    onboardingDone: true,
+    trackAgentEdits: true,
+  },
   projectSettings: { [ids.project.acmeShop]: acmeProjectSettings() },
   runs: {},
+  devices: {},
   deploys: {},
+  checkpoints: {},
+  queues: {},
+  limits: {},
 });
 
 /** Prototype "Empty states": no projects, sessions or targets; builtins and detection intact. */
@@ -1358,7 +1374,11 @@ export const fixtureReadModel = (f: DemoFixture): ReadModel => ({
   popouts: [],
   activity: f.activity,
   runs: f.runs,
+  devices: f.devices,
   deploys: f.deploys,
+  checkpoints: f.checkpoints,
+  queues: f.queues,
+  limits: f.limits,
 });
 
 export const demoReadModel = (): ReadModel => fixtureReadModel(demoFixture());

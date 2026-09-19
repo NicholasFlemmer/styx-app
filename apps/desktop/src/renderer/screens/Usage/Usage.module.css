@@ -1,0 +1,94 @@
+@layer screens {
+  .screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+  }
+  /* Settings header recipe: 18px 600 title, hairline below. */
+  .header {
+    flex: none;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--ln);
+  }
+  .title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  /* Lead line (Settings › Agents recipe): muted 12.5px / 1.5, one column wide. */
+  .lead {
+    margin: 0;
+    padding: var(--sp-4) var(--sp-5) var(--sp-3);
+    color: var(--mu);
+    font-size: 12.5px;
+    line-height: 1.5;
+    max-width: 520px;
+  }
+  .block {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  /* Section label (Home "Activity" recipe): t-label above its table; the table's last hairline separates sections. */
+  .blockHead {
+    margin: 0;
+    padding: var(--sp-5) var(--sp-5) var(--sp-1);
+  }
+  /* Limits: label at the left, Refresh at the right, text baselines aligned. */
+  .limitsHead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-right: var(--sp-5);
+  }
+  /* Numbers: tabular mono (counters are the only zero-padded numerals). */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  /* One window per line: a 120px bar (--s2 track, --ac fill, square corners) then the mono text. */
+  .windows {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-1);
+  }
+  .window {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    min-width: 0;
+  }
+  .bar {
+    flex: none;
+    display: block;
+    width: 120px;
+    height: 6px;
+    background: var(--s2);
+  }
+  .fill {
+    display: block;
+    height: 100%;
+    background: var(--ac);
+  }
+  .windowText {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .empty {
+    margin: 0;
+    padding: var(--sp-3) var(--sp-5) var(--sp-5);
+    color: var(--mu);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+}

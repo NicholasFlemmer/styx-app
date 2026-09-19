@@ -35,8 +35,10 @@ export interface ComposerProps {
   hints: readonly string[];
   /** Model picker label; rendered with a ▾ chevron. Omit to hide. */
   modelLabel?: ReactNode;
-  /** Send hint label (app: `copy.chat.composer.send`, "⏎ send"). */
+  /** Send hint label (app: `copy.chat.composer.send`, "⏎ send"; "Queue" / "Steer" while the agent is mid-turn). */
   sendLabel: string;
+  /** Tooltip on the send button (app: `copy.queue.queueHint` / `.steerHint` mid-turn). */
+  sendTitle?: string;
   onModel?: () => void;
   /**
    * Live session controls rendered in the hint row instead of `modelLabel` (t-label selects, Stop): the app's
@@ -79,6 +81,13 @@ export interface ComposerProps {
   slashItems?: readonly PopupItem[];
   slashHint?: string;
   slashEmpty?: string;
+
+  // --- draft prefill (queue: Take back / Stop return held messages to the composer) ---
+  /**
+   * Text handed back to the draft: applied once per `seq` (appended after a blank line when something is already
+   * typed, so nothing the user wrote is lost), caret at the end, textarea focused. The host clears it afterwards.
+   */
+  prefill?: { text: string; seq: number } | null;
 }
 
 /**
@@ -93,6 +102,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
     hints,
     modelLabel,
     sendLabel,
+    sendTitle,
     onModel,
     controls,
     compact,
@@ -115,10 +125,12 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
     slashItems,
     slashHint = '',
     slashEmpty = '',
+    prefill = null,
   },
   ref,
 ) {
   const [text, setText] = useState('');
+  const appliedPrefill = useRef<number | null>(null);
   const [caret, setCaret] = useState(0);
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   const [active, setActive] = useState(0);
@@ -169,6 +181,16 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
       pendingCaret.current = null;
     }
   }, [text]);
+  useEffect(() => {
+    if (prefill === null || prefill.seq === appliedPrefill.current) return;
+    appliedPrefill.current = prefill.seq;
+    const next = text.trim() === '' ? prefill.text : `${text.replace(/\s+$/, '')}\n\n${prefill.text}`;
+    pendingCaret.current = next.length;
+    setText(next);
+    setCaret(next.length);
+    inner.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the draft is read once, when a new prefill arrives
+  }, [prefill]);
 
   const optionId = (i: number) => `${popupId}-opt-${i}`;
 
@@ -357,7 +379,14 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
               {attachLabel}
             </button>
           )}
-          <button type="button" className={s['hint']} onClick={send} disabled={sendDisabled}>
+          <button
+            type="button"
+            className={s['hint']}
+            onClick={send}
+            disabled={sendDisabled}
+            title={sendTitle}
+            data-composer-send="true"
+          >
             {sendLabel}
           </button>
         </div>

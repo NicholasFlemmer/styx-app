@@ -131,11 +131,16 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
       void spawn();
     }
   };
-  /** OS file picker → `detect.setBinary`; the `discovery.set` delta clears the missing row when the probe succeeds. */
+  /**
+   * OS file picker → `detect.setBinary`; the `discovery.set` delta clears the missing row when the probe succeeds.
+   * A refused pick (a folder, a file that does not run, another agent's CLI) says why, so the user can pick again.
+   */
+  const [locateError, setLocateError] = useState<string | null>(null);
   const locateBinary = async () => {
     const r = await command('dialog.pickFile', { title: copy.errors.locateBinary });
     if (!r.ok || r.value.path === null) return;
-    await command('detect.setBinary', { agent: form.agent, path: r.value.path });
+    const set = await command('detect.setBinary', { agent: form.agent, path: r.value.path });
+    setLocateError(set.ok ? null : set.error.message);
   };
   const installGuide = () => {
     close();
@@ -220,6 +225,11 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
                 </>
               ) : null}
               <Button onClick={fixConnection}>{copy.errors.fixConnection}</Button>
+            </div>
+          ) : null}
+          {missing && locateError !== null ? (
+            <div className={s['error']} role="alert" data-locate-error="true">
+              <span className={s['errorText']}>{locateError}</span>
             </div>
           ) : null}
         </div>

@@ -1,0 +1,50 @@
+@layer screens {
+  /* A settled turn (ADR-0020): one mono line like a tool row — no bubble, muted, actions inline. */
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    padding: 4px 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--mu);
+    font-variant-numeric: tabular-nums;
+  }
+  .summary {
+    color: var(--tx);
+  }
+  .button {
+    font-family: var(--font-mono);
+    letter-spacing: 0;
+    text-transform: none;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .row[data-reverted='true'] .summary {
+    color: var(--mu);
+  }
+  .tag {
+    padding: 1px 6px;
+  }
+  /* The inline question takes the whole line under the summary. */
+  .confirm {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px solid var(--ln);
+    color: var(--tx);
+  }
+  .question {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .compact {
+    font-size: 10.5px;
+  }
+}

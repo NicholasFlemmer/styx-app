@@ -109,7 +109,7 @@ describe('DetectService', () => {
     expect(pickBest([])).toBeNull();
   });
 
-  describe('what the terminal sees (#89)', () => {
+  describe('what the terminal sees (#98)', () => {
     it('unions the login PATH, the shell answer and the install folders; PATH > shell > well-known; searched lists the folders', async () => {
       const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
       const loginDir = join(home, 'login-bin');
@@ -350,6 +350,163 @@ describe('DetectService', () => {
       const codex = (await svc.detectClis()).find((c) => c.agent === 'codex')!;
       expect(codex).toMatchObject({ binary: newCodex, version: '0.42.0', source: 'path' });
       expect(codex.alternatives.map((a) => a.binary)).toEqual([oldCodex, newCodex]);
+    });
+  });
+
+  describe('probe of a picked path (Locate binary)', () => {
+    /** exec by file name: a good claude, a good codex, a file that does not run, everything else silent + failing. */
+    function picker() {
+      const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+      const apps = join(home, 'Applications');
+      mkdirSync(join(apps, 'Claude.app', 'Contents', 'Resources'), { recursive: true });
+      const deps: DetectDeps = {
+        platform: 'darwin',
+        home,
+        pathEnv: join(home, 'bin'),
+        env: { SHELL: '/bin/sh' },
+        applicationsDir: apps,
+        exec: async (b, args) => {
+          if (args[0] === '--version') {
+            if (b.endsWith('/broken')) return { stdout: 'zsh: exec format error', exitCode: 126 };
+            if (b.endsWith('/codex')) return { stdout: 'codex-cli 0.42.0', exitCode: 0 };
+            if (b.endsWith('/claude')) return { stdout: '2.1.263 (Claude Code)', exitCode: 0 };
+            return { stdout: '', exitCode: 1 };
+          }
+          return { stdout: '--mcp-config', exitCode: 0 };
+        },
+      };
+      mkdirSync(join(home, 'bin'));
+      return { home, apps, deps, svc: new DetectService(deps) };
+    }
+
+    it('refuses a plain folder, a file that does not run, and another agent’s CLI, naming the reason', async () => {
+      const { home, svc } = picker();
+      const folder = join(home, 'stuff');
+      mkdirSync(folder);
+      expect(await svc.probe('claude', folder)).toMatchObject({ found: false, problem: { kind: 'directory' } });
+      const broken = bin(home, 'broken');
+      expect(await svc.probe('claude', broken)).toMatchObject({
+        found: false,
+        binary: broken,
+        problem: { kind: 'not-runnable' },
+      });
+      const codex = bin(home, 'codex');
+      expect(await svc.probe('claude', codex)).toMatchObject({
+        found: false,
+        problem: { kind: 'other-agent', agent: 'codex' },
+      });
+      expect(await svc.probe('codex', codex)).toMatchObject({ found: true, version: '0.42.0', source: 'manual' });
+    });
+
+    it('resolves an .app bundle (or a folder holding the CLI) to the executable inside it', async () => {
+      const { home, apps, svc } = picker();
+      const inner = bin(join(apps, 'Claude.app', 'Contents', 'Resources'), 'claude');
+      expect(await svc.probe('claude', join(apps, 'Claude.app'))).toMatchObject({
+        found: true,
+        binary: inner,
+        version: '2.1.263',
+      });
+      const local = join(home, '.claude', 'local');
+      mkdirSync(local, { recursive: true });
+      const wrapper = bin(local, 'claude');
+      expect(await svc.probe('claude', local)).toMatchObject({ found: true, binary: wrapper });
+    });
+
+    it('a remembered pick that no longer runs is ignored and detection falls back to PATH', async () => {
+      const { home, svc } = picker();
+      const onPath = bin(join(home, 'bin'), 'claude');
+      const broken = bin(home, 'broken');
+      const claude = (await svc.detectClis({ claude: broken })).find((c) => c.agent === 'claude')!;
+      expect(claude).toMatchObject({ binary: onPath, source: 'path', found: true });
+    });
+  });
+
+  describe('detectIdes', () => {
+    // The test host is a real Mac with editors installed: point the system lookups at the temp home.
+    const ideDeps = (home: string, over: Partial<DetectDeps> = {}): DetectDeps => ({
+      platform: 'darwin',
+      home,
+      pathEnv: '',
+      env: {},
+      applicationsDir: join(home, 'SystemApplications'),
+      launcherDirs: [],
+      exec: async () => ({ stdout: '', exitCode: 1 }),
+      ...over,
+    });
+
+    it('a User folder VS Code has written to counts as installed even when the app bundle is not in /Applications', async () => {
+      const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+      const user = join(home, 'Library', 'Application Support', 'Code', 'User');
+      mkdirSync(join(user, 'globalStorage'), { recursive: true });
+      writeFileSync(join(user, 'keybindings.json'), '[]');
+      const vscode = (await new DetectService(ideDeps(home)).detectIdes()).find((i) => i.kind === 'vscode')!;
+      expect(vscode).toMatchObject({
+        found: true,
+        product: 'VS Code',
+        location: null,
+        launcher: 'open -b com.microsoft.VSCode',
+        configDir: user,
+        imports: { keybindings: true },
+      });
+    });
+
+    it('finds an app bundle anywhere through Spotlight, and Insiders when stable is absent', async () => {
+      const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+      const elsewhere = join(home, 'Downloads', 'Visual Studio Code.app');
+      mkdirSync(join(elsewhere, 'Contents', 'Resources', 'app'), { recursive: true });
+      writeFileSync(join(elsewhere, 'Contents', 'Resources', 'app', 'package.json'), '{"version":"1.104.2"}');
+      const spotlight = ideDeps(home, {
+        exec: async (b, args) =>
+          b === '/usr/bin/mdfind' && args[0]?.includes('com.microsoft.VSCode"')
+            ? { stdout: `${elsewhere}\n`, exitCode: 0 }
+            : { stdout: '', exitCode: 1 },
+      });
+      const vscode = (await new DetectService(spotlight).detectIdes()).find((i) => i.kind === 'vscode')!;
+      expect(vscode).toMatchObject({
+        found: true,
+        location: elsewhere,
+        version: '1.104.2',
+        launcher: 'open -a "Visual Studio Code"',
+      });
+
+      const home2 = mkdtempSync(join(tmpdir(), 'styx-home-'));
+      mkdirSync(join(home2, 'Applications', 'Visual Studio Code - Insiders.app', 'Contents'), { recursive: true });
+      const insiders = (await new DetectService(ideDeps(home2)).detectIdes()).find((i) => i.kind === 'vscode')!;
+      expect(insiders).toMatchObject({
+        found: true,
+        product: 'VS Code Insiders',
+        launcher: 'open -a "Visual Studio Code - Insiders"',
+      });
+    });
+
+    it('a `code` shim in a launcher dir that is not on the app’s PATH still counts (Homebrew, /usr/local)', async () => {
+      const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+      const brewBin = join(home, 'brew', 'bin');
+      mkdirSync(brewBin, { recursive: true });
+      const code = bin(brewBin, 'code');
+      const deps = ideDeps(home, {
+        launcherDirs: [brewBin],
+        exec: async (b, args) => (b === code && args[0] === '--version' ? { stdout: '1.104.0\nabc', exitCode: 0 } : { stdout: '', exitCode: 1 }),
+      });
+      const vscode = (await new DetectService(deps).detectIdes()).find((i) => i.kind === 'vscode')!;
+      expect(vscode).toMatchObject({ found: true, launcher: code, version: '1.104.0', location: null });
+    });
+
+    it('Windows: a system-wide install under Program Files is found, with its bin\\code.cmd as launcher', async () => {
+      const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+      const programFiles = join(home, 'Program Files');
+      const install = join(programFiles, 'Microsoft VS Code');
+      mkdirSync(join(install, 'resources', 'app'), { recursive: true });
+      writeFileSync(join(install, 'resources', 'app', 'package.json'), '{"version":"1.104.0"}');
+      mkdirSync(join(install, 'bin'));
+      const launcher = bin(join(install, 'bin'), 'code.cmd');
+      const deps = ideDeps(home, {
+        platform: 'win32',
+        programFilesDir: programFiles,
+        env: { LOCALAPPDATA: join(home, 'AppData', 'Local'), APPDATA: join(home, 'AppData', 'Roaming') },
+      });
+      const vscode = (await new DetectService(deps).detectIdes()).find((i) => i.kind === 'vscode')!;
+      expect(vscode).toMatchObject({ found: true, location: install, version: '1.104.0', launcher });
     });
   });
 

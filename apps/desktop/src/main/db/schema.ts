@@ -114,6 +114,8 @@ export const worktrees = sqliteTable(
     prUrl: text('pr_url'),
     conflictFile: text('conflict_file'),
     conflictAgainst: text('conflict_against'),
+    /** ADR-0023: commits on the base branch not yet merged into this lane. */
+    behindBase: integer('behind_base').notNull().default(0),
     mergedAt: integer('merged_at'),
     createdAt: integer('created_at').notNull(),
     archivedAt: integer('archived_at'),
@@ -407,4 +409,47 @@ export const activity = sqliteTable(
     sessionId: text('session_id'),
   },
   (t) => [index('activity_at').on(t.at)],
+);
+
+/** 0015: one row per agent turn; hidden git refs behind it (docs/adr/0020). */
+export const checkpoints = sqliteTable(
+  'checkpoints',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    worktreeId: text('worktree_id')
+      .notNull()
+      .references(() => worktrees.id, { onDelete: 'cascade' }),
+    turn: integer('turn').notNull(),
+    messageId: text('message_id'),
+    baseRef: text('base_ref').notNull(),
+    ref: text('ref'),
+    files: integer('files').notNull().default(0),
+    added: integer('added').notNull().default(0),
+    removed: integer('removed').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    settledAt: integer('settled_at'),
+    revertedAt: integer('reverted_at'),
+    /** 0016: which screenshots exist for the turn (`['before','after']`). */
+    screensJson: text('screens_json').notNull().default('[]'),
+  },
+  (t) => [index('checkpoints_session').on(t.sessionId, t.turn)],
+);
+
+/** 0015: user turns held back while the agent is mid-turn. */
+export const queuedMessages = sqliteTable(
+  'queued_messages',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    body: text('body').notNull(),
+    /** Attachment paths (relative to the worktree), re-read when the message goes out. */
+    filesJson: text('files_json').notNull().default('[]'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('queued_messages_session').on(t.sessionId, t.createdAt)],
 );

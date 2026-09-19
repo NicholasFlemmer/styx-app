@@ -1,0 +1,8 @@
+#!/usr/bin/env node
+'use strict';
+/**
+ * Fake `adb` for e2e: absent. It shadows any real Android SDK on the machine (so a test never touches a real
+ * emulator) and fails `adb version`, which is how DeviceService decides the SDK is not usable.
+ */
+process.stderr.write('fake adb: no Android SDK in e2e\n');
+process.exit(127);

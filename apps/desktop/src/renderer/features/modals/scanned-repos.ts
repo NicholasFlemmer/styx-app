@@ -22,6 +22,29 @@ export const repoMeta = (repo: ScannedRepo, now: number): string => {
   return repo.branch === null ? hostLabel(repo.remote) : `${hostLabel(repo.remote)} · ${repo.branch}`;
 };
 
-/** Row text for a scanned repo: `—` for a picked folder main has not described. */
-export const rowMeta = (repo: RepoRow, now: number): string =>
-  repo.picked === true ? copy.general.none : repoMeta(repo, now);
+/**
+ * Where a row came from, for the meta cell: `Claude Code` / `Codex` (the CLI's own session history, #93) or
+ * `editor recents`; a repo the walker found on disk carries no source (the prototype's rows).
+ */
+export const sourceLabel = (source: ScannedRepo['source']): string | null => {
+  switch (source) {
+    case 'claude':
+      return copy.agentProducts.claude;
+    case 'codex':
+      return copy.agentProducts.codex;
+    case 'ide-recent':
+      return copy.addExisting.sourceRecents;
+    case 'scan':
+      return null;
+  }
+};
+
+/**
+ * Row text for a scanned repo: the git meta, then the source when there is one (`github · main · Claude Code`,
+ * `no git · Codex`); `—` for a picked folder main has not described.
+ */
+export const rowMeta = (repo: RepoRow, now: number): string => {
+  if (repo.picked === true) return copy.general.none;
+  const source = sourceLabel(repo.source);
+  return source === null ? repoMeta(repo, now) : `${repoMeta(repo, now)} · ${source}`;
+};

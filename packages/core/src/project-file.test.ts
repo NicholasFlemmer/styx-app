@@ -168,6 +168,25 @@ describe('mergeSettings', () => {
       source: 'project',
     });
   });
+  it('projectSettingsFromFile takes dev.platform, and dev.device / dev.appId only as plain identifiers', () => {
+    const file = {
+      version: 1 as const,
+      name: 'x',
+      dev: { platform: 'ios' as const, device: 'iPhone 17 Pro', appId: 'com.acme.shop' },
+    };
+    expect(projectSettingsFromFile(file)).toEqual({
+      devPlatform: 'ios',
+      devDevice: 'iPhone 17 Pro',
+      devAppId: 'com.acme.shop',
+    });
+    expect(
+      projectSettingsFromFile({
+        ...file,
+        dev: { platform: 'android', device: 'Pixel; rm -rf /', appId: 'x y' },
+      }),
+    ).toEqual({ devPlatform: 'android' });
+  });
+
   it('projectSettingsFromFile extracts only the keys the file sets', () => {
     expect(projectSettingsFromFile({ version: 1, name: 'x' })).toEqual({});
     expect(projectSettingsFromFile(SAMPLE)).toEqual({

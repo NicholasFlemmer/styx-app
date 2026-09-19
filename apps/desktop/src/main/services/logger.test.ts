@@ -142,3 +142,40 @@ describe('logger', () => {
     expect(vi.mocked(log.debug)).toHaveBeenCalledWith('[redacted]', ['[redacted]']);
   });
 });
+
+describe('publish guards', () => {
+  it('isSecretFile: env, keys, credential stores; not examples or ordinary files', async () => {
+    const { isSecretFile } = await import('./logger');
+    for (const f of [
+      '.env',
+      'apps/web/.env.local',
+      'deploy.pem',
+      'k/id_rsa',
+      'id_ed25519.pub',
+      '.npmrc',
+      'gcp/credentials.json',
+      'x.p12',
+    ])
+      expect(isSecretFile(f), f).toBe(true);
+    for (const f of ['.env.example', '.env.sample', 'src/env.ts', 'README.md', 'keys.md', 'monkey.pemx'])
+      expect(isSecretFile(f), f).toBe(false);
+  });
+
+  it('redactPatch: masks secret assignments and credential URLs on diff lines, keeps the rest', async () => {
+    const { redactPatch } = await import('./logger');
+    const patch = [
+      '+API_KEY=abc123',
+      '+export DATABASE_URL=postgres://u:p@h/db',
+      '-  password: hunter2',
+      '+const port = 3000',
+      `+token: ghp_${'a'.repeat(36)}`,
+    ].join('\n');
+    const out = redactPatch(patch);
+    expect(out).toContain('+API_KEY=[redacted]');
+    expect(out).toContain('+export DATABASE_URL=[redacted]');
+    expect(out).toContain('-  password=[redacted]');
+    expect(out).toContain('+const port = 3000');
+    expect(out).not.toContain('ghp_');
+    expect(out).not.toContain('hunter2');
+  });
+});

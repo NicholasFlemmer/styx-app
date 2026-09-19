@@ -37,7 +37,7 @@ export interface BoardColumn {
   emptyText: string;
 }
 
-/** Spec §4.3: Open · Review grant · Review plan; a Done card reopens (owner addition #88) and archives from its ghost button. */
+/** Spec §4.3: Open · Review grant · Review plan; a Done card reopens (owner addition #97) and archives from its ghost button. */
 const ctaFor = (session: Session, askKind: AskKind | null): string => {
   if (session.state === 'done') return copy.board.actions.reopen;
   if (session.state !== 'needs-you') return copy.board.actions.open;

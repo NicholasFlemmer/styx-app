@@ -43,6 +43,13 @@
     white-space: nowrap;
   }
   /* Text links: `Sign in with claude…`, `Install guide`, `Locate binary` (t-label, 28px hit area per spec §9). */
+  /* A refused Locate binary pick: the reason in mono, muted, under the status row. */
+  .locateError {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--mu);
+  }
   .link {
     position: relative;
     border: 0;
@@ -73,7 +80,7 @@
   .signIn {
     align-self: flex-start;
   }
-  /* Not installed (owner addition #89): a path-or-command field with Use beside it … */
+  /* Not installed (owner addition #98): a path-or-command field with Use beside it … */
   .pathRow {
     display: flex;
     align-items: center;

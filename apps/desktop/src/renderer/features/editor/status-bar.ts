@@ -7,8 +7,11 @@ import {
   sessionsInProject,
   targetDerivedState,
   type DevRun,
+  type DeviceSession,
+  projectSettingsOfOrDefault,
   type ProjectId,
   type ReadModel,
+  type WorktreeId,
 } from '@styx/core';
 
 /**
@@ -43,16 +46,41 @@ export const statusBarTargets = (model: ReadModel, projectId: ProjectId, now: nu
   return out;
 };
 
+/** Keep lanes current (ADR-0023): `↓3 main` for the lane in the editor when its base has moved on; nothing for main. */
+export const statusBarLane = (model: ReadModel, projectId: ProjectId, worktreeId: WorktreeId | null): string[] => {
+  if (worktreeId === null) return [];
+  const wt = model.worktrees.byId[worktreeId];
+  if (wt === undefined || wt.isMain || wt.behindBase === 0) return [];
+  const base = projectSettingsOfOrDefault(model, projectId).baseBranch;
+  return [fill(copy.sync.statusBar, { n: wt.behindBase, base })];
+};
+
 /**
  * Status-bar item for the project's local run (owner addition): `dev · http://localhost:5173` once the server
  * printed its URL, `dev · running` before that; nothing once it exited (the strip under the design bar says so).
  */
 export const statusBarRun = (run: DevRun | null): string[] => {
   if (run === null || run.phase === 'exited') return [];
+  // A device run shows on the simulator, never on a URL: the item names the platform instead.
+  if (run.platform !== 'web')
+    return [
+      fill(copy.workspace.run.runningDevice, { platform: copy.workspace.device.platforms[run.platform] }),
+    ];
   return [
     run.url === null
       ? copy.workspace.run.statusBarNoUrl
       : fill(copy.workspace.run.statusBar, { url: run.url }),
+  ];
+};
+
+/** `iOS · iPhone 17 Pro` while the project's simulator is booting or mirrored; nothing once it stopped or failed. */
+export const statusBarDevice = (device: DeviceSession | null): string[] => {
+  if (device === null || (device.phase !== 'booting' && device.phase !== 'ready')) return [];
+  return [
+    fill(copy.workspace.device.statusBar, {
+      platform: copy.workspace.device.platforms[device.platform],
+      device: device.deviceName,
+    }),
   ];
 };
 

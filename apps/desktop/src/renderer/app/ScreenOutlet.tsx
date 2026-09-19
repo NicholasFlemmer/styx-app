@@ -6,6 +6,7 @@ import { Home } from '../screens/Home/Home';
 import { Onboarding } from '../screens/Onboarding/Onboarding';
 import { Repo } from '../screens/Repo/Repo';
 import { Settings } from '../screens/Settings/Settings';
+import { Usage } from '../screens/Usage/Usage';
 import { Workspace } from '../screens/Workspace/Workspace';
 import { useUi } from '../state/hooks';
 import type { Screen } from '../state/ui-store';
@@ -18,6 +19,7 @@ const SCREENS: Record<Screen, ComponentType> = {
   repo: Repo,
   approvals: Approvals,
   settings: Settings,
+  usage: Usage,
   diff: Diff,
   onboarding: Onboarding,
 };

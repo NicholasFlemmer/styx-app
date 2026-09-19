@@ -480,7 +480,7 @@ describe('AgentService.login', () => {
   });
 });
 
-describe('AgentService.install (#89)', () => {
+describe('AgentService.install (#98)', () => {
   const missing = (app: ReturnType<typeof setup>['app'], agent: Agent) =>
     app.repos.discovery.saveCli({ ...row(app, agent), found: false, binary: null });
   const CLAUDE_INSTALL = 'curl -fsSL https://claude.ai/install.sh | bash';

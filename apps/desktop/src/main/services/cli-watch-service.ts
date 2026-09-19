@@ -11,7 +11,7 @@ export interface CliWatchDeps {
  * Notices an agent CLI being installed (or removed) while Styx runs: one non-recursive `fs.watch` per folder the
  * last detection scanned — the login PATH's folders and the vendors' install folders (`DetectService.onSearched`)
  * — and a debounced re-detect when any of them changes. So `curl … | bash` in a terminal shows up in Settings ›
- * Agents within a second, without a focus change or a restart (owner addition, docs/handoff-discrepancies #89).
+ * Agents within a second, without a focus change or a restart (owner addition, docs/handoff-discrepancies #98).
  * A folder that appears later (`~/.local/bin` created by an installer) is picked up by the next detection's list.
  */
 export class CliWatchService {

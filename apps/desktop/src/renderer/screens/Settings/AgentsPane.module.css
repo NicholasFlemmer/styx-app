@@ -8,7 +8,7 @@
     line-height: 1.5;
     max-width: 460px;
   }
-  /* Lead line with Rescan at its end (owner addition #89): the t-label link recipe, 28px hit target (spec §9). */
+  /* Lead line with Rescan at its end (owner addition #98): the t-label link recipe, 28px hit target (spec §9). */
   .leadRow {
     display: flex;
     align-items: center;

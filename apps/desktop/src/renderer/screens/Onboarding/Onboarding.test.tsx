@@ -38,9 +38,32 @@ const scanned = [
   },
 ] as const;
 
+/** Rows from the agent CLIs' own history (#93): a repo Claude Code worked in, a plain folder Codex worked in. */
+const agentScanned = [
+  {
+    path: '~/code/from-claude',
+    remote: 'git@github.com:acme/from-claude.git',
+    branch: 'main',
+    hasGit: true,
+    source: 'claude',
+    lastModifiedAt: fixtures.DEMO_NOW,
+    suggested: true,
+  },
+  {
+    path: '~/notes',
+    remote: null,
+    branch: null,
+    hasGit: false,
+    source: 'codex',
+    lastModifiedAt: fixtures.DEMO_NOW,
+    suggested: true,
+  },
+] as const;
+
 let picked: string | null = '/Users/me/PBX';
+let scannedRows: readonly (typeof scanned)[number][] | readonly (typeof agentScanned)[number][] = scanned;
 const commandMock = vi.fn(async (name: string, _input?: unknown) => {
-  if (name === 'project.scan') return { ok: true as const, value: { repos: scanned } };
+  if (name === 'project.scan') return { ok: true as const, value: { repos: scannedRows } };
   if (name === 'dialog.pickFolder') return { ok: true as const, value: { path: picked } };
   return { ok: true as const, value: {} };
 });
@@ -51,6 +74,7 @@ describe('Onboarding', () => {
   beforeEach(() => {
     commandMock.mockClear();
     picked = '/Users/me/PBX';
+    scannedRows = scanned;
     Object.assign(window, {
       styx: { platform: 'darwin', env: { now: fixtures.DEMO_NOW }, command: commandMock },
     });
@@ -107,7 +131,7 @@ describe('Onboarding', () => {
         .getAllByRole('checkbox')
         .slice(4)
         .map((c) => (c as HTMLInputElement).checked),
-    ).toEqual([true, true, true, false]);
+    ).toEqual([true, true, true, true, false]);
   });
 
   it('Editor: every detected editor kind gets its own row (Windsurf and Zed included)', () => {
@@ -157,7 +181,30 @@ describe('Onboarding', () => {
       recents: true,
     });
     expect(calls('ide.installOpenIn')).toHaveLength(0);
-    expect(commandMock).toHaveBeenCalledWith('project.scan', { includeIdeRecents: true });
+    expect(commandMock).toHaveBeenCalledWith('project.scan', {
+      includeIdeRecents: true,
+      includeAgentHistory: true,
+    });
+  });
+
+  it('Editor: "Also look where Claude Code and Codex have worked" is on by default; unchecked, step 2 scans without agent history', async () => {
+    render(<Onboarding />);
+    const toggle = screen.getByRole('checkbox', { name: copy.onboarding.editor.importAgentDirs });
+    expect((toggle as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: copy.onboarding.footer.continue }));
+    await waitFor(() => expect(useUiStore.getState().onboardingStep).toBe(2));
+    expect(commandMock).toHaveBeenCalledWith('project.scan', {
+      includeIdeRecents: true,
+      includeAgentHistory: false,
+    });
+    // It is not an IDE import.
+    expect(calls('ide.import')[0]?.[1]).toEqual({
+      ideId: 'ide-vscode',
+      keybindings: true,
+      theme: true,
+      recents: true,
+    });
   });
 
   it('Editor: Install "Open in Styx" runs when checked', async () => {
@@ -185,7 +232,7 @@ describe('Onboarding', () => {
       ),
     ).toEqual([
       ['', '~/code/acme-shop', 'github · main'],
-      ['', '~/work/client-x', 'gitlab · main'],
+      ['', '~/work/client-x', 'gitlab · main · editor recents'],
       ['', '~/Downloads/tmp-fork', 'no remote · 2y old'],
     ]);
     expect(screen.getAllByRole('checkbox').map((c) => (c as HTMLInputElement).checked)).toEqual([
@@ -209,6 +256,25 @@ describe('Onboarding', () => {
     fireEvent.click(screen.getByRole('button', { name: copy.onboarding.footer.continue }));
     await waitFor(() => expect(useUiStore.getState().onboardingStep).toBe(3));
     expect(calls('project.add').map((c) => c[1])).toEqual([{ path: '~/code/acme-shop' }]);
+  });
+
+  it("Projects: rows from the agent CLIs' history name the CLI in the meta; a plain folder reads no git", async () => {
+    scannedRows = agentScanned;
+    useUiStore.setState({ onboardingStep: 2 });
+    render(<Onboarding />);
+    await screen.findByText('Found 2 repos on this machine.');
+    const rows = [...screen.getByRole('table').querySelectorAll('[data-repo-path]')];
+    expect(rows.map((r) => r.getAttribute('data-repo-source'))).toEqual(['claude', 'codex']);
+    expect(
+      rows.map((r) =>
+        within(r as HTMLElement)
+          .getAllByRole('cell')
+          .map((c) => c.textContent),
+      ),
+    ).toEqual([
+      ['', '~/code/from-claude', `github · main · ${copy.agentProducts.claude}`],
+      ['', '~/notes', `${copy.workspace.noGit} · ${copy.agentProducts.codex}`],
+    ]);
   });
 
   it('Projects: "add folder" picks a folder via main, lists it checked (meta —) and adds it on Continue; dismissed = nothing', async () => {

@@ -2,7 +2,7 @@ import type { Agent } from './common';
 
 /**
  * How Styx installs an agent CLI that is not on the machine (Connect agent modal → Install; owner addition,
- * docs/handoff-discrepancies #89): each vendor's own documented command, verbatim, run in the user's login shell
+ * docs/handoff-discrepancies #98): each vendor's own documented command, verbatim, run in the user's login shell
  * (or PowerShell) inside the modal's terminal. Nothing here is interpolated: the renderer sends only the agent id
  * and main runs the matching constant.
  *

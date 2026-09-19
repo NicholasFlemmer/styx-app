@@ -85,6 +85,17 @@ describe('Palette', () => {
     expect(top?.kind === 'modal' && top.modal === 'spawn').toBe(true);
   });
 
+  it('publish row opens the publish modal for the branch the project is on', () => {
+    const id = useUiStore.getState().pushOverlay({ kind: 'palette' });
+    render(<Palette id={id} />);
+    const input = screen.getByRole('combobox');
+    fireEvent.change(input, { target: { value: 'Publish acme' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(useUiStore.getState().overlays).toMatchObject([
+      { kind: 'modal', modal: 'publish', worktreeId: fixtures.ids.worktree.fixCheckout },
+    ]);
+  });
+
   it('Mod+Enter on an agent row requests a new window', () => {
     const id = useUiStore.getState().pushOverlay({ kind: 'palette' });
     render(<Palette id={id} />);

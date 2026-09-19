@@ -46,7 +46,7 @@ export function AgentsPane({ children }: { children?: ReactNode }) {
 
   const rows = AGENT_ORDER.map((agent) => clis.find((c) => c.agent === agent) ?? undetected(agent));
   const [rescanning, setRescanning] = useState(false);
-  /** Re-detects every CLI now (#89): the login shell's PATH, install folders, bundles — the same run focus triggers. */
+  /** Re-detects every CLI now (#98): the login shell's PATH, install folders, bundles — the same run focus triggers. */
   const rescan = async () => {
     if (rescanning) return;
     setRescanning(true);

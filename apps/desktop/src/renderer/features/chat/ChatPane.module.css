@@ -215,3 +215,45 @@
     color: var(--mu);
   }
 }
+
+@layer components {
+  /* A message held while the agent is mid-turn: where the user bubble will be, dashed until it goes out. */
+  .queued {
+    align-self: flex-end;
+    max-width: 88%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px dashed var(--ln);
+    color: var(--tx);
+    line-height: 1.45;
+    user-select: text;
+  }
+  .queuedBody {
+    white-space: pre-wrap;
+  }
+  .queuedMeta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .queuedLabel {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--mu);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .queuedAction {
+    flex: none;
+    padding: 0;
+    border: 0;
+    line-height: normal;
+    white-space: nowrap;
+  }
+}

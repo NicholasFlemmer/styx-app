@@ -1,0 +1,56 @@
+.strip {
+  border-top: 1px solid var(--ln);
+  background: var(--s1);
+}
+.cells {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-8) var(--sp-6) var(--sp-8) 0;
+}
+.cell + .cell {
+  padding-left: var(--sp-6);
+  border-left: 1px solid var(--ln);
+}
+.num {
+  font: 600 56px / 1 var(--font-ui); /* the app's numeral-lg */
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.lbl {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font: 600 10px / 1 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mu);
+}
+.cell[data-on='true'] .lbl {
+  color: var(--tx);
+}
+@media (max-width: 860px) {
+  .cells {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cell {
+    padding: var(--sp-6) var(--sp-4) var(--sp-6) 0;
+  }
+  .cell + .cell {
+    padding-left: var(--sp-4);
+  }
+  .cell:nth-child(3) {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .cell:nth-child(n + 3) {
+    border-top: 1px solid var(--ln);
+  }
+  .num {
+    font-size: 40px;
+  }
+}

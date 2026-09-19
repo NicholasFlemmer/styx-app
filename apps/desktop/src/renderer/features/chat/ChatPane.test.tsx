@@ -824,3 +824,162 @@ describe('ChatPane', () => {
     ]);
   });
 });
+
+describe('ChatPane queue (messages sent mid-turn)', () => {
+  const commands: { name: string; input: unknown }[] = [];
+  const queuedModel = (bodies: string[], sessionId: SessionId = claude, base = fixtures.demoReadModel()) => ({
+    ...base,
+    queues: {
+      ...base.queues,
+      [sessionId]: bodies.map((body, i) => ({
+        id: `q-${i + 1}`,
+        sessionId,
+        body,
+        files: [],
+        createdAt: fixtures.DEMO_NOW + i,
+      })),
+    },
+  });
+
+  beforeEach(() => {
+    commands.length = 0;
+    Object.assign(window, {
+      styx: {
+        platform: 'darwin',
+        env: { now: fixtures.DEMO_NOW },
+        command: vi.fn(async (name: string, input: unknown) => {
+          commands.push({ name, input });
+          return { ok: true, value: {} };
+        }),
+      },
+    });
+    useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
+    useUiStore.setState({
+      overlays: [],
+      screen: 'workspace',
+      platform: 'darwin',
+      projectId: acme,
+      projectSession: {},
+      drafts: {},
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    Object.assign(window, { styx: undefined });
+  });
+
+  it('held messages render as dashed bubbles under the transcript, oldest first, each with Send now / Take back', () => {
+    useReadModel.getState().replaceModel(queuedModel(['first', 'second']), 'connected');
+    const { container } = render(<ChatPane projectId={acme} />);
+    const bubbles = container.querySelectorAll('[data-queued]');
+    expect(Array.from(bubbles).map((b) => b.getAttribute('data-queued'))).toEqual(['q-1', 'q-2']);
+    expect(bubbles[0]?.textContent).toContain('first');
+    expect(bubbles[0]?.textContent).toContain(`${copy.queue.queued} · ${copy.queue.hint}`);
+    expect(screen.getAllByRole('button', { name: copy.queue.sendNow })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: copy.queue.takeBack })).toHaveLength(2);
+    // They sit after the transcript rows and are not user bubbles.
+    const lastUser = container.querySelectorAll('[data-kind="user"]');
+    const last = lastUser[lastUser.length - 1] as Element;
+    expect(
+      last.compareDocumentPosition(bubbles[0] as Element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(bubbles[0]?.getAttribute('data-kind')).toBeNull();
+  });
+
+  it("another session's queue does not show here", () => {
+    useReadModel.getState().replaceModel(queuedModel(['for codex'], codex), 'connected');
+    const { container } = render(<ChatPane projectId={acme} />);
+    expect(container.querySelector('[data-queued]')).toBeNull();
+  });
+
+  it('Send now sends that message through session.sendQueued', () => {
+    useReadModel.getState().replaceModel(queuedModel(['first', 'second']), 'connected');
+    render(<ChatPane projectId={acme} />);
+    fireEvent.click(screen.getAllByRole('button', { name: copy.queue.sendNow })[1] as HTMLElement);
+    expect(commands).toEqual([
+      { name: 'session.sendQueued', input: { sessionId: claude, messageId: 'q-2' } },
+    ]);
+  });
+
+  it('Take back unqueues the message and puts its text into the composer draft', async () => {
+    useReadModel.getState().replaceModel(queuedModel(['bring me back']), 'connected');
+    render(<ChatPane projectId={acme} />);
+    fireEvent.click(screen.getByRole('button', { name: copy.queue.takeBack }));
+    expect(commands).toEqual([{ name: 'session.unqueue', input: { sessionId: claude, messageId: 'q-1' } }]);
+    await flush();
+    const box = screen.getByPlaceholderText('Message Claude…') as HTMLTextAreaElement;
+    expect(box.value).toBe('bring me back');
+    expect(document.activeElement).toBe(box);
+    // Applied once: the store entry is consumed so a remount does not paste it again.
+    expect(useUiStore.getState().drafts[claude]).toBeUndefined();
+  });
+
+  it('a Stop that returned the queue (drafts in the store) lands in the composer, after what was typed', async () => {
+    render(<ChatPane projectId={acme} />);
+    const box = screen.getByPlaceholderText('Message Claude…') as HTMLTextAreaElement;
+    fireEvent.change(box, { target: { value: 'typed' } });
+    act(() => useUiStore.getState().prefillDraft(claude, 'alpha\n\nbeta'));
+    await flush();
+    expect(box.value).toBe('typed\n\nalpha\n\nbeta');
+    expect(useUiStore.getState().drafts[claude]).toBeUndefined();
+  });
+
+  it("send hint: Queue with Claude's hint while working or blocked on an ask; ⏎ send once idle", () => {
+    render(<ChatPane projectId={acme} />); // the demo Claude session is working
+    const send = document.querySelector('[data-composer-send]') as HTMLButtonElement;
+    expect(send.textContent).toBe(copy.queue.send.queue);
+    expect(send.title).toBe(copy.queue.queueHint);
+
+    const model = fixtures.demoReadModel();
+    const s = model.sessions.byId[claude];
+    if (s === undefined) throw new Error('fixture');
+    act(() =>
+      useReadModel
+        .getState()
+        .replaceModel(
+          { ...model, sessions: upsertRows(model.sessions, [{ ...s, state: 'needs-you' }]) },
+          'connected',
+        ),
+    );
+    expect((document.querySelector('[data-composer-send]') as HTMLButtonElement).textContent).toBe('Queue');
+    act(() =>
+      useReadModel
+        .getState()
+        .replaceModel(
+          { ...model, sessions: upsertRows(model.sessions, [{ ...s, state: 'idle' }]) },
+          'connected',
+        ),
+    );
+    const idle = document.querySelector('[data-composer-send]') as HTMLButtonElement;
+    expect(idle.textContent).toBe(copy.chat.composer.send);
+    expect(idle.title).toBe('');
+  });
+
+  it("send hint: Steer with Codex's hint for a working Codex session on the app-server; Queue on the pty", () => {
+    useReadModel.getState().replaceModel(codexLive({ state: 'working' }), 'connected');
+    useUiStore.getState().setSession(acme, codex);
+    render(<ChatPane projectId={acme} />);
+    const send = document.querySelector('[data-composer-send]') as HTMLButtonElement;
+    expect(send.textContent).toBe(copy.queue.send.steer);
+    expect(send.title).toBe(copy.queue.steerHint);
+    act(() =>
+      useReadModel.getState().replaceModel(codexLive({ state: 'working', runner: 'pty' }), 'connected'),
+    );
+    expect((document.querySelector('[data-composer-send]') as HTMLButtonElement).textContent).toBe('Queue');
+  });
+
+  it('under the e2e/visual harness the send hint stays ⏎ send (the baked workspace baseline shows a working session)', () => {
+    Object.assign(window, {
+      styx: {
+        platform: 'darwin',
+        env: { now: fixtures.DEMO_NOW, e2e: true },
+        command: vi.fn(async () => ({ ok: true, value: {} })),
+      },
+    });
+    useReadModel.getState().replaceModel(queuedModel(['still shown']), 'connected');
+    const { container } = render(<ChatPane projectId={acme} />);
+    expect((document.querySelector('[data-composer-send]') as HTMLButtonElement).textContent).toBe('⏎ send');
+    // The bubbles are not gated: nothing is queued in the fixture, so the baseline never sees one.
+    expect(container.querySelector('[data-queued]')).not.toBeNull();
+  });
+});

@@ -1,4 +1,4 @@
-# ADR-0020 Agent CLIs are found the way the terminal finds them, and installed from Styx with the vendor's own installer
+# ADR-0024 Agent CLIs are found the way the terminal finds them, and installed from Styx with the vendor's own installer
 
 Status: accepted · 2026-09-19 (owner request)
 

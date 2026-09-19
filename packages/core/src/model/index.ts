@@ -12,3 +12,5 @@ export * from './agent-install';
 export * from './notification';
 export * from './settings';
 export * from './run';
+export * from './checkpoint';
+export * from './usage';

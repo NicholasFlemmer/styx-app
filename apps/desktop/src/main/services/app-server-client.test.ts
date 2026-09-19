@@ -1,6 +1,13 @@
 import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import { accountLabel, AppServerClient, AppServerError, modelCatalogue } from './app-server-client';
+import {
+  accountLabel,
+  AppServerClient,
+  AppServerError,
+  codexLimits,
+  modelCatalogue,
+  windowLabel,
+} from './app-server-client';
 
 const lines = (stream: PassThrough): string[] => {
   const out: string[] = [];
@@ -132,5 +139,73 @@ describe('accountLabel', () => {
     ['nope', { signedIn: false, account: null }],
   ])('%j', (input, expected) => {
     expect(accountLabel(input)).toEqual(expected);
+  });
+});
+
+describe('codexLimits', () => {
+  const NOW = 1_789_600_000_000;
+  it.each<[unknown, ReturnType<typeof codexLimits>]>([
+    [
+      {
+        rateLimits: {
+          primary: { usedPercent: 85.4, windowDurationMins: 300, resetsAt: 1789561758 },
+          secondary: { usedPercent: 12, windowDurationMins: 10080, resetsAt: 1790077939 },
+          planType: 'team',
+        },
+      },
+      {
+        agent: 'codex',
+        plan: 'team',
+        windows: [
+          { label: '5 h', usedPercent: 85.4, resetsAt: 1789561758000 },
+          { label: '7 d', usedPercent: 12, resetsAt: 1790077939000 },
+        ],
+        updatedAt: NOW,
+      },
+    ],
+    // One window, no plan, a reset already in milliseconds, a percentage over 100, a 90-minute window.
+    [
+      {
+        rateLimits: {
+          primary: null,
+          secondary: { usedPercent: 140, windowDurationMins: 90, resetsAt: 1789561758000 },
+        },
+      },
+      {
+        agent: 'codex',
+        plan: null,
+        windows: [{ label: '90 min', usedPercent: 100, resetsAt: 1789561758000 }],
+        updatedAt: NOW,
+      },
+    ],
+    // No duration: labelled by position; no reset: null; empty plan: none.
+    [
+      { rateLimits: { primary: { usedPercent: 3 }, secondary: undefined, planType: '' } },
+      {
+        agent: 'codex',
+        plan: null,
+        windows: [{ label: 'primary', usedPercent: 3, resetsAt: null }],
+        updatedAt: NOW,
+      },
+    ],
+    [{ rateLimits: { primary: null, secondary: null } }, null],
+    [{ rateLimits: {} }, null],
+    [{}, null],
+    ['nope', null],
+  ])('%j', (input, expected) => {
+    expect(codexLimits(input, NOW)).toEqual(expected);
+  });
+
+  it('labels windows by days, hours or minutes', () => {
+    expect([10080, 1440, 300, 60, 90, 1, null, undefined].map(windowLabel)).toEqual([
+      '7 d',
+      '1 d',
+      '5 h',
+      '1 h',
+      '90 min',
+      '1 min',
+      '',
+      '',
+    ]);
   });
 });

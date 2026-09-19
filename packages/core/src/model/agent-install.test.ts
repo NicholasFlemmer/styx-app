@@ -3,7 +3,7 @@ import { INSTALL_PLATFORMS, installRecipes } from './agent-install';
 
 const CONNECTABLE = ['claude', 'codex', 'gemini', 'cursor'] as const;
 
-describe('installRecipes (#89)', () => {
+describe('installRecipes (#98)', () => {
   it('every connectable agent has a recipe per platform; the shell and an unknown OS have none', () => {
     for (const p of INSTALL_PLATFORMS)
       for (const a of CONNECTABLE) expect(installRecipes(a, p).length, `${a} on ${p}`).toBeGreaterThan(0);

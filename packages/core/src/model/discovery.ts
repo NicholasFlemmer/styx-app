@@ -33,7 +33,7 @@ export type CliAuthState = z.infer<typeof cliAuthStateSchema>;
  * Where a CLI binary came from (`capabilities.source`); `manual` = picked with "Locate binary" (`detect.setBinary`).
  * `shell` = the user's login shell answered `command -v` with it (an alias or a version-manager shim the PATH scan
  * cannot see); `well-known` = one of the folders the vendors' installers write to that is not on the PATH at all
- * (owner addition, docs/handoff-discrepancies #89).
+ * (owner addition, docs/handoff-discrepancies #98).
  */
 export const cliSourceSchema = z.enum([
   'path',

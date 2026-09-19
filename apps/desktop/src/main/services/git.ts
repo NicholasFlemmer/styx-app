@@ -1,6 +1,7 @@
 import { execa, type Options as ExecaOptions } from 'execa';
 import type { Dirent } from 'node:fs';
 import { join, sep } from 'node:path';
+import { logger } from './logger';
 
 export interface GitStatus {
   branch: string;
@@ -117,7 +118,7 @@ export class GitService {
       if (m && m[1] && m[2]) seen.set(m[1], m[2]);
     }
     return [...seen].map(([name, url]) => {
-      const host = url.includes('github.com') ? 'github' : url.includes('gitlab.com') ? 'gitlab' : 'other';
+      const host = remoteHost(url);
       const m = /[:/]([^/:]+)\/([^/]+?)(?:\.git)?$/.exec(url);
       return { name, url, host, ...(m && m[1] && m[2] ? { owner: m[1], repo: m[2] } : {}) };
     });
@@ -216,6 +217,16 @@ export class GitService {
 
   async fetch(path: string): Promise<void> {
     await this.git.run(['fetch', '--prune', '--quiet'], path, { reject: false });
+  }
+
+  /** `git merge --no-edit <ref>` in a worktree; a conflict returns `ok: false` with the tree mid-merge (see `mergeAbort`). */
+  async merge(path: string, ref: string): Promise<{ ok: boolean; output: string }> {
+    const r = await this.git.run(['merge', '--no-edit', ref], path, { reject: false });
+    return { ok: r.exitCode === 0, output: (r.stderr || r.stdout).trim() };
+  }
+
+  async mergeAbort(path: string): Promise<void> {
+    await this.git.run(['merge', '--abort'], path, { reject: false });
   }
 
   async branches(path: string): Promise<string[]> {
@@ -365,21 +376,28 @@ export class GitService {
     await this.git.run(['add', '--', ...files], path);
   }
 
-  async commit(path: string, message: string, opts: { allowEmpty?: boolean } = {}): Promise<void> {
-    await this.git.run(
-      [
-        '-c',
-        'user.name=Styx',
-        '-c',
-        'user.email=styx@localhost',
-        'commit',
-        '-q',
-        ...(opts.allowEmpty ? ['--allow-empty'] : []),
-        '-m',
-        message,
-      ],
-      path,
-    );
+  /**
+   * Commits as `Styx <styx@localhost>` (scaffolds, checkpoints). `asUser` commits with the repo's / the user's own
+   * git identity instead (a publish is the user's commit), falling back to Styx only when git has no identity at
+   * all ("Please tell me who you are").
+   */
+  async commit(
+    path: string,
+    message: string,
+    opts: { allowEmpty?: boolean; asUser?: boolean } = {},
+  ): Promise<void> {
+    const args = ['commit', '-q', ...(opts.allowEmpty ? ['--allow-empty'] : []), '-m', message];
+    if (opts.asUser) {
+      const r = await this.git.run(args, path, { reject: false });
+      if (r.exitCode === 0) return;
+      if (
+        !/tell me who you are|empty ident|auto-detection is disabled|no (name|email) was given|user\.(name|email)/i.test(
+          r.stderr,
+        )
+      )
+        throw new Error(`git commit failed (${r.exitCode}): ${r.stderr.trim()}`);
+    }
+    await this.git.run(['-c', 'user.name=Styx', '-c', 'user.email=styx@localhost', ...args], path);
   }
 
   async addRemote(path: string, name: string, url: string): Promise<void> {
@@ -391,14 +409,34 @@ export class GitService {
    * `GIT_CONFIG_*` env (not argv, so it never shows in `ps`) and is not persisted in the repo config.
    */
   async push(path: string, remote: string, branch: string, opts: { token?: string } = {}): Promise<void> {
-    const env = opts.token
-      ? {
-          GIT_CONFIG_COUNT: '1',
-          GIT_CONFIG_KEY_0: 'http.extraheader',
-          GIT_CONFIG_VALUE_0: `AUTHORIZATION: bearer ${opts.token}`,
-        }
-      : undefined;
-    await this.git.run(['push', '-q', '-u', remote, branch], path, env ? { env } : {});
+    if (opts.token === undefined) {
+      await this.git.run(['push', '-q', '-u', remote, branch], path);
+      return;
+    }
+    // The token is scoped to the push URL's host (never a global header some other URL could receive), and the
+    // push fails closed: no credential helper and no prompt, so a rejected token cannot silently fall back to
+    // the user's own stored credential while the audit says the grant was used.
+    const pushUrl = (
+      await this.git.run(['remote', 'get-url', '--push', remote], path, { reject: false })
+    ).stdout.trim();
+    const host = remoteHost(pushUrl);
+    if (host !== 'github' || !/^https:\/\//i.test(pushUrl)) {
+      // The token is for github.com only; anywhere else the push goes out the way it always did (ssh agent, the
+      // user's own helper, a local path) and the token stays home.
+      logger.info('git push: remote is not https github.com, pushing without the grant token', { remote });
+      await this.git.run(['push', '-q', '-u', remote, branch], path);
+      return;
+    }
+    const env = {
+      GIT_CONFIG_COUNT: '2',
+      GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+      GIT_CONFIG_VALUE_0: `AUTHORIZATION: bearer ${opts.token}`,
+      GIT_CONFIG_KEY_1: 'credential.helper',
+      GIT_CONFIG_VALUE_1: '',
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_ASKPASS: '/usr/bin/false',
+    };
+    await this.git.run(['push', '-q', '-u', remote, branch], path, { env });
   }
 
   async configureRepo(
@@ -413,6 +451,23 @@ export class GitService {
 }
 
 /** Sibling worktree location: `<repoParent>/.styx/worktrees/<repoName>/<branchSlug>` (short paths on Windows). */
+
+/** Which forge a remote URL points at, by its real hostname (ssh `git@host:` and https forms), never a substring. */
+export const remoteHost = (url: string): 'github' | 'gitlab' | 'other' => {
+  let host: string | null = null;
+  const ssh = /^(?:[^@/]+@)?([^:/]+):/.exec(url);
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) {
+    try {
+      host = new URL(url).hostname.toLowerCase();
+    } catch {
+      host = null;
+    }
+  } else if (ssh?.[1] !== undefined) host = ssh[1].toLowerCase();
+  if (host === 'github.com') return 'github';
+  if (host === 'gitlab.com') return 'gitlab';
+  return 'other';
+};
+
 export function worktreeLocation(repoPath: string, branch: string): string {
   const parts = repoPath.split(sep);
   const name = parts.pop() ?? 'repo';

@@ -20,7 +20,7 @@ const toneOf = (card: BoardCard): 'needs' | 'working' | 'done' =>
   card.needs ? 'needs' : card.state === 'done' ? 'done' : 'working';
 
 /**
- * Primary CTA (spec §4.3): Open · Review grant · Review plan; a Done card reopens (owner addition, discrepancy #88)
+ * Primary CTA (spec §4.3): Open · Review grant · Review plan; a Done card reopens (owner addition, discrepancy #97)
  * and lands in its chat once the session is back, Archive having moved to the ghost slot.
  */
 const runCta = (card: BoardCard): void => {

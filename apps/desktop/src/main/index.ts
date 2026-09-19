@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  desktopCapturer,
   dialog,
   ipcMain,
   Menu,
@@ -9,9 +10,12 @@ import {
   net,
   Notification as OsNotification,
   powerMonitor,
+  protocol,
+  session,
   shell,
   systemPreferences,
   Tray,
+  webContents,
 } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -46,6 +50,13 @@ import { rendererPaths, WindowService } from './services/window-service';
 
 const env = process.env;
 const platform = process.platform;
+
+// `styx-device://frame/<project>` and `styx-device://checkpoint/<id>/<side>`: pictures of the running app for the
+// design window and the checkpoint review (the renderer's CSP allows no file: images). Registered before ready,
+// as Electron requires; served from the container's ScreensStore once it exists.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'styx-device', privileges: { standard: true, secure: true, supportFetchAPI: false } },
+]);
 const isMac = platform === 'darwin';
 const fixtureName = isFixtureName(env['STYX_FIXTURE']) ? env['STYX_FIXTURE'] : null;
 
@@ -376,6 +387,20 @@ async function boot(): Promise<void> {
       mainWindow: () => windowService.mainWindow() ?? null,
       onStatus: (status) => container?.publisher.sendEvent('preview.status', status),
     }),
+    deviceHooks: {
+      windowSources: async () =>
+        (await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 } })).map(
+          (s) => ({ id: s.id, name: s.name }),
+        ),
+      screenAccess: () => (isMac ? systemPreferences.getMediaAccessStatus('screen') : 'n/a'),
+      // The one non-https URL Styx opens: the OS privacy pane where the live mirror gets Screen Recording.
+      openScreenAccess: () =>
+        isMac
+          ? shell.openExternal(
+              'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+            )
+          : Promise.resolve(),
+    },
     dialogs: dialogsPort,
     notifications,
     openExternal: (url) =>
@@ -392,6 +417,39 @@ async function boot(): Promise<void> {
 
   container.bus.attach(ipcMain);
   attachPtyChannel(ipcMain, container);
+  // Pictures of the running app: the design window's mirrored device and the checkpoint screenshots.
+  protocol.handle('styx-device', async (request) => {
+    const png = await container?.screens.resolve(request.url);
+    return png
+      ? new Response(new Uint8Array(png), {
+          headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' },
+        })
+      : new Response(null, { status: 404 });
+  });
+  // The renderer's `getDisplayMedia` gets exactly the simulator window `device.mirror` armed, once; never a picker,
+  // never the whole screen. Anything else asking is refused.
+  session.defaultSession.setDisplayMediaRequestHandler(
+    (request, callback) => {
+      // Only Styx's own renderer, in a registered window, gets the armed window; the design window's page lives
+      // on its own partition and never reaches this handler at all.
+      const c = container;
+      const frame = request.frame;
+      const wc = frame === null ? undefined : webContents.fromFrame(frame);
+      const ours =
+        c !== null &&
+        request.videoRequested &&
+        wc !== undefined &&
+        c.publisher.isRegistered(wc.id) &&
+        c.bus.originAllowed(request.securityOrigin);
+      const source = ours ? c.devices.takeArmedSource() : null;
+      if (source === null) {
+        callback({});
+        return;
+      }
+      callback({ video: { id: source.id, name: source.name } });
+    },
+    { useSystemPicker: false },
+  );
   notifications.start(repos.pendingAsks.openAll().length);
   try {
     await container.start();

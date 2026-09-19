@@ -6,7 +6,7 @@ import { CliWatchService } from './cli-watch-service';
 
 const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-describe('CliWatchService (#89)', () => {
+describe('CliWatchService (#98)', () => {
   it('re-detects once per burst of changes in a watched folder; released and stopped folders are quiet', async () => {
     const a = mkdtempSync(join(tmpdir(), 'styx-watch-a-'));
     const b = mkdtempSync(join(tmpdir(), 'styx-watch-b-'));

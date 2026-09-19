@@ -8,6 +8,7 @@ import { command } from '../../state/commands';
 import { useModel, useSessionId, useUi } from '../../state/hooks';
 import { useReadModel } from '../../state/read-model';
 import { selectSessionId, useUiStore } from '../../state/ui-store';
+import { CheckpointDiff } from './CheckpointDiff';
 import { clampFocus, modLabel, reviewOf, type Review, type ReviewHunk } from './diff-data';
 
 /** The review as of now (for key handlers, which must not close over a render). */
@@ -76,6 +77,13 @@ function HunkView({
  * mark reviewed; Done marks the pending hunks reviewed (`hunk.done`) and returns to the Workspace.
  */
 export function Diff() {
+  // A turn checkpoint under review (chat row → Review) shows its patch instead of the session's hunks.
+  const diffCheckpointId = useUi((u) => u.diffCheckpointId);
+  if (diffCheckpointId !== null) return <CheckpointDiff checkpointId={diffCheckpointId} />;
+  return <HunkReview />;
+}
+
+function HunkReview() {
   const model = useModel(identity);
   const projectId = useUi((u) => u.projectId);
   const activeSessionId = useSessionId();

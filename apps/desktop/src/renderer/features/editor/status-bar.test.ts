@@ -1,11 +1,13 @@
-import { copy, fixtures, type Deploy, type DevRun, type ReadModel } from '@styx/core';
+import { copy, fixtures, type Deploy, type DevRun, type DeviceSession, type ReadModel } from '@styx/core';
 import { describe, expect, it } from 'vitest';
 import {
   editorReadoutItems,
   editorStatusLabel,
   statusBarDeploy,
+  statusBarDevice,
   statusBarRun,
   statusBarTargets,
+  statusBarLane,
 } from './status-bar';
 
 const { ids, DEMO_NOW } = fixtures;
@@ -16,6 +18,7 @@ const run = (over: Partial<DevRun> = {}): DevRun => ({
   runId: 'run:1',
   terminalId: 'term:1',
   command: 'pnpm dev',
+  platform: 'web',
   phase: 'running',
   url: null,
   exitCode: null,
@@ -61,8 +64,40 @@ describe('statusBarRun', () => {
       run({ phase: 'exited', exitCode: 0, endedAt: DEMO_NOW }),
       [],
     ],
+    ['an iOS run names the platform, not a URL', run({ platform: 'ios' }), ['Running · iOS']],
+    [
+      'an Android run with a Metro URL still names the platform',
+      run({ platform: 'android', url: 'http://localhost:8081' }),
+      ['Running · Android'],
+    ],
   ])('%s', (_name, r, expected) => {
     expect(statusBarRun(r)).toEqual(expected);
+  });
+});
+
+describe('statusBarDevice', () => {
+  const device = (over: Partial<DeviceSession> = {}): DeviceSession => ({
+    projectId: acme,
+    platform: 'ios',
+    deviceId: 'UDID-1',
+    deviceName: 'iPhone 17 Pro',
+    phase: 'ready',
+    mirror: 'window',
+    input: false,
+    error: null,
+    screen: null,
+    startedAt: DEMO_NOW,
+    ...over,
+  });
+  it.each([
+    ['no device', null, []],
+    ['booting', device({ phase: 'booting' }), ['iOS · iPhone 17 Pro']],
+    ['mirrored', device(), ['iOS · iPhone 17 Pro']],
+    ['android', device({ platform: 'android', deviceName: 'Pixel 8' }), ['Android · Pixel 8']],
+    ['failed: the device row says so, the bar does not', device({ phase: 'failed', error: 'x' }), []],
+    ['stopped', device({ phase: 'stopped' }), []],
+  ])('%s', (_name, d, expected) => {
+    expect(statusBarDevice(d)).toEqual(expected);
   });
 });
 
@@ -100,5 +135,21 @@ describe('editor readout', () => {
       copy.workspace.editorReadOnly.large,
     ]);
     expect(editorReadoutItems({ cursor: null, wrap: false, readOnly: null })).toEqual([]);
+  });
+});
+
+describe('statusBarLane (keep lanes current, ADR-0023)', () => {
+  it('reads ↓N base for a lane behind its base, nothing for main or a current lane', () => {
+    const m = fixtures.demoReadModel();
+    const acme = fixtures.ids.project.acmeShop;
+    const lane = fixtures.ids.worktree.fixCheckout;
+    const behind: ReadModel = {
+      ...m,
+      worktrees: { ...m.worktrees, byId: { ...m.worktrees.byId, [lane]: { ...m.worktrees.byId[lane]!, behindBase: 3 } } },
+    };
+    expect(statusBarLane(behind, acme, lane)).toEqual(['↓3 main']);
+    expect(statusBarLane(m, acme, lane)).toEqual([]); // current
+    expect(statusBarLane(behind, acme, fixtures.ids.worktree.acmeMain)).toEqual([]); // main is the base
+    expect(statusBarLane(behind, acme, null)).toEqual([]);
   });
 });

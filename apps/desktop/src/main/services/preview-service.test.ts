@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deviceBounds, normaliseUrl } from './preview-service';
+import { deviceBounds, normaliseUrl, viewZoom } from './preview-service';
 
 /**
  * The design window loads whatever the user types, so the URL guard is the security boundary: a preview must
@@ -36,22 +36,50 @@ describe('preview URL', () => {
 });
 
 describe('preview device bounds', () => {
-  const pane = { x: 400, y: 100, width: 900, height: 700 };
+  const content = { width: 1280, height: 800 };
 
-  it('desktop fills the pane', () => {
-    expect(deviceBounds(pane, 'desktop')).toEqual(pane);
+  it('trusts the rectangle the renderer reported (it owns the frame layout now)', () => {
+    const slot = { x: 654, y: 100, width: 393, height: 600 };
+    expect(deviceBounds(slot, content)).toEqual(slot);
   });
 
-  it('a preset makes the view genuinely that size, centred in the pane', () => {
-    const phone = deviceBounds(pane, 'phone');
-    expect(phone.width).toBe(393);
-    // Centred horizontally: (900 - 393) / 2 = 253.5 → 400 + 253.5
-    expect(phone.x).toBe(654);
-    expect(phone.height).toBe(700); // the pane is shorter than the phone, so height clamps
+  it('clamps to the window so a rectangle hanging off the edge still shows what it can', () => {
+    expect(deviceBounds({ x: 1100, y: 700, width: 393, height: 852 }, content)).toEqual({
+      x: 1100,
+      y: 700,
+      width: 180,
+      height: 100,
+    });
+    expect(deviceBounds({ x: -20, y: -10, width: 300, height: 400 }, content)).toEqual({
+      x: 0,
+      y: 0,
+      width: 280,
+      height: 390,
+    });
+    expect(deviceBounds({ x: 2000, y: 0, width: 100, height: 100 }, content)).toMatchObject({ width: 0 });
+  });
+});
+
+describe('preview zoom', () => {
+  it('desktop and a frame at full size are unzoomed', () => {
+    expect(viewZoom({ x: 0, y: 0, width: 900, height: 700 }, 'desktop')).toBe(1);
+    expect(viewZoom({ x: 0, y: 0, width: 393, height: 852 }, 'phone')).toBe(1);
+    expect(viewZoom({ x: 0, y: 0, width: 400, height: 900 }, 'phone')).toBe(1);
   });
 
-  it('clamps to the pane so a narrow pane still shows something', () => {
-    const narrow = deviceBounds({ x: 0, y: 0, width: 300, height: 400 }, 'tablet');
-    expect(narrow).toEqual({ x: 0, y: 0, width: 300, height: 400 });
+  it('a frame shrunk by the renderer zooms the page by the same factor, so the layout viewport stays the device', () => {
+    // 393 × 0.55 = 216.15 → the view got 216 px: the factor is exactly 216 / 393, so the page measures 393.
+    expect(viewZoom({ x: 0, y: 0, width: 216, height: 469 }, 'phone')).toBe(216 / 393);
+    expect(Math.round(216 / viewZoom({ x: 0, y: 0, width: 216, height: 469 }, 'phone'))).toBe(393);
+    // Rotated: the view's width is the device's height.
+    expect(viewZoom({ x: 0, y: 0, width: 469, height: 216 }, 'phone')).toBe(469 / 852);
+    expect(viewZoom({ x: 0, y: 0, width: 417, height: 556 }, 'tablet')).toBe(0.5);
+    // A pixel lost to rounding still divides out to the device width.
+    for (const w of [168, 169, 170])
+      expect(Math.round(w / viewZoom({ x: 0, y: 0, width: w, height: 366 }, 'phone'))).toBe(393);
+  });
+
+  it('an empty rectangle is left alone', () => {
+    expect(viewZoom({ x: 0, y: 0, width: 0, height: 0 }, 'phone')).toBe(1);
   });
 });

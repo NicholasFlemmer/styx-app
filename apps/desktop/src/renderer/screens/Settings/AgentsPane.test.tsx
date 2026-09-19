@@ -121,7 +121,7 @@ describe('<AgentsPane />', () => {
     await waitFor(() => expect(cells('gemini')[3]).toBe(copy.agentsPage.state.signedOut));
   });
 
-  it('Rescan re-detects every CLI (detect.clis) and reads rescanning… meanwhile (#89)', async () => {
+  it('Rescan re-detects every CLI (detect.clis) and reads rescanning… meanwhile (#98)', async () => {
     const gate: { settle: (() => void) | null } = { settle: null };
     commandMock.mockImplementationOnce(async () => {
       await new Promise<void>((resolve) => {

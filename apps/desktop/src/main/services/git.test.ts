@@ -9,7 +9,16 @@ const git = new GitService();
 let repo: string;
 
 async function sh(args: string[], cwd: string) {
-  await execa('git', args, { cwd, env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
+  await execa('git', args, {
+    cwd,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: 't',
+      GIT_AUTHOR_EMAIL: 't@t',
+      GIT_COMMITTER_NAME: 't',
+      GIT_COMMITTER_EMAIL: 't@t',
+    },
+  });
 }
 
 beforeAll(async () => {
@@ -45,7 +54,12 @@ describe('GitService', () => {
     const st = await git.status(wt);
     expect(st.branch).toBe('agent/claude-1');
     expect(st.clean).toBe(false);
-    expect(st.changed).toEqual(expect.arrayContaining([{ path: 'checkout.ts', kind: 'modified' }, { path: 'validate.ts', kind: 'untracked' }]));
+    expect(st.changed).toEqual(
+      expect.arrayContaining([
+        { path: 'checkout.ts', kind: 'modified' },
+        { path: 'validate.ts', kind: 'untracked' },
+      ]),
+    );
     const ns = await git.numstat(wt, 'main');
     expect(ns).toEqual({ added: 3, removed: 1, files: 2 });
     expect(await git.diff(wt, 'main')).toContain('+B');
@@ -77,5 +91,61 @@ describe('GitService', () => {
     await git.applyPatch(wt, patch, { cached: true });
     const st = await git.status(wt);
     expect(st.changed).toEqual([{ path: 'pay.ts', kind: 'modified' }]);
+  });
+
+  it('commit: Styx identity by default; `asUser` takes the configured identity and falls back to Styx without one', async () => {
+    // A runner whose git sees no global / system config and no identity env: only what the repo itself sets.
+    const env: Record<string, string> = { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
+    for (const [k, v] of Object.entries(process.env))
+      if (v !== undefined && !/^(GIT_(AUTHOR|COMMITTER)_|EMAIL$)/.test(k) && !(k in env)) env[k] = v;
+    const isolated = new GitService({
+      run: async (args, cwd, opts = {}) => {
+        const r = await execa('git', args, {
+          cwd,
+          reject: opts.reject ?? true,
+          env,
+          extendEnv: false,
+          ...(opts.input !== undefined ? { input: opts.input } : {}),
+        });
+        return { stdout: String(r.stdout ?? ''), stderr: String(r.stderr ?? ''), exitCode: r.exitCode ?? 0 };
+      },
+    });
+    const author = () =>
+      execa('git', ['log', '-1', '--format=%an <%ae>'], { cwd: repo }).then((r) => r.stdout);
+    writeFileSync(join(repo, 'one.txt'), '1\n');
+    await isolated.add(repo, ['one.txt']);
+    await isolated.commit(repo, 'default identity');
+    expect(await author()).toBe('Styx <styx@localhost>');
+    // No identity anywhere (and git's passwd/hostname guess switched off): asUser falls back to Styx.
+    await sh(['config', 'user.useConfigOnly', 'true'], repo);
+    writeFileSync(join(repo, 'two.txt'), '2\n');
+    await isolated.add(repo, ['two.txt']);
+    await isolated.commit(repo, 'no identity', { asUser: true });
+    expect(await author()).toBe('Styx <styx@localhost>');
+    // The repo's own identity wins once it exists.
+    await sh(['config', 'user.name', 'Nic Test'], repo);
+    await sh(['config', 'user.email', 'nic@example.com'], repo);
+    writeFileSync(join(repo, 'three.txt'), '3\n');
+    await isolated.add(repo, ['three.txt']);
+    await isolated.commit(repo, 'own identity', { asUser: true });
+    expect(await author()).toBe('Nic Test <nic@example.com>');
+    // Any other failure surfaces as is.
+    await expect(isolated.commit(repo, 'nothing staged', { asUser: true })).rejects.toThrow(
+      /git commit failed/,
+    );
+  });
+});
+
+describe('remoteHost', () => {
+  it('matches the real hostname only, for https and ssh forms', async () => {
+    const { remoteHost } = await import('./git');
+    expect(remoteHost('https://github.com/acme/shop.git')).toBe('github');
+    expect(remoteHost('git@github.com:acme/shop.git')).toBe('github');
+    expect(remoteHost('ssh://git@github.com/acme/shop.git')).toBe('github');
+    expect(remoteHost('https://gitlab.com/acme/shop.git')).toBe('gitlab');
+    // Look-alikes that a substring match accepted.
+    expect(remoteHost('https://github.com.evil.io/acme/shop.git')).toBe('other');
+    expect(remoteHost('https://evil.io/github.com/acme/shop.git')).toBe('other');
+    expect(remoteHost('/srv/git/github.com/shop.git')).toBe('other');
   });
 });

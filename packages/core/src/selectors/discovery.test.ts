@@ -144,7 +144,7 @@ describe('model catalogue (discrepancy #83)', () => {
   });
 });
 
-describe('cliSearchedDirs (#89)', () => {
+describe('cliSearchedDirs (#98)', () => {
   it('reads the folders detection scanned off the row; a row without them (older or never scanned) reads []', () => {
     const codex = demoClis().find((c) => c.agent === 'codex');
     if (codex === undefined) throw new Error('fixture');

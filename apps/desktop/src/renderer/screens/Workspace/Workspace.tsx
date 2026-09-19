@@ -30,10 +30,13 @@ import {
   editorReadoutItems,
   editorStatusLabel,
   statusBarDeploy,
+  statusBarDevice,
+  statusBarLane,
   statusBarRun,
   statusBarTargets,
 } from '../../features/editor/status-bar';
 import { DeployButton } from '../../features/workspace/DeployButton';
+import { PublishButton } from '../../features/workspace/PublishButton';
 import { StatusBar } from '../../features/editor/StatusBar';
 import { TerminalPane } from '../../features/terminal/TerminalPane';
 import { command } from '../../state/commands';
@@ -167,7 +170,9 @@ export function Workspace() {
       ? []
       : [
           ...statusBarTargets(model, projectId, now),
+          ...statusBarLane(model, projectId, worktreeId),
           ...statusBarRun(model.runs[projectId] ?? null),
+          ...statusBarDevice(model.devices[projectId] ?? null),
           ...statusBarDeploy(model, projectId),
         ];
   const editorStatus = editorStatusLabel(fileState?.eol ?? 'lf', fileState?.lang ?? 'TS');
@@ -240,6 +245,7 @@ export function Workspace() {
               data-workspace-mode="design"
             />
           </div>
+          <PublishButton projectId={projectId} />
           <DeployButton projectId={projectId} />
         </div>
         {mode === 'design' ? (
@@ -249,6 +255,9 @@ export function Workspace() {
             active
             run={model.runs[projectId] ?? null}
             devCommand={model.settings.project[projectId]?.devCommand.value ?? null}
+            device={model.devices[projectId] ?? null}
+            devPlatform={model.settings.project[projectId]?.devPlatform.value ?? null}
+            devDevice={model.settings.project[projectId]?.devDevice.value ?? null}
           />
         ) : (
           <>

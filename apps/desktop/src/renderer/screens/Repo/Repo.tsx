@@ -1,4 +1,5 @@
 import {
+  fill,
   copy,
   fixtures,
   repoHasGit,
@@ -7,7 +8,7 @@ import {
   type UnifiedDiff,
   type WorktreeId,
 } from '@styx/core';
-import { Button, EmptyState, Label, StatusDot, Table, TABLE_COLUMNS, TableCell, TableRow } from '@styx/ui';
+import { Button, EmptyState, Label, StatusDot, Table, TableCell, TableRow } from '@styx/ui';
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { LaneDiff, parsePatch } from '../../features/diff';
 import { bridge, env } from '../../state/bridge';
@@ -29,6 +30,11 @@ import s from './Repo.module.css';
 
 const identity = (m: ReadModel) => m;
 const EMPTY_DIFF: UnifiedDiff = { files: [] };
+/**
+ * The prototype's `1.2fr 1fr 1.6fr 1fr .7fr` with the action column widened to hold two verbs (`Commit & push ·
+ * Open`, ADR-0021) on one line down to the 1100px window minimum; the Changes and PR columns give up the width.
+ */
+const LANE_COLUMNS = '1.2fr 1fr 1.4fr .9fr 1fr';
 
 /**
  * Read query (not a mutation): asks main for the worktree's `git diff -U3`. Unlike `command()` it never toasts —
@@ -125,6 +131,16 @@ export function Repo() {
     if (lane.action === 'diff' || lane.action === 'resolve') setPickedId(lane.worktreeId);
     runAction(lane);
   };
+  const pushOverlay = useUi((u) => u.pushOverlay);
+  /** Commit, push and PR in one step for the lane (ADR-0021); the store hands focus back to the button on close. */
+  const onPublish = (lane: Lane) => (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    pushOverlay({ kind: 'modal', modal: 'publish', worktreeId: lane.worktreeId });
+  };
+  const onOpenPr = (lane: Lane) => (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (lane.prUrl !== null) void command('link.open', { url: lane.prUrl });
+  };
 
   // Plain folder (owner decision: any folder is a project): no lanes, no diff — the empty state offers `git init`.
   if (projectId !== null && !hasGit) {
@@ -169,7 +185,7 @@ export function Repo() {
       </div>
       <Table
         className={s['lanes']}
-        columns={TABLE_COLUMNS.repo}
+        columns={LANE_COLUMNS}
         header={[
           copy.repo.columns.branch,
           copy.repo.columns.owner,
@@ -194,9 +210,47 @@ export function Repo() {
                 <StatusDot size={7} tone={lane.dot} />
                 {lane.owner}
               </TableCell>
-              <TableCell mono>{lane.changes}</TableCell>
-              <TableCell mono>{lane.pr}</TableCell>
-              <TableCell label align="end">
+              <TableCell mono>
+                {lane.changes}
+                {lane.sync !== null ? (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      className={s['syncAction']}
+                      title={lane.sync.label}
+                      aria-label={`${lane.sync.label} · ${lane.branch}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void command('worktree.sync', { worktreeId: lane.worktreeId });
+                      }}
+                      data-action="sync"
+                    >
+                      {fill(copy.repo.changes.behind, { n: lane.sync.n, base: lane.sync.base })}
+                    </button>
+                  </>
+                ) : null}
+              </TableCell>
+              <TableCell mono>
+                {lane.prUrl !== null ? (
+                  <button type="button" className={s['prLink']} onClick={onOpenPr(lane)} data-lane-pr="true">
+                    {lane.pr}
+                  </button>
+                ) : (
+                  lane.pr
+                )}
+              </TableCell>
+              <TableCell label align="end" className={s['actions']}>
+                {lane.publishLabel !== null ? (
+                  <button
+                    type="button"
+                    className={s['action']}
+                    onClick={onPublish(lane)}
+                    data-action="publish"
+                  >
+                    {lane.publishLabel}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className={s['action']}

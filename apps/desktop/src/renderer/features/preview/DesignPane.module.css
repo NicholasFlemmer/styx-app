@@ -44,6 +44,43 @@
     flex: none;
     margin-left: auto;
   }
+  /* Runs on: Web / iOS / Android chips, shown only for a mobile app. */
+  /* The simulator's row under the Run row: a blinking dot while it boots, its state, and its actions. */
+  .deviceRow,
+  .noticeRow {
+    flex: none;
+    min-height: var(--h-statusbar);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 var(--sp-2);
+    border-bottom: 1px solid var(--ln);
+    background: var(--s1);
+  }
+  .deviceText {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    /* --tx, not --act: accent-as-text is 3.5:1 on the light theme's --s1 at this size. */
+    color: var(--tx);
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .deviceRow[data-device-phase='failed'] .deviceText,
+  .deviceRow[data-device-phase='stopped'] .deviceText {
+    color: var(--mu);
+  }
+  .blink {
+    animation: styx-blink var(--motion-blink);
+  }
+  .noticeRow .hint {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   /* Run output under the bar: the prototype's 130px terminal recipe (connect modal's inline login terminal). */
   .strip {
     flex: none;
@@ -118,6 +155,60 @@
     min-height: 0;
     position: relative;
     background: var(--s2);
+  }
+  /* The device frame's room: the hole minus a margin, the frame centred and scaled to fit. */
+  .stage {
+    position: absolute;
+    inset: var(--sp-4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .frame {
+    transform-origin: center;
+  }
+  /* Full-size words over the scaled frame; only the buttons inside take the pointer, the picture stays reachable. */
+  .over {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .over button,
+  .over a {
+    pointer-events: auto;
+  }
+  /* The mirror surface is inside the scaled frame, so its own ring would be clipped and shrunk: draw it on the stage. */
+  .stage:has([data-device-surface]:focus-visible) {
+    outline: 1px solid var(--ac);
+    outline-offset: -1px;
+  }
+  /* The screen slot the native view is positioned over (web presets): empty and unpainted, like the hole. */
+  .slot {
+    position: absolute;
+    inset: 0;
+    background: var(--s2);
+  }
+  /* The mirrored device fills the screen slot. */
+  .mirror {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+  }
+  .surface {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    cursor: default;
+  }
+  .picture {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: var(--bg);
   }
   .empty {
     position: absolute;

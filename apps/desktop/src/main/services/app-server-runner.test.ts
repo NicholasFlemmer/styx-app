@@ -284,6 +284,19 @@ describe('AppServerRunner: the recorded pong turn', () => {
       { type: 'streamStop', key: MSG_ID },
       { type: 'streamFinal', key: MSG_ID, body: 'pong' },
       { type: 'note', note: 'pong' },
+      // The recorded `account/rateLimits/updated` (plan and both windows) feeds the Usage page.
+      {
+        type: 'limits',
+        limits: {
+          agent: 'codex',
+          plan: 'team',
+          windows: [
+            { label: '5 h', usedPercent: 0, resetsAt: 1789561758000 },
+            { label: '7 d', usedPercent: 0, resetsAt: 1790077939000 },
+          ],
+          updatedAt: expect.any(Number) as number,
+        },
+      },
       {
         type: 'usage',
         costUsd: null,
@@ -1154,6 +1167,19 @@ describe('AppServerRunner: items, usage, rate limits, errors', () => {
     expect(kinds().slice(before)).toEqual([
       { type: 'error', message: 'rate limited (Codex will retry)' },
       { type: 'error', message: 'styx MCP server failed to start: env: : No such file or directory' },
+      // The whole report goes to the Usage page (resets in ms); the chat only gets the >80% note.
+      {
+        type: 'limits',
+        limits: {
+          agent: 'codex',
+          plan: null,
+          windows: [
+            { label: '5 h', usedPercent: 85.4, resetsAt: 1789561758000 },
+            { label: '7 d', usedPercent: 12, resetsAt: 1790077939000 },
+          ],
+          updatedAt: expect.any(Number) as number,
+        },
+      },
       { type: 'note', note: resets },
       { type: 'error', message: 'model overloaded' },
       { type: 'usage', costUsd: null, numTurns: 1, durationMs: 42, tokensUsed: 999, contextWindow: null },

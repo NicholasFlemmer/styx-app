@@ -1,4 +1,4 @@
-import type { Agent, AskId, AuditId, ProjectId, Provider, SessionId, TargetId } from '@styx/core';
+import type { Agent, AskId, AuditId, ProjectId, Provider, SessionId, TargetId, WorktreeId } from '@styx/core';
 
 /** Overlay kinds and their z-order / behaviour (plan §8 Overlays). */
 export type OverlayKind = 'palette' | 'modal' | 'sheet' | 'drawer' | 'toast' | 'task';
@@ -23,6 +23,8 @@ export type ModalPayload =
   | { modal: 'deploy'; targetId: TargetId; deployId?: string }
   /** Per-target deploy commands for a project (targets without a built-in verb). */
   | { modal: 'deploy-setup'; projectId: ProjectId }
+  /** Commit, push and PR in one step for a worktree (Repo lane, mode strip, palette; ADR-0021). */
+  | { modal: 'publish'; worktreeId: WorktreeId }
   /**
    * Connect agent (Settings › Agents, onboarding step 3, the Spawn modal's "Fix connection"): verify / sign in for one
    * CLI. `returnTo` re-opens the Spawn modal for that project when the connect modal closes.

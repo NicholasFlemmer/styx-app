@@ -49,7 +49,9 @@ export const Icons: Story = {
       <NavItem icon="workspace" label="Workspace" inv />
       <NavItem icon="agents" label="Agents" meta="3" />
       <NavItem icon="repo" label="Repo" meta="4 wt" />
-      <NavItem icon="projectSettings" label="Project settings" />
+      <NavItem icon="targets" label="Targets" />
+      <NavItem icon="agentDefaults" label="Agent defaults" />
+      <NavItem icon="env" label="Env & secrets" />
       <NavItem icon="audit" label="Tech debt audit" />
     </div>
   ),

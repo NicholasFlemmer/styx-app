@@ -6,7 +6,9 @@ import type { CommandBus } from '../bus';
 export function registerDeployCommands(bus: CommandBus, app: Container): void {
   bus.register('deploy.start', async ({ targetId }) => app.deploys.start(targetId, copy.deploy.reason));
 
-  bus.register('deploy.detect', async ({ targetId }) => ({ suggestions: await app.deploys.detect(targetId) }));
+  bus.register('deploy.detect', async ({ targetId }) => ({
+    suggestions: await app.deploys.detect(targetId),
+  }));
   bus.register('deploy.cancel', ({ deployId }) => {
     app.deploys.cancel(deployId);
     return {};

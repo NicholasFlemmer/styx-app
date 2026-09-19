@@ -5,31 +5,6 @@
     min-width: 0;
     min-height: 0;
   }
-  .nav {
-    width: var(--w-settings-nav);
-    flex: none;
-    border-right: 1px solid var(--ln);
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-  .groupHead {
-    padding: 14px 16px 6px;
-  }
-  .groupHeadProject {
-    padding: 18px 16px 6px;
-    border-top: 1px solid var(--ln);
-    margin-top: 10px;
-  }
-  .navFoot {
-    margin-top: auto;
-    padding: 12px 16px;
-    border-top: 1px solid var(--ln);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--mu);
-    line-height: 1.6;
-  }
   .main {
     flex: 1;
     display: flex;
@@ -50,6 +25,14 @@
     margin: 0;
     font-size: 18px;
     font-weight: 600;
+  }
+  /* Where a project section is kept, at the header's right (the inner nav's footer used to say this). */
+  .file {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--mu);
+    white-space: nowrap;
   }
   .rows {
     display: flex;

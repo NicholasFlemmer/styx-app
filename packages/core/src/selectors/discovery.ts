@@ -53,6 +53,17 @@ export const cliVersionLabel = (cli: Pick<CliInstall, 'agent' | 'found' | 'versi
   return cli.version === null ? name : `${name} ${cli.version}`;
 };
 
+/** A binary the user picked with "Locate binary" (undo via `detect.clearBinary`). */
+export const cliIsManual = (cli: Pick<CliInstall, 'capabilities'>): boolean => cliSourceOf(cli) === 'manual';
+
+/** Each agent CLI's install guide (onboarding "Install →"); https only, so main's openExternal accepts them. */
+export const CLI_INSTALL_URLS: Readonly<Record<Exclude<CliInstall['agent'], 'shell'>, string>> = {
+  claude: 'https://code.claude.com/docs/en/setup',
+  codex: 'https://developers.openai.com/codex/cli',
+  gemini: 'https://github.com/google-gemini/gemini-cli#installation',
+  cursor: 'https://cursor.com/docs/cli/installation',
+};
+
 /** `capabilities.source` of a detected CLI, or null for rows written before sources were recorded. */
 export const cliSourceOf = (cli: Pick<CliInstall, 'capabilities'>): CliSource | null => {
   const r = cliSourceSchema.safeParse(cli.capabilities['source']);

@@ -3,7 +3,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 
 export default tseslint.config(
-  { ignores: ['**/node_modules/**', '**/dist/**', '**/out/**', 'design/**', '.planning/**', '**/storybook-static/**', '**/*.d.ts', '**/e2e/visual/vendor/**', '**/__baseline__/**', '**/coverage/**', '**/resources/cli/**', '**/release/**'] },
+  { ignores: ['**/node_modules/**', '**/dist/**', '**/out/**', 'design/**', '.planning/**', '**/storybook-static/**', '**/*.d.ts', '**/e2e/visual/vendor/**', '**/__baseline__/**', '**/coverage/**', '**/resources/cli/**', '**/release/**', '**/.next/**', '**/next-env.d.ts'] },
   ...tseslint.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
@@ -21,7 +21,8 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/*.config.{ts,js}', '**/.storybook/**', '**/*.stories.tsx', '**/vitest.workspace.ts', '**/drizzle.config.ts', '**/e2e/visual/global-setup.ts'],
+    // Next.js route files (page, layout, metadata routes) are default exports by framework contract.
+    files: ['**/*.config.{ts,js}', '**/.storybook/**', '**/*.stories.tsx', '**/vitest.workspace.ts', '**/drizzle.config.ts', '**/e2e/visual/global-setup.ts', 'apps/website/app/**/*.{ts,tsx}'],
     rules: { 'no-restricted-syntax': 'off' },
   },
   {

@@ -654,6 +654,13 @@ describe('SessionService pty runner + CLI hooks', () => {
     expect(pty.spawned[0]!.args).toEqual(expect.arrayContaining(['-c', 'Fix it']));
     expect(session.state).toBe('working');
 
+    a.sessions.onHook(session.id, 'codex', 'notify', {
+      type: 'agent-turn-complete',
+      'last-assistant-message': 'All green.',
+    });
+    expect(a.sessions.get(session.id)).toMatchObject({ state: 'idle', note: 'All green.' });
+
+    // Idle: the message goes straight into the TUI (mid-turn it would wait in the queue instead).
     a.sessions.sendMessage(session.id, 'more');
     await typed();
     // Text, then Enter a beat later: one write would be a paste burst to a TUI, and Enter inside it a newline.
@@ -661,12 +668,9 @@ describe('SessionService pty runner + CLI hooks', () => {
       { id: session.id, data: 'more' },
       { id: session.id, data: '\r' },
     ]);
-
-    a.sessions.onHook(session.id, 'codex', 'notify', {
-      type: 'agent-turn-complete',
-      'last-assistant-message': 'All green.',
-    });
-    expect(a.sessions.get(session.id)).toMatchObject({ state: 'idle', note: 'All green.' });
+    expect(a.sessions.get(session.id)?.state).toBe('working');
+    a.sessions.onHook(session.id, 'codex', 'notify', { type: 'agent-turn-complete' });
+    expect(a.sessions.get(session.id)?.state).toBe('idle');
     pty.data(session.id, 'thinking…');
     expect(a.sessions.get(session.id)?.state).toBe('working');
     expect(readFileSync(join(t!.userData, 'logs', 'pty', `${session.id}.log`), 'utf8')).toContain(
@@ -1820,6 +1824,7 @@ describe('SessionService attachments + slash commands', () => {
     const { app: a } = app();
     worktreeDir(a, ids.worktree.featPromo);
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'session', event: 'quiet' }); // idle: sends now rather than queueing
     await a.sessions.sendMessage(session.id, 'what is this?', [png]);
     expect(stream.sent.at(-1)).toEqual({
       id: session.id,
@@ -1840,6 +1845,7 @@ describe('SessionService attachments + slash commands', () => {
     const { app: a } = app();
     worktreeDir(a, ids.worktree.featPromo);
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'session', event: 'quiet' }); // idle: sends now rather than queueing
     await a.sessions.sendMessage(session.id, 'review', [{ kind: 'file', path: 'src/a.ts' }, png]);
     expect(stream.sent.at(-1)).toMatchObject({
       text: 'review\n\n<file path="src/a.ts">\nexport const a = 1;\n\n</file>',
@@ -1856,6 +1862,7 @@ describe('SessionService attachments + slash commands', () => {
       },
     });
     // nothing typed: the bubble shows the attachment names; the CLI still gets the file
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
     await a.sessions.sendMessage(session.id, '', [{ kind: 'file', path: './src/../src/a.ts' }, png]);
     expect(userRows(a, session.id).at(-1)).toMatchObject({ body: 'src/a.ts, shot.png' });
     expect(stream.sent.at(-1)!.text).toBe('\n\n<file path="src/a.ts">\nexport const a = 1;\n\n</file>');
@@ -1921,6 +1928,7 @@ describe('SessionService attachments + slash commands', () => {
     const { app: a } = app();
     worktreeDir(a, ids.worktree.testFlaky);
     const { session } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
+    a.sessions.onHook(session.id, 'codex', 'notify', { type: 'agent-turn-complete' }); // idle: sends now
     await a.sessions.sendMessage(session.id, 'look', [png, { kind: 'file', path: 'src/a.ts' }]);
     await typed();
     expect(pty.writes.slice(-2)).toEqual([
@@ -2041,5 +2049,319 @@ describe('background task lifecycle', () => {
     const second = await a.bus.dispatch(sender, 'session.spawn', input);
     expect(second).toEqual(first);
     expect(stream.spawned).toHaveLength(1);
+  });
+});
+
+describe('SessionService queue (a message sent mid-turn is never dropped)', () => {
+  const userRows = (a: TestApp['app'], id: string) =>
+    a.repos.transcripts
+      .last(id)
+      .filter((m) => m.payload.kind === 'user')
+      .map((m) => m.body);
+  const systemLines = (a: TestApp['app'], id: string) =>
+    a.repos.transcripts
+      .last(id)
+      .filter((m) => m.payload.kind === 'system')
+      .map((m) => m.body);
+  const queueDeltas = (win: TestApp['win'], sessionId: string) =>
+    win
+      .batches()
+      .flatMap((b) => b.deltas)
+      .filter(
+        (d): d is { op: string; sessionId: string; messages: { body: string }[] } => d.op === 'queue.replace',
+      )
+      .filter((d) => d.sessionId === sessionId)
+      .map((d) => d.messages.map((m) => m.body));
+  /** The demo Codex CLI moved onto its app-server, so a Codex spawn is a stream session that can steer. */
+  const codexAppServer = (a: TestApp['app']) => {
+    const cli = a.repos.discovery.cli('codex')!;
+    a.repos.discovery.saveCli({ ...cli, capabilities: { ...cli.capabilities, appServer: true } });
+  };
+
+  it('delivery: Codex over the app-server steers; Claude, ACP and pty sessions queue', async () => {
+    const { app: a } = app();
+    const { session: claude } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    expect(a.sessions.deliveryWhileWorking(claude)).toBe('queue');
+    const { session: codexTui } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
+    expect(codexTui.runner).toBe('pty');
+    expect(a.sessions.deliveryWhileWorking(codexTui)).toBe('queue');
+    expect(a.sessions.deliveryWhileWorking({ agent: 'codex', runner: 'stream' })).toBe('steer');
+    expect(a.sessions.deliveryWhileWorking({ agent: 'gemini', runner: 'stream' })).toBe('queue');
+  });
+
+  it('working Claude: the message is persisted in the queue and published, with no user row and nothing on stdin', async () => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    expect(a.sessions.get(session.id)?.state).toBe('working');
+    await a.sessions.sendMessage(session.id, 'and add tests');
+    expect(stream.sent).toEqual([]);
+    expect(userRows(a, session.id)).toEqual(['Fix it']);
+    const queued = a.repos.queuedMessages.bySession(session.id);
+    expect(queued).toHaveLength(1);
+    expect(queued[0]).toMatchObject({ sessionId: session.id, body: 'and add tests', createdAt: DEMO_NOW });
+    a.publisher.flush();
+    expect(queueDeltas(win, session.id)).toEqual([['and add tests']]);
+    // The command bus path is the same one.
+    await a.bus.dispatch(sender, 'session.sendMessage', { sessionId: session.id, body: 'then lint' });
+    expect(a.repos.queuedMessages.bySession(session.id).map((m) => m.body)).toEqual([
+      'and add tests',
+      'then lint',
+    ]);
+  });
+
+  it('needs-you (blocked on an ask) queues too; the ask is still answerable and the queue waits for the turn', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, {
+      type: 'permission',
+      requestId: 'req-1',
+      toolName: 'Bash',
+      input: { command: 'rm -rf dist' },
+    });
+    expect(a.sessions.get(session.id)?.state).toBe('needs-you');
+    await a.sessions.sendMessage(session.id, 'careful with dist');
+    expect(stream.sent).toEqual([]);
+    expect(a.repos.queuedMessages.bySession(session.id).map((m) => m.body)).toEqual(['careful with dist']);
+    const ask = a.repos.pendingAsks.openBySession(session.id)[0]!;
+    a.sessions.resolveAsk(ask.id, { kind: 'decision', chosen: 'Allow' });
+    expect(a.sessions.get(session.id)?.state).toBe('working');
+    // Answering the ask is not the end of the turn: the message is still held.
+    expect(a.repos.queuedMessages.bySession(session.id)).toHaveLength(1);
+    expect(stream.sent).toEqual([]);
+  });
+
+  it('settle: the oldest queued message goes out as the next turn (one per settle) with its user row', async () => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    await a.sessions.sendMessage(session.id, 'first');
+    await a.sessions.sendMessage(session.id, 'second');
+    expect(a.repos.queuedMessages.bySession(session.id)).toHaveLength(2);
+
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    // idle for a moment, then straight back to working on the held message
+    expect(a.sessions.get(session.id)?.state).toBe('working');
+    expect(stream.sent).toEqual([{ id: session.id, text: 'first' }]);
+    expect(userRows(a, session.id)).toEqual(['Fix it', 'first']);
+    expect(a.repos.queuedMessages.bySession(session.id).map((m) => m.body)).toEqual(['second']);
+    a.publisher.flush();
+    expect(queueDeltas(win, session.id).at(-1)).toEqual(['second']);
+
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    expect(stream.sent.map((m) => m.text)).toEqual(['first', 'second']);
+    expect(a.repos.queuedMessages.bySession(session.id)).toEqual([]);
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    expect(a.sessions.get(session.id)?.state).toBe('idle');
+    expect(stream.sent).toHaveLength(2);
+  });
+
+  it("a stream session settles on its own end-of-turn only: the Claude Stop hook (same turn) sends nothing more, an interrupted turn's late result sends nothing", async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    await a.sessions.sendMessage(session.id, 'one');
+    await a.sessions.sendMessage(session.id, 'two');
+    // Claude Code fires Stop and then prints `result` for the same turn: one held message goes out, not two.
+    a.sessions.onHook(session.id, 'claude', 'Stop', {});
+    expect(stream.sent).toEqual([]);
+    expect(a.sessions.get(session.id)?.state).toBe('idle');
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    expect(stream.sent).toEqual([{ id: session.id, text: 'one' }]);
+    expect(a.sessions.get(session.id)?.state).toBe('working');
+    a.sessions.onHook(session.id, 'claude', 'Stop', {}); // the next turn's Stop, before its result
+    expect(stream.sent).toHaveLength(1);
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    expect(stream.sent.map((m) => m.text)).toEqual(['one', 'two']);
+    // The other order — result first, then the hook — sends one as well.
+    await a.sessions.sendMessage(session.id, 'three');
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    a.sessions.onHook(session.id, 'claude', 'Stop', {});
+    expect(stream.sent.map((m) => m.text)).toEqual(['one', 'two', 'three']);
+  });
+
+  it('a pty session settles through the Claude Stop hook / the Codex notify hook', async () => {
+    const { app: a } = app();
+    const cli = a.repos.discovery.cli('claude')!;
+    a.repos.discovery.saveCli({ ...cli, capabilities: {} }); // no stream-json → pty runner
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    expect(session.runner).toBe('pty');
+    await a.sessions.sendMessage(session.id, 'after stop');
+    expect(pty.writes).toEqual([]);
+    a.sessions.onHook(session.id, 'claude', 'Stop', {});
+    await typed();
+    expect(pty.writes).toEqual([
+      { id: session.id, data: 'after stop' },
+      { id: session.id, data: '\r' },
+    ]);
+    pty.writes.length = 0;
+
+    const { session: codex } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
+    await a.sessions.sendMessage(codex.id, 'after notify');
+    expect(pty.writes).toEqual([]); // held, not typed into the TUI mid-turn
+    a.sessions.onHook(codex.id, 'codex', 'notify', { type: 'agent-turn-complete' });
+    await typed();
+    expect(pty.writes).toEqual([
+      { id: codex.id, data: 'after notify' },
+      { id: codex.id, data: '\r' },
+    ]);
+    expect(userRows(a, codex.id)).toEqual(['Fix it', 'after notify']);
+  });
+
+  it('a pty session without hooks (gemini TUI) drains on its quiet timer', async () => {
+    vi.useFakeTimers();
+    try {
+      const { app: a } = app();
+      // Gemini's pty launch writes `.gemini/settings.json` into the worktree: re-point the fixture's literal
+      // `~/code/…` path at a temp dir so nothing lands inside the repo.
+      const fixture = a.repos.worktrees.get(ids.worktree.featPromo)!;
+      a.repos.worktrees.upsert({ ...fixture, path: mkdtempSync(join(tmpdir(), 'styx-gemini-')) });
+      const { session } = await a.sessions.spawn(spawnInput('gemini', ids.worktree.featPromo));
+      expect(session.runner).toBe('pty');
+      pty.data(session.id, 'thinking…');
+      await a.sessions.sendMessage(session.id, 'later');
+      expect(pty.writes).toEqual([]);
+      await vi.advanceTimersByTimeAsync(3100);
+      expect(pty.writes[0]).toEqual({ id: session.id, data: 'later' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('Codex over the app-server steers: a mid-turn message goes to the runner at once, nothing is queued', async () => {
+    const { app: a } = app();
+    codexAppServer(a);
+    const { session } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
+    expect(session.runner).toBe('stream');
+    expect(session.state).toBe('working');
+    await a.sessions.sendMessage(session.id, 'also check the tests');
+    expect(stream.sent).toEqual([{ id: session.id, text: 'also check the tests' }]);
+    expect(a.repos.queuedMessages.bySession(session.id)).toEqual([]);
+    expect(userRows(a, session.id)).toEqual(['Fix it', 'also check the tests']);
+  });
+
+  it('send now: the held message is written to the CLI mid-turn (it buffers it), the user row appears, the queue shrinks', async () => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    await a.sessions.sendMessage(session.id, 'one');
+    await a.sessions.sendMessage(session.id, 'two');
+    const [one, two] = a.repos.queuedMessages.bySession(session.id);
+    await a.bus.dispatch(sender, 'session.sendQueued', { sessionId: session.id, messageId: two!.id });
+    expect(stream.sent).toEqual([{ id: session.id, text: 'two' }]);
+    expect(userRows(a, session.id)).toEqual(['Fix it', 'two']);
+    expect(a.repos.queuedMessages.bySession(session.id).map((m) => m.id)).toEqual([one!.id]);
+    a.publisher.flush();
+    expect(queueDeltas(win, session.id).at(-1)).toEqual(['one']);
+    // A message that is not in this session's queue is refused.
+    await expect(
+      a.bus.dispatch(sender, 'session.sendQueued', { sessionId: ids.session.codex, messageId: one!.id }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } });
+  });
+
+  it('take back: unqueue drops the row and publishes; a stale id is a no-op', async () => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    await a.sessions.sendMessage(session.id, 'never mind');
+    const m = a.repos.queuedMessages.bySession(session.id)[0]!;
+    await a.bus.dispatch(sender, 'session.unqueue', { sessionId: session.id, messageId: m.id });
+    expect(a.repos.queuedMessages.bySession(session.id)).toEqual([]);
+    a.publisher.flush();
+    expect(queueDeltas(win, session.id).at(-1)).toEqual([]);
+    a.sessions.unqueue(session.id, m.id); // already gone
+    expect(stream.sent).toEqual([]);
+    expect(userRows(a, session.id)).toEqual(['Fix it']);
+  });
+
+  it('stop returns every held message to the composer: rows removed, a system line, and the bodies on an event', async () => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    await a.sessions.sendMessage(session.id, 'alpha');
+    await a.sessions.sendMessage(session.id, 'beta');
+    a.sessions.interrupt(session.id);
+    expect(a.repos.queuedMessages.bySession(session.id)).toEqual([]);
+    expect(systemLines(a, session.id)).toEqual([
+      '2 queued messages returned to the composer.',
+      'interrupted',
+    ]);
+    a.publisher.flush();
+    expect(win.events('queue.returned')).toEqual([{ sessionId: session.id, bodies: ['alpha', 'beta'] }]);
+    expect(queueDeltas(win, session.id).at(-1)).toEqual([]);
+    // Nothing held went out behind the stop, and the CLI's own end-of-turn after the interrupt sends nothing.
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    expect(stream.sent).toEqual([]);
+
+    // One message: singular copy.
+    await a.sessions.sendMessage(session.id, 'gamma'); // idle now: goes straight out
+    expect(stream.sent).toEqual([{ id: session.id, text: 'gamma' }]);
+    await a.sessions.sendMessage(session.id, 'delta'); // working again: held
+    a.sessions.interrupt(session.id);
+    expect(systemLines(a, session.id).at(-2)).toBe('1 queued message returned to the composer.');
+    expect(win.events('queue.returned').at(-1)).toEqual({ sessionId: session.id, bodies: ['delta'] });
+  });
+
+  it('a session that ends with messages held returns them too, so nothing is lost with the process', async () => {
+    const { app: a, win } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    await a.sessions.sendMessage(session.id, 'orphan');
+    a.sessions.stop(session.id);
+    expect(a.sessions.get(session.id)?.state).toBe('done');
+    expect(a.repos.queuedMessages.bySession(session.id)).toEqual([]);
+    a.publisher.flush();
+    expect(win.events('queue.returned')).toEqual([{ sessionId: session.id, bodies: ['orphan'] }]);
+  });
+
+  it('a process that is gone relaunches and delivers rather than queueing; what was held goes out on the next settle', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    await a.sessions.sendMessage(session.id, 'held');
+    stream.live.delete(session.id); // the CLI died without an exit event reaching us; the row still says working
+    await a.sessions.sendMessage(session.id, 'wake up');
+    expect(stream.spawned).toHaveLength(2);
+    expect(stream.sent).toEqual([{ id: session.id, text: 'wake up' }]);
+    expect(a.repos.queuedMessages.bySession(session.id).map((m) => m.body)).toEqual(['held']);
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    expect(stream.sent.map((m) => m.text)).toEqual(['wake up', 'held']);
+  });
+
+  it('attachments: files are inlined into the held text; images cannot wait and are dropped with a system line', async () => {
+    const { app: a } = app();
+    // The fixture worktree path is a literal `~/code/…`: re-point it at a temp dir so the test never writes into
+    // the repo.
+    const fixture = a.repos.worktrees.get(ids.worktree.featPromo)!;
+    const root = join(mkdtempSync(join(tmpdir(), 'styx-queue-')), 'wt');
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(join(root, 'src', 'a.ts'), 'export const a = 1;\n');
+    a.repos.worktrees.upsert({ ...fixture, path: root });
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    const png = {
+      kind: 'image' as const,
+      name: 'shot.png',
+      mediaType: 'image/png' as const,
+      data: Buffer.from('png').toString('base64'),
+    };
+    await a.sessions.sendMessage(session.id, 'review', [{ kind: 'file', path: 'src/a.ts' }, png]);
+    const held = a.repos.queuedMessages.bySession(session.id);
+    expect(held).toHaveLength(1);
+    // Paths, never contents: a held row is persisted and mirrored to the renderer, so the file is read again
+    // (confined, fresh) only when the message goes out.
+    expect(held[0]!.body).toBe('review');
+    expect(held[0]!.files).toEqual(['src/a.ts']);
+    expect(held[0]!.body).not.toContain('export const a = 1;');
+    expect(systemLines(a, session.id)).toEqual(['Image dropped: only text can wait for the next turn.']);
+    expect(stream.sent).toEqual([]);
+    // When it goes out the file is inlined for the CLI, while the transcript row keeps metadata only.
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(stream.sent.at(-1)?.text).toContain('<file path="src/a.ts">');
+    expect(stream.sent.at(-1)?.text).toContain('export const a = 1;');
+    const row = a.repos.transcripts.last(session.id).findLast((m) => m.payload.kind === 'user');
+    expect(row?.body).toBe('review');
+  });
+
+  it('a finished session refuses a message; an empty one is invalid (unchanged by the queue)', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    await expect(a.sessions.sendMessage(session.id, '')).rejects.toMatchObject({ code: 'invalid-input' });
+    a.sessions.stop(session.id);
+    await expect(a.sessions.sendMessage(session.id, 'late')).rejects.toMatchObject({
+      code: 'invalid-transition',
+    });
   });
 });

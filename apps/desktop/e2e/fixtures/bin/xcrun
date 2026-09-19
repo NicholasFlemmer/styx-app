@@ -1,0 +1,128 @@
+#!/usr/bin/env node
+'use strict';
+/**
+ * Fake `xcrun simctl` for e2e (apps/desktop/e2e/launch.ts prepends this directory to PATH, and DeviceService runs
+ * device tools with the process PATH ahead of the login shell's, so this shadows /usr/bin/xcrun). This Mac has no
+ * Xcode; the stand-in is one simulator whose state lives in a marker file under `STYX_FAKE_SIM_DIR` (a temp dir per
+ * test) so runs never see each other's state.
+ *
+ *   simctl help                                   → exit 0 (what "is the simulator installed" asks)
+ *   simctl list devices available -j              → one runtime, `iPhone 17 Pro` (FAKE-17PRO), Booted once the marker exists
+ *   simctl boot FAKE-17PRO                        → creates the marker; exit 149 when already booted, like the real one
+ *   simctl bootstatus FAKE-17PRO -b               → exit 0 after 1.5 s (long enough for the pane to show "Booting …")
+ *   simctl io FAKE-17PRO screenshot --type=png F  → writes a valid 393×852 PNG to F, a different colour every call
+ *   simctl shutdown FAKE-17PRO                    → removes the marker
+ *   anything else                                 → exit 2
+ */
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const zlib = require('node:zlib');
+
+const args = process.argv.slice(2);
+const UDID = 'FAKE-17PRO';
+const dir = process.env.STYX_FAKE_SIM_DIR || os.tmpdir();
+const marker = path.join(dir, `styx-fake-sim-${UDID}.booted`);
+const counter = path.join(dir, `styx-fake-sim-${UDID}.shots`);
+
+const crc32 =
+  typeof zlib.crc32 === 'function'
+    ? (buf) => zlib.crc32(buf) >>> 0
+    : (buf) => {
+        let c = 0xffffffff;
+        for (const b of buf) {
+          c ^= b;
+          for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1;
+        }
+        return (c ^ 0xffffffff) >>> 0;
+      };
+
+/** A real RGB PNG (signature, IHDR, one deflated IDAT, IEND) of a solid colour. */
+const png = (width, height, rgb) => {
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // RGB
+  const stride = 1 + width * 3;
+  const raw = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) raw.set(rgb, y * stride + 1 + x * 3);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', zlib.deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+};
+
+const booted = () => fs.existsSync(marker);
+const unsupported = () => {
+  process.stderr.write(`fake xcrun: ${args.join(' ')} is not supported\n`);
+  process.exit(2);
+};
+
+if (args[0] !== 'simctl') unsupported();
+const sub = args[1];
+
+if (sub === 'help') process.exit(0);
+
+if (sub === 'list' && args[2] === 'devices' && args[3] === 'available' && args[4] === '-j') {
+  process.stdout.write(
+    JSON.stringify({
+      devices: {
+        'com.apple.CoreSimulator.SimRuntime.iOS-26-5': [
+          { udid: UDID, name: 'iPhone 17 Pro', state: booted() ? 'Booted' : 'Shutdown', isAvailable: true },
+        ],
+      },
+    }),
+  );
+  process.exit(0);
+}
+
+if (sub === 'boot') {
+  if (args[2] !== UDID) {
+    process.stderr.write(`Invalid device: ${args[2] ?? ''}\n`);
+    process.exit(164);
+  }
+  if (booted()) {
+    process.stderr.write(
+      'An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405):\nUnable to boot device in current state: Booted\n',
+    );
+    process.exit(149);
+  }
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(marker, String(Date.now()));
+  process.exit(0);
+}
+
+if (sub === 'bootstatus' && args[2] === UDID) {
+  setTimeout(() => process.exit(0), 1500);
+} else if (sub === 'io' && args[2] === UDID && args[3] === 'screenshot') {
+  const out = args[args.length - 1];
+  if (!out || out.startsWith('--')) unsupported();
+  let n = 0;
+  try {
+    n = Number(fs.readFileSync(counter, 'utf8')) || 0;
+  } catch {
+    /* first shot */
+  }
+  n += 1;
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(counter, String(n));
+  // A different colour each time so consecutive frames really differ.
+  fs.writeFileSync(out, png(393, 852, [(n * 37) % 256, (n * 91) % 256, (n * 53) % 256]));
+  process.exit(0);
+} else if (sub === 'shutdown' && args[2] === UDID) {
+  fs.rmSync(marker, { force: true });
+  process.exit(0);
+} else {
+  unsupported();
+}
