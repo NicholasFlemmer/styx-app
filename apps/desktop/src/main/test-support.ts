@@ -68,6 +68,9 @@ export interface TestAppOptions {
   exec?: (bin: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>;
   /** RunService's URL probe; tests answer it so nothing is ever connected to for real. */
   probe?: (url: string) => Promise<boolean | ProbeAnswer>;
+  /** The merge resolver's checks runner and Mergiraf hook (ADR-0025 phase B); tests fake both. */
+  runChecks?: (cwd: string, command: string) => Promise<{ exitCode: number; output: string }>;
+  mergiraf?: (file: string, cwd: string) => Promise<boolean>;
 }
 
 /** An in-memory app: SQLite `:memory:`, MemoryVault, FakeMfa, no Electron, one registered fake window. */
@@ -125,6 +128,8 @@ export function makeTestApp(opts: TestAppOptions = {}): TestApp {
     ...(opts.detect ? { detect: opts.detect } : {}),
     ...(opts.exec ? { exec: opts.exec } : {}),
     ...(opts.probe ? { probe: opts.probe } : {}),
+    runChecks: opts.runChecks ?? (async () => ({ exitCode: 0, output: '' })),
+    ...(opts.mergiraf ? { mergiraf: opts.mergiraf } : {}),
     redetectClis: opts.redetectClis ?? false,
     cli,
   });

@@ -180,7 +180,7 @@ export const methods = {
    */
   remember_command: {
     params: z.object({
-      kind: z.enum(['run', 'deploy']),
+      kind: z.enum(['run', 'deploy', 'checks']),
       command: z.string().min(1).max(2000),
       targetId: z.string().optional(),
       url: z.string().max(500).optional(),

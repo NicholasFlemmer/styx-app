@@ -389,15 +389,16 @@ export class SessionService {
         if (!target || target.projectId !== input.projectId || input.purpose !== 'learn-deploy')
           fail('not-found', 'Deploy target does not belong to this project');
       }
-      const existing = this.deps.repos.sessions
-        .byProject(input.projectId)
-        .find(
-          (s) =>
-            s.purpose === input.purpose &&
-            s.taskTargetId === input.taskTargetId &&
-            s.state !== 'done' &&
-            s.archivedAt === null,
-        );
+      const existing = this.deps.repos.sessions.byProject(input.projectId).find(
+        (s) =>
+          s.purpose === input.purpose &&
+          s.taskTargetId === input.taskTargetId &&
+          // A merge task belongs to one lane (ADR-0025 phase B); two lanes may be resolving at once.
+          (input.purpose !== 'merge' ||
+            (input.worktree.kind === 'existing' && s.worktreeId === input.worktree.worktreeId)) &&
+          s.state !== 'done' &&
+          s.archivedAt === null,
+      );
       if (existing) return { sessionId: existing.id, worktreeId: existing.worktreeId };
     }
     const { session, worktree } = await this.spawn(input);
@@ -449,6 +450,7 @@ export class SessionService {
         conflict: null,
         behindBase: 0,
         overlaps: [],
+        resolution: null,
         mergedAt: null,
         createdAt: now,
         archivedAt: null,
@@ -681,7 +683,7 @@ export class SessionService {
     sessionId: string,
     body: string,
     attachments: readonly AttachmentInput[] = [],
-    opts: { now?: boolean } = {},
+    opts: { now?: boolean; from?: 'user' | 'styx' } = {},
   ): Promise<void> {
     const s = this.require(sessionId);
     if (s.state === 'done') fail('invalid-transition', 'session has finished');
@@ -695,7 +697,10 @@ export class SessionService {
             attachments,
           );
     const shown = body !== '' ? body : prepared.meta.map(attachmentName).join(', ');
-    if (opts.now !== true && this.queuesNow(s)) {
+    // A Styx-authored turn (a merge to finish, ADR-0025) is never the human's words: it lands as a `system` row and
+    // goes out now — the resolver only sends when the agent is idle or paused.
+    const fromStyx = opts.from === 'styx';
+    if (!fromStyx && opts.now !== true && this.queuesNow(s)) {
       if (prepared.images.length > 0)
         this.deps.transcript.system(
           s.id,
@@ -710,10 +715,12 @@ export class SessionService {
       );
       return;
     }
-    const userRow = this.deps.transcript.append(s.id, shown, {
-      kind: 'user',
-      ...(prepared.meta.length > 0 ? { attachments: prepared.meta } : {}),
-    });
+    const userRow = fromStyx
+      ? this.deps.transcript.system(s.id, shown)
+      : this.deps.transcript.append(s.id, shown, {
+          kind: 'user',
+          ...(prepared.meta.length > 0 ? { attachments: prepared.meta } : {}),
+        });
     // The workspace as it is before this turn is the turn's baseline (checkpoints, ADR-0020).
     this.hooks?.turnStarted?.(s.id, userRow.id);
     if (!this.isRunning(s.id) && s.state !== 'paused') {

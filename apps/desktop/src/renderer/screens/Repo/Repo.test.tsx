@@ -148,15 +148,15 @@ describe('Repo screen', () => {
     expect(within(rowOf('main')).queryByRole('button', { name: '—' })).toBeNull();
   });
 
-  it('error fixture: conflict lane reads CONFLICT, Resolve opens the conflicting file in the editor', () => {
+  it('error fixture: conflict lane reads CONFLICT; Resolve asks the lane agent to finish the merge (ADR-0025 phase B)', () => {
     useReadModel.getState().replaceModel(fixtures.errorReadModel(), 'connected');
     render(<Repo />);
     const row = within(rowOf('fix/checkout'));
     expect(row.getByText('CONFLICT · checkout.ts vs main')).toBeTruthy();
     fireEvent.click(row.getByRole('button', { name: 'Resolve' }));
-    expect(commandMock).toHaveBeenCalledWith('worktree.openInIde', {
+    expect(commandMock).toHaveBeenCalledWith('worktree.resolve', {
       worktreeId: fixtures.ids.worktree.fixCheckout,
-      file: 'checkout.ts',
     });
+    expect(commandMock).not.toHaveBeenCalledWith('worktree.openInIde', expect.anything());
   });
 });

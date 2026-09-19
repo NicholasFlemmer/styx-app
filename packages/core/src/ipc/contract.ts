@@ -704,6 +704,18 @@ export const commands = {
     input: z.object({ worktreeId: worktreeIdSchema }),
     output: z.object({ merged: z.number().int().nonnegative(), conflict: worktreeConflictSchema.nullable() }),
   },
+  /**
+   * Styx finishes the merge (ADR-0025 phase B): the base is merged into the lane; its conflicts go to the lane's
+   * own agent (or a hidden merge task when that agent is gone) as a Styx-authored turn with both sides' intent;
+   * the result is checked, then committed. `started` is false when the lane was current, already resolving, or
+   * the merge went through without conflicts (`merged` says how many commits came in).
+   */
+  'worktree.resolve': {
+    input: z.object({ worktreeId: worktreeIdSchema }),
+    output: z.object({ started: z.boolean(), merged: z.number().int().nonnegative() }),
+  },
+  /** Puts the lane back to before its last resolved merge (HEAD and the working tree), while nothing was committed on top. */
+  'worktree.undoResolve': { input: z.object({ worktreeId: worktreeIdSchema }), output: ok },
   'worktree.diff': {
     input: z.object({ worktreeId: worktreeIdSchema, file: z.string().optional() }),
     output: z.object({ diff: z.string() }),

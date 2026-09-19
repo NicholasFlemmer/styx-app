@@ -72,6 +72,28 @@ export const worktreeOverlapSchema = z.object({
 });
 export type WorktreeOverlap = z.infer<typeof worktreeOverlapSchema>;
 
+/**
+ * A merge of the base branch that Styx is finishing with an agent (ADR-0025 phase B): the conflicted files, who is
+ * resolving, what the lane looked like before (for Undo), and how it ended.
+ */
+export const worktreeResolutionSchema = z.object({
+  state: z.enum(['resolving', 'checking', 'done', 'failed']),
+  /** The lane's own session, or the hidden `merge` task spawned for a lane whose agent was gone; null when nothing had to be asked. */
+  sessionId: sessionIdSchema.nullable(),
+  files: z.array(z.string()),
+  /** HEAD before the merge began, and a checkpoint commit of the working tree then (null when it was clean). */
+  preHead: z.string(),
+  preTree: z.string().nullable(),
+  /** The merge commit once it landed. */
+  mergeCommit: z.string().nullable(),
+  attempts: z.number().int().nonnegative(),
+  startedAt: timestampSchema,
+  finishedAt: timestampSchema.nullable(),
+  /** Why it was given up, or the checks' output tail, for the human. */
+  failure: z.string().nullable(),
+});
+export type WorktreeResolution = z.infer<typeof worktreeResolutionSchema>;
+
 export const worktreeSchema = z.object({
   id: worktreeIdSchema,
   repoId: repoIdSchema,
@@ -94,6 +116,8 @@ export const worktreeSchema = z.object({
   behindBase: z.number().int().nonnegative().default(0),
   /** Other live lanes that changed files this lane changed too (ADR-0025). */
   overlaps: z.array(worktreeOverlapSchema).default([]),
+  /** A base merge being finished with an agent, or how the last one ended (ADR-0025 phase B). */
+  resolution: worktreeResolutionSchema.nullable().default(null),
   mergedAt: timestampSchema.nullable(),
   createdAt: timestampSchema,
   archivedAt: timestampSchema.nullable(),

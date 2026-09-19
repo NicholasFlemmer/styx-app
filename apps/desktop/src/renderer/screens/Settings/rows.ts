@@ -80,6 +80,14 @@ const AUTO_SYNC_OPTIONS: readonly RowOption[] = AUTO_SYNC_VALUES.map((v) => ({
 }));
 const isAutoSync = (v: string): v is (typeof AUTO_SYNC_VALUES)[number] =>
   (AUTO_SYNC_VALUES as readonly string[]).includes(v);
+/** ADR-0025 phase B/C: who waits — Styx keeps the project current, or the human reviews and merges. */
+const INTEGRATION_VALUES = ['auto', 'review'] as const;
+const INTEGRATION_OPTIONS: readonly RowOption[] = INTEGRATION_VALUES.map((v) => ({
+  value: v,
+  label: copy.settings.values.integration[v],
+}));
+const isIntegration = (v: string): v is (typeof INTEGRATION_VALUES)[number] =>
+  (INTEGRATION_VALUES as readonly string[]).includes(v);
 
 const MODEL_DEFAULT = 'default';
 const NO_IDE = 'none';
@@ -458,6 +466,17 @@ const agentDefaultsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => 
       (v) => v,
       (v) => (isAutoSync(v) ? v : 'turn'),
       AUTO_SYNC_OPTIONS,
+      true,
+    ),
+    projectRow(
+      model,
+      ctx,
+      'integration',
+      r.integration,
+      'integration',
+      (v) => v,
+      (v) => (isIntegration(v) ? v : 'auto'),
+      INTEGRATION_OPTIONS,
       true,
     ),
   ];

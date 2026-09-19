@@ -167,7 +167,7 @@ end.
 2. Auto mode lands on a click first; fully automatic landing is an opt-in once trusted.
 3. The checks command is learned by the agent the first time, like Run locally, and stays editable in settings.
 
-Phase A (awareness) shipped as ADR-0025.
+Phase A (awareness) and phase B (resolution) shipped as ADR-0025.
 
 Sources: [When Agents Collide — 33,596 PRs](https://codex.danielvaughan.com/2026/07/28/agent-pr-merge-conflicts-concurrent-coding-agents-codex-cli-worktree-isolation-coordination-defence/) ·
 [AgenticFlict dataset](https://arxiv.org/pdf/2604.03551) · [ATM: pre-write admission](https://arxiv.org/abs/2607.00041) ·

@@ -131,6 +131,7 @@ describe('sectionRows', () => {
       ['syncOnSpawn', false],
       ['syncBeforePublish', false],
       ['autoSync', false],
+      ['integration', false],
     ]);
   });
 
@@ -148,6 +149,16 @@ describe('sectionRows', () => {
     expect(auto?.options.map((o) => o.label)).toEqual(['After every turn', 'Before publishing', 'Only when I ask']);
     expect(auto?.change.kind === 'project' && auto.change.patch('off')).toEqual({ autoSync: 'off' });
     expect(auto?.change.kind === 'project' && auto.change.patch('bogus')).toEqual({ autoSync: 'turn' });
+    // Phase B/C: auto by default (owner decision); review is one switch away.
+    const integration = rows.find((r) => r.id === 'integration');
+    expect(integration).toMatchObject({ label: 'Merging', value: 'auto' });
+    expect(integration?.options.map((o) => o.label)).toEqual([
+      'Keep my project up to date for me',
+      'I review and merge myself',
+    ]);
+    expect(integration?.change.kind === 'project' && integration.change.patch('review')).toEqual({
+      integration: 'review',
+    });
   });
 
   it('Agent defaults: Model lists the CLI aliases; Permission mode / Effort rows patch project settings (discrepancy #54)', () => {
@@ -282,6 +293,7 @@ describe('sectionRows', () => {
       'syncOnSpawn',
       'syncBeforePublish',
       'autoSync',
+      'integration',
     ]);
     expect(geminiRows.find((r) => r.id === 'model')?.options.map((o) => o.value)).toEqual(['default']);
   });
@@ -309,6 +321,7 @@ describe('sectionRows', () => {
       'On',
       'On',
       'After every turn',
+      'Keep my project up to date for me',
     ]);
     expect(values('project:env')).toEqual(['Keychain', 'Per grant', '.styx/project.json']);
   });

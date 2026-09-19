@@ -4,12 +4,16 @@ import type { Session } from '../model/session';
 import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
 
-export const taskKey = (s: Pick<Session, 'id' | 'purpose' | 'projectId' | 'taskTargetId'>): string =>
+export const taskKey = (
+  s: Pick<Session, 'id' | 'purpose' | 'projectId' | 'taskTargetId' | 'worktreeId'>,
+): string =>
   s.purpose === 'learn-run'
     ? `run:${s.projectId}`
     : s.purpose === 'debt-audit'
       ? `audit:${s.projectId}`
-      : `deploy:${s.taskTargetId ?? s.id}`;
+      : s.purpose === 'merge'
+        ? `merge:${s.worktreeId}`
+        : `deploy:${s.taskTargetId ?? s.id}`;
 
 export const taskTitle = (purpose: Session['purpose'], target?: Pick<Target, 'name' | 'env'>): string =>
   purpose === 'learn-run'
@@ -18,7 +22,9 @@ export const taskTitle = (purpose: Session['purpose'], target?: Pick<Target, 'na
       ? target
         ? `${copy.tasks.deploy} · ${target.name} ${target.env}`
         : copy.tasks.deploy
-      : copy.tasks.audit;
+      : purpose === 'merge'
+        ? copy.tasks.merge
+        : copy.tasks.audit;
 
 export const backgroundTasks = (model: ReadModel): Session[] =>
   rows(model.sessions)

@@ -1,4 +1,5 @@
 import type { ProjectId } from '@styx/core';
+import { command } from '../../state/commands';
 import { Banner, BannerStack as UiBannerStack } from '@styx/ui';
 import { useEffect, useMemo, useRef } from 'react';
 import { useNow, useUi, useUiShallow } from '../../state/hooks';
@@ -43,6 +44,8 @@ export const runBannerAction = (action: BannerAction): void => {
       ui.setScreen('settings');
       return;
     case 'resolve':
+      // ADR-0025 phase B: the banner's Resolve asks the lane's agent to finish the merge, and shows the lane.
+      void command('worktree.resolve', { worktreeId: action.worktreeId });
       ui.setScreen('repo');
       return;
     case 'review-project-policy':

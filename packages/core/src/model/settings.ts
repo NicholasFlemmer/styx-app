@@ -21,6 +21,14 @@ export type WorktreeLocation = z.infer<typeof worktreeLocationSchema>;
 export const autoSyncSchema = z.enum(['turn', 'publish', 'off']);
 export type AutoSync = z.infer<typeof autoSyncSchema>;
 
+/**
+ * Who waits (ADR-0025 phase B/C): `auto` = Styx keeps the project up to date by itself — conflicts are resolved by
+ * the agent, checked and committed, undo one click away; `review` = the same work, but shown for review before it
+ * counts and landed by the human. Auto is the default (owner decision, 2026-09-19).
+ */
+export const integrationSchema = z.enum(['auto', 'review']);
+export type Integration = z.infer<typeof integrationSchema>;
+
 export const envShareSchema = z.enum(['per-grant', 'always', 'never']);
 export type EnvShare = z.infer<typeof envShareSchema>;
 
@@ -81,6 +89,13 @@ export const projectSettingsSchema = z.object({
    */
   autoSync: autoSyncSchema,
   hotspots: z.array(z.string()),
+  integration: integrationSchema,
+  /**
+   * What proves a merge is good (`pnpm typecheck && pnpm test` …): run in the lane before a resolved merge is
+   * committed. Learned by the agent the first time (`remember_command` kind `checks`), editable in
+   * `.styx/project.json`; null = not known yet.
+   */
+  checksCommand: z.string().nullable(),
   branchPrefix: z.string(),
   worktreeLocation: worktreeLocationSchema,
   shellWindows: windowsShellSchema,
@@ -116,6 +131,8 @@ export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   syncBeforePublish: true,
   autoSync: 'turn',
   hotspots: [],
+  integration: 'auto',
+  checksCommand: null,
   branchPrefix: 'agent/',
   worktreeLocation: 'sibling',
   shellWindows: 'powershell',

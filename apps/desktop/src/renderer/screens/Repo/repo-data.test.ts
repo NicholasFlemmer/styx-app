@@ -137,3 +137,44 @@ describe('lane overlaps (ADR-0025)', () => {
     expect(laneRows(model, acme, NOW).every((l) => l.overlaps === null)).toBe(true);
   });
 });
+
+describe('lane resolution states (ADR-0025 phase B)', () => {
+  const base = (state: 'resolving' | 'checking' | 'done' | 'failed', extra: Record<string, unknown> = {}) => ({
+    state,
+    sessionId: fixtures.ids.session.claude,
+    files: ['src/a.ts', 'src/b.ts'],
+    preHead: 'pre',
+    preTree: null,
+    mergeCommit: null,
+    attempts: 1,
+    startedAt: NOW,
+    finishedAt: null,
+    failure: null,
+    ...extra,
+  });
+  const withResolution = (resolution: ReturnType<typeof base>, patch: Record<string, unknown> = {}) => {
+    const model = fixtures.demoReadModel();
+    const w = model.worktrees.byId[fixtures.ids.worktree.fixCheckout];
+    if (w === undefined) throw new Error('fixture');
+    return {
+      ...model,
+      worktrees: { ...model.worktrees, byId: { ...model.worktrees.byId, [w.id]: { ...w, resolution, ...patch } } },
+    };
+  };
+  const row = (model: ReturnType<typeof withResolution>) => laneRows(model, acme, NOW).find((l) => l.branch === 'fix/checkout');
+
+  it('resolving / checking read as such and offer nothing to click but the diff', () => {
+    expect(row(withResolution(base('resolving')))).toMatchObject({ changes: 'merging main with Claude…', action: 'diff' });
+    expect(row(withResolution(base('checking')))).toMatchObject({ changes: 'checking the merge…', action: 'diff' });
+  });
+
+  it('done on the current HEAD offers Undo merge; failed shows the conflict and Resolve again', () => {
+    const done = withResolution(base('done', { mergeCommit: 'mc' }), { headCommit: 'mc', conflict: null });
+    expect(row(done)).toMatchObject({ changes: 'brought in main · 2 resolved', action: 'undo-merge', actionLabel: 'Undo merge' });
+    // The lane moved on since: the ordinary row comes back.
+    const moved = withResolution(base('done', { mergeCommit: 'mc' }), { headCommit: 'later', conflict: null });
+    expect(row(moved)?.action).not.toBe('undo-merge');
+    const failed = withResolution(base('failed', { failure: 'markers' }), { conflict: { file: 'src/a.ts', against: 'main' } });
+    expect(row(failed)).toMatchObject({ changes: 'CONFLICT · src/a.ts vs main', action: 'resolve' });
+  });
+});

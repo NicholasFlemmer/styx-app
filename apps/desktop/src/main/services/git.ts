@@ -253,6 +253,34 @@ export class GitService {
     return out;
   }
 
+  /** Paths git lists as unmerged (the `u` entries of `status --porcelain=v2`). */
+  async conflictedFiles(path: string): Promise<string[]> {
+    return (await this.status(path)).changed.filter((c) => c.kind === 'conflict').map((c) => c.path);
+  }
+
+  async mergeInProgress(path: string): Promise<boolean> {
+    const r = await this.git.run(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], path, { reject: false });
+    return r.exitCode === 0;
+  }
+
+  /** Commit subjects in `range` (`a..b`) that touched `file`, newest first. */
+  async subjects(path: string, range: string, file: string): Promise<string[]> {
+    const r = await this.git.run(['log', '--format=%s', range, '--', file], path, { reject: false });
+    if (r.exitCode !== 0) return [];
+    return r.stdout
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l !== '');
+  }
+
+  async resetHard(path: string, rev: string): Promise<void> {
+    await this.git.run(['reset', '--hard', rev], path);
+  }
+
+  async setConfig(path: string, key: string, value: string): Promise<void> {
+    await this.git.run(['config', key, value], path);
+  }
+
   async fetch(path: string): Promise<void> {
     await this.git.run(['fetch', '--prune', '--quiet'], path, { reject: false });
   }
@@ -412,6 +440,11 @@ export class GitService {
 
   async add(path: string, files: string[]): Promise<void> {
     await this.git.run(['add', '--', ...files], path);
+  }
+
+  /** Every change in the tree, deletions included (`add -A`): a resolved merge is committed whole. */
+  async addAll(path: string): Promise<void> {
+    await this.git.run(['add', '-A'], path);
   }
 
   /**

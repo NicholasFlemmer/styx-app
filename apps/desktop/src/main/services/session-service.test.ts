@@ -2348,8 +2348,8 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     expect(stream.sent).toEqual([]);
     // When it goes out the file is inlined for the CLI, while the transcript row keeps metadata only.
     stream.effect(session.id, { type: 'session', event: 'quiet' });
-    await new Promise((r) => setTimeout(r, 10));
-    expect(stream.sent.at(-1)?.text).toContain('<file path="src/a.ts">');
+    // The held message is read from disk and inlined before it goes out; wait for it rather than sleep.
+    await vi.waitFor(() => expect(stream.sent.at(-1)?.text ?? '').toContain('<file path="src/a.ts">'));
     expect(stream.sent.at(-1)?.text).toContain('export const a = 1;');
     const row = a.repos.transcripts.last(session.id).findLast((m) => m.payload.kind === 'user');
     expect(row?.body).toBe('review');

@@ -227,6 +227,16 @@ export const copy = {
     lanesNow:
       'Other lanes in this project right now:\n{lanes}\nBefore you change a file another lane has already changed, call project_activity (what {base} and the other lanes changed since your lane was cut, and where it overlaps with your files) and agree with that agent through send_message who does what. Styx tells you in this chat when another lane touches a file you changed.',
     laneLine: '- {agent} on {branch} — "{task}" — files: {files}',
+    /** The Styx-authored turn that hands a conflicting base merge to the lane's agent (ADR-0025 phase B). */
+    resolve:
+      "Styx is bringing {base} into this lane ({branch}) and the merge stopped on conflicts. The merge is in progress in your worktree (MERGE_HEAD is set). Resolve it in place: do not abort, rebase, or commit it — Styx commits it once the checks pass.\n\nConflicted files:\n{files}\n\nRules: keep both sides' behaviour — this lane's change and what {base} brings — unless they genuinely contradict, in which case keep both where possible and say in one line what you dropped and why. Never drop the other side's work. Append-only documents (changelogs, numbered tables, migration lists) are appended after the other side's entries and renumbered, never overwritten. Touch only the conflicted files and what they force you to touch. Remove every conflict marker. {checks}\n\nWhen the merge is finished, say so in one line.",
+    resolveFile: '- {file}\n  yours ({branch}, "{task}"): {ours}\n  theirs ({base}): {theirs}',
+    resolveUncommitted: 'uncommitted changes',
+    resolveChecksKnown: "Then run the project's checks: `{command}` — they must pass.",
+    resolveChecksUnknown:
+      'Then work out how this project checks itself (typecheck, tests, lint — read its package scripts), call the styx `remember_command` tool with kind "checks" and the exact command so Styx can run it from now on, and run it — it must pass.',
+    resolveRetry:
+      'Not finished yet: {reason}. Fix that and finish the merge as before — do not abort or commit it; Styx commits once the checks pass.',
   },
 
   /** Claude Code session settings (owner addition, docs/handoff-discrepancies #54; not in §10). */
@@ -374,6 +384,8 @@ export const copy = {
     run: 'Run locally',
     deploy: 'Deploy',
     audit: 'Tech debt audit',
+    /** A hidden merge task for a lane whose own agent is gone (ADR-0025 phase B). */
+    merge: 'Bringing in the base branch',
     starting: 'Starting…',
     working: 'Working…',
     needsYou: 'Needs your input',
@@ -469,6 +481,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       'Styx will build and run this app with `{command}` on the {platform} simulator{device} from now on.',
     learnedRunDeviceName: ' ({device})',
     learnedDeploy: 'Styx will deploy to {target} with `{command}` from now on.',
+    /** ADR-0025 phase B: the checks a resolved merge must pass, learned once. */
+    learnedChecks: 'Styx will check merges with `{command}` from now on.',
+    checksNotResolving: 'A checks command is accepted only from the agent finishing a merge.',
     activityRun: '{agent} worked out how to run {project}',
     activityDeploy: '{agent} worked out how to deploy {project} to {target}',
     secretInCommand:
@@ -979,9 +994,23 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       conflict: 'CONFLICT · {file} vs {against}',
       /** Appended to a lane's changes when the base branch has moved on (owner addition, ADR-0023). */
       behind: '↓{n} {base}',
+      /** ADR-0025 phase B: the lane while an agent finishes the base merge, and after. */
+      resolving: 'merging {base} with {agent}…',
+      checking: 'checking the merge…',
+      resolved: 'brought in {base} · {files} resolved',
+      resolveFailed: 'could not merge {base} · {file}',
     },
     pr: { none: '—', draft: '#{n} draft', open: '#{n} open', merged: '#{n} ✓', closed: '#{n} closed' },
-    actions: { open: 'Open', diff: 'Diff', archive: 'Archive', resolve: 'Resolve', sync: 'Bring in {base}' },
+    actions: {
+      open: 'Open',
+      diff: 'Diff',
+      archive: 'Archive',
+      resolve: 'Resolve',
+      sync: 'Bring in {base}',
+      /** ADR-0025 phase B. */
+      undoMerge: 'Undo merge',
+      reviewMerge: 'Review merge',
+    },
     /**
      * Plain-folder empty state (owner decision, not in §10; spec tone): any folder is a project, git is optional.
      * Shown on Repo and Diff review; `Initialise git` runs `project.gitInit`.
@@ -1199,6 +1228,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       syncBeforePublish: 'Bring in the base branch before publishing',
       /** ADR-0025. */
       autoSync: 'Bring in the base branch',
+      integration: 'Merging',
     },
     values: {
       theme: { system: 'System', dark: 'Dark', light: 'Light' },
@@ -1219,6 +1249,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       /** `{cli} binary` Select: drop a manual "Locate binary" pick and trust detection again. */
       cliAutoDetect: 'Detected automatically',
       autoSync: { turn: 'After every turn', publish: 'Before publishing', off: 'Only when I ask' },
+      integration: { auto: 'Keep my project up to date for me', review: 'I review and merge myself' },
     },
     reset: 'Reset',
   },
@@ -1438,6 +1469,36 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     activity: 'brought {base} into {branch} ({n} commits)',
     /** `autoSync: 'turn'`: the base came in on its own once the agent went quiet. */
     autoSynced: 'Brought in {base} after this turn: {n} commits.',
+    /** Review mode (ADR-0025): a conflicting turn-end sync is not attempted; the human asks the agent to resolve it. */
+    conflictReview:
+      '{base} conflicts with this lane in {file}. Resolve on Repo asks {agent} to merge it, both sides kept.',
+  },
+  /** Styx finishes the merge (ADR-0025 phase B): chat lines, the Home feed, the reasons it hands back. */
+  resolve: {
+    started:
+      '{base} conflicts with this lane in {files}. {agent} is bringing it in now — both sides kept; the checks run before it counts.',
+    startedTask: 'Bringing in {base}: {files} conflict. {agent} is resolving them in the background.',
+    mechanical: 'Brought in {base}: the conflicts in {files} resolved automatically.',
+    done: 'Brought in {base}. {files} were changed by both sides; both kept, checks pass. Undo is on the Repo lane.',
+    doneReview:
+      'Brought in {base}. {files} were changed by both sides; both kept, checks pass. The merge is on this lane — review it on Repo before it lands.',
+    doneNoChecks:
+      'Brought in {base}. {files} were changed by both sides; both kept. No checks command is known for this project, so none ran.',
+    retry: 'The merge is not finished: {reason}. Asked {agent} once more.',
+    failed: 'Could not finish bringing in {base}: {reason}. The merge was undone; the lane is as it was.',
+    busy: '{agent} is mid-turn; the merge will be tried when it settles.',
+    undone: 'Undid the merge of {base}: the lane is back to how it was before it.',
+    reasons: {
+      markers: 'conflict markers remain in {files}',
+      checks: 'the checks failed (`{command}` exited {code})',
+      gone: 'the agent left the merge in an unexpected state',
+    },
+    activity: {
+      started: '{agent} is bringing {base} into {branch}',
+      done: 'brought {base} into {branch} · resolved {files}',
+      failed: 'could not bring {base} into {branch}',
+      undone: 'undid the merge of {base} into {branch}',
+    },
   },
   /** Lanes that know about each other (owner addition, ADR-0025): overlap warnings, the Repo tag, the Spawn modal's list. */
   lanes: {

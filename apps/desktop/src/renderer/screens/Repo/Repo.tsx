@@ -80,11 +80,12 @@ const runAction = (lane: Lane): void => {
       void command('worktree.archive', { worktreeId: lane.worktreeId });
       return;
     case 'resolve':
-      // The user resolves in the editor; `Fetch` re-detects the conflict and resumes the paused owner.
-      void command('worktree.openInIde', {
-        worktreeId: lane.worktreeId,
-        ...(lane.conflict === null ? {} : { file: lane.conflict.file }),
-      });
+      // ADR-0025 phase B: Styx finishes the merge with the lane's agent (both sides' intent handed over, checks
+      // run, then committed); the editor stays one click away for whoever wants to look.
+      void command('worktree.resolve', { worktreeId: lane.worktreeId });
+      return;
+    case 'undo-merge':
+      void command('worktree.undoResolve', { worktreeId: lane.worktreeId });
       return;
     case 'diff':
       return;

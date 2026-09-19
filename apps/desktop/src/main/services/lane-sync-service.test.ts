@@ -163,7 +163,9 @@ describe('LaneSyncService.autoSync (ADR-0025)', () => {
     expect(existsSync(join(wt, 'c.ts'))).toBe(false);
     app.repos.projects.setSettings(acme, { ...app.repos.projects.settings(acme), autoSync: 'turn' }, null);
 
-    // A merge that would conflict is not attempted: the lane is marked, the session pauses, the tree is untouched.
+    // A merge that would conflict: in review mode it is not attempted — the lane is marked, the session pauses,
+    // the tree is untouched, and the line says how to ask the agent (phase B).
+    app.repos.projects.setSettings(acme, { ...app.repos.projects.settings(acme), integration: 'review' }, null);
     writeFileSync(join(repo, 'a.ts'), 'main version\n');
     await sh(['add', '.'], repo);
     await sh(['commit', '-q', '-m', 'main edits a'], repo);
@@ -176,7 +178,24 @@ describe('LaneSyncService.autoSync (ADR-0025)', () => {
     expect(readFileSync(join(wt, 'a.ts'), 'utf8')).toBe('lane version\n');
     expect(existsSync(join(wt, 'c.ts'))).toBe(false);
     expect(lastSystemLine(t, claude)).toBe(
-      'Could not bring in main: conflict in a.ts. The merge was undone; resolve it to continue.',
+      'main conflicts with this lane in a.ts. Resolve on Repo asks Claude Code to merge it, both sides kept.',
     );
+    expect(app.repos.worktrees.get(fixCheckout)?.resolution).toBeNull();
+  });
+
+  it('auto mode (the default): a conflicting turn-end sync is handed straight to the resolver', async () => {
+    const { t, repo, wt } = await rig();
+    const { app } = t;
+    writeFileSync(join(repo, 'a.ts'), 'main version\n');
+    await sh(['add', '.'], repo);
+    await sh(['commit', '-q', '-m', 'main edits a'], repo);
+    writeFileSync(join(wt, 'a.ts'), 'lane version\n');
+    await sh(['add', '.'], wt);
+    await sh(['commit', '-q', '-m', 'lane edits a'], wt);
+    await app.laneSync.autoSync(claude);
+    const lane = app.repos.worktrees.get(fixCheckout);
+    expect(lane?.resolution).toMatchObject({ state: 'resolving', sessionId: claude, files: ['a.ts'] });
+    expect(await app.git.mergeInProgress(wt)).toBe(true);
+    expect(lastSystemLine(t, claude)).toContain('Conflicted files:');
   });
 });

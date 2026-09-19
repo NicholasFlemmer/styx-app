@@ -3,7 +3,7 @@ import type { Db } from '../open';
 import { asBool, asJson, asNum, asStr, placeholders, toBit, toJson, type Raw } from './mappers';
 
 const COLS = `w.id, w.repo_id, r.project_id, w.branch, w.path, w.is_main, w.owner_kind, w.owner_session_id, w.base_commit, w.head_commit, w.added, w.removed, w.files_changed,
-  w.pr_number, w.pr_state, w.pr_url, w.conflict_file, w.conflict_against, w.behind_base, w.overlaps_json, w.merged_at, w.created_at, w.archived_at`;
+  w.pr_number, w.pr_state, w.pr_url, w.conflict_file, w.conflict_against, w.behind_base, w.overlaps_json, w.resolution_json, w.merged_at, w.created_at, w.archived_at`;
 const SELECT = `SELECT ${COLS} FROM worktrees w JOIN repos r ON r.id = w.repo_id`;
 
 export const worktreeFromRow = (r: Raw): Worktree => {
@@ -31,6 +31,10 @@ export const worktreeFromRow = (r: Raw): Worktree => {
       conflictFile === null ? null : { file: conflictFile, against: String(r['conflict_against'] ?? 'main') },
     behindBase: Number(r['behind_base'] ?? 0),
     overlaps: asJson<unknown[]>(r['overlaps_json'], []),
+    resolution:
+      r['resolution_json'] === null || r['resolution_json'] === undefined
+        ? null
+        : asJson<unknown>(r['resolution_json'], null),
     mergedAt: asNum(r['merged_at']),
     createdAt: Number(r['created_at']),
     archivedAt: asNum(r['archived_at']),
@@ -50,11 +54,11 @@ export class WorktreesRepo {
   constructor(private readonly db: Db) {
     this.upsertStmt = db.prepare(
       `INSERT INTO worktrees (id, repo_id, branch, path, is_main, owner_kind, owner_session_id, base_commit, head_commit, added, removed, files_changed,
-         pr_number, pr_state, pr_url, conflict_file, conflict_against, behind_base, overlaps_json, merged_at, created_at, archived_at) VALUES (${placeholders(22)})
+         pr_number, pr_state, pr_url, conflict_file, conflict_against, behind_base, overlaps_json, resolution_json, merged_at, created_at, archived_at) VALUES (${placeholders(23)})
        ON CONFLICT(id) DO UPDATE SET repo_id = excluded.repo_id, branch = excluded.branch, path = excluded.path, is_main = excluded.is_main, owner_kind = excluded.owner_kind,
          owner_session_id = excluded.owner_session_id, base_commit = excluded.base_commit, head_commit = excluded.head_commit, added = excluded.added, removed = excluded.removed,
          files_changed = excluded.files_changed, pr_number = excluded.pr_number, pr_state = excluded.pr_state, pr_url = excluded.pr_url, conflict_file = excluded.conflict_file,
-         conflict_against = excluded.conflict_against, behind_base = excluded.behind_base, overlaps_json = excluded.overlaps_json, merged_at = excluded.merged_at, created_at = excluded.created_at, archived_at = excluded.archived_at`,
+         conflict_against = excluded.conflict_against, behind_base = excluded.behind_base, overlaps_json = excluded.overlaps_json, resolution_json = excluded.resolution_json, merged_at = excluded.merged_at, created_at = excluded.created_at, archived_at = excluded.archived_at`,
     );
     this.getStmt = db.prepare(`${SELECT} WHERE w.id = ?`);
     this.allStmt = db.prepare(`${SELECT} ORDER BY w.created_at ASC, w.rowid ASC`);
@@ -85,6 +89,7 @@ export class WorktreesRepo {
       w.conflict?.against ?? null,
       w.behindBase,
       toJson(w.overlaps),
+      w.resolution === null ? null : toJson(w.resolution),
       w.mergedAt,
       w.createdAt,
       w.archivedAt,

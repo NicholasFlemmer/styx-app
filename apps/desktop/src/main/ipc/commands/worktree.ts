@@ -80,6 +80,7 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
       conflict: null,
       behindBase: 0,
       overlaps: [],
+      resolution: null,
       mergedAt: null,
       createdAt: clock.now(),
       archivedAt: null,
@@ -105,6 +106,11 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
   // Keep lanes current (ADR-0023): fetch, ahead/behind, every lane's distance from the base and its conflict state.
   bus.register('worktree.fetch', ({ projectId }) => app.laneSync.refresh(projectId));
   bus.register('worktree.sync', ({ worktreeId }) => app.laneSync.sync(worktreeId));
+  bus.register('worktree.resolve', ({ worktreeId }) => app.resolver.resolve(worktreeId));
+  bus.register('worktree.undoResolve', async ({ worktreeId }) => {
+    await app.resolver.undo(worktreeId);
+    return {};
+  });
 
   bus.register('worktree.diff', async ({ worktreeId, file }) => {
     const wt = requireWorktree(worktreeId);

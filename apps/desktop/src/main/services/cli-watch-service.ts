@@ -1,10 +1,19 @@
-import { watch, type FSWatcher } from 'node:fs';
+import { watch as fsWatch } from 'node:fs';
 import { logger } from './logger';
+
+/** What the service needs from a watcher: `fs.watch`'s shape, so tests can drive one by hand. */
+export interface DirWatcher {
+  on(event: 'error', cb: (e: Error) => void): unknown;
+  close(): void;
+}
+export type WatchFn = (dir: string, opts: { persistent: boolean }, cb: () => void) => DirWatcher;
 
 export interface CliWatchDeps {
   /** Runs once per burst of changes (a re-detect); errors are logged, never thrown into the fs callback. */
   onChange: () => Promise<unknown> | unknown;
   debounceMs?: number;
+  /** `fs.watch` by default; injectable so tests fire changes without touching a real filesystem's timing. */
+  watch?: WatchFn;
 }
 
 /**
@@ -15,7 +24,7 @@ export interface CliWatchDeps {
  * A folder that appears later (`~/.local/bin` created by an installer) is picked up by the next detection's list.
  */
 export class CliWatchService {
-  private readonly watchers = new Map<string, FSWatcher>();
+  private readonly watchers = new Map<string, DirWatcher>();
   private timer: NodeJS.Timeout | null = null;
   private started = false;
 
@@ -37,7 +46,7 @@ export class CliWatchService {
     for (const dir of want) {
       if (this.watchers.has(dir)) continue;
       try {
-        const w = watch(dir, { persistent: false }, () => this.bump());
+        const w = (this.deps.watch ?? fsWatch)(dir, { persistent: false }, () => this.bump());
         w.on('error', () => {
           w.close();
           this.watchers.delete(dir);

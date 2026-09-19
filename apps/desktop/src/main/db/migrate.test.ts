@@ -70,6 +70,7 @@ describe('migrations', () => {
       '0016_checkpoint_screens',
       '0017_lane_behind_base',
       '0018_lane_overlaps',
+      '0019_lane_resolution',
     ]);
     // Seed at 0001: a project, two targets and an active grant that cascades on the target.
     migrate(db, all.slice(0, 2));
@@ -166,8 +167,9 @@ describe('migrations', () => {
         '0016_checkpoint_screens',
         '0017_lane_behind_base',
         '0018_lane_overlaps',
+        '0019_lane_resolution',
       ],
-      version: 19,
+      version: 20,
     });
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT id, project_id, default_branch, remotes_json FROM repos').all()).toEqual([

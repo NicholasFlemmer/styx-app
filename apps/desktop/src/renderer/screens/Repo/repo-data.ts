@@ -20,7 +20,7 @@ import type { DotTone } from '@styx/ui';
 
 const DAY = 24 * 60 * 60_000;
 
-export type LaneAction = 'open' | 'diff' | 'resolve' | 'archive';
+export type LaneAction = 'open' | 'diff' | 'resolve' | 'archive' | 'undo-merge';
 
 /** One Repo table row (prototype `lanes`). */
 export interface Lane {
@@ -46,12 +46,15 @@ export interface Lane {
   conflict: Worktree['conflict'];
   /** Other live lanes that changed the same files (ADR-0025): their branches, and the files (for the title). */
   overlaps: { branches: string[]; files: string[] } | null;
+  /** A base merge being finished with an agent, or just finished (ADR-0025 phase B); null otherwise. */
+  resolution: Worktree['resolution'];
 }
 
 const ACTION_LABEL: Record<LaneAction, string> = {
   open: copy.repo.actions.open,
   diff: copy.repo.actions.diff,
   resolve: copy.repo.actions.resolve,
+  'undo-merge': copy.repo.actions.undoMerge,
   archive: copy.repo.actions.archive,
 };
 
@@ -123,9 +126,27 @@ export const laneRows = (model: ReadModel, projectId: ProjectId, now: number): L
 
     let changes: string;
     let action: LaneAction;
-    if (w.conflict !== null) {
+    const res = w.resolution;
+    const resolvingAgent =
+      res?.sessionId === null || res?.sessionId === undefined
+        ? null
+        : (model.sessions.byId[res.sessionId] ?? null);
+    if (res !== null && (res.state === 'resolving' || res.state === 'checking')) {
+      // ADR-0025 phase B: the agent is finishing the merge; nothing to click until it is done or handed back.
+      changes =
+        res.state === 'checking'
+          ? copy.repo.changes.checking
+          : fill(copy.repo.changes.resolving, {
+              base,
+              agent: resolvingAgent === null ? copy.repo.you : agentLabel(resolvingAgent),
+            });
+      action = 'diff';
+    } else if (w.conflict !== null) {
       changes = fill(copy.repo.changes.conflict, { file: w.conflict.file, against: w.conflict.against });
       action = 'resolve';
+    } else if (res !== null && res.state === 'done' && res.mergeCommit === w.headCommit) {
+      changes = fill(copy.repo.changes.resolved, { base, files: res.files.length });
+      action = 'undo-merge';
     } else if (merged) {
       changes = fill(copy.repo.changes.merged, { when: mergedWhen(w.mergedAt ?? now, now) });
       action = 'archive';
@@ -165,6 +186,7 @@ export const laneRows = (model: ReadModel, projectId: ProjectId, now: number): L
       isMain: w.isMain,
       conflict: w.conflict,
       overlaps: merged ? null : laneOverlapSummary(model, w),
+      resolution: w.resolution,
     };
   });
 };

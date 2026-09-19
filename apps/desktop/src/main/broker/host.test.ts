@@ -407,6 +407,49 @@ describe('BrokerHost agent-to-agent messaging', () => {
     client.close();
   });
 
+  it('remember_command kind checks: only the agent finishing a merge may set it; then Styx keeps it (ADR-0025 phase B)', async () => {
+    const { t: app, client } = await connectedClient(ids.session.claude);
+    await expect(
+      client.call('remember_command', { kind: 'checks', command: 'pnpm check' }),
+    ).rejects.toMatchObject({
+      message: 'A checks command is accepted only from the agent finishing a merge.',
+    });
+    const lane = app.app.repos.worktrees.get(ids.worktree.fixCheckout);
+    if (!lane) throw new Error('lane');
+    app.app.repos.worktrees.upsert({
+      ...lane,
+      resolution: {
+        state: 'resolving',
+        sessionId: ids.session.claude,
+        files: ['a.ts'],
+        preHead: 'abc',
+        preTree: null,
+        mergeCommit: null,
+        attempts: 1,
+        startedAt: fixtures.DEMO_NOW,
+        finishedAt: null,
+        failure: null,
+      },
+    });
+    expect(
+      await client.call('remember_command', { kind: 'checks', command: 'pnpm typecheck && pnpm test' }),
+    ).toEqual({ ok: true });
+    expect(app.app.repos.projects.settings(ids.project.acmeShop).checksCommand).toBe(
+      'pnpm typecheck && pnpm test',
+    );
+    expect(app.app.repos.transcripts.last(ids.session.claude).at(-1)?.body).toBe(
+      'Styx will check merges with `pnpm typecheck && pnpm test` from now on.',
+    );
+    // A command carrying a secret is refused on every path.
+    expect(
+      await client.call('remember_command', { kind: 'checks', command: 'TOKEN=abc123secretvalue pnpm test' }),
+    ).toEqual({ ok: true });
+    expect(app.app.repos.projects.settings(ids.project.acmeShop).checksCommand).toBe(
+      'pnpm typecheck && pnpm test',
+    );
+    client.close();
+  });
+
   it('project_activity answers with the base, the commits not merged, the other lanes and the overlaps (ADR-0025)', async () => {
     const { client } = await connectedClient(ids.session.gemini);
     const a = await client.call('project_activity', {});

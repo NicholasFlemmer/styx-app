@@ -23,6 +23,9 @@ export interface LaneSyncDeps {
   /** The lane ledger: a project's lanes were re-read / a lane's tree changed under a merge. */
   onRefreshed?: (projectId: string) => void;
   onSynced?: (worktreeId: string) => void;
+  /** ADR-0025 phase B: `ProjectSettings.integration`, and the resolver a conflicting merge is handed to in auto mode. */
+  integrationOf?: (projectId: string) => 'auto' | 'review';
+  resolveConflict?: (worktreeId: string) => Promise<unknown>;
 }
 
 export interface SyncResult {
@@ -101,6 +104,7 @@ export class LaneSyncService {
     if (!session || session.purpose) return;
     const wt = repos.worktrees.get(session.worktreeId);
     if (!wt || wt.isMain || wt.archivedAt !== null || wt.branch === null || wt.conflict !== null) return;
+    if (wt.resolution !== null && (wt.resolution.state === 'resolving' || wt.resolution.state === 'checking')) return;
     if ((this.deps.autoSyncOf?.(wt.projectId) ?? 'turn') !== 'turn') return;
     const project = repos.projects.get(wt.projectId);
     if (!project) return;
@@ -109,8 +113,16 @@ export class LaneSyncService {
     if (behind === 0) return;
     const conflict = await git.detectConflict(project.path, wt.branch, base).catch(() => null);
     if (conflict !== null) {
+      // Auto: Styx finishes the merge with the agent (ADR-0025 phase B). Review: mark it and say how to ask.
+      if ((this.deps.integrationOf?.(wt.projectId) ?? 'auto') === 'auto' && this.deps.resolveConflict) {
+        await this.deps.resolveConflict(wt.id);
+        return;
+      }
       this.save({ ...wt, conflict, behindBase: behind });
-      this.deps.transcript.system(session.id, fill(copy.sync.conflict, { base, file: conflict.file }));
+      this.deps.transcript.system(
+        session.id,
+        fill(copy.sync.conflictReview, { base, file: conflict.file, agent: AGENT_LABEL[session.agent] ?? session.agent }),
+      );
       if (session.state !== 'paused') this.deps.sessionEvent(session.id, { type: 'error', reason: 'conflict' });
       return;
     }
@@ -169,6 +181,11 @@ export class LaneSyncService {
         if (live.state !== 'paused') this.deps.sessionEvent(live.id, { type: 'error', reason: 'conflict' });
       }
       logger.info('lane sync: conflict', { branch, base, file });
+      // Auto mode: the resolver takes it from here (its own merge, checkpointed, handed to the agent).
+      if ((this.deps.integrationOf?.(wt.projectId) ?? 'auto') === 'auto' && this.deps.resolveConflict)
+        void this.deps.resolveConflict(wt.id).catch((e: Error) =>
+          logger.warn('lane sync: resolve after conflict failed', { branch, error: e.message }),
+        );
       return { merged: 0, conflict };
     }
 

@@ -214,7 +214,10 @@ export class HunkService {
           added += f.added;
           removed += f.removed;
         }
-        repos.worktrees.upsert({ ...worktree, changes: { added, removed, files: diff.files.length } });
+        // Re-read before writing: the diff took time, and the lane ledger / sync / resolver may have set
+        // overlaps, behindBase, conflict or resolution on the row meanwhile — only the counters are ours.
+        const current = repos.worktrees.get(worktree.id) ?? worktree;
+        repos.worktrees.upsert({ ...current, changes: { added, removed, files: diff.files.length } });
       });
       this.publish(sessionId, worktree.id);
       publisher.upsert('worktrees', [worktree.id]);

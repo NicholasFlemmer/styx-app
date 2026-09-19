@@ -568,6 +568,11 @@ export class CheckpointService {
     return parseNumstat(r.stdout);
   }
 
+  /** Writes a captured tree back over the working tree (the merge resolver's Undo; ADR-0025 phase B). */
+  restoreTree(worktreePath: string, rev: string): Promise<void> {
+    return this.restore(worktreePath, rev);
+  }
+
   /**
    * Working tree → `base`: name-status of the live tree (temp index) against base decides each path — `A` (not in
    * base) is deleted, `M` / `D` are written back from base. Only paths that differ are touched, and every one

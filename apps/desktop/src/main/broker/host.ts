@@ -47,6 +47,8 @@ export interface BrokerHostDeps {
       device: { platform: 'web' | 'ios' | 'android' | null; device: string | null; appId: string | null },
     ): Promise<void>;
     rememberDeploy(sessionId: string, targetId: string, command: string): Promise<void>;
+    /** The checks a resolved merge must pass (ADR-0025 phase B). */
+    rememberChecks(sessionId: string, command: string): Promise<void>;
   };
 }
 
@@ -361,6 +363,18 @@ export class BrokerHost {
           device: p.device ?? null,
           appId: p.appId ?? null,
         });
+        return { ok: true };
+      }
+      if (p.kind === 'checks') {
+        // ADR-0025 phase B: only the agent Styx is using to finish a merge may set the checks Styx will then run.
+        const me = deps.repos.sessions.get(ctx.session.sessionId);
+        const lane = me ? deps.repos.worktrees.get(me.worktreeId) : null;
+        const resolving =
+          lane?.resolution?.sessionId === ctx.session.sessionId &&
+          (lane.resolution.state === 'resolving' || lane.resolution.state === 'checking');
+        if (!resolving && purpose !== 'merge')
+          throw new BrokerError(ErrorCode.notAllowed, copy.abilities.checksNotResolving);
+        await deps.abilities.rememberChecks(ctx.session.sessionId, p.command);
         return { ok: true };
       }
       if (purpose !== 'learn-deploy') throw new BrokerError(ErrorCode.notAllowed, copy.abilities.notLearning);

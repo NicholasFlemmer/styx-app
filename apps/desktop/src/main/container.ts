@@ -26,6 +26,12 @@ import type { NotificationService } from './services/notification-service';
 import { ProjectService } from './services/project-service';
 import { LaneLedgerService } from './services/lane-ledger-service';
 import { LaneSyncService } from './services/lane-sync-service';
+import {
+  MergeResolveService,
+  checksInLoginShell,
+  mergirafSolver,
+  type ChecksResult,
+} from './services/merge-resolve-service';
 import { execaPublishExec, PublishService } from './services/publish-service';
 import { PtyLog } from './services/pty-log';
 import { PtyService } from './services/pty-service';
@@ -183,6 +189,9 @@ export interface ContainerOptions {
   exec?: (bin: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>;
   /** Does a dev-server URL answer? (RunService); faked in tests so nothing is ever probed for real. */
   probe?: (url: string) => Promise<boolean | ProbeAnswer>;
+  /** The merge resolver's checks runner and Mergiraf hook (ADR-0025 phase B); faked in tests. */
+  runChecks?: (cwd: string, command: string) => Promise<ChecksResult>;
+  mergiraf?: (file: string, cwd: string) => Promise<boolean>;
 }
 
 export interface Container {
@@ -221,6 +230,8 @@ export interface Container {
   screens: ScreensStore;
   /** Turn checkpoints (ADR-0020): hidden git refs per agent turn, diff and revert. */
   checkpoints: CheckpointService;
+  /** Styx finishes the merge (ADR-0025 phase B). */
+  resolver: MergeResolveService;
   /** Commit, push and PR in one step (ADR-0021); the message draft comes from the project's default agent. */
   publish: PublishService;
   /** Keep lanes current (ADR-0023): behind-base counts, `worktree.sync`, the publish gate. */
@@ -406,6 +417,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     autoSyncOf: (projectId) => projectSettingsFor(repos, projectId).autoSync.value,
     onRefreshed: (projectId) => void ledger.refreshProject(projectId),
     onSynced: (worktreeId) => void ledger.laneChanged(worktreeId),
+    integrationOf: (projectId) => projectSettingsFor(repos, projectId).integration.value,
+    resolveConflict: (worktreeId) => resolver.resolve(worktreeId),
   });
   const publish = new PublishService({
     repos,
@@ -562,6 +575,18 @@ export function buildContainer(opts: ContainerOptions): Container {
         const live = runs.all().find((r) => r.projectId === session.projectId && r.phase !== 'exited');
         if (live === undefined) await runs.start(session.projectId, cmd, { platform }).catch(() => undefined);
       },
+      // ADR-0025 phase B: the agent finishing a merge names the project's checks; Styx runs them from then on.
+      rememberChecks: async (sessionId, command) => {
+        const session = repos.sessions.get(sessionId);
+        if (!session) return;
+        const cmd = command.trim();
+        if (commandCarriesSecret(cmd)) {
+          transcript.system(session.id, copy.abilities.secretInCommand);
+          return;
+        }
+        await projects.setSettings(session.projectId, { checksCommand: cmd });
+        transcript.system(session.id, fill(copy.abilities.learnedChecks, { command: cmd }));
+      },
       rememberDeploy: async (sessionId, targetId, command) => {
         const session = repos.sessions.get(sessionId);
         if (!session) return;
@@ -627,6 +652,45 @@ export function buildContainer(opts: ContainerOptions): Container {
     ...(opts.retentionMs !== undefined ? { intervalMs: opts.retentionMs } : {}),
   });
 
+  const resolver = new MergeResolveService({
+    repos,
+    git,
+    publisher,
+    clock,
+    transcript,
+    activity,
+    checkpoints: {
+      capture: (path) => checkpoints.capture(path),
+      restoreTree: (path, rev) => checkpoints.restoreTree(path, rev),
+    },
+    sessions,
+    ledger: { laneChanged: (id) => ledger.laneChanged(id) },
+    baseOf: (projectId) => projectSettingsFor(repos, projectId).baseBranch.value,
+    settingsOf: (projectId) => {
+      const s = projectSettingsFor(repos, projectId);
+      return {
+        integration: s.integration.value,
+        checksCommand: s.checksCommand.value,
+        defaultAgent: s.defaultAgent.value,
+        model: s.model.value,
+        permissionMode: s.permissionMode.value,
+        effort: s.effort.value,
+        notifyWhenNeedsMe: s.notifyWhenNeedsMe.value,
+      };
+    },
+    runChecks:
+      opts.runChecks ??
+      checksInLoginShell(
+        () => pty.resolveLoginPath(),
+        () => pty.defaultShell(),
+        runtime.platform,
+      ),
+    ...(opts.mergiraf !== undefined
+      ? { mergiraf: opts.mergiraf }
+      : redetect
+        ? { mergiraf: mergirafSolver(() => pty.resolveLoginPath(), runtime.platform) }
+        : {}),
+  });
   sessions.bind({
     revokeSessionGrants: (id) => grants.cancelSessionGrants(id),
     cancelHeldAsk: (ask) => broker.cancelAsk(ask),
@@ -636,9 +700,12 @@ export function buildContainer(opts: ContainerOptions): Container {
     turnStarted: (id, messageId) => checkpoints.onTurnStarted(id, messageId),
     turnSettled: (id) => {
       checkpoints.onTurnSettled(id);
-      // ADR-0025: the agent is idle now, so the base can come in without landing under a write.
-      void laneSync
-        .autoSync(id)
+      // ADR-0025: a merge this agent was finishing is verified first; then, idle, the base can come in without
+      // landing under a write.
+      void resolver
+        .onTurnSettled(id)
+        .catch((e: Error) => logger.warn('merge resolve: verify failed', { sessionId: id, error: e.message }))
+        .then(() => laneSync.autoSync(id))
         .catch((e: Error) => logger.warn('lane sync: auto sync failed', { sessionId: id, error: e.message }));
     },
     limitsReported: (limits) => usage.report(limits),
@@ -680,6 +747,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     publish,
     laneSync,
     ledger,
+    resolver,
     usage,
     terminals,
     broker,
