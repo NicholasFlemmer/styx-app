@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fixtures, type ProjectFileV1 } from '@styx/core';
@@ -969,5 +969,16 @@ describe('project file trust gate (H-1): reconcile, banner, accept, audit', () =
       await t.app.bus.dispatch(t.sender, 'project.policy.accept', { projectId: project.id, hash }),
     ).toEqual({ ok: true, value: {} });
     expect(t.app.repos.targets.get(extra!.id)).toMatchObject({ policy: 'always', policySource: 'project' });
+  });
+});
+
+describe('project settings file', () => {
+  it('a project whose path is not absolute (a fixture display path) keeps its settings in the store but never gets a file written under the working directory', async () => {
+    const t = makeTestApp();
+    const acme = fixtures.ids.project.acmeShop;
+    expect(t.app.repos.projects.get(acme)?.path).toBe('~/code/acme-shop');
+    await t.app.projects.setSettings(acme, { devCommand: 'pnpm dev' });
+    expect(t.app.repos.projects.settings(acme).devCommand).toBe('pnpm dev');
+    expect(existsSync(join(process.cwd(), '~'))).toBe(false);
   });
 });

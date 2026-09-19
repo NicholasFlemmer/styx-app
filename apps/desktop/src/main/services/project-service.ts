@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync, type Dirent } from 'node:fs';
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 import { homedir, tmpdir } from 'node:os';
-import { basename, dirname, join, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import {
   copy,
   fill,
@@ -1118,18 +1118,22 @@ export class ProjectService {
 
   private async writeSettings(project: Project, next: Partial<ProjectSettings>): Promise<void> {
     const { repos, publisher, clock } = this.deps;
-    const file = join(project.path, PROJECT_FILE_PATH);
-    let base: ProjectFileV1 = { version: 1, name: project.name };
-    if (existsSync(file)) {
-      const parsed = parseProjectFile(await readFile(file, 'utf8'));
-      if (parsed.ok) base = parsed.file;
-    }
-    const out = applySettingsToFile(base, next);
-    try {
-      await mkdir(dirname(file), { recursive: true });
-      await writeFile(file, serializeProjectFile(out));
-    } catch (e) {
-      logger.warn('project.json write failed', { project: project.name, error: (e as Error).message });
+    // Real projects have absolute paths (`add` / `create` resolve them). A relative one — a fixture's display
+    // path like `~/code/acme-shop` — never gets a file written under whatever the working directory happens to be.
+    if (isAbsolute(project.path)) {
+      const file = join(project.path, PROJECT_FILE_PATH);
+      let base: ProjectFileV1 = { version: 1, name: project.name };
+      if (existsSync(file)) {
+        const parsed = parseProjectFile(await readFile(file, 'utf8'));
+        if (parsed.ok) base = parsed.file;
+      }
+      const out = applySettingsToFile(base, next);
+      try {
+        await mkdir(dirname(file), { recursive: true });
+        await writeFile(file, serializeProjectFile(out));
+      } catch (e) {
+        logger.warn('project.json write failed', { project: project.name, error: (e as Error).message });
+      }
     }
     repos.projects.setSettings(project.id, next, clock.now());
     publisher.upsert('projects', [project.id]);
