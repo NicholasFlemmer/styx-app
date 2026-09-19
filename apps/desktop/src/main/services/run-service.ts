@@ -1,4 +1,4 @@
-import type { DevPlatform, DevRun, ProjectId } from '@styx/core';
+import type { DevPlatform, DevRun, Project, ProjectId, Worktree } from '@styx/core';
 import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import * as http from 'node:http';
@@ -315,9 +315,22 @@ export class RunService {
   }
   private devices: DeviceLauncher | null = null;
 
-  async detect(projectId: ProjectId): Promise<RunDetection> {
+  /**
+   * Where Run locally looks and runs (discrepancy #103): the lane the design window is looking at — its files as
+   * they are, committed or not, which is what the person sees in the editor — else the main checkout. A lane of
+   * another project is refused; an archived one falls back to main.
+   */
+  private laneOf(project: Project, worktreeId: string | undefined): Worktree | null {
+    if (worktreeId === undefined) return null;
+    const wt = this.deps.repos.worktrees.get(worktreeId);
+    if (wt === null || wt.projectId !== project.id) fail('invalid-input', 'that lane is not in this project');
+    return wt.archivedAt === null && !wt.isMain ? wt : null;
+  }
+
+  async detect(projectId: ProjectId, worktreeId?: string): Promise<RunDetection> {
     const project = this.deps.repos.projects.get(projectId) ?? fail('not-found', 'project not found');
-    const [web, mobile] = await Promise.all([detectRunCommands(project.path), detectPlatforms(project.path)]);
+    const dir = this.laneOf(project, worktreeId)?.path ?? project.path;
+    const [web, mobile] = await Promise.all([detectRunCommands(dir), detectPlatforms(dir)]);
     // Device suggestions first for a mobile app, web ones first otherwise, in the platforms' order.
     const suggestions =
       mobile.platforms[0] === 'web' ? [...web, ...mobile.suggestions] : [...mobile.suggestions, ...web];
@@ -327,12 +340,14 @@ export class RunService {
   async start(
     projectId: ProjectId,
     command: string,
-    opts: { platform?: DevPlatform } = {},
+    opts: { platform?: DevPlatform; worktreeId?: string } = {},
   ): Promise<{ runId: string; terminalId: string }> {
     const { repos, publisher, clock, pty, terminals } = this.deps;
     const cmd = command.trim();
     if (cmd === '') fail('invalid-input', 'command is empty');
     const project = repos.projects.get(projectId) ?? fail('not-found', 'project not found');
+    const lane = this.laneOf(project, opts.worktreeId);
+    const cwd = lane?.path ?? project.path;
     const settings = repos.projects.settings(projectId);
     const platform: DevPlatform = opts.platform ?? settings.devPlatform ?? 'web';
     // One run per project: the previous one goes first, listeners and all, so its exit cannot land on this row.
@@ -349,6 +364,7 @@ export class RunService {
     const terminalId = `term:${ulid()}`;
     this.publish({
       projectId,
+      worktreeId: lane?.id ?? null,
       runId,
       terminalId,
       command: cmd,
@@ -467,7 +483,7 @@ export class RunService {
         id: terminalId,
         file,
         args,
-        cwd: project.path,
+        cwd,
         env: terminals.shimEnv(),
       });
     } catch (e) {

@@ -8,6 +8,7 @@ import {
   type SessionId,
   type SessionPurpose,
   type TargetId,
+  type WorktreeId,
 } from '@styx/core';
 import { command } from '../../state/commands';
 import { useUiStore } from '../../state/ui-store';
@@ -26,7 +27,10 @@ export const openTask = (key: string | null): void => {
 
 const pending = new Map<string, Promise<SessionId | null>>();
 
-/** Open feedback before detection/spawn; neither completion nor dismissal changes the current project. */
+/**
+ * Open feedback before detection/spawn; neither completion nor dismissal changes the current project. The task
+ * runs in `worktreeId` when given (the lane whose files the person is looking at, discrepancy #103), else main.
+ */
 export function launchTask(
   model: ReadModel,
   projectId: ProjectId,
@@ -34,6 +38,7 @@ export function launchTask(
   purpose: SessionPurpose,
   prompt: () => Promise<string>,
   targetId?: TargetId,
+  worktreeId?: WorktreeId | null,
 ): Promise<SessionId | null> {
   openTask(key);
   const existing = activeTask(model, key);
@@ -48,7 +53,12 @@ export function launchTask(
   ui.setTaskLaunch(key, launch);
   const run = async (): Promise<SessionId | null> => {
     try {
-      const worktree = mainWorktreeOf(model, projectId);
+      const lane =
+        worktreeId === undefined || worktreeId === null ? undefined : model.worktrees.byId[worktreeId];
+      const worktree =
+        lane !== undefined && lane.projectId === projectId && lane.archivedAt === null
+          ? lane
+          : mainWorktreeOf(model, projectId);
       if (!worktree) throw new Error(copy.tasks.noWorktree);
       const settings = projectSettingsOfOrDefault(model, projectId);
       const firstMessage = await prompt();

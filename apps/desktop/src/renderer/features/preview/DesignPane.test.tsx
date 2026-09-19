@@ -56,6 +56,7 @@ const emit = (name: string, payload: unknown) => {
 
 const run = (over: Partial<DevRun> = {}): DevRun => ({
   projectId: acme,
+  worktreeId: null,
   runId: 'run:1',
   terminalId: 'term:1',
   command: 'pnpm dev',
@@ -91,6 +92,7 @@ const sims: DeviceSummary[] = [
 const pane = (props: Partial<Parameters<typeof DesignPane>[0]> = {}) => (
   <DesignPane
     projectId={acme}
+    worktreeId={null}
     devUrl="localhost:3000"
     active
     run={null}
@@ -307,6 +309,26 @@ describe('DesignPane', () => {
   });
 
   describe('run locally', () => {
+    it('with a lane showing, detection, the learning agent and the run itself all target that lane (discrepancy #103)', async () => {
+      const lane = fixtures.ids.worktree.fixCheckout;
+      const { rerender } = render(pane({ devUrl: null, worktreeId: lane }));
+      await waitFor(() => expect(of('run.detect')).toEqual([{ projectId: acme, worktreeId: lane }]));
+      fireEvent.click(screen.getByRole('button', { name: /Run locally/ }));
+      await waitFor(() => expect(of('session.spawn')).toHaveLength(1));
+      expect(of('session.spawn')[0]).toMatchObject({ worktree: { kind: 'existing', worktreeId: lane } });
+      expect(of('run.detect').at(-1)).toEqual({ projectId: acme, worktreeId: lane });
+      commands.length = 0;
+      rerender(pane({ devUrl: null, worktreeId: lane, devCommand: 'pnpm dev' }));
+      fireEvent.click(screen.getByRole('button', { name: /Run locally/ }));
+      await waitFor(() => expect(of('run.start')).toHaveLength(1));
+      expect(of('run.start')[0]).toEqual({
+        projectId: acme,
+        command: 'pnpm dev',
+        platform: 'web',
+        worktreeId: lane,
+      });
+    });
+
     it('nothing learned yet: no command field, a first-time hint naming the agent, and Run hands the job to the agent', async () => {
       render(pane({ devUrl: null }));
       // Mount detection is what decides whether the platform chips show.

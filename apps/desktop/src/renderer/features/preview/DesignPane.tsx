@@ -14,6 +14,7 @@ import {
   type DevicePlatform,
   type PreviewDevice,
   type ProjectId,
+  type WorktreeId,
 } from '@styx/core';
 import { Button, ChipGroup, DeviceFrame, Icon, Input, Select, StatusDot } from '@styx/ui';
 import {
@@ -41,6 +42,8 @@ import s from './DesignPane.module.css';
 
 export interface DesignPaneProps {
   projectId: ProjectId;
+  /** The lane the workspace is showing (the active session's worktree): Run locally looks and runs there; null = main. */
+  worktreeId: WorktreeId | null;
   /** The project's saved dev-server URL (`project.settings.devUrl`). */
   devUrl: string | null;
   /** False while the Code tab is showing: the native view detaches rather than hiding behind the editor. */
@@ -125,6 +128,7 @@ const deviceOptions = (devices: readonly DeviceSummary[], chosen: string | null)
  */
 export function DesignPane({
   projectId,
+  worktreeId,
   devUrl,
   active,
   run,
@@ -159,13 +163,13 @@ export function DesignPane({
   const [platforms, setPlatforms] = useState<DevPlatform[]>([]);
   useEffect(() => {
     let cancelled = false;
-    void command('run.detect', { projectId }).then((r) => {
+    void command('run.detect', { projectId, ...(worktreeId === null ? {} : { worktreeId }) }).then((r) => {
       if (!cancelled && r.ok) setPlatforms(r.value.platforms);
     });
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, worktreeId]);
   const mobile = isMobile(platforms);
   const platform: DevPlatform = devPlatform ?? platforms[0] ?? 'web';
   const devicePlatform: DevicePlatform | null = platform === 'web' ? null : platform;
@@ -235,19 +239,29 @@ export function DesignPane({
   const startRun = () => {
     if (live) return;
     if (devCommand === null) {
-      void startLearnRun(useReadModel.getState().model, projectId);
+      void startLearnRun(useReadModel.getState().model, projectId, undefined, worktreeId);
       return;
     }
     const next = cmd.trim();
     if (next === '') return;
-    void command('run.start', { projectId, command: next, platform });
+    void command('run.start', {
+      projectId,
+      command: next,
+      platform,
+      ...(worktreeId === null ? {} : { worktreeId }),
+    });
   };
   const stopRun = () => void command('run.stop', { projectId });
   const dismissRun = () => void command('run.dismiss', { projectId });
   const failure = run === null ? null : runFailure(run);
   const askToFix = () => {
     if (run === null || failure === null) return;
-    void startLearnRun(useReadModel.getState().model, projectId, { command: run.command, failure });
+    void startLearnRun(
+      useReadModel.getState().model,
+      projectId,
+      { command: run.command, failure },
+      worktreeId,
+    );
   };
   const saveCmd = () => {
     const next = cmd.trim();

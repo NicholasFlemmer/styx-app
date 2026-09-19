@@ -591,8 +591,12 @@ export function buildContainer(opts: ContainerOptions): Container {
           projectId: session.projectId,
           sessionId: session.id,
         });
+        // The agent learned it where it worked: the run starts in that lane (discrepancy #103).
         const live = runs.all().find((r) => r.projectId === session.projectId && r.phase !== 'exited');
-        if (live === undefined) await runs.start(session.projectId, cmd, { platform }).catch(() => undefined);
+        if (live === undefined)
+          await runs
+            .start(session.projectId, cmd, { platform, worktreeId: session.worktreeId })
+            .catch(() => undefined);
       },
       // ADR-0025 phase B: the agent finishing a merge names the project's checks; Styx runs them from then on.
       rememberChecks: async (sessionId, command) => {

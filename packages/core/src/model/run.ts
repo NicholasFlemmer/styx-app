@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { projectIdSchema, targetIdSchema, timestampSchema } from './common';
+import { projectIdSchema, targetIdSchema, timestampSchema, worktreeIdSchema } from './common';
 
 /** Phase of a local dev-server run started from the design window. */
 export const devRunPhaseSchema = z.enum(['starting', 'running', 'exited']);
@@ -23,6 +23,8 @@ export type DevicePlatform = z.infer<typeof devicePlatformSchema>;
  */
 export const devRunSchema = z.object({
   projectId: projectIdSchema,
+  /** The lane the run was started from (its files, committed or not); null = the main checkout. */
+  worktreeId: worktreeIdSchema.nullable().default(null),
   runId: z.string().min(1),
   terminalId: z.string().min(1),
   command: z.string().min(1),

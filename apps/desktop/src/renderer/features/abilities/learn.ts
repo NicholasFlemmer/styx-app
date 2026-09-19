@@ -7,6 +7,7 @@ import {
   type SessionId,
   type Target,
   type TargetId,
+  type WorktreeId,
   activeTask,
 } from '@styx/core';
 import { command } from '../../state/commands';
@@ -31,39 +32,52 @@ const guessText = (suggestions: readonly Suggestion[]): string =>
 /**
  * "Run this project locally": the agent works it out, Styx remembers the command and starts it. With `failed`,
  * a new background task fixes the remembered command (the output is in the run strip; the agent gets
- * the command and what went wrong).
+ * the command and what went wrong). `worktreeId` is the lane the design window is looking at: the agent works
+ * there, on the files as they are (discrepancy #103); null = the main checkout.
  */
 export const startLearnRun = async (
   model: ReadModel,
   projectId: ProjectId,
   failed?: { command: string; failure: string },
+  worktreeId: WorktreeId | null = null,
 ): Promise<SessionId | null> =>
-  launchTask(model, projectId, learnKey.run(projectId), 'learn-run', async () => {
-    const project = projectNameOf(model, projectId);
-    let prompt: string;
-    if (failed === undefined) {
-      const detected = await command('run.detect', { projectId });
-      const hints = detected.ok ? guessText(detected.value.suggestions) : '';
-      prompt = fill(copy.agentPrompt.learnRun, { project, hints });
-      // A mobile app: the agent runs it on a simulator and reports platform, device and app id.
-      const platforms = detected.ok ? detected.value.platforms : [];
-      const first = platforms[0];
-      if (first !== undefined && first !== 'web') {
-        const kinds = detected.ok
-          ? [...new Set(detected.value.suggestions.map((s) => s.source))]
-              .filter((s) => ['expo', 'react-native', 'flutter', 'xcode', 'gradle'].includes(s))
-              .join(', ')
-          : '';
-        prompt += fill(copy.agentPrompt.learnRunDevice, {
-          platform: first,
-          kinds: kinds === '' ? '' : ` (${kinds})`,
+  launchTask(
+    model,
+    projectId,
+    learnKey.run(projectId),
+    'learn-run',
+    async () => {
+      const project = projectNameOf(model, projectId);
+      let prompt: string;
+      if (failed === undefined) {
+        const detected = await command('run.detect', {
+          projectId,
+          ...(worktreeId === null ? {} : { worktreeId }),
         });
+        const hints = detected.ok ? guessText(detected.value.suggestions) : '';
+        prompt = fill(copy.agentPrompt.learnRun, { project, hints });
+        // A mobile app: the agent runs it on a simulator and reports platform, device and app id.
+        const platforms = detected.ok ? detected.value.platforms : [];
+        const first = platforms[0];
+        if (first !== undefined && first !== 'web') {
+          const kinds = detected.ok
+            ? [...new Set(detected.value.suggestions.map((s) => s.source))]
+                .filter((s) => ['expo', 'react-native', 'flutter', 'xcode', 'gradle'].includes(s))
+                .join(', ')
+            : '';
+          prompt += fill(copy.agentPrompt.learnRunDevice, {
+            platform: first,
+            kinds: kinds === '' ? '' : ` (${kinds})`,
+          });
+        }
+      } else {
+        prompt = fill(copy.agentPrompt.fixRun, { project, command: failed.command, failure: failed.failure });
       }
-    } else {
-      prompt = fill(copy.agentPrompt.fixRun, { project, command: failed.command, failure: failed.failure });
-    }
-    return prompt;
-  });
+      return prompt;
+    },
+    undefined,
+    worktreeId,
+  );
 
 /** "Deploy": the agent works out the command for this target, deploys under a grant, and teaches Styx the command. */
 export const startLearnDeploy = async (model: ReadModel, target: Target): Promise<SessionId | null> =>

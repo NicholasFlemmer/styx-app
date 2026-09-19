@@ -300,9 +300,13 @@ export const commands = {
   },
 
   // --- run locally (the design window's dev server) ---
-  /** Suggests run commands from the repo (`package.json` scripts and the lockfile, Makefile, manage.py, Cargo.toml, go.mod). */
+  /**
+   * Suggests run commands from the folder (`package.json` scripts and the lockfile, Makefile, manage.py, Cargo.toml,
+   * go.mod). `worktreeId` is the lane the design window is looking at: the files there, committed or not, are what
+   * runs (discrepancy #103); without it, the main checkout.
+   */
   'run.detect': {
-    input: z.object({ projectId: projectIdSchema }),
+    input: z.object({ projectId: projectIdSchema, worktreeId: worktreeIdSchema.optional() }),
     output: z.object({
       suggestions: z.array(
         z.object({
@@ -328,14 +332,16 @@ export const commands = {
     }),
   },
   /**
-   * Starts (or restarts) the project's local run in its main worktree; the row lands in `model.runs`. With a device
-   * platform the simulator / emulator is booted first (`model.devices`) and the design window mirrors it.
+   * Starts (or restarts) the project's local run — in the lane it was asked from (`worktreeId`), else the main
+   * checkout; the row lands in `model.runs`. With a device platform the simulator / emulator is booted first
+   * (`model.devices`) and the design window mirrors it.
    */
   'run.start': {
     input: z.object({
       projectId: projectIdSchema,
       command: z.string().min(1),
       platform: devPlatformSchema.optional(),
+      worktreeId: worktreeIdSchema.optional(),
     }),
     output: z.object({ runId: z.string().min(1), terminalId: z.string().min(1) }),
   },

@@ -251,6 +251,7 @@ export function Workspace() {
         {mode === 'design' ? (
           <DesignPane
             projectId={projectId}
+            worktreeId={worktreeId}
             devUrl={devUrl}
             active
             run={model.runs[projectId] ?? null}

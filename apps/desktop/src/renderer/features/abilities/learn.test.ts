@@ -59,6 +59,19 @@ describe('learned abilities: the first Run locally / Deploy is a task for the pr
   });
   afterEach(() => Object.assign(window, { styx: undefined }));
 
+  it('startLearnRun with a lane: the agent works in that lane and the detection hint comes from it (discrepancy #103)', async () => {
+    const lane = fixtures.ids.worktree.fixCheckout;
+    expect(await startLearnRun(model, acme, undefined, lane)).toBe('s-learn');
+    expect(calls('run.detect')).toEqual([{ projectId: acme, worktreeId: lane }]);
+    expect(calls('session.spawn')[0]).toMatchObject({ worktree: { kind: 'existing', worktreeId: lane } });
+    // A lane that is not this project's (or is gone) falls back to main.
+    useUiStore.setState({ learning: {}, taskLaunches: {} });
+    expect(await startLearnRun(model, acme, undefined, fixtures.ids.worktree.blogMain)).toBe('s-learn');
+    expect(calls('session.spawn')[1]).toMatchObject({
+      worktree: { kind: 'existing', worktreeId: mainWorktreeOf(model, acme)?.id },
+    });
+  });
+
   it('startLearnRun: spawns the default agent in the main worktree with the learn prompt (plus the detection as a hint), remembers the session and opens progress without navigating', async () => {
     expect(await startLearnRun(model, acme)).toBe('s-learn');
     const settings = projectSettingsOfOrDefault(model, acme);

@@ -15,6 +15,7 @@ const acme = ids.project.acmeShop;
 
 const run = (over: Partial<DevRun> = {}): DevRun => ({
   projectId: acme,
+  worktreeId: null,
   runId: 'run:1',
   terminalId: 'term:1',
   command: 'pnpm dev',

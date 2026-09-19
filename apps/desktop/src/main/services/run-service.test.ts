@@ -319,6 +319,32 @@ describe('RunService', () => {
     await expect(t.app.runs.detect('proj:nope' as ProjectId)).rejects.toMatchObject({ code: 'not-found' });
   });
 
+  it("a lane: detect reads and start runs in the lane's folder, committed or not (discrepancy #103); another project's lane is refused, an archived one falls back to main", async () => {
+    const { t, pty, dir } = setup({ 'package.json': pkg({ dev: 'next dev' }) });
+    const laneDir = tmp({ 'package.json': pkg({ dev: 'vite' }), 'pnpm-lock.yaml': '' });
+    const lane = t.app.repos.worktrees.get(fixtures.ids.worktree.fixCheckout);
+    if (!lane) throw new Error('fixture lane');
+    t.app.repos.worktrees.upsert({ ...lane, path: laneDir });
+    expect(await t.app.runs.detect(acme, lane.id)).toEqual({
+      suggestions: [{ command: 'pnpm dev', source: 'package.json' }],
+      platforms: ['web'],
+    });
+    const r = await t.app.runs.start(acme, 'pnpm dev', { worktreeId: lane.id });
+    expect(pty.spawned.at(-1)).toMatchObject({ id: r.terminalId, cwd: laneDir });
+    expect(runRows(t).at(-1)).toMatchObject({ worktreeId: lane.id, command: 'pnpm dev' });
+    // Main when asked without a lane; refused for a lane of another project; main again once the lane is archived.
+    const again = await t.app.runs.start(acme, 'pnpm dev');
+    expect(pty.spawned.at(-1)).toMatchObject({ id: again.terminalId, cwd: dir });
+    expect(runRows(t).at(-1)).toMatchObject({ worktreeId: null });
+    await expect(t.app.runs.detect(acme, fixtures.ids.worktree.blogMain as string)).rejects.toMatchObject({
+      code: 'invalid-input',
+    });
+    t.app.repos.worktrees.upsert({ ...lane, path: laneDir, archivedAt: fixtures.DEMO_NOW });
+    expect((await t.app.runs.detect(acme, lane.id)).suggestions).toEqual([
+      { command: 'npm run dev', source: 'package.json' },
+    ]);
+  });
+
   it('start spawns the command through the login shell in the project folder and publishes starting → running', async () => {
     const { t, pty, dir } = setup();
     const r = await t.app.runs.start(acme, 'pnpm dev');
