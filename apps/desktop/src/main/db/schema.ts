@@ -118,6 +118,8 @@ export const worktrees = sqliteTable(
     behindBase: integer('behind_base').notNull().default(0),
     overlapsJson: text('overlaps_json').notNull().default('[]'),
     resolutionJson: text('resolution_json'),
+    /** ADR-0025 phase C: how the lane landed in the base (JSON). */
+    landingJson: text('landing_json'),
     mergedAt: integer('merged_at'),
     createdAt: integer('created_at').notNull(),
     archivedAt: integer('archived_at'),

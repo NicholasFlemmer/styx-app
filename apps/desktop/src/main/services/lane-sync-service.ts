@@ -207,8 +207,15 @@ export class LaneSyncService {
     return { merged: behind, conflict: null };
   }
 
+  /** Writes only the fields this service owns onto the row as it is now (ADR-0025: other services write theirs). */
   private save(wt: Worktree): void {
-    this.deps.repos.worktrees.upsert(wt);
+    const current = this.deps.repos.worktrees.get(wt.id) ?? wt;
+    this.deps.repos.worktrees.upsert({
+      ...current,
+      headCommit: wt.headCommit,
+      conflict: wt.conflict,
+      behindBase: wt.behindBase,
+    });
     this.deps.publisher.upsert('worktrees', [wt.id]);
   }
 }

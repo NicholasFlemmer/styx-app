@@ -25,6 +25,7 @@ import { MfaService, type MfaProvider } from './services/mfa-service';
 import type { NotificationService } from './services/notification-service';
 import { ProjectService } from './services/project-service';
 import { LaneLedgerService } from './services/lane-ledger-service';
+import { LandService } from './services/land-service';
 import { LaneSyncService } from './services/lane-sync-service';
 import {
   MergeResolveService,
@@ -232,6 +233,8 @@ export interface Container {
   checkpoints: CheckpointService;
   /** Styx finishes the merge (ADR-0025 phase B). */
   resolver: MergeResolveService;
+  /** Landing (ADR-0025 phase C): a lane into the base, pushed, undoable. */
+  land: LandService;
   /** Commit, push and PR in one step (ADR-0021); the message draft comes from the project's default agent. */
   publish: PublishService;
   /** Keep lanes current (ADR-0023): behind-base counts, `worktree.sync`, the publish gate. */
@@ -691,6 +694,33 @@ export function buildContainer(opts: ContainerOptions): Container {
         ? { mergiraf: mergirafSolver(() => pty.resolveLoginPath(), runtime.platform) }
         : {}),
   });
+  const land = new LandService({
+    repos,
+    git,
+    publisher,
+    clock,
+    transcript,
+    activity,
+    baseOf: (projectId) => projectSettingsFor(repos, projectId).baseBranch.value,
+    settingsOf: (projectId) => {
+      const s = projectSettingsFor(repos, projectId);
+      return {
+        integration: s.integration.value,
+        autoLand: s.autoLand.value,
+        checksCommand: s.checksCommand.value,
+      };
+    },
+    laneSync,
+    resolver,
+    publish,
+    runChecks:
+      opts.runChecks ??
+      checksInLoginShell(
+        () => pty.resolveLoginPath(),
+        () => pty.defaultShell(),
+        runtime.platform,
+      ),
+  });
   sessions.bind({
     revokeSessionGrants: (id) => grants.cancelSessionGrants(id),
     cancelHeldAsk: (ask) => broker.cancelAsk(ask),
@@ -709,6 +739,13 @@ export function buildContainer(opts: ContainerOptions): Container {
         .catch((e: Error) => logger.warn('lane sync: auto sync failed', { sessionId: id, error: e.message }));
     },
     limitsReported: (limits) => usage.report(limits),
+    // ADR-0025 phase C: a finished lane lands by itself when the project asked for that.
+    sessionFinished: (id) =>
+      void land
+        .maybeAutoLand(id)
+        .catch((e: Error) =>
+          logger.warn('land: automatic landing failed', { sessionId: id, error: e.message }),
+        ),
   });
 
   const container: Container = {
@@ -748,6 +785,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     laneSync,
     ledger,
     resolver,
+    land,
     usage,
     terminals,
     broker,

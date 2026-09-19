@@ -3,6 +3,7 @@ import { parsePatch } from '../../features/diff';
 import { describe, expect, it } from 'vitest';
 import {
   defaultLane,
+  landLabelOf,
   laneDiffHeader,
   laneRows,
   mergedWhen,
@@ -135,6 +136,77 @@ describe('lane overlaps (ADR-0025)', () => {
     });
     expect(lanes.find((l) => l.branch === 'feat/promo')?.overlaps).toBeNull();
     expect(laneRows(model, acme, NOW).every((l) => l.overlaps === null)).toBe(true);
+  });
+});
+
+describe('landing (ADR-0025 phase C)', () => {
+  const model = fixtures.demoReadModel();
+  const lanes = laneRows(model, acme, NOW);
+
+  it('auto mode (the default): live lanes on a branch offer Land; main and merged lanes do not', () => {
+    expect(lanes.map((l) => [l.branch, l.landLabel])).toEqual([
+      ['main', null],
+      ['fix/checkout', 'Land'],
+      ['test/flaky', 'Land'],
+      ['feat/promo', null],
+    ]);
+  });
+
+  it('landLabelOf: review mode says Merge into {base}; a conflict, a merge in progress or no branch offers nothing', () => {
+    const base = { branch: 'x', isMain: false, conflict: null, mergedAt: null, resolution: null };
+    expect(landLabelOf(base, 'review', 'main')).toBe('Merge into main');
+    expect(landLabelOf(base, 'auto', 'main')).toBe('Land');
+    expect(landLabelOf({ ...base, conflict: { file: 'a', against: 'main' } }, 'auto', 'main')).toBeNull();
+    expect(landLabelOf({ ...base, branch: null }, 'auto', 'main')).toBeNull();
+    expect(landLabelOf({ ...base, isMain: true }, 'auto', 'main')).toBeNull();
+    expect(landLabelOf({ ...base, mergedAt: 1 }, 'auto', 'main')).toBeNull();
+    const resolving = {
+      state: 'resolving' as const,
+      sessionId: null,
+      files: [],
+      preHead: 'p',
+      preTree: null,
+      mergeCommit: null,
+      attempts: 1,
+      startedAt: NOW,
+      finishedAt: null,
+      failure: null,
+    };
+    expect(landLabelOf({ ...base, resolution: resolving }, 'auto', 'main')).toBeNull();
+  });
+
+  it('a landed lane reads `landed …` and offers Undo landing while the landing is the base HEAD, Archive after', () => {
+    const m = fixtures.demoReadModel();
+    const lane = m.worktrees.byId[fixtures.ids.worktree.fixCheckout];
+    const main = m.worktrees.byId[fixtures.ids.worktree.acmeMain];
+    if (lane === undefined || main === undefined) throw new Error('fixture');
+    const landing = { commit: 'landed1', base: 'main', pushed: true, at: NOW - 60_000, undoneAt: null };
+    const withMainAt = (head: string, undoneAt: number | null = null) =>
+      laneRows(
+        {
+          ...m,
+          worktrees: {
+            ...m.worktrees,
+            byId: {
+              ...m.worktrees.byId,
+              [lane.id]: { ...lane, mergedAt: NOW - 60_000, landing: { ...landing, undoneAt } },
+              [main.id]: { ...main, headCommit: head },
+            },
+          },
+        },
+        acme,
+        NOW,
+      ).find((l) => l.branch === 'fix/checkout');
+    expect(withMainAt('landed1')).toMatchObject({
+      changes: 'landed today',
+      action: 'undo-land',
+      actionLabel: 'Undo landing',
+      landLabel: null,
+      publishLabel: null,
+    });
+    expect(withMainAt('later')).toMatchObject({ changes: 'landed today', action: 'archive' });
+    // Undone: an ordinary merged row again (mergedAt is cleared by the command; here only the landing says so).
+    expect(withMainAt('landed1', NOW)).toMatchObject({ changes: 'merged today', action: 'archive' });
   });
 });
 

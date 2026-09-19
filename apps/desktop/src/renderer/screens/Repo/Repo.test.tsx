@@ -141,6 +141,47 @@ describe('Repo screen', () => {
     expect(rowOf('test/flaky').getAttribute('data-inv')).toBeNull();
   });
 
+  it('live lanes offer Land (auto mode), which opens the land modal; a landed lane offers Undo landing (ADR-0025 phase C)', () => {
+    const m = fixtures.demoReadModel();
+    const promo = m.worktrees.byId[fixtures.ids.worktree.featPromo];
+    const main = m.worktrees.byId[fixtures.ids.worktree.acmeMain];
+    if (promo === undefined || main === undefined) throw new Error('fixture');
+    useReadModel.getState().replaceModel(
+      {
+        ...m,
+        worktrees: {
+          ...m.worktrees,
+          byId: {
+            ...m.worktrees.byId,
+            [promo.id]: {
+              ...promo,
+              landing: {
+                commit: 'land1',
+                base: 'main',
+                pushed: false,
+                at: promo.mergedAt ?? 0,
+                undoneAt: null,
+              },
+            },
+            [main.id]: { ...main, headCommit: 'land1' },
+          },
+        },
+      },
+      'connected',
+    );
+    render(<Repo />);
+    expect(within(rowOf('main')).queryByRole('button', { name: 'Land' })).toBeNull();
+    fireEvent.click(within(rowOf('test/flaky')).getByRole('button', { name: 'Land' }));
+    expect(useUiStore.getState().overlays).toMatchObject([
+      { kind: 'modal', modal: 'land', worktreeId: fixtures.ids.worktree.testFlaky },
+    ]);
+    expect(rowOf('test/flaky').getAttribute('data-inv')).toBeNull();
+    fireEvent.click(within(rowOf('feat/promo')).getByRole('button', { name: 'Undo landing' }));
+    expect(commandMock).toHaveBeenCalledWith('worktree.undoLand', {
+      worktreeId: fixtures.ids.worktree.featPromo,
+    });
+  });
+
   it('a lane with a PR page shows the PR as a link that opens it in the browser', () => {
     render(<Repo />);
     fireEvent.click(within(rowOf('fix/checkout')).getByRole('button', { name: '#214 draft' }));

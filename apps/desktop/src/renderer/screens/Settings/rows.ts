@@ -479,6 +479,8 @@ const agentDefaultsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => 
       INTEGRATION_OPTIONS,
       true,
     ),
+    // ADR-0025 phase C: off until trusted; a finished lane then lands on its own when the checks pass.
+    projectRow(model, ctx, 'autoLand', r.autoLand, 'autoLand', onOff, isOn, ON_OFF, true),
   ];
 };
 

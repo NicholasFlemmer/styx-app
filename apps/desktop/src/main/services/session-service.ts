@@ -110,6 +110,8 @@ export interface SessionHooks {
   turnSettled?: (sessionId: SessionId) => void;
   /** A CLI reported its account rate limits (UsageService keeps the latest per agent). */
   limitsReported?: (limits: AgentLimits) => void;
+  /** The session reached `done` (ADR-0025 phase C: a lane may land on its own). */
+  sessionFinished?: (sessionId: SessionId) => void;
 }
 
 export interface SpawnInput {
@@ -451,6 +453,7 @@ export class SessionService {
         behindBase: 0,
         overlaps: [],
         resolution: null,
+        landing: null,
         mergedAt: null,
         createdAt: now,
         archivedAt: null,
@@ -1938,6 +1941,7 @@ export class SessionService {
         projectId: next.projectId,
         sessionId: next.id,
       });
+      this.hooks?.sessionFinished?.(next.id);
     }
     return next;
   }

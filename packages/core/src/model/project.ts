@@ -94,6 +94,16 @@ export const worktreeResolutionSchema = z.object({
 });
 export type WorktreeResolution = z.infer<typeof worktreeResolutionSchema>;
 
+/** A lane landed in the base branch (ADR-0025 phase C): the landing commit on the base, whether it was pushed, and if it was undone. */
+export const worktreeLandingSchema = z.object({
+  commit: z.string(),
+  base: z.string(),
+  pushed: z.boolean(),
+  at: timestampSchema,
+  undoneAt: timestampSchema.nullable(),
+});
+export type WorktreeLanding = z.infer<typeof worktreeLandingSchema>;
+
 export const worktreeSchema = z.object({
   id: worktreeIdSchema,
   repoId: repoIdSchema,
@@ -118,6 +128,8 @@ export const worktreeSchema = z.object({
   overlaps: z.array(worktreeOverlapSchema).default([]),
   /** A base merge being finished with an agent, or how the last one ended (ADR-0025 phase B). */
   resolution: worktreeResolutionSchema.nullable().default(null),
+  /** How this lane landed in the base (phase C); null until it does. */
+  landing: worktreeLandingSchema.nullable().default(null),
   mergedAt: timestampSchema.nullable(),
   createdAt: timestampSchema,
   archivedAt: timestampSchema.nullable(),

@@ -999,6 +999,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       checking: 'checking the merge…',
       resolved: 'brought in {base} · {files} resolved',
       resolveFailed: 'could not merge {base} · {file}',
+      /** ADR-0025 phase C. */
+      landed: 'landed {when}',
     },
     pr: { none: '—', draft: '#{n} draft', open: '#{n} open', merged: '#{n} ✓', closed: '#{n} closed' },
     actions: {
@@ -1010,6 +1012,10 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       /** ADR-0025 phase B. */
       undoMerge: 'Undo merge',
       reviewMerge: 'Review merge',
+      /** ADR-0025 phase C: the lane's verb in auto mode; the reviewer's local merge; taking a landing back. */
+      land: 'Land',
+      mergeIntoBase: 'Merge into {base}',
+      undoLand: 'Undo landing',
     },
     /**
      * Plain-folder empty state (owner decision, not in §10; spec tone): any folder is a project, git is optional.
@@ -1229,6 +1235,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       /** ADR-0025. */
       autoSync: 'Bring in the base branch',
       integration: 'Merging',
+      autoLand: 'Land finished lanes by themselves',
     },
     values: {
       theme: { system: 'System', dark: 'Dark', light: 'Light' },
@@ -1472,6 +1479,52 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     /** Review mode (ADR-0025): a conflicting turn-end sync is not attempted; the human asks the agent to resolve it. */
     conflictReview:
       '{base} conflicts with this lane in {file}. Resolve on Repo asks {agent} to merge it, both sides kept.',
+  },
+  /** Landing (ADR-0025 phase C): a lane's work goes into the base branch — committed, merged, pushed, undoable — in plain words. */
+  land: {
+    title: 'Land {branch} into {base}',
+    lead: 'What happened on {branch}, drafted by {agent} from the changes. Edit it if you like: it becomes the record in {base}.',
+    generating: 'Drafting the summary…',
+    messageLabel: 'Summary',
+    files: '{n} files changed',
+    filesOne: '1 file changed',
+    loading: 'Looking at the changes…',
+    willPush: 'Then {base} is pushed to {remote}.',
+    noPush: 'No remote: {base} stays on this machine.',
+    run: 'Land',
+    landing: 'Landing {branch}…',
+    done: '{branch} is now in {base}{pushed}.',
+    failed: 'Not landed: {error}',
+    pushedSuffix: ' and on {remote}',
+    /** The lane's chat and the Home feed. */
+    chat: 'Your work on {branch} is now in {base}{pushed}. Undo is on the Repo lane.',
+    chatAuto:
+      'Your work on {branch} is now in {base}{pushed} — landed on its own once the checks passed. Undo is on the Repo lane.',
+    dirtyBase: 'The main folder has uncommitted changes on {base}. Commit or discard them first.',
+    baseNotCheckedOut: 'The main folder is on {current}, not {base}.',
+    busy: '{agent} is mid-turn on {branch}; wait for it to finish before landing.',
+    resolving:
+      'Bringing {base} in first hit a conflict; {agent} is merging it now. Land again when the lane says it is done.',
+    checksFailed: 'The checks failed (`{command}` exited {code}); {branch} was not landed.',
+    conflict:
+      'Landing {branch} hit a conflict in {file}. The merge was undone; bring {base} in first, then land again.',
+    nothing: 'Nothing to land: {branch} has no changes {base} does not already have.',
+    alreadyLanded: '{branch} has already landed.',
+    undone: 'Took {branch} back out of {base}{pushed}. The lane is live again.',
+    undoMoved: '{base} has moved on since that landing; undo it by hand.',
+    undoNothing: 'Nothing to undo on this lane.',
+    steps: {
+      commit: 'committed {commit}',
+      sync: 'brought in {base} ({n})',
+      checks: 'checks passed',
+      merge: 'merged into {base} ({commit})',
+      push: 'pushed {base}',
+    },
+    activity: {
+      landed: 'landed {branch} into {base}',
+      landedAuto: 'landed {branch} into {base} on its own',
+      undone: 'took {branch} back out of {base}',
+    },
   },
   /** Styx finishes the merge (ADR-0025 phase B): chat lines, the Home feed, the reasons it hands back. */
   resolve: {

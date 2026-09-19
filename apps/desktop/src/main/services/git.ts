@@ -471,6 +471,58 @@ export class GitService {
     await this.git.run(['-c', 'user.name=Styx', '-c', 'user.email=styx@localhost', ...args], path);
   }
 
+  /** Runs a commit-making command as the user, with Styx's identity only when git has none (see `commit`). */
+  private async asUserOrStyx(args: string[], path: string): Promise<{ ok: boolean; output: string }> {
+    const r = await this.git.run(args, path, { reject: false });
+    if (r.exitCode === 0) return { ok: true, output: '' };
+    if (
+      /tell me who you are|empty ident|auto-detection is disabled|no (name|email) was given|user\.(name|email)/i.test(
+        r.stderr,
+      )
+    ) {
+      const r2 = await this.git.run(
+        ['-c', 'user.name=Styx', '-c', 'user.email=styx@localhost', ...args],
+        path,
+        { reject: false },
+      );
+      return { ok: r2.exitCode === 0, output: (r2.stderr || r2.stdout).trim() };
+    }
+    return { ok: false, output: (r.stderr || r.stdout).trim() };
+  }
+
+  /** `git merge --no-ff -m <message> <ref>`: a landing is one commit on the base naming the lane. A conflict returns `ok: false` mid-merge. */
+  mergeNoFf(path: string, ref: string, message: string): Promise<{ ok: boolean; output: string }> {
+    return this.asUserOrStyx(['merge', '--no-ff', '--no-edit', '-m', message, ref], path);
+  }
+
+  /** `git revert -m 1 <merge>`: takes a landing back out of the base as a new commit (history stays). */
+  revertMerge(path: string, commit: string): Promise<{ ok: boolean; output: string }> {
+    return this.asUserOrStyx(['revert', '--no-edit', '-m', '1', commit], path);
+  }
+
+  /** Per-file numstat between two refs in the merge-base form (`from...to`). */
+  async numstatFiles(
+    path: string,
+    from: string,
+    to: string,
+  ): Promise<{ path: string; added: number; removed: number }[]> {
+    const r = await this.git.run(['diff', '--numstat', '--no-renames', `${from}...${to}`], path, {
+      reject: false,
+    });
+    if (r.exitCode !== 0) return [];
+    const out: { path: string; added: number; removed: number }[] = [];
+    for (const line of r.stdout.split('\n')) {
+      const m = /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(line);
+      if (!m) continue;
+      out.push({
+        path: m[3] ?? '',
+        added: m[1] === '-' ? 0 : Number(m[1]),
+        removed: m[2] === '-' ? 0 : Number(m[2]),
+      });
+    }
+    return out;
+  }
+
   async addRemote(path: string, name: string, url: string): Promise<void> {
     await this.git.run(['remote', 'add', name, url], path);
   }

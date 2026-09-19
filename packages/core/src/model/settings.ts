@@ -90,6 +90,8 @@ export const projectSettingsSchema = z.object({
   autoSync: autoSyncSchema,
   hotspots: z.array(z.string()),
   integration: integrationSchema,
+  /** Auto mode only (ADR-0025 phase C): land a lane by itself when its session finishes and the checks pass. Off until trusted. */
+  autoLand: z.boolean(),
   /**
    * What proves a merge is good (`pnpm typecheck && pnpm test` …): run in the lane before a resolved merge is
    * committed. Learned by the agent the first time (`remember_command` kind `checks`), editable in
@@ -132,6 +134,7 @@ export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   autoSync: 'turn',
   hotspots: [],
   integration: 'auto',
+  autoLand: false,
   checksCommand: null,
   branchPrefix: 'agent/',
   worktreeLocation: 'sibling',

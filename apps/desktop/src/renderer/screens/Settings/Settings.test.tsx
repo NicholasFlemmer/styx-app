@@ -132,6 +132,7 @@ describe('sectionRows', () => {
       ['syncBeforePublish', false],
       ['autoSync', false],
       ['integration', false],
+      ['autoLand', false],
     ]);
   });
 
@@ -159,6 +160,10 @@ describe('sectionRows', () => {
     expect(integration?.change.kind === 'project' && integration.change.patch('review')).toEqual({
       integration: 'review',
     });
+    // Phase C: landing by itself is opt-in.
+    const autoLand = rows.find((r) => r.id === 'autoLand');
+    expect(autoLand).toMatchObject({ label: 'Land finished lanes by themselves', value: 'off' });
+    expect(autoLand?.change.kind === 'project' && autoLand.change.patch('on')).toEqual({ autoLand: true });
   });
 
   it('Agent defaults: Model lists the CLI aliases; Permission mode / Effort rows patch project settings (discrepancy #54)', () => {
@@ -294,6 +299,7 @@ describe('sectionRows', () => {
       'syncBeforePublish',
       'autoSync',
       'integration',
+      'autoLand',
     ]);
     expect(geminiRows.find((r) => r.id === 'model')?.options.map((o) => o.value)).toEqual(['default']);
   });
@@ -322,6 +328,7 @@ describe('sectionRows', () => {
       'On',
       'After every turn',
       'Keep my project up to date for me',
+      'Off',
     ]);
     expect(values('project:env')).toEqual(['Keychain', 'Per grant', '.styx/project.json']);
   });

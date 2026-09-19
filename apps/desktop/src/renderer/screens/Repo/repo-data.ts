@@ -20,7 +20,7 @@ import type { DotTone } from '@styx/ui';
 
 const DAY = 24 * 60 * 60_000;
 
-export type LaneAction = 'open' | 'diff' | 'resolve' | 'archive' | 'undo-merge';
+export type LaneAction = 'open' | 'diff' | 'resolve' | 'archive' | 'undo-merge' | 'undo-land';
 
 /** One Repo table row (prototype `lanes`). */
 export interface Lane {
@@ -41,6 +41,11 @@ export interface Lane {
    * that has it (or main); none for merged or conflicted lanes, or a lane on no branch.
    */
   publishLabel: string | null;
+  /**
+   * Landing (ADR-0025 phase C): `Land` in auto mode, `Merge into {base}` in review mode, for a live lane on a
+   * branch with nothing in the way; null for main, merged, conflicted or resolving lanes.
+   */
+  landLabel: string | null;
   sessionId: SessionId | null;
   isMain: boolean;
   conflict: Worktree['conflict'];
@@ -55,6 +60,7 @@ const ACTION_LABEL: Record<LaneAction, string> = {
   diff: copy.repo.actions.diff,
   resolve: copy.repo.actions.resolve,
   'undo-merge': copy.repo.actions.undoMerge,
+  'undo-land': copy.repo.actions.undoLand,
   archive: copy.repo.actions.archive,
 };
 
@@ -108,6 +114,18 @@ export const publishLabelOf = (
   return w.isMain || hasOpenPr(w.pr) ? copy.publish.button : copy.publish.buttonPr;
 };
 
+/** The lane's landing verb (ADR-0025 phase C), by the project's merging mode; see `Lane.landLabel`. */
+export const landLabelOf = (
+  w: Pick<Worktree, 'branch' | 'isMain' | 'conflict' | 'mergedAt' | 'resolution'>,
+  integration: 'auto' | 'review',
+  base: string,
+): string | null => {
+  if (w.isMain || w.branch === null || w.conflict !== null || w.mergedAt !== null) return null;
+  if (w.resolution !== null && (w.resolution.state === 'resolving' || w.resolution.state === 'checking'))
+    return null;
+  return integration === 'auto' ? copy.repo.actions.land : fill(copy.repo.actions.mergeIntoBase, { base });
+};
+
 /** Lane order (prototype): main, then live worktrees in model order, merged ones last (they only await Archive). */
 const laneRank = (w: Worktree): number => (w.isMain ? 0 : w.mergedAt === null ? 1 : 2);
 
@@ -117,7 +135,9 @@ export const laneRows = (model: ReadModel, projectId: ProjectId, now: number): L
   const worktrees = rows(model.worktrees)
     .filter((w) => w.projectId === projectId && w.archivedAt === null)
     .sort((a, b) => laneRank(a) - laneRank(b));
-  const base = projectSettingsOfOrDefault(model, projectId).baseBranch;
+  const settings = projectSettingsOfOrDefault(model, projectId);
+  const base = settings.baseBranch;
+  const mainHead = worktrees.find((w) => w.isMain)?.headCommit ?? null;
   return worktrees.map((w): Lane => {
     const session = w.owner.kind === 'session' ? (model.sessions.byId[w.owner.sessionId] ?? null) : null;
     const owner = session === null ? copy.repo.you : agentLabel(session);
@@ -147,6 +167,10 @@ export const laneRows = (model: ReadModel, projectId: ProjectId, now: number): L
     } else if (res !== null && res.state === 'done' && res.mergeCommit === w.headCommit) {
       changes = fill(copy.repo.changes.resolved, { base, files: res.files.length });
       action = 'undo-merge';
+    } else if (merged && w.landing !== null && w.landing.undoneAt === null) {
+      // ADR-0025 phase C: landed from Styx; Undo while the landing is still the base's HEAD, Archive after.
+      changes = fill(copy.repo.changes.landed, { when: mergedWhen(w.mergedAt ?? now, now) });
+      action = w.landing.commit === mainHead ? 'undo-land' : 'archive';
     } else if (merged) {
       changes = fill(copy.repo.changes.merged, { when: mergedWhen(w.mergedAt ?? now, now) });
       action = 'archive';
@@ -182,6 +206,7 @@ export const laneRows = (model: ReadModel, projectId: ProjectId, now: number): L
           ? { n: w.behindBase, base, label: fill(copy.repo.actions.sync, { base }) }
           : null,
       publishLabel: publishLabelOf(w),
+      landLabel: landLabelOf(w, settings.integration, base),
       sessionId: session?.id ?? null,
       isMain: w.isMain,
       conflict: w.conflict,

@@ -25,6 +25,8 @@ export type ModalPayload =
   | { modal: 'deploy-setup'; projectId: ProjectId }
   /** Commit, push and PR in one step for a worktree (Repo lane, mode strip, palette; ADR-0021). */
   | { modal: 'publish'; worktreeId: WorktreeId }
+  /** Land a lane into the base branch (Repo lane; ADR-0025 phase C). */
+  | { modal: 'land'; worktreeId: WorktreeId }
   /**
    * Connect agent (Settings › Agents, onboarding step 3, the Spawn modal's "Fix connection"): verify / sign in for one
    * CLI. `returnTo` re-opens the Spawn modal for that project when the connect modal closes.

@@ -716,6 +716,33 @@ export const commands = {
   },
   /** Puts the lane back to before its last resolved merge (HEAD and the working tree), while nothing was committed on top. */
   'worktree.undoResolve': { input: z.object({ worktreeId: worktreeIdSchema }), output: ok },
+  /**
+   * Landing (ADR-0025 phase C): what the Land modal shows before anything happens — the files the lane changes
+   * against the base (committed and not), and whether the base will be pushed afterwards (it has a remote).
+   */
+  'worktree.landPreview': {
+    input: z.object({ worktreeId: worktreeIdSchema }),
+    output: z.object({
+      base: z.string(),
+      files: z.array(z.object({ path: z.string(), added: z.number().int(), removed: z.number().int() })),
+      willPush: z.boolean(),
+      remote: z.string().nullable(),
+    }),
+  },
+  /**
+   * Land the lane: commit what is uncommitted, bring the base in (a conflict goes to the resolver first), run
+   * the checks, merge the lane into the base with `message` as the record (`--no-ff`), push the base when it has
+   * a remote, and keep the lane as "landed" with Undo. One landing at a time per project.
+   */
+  'worktree.land': {
+    input: z.object({
+      worktreeId: worktreeIdSchema,
+      message: z.object({ title: z.string().min(1), body: z.string() }),
+    }),
+    output: z.object({ commit: z.string(), pushed: z.boolean(), steps: z.array(z.string()) }),
+  },
+  /** Takes a landing back out of the base (a revert of the landing commit, pushed again if the landing was) while it is the base's HEAD. */
+  'worktree.undoLand': { input: z.object({ worktreeId: worktreeIdSchema }), output: ok },
   'worktree.diff': {
     input: z.object({ worktreeId: worktreeIdSchema, file: z.string().optional() }),
     output: z.object({ diff: z.string() }),

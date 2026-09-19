@@ -81,6 +81,7 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
       behindBase: 0,
       overlaps: [],
       resolution: null,
+      landing: null,
       mergedAt: null,
       createdAt: clock.now(),
       archivedAt: null,
@@ -109,6 +110,13 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
   bus.register('worktree.resolve', ({ worktreeId }) => app.resolver.resolve(worktreeId));
   bus.register('worktree.undoResolve', async ({ worktreeId }) => {
     await app.resolver.undo(worktreeId);
+    return {};
+  });
+  // Landing (ADR-0025 phase C).
+  bus.register('worktree.landPreview', ({ worktreeId }) => app.land.preview(worktreeId));
+  bus.register('worktree.land', ({ worktreeId, message }) => app.land.land(worktreeId, message));
+  bus.register('worktree.undoLand', async ({ worktreeId }) => {
+    await app.land.undo(worktreeId);
     return {};
   });
 

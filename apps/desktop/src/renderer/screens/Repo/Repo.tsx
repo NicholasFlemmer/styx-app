@@ -87,6 +87,9 @@ const runAction = (lane: Lane): void => {
     case 'undo-merge':
       void command('worktree.undoResolve', { worktreeId: lane.worktreeId });
       return;
+    case 'undo-land':
+      void command('worktree.undoLand', { worktreeId: lane.worktreeId });
+      return;
     case 'diff':
       return;
   }
@@ -137,6 +140,11 @@ export function Repo() {
   const onPublish = (lane: Lane) => (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     pushOverlay({ kind: 'modal', modal: 'publish', worktreeId: lane.worktreeId });
+  };
+  /** Land the lane into the base (ADR-0025 phase C): summary drafted by the agent, checks, merge, push, Undo. */
+  const onLand = (lane: Lane) => (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    pushOverlay({ kind: 'modal', modal: 'land', worktreeId: lane.worktreeId });
   };
   const onOpenPr = (lane: Lane) => (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
@@ -262,6 +270,11 @@ export function Repo() {
                     data-action="publish"
                   >
                     {lane.publishLabel}
+                  </button>
+                ) : null}
+                {lane.landLabel !== null ? (
+                  <button type="button" className={s['action']} onClick={onLand(lane)} data-action="land">
+                    {lane.landLabel}
                   </button>
                 ) : null}
                 <button
