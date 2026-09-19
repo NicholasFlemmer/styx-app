@@ -1,7 +1,10 @@
 import type { AskId, SessionId } from '../ids';
 import type { PausedReason, PendingAsk, Session, SessionState } from '../model/session';
 
-/** Spec §1: idle ─start─▶ working ─ask─▶ needs-you ─ask-resolved─▶ working; finish → done; error → paused ─resolve─▶ working. */
+/**
+ * Spec §1: idle ─start─▶ working ─ask─▶ needs-you ─ask-resolved─▶ working; finish → done; error → paused ─resolve─▶ working.
+ * Owner addition (docs/handoff-discrepancies #88): done ─reopen─▶ idle, so a finished session can be picked up again.
+ */
 export type SessionEvent =
   | { type: 'start' }
   | { type: 'ask'; askId: AskId }
@@ -11,6 +14,8 @@ export type SessionEvent =
   /** The user held the agent from the chat (distinct from `error`, which is a fault the app detected). */
   | { type: 'pause' }
   | { type: 'resolve' }
+  /** The user brings a finished session back (Done card → Reopen); the service relaunches its CLI, resuming the conversation where it can. */
+  | { type: 'reopen' }
   | { type: 'activity' }
   | { type: 'quiet' };
 
@@ -97,6 +102,7 @@ const TABLE: Record<SessionState, Row> = {
     error: pause,
     pause: holdByUser,
     resolve: invalid,
+    reopen: invalid,
     activity: () => ok('working'),
     quiet: invalid,
   },
@@ -108,6 +114,7 @@ const TABLE: Record<SessionState, Row> = {
     error: pause,
     pause: holdByUser,
     resolve: invalid,
+    reopen: invalid,
     activity: stay('working'),
     quiet: () => ok('idle'),
   },
@@ -121,6 +128,7 @@ const TABLE: Record<SessionState, Row> = {
     /** Pausing with an ask open is allowed: the ask stays open and answering it later still works. */
     pause: holdByUser,
     resolve: invalid,
+    reopen: invalid,
     /** needs-you never times out (spec §1). */
     activity: stay('needs-you'),
     quiet: stay('needs-you'),
@@ -133,6 +141,8 @@ const TABLE: Record<SessionState, Row> = {
     error: invalid,
     pause: invalid,
     resolve: invalid,
+    /** Back to idle with nothing to undo: `finish` already cancelled asks, grants and timers; the relaunch's `start` follows. */
+    reopen: () => ok('idle'),
     activity: invalid,
     quiet: invalid,
   },
@@ -149,6 +159,7 @@ const TABLE: Record<SessionState, Row> = {
       const next = afterAskResolved(ctx);
       return { ...next, effects: [{ type: 'clearBanner', sessionId: ctx.sessionId }, ...next.effects] };
     },
+    reopen: invalid,
     activity: invalid,
     quiet: invalid,
   },
@@ -172,6 +183,7 @@ export const SESSION_EVENT_TYPES: readonly SessionEventType[] = [
   'error',
   'pause',
   'resolve',
+  'reopen',
   'activity',
   'quiet',
 ];

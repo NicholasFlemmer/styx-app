@@ -197,8 +197,8 @@ describe('boardColumns', () => {
       ['shell', '1h', 'Open'],
     ]);
     expect(cols[2]?.items.map((c) => [c.agent, c.age, c.note, c.cta])).toEqual([
-      ['Cursor', '1d', 'PR #212 opened, merged yesterday', 'Archive'],
-      ['Claude', '2d', '2 commits pushed', 'Archive'],
+      ['Cursor', '1d', 'PR #212 opened, merged yesterday', 'Reopen'],
+      ['Claude', '2d', '2 commits pushed', 'Reopen'],
     ]);
     expect(cols[0]?.items[0]).toMatchObject({
       needs: true,

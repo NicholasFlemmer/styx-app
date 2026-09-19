@@ -106,6 +106,8 @@ export const copy = {
       reviewGrant: 'Review grant',
       reviewPlan: 'Review plan',
       archive: 'Archive',
+      /** Done cards (owner addition, docs/handoff-discrepancies #88): Reopen is the CTA, Archive moves to the ghost slot. */
+      reopen: 'Reopen',
       deny: 'Deny',
       spawn: '+ Spawn agent',
     },
@@ -147,6 +149,9 @@ export const copy = {
       resume: 'Resume',
       paused: 'paused — the agent stops at its next tool call',
       resumed: 'resumed',
+      /** Done card → Reopen (owner addition #88): whether the CLI picks its earlier conversation back up or starts over. */
+      reopened: 'reopened — continuing the earlier conversation',
+      reopenedFresh: 'reopened — {agent} starts a new conversation; the messages above are kept',
       cycleMode: '⇧⇥ mode',
       interrupted: 'interrupted',
       /** A Bash tool call reached a cloud CLI by absolute path, skipping the shim (owner decision: warn, do not block). */

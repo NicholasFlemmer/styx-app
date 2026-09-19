@@ -43,6 +43,11 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
     return {};
   });
 
+  bus.register('session.reopen', async ({ sessionId }) => {
+    await sessions.reopen(sessionId);
+    return {};
+  });
+
   bus.register('session.close', ({ sessionId }) => {
     sessions.close(sessionId);
     return {};

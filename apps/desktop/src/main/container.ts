@@ -25,7 +25,7 @@ import { PtyLog } from './services/pty-log';
 import { PtyService } from './services/pty-service';
 import { RefreshScheduler } from './services/refresh-scheduler';
 import { RetentionJob } from './services/retention-job';
-import { isLoopbackUrl, RunService } from './services/run-service';
+import { isLoopbackUrl, RunService, type ProbeAnswer } from './services/run-service';
 import { commandCarriesSecret } from './services/logger';
 import { SessionService } from './services/session-service';
 import { StreamRunner, type StreamRunnerLike } from './services/stream-runner';
@@ -141,7 +141,7 @@ export interface ContainerOptions {
   /** Runs a CLI status command for AgentService (`claude auth status --json` …); faked in tests. */
   exec?: (bin: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>;
   /** Does a dev-server URL answer? (RunService); faked in tests so nothing is ever probed for real. */
-  probe?: (url: string) => Promise<boolean>;
+  probe?: (url: string) => Promise<boolean | ProbeAnswer>;
 }
 
 export interface Container {

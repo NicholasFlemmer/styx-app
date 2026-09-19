@@ -35,7 +35,7 @@ export const NeedsYou: Story = {
   },
 };
 export const Done: Story = {
-  args: { tone: 'done', agent: 'Cursor', age: '1d', branch: 'feat/promo', note: 'PR #212 opened, merged yesterday', actions: <Button>Archive</Button> },
+  args: { tone: 'done', agent: 'Cursor', age: '1d', branch: 'feat/promo', note: 'PR #212 opened, merged yesterday', actions: <><Button>Reopen</Button><Button variant="ghost">Archive</Button></> },
 };
 export const Idle: Story = { args: { agent: 'Gemini', age: '—', branch: 'docs', note: 'Idle' } };
 
@@ -44,7 +44,7 @@ export const Matrix: Story = {
     <div>
       <Card {...a} tone="needs" agent="Codex" note="Requesting Supabase prod · read + write" actions={<><Button>Review grant</Button><Button variant="ghost">Deny</Button></>} />
       <Card {...a} tone="working" />
-      <Card {...a} tone="done" agent="Cursor" note="PR #212 opened, merged yesterday" actions={<Button>Archive</Button>} />
+      <Card {...a} tone="done" agent="Cursor" note="PR #212 opened, merged yesterday" actions={<><Button>Reopen</Button><Button variant="ghost">Archive</Button></>} />
       <Card {...a} tone="working" inv />
     </div>
   ),

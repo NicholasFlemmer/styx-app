@@ -34,6 +34,7 @@ const EVENTS: Record<SessionEventType, SessionEvent> = {
   error: { type: 'error', reason: 'conflict' },
   pause: { type: 'pause' },
   resolve: { type: 'resolve' },
+  reopen: { type: 'reopen' },
   activity: { type: 'activity' },
   quiet: { type: 'quiet' },
 };
@@ -48,6 +49,7 @@ const EXPECTED: Record<SessionState, Record<SessionEventType, SessionState | nul
     error: 'paused',
     pause: 'paused',
     resolve: null,
+    reopen: null,
     activity: 'working',
     quiet: null,
   },
@@ -59,6 +61,7 @@ const EXPECTED: Record<SessionState, Record<SessionEventType, SessionState | nul
     error: 'paused',
     pause: 'paused',
     resolve: null,
+    reopen: null,
     activity: 'working',
     quiet: 'idle',
   },
@@ -70,6 +73,7 @@ const EXPECTED: Record<SessionState, Record<SessionEventType, SessionState | nul
     error: 'paused',
     pause: 'paused',
     resolve: null,
+    reopen: null,
     activity: 'needs-you',
     quiet: 'needs-you',
   },
@@ -81,6 +85,7 @@ const EXPECTED: Record<SessionState, Record<SessionEventType, SessionState | nul
     error: null,
     pause: null,
     resolve: null,
+    reopen: 'idle',
     activity: null,
     quiet: null,
   },
@@ -92,6 +97,7 @@ const EXPECTED: Record<SessionState, Record<SessionEventType, SessionState | nul
     error: 'paused',
     pause: 'paused',
     resolve: 'working',
+    reopen: null,
     activity: null,
     quiet: null,
   },
@@ -113,6 +119,14 @@ describe('session machine: every (state, event) pair', () => {
 });
 
 describe('session machine: effects and guards', () => {
+  it('reopen from done carries no effects and no paused reason: finish already cancelled asks, grants and timers', () => {
+    expect(transition('done', EVENTS.reopen, ctx())).toEqual({
+      state: 'idle',
+      pausedReason: null,
+      effects: [],
+    });
+  });
+
   it('ask from working notifies when the session wants notifications', () => {
     const r = transition('working', EVENTS.ask, ctx());
     expect(r?.effects).toEqual([{ type: 'notify', sessionId, askId }]);

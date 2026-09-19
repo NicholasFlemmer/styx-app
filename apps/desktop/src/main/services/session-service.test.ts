@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fixtures, MAX_FILE_ATTACHMENT_BYTES, MAX_IMAGE_BYTES } from '@styx/core';
+import { copy, fixtures, MAX_FILE_ATTACHMENT_BYTES, MAX_IMAGE_BYTES } from '@styx/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
 import { PtyService } from './pty-service';
@@ -937,6 +937,73 @@ describe('SessionService Claude Code parity (stream)', () => {
     expect(flag(args, '--resume')).toBe('cli-sess-9');
     expect(flag(args, '--model')).toBe('sonnet');
     expect(stream.spawned[0]!.args).not.toContain('--resume');
+  });
+
+  it('session.reopen: a finished session comes back with its transcript, relaunched on its CLI conversation', async () => {
+    const { app: a, clock } = app();
+    const { session, worktree } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, {
+      type: 'init',
+      chatId: 'cli-sess-3',
+      model: 'claude-opus-4-1',
+      permissionMode: 'default',
+      slashCommands: [],
+    });
+    // Only a finished session reopens.
+    expect(await a.bus.dispatch(sender, 'session.reopen', { sessionId: session.id })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-transition' },
+    });
+    await a.bus.dispatch(sender, 'session.stop', { sessionId: session.id });
+    expect(a.sessions.get(session.id)).toMatchObject({ state: 'done', endedAt: DEMO_NOW, exitCode: 0 });
+    a.repos.worktrees.upsert({ ...a.repos.worktrees.get(worktree.id)!, owner: { kind: 'user' } });
+
+    clock.advance(5_000);
+    expect(await a.bus.dispatch(sender, 'session.reopen', { sessionId: session.id })).toMatchObject({
+      ok: true,
+    });
+    expect(a.sessions.get(session.id)).toMatchObject({
+      state: 'working',
+      endedAt: null,
+      exitCode: null,
+      pid: 777,
+      cliSessionId: 'cli-sess-3',
+      lastActivityAt: DEMO_NOW + 5_000,
+    });
+    // Same worktree, taken back; the CLI resumes its own conversation and replays nothing.
+    expect(a.repos.worktrees.get(worktree.id)?.owner).toEqual({ kind: 'session', sessionId: session.id });
+    expect(stream.spawned).toHaveLength(2);
+    const again = stream.spawned[1]!;
+    expect(flag(again.args, '--resume')).toBe('cli-sess-3');
+    expect(again.firstMessage).toBeNull();
+    expect(again.cwd).toBe(worktree.path);
+    expect(again.env['STYX_TOKEN']).not.toBe(stream.spawned[0]!.env['STYX_TOKEN']);
+    // The transcript is kept and says the conversation continues; Home hears about it.
+    expect(a.repos.transcripts.last(session.id).map((m) => [m.payload.kind, m.body])).toEqual([
+      ['user', 'Fix it'],
+      ['system', copy.chat.controls.reopened],
+    ]);
+    expect(a.repos.activity.recent(1)[0]).toMatchObject({
+      who: 'Claude',
+      what: 'acme-shop · reopened on feat/promo',
+      sessionId: session.id,
+    });
+    expect(a.repos.projects.get(ids.project.acmeShop)?.lastActivityAt).toBe(DEMO_NOW + 5_000);
+
+    // Once archived it stays archived; a session whose CLI never reported an id says it starts over.
+    await a.bus.dispatch(sender, 'session.stop', { sessionId: session.id });
+    a.sessions.archive(session.id);
+    expect(await a.bus.dispatch(sender, 'session.reopen', { sessionId: session.id })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-transition' },
+    });
+    const fresh = await a.sessions.spawn(spawnInput('claude', ids.worktree.testFlaky, ''));
+    a.sessions.stop(fresh.session.id);
+    await a.sessions.reopen(fresh.session.id);
+    expect(stream.spawned[3]!.args).not.toContain('--resume');
+    expect(systemLines(a, fresh.session.id)).toEqual([
+      'reopened — Claude starts a new conversation; the messages above are kept',
+    ]);
   });
 
   it.each([

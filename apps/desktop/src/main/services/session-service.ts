@@ -836,6 +836,50 @@ export class SessionService {
   }
 
   /**
+   * Brings a finished session back (board Done card → Reopen; owner addition, docs/handoff-discrepancies #88 — §1
+   * has `done` as terminal). The row leaves `done` for `idle` with its transcript, worktree and settings intact, and
+   * the CLI is relaunched at once with its earlier conversation resumed where the runner can (Claude `--resume`,
+   * Codex `thread/resume`, ACP `session/load`); a CLI that never reported a conversation id starts a fresh one under
+   * the same transcript, and the chat says which. Archived sessions (retention, Close chat) have lost their logs and
+   * stay archived; background tasks are run again from their button instead.
+   */
+  async reopen(sessionId: string): Promise<void> {
+    const s = this.require(sessionId);
+    if (s.state !== 'done') fail('invalid-transition', 'only a finished session can be reopened');
+    if (s.archivedAt !== null) fail('invalid-transition', 'an archived session cannot be reopened');
+    if (s.purpose) fail('invalid-input', 'background tasks are run again from their button');
+    const { repos, clock } = this.deps;
+    const worktree = repos.worktrees.get(s.worktreeId) ?? fail('not-found', 'worktree missing');
+    if (worktree.archivedAt !== null)
+      fail('not-found', `the ${worktree.branch ?? 'folder'} lane was removed; spawn a new agent instead`);
+    const project = repos.projects.get(s.projectId) ?? fail('not-found', 'project missing');
+    const now = clock.now();
+    repos.transaction(() => {
+      // Takes the lane back unless a live session has since claimed it (the rule spawning into an existing lane uses).
+      const owner = worktree.owner.kind === 'session' ? repos.sessions.get(worktree.owner.sessionId) : null;
+      if (!worktree.isMain && (owner === null || owner.state === 'done'))
+        repos.worktrees.upsert({ ...worktree, owner: { kind: 'session', sessionId: s.id } });
+      repos.projects.upsert({ ...project, lastActivityAt: now }, repos.projects.settings(project.id));
+    });
+    this.deps.publisher.upsert('worktrees', [worktree.id]);
+    this.deps.publisher.upsert('projects', [project.id]);
+    this.applyEvent(s.id, { type: 'reopen' });
+    this.deps.transcript.system(
+      s.id,
+      s.cliSessionId !== null
+        ? copy.chat.controls.reopened
+        : fill(copy.chat.controls.reopenedFresh, { agent: AGENT_LABEL[s.agent] }),
+    );
+    this.deps.activity.append({
+      who: AGENT_LABEL[s.agent],
+      what: `${project.name} · reopened${worktree.branch === null ? '' : ` on ${worktree.branch}`}`,
+      projectId: project.id,
+      sessionId: s.id,
+    });
+    await this.relaunch(this.require(s.id));
+  }
+
+  /**
    * Close chat: ends the session and archives it in one step, whatever state it was in. `archive` alone only
    * accepts a finished session (it is the 7-day retention step), and `stop` finishes asynchronously off the
    * process exit — so closing a running chat has to end it here rather than wait for that round trip.
@@ -1670,7 +1714,7 @@ export class SessionService {
       pausedReason: t.pausedReason,
       lastActivityAt: event.type === 'activity' || event.type === 'start' ? now : s.lastActivityAt,
       endedAt: t.state === 'done' ? (s.endedAt ?? now) : null,
-      exitCode: event.type === 'finish' ? event.exitCode : s.exitCode,
+      exitCode: event.type === 'finish' ? event.exitCode : event.type === 'reopen' ? null : s.exitCode,
       pid: t.state === 'done' ? null : s.pid,
     };
     if (t.state === 'done' && next.endedAt === null) next.endedAt = now;

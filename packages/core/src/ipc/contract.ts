@@ -418,6 +418,12 @@ export const commands = {
   },
   'session.stop': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   'session.archive': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
+  /**
+   * Brings a finished (not archived) session back (Done card → Reopen; owner addition #88): the row returns to `idle`
+   * with its transcript, worktree and settings, and its CLI is relaunched with the earlier conversation resumed where
+   * the runner can. Background tasks are run again from their button instead.
+   */
+  'session.reopen': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   /** Close chat: ends the session if it is running and archives it, whatever state it was in. */
   'session.close': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   /**

@@ -19,11 +19,16 @@ import s from './Agents.module.css';
 const toneOf = (card: BoardCard): 'needs' | 'working' | 'done' =>
   card.needs ? 'needs' : card.state === 'done' ? 'done' : 'working';
 
-/** Primary CTA (spec §4.3): Open · Review grant · Review plan · Archive. */
+/**
+ * Primary CTA (spec §4.3): Open · Review grant · Review plan; a Done card reopens (owner addition, discrepancy #88)
+ * and lands in its chat once the session is back, Archive having moved to the ghost slot.
+ */
 const runCta = (card: BoardCard): void => {
   const ui = useUiStore.getState();
   if (card.state === 'done') {
-    void command('session.archive', { sessionId: card.sessionId });
+    void command('session.reopen', { sessionId: card.sessionId }).then((r) => {
+      if (r.ok) useUiStore.getState().openSession(card.projectId, card.sessionId);
+    });
     return;
   }
   ui.openSession(card.projectId, card.sessionId);
@@ -94,6 +99,14 @@ function BoardCardView({ card, onFocusCard }: { card: BoardCard; onFocusCard: (i
           {card.needs ? (
             <Button variant="ghost" onClick={() => runDeny(card)}>
               {copy.board.actions.deny}
+            </Button>
+          ) : null}
+          {card.state === 'done' ? (
+            <Button
+              variant="ghost"
+              onClick={() => void command('session.archive', { sessionId: card.sessionId })}
+            >
+              {copy.board.actions.archive}
             </Button>
           ) : null}
         </>

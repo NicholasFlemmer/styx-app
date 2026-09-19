@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { boardColumns, copy, fixtures, type ProjectId } from '@styx/core';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { keys } from '../../keys';
 import { useReadModel } from '../../state/read-model';
@@ -44,11 +44,14 @@ describe('Agents board', () => {
         expect(region.getByText(card.note)).toBeTruthy();
       }
       expect(
-        region.getAllByRole('button', { name: /^(Open|Review grant|Review plan|Archive)$/ }),
+        region.getAllByRole('button', { name: /^(Open|Review grant|Review plan|Reopen)$/ }),
       ).toHaveLength(col.items.length);
-      // Deny only on needs-you cards.
+      // Deny only on needs-you cards; Archive only on done cards.
       expect(region.queryAllByRole('button', { name: copy.board.actions.deny })).toHaveLength(
         col.key === 'needs-you' ? col.items.length : 0,
+      );
+      expect(region.queryAllByRole('button', { name: copy.board.actions.archive })).toHaveLength(
+        col.key === 'done' ? col.items.length : 0,
       );
     }
     expect(screen.getByText(copy.board.columns.needsYou).getAttribute('data-on')).toBe('true');
@@ -103,7 +106,7 @@ describe('Agents board', () => {
     });
   });
 
-  it('Archive sends session.archive', () => {
+  it('Archive sends session.archive and stays on the board', () => {
     render(<Agents />);
     fireEvent.click(
       column(copy.board.columns.done).getAllByRole('button', {
@@ -111,6 +114,35 @@ describe('Agents board', () => {
       })[0] as HTMLElement,
     );
     expect(commandMock).toHaveBeenCalledWith('session.archive', { sessionId: fixtures.ids.session.cursor });
+    expect(useUiStore.getState().screen).toBe('agents');
+  });
+
+  it('Reopen sends session.reopen, then opens the session in its project once main has it back', async () => {
+    render(<Agents />);
+    fireEvent.click(
+      column(copy.board.columns.done).getAllByRole('button', {
+        name: copy.board.actions.reopen,
+      })[0] as HTMLElement,
+    );
+    expect(commandMock).toHaveBeenCalledWith('session.reopen', { sessionId: fixtures.ids.session.cursor });
+    await waitFor(() => expect(useUiStore.getState().screen).toBe('workspace'));
+    expect(useUiStore.getState().projectSession[acme]).toBe(fixtures.ids.session.cursor);
+  });
+
+  it('a refused reopen stays on the board', async () => {
+    commandMock.mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'invalid-transition', message: 'only a finished session can be reopened' },
+    } as never);
+    render(<Agents />);
+    fireEvent.click(
+      column(copy.board.columns.done).getAllByRole('button', {
+        name: copy.board.actions.reopen,
+      })[0] as HTMLElement,
+    );
+    await waitFor(() => expect(commandMock).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+    expect(useUiStore.getState().screen).toBe('agents');
   });
 
   it('+ Spawn agent opens the spawn modal for the current project', () => {
