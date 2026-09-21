@@ -16,5 +16,7 @@ export default defineConfig({
     // axe over every harness state (also runs inside `e2e`: `pnpm e2e -- --grep a11y`).
     { name: 'a11y', testMatch: /a11y\.spec\.ts/ },
     { name: 'visual', testMatch: /visual\/.*\.spec\.ts/ },
+    // User simulations (owner request): long, soft-failing walkthroughs that write docs/reports/user-sim/<area>.md.
+    { name: 'sim', testMatch: /sim\/.*\.sim\.ts/, timeout: 30 * 60_000 },
   ],
 });

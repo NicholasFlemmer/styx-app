@@ -31,3 +31,4 @@ apps/desktop/resources/cli/
 next-env.d.ts
 .playwright-mcp/
 *.tsbuildinfo
+apps/desktop/e2e/sim/out/
