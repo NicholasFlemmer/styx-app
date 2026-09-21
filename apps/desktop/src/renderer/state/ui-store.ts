@@ -77,6 +77,11 @@ export interface UiState {
    * session. The chat pane applies it once and clears it; `seq` tells the composer a new one arrived.
    */
   drafts: Record<string, { text: string; seq: number }>;
+  /**
+   * What is typed in each session's composer (owner report: one composer's text showed in every tab and was
+   * gone after a trip to Settings). Kept here, per session, for as long as the window lives.
+   */
+  composerText: Record<string, string>;
 }
 
 export interface UiActions {
@@ -118,6 +123,7 @@ export interface UiActions {
   /** Puts `text` into the session's composer draft (after anything already waiting there, blank-line separated). */
   prefillDraft(sessionId: SessionId, text: string): void;
   clearDraft(sessionId: SessionId): void;
+  setComposerText(sessionId: SessionId, text: string): void;
 }
 
 export type UiStore = UiState & UiActions;
@@ -163,6 +169,7 @@ export const useUiStore = create<UiStore>()(
     banners: {},
     dismissedBanners: [],
     drafts: {},
+    composerText: {},
 
     setScreen: (screen) =>
       set((s) => {
@@ -340,6 +347,11 @@ export const useUiStore = create<UiStore>()(
     clearDraft: (sessionId) =>
       set((s) => {
         delete s.drafts[sessionId];
+      }),
+    setComposerText: (sessionId, text) =>
+      set((s) => {
+        if (text === '') delete s.composerText[sessionId];
+        else if (s.composerText[sessionId] !== text) s.composerText[sessionId] = text;
       }),
   })),
 );

@@ -88,6 +88,13 @@ export interface ComposerProps {
    * typed, so nothing the user wrote is lost), caret at the end, textarea focused. The host clears it afterwards.
    */
   prefill?: { text: string; seq: number } | null;
+  /**
+   * The draft this instance starts with, and every change to it (typing, a prefill, the clear after send): the
+   * host keeps drafts per session so switching tabs or screens never mixes or loses them. Mount one instance per
+   * session (`key`) and seed it from what the host kept.
+   */
+  initialText?: string;
+  onTextChange?: (text: string) => void;
 }
 
 /**
@@ -126,11 +133,19 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
     slashHint = '',
     slashEmpty = '',
     prefill = null,
+    initialText = '',
+    onTextChange,
   },
   ref,
 ) {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText);
   const appliedPrefill = useRef<number | null>(null);
+  // Reported after every change; the callback is read through a ref so a host re-render never re-fires it.
+  const reportText = useRef(onTextChange);
+  reportText.current = onTextChange;
+  useEffect(() => {
+    reportText.current?.(text);
+  }, [text]);
   const [caret, setCaret] = useState(0);
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   const [active, setActive] = useState(0);

@@ -90,6 +90,34 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: '⏎ send' })).toBeEnabled();
   });
 
+  it('initialText seeds the draft and onTextChange reports typing, a prefill, and the clear after send', async () => {
+    const user = userEvent.setup();
+    const reported: string[] = [];
+    const onSend = vi.fn();
+    const { rerender } = render(
+      <Composer {...strings} onSend={onSend} initialText="kept" onTextChange={(t) => reported.push(t)} />,
+    );
+    const box = screen.getByRole('textbox');
+    expect(box).toHaveValue('kept');
+    await user.type(box, ' on');
+    rerender(
+      <Composer
+        {...strings}
+        onSend={onSend}
+        initialText="kept"
+        onTextChange={(t) => reported.push(t)}
+        prefill={{ text: 'back', seq: 1 }}
+      />,
+    );
+    expect(box).toHaveValue('kept on\n\nback');
+    await user.keyboard('{Enter}');
+    expect(onSend).toHaveBeenCalledWith('kept on\n\nback');
+    expect(box).toHaveValue('');
+    expect(reported.at(0)).toBe('kept');
+    expect(reported).toContain('kept on\n\nback');
+    expect(reported.at(-1)).toBe('');
+  });
+
   it('sendTitle is the send button tooltip (the queue / steer hint mid-turn)', () => {
     render(
       <Composer

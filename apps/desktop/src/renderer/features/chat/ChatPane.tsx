@@ -71,6 +71,11 @@ import { mentionItems as toMentionItems, slashItems } from './slash-commands';
 import { thinkingLabel, wholeSeconds, workingLine } from './stream-state';
 import { inlineSegments, transcriptItems, type TranscriptItem } from './transcript-items';
 
+const omitKey = <T,>(all: Record<string, T>, key: string): Record<string, T> => {
+  const { [key]: _dropped, ...rest } = all;
+  return rest;
+};
+
 export interface ChatPaneProps {
   projectId: ProjectId;
   /** Pop-out window (spec §4.13): compact messages/composer, no tab row, no meta line. */
@@ -215,8 +220,11 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const setScreen = useUi((u) => u.setScreen);
   const setDiffCheckpoint = useUi((u) => u.setDiffCheckpoint);
   const [menuOpen, setMenuOpen] = useState(false);
-  /** Attachments waiting to go with the next message (images read to base64, `@`-mentioned worktree files). */
-  const [pending, setPending] = useState<Pending[]>([]);
+  /**
+   * Attachments waiting to go with the next message (images read to base64, `@`-mentioned worktree files), per
+   * session: what was attached in one tab must not ride along in another.
+   */
+  const [pendingBySession, setPendingBySession] = useState<Record<string, Pending[]>>({});
   const [mentionPaths, setMentionPaths] = useState<readonly string[]>([]);
   const [slashQuery, setSlashQuery] = useState('');
   const mentionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -225,6 +233,21 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
 
   const tabs = useMemo(() => sessionTabs(model, projectId, sessionId), [model, projectId, sessionId]);
   const activeId: SessionId | null = tabs.activeId;
+  const pending: Pending[] = activeId === null ? [] : (pendingBySession[activeId] ?? []);
+  const setPending = useCallback(
+    (update: Pending[] | ((prev: Pending[]) => Pending[])) => {
+      if (activeId === null) return;
+      setPendingBySession((all) => {
+        const prev = all[activeId] ?? [];
+        const next = typeof update === 'function' ? update(prev) : update;
+        return next.length === 0 ? omitKey(all, activeId) : { ...all, [activeId]: next };
+      });
+    },
+    [activeId],
+  );
+  // The composer's text, per session, in the store: it survives a tab switch and a trip to another screen.
+  const composerText = useUi((u) => (activeId === null ? '' : (u.composerText[activeId] ?? '')));
+  const setComposerText = useUi((u) => u.setComposerText);
   // Working line (discrepancy #55): hidden under the e2e/visual harness like the session controls — the demo
   // Claude session is `working`, so the line would otherwise land on the baked `workspace` baseline. Whether it
   // shows does not depend on the clock; the clock only feeds its elapsed seconds, ticking 1s while it is up.
@@ -752,6 +775,11 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           }}
         />
         <Composer
+          key={activeId ?? 'none'}
+          initialText={composerText}
+          onTextChange={(text) => {
+            if (activeId !== null) setComposerText(activeId, text);
+          }}
           placeholder={placeholder}
           onSend={send}
           hints={[copy.chat.composer.file, copy.chat.composer.command]}

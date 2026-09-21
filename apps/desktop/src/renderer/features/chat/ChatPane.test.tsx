@@ -241,6 +241,8 @@ describe('ChatPane', () => {
       platform: 'darwin',
       projectId: acme,
       projectSession: {},
+      composerText: {},
+      drafts: {},
     });
   });
   afterEach(() => {
@@ -922,6 +924,28 @@ describe('ChatPane queue (messages sent mid-turn)', () => {
     await flush();
     expect(box.value).toBe('typed\n\nalpha\n\nbeta');
     expect(useUiStore.getState().drafts[claude]).toBeUndefined();
+  });
+
+  it('the composer draft belongs to its session: switching tabs shows each tab its own text, and a remount (another screen) brings it back', () => {
+    const { unmount } = render(<ChatPane projectId={acme} />);
+    const box = () => screen.getByRole('textbox', { name: /^Message/ }) as HTMLTextAreaElement;
+    fireEvent.change(box(), { target: { value: 'for claude' } });
+    expect(useUiStore.getState().composerText[claude]).toBe('for claude');
+    // Codex's tab: an empty composer, its own text.
+    fireEvent.click(screen.getByRole('tab', { name: /Codex/ }));
+    expect(box().value).toBe('');
+    fireEvent.change(box(), { target: { value: 'for codex' } });
+    // Back to Claude: the first draft is still there, untouched.
+    fireEvent.click(screen.getByRole('tab', { name: /Claude/ }));
+    expect(box().value).toBe('for claude');
+    // Leaving the workspace (Settings, say) unmounts the pane; coming back restores the draft from the store.
+    unmount();
+    render(<ChatPane projectId={acme} />);
+    expect(box().value).toBe('for claude');
+    // Sending clears the store entry for that session only.
+    fireEvent.click(document.querySelector('[data-composer-send]') as HTMLButtonElement);
+    expect(useUiStore.getState().composerText[claude]).toBeUndefined();
+    expect(useUiStore.getState().composerText[codex]).toBe('for codex');
   });
 
   it("send hint: Queue with Claude's hint while working or blocked on an ask; ⏎ send once idle", () => {
