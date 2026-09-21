@@ -224,7 +224,7 @@ export const copy = {
     /** Keep lanes current (ADR-0023): the lane's base is Styx's job, so agents do not invent their own git choreography. */
     /** Ahead of the first turn for CLIs without a system-prompt flag (Codex, Gemini, Cursor): the same lines Claude Code gets. */
     preamble: 'From Styx, the app running this session — read before the message that follows:',
-    lane: 'Your worktree is the branch {branch}, cut from {base}. Styx keeps it current: it fetches before a session starts, merges {base} in before Publish, and shows how far behind the lane is. Do not rebase, merge or switch branches yourself. If a merge conflict appears in the tree, resolve it in place and tell the user.',
+    lane: 'Your worktree is the branch {branch}, cut from {base}. Styx keeps it current: it fetches before a session starts, merges {base} in before Publish, and shows how far behind the lane is. Do not rebase, merge or switch branches yourself. If a merge conflict appears in the tree, resolve it in place and tell the user. When the user asks you to merge, land, publish or push this work to {base} (or "to main"), call the styx `land` tool with a one-line summary of what the lane did: Styx commits what you left uncommitted, brings {base} in, runs the project checks, merges into {base} and pushes it. Never push {base}, merge into it, or open a pull request yourself; if `land` refuses, tell the user its reason in one line.',
     /** The other live lanes at spawn (ADR-0025), so an agent knows what the project is doing beyond its worktree. */
     lanesNow:
       'Other lanes in this project right now:\n{lanes}\nBefore you change a file another lane has already changed, call project_activity (what {base} and the other lanes changed since your lane was cut, and where it overlaps with your files) and agree with that agent through send_message who does what. Styx tells you in this chat when another lane touches a file you changed.',
@@ -1513,6 +1513,16 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     conflict:
       'Landing {branch} hit a conflict in {file}. The merge was undone; bring {base} in first, then land again.',
     nothing: 'Nothing to land: {branch} has no changes {base} does not already have.',
+    baseDiverged:
+      '{base} on this machine and {upstream} have each moved on ({ahead} local, {behind} remote). Bring {upstream} into {base} in the main folder first, then land again.',
+    /** The `land` tool (agents): why a call was refused, in words the agent relays. */
+    tool: {
+      notLane:
+        'This session is on the main worktree, not a lane: there is nothing to land. The work is already on {base}.',
+      review:
+        'This project is in review mode: the person merges. Tell them Merge into {base} is on the Repo lane.',
+      landed: '{branch} is now in {base}{pushed}.',
+    },
     undone: 'Took {branch} back out of {base}{pushed}. The lane is live again.',
     undoMoved: '{base} has moved on since that landing; undo it by hand.',
     undoNothing: 'Nothing to undo on this lane.',
@@ -1526,6 +1536,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     activity: {
       landed: 'landed {branch} into {base}',
       landedAuto: 'landed {branch} into {base} on its own',
+      landedAsked: 'landed {branch} into {base} (asked in chat)',
       undone: 'took {branch} back out of {base}',
       archived: 'tidied away {branch} (landed)',
     },

@@ -105,6 +105,28 @@ export function createStyxMcpServer(client: BrokerClient): McpServer {
   );
 
   server.registerTool(
+    'land',
+    {
+      description:
+        "Land this lane's work in the project's base branch and push it — the one way to get your work onto main / the base. Call it when the user asks you to merge, land, publish, or push to main. Styx commits what you left uncommitted, brings the base in, runs the project's checks, merges into the base with your summary as the record, and pushes. Never push the base branch, merge into it, or open a pull request instead. If Styx refuses (review mode, a conflict being resolved, failing checks, nothing to land) the result says why: tell the user in one line.",
+      inputSchema: {
+        summary: z
+          .string()
+          .min(1)
+          .max(2000)
+          .describe('What this lane did, one line (more lines become the body of the merge record).'),
+      },
+    },
+    async ({ summary }) => {
+      try {
+        return text(await client.call('land', { summary }));
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
     'project_activity',
     {
       description:

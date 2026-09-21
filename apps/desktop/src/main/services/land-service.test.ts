@@ -1,7 +1,7 @@
 import { execa } from 'execa';
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fixtures } from '@styx/core';
 import { describe, expect, it, vi } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
@@ -209,6 +209,54 @@ describe('LandService (ADR-0025 phase C)', { timeout: 30_000 }, () => {
     );
     expect(t.app.repos.activity.recent(1)[0]?.what).toBe('acme-shop · took fix/checkout back out of main');
     await expect(t.app.land.undo(fixCheckout)).rejects.toThrow('Nothing to undo on this lane.');
+  });
+
+  it('a stale local base is brought up to origin before the merge, so the landing merges onto what origin has and the push fast-forwards', async () => {
+    const { t, repo, wt1, bare } = await rig();
+    // Origin moves on by one commit the local main does not have (someone else pushed).
+    await sh(['push', '-q', '-u', 'origin', 'main'], repo);
+    const clone = join(dirname(repo), 'clone');
+    await sh(['clone', '-q', '-b', 'main', bare, clone], dirname(repo));
+    writeFileSync(join(clone, 'd.ts'), 'd\n');
+    await sh(['add', '.'], clone);
+    await sh(['commit', '-q', '-m', 'on origin: add d'], clone);
+    await sh(['push', '-q', 'origin', 'main'], clone);
+    const remoteHead = await sh(['rev-parse', 'HEAD'], clone);
+
+    const r = await t.app.land.land(fixCheckout, { title: 'Fix the checkout total', body: '' });
+    expect(r.pushed).toBe(true);
+    // The base was forwarded first: the landing sits on origin's commit, the lane got it too, and origin is at the landing.
+    expect(await sh(['rev-parse', 'HEAD^1'], repo)).toBe(remoteHead);
+    expect(await sh(['show', 'HEAD:d.ts'], repo)).toBe('d');
+    expect(existsSync(join(wt1, 'd.ts'))).toBe(true);
+    expect(await sh(['rev-parse', 'refs/heads/main'], bare)).toBe(r.commit);
+    expect(r.steps).toContain('brought in main (2)');
+  });
+
+  it('a diverged local base (commits origin lacks, and vice versa) is refused before anything is touched', async () => {
+    const { t, repo, wt1, bare } = await rig();
+    await sh(['push', '-q', '-u', 'origin', 'main'], repo);
+    const clone = join(dirname(repo), 'clone');
+    await sh(['clone', '-q', '-b', 'main', bare, clone], dirname(repo));
+    writeFileSync(join(clone, 'd.ts'), 'd\n');
+    await sh(['add', '.'], clone);
+    await sh(['commit', '-q', '-m', 'on origin: add d'], clone);
+    await sh(['push', '-q', 'origin', 'main'], clone);
+    writeFileSync(join(repo, 'e.ts'), 'e\n');
+    await sh(['add', '.'], repo);
+    await sh(['commit', '-q', '-m', 'local only: add e'], repo);
+    const mainBefore = await sh(['rev-parse', 'main'], repo);
+    const laneBefore = await sh(['rev-parse', 'HEAD'], wt1);
+
+    await expect(t.app.land.land(fixCheckout, { title: 'x', body: '' })).rejects.toMatchObject({
+      code: 'invalid-input',
+      message: expect.stringContaining(
+        'main on this machine and origin/main have each moved on (1 local, 1 remote)',
+      ),
+    });
+    expect(await sh(['rev-parse', 'main'], repo)).toBe(mainBefore);
+    expect(await sh(['rev-parse', 'HEAD'], wt1)).toBe(laneBefore);
+    expect(t.app.repos.worktrees.get(fixCheckout)?.landing).toBeNull();
   });
 
   it('refuses before touching anything: a dirty base, the base not checked out, red checks, a busy agent, nothing to land', async () => {

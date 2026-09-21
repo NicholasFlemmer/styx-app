@@ -285,6 +285,52 @@ export class GitService {
     await this.git.run(['fetch', '--prune', '--quiet'], path, { reject: false });
   }
 
+  /**
+   * The remote-tracking ref a branch follows (`origin/main`): its configured upstream, else `<remote>/<branch>` for
+   * the first remote when that ref exists (a clone whose branch was never `--set-upstream`); null when there is none.
+   */
+  async upstreamRef(path: string, branch: string): Promise<string | null> {
+    const cfg = await this.git.run(
+      ['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${branch}@{upstream}`],
+      path,
+      { reject: false },
+    );
+    if (cfg.exitCode === 0 && cfg.stdout.trim() !== '') return cfg.stdout.trim();
+    const remote = (await this.remotes(path))[0]?.name;
+    if (remote === undefined) return null;
+    const ref = `${remote}/${branch}`;
+    const r = await this.git.run(['rev-parse', '--verify', '--quiet', `refs/remotes/${ref}`], path, {
+      reject: false,
+    });
+    return r.exitCode === 0 ? ref : null;
+  }
+
+  async revParse(path: string, ref: string): Promise<string | null> {
+    const r = await this.git.run(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], path, {
+      reject: false,
+    });
+    return r.exitCode === 0 && r.stdout.trim() !== '' ? r.stdout.trim() : null;
+  }
+
+  /** `git merge-base --is-ancestor a b`: is `a` reachable from `b`? */
+  async isAncestor(path: string, ancestor: string, descendant: string): Promise<boolean> {
+    const r = await this.git.run(['merge-base', '--is-ancestor', ancestor, descendant], path, {
+      reject: false,
+    });
+    return r.exitCode === 0;
+  }
+
+  /** `git merge --ff-only <ref>` in a checkout: moves the current branch forward or does nothing at all. */
+  async mergeFfOnly(path: string, ref: string): Promise<boolean> {
+    const r = await this.git.run(['merge', '--ff-only', '--quiet', ref], path, { reject: false });
+    return r.exitCode === 0;
+  }
+
+  /** Moves a branch ref that is checked out nowhere (`git update-ref`); the caller has checked that. */
+  async updateBranchRef(path: string, branch: string, sha: string): Promise<void> {
+    await this.git.run(['update-ref', `refs/heads/${branch}`, sha], path);
+  }
+
   /** `git merge --no-edit <ref>` in a worktree; a conflict returns `ok: false` with the tree mid-merge (see `mergeAbort`). */
   async merge(path: string, ref: string): Promise<{ ok: boolean; output: string }> {
     const r = await this.git.run(['merge', '--no-edit', ref], path, { reject: false });

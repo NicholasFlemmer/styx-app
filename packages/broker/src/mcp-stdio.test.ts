@@ -13,13 +13,35 @@ let server: BrokerServer;
 afterEach(async () => server?.close());
 
 describe('styx MCP server', () => {
-  it('exposes the nine tools and proxies calls to the broker', async () => {
+  it('exposes the ten tools and proxies calls to the broker', async () => {
     const path = join(mkdtempSync(join(tmpdir(), 'styx-mcp-')), 'b.sock');
     server = new BrokerServer({
-      authenticate: async () => ({ sessionId: 's1', projectId: 'p', projectName: 'acme-shop', worktreePath: null, branch: null, agent: 'claude' }),
+      authenticate: async () => ({
+        sessionId: 's1',
+        projectId: 'p',
+        projectName: 'acme-shop',
+        worktreePath: null,
+        branch: null,
+        agent: 'claude',
+      }),
     });
-    server.on('list_targets', async () => [{ id: 'tgt-Supabase', name: 'Supabase', provider: 'supabase', env: 'prod', lockState: 'locked', scopes: ['read', 'write'] }]);
-    server.on('request_access', async (p) => ({ status: 'active', grantId: 'g1', scope: p.scope, expiresAt: null, decidedBy: 'policy' }));
+    server.on('list_targets', async () => [
+      {
+        id: 'tgt-Supabase',
+        name: 'Supabase',
+        provider: 'supabase',
+        env: 'prod',
+        lockState: 'locked',
+        scopes: ['read', 'write'],
+      },
+    ]);
+    server.on('request_access', async (p) => ({
+      status: 'active',
+      grantId: 'g1',
+      scope: p.scope,
+      expiresAt: null,
+      decidedBy: 'policy',
+    }));
     await server.listen(path);
 
     const broker = new BrokerClient({ endpoint: path, sessionId: 's1', token: TOKEN, client: 'mcp', pid: 1 });
@@ -35,6 +57,7 @@ describe('styx MCP server', () => {
       'ask_user',
       'check_grant',
       'get_credential',
+      'land',
       'list_sessions',
       'list_targets',
       'project_activity',
@@ -45,10 +68,25 @@ describe('styx MCP server', () => {
     ]);
 
     const lt = await client.callTool({ name: 'list_targets', arguments: {} });
-    expect(JSON.parse((lt.content as { text: string }[])[0]?.text ?? '')).toEqual([{ id: 'tgt-Supabase', name: 'Supabase', provider: 'supabase', env: 'prod', lockState: 'locked', scopes: ['read', 'write'] }]);
+    expect(JSON.parse((lt.content as { text: string }[])[0]?.text ?? '')).toEqual([
+      {
+        id: 'tgt-Supabase',
+        name: 'Supabase',
+        provider: 'supabase',
+        env: 'prod',
+        lockState: 'locked',
+        scopes: ['read', 'write'],
+      },
+    ]);
 
-    const ra = await client.callTool({ name: 'request_access', arguments: { target: 'supabase-prod', scope: ['read'], reason: 'list tables' } });
-    expect(JSON.parse((ra.content as { text: string }[])[0]?.text ?? '')).toMatchObject({ status: 'active', grantId: 'g1' });
+    const ra = await client.callTool({
+      name: 'request_access',
+      arguments: { target: 'supabase-prod', scope: ['read'], reason: 'list tables' },
+    });
+    expect(JSON.parse((ra.content as { text: string }[])[0]?.text ?? '')).toMatchObject({
+      status: 'active',
+      grantId: 'g1',
+    });
 
     const bad = await client.callTool({ name: 'get_credential', arguments: { grantId: 'nope' } });
     expect(bad.isError).toBe(true);

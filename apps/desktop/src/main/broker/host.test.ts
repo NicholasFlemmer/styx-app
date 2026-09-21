@@ -450,6 +450,43 @@ describe('BrokerHost agent-to-agent messaging', () => {
     client.close();
   });
 
+  it("land: the main worktree has nothing to land, review mode is the person's, and a lane in auto mode lands (or says why not) without throwing", async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const session = app.app.repos.sessions.get(ids.session.gemini);
+    if (!session) throw new Error('fixture session');
+    // On the main worktree: the work is already on the base.
+    app.app.repos.sessions.upsert({ ...session, worktreeId: ids.worktree.acmeMain });
+    expect(await client.call('land', { summary: 'x' })).toEqual({
+      landed: false,
+      commit: null,
+      pushed: false,
+      steps: [],
+      reason: fill(copy.land.tool.notLane, { base: 'main' }),
+    });
+    // On a lane, in review mode: the person merges.
+    app.app.repos.sessions.upsert({ ...session, worktreeId: ids.worktree.fixCheckout });
+    app.app.repos.projects.setSettings(
+      ids.project.acmeShop,
+      { ...app.app.repos.projects.settings(ids.project.acmeShop), integration: 'review' },
+      null,
+    );
+    expect(await client.call('land', { summary: 'x' })).toMatchObject({
+      landed: false,
+      reason: fill(copy.land.tool.review, { base: 'main' }),
+    });
+    // Auto mode: the landing runs; the fixture lane has no folder on disk, so the refusal is a sentence, not a throw.
+    app.app.repos.projects.setSettings(
+      ids.project.acmeShop,
+      { ...app.app.repos.projects.settings(ids.project.acmeShop), integration: 'auto' },
+      null,
+    );
+    const r = await client.call('land', { summary: 'Fix the checkout total\nDetails.' });
+    expect(r.landed).toBe(false);
+    expect(typeof r.reason).toBe('string');
+    expect(r.reason).not.toBe('');
+    client.close();
+  });
+
   it('project_activity answers with the base, the commits not merged, the other lanes and the overlaps (ADR-0025)', async () => {
     const { client } = await connectedClient(ids.session.gemini);
     const a = await client.call('project_activity', {});

@@ -42,6 +42,13 @@ keeps every existing ref valid and makes the sync itself visible in the lane's l
 - `worktrees.behind_base` (migration 0017); `Worktree.behindBase` in core; `worktree.sync` command;
   `worktree.publish` output gains an optional `synced`.
 - The base is `ProjectSettings.baseBranch` (default `main`), the same setting Publish already uses for PRs.
-- Not done yet: "Resolve with agent" (handing a conflicting sync to the owning agent as a turn) and keeping the
-  local base branch itself current with its upstream. Both fit the same service; the conflict path today ends in
-  the existing Resolve lane action.
+- "Resolve with agent" is ADR-0025 phase B.
+- **The local base follows its upstream (closed 2026-09-21).** A fetch updates `origin/main`, never `main`, and
+  every count, "already up to date" line, sync and landing was measured against the local branch — on one project
+  77 commits behind GitHub, so a lane heard "Already up to date with main" while main had moved on for a week.
+  `LaneSyncService.freshenBase` runs after every fetch (refresh, sync, turn-end auto sync, landing): a
+  fast-forward is the only move it makes — in the main folder when it is on the base and clean, by ref when the
+  base is checked out nowhere. A dirty main folder is left alone and lanes measure against and merge from the
+  upstream ref (`baseRefOf`) until it is clean; a diverged base (local commits the upstream lacks) is never
+  touched, the Repo row's ↑/↓ shows it, and a landing refuses with `land.baseDiverged` rather than merging onto
+  a base the remote would reject.

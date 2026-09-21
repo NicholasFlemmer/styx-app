@@ -6,6 +6,7 @@ import type { Publisher } from '../store/publisher';
 import type { ActivityService } from './activity-service';
 import type { GitService } from './git';
 import { isSecretFile, logger } from './logger';
+import type { FreshenResult } from './lane-sync-service';
 import type { ChecksResult } from './merge-resolve-service';
 import { fallbackDraft, statsOf, type PublishMessage, type PublishResult } from './publish-service';
 import type { TranscriptService } from './transcript-service';
@@ -25,8 +26,16 @@ export interface LandDeps {
   activity: ActivityService;
   baseOf: (projectId: string) => string;
   settingsOf: (projectId: string) => LandSettings;
-  /** Keep lanes current (ADR-0023): the base comes into the lane first; a conflict goes to the resolver. */
-  laneSync: { sync(worktreeId: string): Promise<{ merged: number; conflict: { file: string } | null }> };
+  /**
+   * Keep lanes current (ADR-0023): the local base is brought up to its upstream first (a landing must merge onto
+   * the base as it is on the remote, or the push is refused), the base comes into the lane, a conflict goes to the
+   * resolver. `baseRefOf` is what git is asked about; `baseOf` is the name people see.
+   */
+  laneSync: {
+    sync(worktreeId: string): Promise<{ merged: number; conflict: { file: string } | null }>;
+    freshenBase(projectId: string): Promise<FreshenResult>;
+    baseRefOf(projectId: string): string;
+  };
   resolver: { resolve(worktreeId: string): Promise<{ started: boolean }> };
   /**
    * Publish's own steps (ADR-0021): the lane's commit (secret files stay out, the user's identity) and the base's
@@ -87,17 +96,24 @@ export class LandService {
     const branch = wt.branch ?? fail('invalid-input', copy.publish.noBranch);
     const project = repos.projects.get(wt.projectId) ?? fail('not-found', 'project not found');
     const base = this.deps.baseOf(project.id);
-    const files = await this.filesOf(project.path, wt.path, base, branch);
+    const files = await this.filesOf(project.path, wt.path, this.deps.laneSync.baseRefOf(project.id), branch);
     const remote = await this.remoteOf(project.path);
     return { base, files, willPush: remote !== null, remote };
   }
 
-  /** Lands the lane; landings of one project run one after another. */
-  land(worktreeId: string, message: PublishMessage, opts: { auto?: boolean } = {}): Promise<LandResult> {
+  /**
+   * Lands the lane; landings of one project run one after another. `caller` is the session asking through the
+   * `land` tool: its own lane is landed even though it is mid-turn (it is waiting on this very call).
+   */
+  land(
+    worktreeId: string,
+    message: PublishMessage,
+    opts: { auto?: boolean; caller?: string } = {},
+  ): Promise<LandResult> {
     const wt =
       this.deps.repos.worktrees.get(worktreeId) ?? fail('not-found', `worktree ${worktreeId} not found`);
     const prev = this.queues.get(wt.projectId) ?? Promise.resolve();
-    const go = () => this.doLand(worktreeId, message, opts.auto === true);
+    const go = () => this.doLand(worktreeId, message, opts.auto === true, opts.caller ?? null);
     const run = prev.then(go, go);
     this.queues.set(
       wt.projectId,
@@ -106,7 +122,12 @@ export class LandService {
     return run;
   }
 
-  private async doLand(worktreeId: string, message: PublishMessage, auto: boolean): Promise<LandResult> {
+  private async doLand(
+    worktreeId: string,
+    message: PublishMessage,
+    auto: boolean,
+    caller: string | null,
+  ): Promise<LandResult> {
     const { repos, git, clock } = this.deps;
     const wt = repos.worktrees.get(worktreeId) ?? fail('not-found', `worktree ${worktreeId} not found`);
     if (wt.isMain) fail('invalid-input', 'the main worktree is the base; nothing to land');
@@ -116,7 +137,8 @@ export class LandService {
     const base = this.deps.baseOf(project.id);
     const owner = wt.owner.kind === 'session' ? repos.sessions.get(wt.owner.sessionId) : null;
     const agent = copy.agentProducts[owner?.agent ?? 'claude'];
-    if (owner !== null && (owner.state === 'working' || owner.state === 'needs-you'))
+    const byOwner = owner !== null && caller === owner.id;
+    if (!byOwner && owner !== null && (owner.state === 'working' || owner.state === 'needs-you'))
       fail('invalid-input', fill(copy.land.busy, { agent, branch }));
     if (wt.resolution !== null && (wt.resolution.state === 'resolving' || wt.resolution.state === 'checking'))
       fail('invalid-transition', fill(copy.land.resolving, { base, agent }));
@@ -125,6 +147,20 @@ export class LandService {
     if (current !== base)
       fail('invalid-input', fill(copy.land.baseNotCheckedOut, { current: current ?? '?', base }));
     if (!(await git.status(project.path)).clean) fail('invalid-input', fill(copy.land.dirtyBase, { base }));
+    // The base as it is on the remote, before anything is measured against it or merged onto it: a landing onto a
+    // stale local base pushes as a non-fast-forward and is refused by the remote — after the merge is made.
+    if ((await git.remotes(project.path)).length > 0) await git.fetch(project.path).catch(() => undefined);
+    const fresh = await this.deps.laneSync.freshenBase(project.id);
+    if (fresh.state === 'diverged')
+      fail(
+        'invalid-input',
+        fill(copy.land.baseDiverged, {
+          base,
+          upstream: fresh.upstream,
+          ahead: fresh.ahead,
+          behind: fresh.behind,
+        }),
+      );
 
     const steps: string[] = [];
     // 1. Commit what the agent left uncommitted, as Publish would (by name; secret files stay out).
@@ -184,8 +220,15 @@ export class LandService {
         fill(auto ? copy.land.chatAuto : copy.land.chat, { branch, base, pushed: pushedSuffix }),
       );
     this.deps.activity.append({
-      who: auto && owner !== null ? copy.agentProducts[owner.agent] : copy.repo.you,
-      what: `${project.name} · ${fill(auto ? copy.land.activity.landedAuto : copy.land.activity.landed, { branch, base })}`,
+      who: (auto || byOwner) && owner !== null ? copy.agentProducts[owner.agent] : copy.repo.you,
+      what: `${project.name} · ${fill(
+        auto
+          ? copy.land.activity.landedAuto
+          : byOwner
+            ? copy.land.activity.landedAsked
+            : copy.land.activity.landed,
+        { branch, base },
+      )}`,
       projectId: project.id,
       sessionId: owner?.id ?? null,
     });

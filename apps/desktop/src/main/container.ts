@@ -4,7 +4,7 @@ import { APP_ID, DEVICE_NAME, copy, fill, type AppSettings } from '@styx/core';
 import type { Clock } from './clock';
 import type { Db } from './db/open';
 import { Repos } from './db/repos';
-import { CommandBus } from './ipc/bus';
+import { CommandBus, CommandError } from './ipc/bus';
 import { registerAllCommands } from './ipc/commands';
 import { ProviderRegistry } from './providers';
 import { ExecaCliRunner, type CliRunner } from './providers/cli-runner';
@@ -317,7 +317,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     publisher,
     clock,
     tell: (sessionId, text) => sessions.tell(sessionId, text),
-    baseOf: (projectId) => projectSettingsFor(repos, projectId).baseBranch.value,
+    // The base as git should see it (`origin/main` while the local base cannot be brought up to it, ADR-0023).
+    baseOf: (projectId: string): string => laneSync.baseRefOf(projectId),
     hotspotsOf: (projectId) => projectSettingsFor(repos, projectId).hotspots.value,
   });
   const sessions = new SessionService({
@@ -537,6 +538,36 @@ export function buildContainer(opts: ContainerOptions): Container {
     providers,
     clock,
     endpoint: runtime.brokerEndpoint,
+    landing: {
+      // "Merge / push to main" said in the chat: the lane lands through LandService like the Land button, the
+      // person's integration mode respected, and every refusal comes back as a sentence rather than an error.
+      land: async (sessionId, summary) => {
+        const refuse = (reason: string) => ({
+          landed: false,
+          commit: null,
+          pushed: false,
+          steps: [],
+          reason,
+        });
+        const session = repos.sessions.get(sessionId);
+        if (!session) return refuse('session not found');
+        const wt = repos.worktrees.get(session.worktreeId);
+        const base = laneSync.baseOf(session.projectId);
+        if (!wt || wt.isMain) return refuse(fill(copy.land.tool.notLane, { base }));
+        if (projectSettingsFor(repos, session.projectId).integration.value === 'review')
+          return refuse(fill(copy.land.tool.review, { base }));
+        const [title = '', ...rest] = summary.trim().split('\n');
+        const message = { title: title.trim().slice(0, 120), body: rest.join('\n').trim() };
+        try {
+          const r = await land.land(wt.id, message, { caller: sessionId });
+          return { landed: true, commit: r.commit, pushed: r.pushed, steps: r.steps, reason: null };
+        } catch (e) {
+          const reason = e instanceof CommandError ? e.message : (e as Error).message;
+          logger.info('land: refused from the chat', { sessionId, reason });
+          return refuse(reason);
+        }
+      },
+    },
     abilities: {
       // The agent worked out how to run the project: keep the command (and URL), say so in its chat and on Home,
       // and start the managed run so the design window shows the app straight away.
@@ -688,7 +719,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     },
     sessions,
     ledger: { laneChanged: (id) => ledger.laneChanged(id) },
-    baseOf: (projectId) => projectSettingsFor(repos, projectId).baseBranch.value,
+    baseOf: (projectId: string): string => laneSync.baseRefOf(projectId),
     settingsOf: (projectId) => {
       const s = projectSettingsFor(repos, projectId);
       return {

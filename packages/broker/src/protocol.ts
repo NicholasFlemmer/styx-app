@@ -126,6 +126,20 @@ export const methods = {
    * with its files and the Styx lane it came from when it was one; the other live lanes with task and files; and
    * every file of the caller's that another lane changed too.
    */
+  /**
+   * Land the calling session's lane in the project's base branch (ADR-0025 phase C, from the chat): Styx commits,
+   * brings the base in, runs the checks, merges and pushes. A refusal comes back as `landed: false` with the reason.
+   */
+  land: {
+    params: z.object({ summary: z.string().min(1).max(2000) }),
+    result: z.object({
+      landed: z.boolean(),
+      commit: z.string().nullable(),
+      pushed: z.boolean(),
+      steps: z.array(z.string()),
+      reason: z.string().nullable(),
+    }),
+  },
   project_activity: {
     params: z.object({}),
     result: z.object({

@@ -78,7 +78,7 @@ Repo lane in auto mode and a `Merge into {base}` button in review mode (Publish 
    (`through: 'push'`) on the main worktree: the same grant, audit and activity path as the Publish button.
 4. **The lane stays, landed.** `Worktree.landing` (migration 0020) records the landing commit, the base, whether it
    was pushed and when; the row reads `landed today` and offers `Undo landing` (`worktree.undoLand`: `git revert
-   -m 1`, pushed again if the landing was) while the landing is still the base's HEAD, then `Archive`. The lane's
+-m 1`, pushed again if the landing was) while the landing is still the base's HEAD, then `Archive`. The lane's
    chat gets one plain line; Home gets a row.
 5. **One at a time per project.** Landings queue per project; the next brings the freshly moved base into its lane
    before it merges — the serialised, gated merging the research recommends over parallel merges racing each other.
@@ -105,6 +105,18 @@ Two things the phases before it left open are closed here too:
   were seen by the human and never by the agent. They now go through `SessionService.tell`: in the chat at
   once; to the CLI at once while it is working (a steer, not a new turn); otherwise owed and sent ahead of the
   agent's next turn. An idle agent is never woken up to read a note.
+
+## Addendum (2026-09-21) — the chat can land
+
+"Commit and push to main" said in a lane's chat went nowhere: the preamble told the agent Styx owns the base, so
+the agent pushed its branch and pointed at the button, and the person went around Styx with `gh pr merge` —
+which left the lane unlanded in the ledger and the deploy out of Styx's record. The agent now has a broker tool,
+`land` (`summary`): the container checks the session is on a lane and the project is in auto mode (review mode
+answers "the person merges; Merge into {base} is on the Repo lane"), then runs `LandService.land` with the
+session as `caller` — its own mid-turn state is not a refusal, since it is waiting on this very call — and every
+refusal comes back as a sentence the agent relays, never an error. The lane preamble (`agentPrompt.lane`) says
+when to call it and never to push the base, merge into it, or open a PR itself. Landings from the chat are
+metered with the session's request bucket and show on Home as `landed {branch} into {base} (asked in chat)`.
 
 ## Consequences
 

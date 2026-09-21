@@ -50,6 +50,19 @@ export interface BrokerHostDeps {
     /** The checks a resolved merge must pass (ADR-0025 phase B). */
     rememberChecks(sessionId: string, command: string): Promise<void>;
   };
+  /** The `land` tool: the container applies the project's integration mode and runs LandService; never throws. */
+  landing: {
+    land(
+      sessionId: string,
+      summary: string,
+    ): Promise<{
+      landed: boolean;
+      commit: string | null;
+      pushed: boolean;
+      steps: string[];
+      reason: string | null;
+    }>;
+  };
 }
 
 const activeResult = (
@@ -343,6 +356,13 @@ export class BrokerHost {
     server.on('hook', async (p, ctx) => {
       this.onHook(ctx.session.sessionId, p.agent, p.event, p.payload);
       return { ok: true };
+    });
+
+    /** The chat's "merge / push to main": the lane lands through Styx's own landing, refusals as words. */
+    server.on('land', async (p, ctx) => {
+      if (!server.allow(ctx.session.sessionId))
+        throw new BrokerError(ErrorCode.rateLimited, 'too many land calls; try again in a minute');
+      return deps.landing.land(ctx.session.sessionId, p.summary);
     });
 
     /** An agent worked something out; Styx keeps it. A deploy target must belong to the caller's project. */

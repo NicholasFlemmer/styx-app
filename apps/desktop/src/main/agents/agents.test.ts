@@ -1,4 +1,4 @@
-import { copy } from '@styx/core';
+import { copy, fill } from '@styx/core';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -180,7 +180,7 @@ describe('agentPreamble (ADR-0025): CLIs without a system-prompt flag get the sa
       copy.agentPrompt.preamble,
       copy.agentPrompt.shims,
       copy.agentPrompt.peers,
-      'Your worktree is the branch fix/checkout, cut from main. Styx keeps it current: it fetches before a session starts, merges main in before Publish, and shows how far behind the lane is. Do not rebase, merge or switch branches yourself. If a merge conflict appears in the tree, resolve it in place and tell the user.',
+      fill(copy.agentPrompt.lane, { branch: 'fix/checkout', base: 'main' }),
       'Other lanes in this project right now:\n- Codex on test/flaky',
     ]);
     expect(agentPreamble(undefined).split('\n\n')).toEqual([

@@ -2,7 +2,7 @@ import { copy, fixtures } from '@styx/core';
 import { execa } from 'execa';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
 
@@ -47,7 +47,14 @@ async function rig(): Promise<{ t: TestApp; repo: string; wt: string }> {
   const laneRow = t.app.repos.worktrees.get(fixCheckout);
   if (!mainRow || !laneRow) throw new Error('fixture worktrees');
   t.app.repos.worktrees.upsert({ ...mainRow, path: repo, baseCommit: head, headCommit: head });
-  t.app.repos.worktrees.upsert({ ...laneRow, path: wt, baseCommit: head, headCommit: head, pr: null, conflict: null });
+  t.app.repos.worktrees.upsert({
+    ...laneRow,
+    path: wt,
+    baseCommit: head,
+    headCommit: head,
+    pr: null,
+    conflict: null,
+  });
   const session = t.app.repos.sessions.get(claude);
   if (!session) throw new Error('fixture session');
   t.app.repos.sessions.upsert({ ...session, state: 'idle', pausedReason: null });
@@ -72,10 +79,14 @@ describe('LaneSyncService (keep lanes current, ADR-0023)', () => {
     expect(fetched.ok).toBe(true);
     expect(app.repos.worktrees.get(fixCheckout)?.behindBase).toBe(1);
     expect(app.repos.worktrees.get(acmeMain)?.behindBase).toBe(0);
-    expect(lastSystemLine(t, claude)).toBe('main moved: 1 new commits. Bring them in from Repo before you publish.');
+    expect(lastSystemLine(t, claude)).toBe(
+      'main moved: 1 new commits. Bring them in from Repo before you publish.',
+    );
     // A second fetch with nothing new says nothing more.
     await app.bus.dispatch(sender, 'worktree.fetch', { projectId: acme });
-    expect(t.app.repos.transcripts.last(claude).filter((m) => m.body.startsWith('main moved')).length).toBe(1);
+    expect(t.app.repos.transcripts.last(claude).filter((m) => m.body.startsWith('main moved')).length).toBe(
+      1,
+    );
 
     // Mid-turn agents are left alone.
     const s = app.repos.sessions.get(claude);
@@ -83,7 +94,10 @@ describe('LaneSyncService (keep lanes current, ADR-0023)', () => {
     app.repos.sessions.upsert({ ...s, state: 'working' });
     expect(await app.bus.dispatch(sender, 'worktree.sync', { worktreeId: fixCheckout })).toMatchObject({
       ok: false,
-      error: { code: 'invalid-input', message: 'Claude Code is mid-turn. Wait for it to finish, or stop it, before bringing in main.' },
+      error: {
+        code: 'invalid-input',
+        message: 'Claude Code is mid-turn. Wait for it to finish, or stop it, before bringing in main.',
+      },
     });
     app.repos.sessions.upsert({ ...s, state: 'idle' });
 
@@ -94,7 +108,9 @@ describe('LaneSyncService (keep lanes current, ADR-0023)', () => {
     expect(lane?.behindBase).toBe(0);
     expect(lane?.headCommit).toBe(await app.git.headCommit(wt));
     expect(lastSystemLine(t, claude)).toBe('Brought in main: 1 commits.');
-    expect(app.repos.activity.recent(1)[0]?.what).toBe('acme-shop · brought main into fix/checkout (1 commits)');
+    expect(app.repos.activity.recent(1)[0]?.what).toBe(
+      'acme-shop · brought main into fix/checkout (1 commits)',
+    );
 
     // Nothing to bring in: no merge, one quiet line.
     expect(await app.bus.dispatch(sender, 'worktree.sync', { worktreeId: fixCheckout })).toEqual({
@@ -165,7 +181,11 @@ describe('LaneSyncService.autoSync (ADR-0025)', () => {
 
     // A merge that would conflict: in review mode it is not attempted — the lane is marked, the session pauses,
     // the tree is untouched, and the line says how to ask the agent (phase B).
-    app.repos.projects.setSettings(acme, { ...app.repos.projects.settings(acme), integration: 'review' }, null);
+    app.repos.projects.setSettings(
+      acme,
+      { ...app.repos.projects.settings(acme), integration: 'review' },
+      null,
+    );
     writeFileSync(join(repo, 'a.ts'), 'main version\n');
     await sh(['add', '.'], repo);
     await sh(['commit', '-q', '-m', 'main edits a'], repo);
@@ -197,5 +217,116 @@ describe('LaneSyncService.autoSync (ADR-0025)', () => {
     expect(lane?.resolution).toMatchObject({ state: 'resolving', sessionId: claude, files: ['a.ts'] });
     expect(await app.git.mergeInProgress(wt)).toBe(true);
     expect(lastSystemLine(t, claude)).toContain('Conflicted files:');
+  });
+});
+
+/**
+ * A bare `origin` for the rig's repo with main pushed, plus a clone that moves origin's main by one commit
+ * (`remote.ts`) — the state a fetch leaves behind: `origin/main` ahead of the local `main`.
+ */
+async function withOriginAhead(repo: string): Promise<{ bare: string; remoteHead: string }> {
+  const root = dirname(repo);
+  const bare = join(root, 'origin.git');
+  await sh(['init', '--bare', '-q', bare], root);
+  await sh(['remote', 'add', 'origin', bare], repo);
+  await sh(['push', '-q', '-u', 'origin', 'main'], repo);
+  const clone = join(root, 'clone');
+  await sh(['clone', '-q', '-b', 'main', bare, clone], root);
+  writeFileSync(join(clone, 'remote.ts'), 'r\n');
+  await sh(['add', '.'], clone);
+  await sh(['commit', '-q', '-m', 'on origin'], clone);
+  await sh(['push', '-q', 'origin', 'main'], clone);
+  return { bare, remoteHead: await sh(['rev-parse', 'HEAD'], clone) };
+}
+
+describe('LaneSyncService.freshenBase (the local base follows its upstream, ADR-0023 closed)', () => {
+  it('fetch fast-forwards a clean main folder to origin, and the lane is measured against what origin has', async () => {
+    const { t, repo, wt } = await rig();
+    const { remoteHead } = await withOriginAhead(repo);
+    // Before: local main is one behind origin; the lane matches local main exactly.
+    expect(await sh(['rev-parse', 'main'], repo)).not.toBe(remoteHead);
+
+    // An untracked file in the main folder (a `.styx/project.json` Styx wrote, say) does not block the move.
+    writeFileSync(join(repo, 'scratch.txt'), 'x\n');
+    const fetched = await t.app.bus.dispatch(t.sender, 'worktree.fetch', { projectId: acme });
+    expect(fetched.ok).toBe(true);
+    expect(await sh(['rev-parse', 'main'], repo)).toBe(remoteHead);
+    expect(existsSync(join(repo, 'remote.ts'))).toBe(true);
+    expect(existsSync(join(repo, 'scratch.txt'))).toBe(true);
+    expect(t.app.repos.worktrees.get(fixCheckout)?.behindBase).toBe(1);
+    expect(lastSystemLine(t, claude)).toBe(
+      'main moved: 1 new commits. Bring them in from Repo before you publish.',
+    );
+    // The lane never hears "already up to date" about a main that origin has moved past.
+    const synced = await t.app.bus.dispatch(t.sender, 'worktree.sync', { worktreeId: fixCheckout });
+    expect(synced).toEqual({ ok: true, value: { merged: 1, conflict: null } });
+    expect(existsSync(join(wt, 'remote.ts'))).toBe(true);
+    expect(lastSystemLine(t, claude)).toBe('Brought in main: 1 commits.');
+  });
+
+  it('a dirty main folder is left alone; the lane is measured against origin/main and merges from it', async () => {
+    const { t, repo, wt } = await rig();
+    const { remoteHead } = await withOriginAhead(repo);
+    const before = await sh(['rev-parse', 'main'], repo);
+    writeFileSync(join(repo, 'a.ts'), 'edited, not committed\n');
+
+    await t.app.git.fetch(repo);
+    expect(await t.app.laneSync.freshenBase(acme)).toEqual({
+      state: 'stale',
+      reason: 'dirty',
+      behind: 1,
+      upstream: 'origin/main',
+    });
+    expect(await sh(['rev-parse', 'main'], repo)).toBe(before);
+    expect(t.app.laneSync.baseRefOf(acme)).toBe('origin/main');
+
+    await t.app.bus.dispatch(t.sender, 'worktree.fetch', { projectId: acme });
+    expect(t.app.repos.worktrees.get(fixCheckout)?.behindBase).toBe(1);
+    const synced = await t.app.bus.dispatch(t.sender, 'worktree.sync', { worktreeId: fixCheckout });
+    expect(synced).toEqual({ ok: true, value: { merged: 1, conflict: null } });
+    // The lane had no commits of its own, so origin's commit came in as a fast-forward.
+    expect(await sh(['rev-parse', 'HEAD'], wt)).toBe(remoteHead);
+    expect(existsSync(join(wt, 'remote.ts'))).toBe(true);
+    expect(lastSystemLine(t, claude)).toBe('Brought in main: 1 commits.');
+    // Once the folder is clean again the base catches up and the plain name is back.
+    await sh(['checkout', '--', 'a.ts'], repo);
+    expect((await t.app.laneSync.freshenBase(acme)).state).toBe('forwarded');
+    expect(t.app.laneSync.baseRefOf(acme)).toBe('main');
+  });
+
+  it('a diverged main (local commits origin lacks) is never moved; the person sees it on the Repo row', async () => {
+    const { t, repo } = await rig();
+    await withOriginAhead(repo);
+    writeFileSync(join(repo, 'local.ts'), 'l\n');
+    await sh(['add', '.'], repo);
+    await sh(['commit', '-q', '-m', 'local only'], repo);
+    const before = await sh(['rev-parse', 'main'], repo);
+    await t.app.git.fetch(repo);
+    expect(await t.app.laneSync.freshenBase(acme)).toEqual({
+      state: 'diverged',
+      ahead: 1,
+      behind: 1,
+      upstream: 'origin/main',
+    });
+    expect(await sh(['rev-parse', 'main'], repo)).toBe(before);
+    expect(t.app.laneSync.baseRefOf(acme)).toBe('main');
+    const r = await t.app.bus.dispatch(t.sender, 'worktree.fetch', { projectId: acme });
+    expect(r).toMatchObject({ ok: true, value: { ahead: 1, behind: 1 } });
+  });
+
+  it('a base checked out nowhere is moved by ref', async () => {
+    const { t, repo } = await rig();
+    const { remoteHead } = await withOriginAhead(repo);
+    await sh(['checkout', '-q', '-b', 'other'], repo);
+    await t.app.git.fetch(repo);
+    expect((await t.app.laneSync.freshenBase(acme)).state).toBe('forwarded');
+    expect(await sh(['rev-parse', 'main'], repo)).toBe(remoteHead);
+    expect(await sh(['branch', '--show-current'], repo)).toBe('other');
+  });
+
+  it('no remote, no upstream: nothing to do and nothing said', async () => {
+    const { t } = await rig();
+    expect(await t.app.laneSync.freshenBase(acme)).toEqual({ state: 'no-remote' });
+    expect(t.app.laneSync.baseRefOf(acme)).toBe('main');
   });
 });
