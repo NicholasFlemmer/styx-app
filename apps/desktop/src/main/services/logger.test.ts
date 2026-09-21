@@ -31,6 +31,17 @@ describe('redactArgv', () => {
     ]);
     expect(redactArgv(['login', '--with-token', 'abc'])).toEqual(['login', '--with-token', '[redacted]']);
     expect(redactArgv(['-p', 'hunter2', 'user@host'])).toEqual(['-p', '[redacted]', 'user@host']);
+    // `-p` before a bare port number is a port (ssh, next dev, vite), not a password.
+    expect(redactArgv(['ssh', '-p', '2222', 'user@host'])).toEqual(['ssh', '-p', '2222', 'user@host']);
+    expect(redactArgv(['npm', 'run', 'dev', '--', '-p', '3010'])).toEqual([
+      'npm',
+      'run',
+      'dev',
+      '--',
+      '-p',
+      '3010',
+    ]);
+    expect(redactArgv(['-p', '123456'])).toEqual(['-p', '[redacted]']);
     expect(redactArgv(['--password=hunter2', '--api-key=k', '--secret-key=s', '--name=ok'])).toEqual([
       '--password=[redacted]',
       '--api-key=[redacted]',
@@ -117,6 +128,8 @@ describe('commandCarriesSecret', () => {
     expect(commandCarriesSecret('pnpm  dev')).toBe(false);
     expect(commandCarriesSecret('FOO=1\tpnpm dev')).toBe(false);
     expect(commandCarriesSecret('gcloud run deploy api --source . --region europe-west1')).toBe(false);
+    expect(commandCarriesSecret('npm --prefix web run dev -- -p 3010')).toBe(false);
+    expect(commandCarriesSecret('mysql -p hunter2 -e "select 1"')).toBe(true);
     expect(commandCarriesSecret('pnpm dev --token abc123')).toBe(true);
     expect(commandCarriesSecret('API_KEY=abc pnpm dev')).toBe(true);
     expect(commandCarriesSecret('DATABASE_URL=postgres://u:p@localhost/db pnpm dev')).toBe(true);

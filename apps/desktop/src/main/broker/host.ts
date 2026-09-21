@@ -38,17 +38,21 @@ export interface BrokerHostDeps {
   providers: ProviderRegistry;
   clock: Clock;
   endpoint: string;
-  /** What an agent teaches Styx (`remember_command`): persisted on the project / target by the container. */
+  /**
+   * What an agent teaches Styx (`remember_command`): persisted on the project / target by the container. Each
+   * resolves to null when kept, or to the reason it was refused — which the tool returns as an error, so the
+   * agent never believes something was recorded that was not.
+   */
   abilities: {
     rememberRun(
       sessionId: string,
       command: string,
       url: string | null,
       device: { platform: 'web' | 'ios' | 'android' | null; device: string | null; appId: string | null },
-    ): Promise<void>;
-    rememberDeploy(sessionId: string, targetId: string, command: string): Promise<void>;
+    ): Promise<string | null>;
+    rememberDeploy(sessionId: string, targetId: string, command: string): Promise<string | null>;
     /** The checks a resolved merge must pass (ADR-0025 phase B). */
-    rememberChecks(sessionId: string, command: string): Promise<void>;
+    rememberChecks(sessionId: string, command: string): Promise<string | null>;
   };
   /** The `land` tool: the container applies the project's integration mode and runs LandService; never throws. */
   landing: {
@@ -378,11 +382,12 @@ export class BrokerHost {
         );
       if (p.kind === 'run') {
         if (purpose !== 'learn-run') throw new BrokerError(ErrorCode.notAllowed, copy.abilities.notLearning);
-        await deps.abilities.rememberRun(ctx.session.sessionId, p.command, p.url ?? null, {
+        const refused = await deps.abilities.rememberRun(ctx.session.sessionId, p.command, p.url ?? null, {
           platform: p.platform ?? null,
           device: p.device ?? null,
           appId: p.appId ?? null,
         });
+        if (refused !== null) throw new BrokerError(ErrorCode.notAllowed, refused);
         return { ok: true };
       }
       if (p.kind === 'checks') {
@@ -394,7 +399,8 @@ export class BrokerHost {
           (lane.resolution.state === 'resolving' || lane.resolution.state === 'checking');
         if (!resolving && purpose !== 'merge')
           throw new BrokerError(ErrorCode.notAllowed, copy.abilities.checksNotResolving);
-        await deps.abilities.rememberChecks(ctx.session.sessionId, p.command);
+        const refused = await deps.abilities.rememberChecks(ctx.session.sessionId, p.command);
+        if (refused !== null) throw new BrokerError(ErrorCode.notAllowed, refused);
         return { ok: true };
       }
       if (purpose !== 'learn-deploy') throw new BrokerError(ErrorCode.notAllowed, copy.abilities.notLearning);
@@ -416,7 +422,8 @@ export class BrokerHost {
             .some((u) => u.sessionId === ctx.session.sessionId && u.exitCode === 0),
         );
       if (!deployed) throw new BrokerError(ErrorCode.notAllowed, copy.abilities.deployFirst);
-      await deps.abilities.rememberDeploy(ctx.session.sessionId, target.id, p.command);
+      const refused = await deps.abilities.rememberDeploy(ctx.session.sessionId, target.id, p.command);
+      if (refused !== null) throw new BrokerError(ErrorCode.notAllowed, refused);
       return { ok: true };
     });
 

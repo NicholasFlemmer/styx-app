@@ -44,6 +44,8 @@ export function redact<T>(value: T): T {
  * CLI flags whose *next* argument (or `=value`) is a secret. `-p` covers `--password` short forms (ssh's port is
  * collateral); `--body`/`-b`/`--value` carry `gh secret set` / `vercel env add` payloads (PR bodies are collateral).
  */
+/** A bare TCP port, the one `-p` value that is never a password. */
+const PORT = /^\d{1,5}$/;
 const SECRET_FLAGS =
   /^(--token|--with-token|--password|--passphrase|--secret[a-z-]*|--api-key|--body|--value|-p|-b)$/i;
 /**
@@ -62,10 +64,16 @@ const SECRET_KV = /^(--?[a-z][a-z0-9_.-]*|[A-Za-z_][A-Za-z0-9_.-]*)=(.*)$/s;
 export function redactArgv(argv: readonly string[]): string[] {
   const out: string[] = [];
   let dropNext = false;
-  for (const a of argv) {
+  for (const [i, a] of argv.entries()) {
     if (dropNext) {
       out.push('[redacted]');
       dropNext = false;
+      continue;
+    }
+    // `-p` is `--password` for mysql and friends and `--port` for ssh, next, vite…: a value that is nothing but a
+    // port number is a port. (A run command with `-- -p 3010` was refused as secret-bearing, and never remembered.)
+    if (/^-p$/i.test(a) && PORT.test(argv[i + 1] ?? '')) {
+      out.push(a);
       continue;
     }
     if (SECRET_FLAGS.test(a) || SECRET_WORD.test(a)) {

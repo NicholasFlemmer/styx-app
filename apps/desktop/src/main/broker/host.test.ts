@@ -440,10 +440,10 @@ describe('BrokerHost agent-to-agent messaging', () => {
     expect(app.app.repos.transcripts.last(ids.session.claude).at(-1)?.body).toBe(
       'Styx will check merges with `pnpm typecheck && pnpm test` from now on.',
     );
-    // A command carrying a secret is refused on every path.
-    expect(
-      await client.call('remember_command', { kind: 'checks', command: 'TOKEN=abc123secretvalue pnpm test' }),
-    ).toEqual({ ok: true });
+    // A command carrying a secret is refused on every path — as an error the agent sees, not a silent ok.
+    await expect(
+      client.call('remember_command', { kind: 'checks', command: 'TOKEN=abc123secretvalue pnpm test' }),
+    ).rejects.toThrow(copy.abilities.secretInCommand);
     expect(app.app.repos.projects.settings(ids.project.acmeShop).checksCommand).toBe(
       'pnpm typecheck && pnpm test',
     );
@@ -713,15 +713,32 @@ describe('BrokerHost learned abilities (remember_command)', () => {
     expect(after.devUrl).toBe(before);
   });
 
-  it('kind "run": a command carrying a secret is refused with an explanation, and nothing is stored or started', async () => {
+  it('kind "run": a command carrying a secret is refused — the tool errors so the agent knows, the chat says why, nothing is stored or started', async () => {
     const { app, client } = await learner('learn-run');
     const before = app.repos.projects.settings(acme);
     for (const command of ['pnpm dev --token abc123', 'DATABASE_URL=postgres://u:p@localhost/db pnpm dev']) {
-      await client.call('remember_command', { kind: 'run', command, url: 'http://localhost:5173' });
+      await expect(
+        client.call('remember_command', { kind: 'run', command, url: 'http://localhost:5173' }),
+      ).rejects.toThrow(copy.abilities.secretInCommand);
     }
     expect(app.repos.projects.settings(acme)).toEqual(before);
     expect(systemLines(app).filter((l) => l === copy.abilities.secretInCommand)).toHaveLength(2);
     expect(app.runs.all()).toEqual([]);
+  });
+
+  it('kind "run": a dev server pinned to a port (`-- -p 3010`) is not a secret and is remembered', async () => {
+    const { app, client } = await learner('learn-run');
+    expect(
+      await client.call('remember_command', {
+        kind: 'run',
+        command: 'npm --prefix web run dev -- -p 3010',
+        url: 'http://localhost:3010/cards/app',
+      }),
+    ).toEqual({ ok: true });
+    expect(app.repos.projects.settings(acme)).toMatchObject({
+      devCommand: 'npm --prefix web run dev -- -p 3010',
+      devUrl: 'http://localhost:3010/cards/app',
+    });
   });
 
   it('an ordinary session (no purpose), or one started for the other job, cannot remember anything', async () => {
@@ -783,11 +800,13 @@ describe('BrokerHost learned abilities (remember_command)', () => {
       }),
     );
     // A secret in the command is refused even then.
-    await client.call('remember_command', {
-      kind: 'deploy',
-      targetId: ids.target.vercelPreview,
-      command: 'vercel deploy --token abc123',
-    });
+    await expect(
+      client.call('remember_command', {
+        kind: 'deploy',
+        targetId: ids.target.vercelPreview,
+        command: 'vercel deploy --token abc123',
+      }),
+    ).rejects.toThrow(copy.abilities.secretInCommand);
     expect(app.repos.targets.get(ids.target.vercelPreview)?.config['deployCommand']).toBe(
       'vercel deploy --yes',
     );

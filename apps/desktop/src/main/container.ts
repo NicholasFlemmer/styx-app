@@ -573,11 +573,11 @@ export function buildContainer(opts: ContainerOptions): Container {
       // and start the managed run so the design window shows the app straight away.
       rememberRun: async (sessionId, command, url, device) => {
         const session = repos.sessions.get(sessionId);
-        if (!session) return;
+        if (!session) return 'session not found';
         const cmd = command.trim();
         if (commandCarriesSecret(cmd)) {
           transcript.system(session.id, copy.abilities.secretInCommand);
-          return;
+          return copy.abilities.secretInCommand;
         }
         // Stored in its parsed form: the parser strips stray whitespace and control characters.
         const safeUrl = url !== null && isLoopbackUrl(url) ? new URL(url).href : null;
@@ -628,25 +628,27 @@ export function buildContainer(opts: ContainerOptions): Container {
           await runs
             .start(session.projectId, cmd, { platform, worktreeId: session.worktreeId })
             .catch(() => undefined);
+        return null;
       },
       // ADR-0025 phase B: the agent finishing a merge names the project's checks; Styx runs them from then on.
       rememberChecks: async (sessionId, command) => {
         const session = repos.sessions.get(sessionId);
-        if (!session) return;
+        if (!session) return 'session not found';
         const cmd = command.trim();
         if (commandCarriesSecret(cmd)) {
           transcript.system(session.id, copy.abilities.secretInCommand);
-          return;
+          return copy.abilities.secretInCommand;
         }
         await projects.setSettings(session.projectId, { checksCommand: cmd });
         transcript.system(session.id, fill(copy.abilities.learnedChecks, { command: cmd }));
+        return null;
       },
       rememberDeploy: async (sessionId, targetId, command) => {
         const session = repos.sessions.get(sessionId);
-        if (!session) return;
+        if (!session) return 'session not found';
         if (commandCarriesSecret(command)) {
           transcript.system(session.id, copy.abilities.secretInCommand);
-          return;
+          return copy.abilities.secretInCommand;
         }
         const target = targets.setDeployCommand(targetId, command);
         const label = `${target.name} ${target.env}`;
@@ -665,6 +667,7 @@ export function buildContainer(opts: ContainerOptions): Container {
           projectId: session.projectId,
           sessionId: session.id,
         });
+        return null;
       },
     },
   });

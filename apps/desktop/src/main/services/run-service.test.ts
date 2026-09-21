@@ -524,6 +524,11 @@ describe('RunService', () => {
     expect(t.app.repos.projects.settings(acme).devCommand).toBe('pnpm dev');
     await t.app.runs.start(acme, 'make dev');
     expect(t.app.repos.projects.settings(acme).devCommand).toBe('make dev');
+    // A port pinned with `-p` is remembered; a password flag is run but never written.
+    await t.app.runs.start(acme, 'npm --prefix web run dev -- -p 3010');
+    expect(t.app.repos.projects.settings(acme).devCommand).toBe('npm --prefix web run dev -- -p 3010');
+    await t.app.runs.start(acme, 'mysql -p hunter2');
+    expect(t.app.repos.projects.settings(acme).devCommand).toBe('npm --prefix web run dev -- -p 3010');
   });
 
   it('remembers the platform the run targeted (web clears it) and refuses a device run without simulator support', async () => {

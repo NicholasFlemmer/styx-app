@@ -36,3 +36,14 @@ task still running, `session.configure` switches the session at once (Claude liv
 next turn). The merge resolver's hidden task (ADR-0025 phase B) uses the same mode. Styx's own edit approvals
 follow it (`taskAutoApprovesEdits`): every mode but "ask each time" and plan. The person's ordinary sessions
 keep `permissionMode` as before.
+
+## Addendum (2026-09-21) — a refused `remember_command` is an error the agent sees
+
+A fix-run agent on a Next.js app found the working command, `npm --prefix web run dev -- -p 3010`, and called
+`remember_command`; Styx's secret heuristic read `-p 3010` as a password flag and value, wrote "that command
+carries something that looks like a secret" into the chat — a display-only line the agent never receives — and
+returned `ok: true`. The agent believed the command was recorded; the next Run locally ran the old `pnpm dev` and
+failed exactly as before, twice. Two changes: `-p` followed by a bare port number is a port (`redactArgv`, so
+`commandCarriesSecret` and the run's own remembering agree); and every `remember_command` refusal — secret-bearing
+command, unknown session — now comes back as the tool's error with the reason, so an agent can rephrase or tell
+the person, and never reports as done something Styx dropped.
