@@ -18,12 +18,6 @@ import { selectSessionId, useUiStore } from '../state/ui-store';
 import { nextPermissionMode, sessionControls } from '../features/chat/session-controls';
 import type { KeyBinding } from './registry';
 
-const THEME_CYCLE: Record<ThemePreference, ThemePreference> = {
-  dark: 'light',
-  light: 'system',
-  system: 'dark',
-};
-
 const model = (): ReadModel => useReadModel.getState().model;
 
 /** The grant behind the head ask of the active session, when that ask is a grant request. */
@@ -108,8 +102,13 @@ const closeTopmost = (): boolean => {
   return true;
 };
 
+/**
+ * Spec §6 "Toggle theme": every press visibly flips the window. The toggle works from the *resolved* look, so a
+ * `system` preference on a dark OS goes straight to `light` instead of passing through a `dark` step nobody can
+ * see. `system` stays reachable from Settings › General.
+ */
 const cycleTheme = (): boolean => {
-  const next = THEME_CYCLE[model().settings.app.theme];
+  const next: ThemePreference = useUiStore.getState().resolvedTheme === 'dark' ? 'light' : 'dark';
   void command('settings.set', { patch: { theme: next } });
   return true;
 };

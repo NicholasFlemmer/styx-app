@@ -136,9 +136,34 @@ describe('shell bindings', () => {
     expect(commands).toEqual([]);
   });
 
-  it('Mod+Shift+T cycles the theme via settings.set', () => {
+  it('Mod+Shift+T toggles the theme from the resolved look, so a press always shows (spec §6 "Toggle theme")', () => {
+    const inputs: unknown[] = [];
+    (window as unknown as { styx: { command: unknown } }).styx.command = vi.fn(
+      async (name: string, input: unknown) => {
+        commands.push(name);
+        inputs.push(input);
+        return { ok: true, value: {} };
+      },
+    );
+    // `system` preference on a dark OS: the visible look is dark, so the toggle goes to light, not to dark.
+    useReadModel
+      .getState()
+      .replaceModel(
+        {
+          ...fixtures.demoReadModel(),
+          settings: {
+            ...fixtures.demoReadModel().settings,
+            app: { ...fixtures.demoReadModel().settings.app, theme: 'system' },
+          },
+        },
+        'connected',
+      );
+    useUiStore.setState({ resolvedTheme: 'dark' });
     press({ key: 't', metaKey: true, shiftKey: true });
-    expect(commands).toEqual(['settings.set']);
+    useUiStore.setState({ resolvedTheme: 'light' });
+    press({ key: 't', metaKey: true, shiftKey: true });
+    expect(commands).toEqual(['settings.set', 'settings.set']);
+    expect(inputs).toEqual([{ patch: { theme: 'light' } }, { patch: { theme: 'dark' } }]);
   });
 
   it('Mod+Shift+O pops out the active session', () => {
