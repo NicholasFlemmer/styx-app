@@ -347,7 +347,7 @@ describe('DesignPane', () => {
       expect(of('run.detect')).toEqual([{ projectId: acme }, { projectId: acme }]);
       expect(of('session.spawn')[0]).toMatchObject({
         projectId: acme,
-        toggles: { mayRequestTargets: false, autoApproveEdits: false },
+        toggles: { mayRequestTargets: false, autoApproveEdits: true },
       });
       const first = (of('session.spawn')[0] as { firstMessage: string }).firstMessage;
       expect(first).toContain('run acme-shop locally');

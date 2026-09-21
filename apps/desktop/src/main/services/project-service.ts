@@ -224,6 +224,7 @@ export const initialsOf = (name: string): string => {
 const PROJECT_KEYS: (keyof ProjectSettings)[] = [
   'defaultAgent',
   'model',
+  'taskPermissionMode',
   'autoApproveEdits',
   'mayRequestTargets',
   'notifyWhenNeedsMe',

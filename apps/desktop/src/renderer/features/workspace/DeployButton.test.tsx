@@ -108,7 +108,7 @@ describe('DeployButton', () => {
     expect(modals()).toEqual([]);
     expect(calls('session.spawn')[0]).toMatchObject({
       projectId: ids.project.infraTools,
-      toggles: { mayRequestTargets: true, autoApproveEdits: false },
+      toggles: { mayRequestTargets: true, autoApproveEdits: true },
     });
     const first = (calls('session.spawn')[0] as { firstMessage: string }).firstMessage;
     expect(first).toContain('AWS acme-prod prod');

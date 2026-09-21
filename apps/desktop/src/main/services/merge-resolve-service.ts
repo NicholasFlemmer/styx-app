@@ -37,6 +37,8 @@ export interface ResolveSettings {
   defaultAgent: Agent;
   model: string | null;
   permissionMode: PermissionMode;
+  /** The mode a hidden merge task runs in (`ProjectSettings.taskPermissionMode`): bypass by default. */
+  taskPermissionMode: PermissionMode;
   effort: Effort | null;
   notifyWhenNeedsMe: boolean;
 }
@@ -289,7 +291,7 @@ export class MergeResolveService {
       firstMessage,
       toggles: { autoApproveEdits: true, mayRequestTargets: false, notifyWhenNeedsMe: s.notifyWhenNeedsMe },
       model: s.model,
-      permissionMode: s.permissionMode,
+      permissionMode: s.taskPermissionMode,
       effort: s.effort,
       purpose: 'merge',
     });

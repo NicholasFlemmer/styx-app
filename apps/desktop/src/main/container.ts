@@ -728,6 +728,7 @@ export function buildContainer(opts: ContainerOptions): Container {
         defaultAgent: s.defaultAgent.value,
         model: s.model.value,
         permissionMode: s.permissionMode.value,
+        taskPermissionMode: s.taskPermissionMode.value,
         effort: s.effort.value,
         notifyWhenNeedsMe: s.notifyWhenNeedsMe.value,
       };

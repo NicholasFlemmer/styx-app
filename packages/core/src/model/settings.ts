@@ -74,6 +74,11 @@ export const projectSettingsSchema = z.object({
   defaultAgent: agentSchema,
   model: z.string().nullable(),
   permissionMode: permissionModeSchema,
+  /**
+   * The mode Styx's own tasks run in — Run locally, Deploy, Tech debt audit, the merge resolver (owner decision):
+   * bounded jobs Styx started, so they run without asking unless the person says otherwise.
+   */
+  taskPermissionMode: permissionModeSchema,
   effort: effortSchema.nullable(),
   autoApproveEdits: z.boolean(),
   mayRequestTargets: z.boolean(),
@@ -124,6 +129,7 @@ export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   defaultAgent: 'claude',
   model: null,
   permissionMode: 'default',
+  taskPermissionMode: 'bypassPermissions',
   effort: null,
   autoApproveEdits: false,
   mayRequestTargets: true,
@@ -165,7 +171,10 @@ export type PreviewDevice = z.infer<typeof previewDeviceSchema>;
 export const PREVIEW_DEVICES: readonly PreviewDevice[] = previewDeviceSchema.options;
 
 /** CSS pixel viewports for the emulated presets (iPad Air and iPhone 14 Pro, the common check sizes). */
-export const PREVIEW_VIEWPORTS: Record<Exclude<PreviewDevice, 'desktop'>, { width: number; height: number }> = {
+export const PREVIEW_VIEWPORTS: Record<
+  Exclude<PreviewDevice, 'desktop'>,
+  { width: number; height: number }
+> = {
   tablet: { width: 834, height: 1112 },
   phone: { width: 393, height: 852 },
 };

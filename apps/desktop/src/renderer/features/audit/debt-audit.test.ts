@@ -42,17 +42,21 @@ describe('startDebtAudit', () => {
       // The main worktree, not a new one: an audit reads, and the developer means *this* code.
       worktree: { kind: 'existing', worktreeId: mainWorktreeOf(model, acme)?.id },
       firstMessage: copy.debtAudit.prompt,
-      permissionMode: 'default',
+      // Styx's own task: the project's task mode, bypass unless changed (owner decision).
+      permissionMode: 'bypassPermissions',
+      toggles: { autoApproveEdits: true, mayRequestTargets: false, notifyWhenNeedsMe: true },
       purpose: 'debt-audit',
     });
   });
 
-  it('cannot edit without asking, and cannot reach deploy targets', async () => {
+  it("runs in the project's task mode (bypass unless changed; Styx approves its edits) and cannot reach deploy targets", async () => {
     await startDebtAudit(useReadModel.getState().model, acme);
     const spawn = commands.find((c) => c.name === 'session.spawn')?.input as {
       toggles: Record<string, boolean>;
+      permissionMode: string;
     };
-    expect(spawn.toggles.autoApproveEdits).toBe(false);
+    expect(spawn.permissionMode).toBe('bypassPermissions');
+    expect(spawn.toggles.autoApproveEdits).toBe(true);
     expect(spawn.toggles.mayRequestTargets).toBe(false);
   });
 

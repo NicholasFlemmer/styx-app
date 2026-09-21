@@ -3,6 +3,7 @@ import {
   copy,
   mainWorktreeOf,
   projectSettingsOfOrDefault,
+  type PermissionMode,
   type ProjectId,
   type ReadModel,
   type SessionId,
@@ -27,6 +28,9 @@ export const openTask = (key: string | null): void => {
 
 const pending = new Map<string, Promise<SessionId | null>>();
 
+/** Whether Styx approves a task's edits itself: every mode but the two that mean "ask me" / "read only". */
+export const taskAutoApprovesEdits = (mode: PermissionMode): boolean => mode !== 'default' && mode !== 'plan';
+
 /**
  * Open feedback before detection/spawn; neither completion nor dismissal changes the current project. The task
  * runs in `worktreeId` when given (the lane whose files the person is looking at, discrepancy #103), else main.
@@ -43,7 +47,9 @@ export function launchTask(
   openTask(key);
   const existing = activeTask(model, key);
   if (existing) {
-    useUiStore.getState().setTaskLaunch(key, { key, projectId, purpose, sessionId: existing.id, error: null });
+    useUiStore
+      .getState()
+      .setTaskLaunch(key, { key, projectId, purpose, sessionId: existing.id, error: null });
     return Promise.resolve(existing.id);
   }
   const inFlight = pending.get(key);
@@ -62,18 +68,21 @@ export function launchTask(
       if (!worktree) throw new Error(copy.tasks.noWorktree);
       const settings = projectSettingsOfOrDefault(model, projectId);
       const firstMessage = await prompt();
+      // Styx's own task, not a person's session: it runs in the project's task mode (bypass unless changed), and
+      // Styx's own edit approvals follow it — a mode that never asks must not be waiting on an edit approval.
+      const permissionMode = settings.taskPermissionMode;
       const r = await command('session.spawn', {
         projectId,
         agent: settings.defaultAgent,
         worktree: { kind: 'existing', worktreeId: worktree.id },
         firstMessage,
         toggles: {
-          autoApproveEdits: false,
+          autoApproveEdits: taskAutoApprovesEdits(permissionMode),
           mayRequestTargets: purpose === 'learn-deploy',
           notifyWhenNeedsMe: settings.notifyWhenNeedsMe,
         },
         model: null,
-        permissionMode: 'default',
+        permissionMode,
         effort: null,
         purpose,
         ...(targetId ? { taskTargetId: targetId } : {}),

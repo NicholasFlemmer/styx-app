@@ -249,7 +249,10 @@ const agentsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
     const alternatives = cliAlternatives(c);
     const manual = cliIsManual(c);
     if ((alternatives.length < 2 && !manual) || c.binary === null) return [];
-    const options: RowOption[] = alternatives.map((a) => ({ value: a.binary, label: cliCandidateLabel(c.agent, a) }));
+    const options: RowOption[] = alternatives.map((a) => ({
+      value: a.binary,
+      label: cliCandidateLabel(c.agent, a),
+    }));
     if (manual) options.push({ value: CLI_BINARY_AUTO, label: v.cliAutoDetect });
     return [
       {
@@ -453,10 +456,35 @@ const agentDefaultsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => 
       PERMISSION_MODE_OPTIONS,
       true,
     ),
+    // Styx's own tasks (owner decision): bypass by default; the same six modes, switchable here and in the task dialog.
+    projectRow(
+      model,
+      ctx,
+      'taskPermissionMode',
+      r.taskPermissionMode,
+      'taskPermissionMode',
+      (m) => m,
+      (m) =>
+        (PERMISSION_MODES.includes(m as ProjectSettings['taskPermissionMode'])
+          ? m
+          : 'bypassPermissions') as ProjectSettings['taskPermissionMode'],
+      PERMISSION_MODE_OPTIONS,
+      true,
+    ),
     ...effortRow,
     // Keep lanes current (ADR-0023): fetch before cutting a lane; merge the base in before push / PR.
     projectRow(model, ctx, 'syncOnSpawn', r.syncOnSpawn, 'syncOnSpawn', onOff, isOn, ON_OFF, true),
-    projectRow(model, ctx, 'syncBeforePublish', r.syncBeforePublish, 'syncBeforePublish', onOff, isOn, ON_OFF, true),
+    projectRow(
+      model,
+      ctx,
+      'syncBeforePublish',
+      r.syncBeforePublish,
+      'syncBeforePublish',
+      onOff,
+      isOn,
+      ON_OFF,
+      true,
+    ),
     projectRow(
       model,
       ctx,

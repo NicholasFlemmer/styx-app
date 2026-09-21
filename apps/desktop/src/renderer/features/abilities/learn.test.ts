@@ -10,6 +10,7 @@ import {
 } from '@styx/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUiStore } from '../../state/ui-store';
+import { taskAutoApprovesEdits } from '../tasks/task-launch';
 import { learnKey, learningSession, startLearnDeploy, startLearnRun } from './learn';
 
 const { ids } = fixtures;
@@ -85,12 +86,13 @@ describe('learned abilities: the first Run locally / Deploy is a task for the pr
           hints: fill(copy.agentPrompt.guess, { guesses: '`pnpm dev` (from package.json)' }),
         }),
         toggles: {
-          autoApproveEdits: false,
+          // Styx's own task: bypass by default (owner decision), so Styx approves its edits itself too.
+          autoApproveEdits: true,
           mayRequestTargets: false,
           notifyWhenNeedsMe: settings.notifyWhenNeedsMe,
         },
         model: null,
-        permissionMode: 'default',
+        permissionMode: 'bypassPermissions',
         effort: null,
         purpose: 'learn-run',
       },
@@ -134,7 +136,7 @@ describe('learned abilities: the first Run locally / Deploy is a task for the pr
           fill(copy.agentPrompt.guess, { guesses: '`gcloud run deploy api --source .` (from Cloud Run)' }),
         targetId: gcp.id,
       }),
-      toggles: { autoApproveEdits: false, mayRequestTargets: true },
+      toggles: { autoApproveEdits: true, mayRequestTargets: true },
       purpose: 'learn-deploy',
     });
     expect(useUiStore.getState().learning).toEqual({ [learnKey.deploy(gcp.id)]: 's-learn' });
@@ -171,5 +173,23 @@ describe('learned abilities: the first Run locally / Deploy is a task for the pr
       },
     };
     expect(learningSession(finished, learning, learnKey.run(acme))).toBeNull();
+  });
+});
+
+describe('taskAutoApprovesEdits', () => {
+  it('Styx approves a task\'s edits itself in every mode but "ask me" and "read only"', () => {
+    expect(
+      (['default', 'acceptEdits', 'plan', 'bypassPermissions', 'dontAsk', 'auto'] as const).map((m) => [
+        m,
+        taskAutoApprovesEdits(m),
+      ]),
+    ).toEqual([
+      ['default', false],
+      ['acceptEdits', true],
+      ['plan', false],
+      ['bypassPermissions', true],
+      ['dontAsk', true],
+      ['auto', true],
+    ]);
   });
 });

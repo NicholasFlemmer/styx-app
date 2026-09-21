@@ -7,7 +7,7 @@
 import { test, expect } from '@playwright/test';
 import { launchStyx } from './launch';
 
-test('Audit debt spawns a read-only agent session with the audit as its first message', async () => {
+test("Audit debt spawns a hidden task in the project's task mode (bypass by default) with the audit as its first message", async () => {
   const { app, page } = await launchStyx({
     screen: 'repo',
     fixture: 'demo',
@@ -18,7 +18,8 @@ test('Audit debt spawns a read-only agent session with the audit as its first me
 
   const snapshot = async () =>
     page.evaluate(async () => {
-      const styx = (window as never as { styx: { command: (n: string, i: unknown) => Promise<unknown> } }).styx;
+      const styx = (window as never as { styx: { command: (n: string, i: unknown) => Promise<unknown> } })
+        .styx;
       const snap = (await styx.command('store.snapshot', {})) as {
         value?: {
           sessions: {
@@ -43,8 +44,8 @@ test('Audit debt spawns a read-only agent session with the audit as its first me
   // The main worktree: an audit reads, and the developer means this code.
   const main = after.worktrees.find((w) => w.isMain && w.projectId === '01JDEMOPROJ000000000000001');
   expect(spawned?.worktreeId).toBe(main?.id);
-  // A report, not a rewrite.
-  expect(spawned?.toggles.autoApproveEdits).toBe(false);
+  // Styx's own task (owner decision): it runs without asking; the prompt, not the toggle, keeps it a report.
+  expect(spawned?.toggles.autoApproveEdits).toBe(true);
   expect(spawned?.toggles.mayRequestTargets).toBe(false);
 
   await app.close();

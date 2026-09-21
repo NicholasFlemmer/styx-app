@@ -127,6 +127,7 @@ describe('sectionRows', () => {
       ['model', false],
       ['autoApproveEdits', false],
       ['permissionMode', false],
+      ['taskPermissionMode', false],
       ['effort', false],
       ['syncOnSpawn', false],
       ['syncBeforePublish', false],
@@ -143,11 +144,17 @@ describe('sectionRows', () => {
     expect(spawn).toMatchObject({ label: 'Fetch before cutting a lane', value: 'on' });
     expect(publish).toMatchObject({ label: 'Bring in the base branch before publishing', value: 'on' });
     expect(spawn?.options.map((o) => o.label)).toEqual(['On', 'Off']);
-    expect(publish?.change.kind === 'project' && publish.change.patch('off')).toEqual({ syncBeforePublish: false });
+    expect(publish?.change.kind === 'project' && publish.change.patch('off')).toEqual({
+      syncBeforePublish: false,
+    });
     // ADR-0025: the base comes in after every turn unless told otherwise.
     const auto = rows.find((r) => r.id === 'autoSync');
     expect(auto).toMatchObject({ label: 'Bring in the base branch', value: 'turn' });
-    expect(auto?.options.map((o) => o.label)).toEqual(['After every turn', 'Before publishing', 'Only when I ask']);
+    expect(auto?.options.map((o) => o.label)).toEqual([
+      'After every turn',
+      'Before publishing',
+      'Only when I ask',
+    ]);
     expect(auto?.change.kind === 'project' && auto.change.patch('off')).toEqual({ autoSync: 'off' });
     expect(auto?.change.kind === 'project' && auto.change.patch('bogus')).toEqual({ autoSync: 'turn' });
     // Phase B/C: auto by default (owner decision); review is one switch away.
@@ -162,7 +169,10 @@ describe('sectionRows', () => {
     });
     // Phase C: landing by itself is opt-in.
     const autoLand = rows.find((r) => r.id === 'autoLand');
-    expect(autoLand).toMatchObject({ label: 'Land on its own when the agent goes quiet and the checks pass', value: 'off' });
+    expect(autoLand).toMatchObject({
+      label: 'Land on its own when the agent goes quiet and the checks pass',
+      value: 'off',
+    });
     expect(autoLand?.change.kind === 'project' && autoLand.change.patch('on')).toEqual({ autoLand: true });
   });
 
@@ -295,6 +305,7 @@ describe('sectionRows', () => {
       'model',
       'autoApproveEdits',
       'permissionMode',
+      'taskPermissionMode',
       'syncOnSpawn',
       'syncBeforePublish',
       'autoSync',
@@ -323,6 +334,7 @@ describe('sectionRows', () => {
       'Default',
       'Off',
       'Ask each time',
+      'Bypass permissions',
       'Default effort',
       'On',
       'On',

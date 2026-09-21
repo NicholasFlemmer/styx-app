@@ -24,3 +24,15 @@ sessions retain their existing lifecycle. Reports use the persisted transcript a
 Validation covers startup/navigation races, duplicate starts, hidden-session selectors, persisted reports,
 permissions, cancellation and failures. An Electron test uses the fake Codex app-server to exercise the full
 approval flow while switching projects and reopening the report after a reload.
+
+## Addendum (2026-09-21) — tasks run without asking, unless told otherwise
+
+A task spawned with the person's chat defaults (`permissionMode: 'default'`, Styx not approving edits) asked at
+every step — Run locally, Deploy and the audit each turned into a string of approvals for a job Styx itself had
+started. Owner decision: a Styx task is a bounded job on the person's behalf, so it runs in its own mode,
+`ProjectSettings.taskPermissionMode`, `bypassPermissions` by default, with the same six modes on offer. It is a
+row under Agent defaults and a select in the task dialog; changing it there sets the project's mode and, for a
+task still running, `session.configure` switches the session at once (Claude live over the stream, Codex at its
+next turn). The merge resolver's hidden task (ADR-0025 phase B) uses the same mode. Styx's own edit approvals
+follow it (`taskAutoApprovesEdits`): every mode but "ask each time" and plan. The person's ordinary sessions
+keep `permissionMode` as before.

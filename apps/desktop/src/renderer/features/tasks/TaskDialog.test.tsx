@@ -138,6 +138,34 @@ describe('background tasks', () => {
     );
   });
 
+  it("shows the task's permission mode (bypass by default) and switching it sets the project's task mode and the running session", async () => {
+    const task = seedTask({ state: 'working', permissionMode: 'bypassPermissions' });
+    openTask(auditKey);
+    render(<OverlayHost />);
+    const select = screen.getByLabelText(copy.tasks.mode) as HTMLSelectElement;
+    expect(select.value).toBe('bypassPermissions');
+    expect(screen.getByText(copy.tasks.modeHint)).toBeTruthy();
+    fireEvent.change(select, { target: { value: 'default' } });
+    await waitFor(() =>
+      expect(calls).toHaveBeenCalledWith('project.settings.set', {
+        projectId,
+        patch: { taskPermissionMode: 'default' },
+      }),
+    );
+    expect(calls).toHaveBeenCalledWith('session.configure', {
+      sessionId: task.id,
+      permissionMode: 'default',
+    });
+    // A finished task is not reconfigured; the project setting still is.
+    calls.mockClear();
+    act(() => {
+      seedTask({ state: 'done', exitCode: 0, permissionMode: 'bypassPermissions' });
+    });
+    fireEvent.change(screen.getByLabelText(copy.tasks.mode), { target: { value: 'acceptEdits' } });
+    await waitFor(() => expect(calls).toHaveBeenCalledWith('project.settings.set', expect.anything()));
+    expect(calls).not.toHaveBeenCalledWith('session.configure', expect.anything());
+  });
+
   it('answers an approval inside the task, while keeping its agent hidden', async () => {
     const task = seedTask({ state: 'needs-you' });
     const model = useReadModel.getState().model;

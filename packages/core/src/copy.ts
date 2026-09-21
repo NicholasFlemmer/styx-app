@@ -410,6 +410,10 @@ export const copy = {
     noResult: 'The task ended without a report. Check the activity below before trying again.',
     reviewGrant: 'Review access request',
     answer: 'Send answer',
+    /** The permission mode Styx's tasks run in, switchable from the dialog (owner decision: bypass by default). */
+    mode: 'Permissions',
+    modeHint:
+      'Styx’s own tasks run without asking unless you say otherwise. Changing it here applies to this project’s tasks; a task already running switches at once.',
   },
   debtAudit: {
     action: 'Tech debt audit',
@@ -1227,6 +1231,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       autoApproveEdits: 'Auto-approve edits',
       /** Claude Code session defaults (owner addition, docs/handoff-discrepancies #54; not in §10). */
       permissionMode: 'Permission mode',
+      /** Styx's own tasks (owner decision, 2026-09-21): bypass by default, switchable here and in the task dialog. */
+      taskPermissionMode: 'Styx tasks · Run locally, Deploy, Tech debt audit, merges',
       effort: 'Effort',
       envSource: '.env source',
       shareWithAgents: 'Share with agents',

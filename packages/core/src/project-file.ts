@@ -44,6 +44,7 @@ export const projectFileAgentsSchema = z
     default: agentSchema.optional(),
     model: z.string().nullable().optional(),
     permissionMode: permissionModeSchema.optional(),
+    taskPermissionMode: permissionModeSchema.optional(),
     effort: effortSchema.nullable().optional(),
     autoApproveEdits: z.boolean().optional(),
     mayRequestTargets: z.boolean().optional(),
@@ -225,6 +226,7 @@ export const projectSettingsFromFile = (file: ProjectFileV1): Partial<ProjectSet
   if (a?.default !== undefined) out.defaultAgent = a.default;
   if (a?.model !== undefined) out.model = a.model;
   if (a?.permissionMode !== undefined) out.permissionMode = a.permissionMode;
+  if (a?.taskPermissionMode !== undefined) out.taskPermissionMode = a.taskPermissionMode;
   if (a?.effort !== undefined) out.effort = a.effort;
   if (a?.autoApproveEdits !== undefined) out.autoApproveEdits = a.autoApproveEdits;
   if (a?.mayRequestTargets !== undefined) out.mayRequestTargets = a.mayRequestTargets;

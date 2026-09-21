@@ -8,8 +8,11 @@ import {
   type AskResolution,
   type PendingAsk,
   type Session,
+  PERMISSION_MODES,
+  projectSettingsOfOrDefault,
+  type PermissionMode,
 } from '@styx/core';
-import { Button, Input, Markdown, QuestionSet, StatusDot } from '@styx/ui';
+import { Button, Input, Markdown, QuestionSet, Select, StatusDot } from '@styx/ui';
 import { useEffect, useId, useRef, useState } from 'react';
 import { command } from '../../state/commands';
 import { useModel, useUi } from '../../state/hooks';
@@ -221,6 +224,31 @@ export function TaskDialog({ id, selectedKey }: { id: string; selectedKey: strin
               {status}
             </div>
             <p className={s['hint']}>{copy.tasks.hint}</p>
+            {projectId ? (
+              <div className={s['mode']} data-task-mode="true">
+                <Select
+                  aria-label={copy.tasks.mode}
+                  width={190}
+                  value={
+                    session?.permissionMode ?? projectSettingsOfOrDefault(model, projectId).taskPermissionMode
+                  }
+                  options={PERMISSION_MODES.map((m) => ({
+                    value: m,
+                    label: copy.session.permissionModes[m],
+                  }))}
+                  onChange={(e) => {
+                    const mode = e.currentTarget.value as PermissionMode;
+                    // The project's tasks from now on, and this one straight away (Claude switches live; Codex at its
+                    // next turn).
+                    void command('project.settings.set', { projectId, patch: { taskPermissionMode: mode } });
+                    if (session && session.state !== 'done')
+                      void command('session.configure', { sessionId: session.id, permissionMode: mode });
+                  }}
+                  data-task-mode-select="true"
+                />
+                <span className={s['hint']}>{copy.tasks.modeHint}</span>
+              </div>
+            ) : null}
             {error ? <p role="alert">{error}</p> : null}
             {session?.note && !ask ? <p>{session.note}</p> : null}
             {session?.state === 'paused' ? (
