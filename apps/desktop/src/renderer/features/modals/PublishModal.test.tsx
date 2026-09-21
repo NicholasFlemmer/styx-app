@@ -55,6 +55,41 @@ describe('PublishModal', () => {
     Object.assign(window, { styx: undefined });
   });
 
+  it('a project with no remote: commit only, the notice says so, and Connect to GitHub swaps in the connect modal that comes back here', async () => {
+    const model = fixtures.demoReadModel();
+    const wt = model.worktrees.byId[testFlaky];
+    const repo = wt ? model.repos.byId[wt.repoId] : undefined;
+    if (!wt || !repo) throw new Error('fixture');
+    useReadModel.getState().replaceModel(
+      {
+        ...model,
+        repos: { ...model.repos, byId: { ...model.repos.byId, [repo.id]: { ...repo, remotes: [] } } },
+      },
+      'connected',
+    );
+    render(<PublishModal id="modal-1" worktreeId={testFlaky} />);
+    expect(screen.getByText(copy.publish.noRemoteHint)).toBeTruthy();
+    const chips = within(dialog()).getAllByRole('radio');
+    expect(
+      chips.map((c) => [c.textContent, c.getAttribute('aria-checked'), (c as HTMLButtonElement).disabled]),
+    ).toEqual([
+      [copy.publish.through.commit, 'true', false],
+      [copy.publish.through.push, 'false', true],
+      [copy.publish.through.pr, 'false', true],
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: copy.repo.connect }));
+    await waitFor(() =>
+      expect(useUiStore.getState().overlays).toEqual([
+        expect.objectContaining({
+          kind: 'modal',
+          modal: 'connect-repo',
+          projectId: wt.projectId,
+          returnTo: { modal: 'publish', worktreeId: testFlaky },
+        }),
+      ]),
+    );
+  });
+
   it('helpers: the reach defaults to PR without an open one, push with one, push on main; the message splits on its first line', () => {
     expect(defaultThrough(null)).toBe('push');
     expect(defaultThrough({ isMain: true, pr: null })).toBe('push');
@@ -231,7 +266,7 @@ describe('PublishModal', () => {
     fireEvent.click(screen.getByRole('button', { name: copy.publish.run }));
     await waitFor(() => expect(stepLine('push')?.getAttribute('data-state')).toBe('failed'));
     expect(within(dialog()).getByRole('alert').textContent).toBe(
-      'Commit & push failed: No remote: add one under Repo before pushing.',
+      'Commit & push failed: No remote: connect one before pushing.',
     );
     expect(stepLine('pr')).toBeNull();
     expect(calls('worktree.publish')).toHaveLength(2);

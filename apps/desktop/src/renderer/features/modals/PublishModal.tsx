@@ -49,6 +49,7 @@ export const defaultThrough = (
  */
 export function PublishModal({ id, worktreeId }: PublishModalProps) {
   const popOverlay = useUi((u) => u.popOverlay);
+  const pushOverlay = useUi((u) => u.pushOverlay);
   const wt = useModel(useCallback((m: ReadModel) => m.worktrees.byId[worktreeId] ?? null, [worktreeId]));
   const agent = useModel(
     useCallback(
@@ -64,7 +65,11 @@ export function PublishModal({ id, worktreeId }: PublishModalProps) {
       [wt],
     ),
   );
-  const [through, setThrough] = useState<PublishThrough>(() => defaultThrough(wt));
+  // No remote (owner report): commit still works; push and PR wait on one, and the notice offers to connect it.
+  const noRemote = useModel(
+    useCallback((m: ReadModel) => wt !== null && (m.repos.byId[wt.repoId]?.remotes.length ?? 0) === 0, [wt]),
+  );
+  const [through, setThrough] = useState<PublishThrough>(() => (noRemote ? 'commit' : defaultThrough(wt)));
   const [message, setMessage] = useState('');
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
@@ -242,11 +247,36 @@ export function PublishModal({ id, worktreeId }: PublishModalProps) {
         {phase === 'edit' ? (
           <>
             <p className={s['lead']}>{fill(copy.publish.lead, { agent: agent ?? copy.general.none })}</p>
+            {noRemote && wt !== null ? (
+              <div className={s['notice']} role="status" data-publish-no-remote="true">
+                <span>{copy.publish.noRemoteHint}</span>
+                <Button
+                  size="compact"
+                  variant="secondary"
+                  onClick={() => {
+                    popOverlay(id);
+                    pushOverlay({
+                      kind: 'modal',
+                      modal: 'connect-repo',
+                      projectId: wt.projectId,
+                      returnTo: { modal: 'publish', worktreeId },
+                    });
+                  }}
+                  data-publish-connect="true"
+                >
+                  {copy.repo.connect}
+                </Button>
+              </div>
+            ) : null}
             <ChipGroup
               layout="inline"
               size="env"
               aria-label={copy.publish.run}
-              options={throughOptions}
+              options={
+                noRemote
+                  ? throughOptions.map((o) => ({ ...o, disabled: o.value !== 'commit' }))
+                  : throughOptions
+              }
               value={through}
               onChange={(v) => setThrough(v as PublishThrough)}
               data-publish-through="true"

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { copy, fixtures, type ProjectId } from '@styx/core';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
@@ -108,6 +108,28 @@ describe('Repo screen', () => {
       }),
     );
     expect(screen.getByRole('region', { name: 'test/flaky' })).toBeTruthy();
+  });
+
+  it('a repo with no remote offers Connect to GitHub in the header, which opens the connect-repo modal', () => {
+    const model = fixtures.demoReadModel();
+    const repo = model.repos.byId[fixtures.ids.repo.acmeShop];
+    if (!repo) throw new Error('fixture repo');
+    useReadModel.getState().replaceModel(
+      {
+        ...model,
+        repos: { ...model.repos, byId: { ...model.repos.byId, [repo.id]: { ...repo, remotes: [] } } },
+      },
+      'connected',
+    );
+    render(<Repo />);
+    fireEvent.click(screen.getByRole('button', { name: copy.repo.connect }));
+    expect(useUiStore.getState().overlays).toEqual([
+      expect.objectContaining({ kind: 'modal', modal: 'connect-repo', projectId: acme }),
+    ]);
+    // With a remote the same place reads Reconnect (a wrong or dead remote can be replaced).
+    act(() => useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected'));
+    expect(screen.queryByRole('button', { name: copy.repo.connect })).toBeNull();
+    expect(screen.getByRole('button', { name: copy.repo.reconnect })).toBeTruthy();
   });
 
   it('Fetch, + Worktree, and Archive dispatch worktree commands', () => {

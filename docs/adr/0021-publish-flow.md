@@ -77,3 +77,18 @@ json` — capped at 60 KB of numstat + patch and 60 s. That is the trade t3code 
   minimum; Changes and PR give up the width.
 - Copy additions (`copy.publish.*`, `copy.palette.actions.publish*`) are not in spec §10; logged as
   discrepancy #90.
+
+## Addendum (2026-09-21) — connecting the remote, and the push header
+
+- **A project with no remote can get one from Styx.** Publish's only answer used to be "add one under Repo", and
+  Repo had no way. `project.connectRemote` (Repo header `Connect to GitHub`; the Publish modal's notice, which
+  reopens Publish once done) creates a private repo through the connected GitHub target — created, `origin`, the
+  current branch pushed, audited `connected` — or takes an existing repo's URL (`owner/name` shorthand means
+  github.com) as `origin` with no GitHub connection needed. With a remote the same button reads `Reconnect` and
+  replaces `origin` outright (a wrong or dead remote is a new remote, not an edit), after saying which one is
+  there. The remote is never replaced without that explicit ask.
+- **The token push uses basic auth.** The grant's token travelled as `Authorization: bearer`, which GitHub's REST
+  API accepts and its git endpoint does not: the push got 401, git asked for a username, the prompt was disabled
+  by design, and the person read "unable to read askpass response from /usr/bin/false". The header is now
+  `basic` with `x-access-token:<token>` (the form GitHub documents and actions/checkout uses), it takes a PAT, a
+  fine-grained PAT, an installation token and `gh`'s OAuth token alike, and a refused token is reported as one.

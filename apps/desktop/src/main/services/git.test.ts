@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execa } from 'execa';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { GitService, worktreeLocation } from './git';
+import { GitService, isTokenRefusal, worktreeLocation } from './git';
 
 const git = new GitService();
 let repo: string;
@@ -147,5 +147,62 @@ describe('remoteHost', () => {
     expect(remoteHost('https://github.com.evil.io/acme/shop.git')).toBe('other');
     expect(remoteHost('https://evil.io/github.com/acme/shop.git')).toBe('other');
     expect(remoteHost('/srv/git/github.com/shop.git')).toBe('other');
+  });
+});
+
+describe('push with a grant token', () => {
+  /** A runner that records each call; `remote get-url` answers with the configured push URL. */
+  const recorder = (pushUrl: string, pushError: string | null = null) => {
+    const calls: { args: string[]; env: Record<string, string> | undefined }[] = [];
+    const runner = {
+      run: async (args: string[], _cwd: string, opts: { env?: Record<string, string> } = {}) => {
+        calls.push({ args, env: opts.env });
+        if (args[0] === 'remote') return { stdout: `${pushUrl}\n`, stderr: '', exitCode: 0 };
+        if (args[0] === 'push' && pushError !== null) throw new Error(pushError);
+        return { stdout: '', stderr: '', exitCode: 0 };
+      },
+    };
+    return { calls, svc: new GitService(runner) };
+  };
+
+  it('sends the token as basic x-access-token auth, scoped to github.com, with helpers and prompts off', async () => {
+    const { calls, svc } = recorder('https://github.com/acme/shop.git');
+    await svc.push('/repo', 'origin', 'fix/checkout', { token: 'gho_abc' });
+    const push = calls.find((c) => c.args[0] === 'push');
+    expect(push?.args).toEqual(['push', '-q', '-u', 'origin', 'fix/checkout']);
+    expect(push?.env).toMatchObject({
+      GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+      GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from('x-access-token:gho_abc').toString('base64')}`,
+      GIT_CONFIG_KEY_1: 'credential.helper',
+      GIT_CONFIG_VALUE_1: '',
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_ASKPASS: '/usr/bin/false',
+    });
+    expect(push?.env?.['GIT_CONFIG_VALUE_0']).not.toContain('bearer');
+  });
+
+  it('a non-github or ssh remote is pushed without the token and without the lockdown', async () => {
+    for (const url of [
+      'git@github.com:acme/shop.git',
+      'https://gitlab.com/acme/shop.git',
+      '/srv/git/shop.git',
+    ]) {
+      const { calls, svc } = recorder(url);
+      await svc.push('/repo', 'origin', 'main', { token: 'gho_abc' });
+      const push = calls.find((c) => c.args[0] === 'push');
+      expect(push?.env, url).toBeUndefined();
+    }
+  });
+
+  it('a refused token reads as a refused token, not as an askpass failure', async () => {
+    const { svc } = recorder(
+      'https://github.com/acme/shop.git',
+      "git push -q -u origin main failed (128): error: unable to read askpass response from '/usr/bin/false'\nfatal: could not read Username for 'https://github.com': terminal prompts disabled",
+    );
+    await expect(svc.push('/repo', 'origin', 'main', { token: 'gho_abc' })).rejects.toThrow(
+      /GitHub refused the token for https:\/\/github.com\/acme\/shop.git/,
+    );
+    expect(isTokenRefusal('The requested URL returned error: 403')).toBe(true);
+    expect(isTokenRefusal('remote: not found')).toBe(false);
   });
 });

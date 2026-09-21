@@ -68,6 +68,10 @@ export class ExecaGitRunner implements GitRunner {
   }
 }
 
+/** What git says when the token in the header was refused and no prompt was allowed to rescue it. */
+export const isTokenRefusal = (message: string): boolean =>
+  /could not read Username|Authentication failed|The requested URL returned error: 40[13]/i.test(message);
+
 /** Wraps system git (≥2.38 for merge-tree --write-tree). All paths are absolute. */
 export class GitService {
   constructor(private readonly git: GitRunner = new ExecaGitRunner()) {}
@@ -573,6 +577,11 @@ export class GitService {
     await this.git.run(['remote', 'add', name, url], path);
   }
 
+  /** Drops a remote and its tracking refs (a reconnect replaces `origin` rather than editing it in place). */
+  async removeRemote(path: string, name: string): Promise<void> {
+    await this.git.run(['remote', 'remove', name], path);
+  }
+
   /**
    * `git push -u <remote> <branch>`. A bearer token, when given, travels as a one-shot `http.extraheader` through
    * `GIT_CONFIG_*` env (not argv, so it never shows in `ps`) and is not persisted in the repo config.
@@ -596,16 +605,27 @@ export class GitService {
       await this.git.run(['push', '-q', '-u', remote, branch], path);
       return;
     }
+    // Basic auth with `x-access-token`, the form GitHub documents for git over HTTPS (and the one actions/checkout
+    // uses): it takes a PAT, a fine-grained PAT, an installation token and `gh`'s OAuth token alike. A bearer
+    // header is accepted by the REST API but not by the git endpoint, which answers 401 and asks for a username.
     const env = {
       GIT_CONFIG_COUNT: '2',
       GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
-      GIT_CONFIG_VALUE_0: `AUTHORIZATION: bearer ${opts.token}`,
+      GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${opts.token}`).toString('base64')}`,
       GIT_CONFIG_KEY_1: 'credential.helper',
       GIT_CONFIG_VALUE_1: '',
       GIT_TERMINAL_PROMPT: '0',
       GIT_ASKPASS: '/usr/bin/false',
     };
-    await this.git.run(['push', '-q', '-u', remote, branch], path, { env });
+    try {
+      await this.git.run(['push', '-q', '-u', remote, branch], path, { env });
+    } catch (e) {
+      // The prompt is disabled on purpose, so a refused token surfaces as git asking for a username: say what
+      // actually happened rather than quoting askpass.
+      if (isTokenRefusal((e as Error).message))
+        throw new Error(`GitHub refused the token for ${pushUrl} (the login may lack the repo scope)`);
+      throw e;
+    }
   }
 
   async configureRepo(

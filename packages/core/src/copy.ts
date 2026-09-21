@@ -990,6 +990,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     remoteLine: '{remote} · {branch} ↑{ahead} ↓{behind}',
     fetch: 'Fetch',
     addWorktree: '+ Worktree',
+    /** A repo with no remote (owner report): the header offers to connect one; with one, to replace it. */
+    connect: 'Connect to GitHub',
+    reconnect: 'Reconnect',
     columns: { branch: 'Branch', owner: 'Owner', changes: 'Changes', pr: 'PR' },
     you: 'you',
     changes: {
@@ -1434,6 +1437,28 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     screensAltAfter: 'Screenshot of the app after turn {n}',
   },
   /** Commit, push and pull request in one step (owner request after t3code). */
+  /** Connect a project to a GitHub repo (owner report, 2026-09-21): Publish and Land push to a remote it did not have. */
+  connectRepo: {
+    title: 'Connect {project} to GitHub',
+    lead: 'Publish and Land push to a remote. This project has none yet: create a repo on GitHub, or point Styx at one that exists.',
+    kinds: { create: 'Create a new repo', existing: 'Use an existing repo' },
+    kindLabel: 'Repository',
+    name: 'Repository name',
+    private: 'Private',
+    url: 'Repository URL',
+    urlPlaceholder: 'https://github.com/you/repo.git · git@github.com:you/repo.git · you/repo',
+    cta: 'Connect',
+    /** Reconnect (owner request): a wrong or dead remote is replaced, never edited in place. */
+    current: 'Connected to {url}. Connecting again replaces it.',
+    reconnectCta: 'Reconnect',
+    connecting: 'Connecting…',
+    noGithub:
+      'Creating a repo needs GitHub connected under Targets. An existing repo\u2019s URL works without it.',
+    hasOrigin: 'This project already has a remote: {url}.',
+    invalidUrl: 'Enter a repository URL (https or ssh), a path, or owner/name.',
+    noGit: 'This folder is not a git repository yet. Initialise git under Repo first.',
+    activity: 'connected to {remote}',
+  },
   publish: {
     button: 'Commit & push',
     buttonPr: 'Open PR',
@@ -1450,7 +1475,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     running: { commit: 'Committing…', push: 'Pushing…', pr: 'Opening pull request…' },
     done: { commit: 'Committed {commit}', push: 'Pushed {branch}', pr: 'Opened PR #{number}' },
     nothingToCommit: 'Nothing to commit: the worktree is clean.',
-    noRemote: 'No remote: add one under Repo before pushing.',
+    noRemote: 'No remote: connect one before pushing.',
+    /** The modal's notice while the project has no remote: commit still works, the rest waits on a remote. */
+    noRemoteHint: 'This project has no remote yet, so Publish can only commit until one is connected.',
     prExists: 'PR #{number} already exists for this branch.',
     failed: '{step} failed: {error}',
     openPr: 'Open PR #{number}',

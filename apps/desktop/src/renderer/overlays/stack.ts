@@ -23,6 +23,8 @@ export type ModalPayload =
   | { modal: 'deploy'; targetId: TargetId; deployId?: string }
   /** Per-target deploy commands for a project (targets without a built-in verb). */
   | { modal: 'deploy-setup'; projectId: ProjectId }
+  /** Connect a project to a GitHub repo (Repo header, the Publish modal's notice); `returnTo` reopens Publish after. */
+  | { modal: 'connect-repo'; projectId: ProjectId; returnTo?: { modal: 'publish'; worktreeId: WorktreeId } }
   /** Commit, push and PR in one step for a worktree (Repo lane, mode strip, palette; ADR-0021). */
   | { modal: 'publish'; worktreeId: WorktreeId }
   /** Land a lane into the base branch (Repo lane; ADR-0025 phase C). */

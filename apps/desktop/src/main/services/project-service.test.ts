@@ -22,6 +22,8 @@ import {
   projectFileRules,
   scanRoots,
   walkForRepos,
+  githubHtmlUrl,
+  remoteUrlOf,
 } from './project-service';
 
 const { ids } = fixtures;
@@ -723,6 +725,124 @@ describe('project.create with createGithubRepo', () => {
     const entry = t.app.repos.audit.all().find((e) => e.action === 'connected' && e.projectId === project.id);
     expect(entry?.detail).toMatchObject({ repo: 'acme/new-thing' });
     expect(entry?.targetId).toBe(gh.id);
+  });
+
+  it('project.connectRemote: an existing repo (URL, path, or owner/name) becomes origin; a second remote or a bad URL is refused', async () => {
+    const t = makeTestApp();
+    const root = mkdtempSync(join(tmpdir(), 'styx-connect-'));
+    const path = join(root, 'acme-shop');
+    mkdirSync(path);
+    await t.app.git.init(path);
+    await t.app.git.commit(path, 'init', { allowEmpty: true });
+    const project = t.app.repos.projects.get(ids.project.acmeShop);
+    if (!project) throw new Error('fixture project');
+    t.app.repos.projects.upsert({ ...project, path }, t.app.repos.projects.settings(project.id));
+    const repo = t.app.repos.repos.byProject(project.id);
+    if (!repo) throw new Error('fixture repo');
+    t.app.repos.repos.upsert({ ...repo, remotes: [] });
+    const bare = join(root, 'origin.git');
+    await t.app.git['git'].run(['init', '--bare', '-q', bare], root);
+
+    await expect(
+      t.app.projects.connectRemote(project.id, { kind: 'existing', url: 'not a url' }),
+    ).rejects.toMatchObject({ code: 'invalid-input' });
+    const r = await t.app.bus.dispatch(t.sender, 'project.connectRemote', {
+      projectId: project.id,
+      remote: { kind: 'existing', url: bare },
+    });
+    expect(r).toEqual({ ok: true, value: { url: bare, htmlUrl: null } });
+    expect((await t.app.git.remotes(path)).map((x) => [x.name, x.url])).toEqual([['origin', bare]]);
+    expect(t.app.repos.repos.byProject(project.id)?.remotes).toEqual([{ name: 'origin', url: bare }]);
+    expect(t.app.repos.activity.recent().map((a) => a.what)).toContain(`acme-shop · connected to ${bare}`);
+    // Already connected: refused unless the person asked to reconnect, which replaces origin outright.
+    await expect(
+      t.app.projects.connectRemote(project.id, {
+        kind: 'existing',
+        url: 'https://github.com/acme/other.git',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid-input', message: expect.stringContaining(bare) });
+    const again = await t.app.projects.connectRemote(
+      project.id,
+      { kind: 'existing', url: 'acme/other' },
+      { replace: true },
+    );
+    expect(again).toEqual({
+      url: 'https://github.com/acme/other.git',
+      htmlUrl: 'https://github.com/acme/other',
+    });
+    expect((await t.app.git.remotes(path)).map((x) => [x.name, x.url])).toEqual([
+      ['origin', 'https://github.com/acme/other.git'],
+    ]);
+    // A bad URL on reconnect leaves the old remote in place.
+    await expect(
+      t.app.projects.connectRemote(project.id, { kind: 'existing', url: 'nope nope' }, { replace: true }),
+    ).rejects.toMatchObject({ code: 'invalid-input' });
+    expect((await t.app.git.remotes(path)).map((x) => x.url)).toEqual(['https://github.com/acme/other.git']);
+    // The shorthand and the ssh form resolve to github.com pages; other hosts have none.
+    expect(remoteUrlOf('acme/shop')).toBe('https://github.com/acme/shop.git');
+    expect(remoteUrlOf(' git@github.com:acme/shop.git ')).toBe('git@github.com:acme/shop.git');
+    expect(remoteUrlOf('https://gitlab.com/acme/shop')).toBe('https://gitlab.com/acme/shop');
+    expect(remoteUrlOf('acme shop')).toBeNull();
+    expect(githubHtmlUrl('https://github.com/acme/shop.git')).toBe('https://github.com/acme/shop');
+    expect(githubHtmlUrl('git@github.com:acme/shop.git')).toBe('https://github.com/acme/shop');
+    expect(githubHtmlUrl('https://gitlab.com/acme/shop.git')).toBeNull();
+  });
+
+  it('project.connectRemote: a new repo goes through the GitHub target with the chosen name and visibility, and the branch is pushed', async () => {
+    const calls: { url: string; method: string; body: unknown }[] = [];
+    const bare = mkdtempSync(join(tmpdir(), 'styx-bare-'));
+    const fetchFake: typeof fetch = async (input, init) => {
+      const url = String(input);
+      calls.push({
+        url,
+        method: init?.method ?? 'GET',
+        body: init?.body ? JSON.parse(String(init.body)) : null,
+      });
+      if (url === 'https://api.github.com/user') return Response.json({ login: 'me' });
+      // The fixture target may name an org owner: either endpoint answers the same way.
+      if (url === 'https://api.github.com/user/repos' || /\/orgs\/[^/]+\/repos$/.test(url))
+        return Response.json(
+          {
+            full_name: 'me/shop-web',
+            clone_url: bare,
+            html_url: 'https://github.com/me/shop-web',
+            default_branch: 'main',
+          },
+          { status: 201 },
+        );
+      return new Response('nope', { status: 404 });
+    };
+    const t = makeTestApp({ fetch: fetchFake });
+    await t.app.git.init(bare);
+    await t.app.git['git'].run(['config', 'receive.denyCurrentBranch', 'ignore'], bare);
+    const gh = t.app.repos.targets.get(ids.target.github);
+    if (!gh?.credentialRef) throw new Error('fixture github target');
+    await t.vault.set(gh.credentialRef, JSON.stringify({ token: 'gh_test' }));
+    const root = mkdtempSync(join(tmpdir(), 'styx-connect-'));
+    const path = join(root, 'acme-shop');
+    mkdirSync(path);
+    await t.app.git.init(path);
+    await t.app.git.commit(path, 'init', { allowEmpty: true });
+    const project = t.app.repos.projects.get(ids.project.acmeShop);
+    if (!project) throw new Error('fixture project');
+    t.app.repos.projects.upsert({ ...project, path }, t.app.repos.projects.settings(project.id));
+    const repo = t.app.repos.repos.byProject(project.id);
+    if (!repo) throw new Error('fixture repo');
+    t.app.repos.repos.upsert({ ...repo, remotes: [] });
+
+    const r = await t.app.projects.connectRemote(project.id, {
+      kind: 'create',
+      name: 'shop-web',
+      isPrivate: false,
+    });
+    expect(r).toEqual({ url: bare, htmlUrl: 'https://github.com/me/shop-web' });
+    expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
+    expect(calls[1]?.url).toMatch(/\/repos$/);
+    expect(calls[1]?.body).toEqual({ name: 'shop-web', private: false, auto_init: false });
+    expect(t.app.repos.repos.byProject(project.id)?.remotes).toEqual([{ name: 'origin', url: bare }]);
+    expect(await t.app.git.headCommit(bare)).toBe(await t.app.git.headCommit(path));
+    const entry = t.app.repos.audit.all().find((e) => e.action === 'connected' && e.projectId === project.id);
+    expect(entry?.triggeredBy).toBe('project.connectRemote');
   });
 
   it('fails with provider-error when no GitHub target is connected', async () => {

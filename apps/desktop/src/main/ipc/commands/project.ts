@@ -18,6 +18,10 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
     return {};
   });
 
+  bus.register('project.connectRemote', ({ projectId, remote, replace }) =>
+    projects.connectRemote(projectId, remote, { replace }),
+  );
+
   /** "Open in {IDE} too": the fallback IDE, else the app setting's kind; nothing when neither is detected. */
   const openInFallbackIde = (path: string): void => {
     const ide =

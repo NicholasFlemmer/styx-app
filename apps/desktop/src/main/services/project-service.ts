@@ -221,6 +221,29 @@ export const initialsOf = (name: string): string => {
   return (s || 'PR').toUpperCase();
 };
 
+/**
+ * What may become `origin`: an https / ssh URL, a local path (a bare repo on disk), or the `owner/name` shorthand,
+ * which means github.com. Anything else is not a remote and is not tried.
+ */
+export const remoteUrlOf = (raw: string): string | null => {
+  const text = raw.trim();
+  if (text === '' || /\s/.test(text)) return null;
+  if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(text)) return `https://github.com/${text}.git`;
+  if (/^(https?|ssh|git|file):\/\/\S+$/i.test(text)) return text;
+  if (/^[\w.-]+@[\w.-]+:\S+$/.test(text)) return text;
+  if (text.startsWith('/')) return text;
+  return null;
+};
+
+/** The web page for a github.com remote (`.git` and the ssh form both resolve), null for anything else. */
+export const githubHtmlUrl = (url: string): string | null => {
+  const https = /^https:\/\/github\.com\/([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i.exec(url);
+  if (https?.[1] !== undefined) return `https://github.com/${https[1]}`;
+  const ssh = /^git@github\.com:([^/\s]+\/[^/\s]+?)(?:\.git)?$/i.exec(url);
+  if (ssh?.[1] !== undefined) return `https://github.com/${ssh[1]}`;
+  return null;
+};
+
 const PROJECT_KEYS: (keyof ProjectSettings)[] = [
   'defaultAgent',
   'model',
@@ -766,16 +789,24 @@ export class ProjectService {
    * Creates a private repo through the GitHub target's token (`/user/repos`, or `/orgs/{owner}/repos` when the target's
    * `owner` is an org), adds it as `origin` and pushes the initial commit. Audited as `connected` with `{ repo }`.
    */
-  async createGithubRepo(projectId: string, push: boolean): Promise<{ fullName: string; htmlUrl: string }> {
+  async createGithubRepo(
+    projectId: string,
+    push: boolean,
+    opts: { name?: string; isPrivate?: boolean; triggeredBy?: string } = {},
+  ): Promise<{ fullName: string; htmlUrl: string; cloneUrl: string }> {
     const { repos, github, git, publisher } = this.deps;
     const project = this.require(projectId);
     const target = this.githubTarget(project.id);
-    if (!target || !github) fail('provider-error', 'Connect GitHub to create the remote');
+    if (!target || !github) fail('provider-error', copy.connectRepo.noGithub);
     const owner = typeof target.config['owner'] === 'string' ? target.config['owner'] : null;
     const info = this.targetInfo(target);
     let created;
     try {
-      created = await github.createRepo(info, { name: project.name, owner, isPrivate: true });
+      created = await github.createRepo(info, {
+        name: opts.name ?? project.name,
+        owner,
+        isPrivate: opts.isPrivate ?? true,
+      });
     } catch (e) {
       fail('provider-error', (e as Error).message);
     }
@@ -807,14 +838,64 @@ export class ProjectService {
         actorLabel: 'you',
         action: 'connected',
         ...auditContext(repos, { target, projectId: project.id }),
-        triggeredBy: 'project.create',
+        triggeredBy: opts.triggeredBy ?? 'project.create',
         detail: { repo: created.fullName, url: created.htmlUrl },
       });
       publisher.upsert('auditEntries', [row.id]);
       const entry = repos.audit.get(row.id);
       if (entry && this.deps.activity) this.deps.activity.fromAudit(entry);
     }
-    return { fullName: created.fullName, htmlUrl: created.htmlUrl };
+    return { fullName: created.fullName, htmlUrl: created.htmlUrl, cloneUrl: created.cloneUrl };
+  }
+
+  /**
+   * Gives a project with no remote one (owner report): a new repo on GitHub through the target, pushed, or an
+   * existing repo's URL as `origin` (fetched so the base's ahead / behind read at once). Never replaces a remote
+   * that is already there — that is a decision for the person and their git.
+   */
+  async connectRemote(
+    projectId: string,
+    input: { kind: 'create'; name: string; isPrivate: boolean } | { kind: 'existing'; url: string },
+    opts: { replace?: boolean } = {},
+  ): Promise<{ url: string; htmlUrl: string | null }> {
+    const { repos, git, publisher } = this.deps;
+    const project = this.require(projectId);
+    if (!(await git.isRepo(project.path))) fail('invalid-input', copy.connectRepo.noGit);
+    const origin = (await git.remotes(project.path)).find((r) => r.name === 'origin');
+    if (origin !== undefined) {
+      if (opts.replace !== true) fail('invalid-input', fill(copy.connectRepo.hasOrigin, { url: origin.url }));
+      // Reconnect (owner request): the old origin goes, tracking refs and all, and the new one is set up fresh.
+      if (input.kind === 'existing' && remoteUrlOf(input.url) === null)
+        fail('invalid-input', copy.connectRepo.invalidUrl);
+      await git.removeRemote(project.path, 'origin');
+      logger.info('project: remote replaced', { project: project.name, previous: origin.url });
+    }
+    if (input.kind === 'create') {
+      const created = await this.createGithubRepo(project.id, true, {
+        name: input.name.trim(),
+        isPrivate: input.isPrivate,
+        triggeredBy: 'project.connectRemote',
+      });
+      return { url: created.cloneUrl, htmlUrl: created.htmlUrl };
+    }
+    const url = remoteUrlOf(input.url);
+    if (url === null) fail('invalid-input', copy.connectRepo.invalidUrl);
+    await git.addRemote(project.path, 'origin', url);
+    await git.fetch(project.path).catch(() => undefined);
+    const repo = repos.repos.byProject(project.id);
+    if (repo) {
+      const info = await this.describeGit(project.path);
+      repos.repos.upsert({ ...repo, remotes: info.remotes, ahead: info.ahead, behind: info.behind });
+      publisher.upsert('repos', [repo.id]);
+    }
+    this.deps.activity?.append({
+      who: copy.repo.you,
+      what: `${project.name} · ${fill(copy.connectRepo.activity, { remote: url })}`,
+      projectId: project.id as ProjectId,
+      sessionId: null,
+    });
+    logger.info('project: remote connected', { project: project.name, remote: url });
+    return { url, htmlUrl: githubHtmlUrl(url) };
   }
 
   /** Built-in template names plus repos tagged `styx-template` in the GitHub target's org (empty when unavailable). */

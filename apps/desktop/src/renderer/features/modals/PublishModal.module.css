@@ -11,6 +11,18 @@
     line-height: 1.5;
   }
   /* Progress: one row per step, a square dot that goes accent while running and text-colour once done. */
+  /* No remote yet: one line and the way to fix it, on the panel surface with a hairline. */
+  .notice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--ln);
+    background: var(--s2);
+    color: var(--mu);
+    font-size: 12.5px;
+  }
   .steps {
     margin: 0;
     padding: 0;

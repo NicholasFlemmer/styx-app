@@ -7,6 +7,7 @@ import { ConnectAgentModal } from '../features/modals/ConnectAgentModal';
 import { ConnectModal } from '../features/modals/ConnectModal';
 import { DeployModal } from '../features/modals/DeployModal';
 import { DeploySetupModal } from '../features/modals/DeploySetupModal';
+import { ConnectRepoModal } from '../features/modals/ConnectRepoModal';
 import { NewProjectModal } from '../features/modals/NewProjectModal';
 import { LandModal } from '../features/modals/LandModal';
 import { PublishModal } from '../features/modals/PublishModal';
@@ -43,6 +44,15 @@ const render = (o: Overlay) => {
           );
         case 'deploy-setup':
           return <DeploySetupModal key={o.id} id={o.id} projectId={o.projectId} />;
+        case 'connect-repo':
+          return (
+            <ConnectRepoModal
+              key={o.id}
+              id={o.id}
+              projectId={o.projectId}
+              {...(o.returnTo !== undefined ? { returnTo: o.returnTo } : {})}
+            />
+          );
         case 'publish':
           return <PublishModal key={o.id} id={o.id} worktreeId={o.worktreeId} />;
         case 'land':

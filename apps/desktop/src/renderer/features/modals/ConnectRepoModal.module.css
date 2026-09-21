@@ -1,0 +1,19 @@
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+  }
+  .lead,
+  .hint {
+    margin: 0;
+    color: var(--mu);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .error {
+    margin: 0;
+    color: var(--act);
+    font-size: 12.5px;
+  }
+}

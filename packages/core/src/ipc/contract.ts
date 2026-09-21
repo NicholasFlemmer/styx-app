@@ -55,9 +55,7 @@ import {
 import { appSettingsSchema, previewDeviceSchema, projectSettingsSchema } from '../model/settings';
 import { pendingAskSchema } from '../model/session';
 import { notificationSchema } from '../model/notification';
-import { projectSchema, repoSchema, worktreeSchema,
-  worktreeConflictSchema,
-} from '../model/project';
+import { projectSchema, repoSchema, worktreeSchema, worktreeConflictSchema } from '../model/project';
 import { sessionSchema } from '../model/session';
 import { targetSchema } from '../model/target';
 import { grantSchema } from '../model/grant';
@@ -175,6 +173,23 @@ export const commands = {
   },
   /** `git init -b main` (+ an empty first commit) in a plain-folder project; the main worktree lands on `main`. */
   'project.gitInit': { input: z.object({ projectId: projectIdSchema }), output: ok },
+  /**
+   * Gives a project with no remote one (owner report: Publish said "add one under Repo", and Repo had no way):
+   * a new GitHub repo through the connected GitHub target, or an existing repo's URL (`owner/name` shorthand
+   * expands to github.com) as `origin`.
+   */
+  'project.connectRemote': {
+    input: z.object({
+      projectId: projectIdSchema,
+      remote: z.discriminatedUnion('kind', [
+        z.object({ kind: z.literal('create'), name: z.string().min(1).max(100), isPrivate: z.boolean() }),
+        z.object({ kind: z.literal('existing'), url: z.string().min(1).max(500) }),
+      ]),
+      /** Reconnect: replace the `origin` that is there (a wrong or dead remote). Off, an existing origin refuses. */
+      replace: z.boolean().default(false),
+    }),
+    output: z.object({ url: z.string(), htmlUrl: z.string().nullable() }),
+  },
   /** `into` is the full destination folder (`~/code/<repo>`); progress arrives as `project.cloneProgress`. */
   'project.clone': {
     input: z.object({

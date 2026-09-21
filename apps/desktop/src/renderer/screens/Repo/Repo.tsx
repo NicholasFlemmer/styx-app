@@ -181,6 +181,18 @@ export function Repo() {
         <span className={s['meta']} data-repo-remote="true">
           {remoteLine(repo)}
         </span>
+        {/* No remote: Publish and Land have nowhere to push until one is connected; with one, it can be replaced
+            (owner report and request). */}
+        {projectId !== null && repo !== null ? (
+          <Button
+            size="regular"
+            variant={repo.remotes.length === 0 ? 'secondary' : 'ghost'}
+            onClick={() => pushOverlay({ kind: 'modal', modal: 'connect-repo', projectId })}
+            data-repo-connect={repo.remotes.length === 0 ? 'connect' : 'reconnect'}
+          >
+            {repo.remotes.length === 0 ? copy.repo.connect : copy.repo.reconnect}
+          </Button>
+        ) : null}
         <span className={s['spacer']} />
         <Button size="regular" onClick={audit} data-repo-audit="true">
           {copy.debtAudit.action}
