@@ -503,6 +503,12 @@ export function DesignPane({
       ) : (
         <span className={s['hint']}>{copy.workspace.design.waitingHint}</span>
       )}
+      {/* A URL nobody is serving: the server usually just needs starting, and Styx knows how (owner report). */}
+      {!live && devCommand !== null && (
+        <Button size="compact" variant="secondary" onClick={startRun} data-preview-run="true">
+          {copy.workspace.run.run}
+        </Button>
+      )}
     </div>
   ) : null;
 

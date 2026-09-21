@@ -11,7 +11,7 @@ import {
   type ReadModel,
   type Session,
 } from '@styx/core';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
@@ -572,6 +572,39 @@ describe('DesignPane', () => {
         bounds: { x: 220, y: 80, width: 900, height: 600 },
       });
       expect(document.querySelector('[data-preview-hole]')).not.toBeNull();
+    });
+  });
+
+  describe('a URL nobody is serving', () => {
+    it('offers Run locally while waiting and when nothing answered, when a command is known and no run is live', async () => {
+      const { rerender } = render(pane({ devUrl: 'localhost:3010', devCommand: 'npm run dev' }));
+      emit('preview.status', { url: 'http://localhost:3010/', phase: 'waiting', attempts: 3 });
+      const waiting = await waitFor(() => {
+        const el = document.querySelector('[data-preview-status="waiting"]') as HTMLElement;
+        expect(el).not.toBeNull();
+        return el;
+      });
+      expect(waiting.textContent).toContain('Waiting for http://localhost:3010/');
+      fireEvent.click(within(waiting).getByRole('button', { name: copy.workspace.run.run }));
+      expect(of('run.start')).toHaveLength(1);
+      expect(of('run.start')[0]).toMatchObject({ projectId: acme, command: 'npm run dev', platform: 'web' });
+
+      emit('preview.status', { url: 'http://localhost:3010/', phase: 'failed', attempts: 120 });
+      const failed = await waitFor(() => {
+        const el = document.querySelector('[data-preview-status="failed"]') as HTMLElement;
+        expect(el).not.toBeNull();
+        return el;
+      });
+      expect(within(failed).getByRole('button', { name: copy.workspace.design.retry })).toBeTruthy();
+      expect(within(failed).getByRole('button', { name: copy.workspace.run.run })).toBeTruthy();
+
+      // A live run is already on its way: no second start; no command known: nothing to offer.
+      rerender(
+        pane({ devUrl: 'localhost:3010', devCommand: 'npm run dev', run: run({ phase: 'starting' }) }),
+      );
+      expect(document.querySelector('[data-preview-run]')).toBeNull();
+      rerender(pane({ devUrl: 'localhost:3010', devCommand: null }));
+      expect(document.querySelector('[data-preview-run]')).toBeNull();
     });
   });
 
