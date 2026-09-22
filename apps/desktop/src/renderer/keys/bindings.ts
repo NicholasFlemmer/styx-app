@@ -129,7 +129,10 @@ export const composerBindings = (sessionOf: () => SessionId | null): KeyBinding[
     run: () => {
       const sessionId = sessionOf();
       const session = sessionId === null ? undefined : model().sessions.byId[sessionId];
-      if (session === undefined || !sessionControls(session).stop) return false;
+      // Only a turn that is actually running: the Stop button also shows while an ask waits (needs-you), but a
+      // stray Esc in the composer must not cancel an agent's open request.
+      if (session === undefined || session.state !== 'working' || !sessionControls(session).stop)
+        return false;
       void command('session.interrupt', { sessionId: session.id });
       return true;
     },
