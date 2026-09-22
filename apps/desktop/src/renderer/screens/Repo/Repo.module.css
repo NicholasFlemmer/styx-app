@@ -54,6 +54,10 @@
   .actions {
     gap: var(--sp-3);
     white-space: nowrap;
+    /* Three verbs (Commit & push · Land · Diff) need ~148px; at the 1100px window minimum the cell has 142. They
+       wrap onto a second line there instead of running into the next column. */
+    flex-wrap: wrap;
+    row-gap: 2px;
   }
   /* PR cell as a link when the PR's page is known: the mono text stays, underline says it opens. */
   .prLink {

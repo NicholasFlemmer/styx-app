@@ -13,6 +13,15 @@ export interface GitStatus {
   clean: boolean;
 }
 
+/**
+ * The tracked changes that stand in the way of moving a base branch: everything except untracked files (a
+ * fast-forward or a merge leaves those alone) and Styx's own `.styx/` settings file, which Styx rewrites on every
+ * Settings change and which is committed by design — it must never make the main folder read as "dirty" to Styx
+ * itself. git still refuses the move if an incoming commit touches a dirty file, and that is reported as such.
+ */
+export const blockingChanges = (status: Pick<GitStatus, 'changed'>): GitStatus['changed'] =>
+  status.changed.filter((c) => c.kind !== 'untracked' && !c.path.startsWith('.styx/'));
+
 export interface NumStat {
   added: number;
   removed: number;

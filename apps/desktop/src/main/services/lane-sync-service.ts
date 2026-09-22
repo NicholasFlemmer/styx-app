@@ -5,7 +5,7 @@ import { fail } from '../ipc/bus';
 import type { Publisher } from '../store/publisher';
 import { projectSettingsFor } from '../store/projection';
 import type { ActivityService } from './activity-service';
-import type { GitService } from './git';
+import { blockingChanges, type GitService } from './git';
 import { logger } from './logger';
 import type { TranscriptService } from './transcript-service';
 
@@ -29,6 +29,12 @@ export interface LaneSyncDeps {
   /** ADR-0025 phase B: `ProjectSettings.integration`, and the resolver a conflicting merge is handed to in auto mode. */
   integrationOf?: (projectId: string) => 'auto' | 'review';
   resolveConflict?: (worktreeId: string) => Promise<unknown>;
+  /**
+   * Commits what the lane left uncommitted before a merge (PublishService, `through: 'commit'`: by name, secret
+   * files stay out). git refuses to merge over local changes to a file the merge touches, and a raw
+   * "would be overwritten" error is no answer to a person who pressed Bring in main. Absent = merge as is.
+   */
+  commitLane?: (worktreeId: string, message: string) => Promise<string | null>;
 }
 
 export interface SyncResult {
@@ -110,10 +116,11 @@ export class LaneSyncService {
     // nowhere (the folder is on another branch); never under a dirty tree or a checkout elsewhere.
     const current = await git.currentBranch(project.path);
     if (current === base) {
-      // Tracked changes block the move; an untracked file does not (a fast-forward leaves it alone, and one the
-      // incoming commits would overwrite makes git refuse, which reads as `failed` below).
+      // Tracked changes block the move; an untracked file or Styx's own `.styx/project.json` does not (a
+      // fast-forward leaves them alone, and one the incoming commits would overwrite makes git refuse, which
+      // reads as `failed` below).
       const status = await git.status(project.path);
-      if (status.changed.some((c) => c.kind !== 'untracked'))
+      if (blockingChanges(status).length > 0)
         return done({ state: 'stale', reason: 'dirty', behind, upstream });
       const ok = await git.mergeFfOnly(project.path, upstream);
       if (!ok) return done({ state: 'stale', reason: 'failed', behind, upstream });
@@ -266,6 +273,8 @@ export class LaneSyncService {
       return { merged: 0, conflict: null };
     }
 
+    if (this.deps.commitLane !== undefined && !(await git.status(wt.path)).clean)
+      await this.deps.commitLane(wt.id, fill(copy.sync.wipCommit, { branch, base }));
     const r = await git.merge(wt.path, baseRef);
     if (!r.ok) {
       const status = await git.status(wt.path).catch(() => null);

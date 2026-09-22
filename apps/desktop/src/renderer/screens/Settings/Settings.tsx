@@ -19,6 +19,7 @@ import {
   Tag,
   TABLE_COLUMNS,
 } from '@styx/ui';
+import { useEffect, useState } from 'react';
 import { PROJECT_POLICY_BANNER } from '../../features/banners/BannerStack';
 import { cliTargetMeta } from '../../features/modals/modals';
 import { AgentsPane } from './AgentsPane';
@@ -83,6 +84,9 @@ export function Settings() {
   );
 }
 
+/** How long an armed Remove waits for its second press. */
+const REMOVE_ARM_MS = 4000;
+
 function Targets({ model, projectId }: { model: ReadModel; projectId: ProjectId | null }) {
   const now = useNow();
   const pushOverlay = useUi((u) => u.pushOverlay);
@@ -92,6 +96,22 @@ function Targets({ model, projectId }: { model: ReadModel; projectId: ProjectId 
   // The accept is bound to the reviewed file hash (security H-1 TOCTOU): main refuses and re-sets the banner if it changed.
   const policyHash = policyBanner?.action.kind === 'review-project-policy' ? policyBanner.action.hash : null;
   const rows = projectId === null ? [] : targetRows(model, projectId, now);
+  // Remove is armed by a first press and fires on the second (within a few seconds): the credential leaves the
+  // keychain and the target's grants end, so one stray click must not do it.
+  const [armed, setArmed] = useState<string | null>(null);
+  useEffect(() => {
+    if (armed === null) return;
+    const timer = setTimeout(() => setArmed(null), REMOVE_ARM_MS);
+    return () => clearTimeout(timer);
+  }, [armed]);
+  const onRemove = (t: TargetRow) => {
+    if (armed !== t.targetId) {
+      setArmed(t.targetId);
+      return;
+    }
+    setArmed(null);
+    void command('target.remove', { targetId: t.targetId });
+  };
 
   const openConnect = () => {
     if (projectId !== null) pushOverlay({ kind: 'modal', modal: 'connect', projectId });
@@ -178,6 +198,16 @@ function Targets({ model, projectId }: { model: ReadModel; projectId: ProjectId 
                 onClick={() => onAction(t)}
               >
                 {t.action}
+              </button>
+              <button
+                type="button"
+                className={s['action']}
+                aria-label={`${copy.targets.actions.remove} · ${t.name} ${t.env}`}
+                data-on={armed === t.targetId ? 'true' : undefined}
+                data-target-remove={armed === t.targetId ? 'armed' : 'true'}
+                onClick={() => onRemove(t)}
+              >
+                {armed === t.targetId ? copy.targets.actions.removeConfirm : copy.targets.actions.remove}
               </button>
             </TableCell>
           </TableRow>

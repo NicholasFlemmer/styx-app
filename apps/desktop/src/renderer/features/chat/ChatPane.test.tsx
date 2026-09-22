@@ -952,7 +952,7 @@ describe('ChatPane queue (messages sent mid-turn)', () => {
     render(<ChatPane projectId={acme} />); // the demo Claude session is working
     const send = document.querySelector('[data-composer-send]') as HTMLButtonElement;
     expect(send.textContent).toBe(copy.queue.send.queue);
-    expect(send.title).toBe(copy.queue.queueHint);
+    expect(send.title).toBe(fill(copy.queue.queueHint, { agent: 'Claude Code' }));
 
     const model = fixtures.demoReadModel();
     const s = model.sessions.byId[claude];
@@ -985,7 +985,7 @@ describe('ChatPane queue (messages sent mid-turn)', () => {
     render(<ChatPane projectId={acme} />);
     const send = document.querySelector('[data-composer-send]') as HTMLButtonElement;
     expect(send.textContent).toBe(copy.queue.send.steer);
-    expect(send.title).toBe(copy.queue.steerHint);
+    expect(send.title).toBe(fill(copy.queue.steerHint, { agent: 'Codex' }));
     act(() =>
       useReadModel.getState().replaceModel(codexLive({ state: 'working', runner: 'pty' }), 'connected'),
     );

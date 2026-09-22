@@ -4,7 +4,7 @@ import type { Repos } from '../db/repos';
 import { fail } from '../ipc/bus';
 import type { Publisher } from '../store/publisher';
 import type { ActivityService } from './activity-service';
-import type { GitService } from './git';
+import { blockingChanges, type GitService } from './git';
 import { isSecretFile, logger } from './logger';
 import type { FreshenResult } from './lane-sync-service';
 import type { ChecksResult } from './merge-resolve-service';
@@ -148,7 +148,8 @@ export class LandService {
     const current = await git.currentBranch(project.path);
     if (current !== base)
       fail('invalid-input', fill(copy.land.baseNotCheckedOut, { current: current ?? '?', base }));
-    if (!(await git.status(project.path)).clean) fail('invalid-input', fill(copy.land.dirtyBase, { base }));
+    if (blockingChanges(await git.status(project.path)).length > 0)
+      fail('invalid-input', fill(copy.land.dirtyBase, { base }));
     // The base as it is on the remote, before anything is measured against it or merged onto it: a landing onto a
     // stale local base pushes as a non-fast-forward and is refused by the remote — after the merge is made.
     if ((await git.remotes(project.path)).length > 0) await git.fetch(project.path).catch(() => undefined);
@@ -339,7 +340,8 @@ export class LandService {
       fail('invalid-input', fill(copy.land.baseNotCheckedOut, { current: current ?? '?', base }));
     if ((await git.headCommit(project.path)) !== landing.commit)
       fail('invalid-transition', fill(copy.land.undoMoved, { base }));
-    if (!(await git.status(project.path)).clean) fail('invalid-input', fill(copy.land.dirtyBase, { base }));
+    if (blockingChanges(await git.status(project.path)).length > 0)
+      fail('invalid-input', fill(copy.land.dirtyBase, { base }));
     // A landing is a merge commit, except a re-land that reapplied an undone one (a single revert-of-a-revert).
     const r =
       (await git.parentCount(project.path, landing.commit)) > 1

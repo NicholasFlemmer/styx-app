@@ -1093,6 +1093,20 @@ describe('project file trust gate (H-1): reconcile, banner, accept, audit', () =
 });
 
 describe('project settings file', () => {
+  it('every key of the settings schema is written by setSettings (a hand-kept list once dropped permissionMode and effort)', async () => {
+    const t = makeTestApp();
+    const acme = fixtures.ids.project.acmeShop;
+    await t.app.projects.setSettings(acme, {
+      permissionMode: 'acceptEdits',
+      effort: 'high',
+      taskPermissionMode: 'plan',
+    });
+    const saved = t.app.repos.projects.settings(acme);
+    expect(saved.permissionMode).toBe('acceptEdits');
+    expect(saved.effort).toBe('high');
+    expect(saved.taskPermissionMode).toBe('plan');
+  });
+
   it('a project whose path is not absolute (a fixture display path) keeps its settings in the store but never gets a file written under the working directory', async () => {
     const t = makeTestApp();
     const acme = fixtures.ids.project.acmeShop;

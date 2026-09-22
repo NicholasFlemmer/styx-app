@@ -278,7 +278,11 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
     session !== null && env().e2e !== true && isMidTurn(session) ? deliveryWhileWorking(session) : null;
   const sendLabel = delivery === null ? copy.chat.composer.send : copy.queue.send[delivery];
   const sendTitle =
-    delivery === 'steer' ? copy.queue.steerHint : delivery === 'queue' ? copy.queue.queueHint : undefined;
+    delivery === null || session === null
+      ? undefined
+      : fill(delivery === 'steer' ? copy.queue.steerHint : copy.queue.queueHint, {
+          agent: copy.agentProducts[session.agent],
+        });
   // Messages held while the agent is mid-turn (queue): dashed bubbles under the transcript, oldest first.
   const queued: readonly QueuedMessage[] = activeId === null ? [] : (model.queues[activeId] ?? []);
   // Text handed back to this composer (Take back, or Stop returning the queue): applied once, then cleared.

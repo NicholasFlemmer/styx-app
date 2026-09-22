@@ -300,6 +300,22 @@ describe('DesignPane', () => {
     expect(of('project.settings.set')).toEqual([{ projectId: acme, patch: { devUrl: 'localhost:5173' } }]);
   });
 
+  it('a non-local URL is refused with the local-only notice, also when a page was saved before', async () => {
+    render(pane({ devUrl: 'localhost:3000' }));
+    const field = screen.getByLabelText(copy.workspace.design.urlLabel);
+    fireEvent.change(field, { target: { value: 'https://example.com' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(of('project.settings.set')).toEqual([]);
+    expect(document.querySelector('[data-preview-local-only="true"]')?.textContent).toContain(
+      copy.workspace.design.localOnly,
+    );
+    // The page slot stays hidden behind the notice until a local URL is typed again.
+    await waitFor(() => expect(sets().at(-1)).toMatchObject({ visible: false }));
+    fireEvent.change(field, { target: { value: 'localhost:3000' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(document.querySelector('[data-preview-local-only="true"]')).toBeNull();
+  });
+
   it('unmounting detaches the view', async () => {
     const { unmount } = render(pane());
     await waitFor(() => expect(sets().length).toBeGreaterThan(0));
@@ -636,17 +652,18 @@ describe('DesignPane', () => {
       // A device platform: no web presets, the device hint, the device empty state, no page.
       expect(document.querySelectorAll('[data-preview-device]')).toHaveLength(0);
       expect(document.querySelector('[data-run-first-time]')?.textContent).toBe(
-        copy.workspace.run.firstTimeDevice,
+        fill(copy.workspace.run.firstTimeDevice, { agent: defaultAgent() }),
       );
       expect(screen.getByText(copy.workspace.device.empty)).toBeTruthy();
       await waitFor(() => expect(sets().at(-1)).toMatchObject({ visible: false, url: '' }));
       fireEvent.click(chips()[1]!);
       expect(of('project.settings.set')).toEqual([{ projectId: acme, patch: { devPlatform: 'android' } }]);
-      // Main saved it: android is now the selection; web clears the setting (detection's first is the default).
+      // Main saved it: android is now the selection; on a mobile app Web is saved as web (null would resolve
+      // back to iOS, detection's first, and the person could never pick Web).
       rerender(pane({ devUrl: null, devPlatform: 'android' }));
       expect(chips().map((c) => c.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false']);
       fireEvent.click(chips()[2]!);
-      expect(of('project.settings.set').at(-1)).toEqual({ projectId: acme, patch: { devPlatform: null } });
+      expect(of('project.settings.set').at(-1)).toEqual({ projectId: acme, patch: { devPlatform: 'web' } });
       // Clicking the current one is a no-op.
       fireEvent.click(chips()[1]!);
       expect(of('project.settings.set')).toHaveLength(2);

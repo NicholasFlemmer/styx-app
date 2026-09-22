@@ -66,6 +66,10 @@
     text-transform: inherit;
     color: inherit;
   }
+  /* An armed Remove (second press removes): accent, the "armed" vocabulary. */
+  .action[data-on='true'] {
+    color: var(--act);
+  }
   /* spec §9: hit targets ≥ 28px for the 10px action label */
   .action::after {
     content: '';

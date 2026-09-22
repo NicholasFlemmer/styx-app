@@ -203,7 +203,10 @@ export function DesignPane({
   const devices = listed !== null && listed.platform === devicePlatform ? listed.devices : [];
   const choosePlatform = (p: DevPlatform) => {
     if (p === platform) return;
-    void command('project.settings.set', { projectId, patch: { devPlatform: p === 'web' ? null : p } });
+    // The pick is saved as picked. Only a plain web app (web is detection's default anyway) keeps the setting
+    // unset; on a mobile app "Web" must be remembered, or null would resolve straight back to iOS.
+    const unset = p === 'web' && (platforms[0] ?? 'web') === 'web';
+    void command('project.settings.set', { projectId, patch: { devPlatform: unset ? null : p } });
   };
   const chooseDevice = (e: ChangeEvent<HTMLSelectElement>) => {
     const next = e.currentTarget.value;
@@ -346,7 +349,9 @@ export function DesignPane({
   // platform has no page: the simulator is the app.
   const previewUrl =
     devicePlatform !== null ? '' : live && run.url !== null ? run.url : isLocalDevUrl(url) ? url : '';
-  const visible = active && !covered && previewUrl !== '' && !mirroring;
+  // A refused (non-local) URL in the field: the notice says so and the page slot stays off screen.
+  const [localOnly, setLocalOnly] = useState(false);
+  const visible = active && !covered && previewUrl !== '' && !mirroring && !localOnly;
   // Main probes a new URL until the server answers, then loads it; until then the hole says so.
   const [status, setStatus] = useState<{
     url: string;
@@ -444,7 +449,6 @@ export function DesignPane({
     [projectId],
   );
 
-  const [localOnly, setLocalOnly] = useState(false);
   const save = () => {
     const next = draft.trim();
     if (next !== '' && !isLocalDevUrl(next)) {
@@ -481,7 +485,9 @@ export function DesignPane({
         </span>
       )}
     </div>
-  ) : previewUrl === '' ? (
+  ) : previewUrl === '' || localOnly ? (
+    // A refused (non-local) URL says so whether or not a page was saved before: the field still holds the
+    // rejected text, so a silent notice about the old page would read as the app having ignored the person.
     <div className={s['empty']} data-preview-local-only={localOnly ? 'true' : undefined}>
       <span className="t-label">
         {localOnly ? copy.workspace.design.localOnly : copy.workspace.design.empty}
@@ -631,7 +637,7 @@ export function DesignPane({
         ) : learnerId === null ? (
           <span className={s['hint']} data-run-first-time="true">
             {devicePlatform !== null
-              ? copy.workspace.run.firstTimeDevice
+              ? fill(copy.workspace.run.firstTimeDevice, { agent: agentName })
               : fill(copy.workspace.run.firstTime, { agent: agentName })}
           </span>
         ) : null}

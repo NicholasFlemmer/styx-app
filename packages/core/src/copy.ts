@@ -393,6 +393,12 @@ export const copy = {
     needsYou: 'Needs your input',
     paused: 'Paused',
     finished: 'Finished',
+    /** A learn task that ended without telling Styx anything: the run row would be back where it started. */
+    nothingLearned: 'Finished, but nothing was learned',
+    nothingLearnedRun:
+      'The agent ended without telling Styx how to run this project, so nothing will start next time. Run again, or type the command in the Design tab.',
+    nothingLearnedDeploy:
+      'The agent ended without telling Styx how to deploy to this target. Run again, or set the command under Settings › Targets.',
     failed: 'Could not finish',
     stopped: 'Stopped',
     background: 'Continue in background',
@@ -665,7 +671,15 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       unconnected: 'unconnected',
       open: 'open · {t} left',
     },
-    actions: { revoke: 'Revoke', edit: 'Edit', connect: 'Connect', refresh: 'Refresh' },
+    actions: {
+      revoke: 'Revoke',
+      edit: 'Edit',
+      connect: 'Connect',
+      refresh: 'Refresh',
+      /** Two presses: the first arms it (the credential leaves the keychain, grants end), the second removes. */
+      remove: 'Remove',
+      removeConfirm: 'Remove?',
+    },
     /** Settings › Targets affordance for repo-authored grant policies (security audit H-1). */
     acceptProjectPolicies: 'Accept project policies',
     statusBar: {
@@ -1166,7 +1180,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       statusBarNoUrl: 'dev · running',
       /** First run: the agent works it out in chat (owner principle: the button does what asking an agent does). */
       learning: 'Preparing local app…',
-      firstTime: 'Set up and start this project locally.',
+      firstTime: 'Set up and start this project locally. {agent} works out how.',
       learningHint: 'It may ask you a question in the chat. Styx will remember the answer.',
       openChat: 'View progress',
       askToFix: 'Ask {agent} to fix it',
@@ -1174,7 +1188,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       failureNoUrl: 'never answered on a local URL',
       /** Device runs: the row reads the platform, not a URL. */
       runningDevice: 'Running · {platform}',
-      firstTimeDevice: 'Set up and run this app on a simulator.',
+      firstTimeDevice: 'Set up and run this app on a simulator. {agent} works out how.',
       commandPlaceholderIos: 'npx expo run:ios',
       commandPlaceholderAndroid: 'npx expo run:android',
     },
@@ -1509,6 +1523,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     upToDate: 'Already up to date with {base}.',
     conflict: 'Could not bring in {base}: conflict in {file}. The merge was undone; resolve it to continue.',
     busy: '{agent} is mid-turn. Wait for it to finish, or stop it, before bringing in {base}.',
+    /** Uncommitted work on the lane is committed first (git refuses to merge over it), as Land does. */
+    wipCommit: 'Work on {branch} before bringing in {base}',
     statusBar: '↓{n} {base}',
     activity: 'brought {base} into {branch} ({n} commits)',
     /** `autoSync: 'turn'`: the base came in on its own once the agent went quiet. */
@@ -1628,8 +1644,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     sendNow: 'Send now',
     takeBack: 'Take back',
     send: { queue: 'Queue', steer: 'Steer' },
-    steerHint: 'Codex takes it mid-turn.',
-    queueHint: 'Claude Code takes it after this turn.',
+    /** `{agent}` is the session's product name: the same hint on a Gemini tab must not say Claude Code. */
+    steerHint: '{agent} takes it mid-turn.',
+    queueHint: '{agent} takes it after this turn.',
     stopped: '{n} queued message returned to the composer.',
     stoppedMany: '{n} queued messages returned to the composer.',
   },

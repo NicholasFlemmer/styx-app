@@ -116,7 +116,7 @@ async function rig(
     if (!s) throw new Error('fixture session');
     t.app.repos.sessions.upsert({ ...s, state: 'idle', pausedReason: null, exitCode: null });
   }
-  return { t, checks, repo, wt1, wt2, bare };
+  return { t, checks, repo, wt1, wt2, bare, root };
 }
 
 /** The session's CLI exited with `exitCode` — what the finish event records before `sessionFinished` fires. */
@@ -150,7 +150,7 @@ describe('LandService (ADR-0025 phase C)', { timeout: 30_000 }, () => {
   });
 
   it('land: commits the lane, brings the base in, runs the checks, merges --no-ff with the summary, pushes, and marks the lane landed; undo reverts and pushes again', async () => {
-    const { t, checks, repo, wt1, bare } = await rig();
+    const { t, checks, repo, wt1, bare, root } = await rig();
     const r = await t.app.land.land(fixCheckout, { title: 'Fix the checkout total', body: 'a.ts and b.ts.' });
     expect(r.steps).toEqual([
       expect.stringMatching(/^committed [0-9a-f]{7}$/),
@@ -226,10 +226,20 @@ describe('LandService (ADR-0025 phase C)', { timeout: 30_000 }, () => {
       undoneAt: null,
       revertCommit: null,
     });
-    // And that landing (a single commit, not a merge) can be undone too.
-    await t.app.land.undo(fixCheckout);
-    expect(await sh(['show', 'HEAD:a.ts'], repo)).toBe('a');
-    expect(await sh(['ls-tree', '--name-only', 'HEAD'], repo)).toBe('a.ts\nc.ts');
+    // origin moves on (another machine pushes): the next fetch fast-forwards the main folder to it.
+    const clone = join(root, 'clone');
+    await sh(['clone', '-q', '-b', 'main', bare, clone], root);
+    writeFileSync(join(clone, 'upstream.txt'), 'from elsewhere\n');
+    await sh(['add', '.'], clone);
+    await sh(['commit', '-q', '-m', 'upstream'], clone);
+    await sh(['push', '-q', 'origin', 'HEAD:main'], clone);
+    const tip = (await sh(['rev-parse', 'HEAD'], clone)).trim();
+    await t.app.laneSync.refresh(acme);
+    expect((await sh(['rev-parse', 'main'], repo)).trim()).toBe(tip);
+    // And that landing (a single commit, not a merge) can be undone too — main has moved, so not any more.
+    await expect(t.app.land.undo(fixCheckout)).rejects.toThrow(
+      'main has moved on since that landing; undo it by hand.',
+    );
   });
 
   it('a stale local base is brought up to origin before the merge, so the landing merges onto what origin has and the push fast-forwards', async () => {

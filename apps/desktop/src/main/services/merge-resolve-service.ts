@@ -50,6 +50,8 @@ export interface MergeResolveDeps {
   clock: Clock;
   transcript: TranscriptService;
   activity: ActivityService;
+  /** Commits the lane's uncommitted work before the merge (as Land and Bring in main do); absent = merge as is. */
+  commitLane?: (worktreeId: string, message: string) => Promise<string | null>;
   /** Checkpoints (ADR-0020): a commit of the working tree before the merge, and writing it back for Undo. */
   checkpoints: {
     capture(worktreePath: string): Promise<string>;
@@ -109,6 +111,9 @@ export class MergeResolveService {
       return { started: false, merged: 0 };
     }
 
+    // Uncommitted work is committed first (git will not merge over it); the undo point is that commit.
+    if (this.deps.commitLane !== undefined && !(await git.status(wt.path)).clean)
+      await this.deps.commitLane(wt.id, fill(copy.sync.wipCommit, { branch, base }));
     // Before anything moves: HEAD and a checkpoint of the tree, so the whole merge can be undone in one step.
     const preHead = (await git.headCommit(wt.path)) ?? fail('git-error', 'the lane has no commits yet');
     const preTree = (await git.status(wt.path)).clean ? null : await this.deps.checkpoints.capture(wt.path);

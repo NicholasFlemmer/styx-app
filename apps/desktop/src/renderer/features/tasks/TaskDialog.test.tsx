@@ -128,6 +128,20 @@ describe('background tasks', () => {
     expect(calls).not.toHaveBeenCalled();
   });
 
+  it('a learn-run task that ended without teaching Styx a command says so instead of "Finished"', () => {
+    const task = seedTask({ purpose: 'learn-run', state: 'done', endedAt: fixtures.DEMO_NOW, exitCode: 0 });
+    // The fixture project has no learned command and no run: the agent taught nothing.
+    const model = useReadModel.getState().model;
+    expect(model.settings.project[projectId]?.devCommand.value ?? null).toBeNull();
+    openTask(taskKey(task));
+    render(<OverlayHost />);
+    expect(screen.getByRole('status').textContent).toBe(copy.tasks.nothingLearned);
+    expect(document.querySelector('[data-task-nothing-learned]')?.textContent).toBe(
+      copy.tasks.nothingLearnedRun,
+    );
+    expect(screen.getByRole('button', { name: copy.tasks.again })).toBeTruthy();
+  });
+
   it('routes notifications for hidden sessions into progress instead of changing the current chat', () => {
     const task = seedTask();
     useUiStore.getState().openSession(projectId, task.id);

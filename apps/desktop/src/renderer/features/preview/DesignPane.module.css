@@ -9,10 +9,11 @@
   /* Chrome row above the native view: URL, device presets, reload, open in browser. */
   .bar {
     flex: none;
-    height: var(--h-tabrow);
+    min-height: var(--h-tabrow);
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
+    gap: 2px 6px;
     padding: 0 8px;
     border-bottom: 1px solid var(--ln);
     background: var(--s1);
@@ -20,10 +21,13 @@
   /* Second row: ▶ Run locally / ■ Stop and the command it runs (own row so neither input starves at 1100px). */
   .runRow {
     flex: none;
-    height: var(--h-tabrow);
+    /* One line where it fits; at the 1100px window minimum the editor column is ~316px wide, so the controls
+       (Run · command · platforms · presets) wrap onto a second line rather than run off the pane. */
+    min-height: var(--h-tabrow);
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
+    gap: 2px 6px;
     padding: 0 8px;
     border-bottom: 1px solid var(--ln);
     background: var(--s1);

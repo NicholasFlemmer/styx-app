@@ -19,6 +19,7 @@ import {
   type ProjectId,
   type ProjectPolicyDiff,
   type ProjectPolicySummary,
+  projectSettingsSchema,
   type ProjectSettings,
   type Repo,
   type Target,
@@ -244,33 +245,12 @@ export const githubHtmlUrl = (url: string): string | null => {
   return null;
 };
 
-const PROJECT_KEYS: (keyof ProjectSettings)[] = [
-  'defaultAgent',
-  'model',
-  'taskPermissionMode',
-  'autoApproveEdits',
-  'mayRequestTargets',
-  'notifyWhenNeedsMe',
-  'baseBranch',
-  'syncOnSpawn',
-  'syncBeforePublish',
-  'autoSync',
-  'hotspots',
-  'integration',
-  'autoLand',
-  'checksCommand',
-  'branchPrefix',
-  'worktreeLocation',
-  'shellWindows',
-  'lineEndings',
-  'envFiles',
-  'envShareWithAgents',
-  'devUrl',
-  'devCommand',
-  'devPlatform',
-  'devDevice',
-  'devAppId',
-];
+/**
+ * Every project setting `setSetting` may write, straight from the schema: a hand-kept list silently dropped keys
+ * added later (`permissionMode` and `effort` never reached project.json; the row showed the default after every
+ * change), so the schema is the list.
+ */
+const PROJECT_KEYS = Object.keys(projectSettingsSchema.shape) as (keyof ProjectSettings)[];
 
 /**
  * Machine-local acceptance record, stored in `ui_state` under `project-policy-accepted:<projectId>` (H-1 trust gate).

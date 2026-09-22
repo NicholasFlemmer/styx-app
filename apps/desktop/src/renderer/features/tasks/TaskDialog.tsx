@@ -1,12 +1,14 @@
 import {
   backgroundTasks,
   copy,
+  deployCommandOf,
   headAskOf,
   projectNameOf,
   taskKey,
   taskTitle,
   type AskResolution,
   type PendingAsk,
+  type ReadModel,
   type Session,
   PERMISSION_MODES,
   projectSettingsOfOrDefault,
@@ -112,12 +114,32 @@ function TaskAsk({ ask }: { ask: PendingAsk }) {
   }
 }
 
-export const taskStatus = (session: Session): string => {
+/**
+ * A learn task exists to teach Styx something (a run command, a deploy command). Ending cleanly without having
+ * done so is not "Finished": the row it was started from would be back where it began, with nothing said.
+ */
+export const learnedNothing = (model: ReadModel, session: Session): boolean => {
+  if (session.state !== 'done' || session.exitCode !== 0) return false;
+  if (session.purpose === 'learn-run') {
+    const settings = model.settings.project[session.projectId];
+    const cmd = settings?.devCommand.value ?? null;
+    return (cmd === null || cmd === '') && model.runs[session.projectId] === undefined;
+  }
+  if (session.purpose === 'learn-deploy') {
+    const target = session.taskTargetId === undefined ? undefined : model.targets.byId[session.taskTargetId];
+    return target === undefined ? false : deployCommandOf(target) === null;
+  }
+  return false;
+};
+
+export const taskStatus = (session: Session, model?: ReadModel): string => {
   if (session.state === 'needs-you') return copy.tasks.needsYou;
   if (session.state === 'paused') return copy.tasks.paused;
   if (session.state === 'done')
     return session.exitCode === 0
-      ? copy.tasks.finished
+      ? model !== undefined && learnedNothing(model, session)
+        ? copy.tasks.nothingLearned
+        : copy.tasks.finished
       : session.exitCode === null
         ? copy.tasks.stopped
         : copy.tasks.failed;
@@ -146,7 +168,8 @@ export function TaskDialog({ id, selectedKey }: { id: string; selectedKey: strin
   const activity = messages.filter((m) => m.payload.kind === 'tool' || m.payload.kind === 'system').slice(-8);
   const error = launch?.error;
   const busy = !error && (session === undefined || session.state !== 'done');
-  const status = error ? copy.tasks.failed : session ? taskStatus(session) : copy.tasks.starting;
+  const status = error ? copy.tasks.failed : session ? taskStatus(session, model) : copy.tasks.starting;
+  const nothingLearned = session !== undefined && learnedNothing(model, session);
   const retry = () => {
     if (!projectId) return;
     if (purpose === 'debt-audit') void startDebtAudit(model, projectId);
@@ -163,7 +186,7 @@ export function TaskDialog({ id, selectedKey }: { id: string; selectedKey: strin
       entries.set(key, {
         title: taskTitle(t.purpose, model.targets.byId[t.taskTargetId ?? '']),
         project: projectNameOf(model, t.projectId),
-        status: taskStatus(t),
+        status: taskStatus(t, model),
       });
   }
   for (const l of Object.values(launches)) {
@@ -250,6 +273,11 @@ export function TaskDialog({ id, selectedKey }: { id: string; selectedKey: strin
               </div>
             ) : null}
             {error ? <p role="alert">{error}</p> : null}
+            {nothingLearned ? (
+              <p role="alert" data-task-nothing-learned="true">
+                {purpose === 'learn-deploy' ? copy.tasks.nothingLearnedDeploy : copy.tasks.nothingLearnedRun}
+              </p>
+            ) : null}
             {session?.note && !ask ? <p>{session.note}</p> : null}
             {session?.state === 'paused' ? (
               <Button onClick={() => void command('session.resume', { sessionId: session.id })}>

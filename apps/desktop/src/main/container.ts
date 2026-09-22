@@ -439,7 +439,19 @@ export function buildContainer(opts: ContainerOptions): Container {
     onSynced: (worktreeId) => void ledger.laneChanged(worktreeId),
     integrationOf: (projectId) => projectSettingsFor(repos, projectId).integration.value,
     resolveConflict: (worktreeId) => resolver.resolve(worktreeId),
+    commitLane: (worktreeId, title) => commitLane(worktreeId, title),
   });
+  /** What the lane left uncommitted goes in first, by name (secret files stay out); nothing to commit is fine. */
+  const commitLane = async (worktreeId: string, title: string): Promise<string | null> => {
+    try {
+      return (
+        await publish.publish(worktreeId, { through: 'commit', message: { title, body: '' }, draft: false })
+      ).commit;
+    } catch (e) {
+      if (e instanceof CommandError && e.message === copy.publish.nothingToCommit) return null;
+      throw e;
+    }
+  };
   const publish = new PublishService({
     repos,
     publisher,
@@ -716,6 +728,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     clock,
     transcript,
     activity,
+    commitLane: (worktreeId, title) => commitLane(worktreeId, title),
     checkpoints: {
       capture: (path) => checkpoints.capture(path),
       restoreTree: (path, rev) => checkpoints.restoreTree(path, rev),

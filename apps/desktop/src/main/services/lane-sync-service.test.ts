@@ -125,6 +125,27 @@ describe('LaneSyncService (keep lanes current, ADR-0023)', () => {
     });
   });
 
+  it('uncommitted work on a file main also touched is committed first (git will not merge over it), then main comes in and the work is kept', async () => {
+    const { t, repo, wt } = await rig();
+    const lines = Array.from({ length: 10 }, (_, i) => `l${i + 1}`);
+    writeFileSync(join(repo, 'a.ts'), `${lines.join('\n')}\n`);
+    await sh(['commit', '-q', '-am', 'main: ten lines'], repo);
+    expect(await t.app.laneSync.sync(fixCheckout)).toEqual({ merged: 1, conflict: null });
+    // main changes the last line; the lane has an uncommitted change to the first.
+    writeFileSync(join(repo, 'a.ts'), `${[...lines.slice(0, 9), 'l10 main'].join('\n')}\n`);
+    await sh(['commit', '-q', '-am', 'main: tail'], repo);
+    writeFileSync(join(wt, 'a.ts'), `${['l1 lane', ...lines.slice(1)].join('\n')}\n`);
+    expect(await t.app.laneSync.sync(fixCheckout)).toEqual({ merged: 1, conflict: null });
+    expect(await sh(['status', '--porcelain'], wt)).toBe('');
+    expect((await sh(['log', '--format=%s', '-2', 'fix/checkout'], wt)).trim().split('\n')).toEqual([
+      expect.stringMatching(/^Merge/),
+      'Work on fix/checkout before bringing in main',
+    ]);
+    expect((await sh(['show', 'HEAD:a.ts'], wt)).trim()).toBe(
+      ['l1 lane', ...lines.slice(1, 9), 'l10 main'].join('\n'),
+    );
+  });
+
   it('a conflicting merge is undone on the spot: the tree is untouched, the lane is marked and the session pauses', async () => {
     const { t, repo, wt } = await rig();
     const { app, sender } = t;
@@ -288,8 +309,23 @@ describe('LaneSyncService.freshenBase (the local base follows its upstream, ADR-
     expect(await sh(['rev-parse', 'HEAD'], wt)).toBe(remoteHead);
     expect(existsSync(join(wt, 'remote.ts'))).toBe(true);
     expect(lastSystemLine(t, claude)).toBe('Brought in main: 1 commits.');
-    // Once the folder is clean again the base catches up and the plain name is back.
+    // Once the folder is clean again the base catches up and the plain name is back. Styx's own settings file
+    // being rewritten (every Settings change does) is not "dirty": it never blocks the move.
     await sh(['checkout', '--', 'a.ts'], repo);
+    expect((await t.app.laneSync.freshenBase(acme)).state).toBe('forwarded');
+    mkdirSync(join(repo, '.styx'), { recursive: true });
+    writeFileSync(join(repo, '.styx', 'project.json'), '{"version":1}\n');
+    await sh(['add', '.styx'], repo);
+    await sh(['commit', '-q', '-m', 'settings'], repo);
+    await sh(['push', '-q', 'origin', 'main'], repo);
+    const clone = join(dirname(repo), 'clone');
+    await sh(['pull', '-q', '--ff-only', 'origin', 'main'], clone);
+    writeFileSync(join(clone, 'later.ts'), 'l\n');
+    await sh(['add', '.'], clone);
+    await sh(['commit', '-q', '-m', 'later'], clone);
+    await sh(['push', '-q', 'origin', 'main'], clone);
+    writeFileSync(join(repo, '.styx', 'project.json'), '{"version":1,"integration":"review"}\n');
+    await t.app.git.fetch(repo);
     expect((await t.app.laneSync.freshenBase(acme)).state).toBe('forwarded');
     expect(t.app.laneSync.baseRefOf(acme)).toBe('main');
   });

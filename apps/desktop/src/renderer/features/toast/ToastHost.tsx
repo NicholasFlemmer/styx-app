@@ -75,6 +75,7 @@ export function AskToast({ id, askId, sessionId, projectId }: AskToastProps) {
       detail={detail}
       ttl={motion.toastTtl}
       onDismiss={() => popOverlay(id)}
+      data-toast="needs-you"
       actions={[
         { label: copy.toast.review, onClick: review, primary: true },
         { label: copy.toast.later, onClick: later },
@@ -92,6 +93,7 @@ function ErrorToast({ id, code, message }: { id: string; code: string; message: 
       title={message}
       ttl={motion.toastTtl}
       onDismiss={() => popOverlay(id)}
+      data-toast="error"
     />
   );
 }

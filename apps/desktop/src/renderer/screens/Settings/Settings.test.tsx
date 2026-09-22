@@ -424,6 +424,22 @@ describe('<Settings />', () => {
     ]);
   });
 
+  it('Remove arms on the first press (accent, "Remove?") and removes on the second; a press elsewhere disarms', () => {
+    render(<Settings />);
+    const remove = screen.getByRole('button', { name: /^Remove · Supabase prod/ });
+    expect(remove.textContent).toBe(copy.targets.actions.remove);
+    fireEvent.click(remove);
+    expect(remove.textContent).toBe(copy.targets.actions.removeConfirm);
+    expect(remove.getAttribute('data-on')).toBe('true');
+    expect(commandMock).not.toHaveBeenCalledWith('target.remove', expect.anything());
+    // Arming another row disarms this one.
+    fireEvent.click(screen.getByRole('button', { name: /^Remove · Vercel prod/ }));
+    expect(remove.textContent).toBe(copy.targets.actions.remove);
+    fireEvent.click(remove);
+    fireEvent.click(remove);
+    expect(commandMock).toHaveBeenCalledWith('target.remove', { targetId: fixtures.ids.target.supabaseProd });
+  });
+
   it('Edit reopens the connect modal on that target', () => {
     render(<Settings />);
     fireEvent.click(screen.getByRole('button', { name: /^Edit · AWS acme-prod/ }));
