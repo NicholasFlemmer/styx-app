@@ -814,7 +814,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
             ? {
                 slashItems: slashItems(session, slashQuery),
                 onSlashQuery: setSlashQuery,
-                slashHint: copy.chat.slash.hint,
+                slashHint: fill(copy.chat.slash.hint, { agent: copy.agentProducts[session.agent] }),
                 slashEmpty: copy.chat.slash.none,
               }
             : {})}

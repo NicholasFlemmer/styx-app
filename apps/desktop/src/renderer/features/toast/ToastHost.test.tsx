@@ -171,6 +171,23 @@ describe('ToastHost · one needs-you toast per ask', () => {
       listeners.get('ask.opened')?.(ask);
     });
     expect(toasts().filter((o) => o.kind === 'toast' && o.toast.kind === 'ask')).toHaveLength(1);
+    // Answered elsewhere: the toast goes with the ask.
+    act(() => {
+      const st = useReadModel.getState();
+      const row = st.model.pendingAsks.byId[ask.askId];
+      if (!row) throw new Error('fixture ask');
+      st.replaceModel(
+        {
+          ...st.model,
+          pendingAsks: {
+            ...st.model.pendingAsks,
+            byId: { ...st.model.pendingAsks.byId, [ask.askId]: { ...row, state: 'resolved' } },
+          },
+        },
+        'connected',
+      );
+    });
+    expect(toasts().filter((o) => o.kind === 'toast' && o.toast.kind === 'ask')).toHaveLength(0);
     cleanup();
     Object.assign(window, { styx: undefined });
   });

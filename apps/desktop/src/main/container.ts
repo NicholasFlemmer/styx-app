@@ -806,6 +806,10 @@ export function buildContainer(opts: ContainerOptions): Container {
     turnStarted: (id, messageId) => checkpoints.onTurnStarted(id, messageId),
     turnSettled: (id) => {
       checkpoints.onTurnSettled(id);
+      // The lane ledger (overlaps between lanes) refreshed only on Fetch when Track agent edits is off: a turn
+      // that wrote files is the moment the overlap appeared.
+      const settled = repos.sessions.get(id);
+      if (settled) void ledger.laneChanged(settled.worktreeId);
       // ADR-0025: a merge this agent was finishing is verified first; then, idle, the base can come in without
       // landing under a write.
       void resolver

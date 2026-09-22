@@ -14,12 +14,7 @@ import {
 import { motion, space } from '@styx/tokens';
 import { Toast } from '@styx/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  invokerOf,
-  rememberInvoker,
-  type Overlay,
-  type ToastPayload,
-} from '../../overlays/stack';
+import { invokerOf, rememberInvoker, type Overlay, type ToastPayload } from '../../overlays/stack';
 import { onEvent } from '../../state/bridge';
 import { command } from '../../state/commands';
 import { useUi, useUiShallow } from '../../state/hooks';
@@ -222,6 +217,21 @@ export function ToastHost() {
         );
         if (already) return;
         ui.pushOverlay({ kind: 'toast', toast: { kind: 'ask', askId, sessionId, projectId } });
+      }),
+    [],
+  );
+  // An ask answered anywhere else (the board, the chat, the inbox, a Mod+⏎) takes its toast with it: a "needs
+  // you" that has been dealt with is not news, and Review on it would open a settled bubble.
+  useEffect(
+    () =>
+      useReadModel.subscribe((st, prev) => {
+        if (st.model.pendingAsks === prev.model.pendingAsks) return;
+        const ui = useUiStore.getState();
+        for (const o of ui.overlays) {
+          if (o.kind !== 'toast' || o.toast.kind !== 'ask') continue;
+          const ask = st.model.pendingAsks.byId[o.toast.askId];
+          if (ask === undefined || ask.state !== 'open') ui.popOverlay(o.id);
+        }
       }),
     [],
   );

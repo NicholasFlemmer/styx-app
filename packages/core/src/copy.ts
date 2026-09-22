@@ -189,7 +189,7 @@ export const copy = {
       pickFile: 'Attach file…',
     },
     mention: { hint: 'Files in this worktree', none: 'No matching file' },
-    slash: { hint: 'Claude Code commands', none: 'No matching command' },
+    slash: { hint: '{agent} commands', none: 'No matching command' },
     /** Thinking blocks and the live working line (owner addition, docs/handoff-discrepancies #55; not in §10). */
     thinking: { streaming: 'Thinking…', done: 'Thought for {s}s', show: 'Show', hide: 'Hide' },
     working: {
