@@ -602,6 +602,38 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     matchesToday: 'matches {n} today',
     revokedThisWeek: 'revoked {n} this week',
     autoLabel: 'auto: policy #{n}',
+    /** The rule editor behind + Rule (owner addition: the button was a no-op). */
+    editor: {
+      title: 'New rule',
+      editTitle: 'Edit rule',
+      lead: 'Rules are checked top to bottom on every access request. The first one that matches decides.',
+      kind: 'Decision',
+      kinds: { 'auto-approve': 'Auto-approve', ask: 'Ask' },
+      providers: 'Targets',
+      anyProvider: 'Any target',
+      envs: 'Environments',
+      anyEnv: 'Any environment',
+      envNames: { prod: 'Prod', staging: 'Staging', preview: 'Preview', scm: 'Source control' },
+      scopes: 'Scopes',
+      duration: 'Grant for',
+      requireMfa: 'Require {mfa}',
+      text: 'Rule text',
+      textHint:
+        'How the rule reads in the list and the audit log. Drafted from the choices above; edit it if you like.',
+      needScope: 'Pick at least one scope.',
+      save: 'Add rule',
+      saveEdit: 'Save rule',
+      edit: 'Edit',
+      remove: 'Remove',
+      /** Drafted rule text: "{decision} {scopes} on {targets} {envs}". */
+      draft: {
+        auto: 'Auto-approve {scopes} on {targets}{envs} for {duration}',
+        ask: 'Ask for {scopes} on {targets}{envs}',
+        askMfa: 'Ask, require {mfa} for {scopes} on {targets}{envs}',
+        anyTarget: 'any target',
+        envSuffix: ' ({envs})',
+      },
+    },
   },
 
   approvals: {
@@ -1034,6 +1066,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       sync: 'Bring in {base}',
       /** ADR-0025 phase B. */
       undoMerge: 'Undo merge',
+      /** While the agent is still merging: the way out. Stops its turn and puts the lane back. */
+      stopMerge: 'Stop merging',
       reviewMerge: 'Review merge',
       /** ADR-0025 phase C: the lane's verb in auto mode; the reviewer's local merge; taking a landing back. */
       land: 'Land',
@@ -1609,7 +1643,10 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     failed: 'Could not finish bringing in {base}: {reason}. The merge was undone; the lane is as it was.',
     busy: '{agent} is mid-turn; the merge will be tried when it settles.',
     undone: 'Undid the merge of {base}: the lane is back to how it was before it.',
+    stopped:
+      'Stopped bringing in {base}: the merge was undone and the lane is as it was. Resolve is on the Repo lane.',
     reasons: {
+      stopped: 'stopped by you',
       markers: 'conflict markers remain in {files}',
       checks: 'the checks failed (`{command}` exited {code})',
       gone: 'the agent left the merge in an unexpected state',
@@ -1618,6 +1655,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       started: '{agent} is bringing {base} into {branch}',
       done: 'brought {base} into {branch} · resolved {files}',
       failed: 'could not bring {base} into {branch}',
+      stopped: 'stopped bringing {base} into {branch}',
       undone: 'undid the merge of {base} into {branch}',
     },
   },

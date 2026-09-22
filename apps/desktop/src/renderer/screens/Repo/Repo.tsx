@@ -85,6 +85,7 @@ const runAction = (lane: Lane): void => {
       void command('worktree.resolve', { worktreeId: lane.worktreeId });
       return;
     case 'undo-merge':
+    case 'stop-merge':
       void command('worktree.undoResolve', { worktreeId: lane.worktreeId });
       return;
     case 'undo-land':

@@ -1,4 +1,14 @@
-import type { Agent, AskId, AuditId, ProjectId, Provider, SessionId, TargetId, WorktreeId } from '@styx/core';
+import type {
+  Agent,
+  AskId,
+  AuditId,
+  PolicyId,
+  ProjectId,
+  Provider,
+  SessionId,
+  TargetId,
+  WorktreeId,
+} from '@styx/core';
 
 /** Overlay kinds and their z-order / behaviour (plan §8 Overlays). */
 export type OverlayKind = 'palette' | 'modal' | 'sheet' | 'drawer' | 'toast' | 'task';
@@ -33,7 +43,9 @@ export type ModalPayload =
    * Connect agent (Settings › Agents, onboarding step 3, the Spawn modal's "Fix connection"): verify / sign in for one
    * CLI. `returnTo` re-opens the Spawn modal for that project when the connect modal closes.
    */
-  | { modal: 'connect-agent'; agent: Agent; returnTo?: { modal: 'spawn'; projectId: ProjectId } };
+  | { modal: 'connect-agent'; agent: Agent; returnTo?: { modal: 'spawn'; projectId: ProjectId } }
+  /** Approvals › Policies › + Rule: an auto-approve / ask rule; `policyId` edits an existing custom rule. */
+  | { modal: 'policy-rule'; policyId?: PolicyId };
 
 export type Overlay =
   | { id: string; kind: 'task'; taskKey: string | null }

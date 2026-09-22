@@ -140,6 +140,48 @@
   .policy:hover {
     background: var(--s2);
   }
+  /* A custom rule's row: the checkbox row plus Edit · Remove verbs at its right edge (label recipe). */
+  .policyRow {
+    position: relative;
+  }
+  .policyRow:hover .policyActions,
+  .policyRow:focus-within .policyActions {
+    opacity: 1;
+  }
+  .policyActions {
+    position: absolute;
+    top: 14px;
+    right: 18px;
+    display: flex;
+    gap: var(--sp-3);
+    opacity: 0;
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mu);
+  }
+  .policyAction {
+    all: unset;
+    cursor: pointer;
+    position: relative;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
+  }
+  .policyAction:hover {
+    color: var(--tx);
+  }
+  .policyAction:focus-visible {
+    outline: 1px solid var(--tx);
+  }
+  .policyAction::after {
+    content: '';
+    position: absolute;
+    inset: -9px -6px;
+  }
   .policy > [aria-hidden='true'] {
     margin-top: 2px;
   }

@@ -337,6 +337,37 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
     },
   );
 
+  it(
+    'Stop merging while the agent is at it: its turn is interrupted, the merge undone, the conflict marked again',
+    { timeout: 30_000 },
+    async () => {
+      const { t, wt } = await rig();
+      const { app } = t;
+      const r = await app.resolver.resolve(fixCheckout);
+      expect(r).toEqual({ started: true, merged: 0 });
+      const res = lane(t).resolution;
+      expect(res?.state).toBe('resolving');
+      // The person stops it from the Repo row: undoResolve while resolving.
+      await app.resolver.undo(fixCheckout);
+      expect(await app.git.mergeInProgress(wt)).toBe(false);
+      expect(await app.git.headCommit(wt)).toBe(res?.preHead);
+      expect(readFileSync(join(wt, 'a.ts'), 'utf8')).toBe('lane version\n');
+      expect(lane(t)).toMatchObject({
+        conflict: { file: 'a.ts', against: 'main' },
+        resolution: { state: 'failed', failure: 'stopped by you' },
+      });
+      expect(systemLines(t, claude)).toContain(
+        'Stopped bringing in main: the merge was undone and the lane is as it was. Resolve is on the Repo lane.',
+      );
+      expect(app.repos.activity.recent(1)[0]?.what).toBe(
+        'acme-shop · stopped bringing main into fix/checkout',
+      );
+      // Resolve is offered again and works.
+      const again = await app.resolver.resolve(fixCheckout);
+      expect(again).toEqual({ started: true, merged: 0 });
+    },
+  );
+
   it('refuses while the agent is mid-turn, and does nothing twice', { timeout: 30_000 }, async () => {
     const { t } = await rig();
     const s = t.app.repos.sessions.get(claude);

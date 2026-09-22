@@ -201,6 +201,7 @@ interface PoliciesPaneProps {
 }
 
 function PoliciesPane({ policies, platform }: PoliciesPaneProps) {
+  const pushOverlay = useUi((u) => u.pushOverlay);
   const exportJson = async () => {
     const result = await command('policy.export', {});
     if (result.ok && typeof navigator !== 'undefined' && navigator.clipboard !== undefined) {
@@ -214,26 +215,53 @@ function PoliciesPane({ policies, platform }: PoliciesPaneProps) {
       </Label>
       <div className={s['policyList']}>
         {policies.map((p) => (
-          <Checkbox
-            key={p.id}
-            size={16}
-            tone="accent"
-            checked={p.enabled}
-            onChange={(enabled) => void command('policy.toggle', { policyId: p.id, enabled })}
-            className={s['policy']}
-            data-policy-id={p.id}
-            label={
-              <span className={s['policyText']}>
-                <span className={s['policyRule']}>{policyRuleText(p, platform)}</span>
-                <span className={s['policyMeta']}>{policyMeta(p)}</span>
+          <div key={p.id} className={s['policyRow']} data-policy-row={p.id}>
+            <Checkbox
+              size={16}
+              tone="accent"
+              checked={p.enabled}
+              onChange={(enabled) => void command('policy.toggle', { policyId: p.id, enabled })}
+              className={s['policy']}
+              data-policy-id={p.id}
+              label={
+                <span className={s['policyText']}>
+                  <span className={s['policyRule']}>{policyRuleText(p, platform)}</span>
+                  <span className={s['policyMeta']}>{policyMeta(p)}</span>
+                </span>
+              }
+            />
+            {/* A rule the person wrote can be edited or removed; the built-in three are toggled only. */}
+            {p.builtinKey === null ? (
+              <span className={s['policyActions']}>
+                <button
+                  type="button"
+                  className={s['policyAction']}
+                  onClick={() => pushOverlay({ kind: 'modal', modal: 'policy-rule', policyId: p.id })}
+                  aria-label={`${copy.policies.editor.edit} · ${policyRuleText(p, platform)}`}
+                  data-policy-edit={p.id}
+                >
+                  {copy.policies.editor.edit}
+                </button>
+                <button
+                  type="button"
+                  className={s['policyAction']}
+                  onClick={() => void command('policy.remove', { policyId: p.id })}
+                  aria-label={`${copy.policies.editor.remove} · ${policyRuleText(p, platform)}`}
+                  data-policy-remove={p.id}
+                >
+                  {copy.policies.editor.remove}
+                </button>
               </span>
-            }
-          />
+            ) : null}
+          </div>
         ))}
       </div>
       <div className={s['policiesFoot']}>
-        {/* TODO(policy.add): the rule editor is not designed yet; the button is a no-op until it is. */}
-        <Button size="regular" onClick={() => undefined}>
+        <Button
+          size="regular"
+          onClick={() => pushOverlay({ kind: 'modal', modal: 'policy-rule' })}
+          data-policy-add="true"
+        >
           {copy.policies.addRule}
         </Button>
         <Button variant="ghost" size="regular" onClick={() => void exportJson()}>

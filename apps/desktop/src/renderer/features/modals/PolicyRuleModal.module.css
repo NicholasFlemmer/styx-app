@@ -1,0 +1,24 @@
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+  }
+  .lead {
+    margin: 0;
+    color: var(--mu);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  /* A row of checkboxes for a set (targets, environments, scopes); wraps when the modal is narrow. */
+  .checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-4);
+  }
+  .error {
+    margin: 0;
+    color: var(--act);
+    font-size: 12.5px;
+  }
+}

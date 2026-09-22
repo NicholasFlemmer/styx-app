@@ -266,10 +266,11 @@ describe('lane resolution states (ADR-0025 phase B)', () => {
   const row = (model: ReturnType<typeof withResolution>) =>
     laneRows(model, acme, NOW).find((l) => l.branch === 'fix/checkout');
 
-  it('resolving / checking read as such and offer nothing to click but the diff', () => {
+  it('resolving offers Stop merging (the way out while the agent works); checking offers only the diff', () => {
     expect(row(withResolution(base('resolving')))).toMatchObject({
       changes: 'merging main with Claude…',
-      action: 'diff',
+      action: 'stop-merge',
+      actionLabel: 'Stop merging',
     });
     expect(row(withResolution(base('checking')))).toMatchObject({
       changes: 'checking the merge…',

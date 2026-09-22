@@ -30,6 +30,7 @@ async function sh(args: string[], cwd: string): Promise<string> {
 
 interface Rig {
   t: TestApp;
+  root: string;
   checks: ReturnType<
     typeof vi.fn<(cwd: string, command: string) => Promise<{ exitCode: number; output: string }>>
   >;

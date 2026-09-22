@@ -11,6 +11,7 @@ import { ConnectRepoModal } from '../features/modals/ConnectRepoModal';
 import { NewProjectModal } from '../features/modals/NewProjectModal';
 import { LandModal } from '../features/modals/LandModal';
 import { PublishModal } from '../features/modals/PublishModal';
+import { PolicyRuleModal } from '../features/modals/PolicyRuleModal';
 import { SpawnModal } from '../features/modals/SpawnModal';
 import { Palette } from '../features/palette/Palette';
 import { SkillDrawer } from '../features/skills/SkillDrawer';
@@ -55,6 +56,14 @@ const render = (o: Overlay) => {
           );
         case 'publish':
           return <PublishModal key={o.id} id={o.id} worktreeId={o.worktreeId} />;
+        case 'policy-rule':
+          return (
+            <PolicyRuleModal
+              key={o.id}
+              id={o.id}
+              {...(o.policyId !== undefined ? { policyId: o.policyId } : {})}
+            />
+          );
         case 'land':
           return <LandModal key={o.id} id={o.id} worktreeId={o.worktreeId} />;
         case 'connect-agent':

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import {
   copy,
+  fill,
   fixtures,
   upsertRows,
   type AskQuestion,

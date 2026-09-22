@@ -20,7 +20,7 @@ import type { DotTone } from '@styx/ui';
 
 const DAY = 24 * 60 * 60_000;
 
-export type LaneAction = 'open' | 'diff' | 'resolve' | 'archive' | 'undo-merge' | 'undo-land';
+export type LaneAction = 'open' | 'diff' | 'resolve' | 'archive' | 'undo-merge' | 'stop-merge' | 'undo-land';
 
 /** One Repo table row (prototype `lanes`). */
 export interface Lane {
@@ -60,6 +60,7 @@ const ACTION_LABEL: Record<LaneAction, string> = {
   diff: copy.repo.actions.diff,
   resolve: copy.repo.actions.resolve,
   'undo-merge': copy.repo.actions.undoMerge,
+  'stop-merge': copy.repo.actions.stopMerge,
   'undo-land': copy.repo.actions.undoLand,
   archive: copy.repo.actions.archive,
 };
@@ -152,7 +153,8 @@ export const laneRows = (model: ReadModel, projectId: ProjectId, now: number): L
         ? null
         : (model.sessions.byId[res.sessionId] ?? null);
     if (res !== null && (res.state === 'resolving' || res.state === 'checking')) {
-      // ADR-0025 phase B: the agent is finishing the merge; nothing to click until it is done or handed back.
+      // ADR-0025 phase B: the agent is finishing the merge. Stop merging is the way out while it works (it
+      // stops the turn and puts the lane back); the checks cannot be interrupted.
       changes =
         res.state === 'checking'
           ? copy.repo.changes.checking
@@ -160,7 +162,7 @@ export const laneRows = (model: ReadModel, projectId: ProjectId, now: number): L
               base,
               agent: resolvingAgent === null ? copy.repo.you : agentLabel(resolvingAgent),
             });
-      action = 'diff';
+      action = res.state === 'checking' ? 'diff' : 'stop-merge';
     } else if (w.conflict !== null) {
       changes = fill(copy.repo.changes.conflict, { file: w.conflict.file, against: w.conflict.against });
       action = 'resolve';

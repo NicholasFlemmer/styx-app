@@ -57,7 +57,7 @@ export interface MergeResolveDeps {
     capture(worktreePath: string): Promise<string>;
     restoreTree(worktreePath: string, rev: string): Promise<void>;
   };
-  sessions: Pick<SessionService, 'get' | 'isRunning' | 'sendMessage' | 'applyEvent' | 'start'>;
+  sessions: Pick<SessionService, 'get' | 'isRunning' | 'sendMessage' | 'applyEvent' | 'start' | 'interrupt'>;
   ledger: { laneChanged(worktreeId: string): Promise<void> };
   baseOf: (projectId: string) => string;
   settingsOf: (projectId: string) => ResolveSettings;
@@ -199,6 +199,7 @@ export class MergeResolveService {
     const { repos, git } = this.deps;
     const wt = repos.worktrees.get(worktreeId) ?? fail('not-found', `worktree ${worktreeId} not found`);
     const res = wt.resolution;
+    if (res !== null && res.state === 'resolving') return this.stop(wt, res);
     if (res === null || res.state !== 'done' || res.mergeCommit === null)
       fail('invalid-transition', 'nothing to undo on this lane');
     if ((await git.headCommit(wt.path)) !== res.mergeCommit)
@@ -229,6 +230,41 @@ export class MergeResolveService {
     this.deps.activity.append({
       who: copy.repo.you,
       what: `${project?.name ?? ''} · ${fill(copy.resolve.activity.undone, { base, branch: wt.branch ?? '' })}`,
+      projectId: wt.projectId,
+      sessionId: owner?.id ?? null,
+    });
+    await this.deps.ledger.laneChanged(wt.id);
+  }
+
+  /**
+   * Stop merging (the person's way out while the agent is still at it): the agent's turn is interrupted, the
+   * merge is undone and the lane is back to before it, with the conflict marked so Resolve is offered again.
+   * Without this a merge the agent could not finish stayed "merging…" with nothing to click.
+   */
+  private async stop(wt: Worktree, res: WorktreeResolution): Promise<void> {
+    const { repos, clock } = this.deps;
+    const base = this.deps.baseOf(wt.projectId);
+    const session = res.sessionId === null ? null : repos.sessions.get(res.sessionId);
+    if (session !== null && session.state !== 'done') this.deps.sessions.interrupt(session.id);
+    await this.rollback(wt, res);
+    const failed: WorktreeResolution = {
+      ...res,
+      state: 'failed',
+      finishedAt: clock.now(),
+      failure: copy.resolve.reasons.stopped,
+    };
+    const conflict = { file: res.files[0] ?? '', against: base };
+    this.save({ ...wt, headCommit: res.preHead, conflict, resolution: failed });
+    const owner = wt.owner.kind === 'session' ? repos.sessions.get(wt.owner.sessionId) : null;
+    if (owner !== null && owner.state !== 'done') {
+      this.deps.transcript.system(owner.id, fill(copy.resolve.stopped, { base }));
+      if (owner.state !== 'paused')
+        this.deps.sessions.applyEvent(owner.id, { type: 'error', reason: 'conflict' });
+    }
+    const project = repos.projects.get(wt.projectId);
+    this.deps.activity.append({
+      who: copy.repo.you,
+      what: `${project?.name ?? ''} · ${fill(copy.resolve.activity.stopped, { base, branch: wt.branch ?? '' })}`,
       projectId: wt.projectId,
       sessionId: owner?.id ?? null,
     });

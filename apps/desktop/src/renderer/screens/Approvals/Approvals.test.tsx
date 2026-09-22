@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtures, type ProjectId } from '@styx/core';
+import { fixtures, type PolicyId, type ProjectId } from '@styx/core';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
@@ -99,6 +99,44 @@ describe('Approvals', () => {
     fireEvent.click(within(pane).getByRole('button', { name: 'Export JSON' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('{"policies":[]}'));
     expect(commandMock).toHaveBeenCalledWith('policy.export', {});
+  });
+
+  it('+ Rule opens the rule editor; a custom rule has Edit and Remove, the built-in three do not', () => {
+    const model = useReadModel.getState().model;
+    const id = 'p-custom' as PolicyId;
+    useReadModel.getState().replaceModel(
+      {
+        ...model,
+        policies: {
+          byId: {
+            ...model.policies.byId,
+            [id]: {
+              id,
+              ord: 4,
+              rule: { kind: 'auto-approve', match: {}, scopes: ['read'], duration: '1h' },
+              ruleText: 'Reads are fine',
+              enabled: true,
+              builtinKey: null,
+              matchCountToday: 0,
+              matchCountWeek: 0,
+              countersResetAt: null,
+              createdAt: fixtures.DEMO_NOW,
+            },
+          },
+          ids: [...model.policies.ids, id],
+        },
+      },
+      'connected',
+    );
+    render(<Approvals />);
+    const pane = screen.getByRole('complementary', { name: 'Policies' });
+    fireEvent.click(within(pane).getByRole('button', { name: '+ Rule' }));
+    expect(useUiStore.getState().overlays.at(-1)).toMatchObject({ kind: 'modal', modal: 'policy-rule' });
+    expect(within(pane).getAllByRole('button', { name: /^Remove · / })).toHaveLength(1);
+    fireEvent.click(within(pane).getByRole('button', { name: 'Edit · Reads are fine' }));
+    expect(useUiStore.getState().overlays.at(-1)).toMatchObject({ modal: 'policy-rule', policyId: id });
+    fireEvent.click(within(pane).getByRole('button', { name: 'Remove · Reads are fine' }));
+    expect(commandMock).toHaveBeenCalledWith('policy.remove', { policyId: id });
   });
 
   it('Policies tab shows the intro copy; Audit log rows open the drawer and read as inverted', () => {
