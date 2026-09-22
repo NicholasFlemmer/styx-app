@@ -1,7 +1,7 @@
 import { copy, projectHasGit, projectWorktreeOf, type ProjectId, type ReadModel } from '@styx/core';
 import { Button } from '@styx/ui';
 import { useCallback } from 'react';
-import { useModel, useUi } from '../../state/hooks';
+import { useModel, useSessionId, useUi } from '../../state/hooks';
 import s from './PublishButton.module.css';
 
 export interface PublishButtonProps {
@@ -15,10 +15,11 @@ export interface PublishButtonProps {
  * no branch to publish, so the button does not render there.
  */
 export function PublishButton({ projectId }: PublishButtonProps) {
+  const sessionId = useSessionId();
   const worktree = useModel(
     useCallback(
-      (m: ReadModel) => (projectHasGit(m, projectId) ? projectWorktreeOf(m, projectId) : null),
-      [projectId],
+      (m: ReadModel) => (projectHasGit(m, projectId) ? projectWorktreeOf(m, projectId, sessionId) : null),
+      [projectId, sessionId],
     ),
   );
   const pushOverlay = useUi((u) => u.pushOverlay);

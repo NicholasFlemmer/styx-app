@@ -399,8 +399,14 @@ export class GrantService {
       return { kind: 'active', grant: active, decidedBy: decision.decidedBy };
     }
 
-    // ask: queue behind the session's open asks; the head is the only one surfaced.
-    if (!session) fail('forbidden', 'a user decision needs a session');
+    // ask, with no session: the request came from the app itself — the person pressed Deploy or Publish — so the
+    // press is the decision. It is approved on the spot as the grant sheet would (MFA where the target or the
+    // scope demands it, decidedBy user, the button named as the trigger) instead of queueing an ask no chat
+    // would ever show. Agents always carry a session, so nothing they request takes this path.
+    if (!session) {
+      const active = await this.approve(grant.id, 'once', undefined, req.triggeredBy);
+      return { kind: 'active', grant: active, decidedBy: 'user' };
+    }
     const ask: PendingAsk = {
       id: newId<'AskId'>(),
       sessionId: session.id,

@@ -139,6 +139,47 @@ describe('GrantService', () => {
     expect(t.app.repos.grants.get(out.grant.id)?.state).toBe('requested');
   });
 
+  it('an app-initiated request (no session) on an ask target is approved by the press itself: MFA, decidedBy user, the button as trigger', async () => {
+    const t = makeTestApp();
+    const target = t.app.repos.targets.get(ids.target.supabaseProd);
+    if (!target?.credentialRef) throw new Error('fixture target');
+    await t.vault.set(target.credentialRef, JSON.stringify({ token: 'sbp_test' }));
+    const out = await t.app.grants.request({
+      sessionId: null,
+      targetId: ids.target.supabaseProd,
+      scope: ['deploy'],
+      reason: 'Deploy from Styx',
+      triggeredBy: 'Deploy · Supabase prod',
+    });
+    if (out.kind !== 'active') throw new Error(`expected active, got ${out.kind}`);
+    expect(out.grant).toMatchObject({
+      state: 'active',
+      duration: 'once',
+      mfaVerified: true,
+      decidedBy: 'user',
+      sessionId: null,
+    });
+    expect(t.app.repos.pendingAsks.all().some((a) => a.grantId === out.grant.id)).toBe(false);
+    const rows = t.app.repos.audit.all().filter((e) => e.grantId === out.grant.id);
+    expect(rows.map((e) => e.action)).toEqual(['requested', 'granted']);
+    expect(rows[1]).toMatchObject({ actorKind: 'you', triggeredBy: 'Deploy · Supabase prod' });
+
+    // The press does not skip MFA: a refused verification is the refusal.
+    const refused = makeTestApp({ mfa: 'failed' });
+    const t2 = refused.app.repos.targets.get(ids.target.supabaseProd);
+    if (!t2?.credentialRef) throw new Error('fixture target');
+    await refused.vault.set(t2.credentialRef, JSON.stringify({ token: 'sbp_test' }));
+    await expect(
+      refused.app.grants.request({
+        sessionId: null,
+        targetId: ids.target.supabaseProd,
+        scope: ['deploy'],
+        reason: 'Deploy from Styx',
+        triggeredBy: 'Deploy · Supabase prod',
+      }),
+    ).rejects.toMatchObject({ code: 'mfa-failed' });
+  });
+
   it('deny → denied, audit denied, ask resolved, session leaves needs-you', async () => {
     const t = makeTestApp();
     const out = await requestSupabase(t);

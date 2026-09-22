@@ -180,6 +180,7 @@ describe('LandService (ADR-0025 phase C)', { timeout: 30_000 }, () => {
       pushed: true,
       at: t.clock.now(),
       undoneAt: null,
+      revertCommit: null,
     });
     expect(t.app.repos.worktrees.get(acmeMain)?.headCommit).toBe(r.commit);
     expect(systemLines(t, claude).at(-1)).toBe(
@@ -208,7 +209,27 @@ describe('LandService (ADR-0025 phase C)', { timeout: 30_000 }, () => {
       'Took fix/checkout back out of main and on origin. The lane is live again.',
     );
     expect(t.app.repos.activity.recent(1)[0]?.what).toBe('acme-shop · took fix/checkout back out of main');
+    expect(after?.landing?.revertCommit).toBe(reverted);
     await expect(t.app.land.undo(fixCheckout)).rejects.toThrow('Nothing to undo on this lane.');
+
+    // Land again after the undo: the revert is reapplied on main first, so the lane's work goes back in, and the
+    // lane's own tree keeps its files (the revert never wipes it when main is brought in).
+    const again = await t.app.land.land(fixCheckout, { title: 'Fix the checkout total, again', body: '' });
+    expect(again.steps[0]).toMatch(/^reapplied the undone landing on main \([0-9a-f]{7}\)$/);
+    expect(again.steps).toContain('pushed main');
+    expect(await sh(['show', 'HEAD:a.ts'], repo)).toBe('a1');
+    expect(await sh(['show', 'HEAD:b.ts'], repo)).toBe('b');
+    expect(await sh(['show', 'HEAD:a.ts'], wt1)).toBe('a1');
+    expect(await sh(['rev-parse', 'refs/heads/main'], bare)).toBe(again.commit);
+    expect(t.app.repos.worktrees.get(fixCheckout)?.landing).toMatchObject({
+      commit: again.commit,
+      undoneAt: null,
+      revertCommit: null,
+    });
+    // And that landing (a single commit, not a merge) can be undone too.
+    await t.app.land.undo(fixCheckout);
+    expect(await sh(['show', 'HEAD:a.ts'], repo)).toBe('a');
+    expect(await sh(['ls-tree', '--name-only', 'HEAD'], repo)).toBe('a.ts\nc.ts');
   });
 
   it('a stale local base is brought up to origin before the merge, so the landing merges onto what origin has and the push fast-forwards', async () => {
@@ -276,6 +297,11 @@ describe('LandService (ADR-0025 phase C)', { timeout: 30_000 }, () => {
     t.app.repos.sessions.upsert({ ...s, state: 'working' });
     await expect(t.app.land.land(fixCheckout, { title: 'x', body: '' })).rejects.toThrow(
       'Claude Code is mid-turn on fix/checkout; wait for it to finish before landing.',
+    );
+    // Waiting on the person is not mid-turn: the refusal says what to do.
+    t.app.repos.sessions.upsert({ ...s, state: 'needs-you' });
+    await expect(t.app.land.land(fixCheckout, { title: 'x', body: '' })).rejects.toThrow(
+      'Claude Code is waiting on you on fix/checkout; answer it (or stop it) before landing.',
     );
     t.app.repos.sessions.upsert({ ...s, state: 'idle' });
     checks.mockResolvedValueOnce({ exitCode: 2, output: 'FAIL cart.test.ts' });

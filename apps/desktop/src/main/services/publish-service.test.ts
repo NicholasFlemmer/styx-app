@@ -4,6 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { CommandError } from '../ipc/bus';
 import { makeTestApp, type TestApp } from '../test-support';
 import {
   agentInvocation,
@@ -86,10 +87,14 @@ const rig = async (
     agent?: Agent;
     dirty?: boolean;
     /** Keep lanes current (ADR-0023): a scripted `laneSync` and the setting that turns the step on. */
-    laneSync?: (worktreeId: string) => Promise<{ merged: number; conflict: { file: string; against: string } | null }>;
+    laneSync?: (
+      worktreeId: string,
+    ) => Promise<{ merged: number; conflict: { file: string; against: string } | null }>;
+    /** What the fake MFA answers when a grant needs it. */
+    mfa?: 'ok' | 'failed';
   } = {},
 ): Promise<Rig> => {
-  const t = makeTestApp();
+  const t = makeTestApp(opts.mfa ? { mfa: opts.mfa } : {});
   const root = mkdtempSync(join(tmpdir(), 'styx-publish-'));
   const repo = join(root, 'acme-shop');
   mkdirSync(repo);
@@ -376,25 +381,67 @@ describe('PublishService.publish', () => {
         return { merged: 2, conflict: null };
       },
     });
-    const r = await svc.publish(fixCheckout, { through: 'push', message: { title: 'Validate', body: '' }, draft: false });
+    const r = await svc.publish(fixCheckout, {
+      through: 'push',
+      message: { title: 'Validate', body: '' },
+      draft: false,
+    });
     expect(synced).toEqual([fixCheckout]);
     expect(r).toMatchObject({ pushed: true, synced: 2 });
     expect(await sh(['rev-parse', 'refs/heads/fix/checkout'], bare)).toBe(r.commit);
-    expect(activityRows(t)[0]).toMatch(/^acme-shop · published fix\/checkout \(commit [0-9a-f]{7} · merged main \(2\) · push\)$/);
+    expect(activityRows(t)[0]).toMatch(
+      /^acme-shop · published fix\/checkout \(commit [0-9a-f]{7} · merged main \(2\) · push\)$/,
+    );
 
-    const blocked = await rig({ laneSync: async () => ({ merged: 0, conflict: { file: 'pay.ts', against: 'main' } }) });
+    const blocked = await rig({
+      laneSync: async () => ({ merged: 0, conflict: { file: 'pay.ts', against: 'main' } }),
+    });
     await expect(
-      blocked.svc.publish(fixCheckout, { through: 'push', message: { title: 'Validate', body: '' }, draft: false }),
+      blocked.svc.publish(fixCheckout, {
+        through: 'push',
+        message: { title: 'Validate', body: '' },
+        draft: false,
+      }),
     ).rejects.toMatchObject({
       code: 'git-error',
-      message: 'Bringing in main hit a conflict in pay.ts. The merge was undone; resolve it, then publish again.',
+      message:
+        'Bringing in main hit a conflict in pay.ts. The merge was undone; resolve it, then publish again.',
     });
     // The commit happened (step 1) but nothing was pushed.
     await expect(sh(['rev-parse', '--verify', 'refs/heads/fix/checkout'], blocked.bare)).rejects.toThrow();
 
+    // The lane's agent is mid-turn: the merge is refused, the push still goes out and the result says what was skipped.
+    const busy = await rig({
+      laneSync: async () => {
+        throw new CommandError(
+          'invalid-input',
+          'Claude Code is mid-turn. Wait for it to finish, or stop it, before bringing in main.',
+        );
+      },
+    });
+    const b = await busy.svc.publish(fixCheckout, {
+      through: 'push',
+      message: { title: 'Validate', body: '' },
+      draft: false,
+    });
+    expect(b).toMatchObject({
+      pushed: true,
+      syncSkipped: 'Claude Code is mid-turn. Wait for it to finish, or stop it, before bringing in main.',
+    });
+    expect(b.synced).toBeUndefined();
+    expect(await sh(['rev-parse', 'refs/heads/fix/checkout'], busy.bare)).toBe(b.commit);
+
     // A `commit`-only publish never touches the base.
-    const quiet = await rig({ laneSync: async () => { throw new Error('must not run'); } });
-    const c = await quiet.svc.publish(fixCheckout, { through: 'commit', message: { title: 'Validate', body: '' }, draft: false });
+    const quiet = await rig({
+      laneSync: async () => {
+        throw new Error('must not run');
+      },
+    });
+    const c = await quiet.svc.publish(fixCheckout, {
+      through: 'commit',
+      message: { title: 'Validate', body: '' },
+      draft: false,
+    });
     expect(c.synced).toBeUndefined();
   });
 
@@ -618,13 +665,29 @@ describe('PublishService.publish', () => {
     expect(opened?.targetId).toBeNull();
   });
 
-  it('a GitHub target whose policy asks cannot be answered from the button: forbidden, needs approval', async () => {
-    const { t, svc } = await rig();
+  it('a GitHub target whose policy asks: the Publish press is the approval (a one-use grant, decided by the person); a refused MFA is final', async () => {
+    const { t, svc, bare } = await rig();
     const target = t.app.repos.targets.get(ids.target.github);
     if (!target) throw new Error('fixture target');
     t.app.repos.targets.upsert({ ...target, policy: 'ask' });
+    const r = await svc.publish(fixCheckout, {
+      through: 'push',
+      message: { title: 'x', body: '' },
+      draft: false,
+    });
+    expect(r.pushed).toBe(true);
+    expect(await sh(['rev-parse', 'refs/heads/fix/checkout'], bare)).toBe(r.commit);
+    const grant = t.app.repos.grants.byTarget(target.id).at(-1);
+    // `once`: the grant closes behind the push it was issued for.
+    expect(grant).toMatchObject({ sessionId: null, duration: 'once', decidedBy: 'user', state: 'revoked' });
+    expect(t.app.repos.pendingAsks.all().some((a) => a.grantId === grant?.id)).toBe(false);
+
+    const refused = await rig({ mfa: 'failed' });
+    const t2 = refused.t.app.repos.targets.get(ids.target.github);
+    if (!t2) throw new Error('fixture target');
+    refused.t.app.repos.targets.upsert({ ...t2, policy: 'ask-mfa' });
     await expect(
-      svc.publish(fixCheckout, { through: 'push', message: { title: 'x', body: '' }, draft: false }),
+      refused.svc.publish(fixCheckout, { through: 'push', message: { title: 'x', body: '' }, draft: false }),
     ).rejects.toMatchObject({ code: 'forbidden', message: copy.publish.needsApproval });
   });
 

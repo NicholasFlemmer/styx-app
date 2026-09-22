@@ -66,6 +66,8 @@ export interface PaletteGroup {
 
 export interface PaletteUi {
   projectId: ProjectId | null;
+  /** The chat tab the person is on: Publish offers that lane (what the editor column shows). */
+  sessionId?: SessionId | null;
 }
 
 /** Providers with a built-in deploy verb (`adapter.deployCommand`). */
@@ -196,7 +198,7 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
       action: { kind: 'debt-audit', projectId },
     });
   // Publish the branch the project is on (a plain folder has no branch to push).
-  const wt = projectId === null ? null : projectWorktreeOf(model, projectId);
+  const wt = projectId === null ? null : projectWorktreeOf(model, projectId, ui.sessionId ?? null);
   if (projectId !== null && wt !== null && wt.branch !== null && projectHasGit(model, projectId))
     items.push({
       id: `publish:${wt.id}`,

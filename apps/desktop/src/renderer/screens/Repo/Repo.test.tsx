@@ -183,6 +183,7 @@ describe('Repo screen', () => {
                 pushed: false,
                 at: promo.mergedAt ?? 0,
                 undoneAt: null,
+                revertCommit: null,
               },
             },
             [main.id]: { ...main, headCommit: 'land1' },

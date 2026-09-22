@@ -1486,6 +1486,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     steps: { commit: 'commit {commit}', push: 'push', pr: 'PR #{number}', sync: 'merged {base} ({n})' },
     /** Keep lanes current (ADR-0023): the base branch is merged in between commit and push. */
     synced: 'Brought in {n} commits from {base} · ',
+    /** The pre-push merge was refused (the agent is mid-turn): said on the push line, the push still happens. */
+    syncSkipped: '{base} not brought in ({reason}) · ',
     syncConflict:
       'Bringing in {base} hit a conflict in {file}. The merge was undone; resolve it, then publish again.',
     /** The grant `gh` runs under (sheet, audit); the branch names what it is for. */
@@ -1540,6 +1542,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     dirtyBase: 'The main folder has uncommitted changes on {base}. Commit or discard them first.',
     baseNotCheckedOut: 'The main folder is on {current}, not {base}.',
     busy: '{agent} is mid-turn on {branch}; wait for it to finish before landing.',
+    waiting: '{agent} is waiting on you on {branch}; answer it (or stop it) before landing.',
     resolving:
       'Bringing {base} in first hit a conflict; {agent} is merging it now. Land again when the lane says it is done.',
     checksFailed: 'The checks failed (`{command}` exited {code}); {branch} was not landed.',
@@ -1561,6 +1564,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     undoNothing: 'Nothing to undo on this lane.',
     steps: {
       commit: 'committed {commit}',
+      reapply: 'reapplied the undone landing on {base} ({commit})',
       sync: 'brought in {base} ({n})',
       checks: 'checks passed',
       merge: 'merged into {base} ({commit})',

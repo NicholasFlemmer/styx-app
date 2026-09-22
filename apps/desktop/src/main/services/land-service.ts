@@ -138,8 +138,10 @@ export class LandService {
     const owner = wt.owner.kind === 'session' ? repos.sessions.get(wt.owner.sessionId) : null;
     const agent = copy.agentProducts[owner?.agent ?? 'claude'];
     const byOwner = owner !== null && caller === owner.id;
-    if (!byOwner && owner !== null && (owner.state === 'working' || owner.state === 'needs-you'))
+    if (!byOwner && owner !== null && owner.state === 'working')
       fail('invalid-input', fill(copy.land.busy, { agent, branch }));
+    if (!byOwner && owner !== null && owner.state === 'needs-you')
+      fail('invalid-input', fill(copy.land.waiting, { agent, branch }));
     if (wt.resolution !== null && (wt.resolution.state === 'resolving' || wt.resolution.state === 'checking'))
       fail('invalid-transition', fill(copy.land.resolving, { base, agent }));
     // The base is merged in its own checkout: it has to be on the base, and clean.
@@ -168,37 +170,60 @@ export class LandService {
       const r = await this.deps.publish.publish(wt.id, { through: 'commit', message, draft: false });
       if (r.commit !== null) steps.push(fill(copy.land.steps.commit, { commit: r.commit.slice(0, 7) }));
     }
-    // 2. The base comes into the lane; a conflict is the resolver's and the landing waits for it.
-    const synced = await this.deps.laneSync.sync(wt.id);
-    if (synced.conflict !== null) {
-      await this.deps.resolver.resolve(wt.id).catch(() => undefined);
-      fail('invalid-transition', fill(copy.land.resolving, { base, agent }));
+    // 1b. An undone landing left a revert on the base, so the lane's commits are already ancestors of it and a
+    // plain merge would bring nothing back. The revert is reverted first (the base regains the work), and then
+    // the sync below carries that through the lane instead of wiping its tree with the revert.
+    const undone = wt.landing;
+    let reapplied: string | null = null;
+    if (
+      undone !== null &&
+      undone.undoneAt !== null &&
+      undone.revertCommit !== null &&
+      (await git.isAncestor(project.path, undone.revertCommit, base))
+    ) {
+      const r = await git.revertCommit(project.path, undone.revertCommit);
+      if (!r.ok) fail('git-error', r.output || 'git revert failed');
+      reapplied = (await git.headCommit(project.path)) ?? undone.revertCommit;
+      steps.push(fill(copy.land.steps.reapply, { base, commit: reapplied.slice(0, 7) }));
+      this.patch(wt.id, (w) => ({ ...w, landing: { ...undone, revertCommit: null } }));
     }
-    if (synced.merged > 0) steps.push(fill(copy.land.steps.sync, { base, n: synced.merged }));
-    if ((await git.aheadBehind(project.path, branch, base)).ahead === 0)
-      fail('invalid-input', fill(copy.land.nothing, { branch, base }));
-    // 3. The checks, in the lane, before anything reaches the base.
-    const checks = this.deps.settingsOf(project.id).checksCommand;
-    if (checks !== null) {
-      const r = await this.deps.runChecks(wt.path, checks);
-      if (r.exitCode !== 0)
-        fail(
-          'invalid-transition',
-          fill(copy.land.checksFailed, { command: checks, code: r.exitCode, branch }) +
-            (r.output === '' ? '' : `\n${r.output}`),
-        );
-      steps.push(copy.land.steps.checks);
+    let commit: string;
+    if (reapplied !== null && (await git.aheadBehind(project.path, branch, base)).ahead === 0) {
+      // Nothing new on the lane since the undone landing: the reapply is the landing, and it is one commit.
+      commit = reapplied;
+    } else {
+      // 2. The base comes into the lane; a conflict is the resolver's and the landing waits for it.
+      const synced = await this.deps.laneSync.sync(wt.id);
+      if (synced.conflict !== null) {
+        await this.deps.resolver.resolve(wt.id).catch(() => undefined);
+        fail('invalid-transition', fill(copy.land.resolving, { base, agent }));
+      }
+      if (synced.merged > 0) steps.push(fill(copy.land.steps.sync, { base, n: synced.merged }));
+      if ((await git.aheadBehind(project.path, branch, base)).ahead === 0)
+        fail('invalid-input', fill(copy.land.nothing, { branch, base }));
+      // 3. The checks, in the lane, before anything reaches the base.
+      const checks = this.deps.settingsOf(project.id).checksCommand;
+      if (checks !== null) {
+        const r = await this.deps.runChecks(wt.path, checks);
+        if (r.exitCode !== 0)
+          fail(
+            'invalid-transition',
+            fill(copy.land.checksFailed, { command: checks, code: r.exitCode, branch }) +
+              (r.output === '' ? '' : `\n${r.output}`),
+          );
+        steps.push(copy.land.steps.checks);
+      }
+      // 4. The merge into the base: one commit naming the lane, the summary as its message.
+      const text = message.body.trim() === '' ? message.title : `${message.title}\n\n${message.body}`;
+      const merged = await git.mergeNoFf(project.path, branch, text);
+      if (!merged.ok) {
+        const file = (await git.conflictedFiles(project.path).catch(() => []))[0] ?? copy.general.none;
+        await git.mergeAbort(project.path).catch(() => undefined);
+        fail('git-error', fill(copy.land.conflict, { branch, file, base }));
+      }
+      commit = (await git.headCommit(project.path)) ?? fail('git-error', 'no commit after the merge');
+      steps.push(fill(copy.land.steps.merge, { base, commit: commit.slice(0, 7) }));
     }
-    // 4. The merge into the base: one commit naming the lane, the summary as its message.
-    const text = message.body.trim() === '' ? message.title : `${message.title}\n\n${message.body}`;
-    const merged = await git.mergeNoFf(project.path, branch, text);
-    if (!merged.ok) {
-      const file = (await git.conflictedFiles(project.path).catch(() => []))[0] ?? copy.general.none;
-      await git.mergeAbort(project.path).catch(() => undefined);
-      fail('git-error', fill(copy.land.conflict, { branch, file, base }));
-    }
-    const commit = (await git.headCommit(project.path)) ?? fail('git-error', 'no commit after the merge');
-    steps.push(fill(copy.land.steps.merge, { base, commit: commit.slice(0, 7) }));
     // 5. Push the base when it has somewhere to go.
     const mainRow = repos.worktrees.byProject(project.id).find((w) => w.isMain) ?? null;
     const remote = await this.remoteOf(project.path);
@@ -210,7 +235,7 @@ export class LandService {
     }
     // 6. Rows, the chat, Home. The lane stays, landed, with Undo.
     const now = clock.now();
-    const landing: WorktreeLanding = { commit, base, pushed, at: now, undoneAt: null };
+    const landing: WorktreeLanding = { commit, base, pushed, at: now, undoneAt: null, revertCommit: null };
     this.patch(wt.id, (w) => ({ ...w, mergedAt: now, landing, behindBase: 0, conflict: null }));
     if (mainRow !== null) this.patch(mainRow.id, (w) => ({ ...w, headCommit: commit }));
     const pushedSuffix = pushed ? fill(copy.land.pushedSuffix, { remote: remote ?? '' }) : '';
@@ -315,7 +340,11 @@ export class LandService {
     if ((await git.headCommit(project.path)) !== landing.commit)
       fail('invalid-transition', fill(copy.land.undoMoved, { base }));
     if (!(await git.status(project.path)).clean) fail('invalid-input', fill(copy.land.dirtyBase, { base }));
-    const r = await git.revertMerge(project.path, landing.commit);
+    // A landing is a merge commit, except a re-land that reapplied an undone one (a single revert-of-a-revert).
+    const r =
+      (await git.parentCount(project.path, landing.commit)) > 1
+        ? await git.revertMerge(project.path, landing.commit)
+        : await git.revertCommit(project.path, landing.commit);
     if (!r.ok) fail('git-error', r.output || 'git revert failed');
     const reverted = (await git.headCommit(project.path)) ?? landing.commit;
     const mainRow = repos.worktrees.byProject(project.id).find((w) => w.isMain) ?? null;
@@ -327,7 +356,11 @@ export class LandService {
         .pushed;
     }
     const now = clock.now();
-    this.patch(wt.id, (w) => ({ ...w, mergedAt: null, landing: { ...landing, undoneAt: now } }));
+    this.patch(wt.id, (w) => ({
+      ...w,
+      mergedAt: null,
+      landing: { ...landing, undoneAt: now, revertCommit: reverted },
+    }));
     if (mainRow !== null) this.patch(mainRow.id, (w) => ({ ...w, headCommit: reverted }));
     const owner = wt.owner.kind === 'session' ? repos.sessions.get(wt.owner.sessionId) : null;
     const pushedSuffix = pushed ? fill(copy.land.pushedSuffix, { remote: remote ?? '' }) : '';

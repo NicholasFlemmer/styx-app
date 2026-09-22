@@ -329,4 +329,17 @@ describe('LaneSyncService.freshenBase (the local base follows its upstream, ADR-
     expect(await t.app.laneSync.freshenBase(acme)).toEqual({ state: 'no-remote' });
     expect(t.app.laneSync.baseRefOf(acme)).toBe('main');
   });
+
+  it('fetch re-reads the remotes, so a remote added or removed outside Styx shows on the Repo header', async () => {
+    const { t, repo } = await rig();
+    // The fixture row still names github.com/acme/shop; the folder has no remote at all.
+    expect(t.app.repos.repos.byProject(acme)?.remotes.length).toBeGreaterThan(0);
+    await t.app.laneSync.refresh(acme);
+    expect(t.app.repos.repos.byProject(acme)?.remotes).toEqual([]);
+    const bare = join(mkdtempSync(join(tmpdir(), 'styx-lane-remote-')), 'origin.git');
+    await sh(['init', '--bare', '-q', bare], tmpdir());
+    await sh(['remote', 'add', 'origin', bare], repo);
+    await t.app.laneSync.refresh(acme);
+    expect(t.app.repos.repos.byProject(acme)?.remotes).toEqual([{ name: 'origin', url: bare }]);
+  });
 });

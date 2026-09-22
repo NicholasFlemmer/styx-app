@@ -101,6 +101,8 @@ export const worktreeLandingSchema = z.object({
   pushed: z.boolean(),
   at: timestampSchema,
   undoneAt: timestampSchema.nullable(),
+  /** The revert commit an Undo put on the base; the next landing reapplies it so the lane's work can go back in. */
+  revertCommit: z.string().nullable().default(null),
 });
 export type WorktreeLanding = z.infer<typeof worktreeLandingSchema>;
 

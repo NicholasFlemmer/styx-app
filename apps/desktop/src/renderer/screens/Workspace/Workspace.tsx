@@ -1,9 +1,9 @@
 import {
   AGENT_LABEL,
   copy,
+  projectWorktreeOf,
   rows,
   sessionTabs,
-  sessionsInProject,
   type AgentChange,
   type ProjectId,
   type ReadModel,
@@ -46,19 +46,19 @@ import s from './Workspace.module.css';
 
 /** Which half of the editor column is showing; persisted alongside the pane sizes. */
 const WORKSPACE_MODE_KEY = 'workspace-mode';
+/** git needs a moment after a turn ends before its marks are final; one re-read, not one per delta. */
+const TREE_REFRESH_DEBOUNCE_MS = 400;
 
 /**
- * The worktree the editor column shows: the project's default session tab's worktree (what the titlebar branch
+ * The worktree the editor column shows: the active chat tab's lane (files, terminal, status bar and Run locally
+ * all follow the tab the person is on), else the project's default session tab's worktree (what the nav branch
  * reads), else the main worktree.
  */
-export const editorWorktree = (model: ReadModel, projectId: ProjectId): Worktree | null => {
-  const first = sessionsInProject(model, projectId)
-    .filter((x) => x.state !== 'done')
-    .sort((a, b) => a.startedAt - b.startedAt)[0];
-  const own = first === undefined ? undefined : model.worktrees.byId[first.worktreeId];
-  if (own !== undefined) return own;
-  return rows(model.worktrees).find((w) => w.projectId === projectId && w.isMain) ?? null;
-};
+export const editorWorktree = (
+  model: ReadModel,
+  projectId: ProjectId,
+  activeSessionId: SessionId | null = null,
+): Worktree | null => projectWorktreeOf(model, projectId, activeSessionId);
 
 const fallbackIde = (model: ReadModel): string | null => {
   const ides = model.discovery.ides;
@@ -96,9 +96,9 @@ export function Workspace() {
   const now = useNow();
   const column = useRef<HTMLDivElement>(null);
 
-  const worktree = projectId === null ? null : editorWorktree(model, projectId);
   // The chat's active tab (falls back to the first tab when no session was picked yet).
   const activeSessionId = projectId === null ? null : sessionTabs(model, projectId, sessionId).activeId;
+  const worktree = projectId === null ? null : editorWorktree(model, projectId, activeSessionId);
   const worktreeId = worktree?.id ?? null;
   // Tracking off (the default): no bands, no hunk bar — main sends no hunks either, but a stale row must not show.
   const tracking = model.settings.app.trackAgentEdits;
@@ -136,6 +136,37 @@ export function Workspace() {
       cancelled = true;
     };
   }, [worktreeId, setEditorFile]);
+
+  // The tree is read again when the lane's files may have moved: a session on it changed state (a turn ended, an
+  // approval was answered), a checkpoint was recorded, the hunk watcher saw something, or the window came back
+  // to the front (the person edited in another app). Only the nodes and marks change: open tabs and the file in
+  // the editor stay as they were. Without this an agent's new file only showed after leaving the Workspace.
+  const treeStamp = useMemo(() => {
+    if (worktreeId === null) return '';
+    const parts: string[] = [String(changes.length)];
+    for (const sess of rows(model.sessions))
+      if (sess.worktreeId === worktreeId && sess.archivedAt === null)
+        parts.push(`${sess.id}:${sess.state}:${(model.checkpoints[sess.id] ?? []).length}`);
+    return parts.join('|');
+  }, [worktreeId, changes.length, model.sessions, model.checkpoints]);
+  const lastStamp = useRef(treeStamp);
+  const refreshTree = useCallback(() => {
+    if (worktreeId === null) return;
+    void loadWorktreeTree(worktreeId).then((t) => {
+      if (t.source !== 'fs') return;
+      setTree({ nodes: t.nodes, changes: t.changes });
+    });
+  }, [worktreeId]);
+  useEffect(() => {
+    if (lastStamp.current === treeStamp) return;
+    lastStamp.current = treeStamp;
+    const timer = setTimeout(refreshTree, TREE_REFRESH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [treeStamp, refreshTree]);
+  useEffect(() => {
+    window.addEventListener('focus', refreshTree);
+    return () => window.removeEventListener('focus', refreshTree);
+  }, [refreshTree]);
 
   const openFile = (path: string) => {
     setOpen((prev) => (prev.includes(path) ? prev : [...prev, path]));

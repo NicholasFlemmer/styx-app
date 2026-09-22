@@ -796,6 +796,8 @@ export const commands = {
       pr: z.object({ number: z.number().int().positive(), url: z.string() }).nullable(),
       /** Commits merged in from the base branch before the push (ADR-0023); absent when nothing was behind. */
       synced: z.number().int().nonnegative().optional(),
+      /** The base could not be brought in (the lane's agent is mid-turn); the push went ahead without it. */
+      syncSkipped: z.string().optional(),
     }),
   },
 

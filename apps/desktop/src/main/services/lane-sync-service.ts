@@ -135,12 +135,15 @@ export class LaneSyncService {
     const project = repos.projects.get(projectId) ?? fail('not-found', `project ${projectId} not found`);
     const repo = repos.repos.byProject(project.id) ?? fail('not-found', 'project has no repo');
     if (repo.defaultBranch === null) return { ahead: 0, behind: 0 }; // plain folder: nothing to fetch
-    if ((await git.remotes(project.path)).length > 0) await git.fetch(project.path);
+    // The remotes are read again on every fetch: a remote added or removed outside Styx must not leave the Repo
+    // header (and Publish's no-remote notice) describing a remote git no longer has.
+    const remotes = (await git.remotes(project.path)).map((r) => ({ name: r.name, url: r.url }));
+    if (remotes.length > 0) await git.fetch(project.path);
     const status = await git.status(project.path);
     const ab = status.upstream
       ? await git.aheadBehind(project.path, status.branch, status.upstream)
       : { ahead: status.ahead, behind: status.behind };
-    repos.repos.upsert({ ...repo, ahead: ab.ahead, behind: ab.behind, fetchedAt: clock.now() });
+    repos.repos.upsert({ ...repo, remotes, ahead: ab.ahead, behind: ab.behind, fetchedAt: clock.now() });
     publisher.upsert('repos', [repo.id]);
 
     await this.freshenBase(project.id).catch((e: Error) =>

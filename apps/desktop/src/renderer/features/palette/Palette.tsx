@@ -11,7 +11,7 @@ import {
 import { sizes } from '@styx/tokens';
 import { Backdrop, PaletteList } from '@styx/ui';
 import { useCallback, useMemo, useRef, type KeyboardEvent } from 'react';
-import { useCopyPlatform, useNow, useUi, useUiShallow } from '../../state/hooks';
+import { useCopyPlatform, useNow, useSessionId, useUi, useUiShallow } from '../../state/hooks';
 import { useReadModel } from '../../state/read-model';
 import { runPaletteAction } from './actions';
 import s from './Palette.module.css';
@@ -31,6 +31,7 @@ export function Palette({ id }: PaletteProps) {
   const model = useReadModel((s) => s.model);
   const now = useNow();
   const projectId = useUi((s) => s.projectId);
+  const sessionId = useSessionId();
   const platform = useUi((s) => s.platform);
   const copyPlatform = useCopyPlatform();
   const palette = useUiShallow((s) => s.palette);
@@ -39,8 +40,8 @@ export function Palette({ id }: PaletteProps) {
   const newWindow = useRef(false);
 
   const groups = useMemo(
-    () => paletteResults(model, { projectId }, palette.query, palette.scope, now),
-    [model, projectId, palette.query, palette.scope, now],
+    () => paletteResults(model, { projectId, sessionId }, palette.query, palette.scope, now),
+    [model, projectId, sessionId, palette.query, palette.scope, now],
   );
   const flat = useMemo(() => flattenPalette(groups), [groups]);
   const activeId = flat.some((i) => i.id === palette.activeId)

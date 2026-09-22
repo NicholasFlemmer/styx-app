@@ -550,6 +550,18 @@ export class GitService {
     return this.asUserOrStyx(['revert', '--no-edit', '-m', '1', commit], path);
   }
 
+  /** How many parents a commit has: 1 for an ordinary commit, 2+ for a merge. */
+  async parentCount(path: string, commit: string): Promise<number> {
+    const r = await this.git.run(['rev-list', '--parents', '-n', '1', commit], path, { reject: false });
+    if (r.exitCode !== 0) return 0;
+    return Math.max(0, r.stdout.trim().split(/\s+/).length - 1);
+  }
+
+  /** Reverts an ordinary (non-merge) commit — used to take an Undo's revert back out (re-land). */
+  revertCommit(path: string, commit: string): Promise<{ ok: boolean; output: string }> {
+    return this.asUserOrStyx(['revert', '--no-edit', commit], path);
+  }
+
   /** Per-file numstat between two refs in the merge-base form (`from...to`). */
   async numstatFiles(
     path: string,

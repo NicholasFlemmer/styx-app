@@ -14,7 +14,7 @@ import {
 } from '@styx/core';
 import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
-import { fail } from '../ipc/bus';
+import { CommandError, fail } from '../ipc/bus';
 import { STRIPPED_ENV } from '../providers/cli-runner';
 import type { Publisher } from '../store/publisher';
 import type { ActivityService } from './activity-service';
@@ -35,10 +35,10 @@ export interface PublishMessage {
 export interface PublishResult {
   commit: string | null;
   pushed: boolean;
-  pr: { number: number; url: string
-} | null;
+  pr: { number: number; url: string } | null;
   /** Commits merged in from the base branch before the push (ADR-0023); absent when nothing was behind. */
   synced?: number;
+  syncSkipped?: string;
 }
 
 export interface ExecResult {
@@ -74,9 +74,15 @@ export interface PublishServiceDeps {
   audit: AuditService;
   exec: PublishExec;
   /** The project's effective default agent and base branch (projection `projectSettingsFor`). */
-  projectSettings: (projectId: string) => { defaultAgent: Agent; baseBranch: string; syncBeforePublish?: boolean };
+  projectSettings: (projectId: string) => {
+    defaultAgent: Agent;
+    baseBranch: string;
+    syncBeforePublish?: boolean;
+  };
   /** LaneSyncService.sync: merge the base branch in before pushing (ADR-0023); absent = skip the step. */
-  laneSync?: (worktreeId: string) => Promise<{ merged: number; conflict: { file: string; against: string } | null }>;
+  laneSync?: (
+    worktreeId: string,
+  ) => Promise<{ merged: number; conflict: { file: string; against: string } | null }>;
   /** Where `gh` is looked up: the process PATH first (e2e's fake bin dir), then the login shell's. */
   loginPath: () => Promise<string>;
   /** The process env whose PATH is searched first (default `process.env`; tests point it at a temp bin). */
@@ -250,11 +256,25 @@ export class PublishService {
 
     // 1b. keep the lane current (ADR-0023): the base branch comes in before anything leaves the machine, so the
     // push and the PR carry code that merges cleanly. A conflict undoes the merge and stops here.
-    if (settings.syncBeforePublish && !wt.isMain && branch !== baseBranch && this.deps.laneSync !== undefined) {
-      const synced = await this.deps.laneSync(wt.id);
-      if (synced.conflict !== null)
+    if (
+      settings.syncBeforePublish &&
+      !wt.isMain &&
+      branch !== baseBranch &&
+      this.deps.laneSync !== undefined
+    ) {
+      // The merge is refused while the lane's agent is mid-turn (it may be writing files). That is a reason to
+      // push without it, not to fail a publish whose commit already exists: the line says what was skipped.
+      let synced: Awaited<ReturnType<NonNullable<PublishServiceDeps['laneSync']>>> | null = null;
+      try {
+        synced = await this.deps.laneSync(wt.id);
+      } catch (e) {
+        if (!(e instanceof CommandError) || e.code !== 'invalid-input') throw e;
+        result.syncSkipped = e.message;
+        logger.info('publish: base not brought in', { branch, reason: e.message });
+      }
+      if (synced !== null && synced.conflict !== null)
         fail('git-error', fill(copy.publish.syncConflict, { base: baseBranch, file: synced.conflict.file }));
-      if (synced.merged > 0) {
+      if (synced !== null && synced.merged > 0) {
         result.synced = synced.merged;
         result.commit ??= await git.headCommit(wt.path);
         await this.refreshHead(wt);
@@ -369,8 +389,9 @@ export class PublishService {
         worktreeId: wt.id,
       })
       .catch((e: Error) => {
-        // A user decision needs a session to ask in; the button has none, so the policy answer is final here.
-        if (/needs a session/.test(e.message)) return fail('forbidden', copy.publish.needsApproval);
+        // MFA refused or unavailable (a prod GitHub target): the button's press was the approval, so this is final.
+        if (/^verification|is not available on this machine$/.test(e.message))
+          return fail('forbidden', copy.publish.needsApproval);
         throw e;
       });
     if (outcome.kind === 'denied') fail('forbidden', copy.publish.denied);

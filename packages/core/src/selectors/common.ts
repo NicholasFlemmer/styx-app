@@ -55,19 +55,39 @@ export const byRecentActivity = (
   return b.lastActivityAt - a.lastActivityAt;
 };
 
-/** The branch a project is "on": the worktree of its default (first, non-done) session tab, else the main worktree. */
-export const projectBranch = (model: ReadModel, projectId: ProjectId): string =>
-  projectBranchOrNull(model, projectId) ?? '—';
+/**
+ * The branch a project is "on": the worktree of the chat tab the person is looking at (`activeSessionId`), else of
+ * its default (first, non-done) session tab, else the main worktree.
+ */
+export const projectBranch = (
+  model: ReadModel,
+  projectId: ProjectId,
+  activeSessionId: SessionId | null = null,
+): string => projectBranchOrNull(model, projectId, activeSessionId) ?? '—';
 
 /** Same, but null when the project is on no branch (plain folder, or no worktree yet); the project nav shows no branch line. */
-export const projectBranchOrNull = (model: ReadModel, projectId: ProjectId): string | null =>
-  projectWorktreeOf(model, projectId)?.branch ?? null;
+export const projectBranchOrNull = (
+  model: ReadModel,
+  projectId: ProjectId,
+  activeSessionId: SessionId | null = null,
+): string | null => projectWorktreeOf(model, projectId, activeSessionId)?.branch ?? null;
 
-/** The worktree a project is "on" (what `projectBranch` reads): the default session tab's worktree, else main. */
-export const projectWorktreeOf = (model: ReadModel, projectId: ProjectId): Worktree | null => {
-  const first = sessionsInProject(model, projectId)
+/**
+ * The worktree a project is "on" (what `projectBranch`, the editor column, Publish and Run locally read): the
+ * active chat tab's worktree when one is given and it is a live session of this project, else the default (first,
+ * non-done) session tab's, else main. The workspace mirrors what the person is looking at (discrepancy #103), so
+ * switching tabs switches files, terminal and status bar with it.
+ */
+export const projectWorktreeOf = (
+  model: ReadModel,
+  projectId: ProjectId,
+  activeSessionId: SessionId | null = null,
+): Worktree | null => {
+  const live = sessionsInProject(model, projectId)
     .filter((s) => s.state !== 'done')
-    .sort((a, b) => a.startedAt - b.startedAt)[0];
-  if (first !== undefined) return worktreeOf(model, first) ?? null;
+    .sort((a, b) => a.startedAt - b.startedAt);
+  const active = activeSessionId === null ? undefined : live.find((s) => s.id === activeSessionId);
+  const pick = active ?? live[0];
+  if (pick !== undefined) return worktreeOf(model, pick) ?? null;
   return mainWorktreeOf(model, projectId);
 };

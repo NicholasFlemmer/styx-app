@@ -44,12 +44,25 @@ describe('Repo lanes (prototype `lanes`)', () => {
     const m = fixtures.demoReadModel();
     const behind = {
       ...m.worktrees.byId,
-      [fixtures.ids.worktree.fixCheckout]: { ...m.worktrees.byId[fixtures.ids.worktree.fixCheckout]!, behindBase: 3 },
-      [fixtures.ids.worktree.acmeMain]: { ...m.worktrees.byId[fixtures.ids.worktree.acmeMain]!, behindBase: 2 },
-      [fixtures.ids.worktree.featPromo]: { ...m.worktrees.byId[fixtures.ids.worktree.featPromo]!, behindBase: 4 },
+      [fixtures.ids.worktree.fixCheckout]: {
+        ...m.worktrees.byId[fixtures.ids.worktree.fixCheckout]!,
+        behindBase: 3,
+      },
+      [fixtures.ids.worktree.acmeMain]: {
+        ...m.worktrees.byId[fixtures.ids.worktree.acmeMain]!,
+        behindBase: 2,
+      },
+      [fixtures.ids.worktree.featPromo]: {
+        ...m.worktrees.byId[fixtures.ids.worktree.featPromo]!,
+        behindBase: 4,
+      },
     };
     const rows = laneRows({ ...m, worktrees: { ...m.worktrees, byId: behind } }, acme, NOW);
-    expect(rows.find((l) => l.branch === 'fix/checkout')?.sync).toEqual({ n: 3, base: 'main', label: 'Bring in main' });
+    expect(rows.find((l) => l.branch === 'fix/checkout')?.sync).toEqual({
+      n: 3,
+      base: 'main',
+      label: 'Bring in main',
+    });
     expect(rows.find((l) => l.branch === 'main')?.sync).toBeNull();
     expect(rows.find((l) => l.branch === 'feat/promo')?.sync).toBeNull(); // merged
     expect(lanes.every((l) => l.sync === null)).toBe(true); // the fixture's lanes are current
@@ -126,7 +139,11 @@ describe('lane overlaps (ADR-0025)', () => {
       ...model,
       worktrees: {
         ...model.worktrees,
-        byId: { ...model.worktrees.byId, [w.id]: { ...w, overlaps: overlap }, [merged.id]: { ...merged, overlaps: overlap } },
+        byId: {
+          ...model.worktrees.byId,
+          [w.id]: { ...w, overlaps: overlap },
+          [merged.id]: { ...merged, overlaps: overlap },
+        },
       },
     };
     const lanes = laneRows(withOverlaps, acme, NOW);
@@ -180,7 +197,14 @@ describe('landing (ADR-0025 phase C)', () => {
     const lane = m.worktrees.byId[fixtures.ids.worktree.fixCheckout];
     const main = m.worktrees.byId[fixtures.ids.worktree.acmeMain];
     if (lane === undefined || main === undefined) throw new Error('fixture');
-    const landing = { commit: 'landed1', base: 'main', pushed: true, at: NOW - 60_000, undoneAt: null };
+    const landing = {
+      commit: 'landed1',
+      base: 'main',
+      pushed: true,
+      at: NOW - 60_000,
+      undoneAt: null,
+      revertCommit: null,
+    };
     const withMainAt = (head: string, undoneAt: number | null = null) =>
       laneRows(
         {
@@ -211,7 +235,10 @@ describe('landing (ADR-0025 phase C)', () => {
 });
 
 describe('lane resolution states (ADR-0025 phase B)', () => {
-  const base = (state: 'resolving' | 'checking' | 'done' | 'failed', extra: Record<string, unknown> = {}) => ({
+  const base = (
+    state: 'resolving' | 'checking' | 'done' | 'failed',
+    extra: Record<string, unknown> = {},
+  ) => ({
     state,
     sessionId: fixtures.ids.session.claude,
     files: ['src/a.ts', 'src/b.ts'],
@@ -230,23 +257,42 @@ describe('lane resolution states (ADR-0025 phase B)', () => {
     if (w === undefined) throw new Error('fixture');
     return {
       ...model,
-      worktrees: { ...model.worktrees, byId: { ...model.worktrees.byId, [w.id]: { ...w, resolution, ...patch } } },
+      worktrees: {
+        ...model.worktrees,
+        byId: { ...model.worktrees.byId, [w.id]: { ...w, resolution, ...patch } },
+      },
     };
   };
-  const row = (model: ReturnType<typeof withResolution>) => laneRows(model, acme, NOW).find((l) => l.branch === 'fix/checkout');
+  const row = (model: ReturnType<typeof withResolution>) =>
+    laneRows(model, acme, NOW).find((l) => l.branch === 'fix/checkout');
 
   it('resolving / checking read as such and offer nothing to click but the diff', () => {
-    expect(row(withResolution(base('resolving')))).toMatchObject({ changes: 'merging main with Claude…', action: 'diff' });
-    expect(row(withResolution(base('checking')))).toMatchObject({ changes: 'checking the merge…', action: 'diff' });
+    expect(row(withResolution(base('resolving')))).toMatchObject({
+      changes: 'merging main with Claude…',
+      action: 'diff',
+    });
+    expect(row(withResolution(base('checking')))).toMatchObject({
+      changes: 'checking the merge…',
+      action: 'diff',
+    });
   });
 
   it('done on the current HEAD offers Undo merge; failed shows the conflict and Resolve again', () => {
     const done = withResolution(base('done', { mergeCommit: 'mc' }), { headCommit: 'mc', conflict: null });
-    expect(row(done)).toMatchObject({ changes: 'brought in main · 2 resolved', action: 'undo-merge', actionLabel: 'Undo merge' });
+    expect(row(done)).toMatchObject({
+      changes: 'brought in main · 2 resolved',
+      action: 'undo-merge',
+      actionLabel: 'Undo merge',
+    });
     // The lane moved on since: the ordinary row comes back.
-    const moved = withResolution(base('done', { mergeCommit: 'mc' }), { headCommit: 'later', conflict: null });
+    const moved = withResolution(base('done', { mergeCommit: 'mc' }), {
+      headCommit: 'later',
+      conflict: null,
+    });
     expect(row(moved)?.action).not.toBe('undo-merge');
-    const failed = withResolution(base('failed', { failure: 'markers' }), { conflict: { file: 'src/a.ts', against: 'main' } });
+    const failed = withResolution(base('failed', { failure: 'markers' }), {
+      conflict: { file: 'src/a.ts', against: 'main' },
+    });
     expect(row(failed)).toMatchObject({ changes: 'CONFLICT · src/a.ts vs main', action: 'resolve' });
   });
 });

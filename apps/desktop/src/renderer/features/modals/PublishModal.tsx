@@ -176,7 +176,9 @@ export function PublishModal({ id, worktreeId }: PublishModalProps) {
         line.text =
           (r.value.synced !== undefined && r.value.synced > 0
             ? fill(copy.publish.synced, { n: r.value.synced, base: baseBranch })
-            : '') + fill(copy.publish.done.push, { branch });
+            : r.value.syncSkipped !== undefined
+              ? fill(copy.publish.syncSkipped, { base: baseBranch, reason: r.value.syncSkipped })
+              : '') + fill(copy.publish.done.push, { branch });
       else if (r.value.pr !== null) {
         line.text =
           r.value.pr.number === priorPr

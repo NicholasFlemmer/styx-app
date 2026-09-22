@@ -11,7 +11,7 @@ import {
 } from '@styx/core';
 import { NavItem, type IconName } from '@styx/ui';
 import { useCallback } from 'react';
-import { useModel, useNow, useUi } from '../state/hooks';
+import { useModel, useNow, useSessionId, useUi } from '../state/hooks';
 import { startDebtAudit } from '../features/audit';
 import {
   PROJECT_SECTIONS,
@@ -53,10 +53,11 @@ export function Nav() {
   const setBoardScope = useUi((u) => u.setBoardScope);
   const now = useNow();
   const model = useModel(useCallback((m: ReadModel) => m, []));
+  const activeSessionId = useSessionId();
 
   const project = projectId === null ? null : projectOf(model, projectId);
   const projectName = projectId === null ? copy.general.none : projectNameOf(model, projectId);
-  const branch = projectId === null ? null : projectBranchOrNull(model, projectId);
+  const branch = projectId === null ? null : projectBranchOrNull(model, projectId, activeSessionId);
   const agents =
     projectId === null ? 0 : sessionsInProject(model, projectId).filter((x) => x.state !== 'done').length;
   const worktrees =

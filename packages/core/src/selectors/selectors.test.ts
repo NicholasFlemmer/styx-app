@@ -386,6 +386,13 @@ describe('common', () => {
       '—',
     );
   });
+  it('the active chat tab wins: its lane is what the workspace, nav and Publish show; a tab of another project or a done one falls back', () => {
+    expect(projectBranch(model, ids.project.acmeShop, ids.session.codex)).toBe('test/flaky');
+    expect(projectBranch(model, ids.project.acmeShop, ids.session.gemini)).toBe('main');
+    // blog's session is not acme-shop's: the default tab rule applies.
+    expect(projectBranch(model, ids.project.acmeShop, ids.session.blog)).toBe('fix/checkout');
+    expect(projectBranch(model, ids.project.acmeShop, ids.session.cursor)).toBe('fix/checkout');
+  });
   it('plain folder (repo.defaultBranch null, main worktree on no branch): not git, branch — / null', () => {
     const repo = model.repos.byId[ids.repo.sideApi];
     const main = model.worktrees.byId[ids.worktree.sideMain];
