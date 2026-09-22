@@ -243,7 +243,9 @@ export const sessionControls = (
     liveEffort: structured && takesEffort(session.agent) && !claude,
     // Stop was gated on `streaming`, so codex / gemini / shell had no stop control at all even though the pty
     // branch has always written ^C. Every live runner mid-turn can be stopped.
-    stop: session.state === 'working',
+    // A turn blocked on an approval (needs-you) is mid-turn too: Stop declines what is open and ends the turn,
+    // which is what `session.interrupt` already does for open permission asks.
+    stop: session.state === 'working' || session.state === 'needs-you',
     // Pausing means parking a `can_use_tool` request, which only the stream runner produces.
     pause: streaming && (session.state === 'working' || heldByUser),
     paused: heldByUser,

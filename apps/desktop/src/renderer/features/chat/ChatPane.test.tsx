@@ -420,6 +420,14 @@ describe('ChatPane', () => {
   });
 
   it('other agents keep the static Model ▾ hint; a done Claude session shows no controls', () => {
+    // The fixture's Codex session waits on a grant (needs-you: Stop shows); at rest the static hint is back.
+    const atRest = fixtures.demoReadModel();
+    const codexRow = atRest.sessions.byId[codex];
+    if (codexRow === undefined) throw new Error('fixture');
+    useReadModel.getState().replaceModel(
+      { ...atRest, sessions: upsertRows(atRest.sessions, [{ ...codexRow, state: 'idle' }]) },
+      'connected',
+    );
     useUiStore.getState().setSession(acme, codex);
     const { unmount } = render(<ChatPane projectId={acme} />);
     expect(screen.getByRole('button', { name: 'Model' })).toBeTruthy();
@@ -428,11 +436,13 @@ describe('ChatPane', () => {
     const model = fixtures.demoReadModel();
     const s = model.sessions.byId[claude];
     if (s === undefined) throw new Error('fixture');
+    // A done session is no tab: the pane falls back to the first live one (Codex, idle here), which has no controls.
     useReadModel.getState().replaceModel(
       {
         ...model,
         sessions: upsertRows(model.sessions, [
           { ...s, state: 'done', pid: null, exitCode: 0, endedAt: fixtures.DEMO_NOW },
+          { ...codexRow, state: 'idle' },
         ]),
       },
       'connected',

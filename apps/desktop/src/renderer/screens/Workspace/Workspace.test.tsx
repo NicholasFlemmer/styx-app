@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { copy, fixtures, type ProjectId, type SessionId } from '@styx/core';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
@@ -50,8 +50,25 @@ const listDir = (path: string) =>
     : path === 'src'
       ? { entries: [{ name: 'server.ts', kind: 'file', gitStatus: null }] }
       : { entries: [] };
+/** Files that "appear on disk" between reads (the refresh test adds one). */
+let extraFiles: string[] = [];
 const commandMock = vi.fn(async (name: string, input?: unknown) => {
-  if (name === 'fs.listDir') return { ok: true as const, value: listDir((input as { path: string }).path) };
+  if (name === 'fs.listDir') {
+    const base = listDir((input as { path: string }).path);
+    const path = (input as { path: string }).path;
+    return {
+      ok: true as const,
+      value:
+        path === ''
+          ? {
+              entries: [
+                ...base.entries,
+                ...extraFiles.map((name) => ({ name, kind: 'file' as const, gitStatus: '?' as const })),
+              ],
+            }
+          : base,
+    };
+  }
   if (name === 'fs.readFile') return { ok: true as const, value: { text: '', eol: 'lf' } };
   return { ok: true as const, value: {} };
 });
@@ -91,6 +108,41 @@ describe('Workspace screen', () => {
     const bar = document.querySelector('[data-status-bar]');
     expect(bar?.textContent?.startsWith('main')).toBe(true);
     expect(document.querySelector('[data-workspace]')?.getAttribute('data-workspace')).toBe('main');
+  });
+
+  it('watches the worktree it shows and re-reads the tree when main says something on disk moved', async () => {
+    extraFiles = [];
+    const listeners = new Map<string, (payload: unknown) => void>();
+    Object.assign(window, {
+      styx: {
+        platform: 'darwin',
+        env: { now: fixtures.DEMO_NOW },
+        command: commandMock,
+        onEvent: (name: string, cb: (payload: unknown) => void) => {
+          listeners.set(name, cb);
+          return () => listeners.delete(name);
+        },
+      },
+    });
+    useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
+    const { unmount } = render(<Workspace />);
+    await waitFor(() => expect(screen.getByRole('treeitem', { name: 'README.md' })).toBeTruthy());
+    expect(commandMock).toHaveBeenCalledWith('fs.watchTree', { worktreeId: sideMain });
+    extraFiles = ['new-from-agent.ts'];
+    expect(listeners.has('fs.treeChanged')).toBe(true);
+    const listsBefore = commandMock.mock.calls.filter((c) => c[0] === 'fs.listDir').length;
+    act(() => listeners.get('fs.treeChanged')?.({ worktreeId: sideMain }));
+    await waitFor(() =>
+      expect(commandMock.mock.calls.filter((c) => c[0] === 'fs.listDir').length).toBeGreaterThan(listsBefore),
+    );
+    await waitFor(() => expect(screen.getByRole('treeitem', { name: /new-from-agent\.ts/ })).toBeTruthy());
+    // Another lane's change is not this pane's business.
+    const before = commandMock.mock.calls.filter((c) => c[0] === 'fs.listDir').length;
+    listeners.get('fs.treeChanged')?.({ worktreeId: 'someone-else' });
+    expect(commandMock.mock.calls.filter((c) => c[0] === 'fs.listDir').length).toBe(before);
+    unmount();
+    expect(commandMock).toHaveBeenCalledWith('fs.unwatchTree', {});
+    extraFiles = [];
   });
 
   it('a plain folder (no git) shows `no git` in place of the branch and no hunk bar', async () => {

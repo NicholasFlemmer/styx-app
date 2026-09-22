@@ -132,3 +132,29 @@ describe('Composer', () => {
     expect(send).toHaveAttribute('data-composer-send', 'true');
   });
 });
+
+describe('Composer slash popup', () => {
+  it('typing / opens the commands; ↓ + ⏎ replaces the typed token with the picked command and a space', async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+    render(
+      <Composer
+        {...strings}
+        onSend={onSend}
+        slashItems={[
+          { id: 'help', label: '/help' },
+          { id: 'memory', label: '/memory' },
+        ]}
+        slashHint="Commands"
+        slashEmpty="No commands"
+      />,
+    );
+    const box = screen.getByRole('textbox');
+    await user.click(box);
+    await user.keyboard('/');
+    expect(screen.getByRole('listbox')).toBeTruthy();
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(box).toHaveValue('/memory ');
+    expect(onSend).not.toHaveBeenCalled();
+  });
+});

@@ -682,6 +682,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
                         role="menuitem"
                         className={s['menuItem']}
                         onClick={() => pick(t.sessionId)}
+                        data-session-menu-item={t.sessionId}
                       >
                         <StatusDot tone={t.dot} size={7} />
                         {t.label}

@@ -54,7 +54,15 @@ const runApprove = (card: BoardCard): void => {
   runCta(card);
 };
 
-/** Deny on a needs-you card: `grant.deny` for the head grant ask, `ask.respond` reject for plan asks. */
+/** The option of a decision ask that says no: "Deny" / "No" / "Reject" when the CLI offers one, else its last. */
+export const denyOptionOf = (options: readonly string[]): string | null =>
+  options.find((o) => /^(deny|no|reject|cancel)\b/i.test(o)) ?? options.at(-1) ?? null;
+
+/**
+ * Deny on a needs-you card: `grant.deny` for the head grant ask, `ask.respond` reject for plan asks, and the
+ * declining option for a command / tool approval (a `decision` ask) — the card showed Deny for those too, and
+ * it used to do nothing.
+ */
 const runDeny = (card: BoardCard): void => {
   if (card.askId === null) return;
   const ask = useReadModel.getState().model.pendingAsks.byId[card.askId];
@@ -68,6 +76,12 @@ const runDeny = (card: BoardCard): void => {
       askId: ask.id,
       resolution: { kind: 'plan', outcome: 'rejected', note: null },
     });
+    return;
+  }
+  if (ask.kind === 'decision' && ask.payload.kind === 'decision') {
+    const chosen = denyOptionOf(ask.payload.options);
+    if (chosen !== null)
+      void command('ask.respond', { askId: ask.id, resolution: { kind: 'decision', chosen } });
   }
 };
 

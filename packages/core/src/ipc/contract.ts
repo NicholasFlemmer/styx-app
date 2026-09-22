@@ -852,6 +852,13 @@ export const commands = {
     }),
   },
 
+  /**
+   * The files pane watches the worktree it shows: one watcher per window (a new call replaces the old one),
+   * `fs.treeChanged` when anything under it moves. `fs.unwatchTree` when the pane goes.
+   */
+  'fs.watchTree': { input: z.object({ worktreeId: worktreeIdSchema }), output: ok },
+  'fs.unwatchTree': { input: z.object({}), output: ok },
+
   // --- terminal (user terminals, not agent ptys) ---
   'terminal.spawn': {
     input: z.object({ worktreeId: worktreeIdSchema }),
@@ -998,6 +1005,8 @@ export const events = {
   'ask.opened': z.object({ askId: askIdSchema, sessionId: sessionIdSchema, projectId: projectIdSchema }),
   /** A dock card was clicked: the main window brings that session forward. */
   'session.focus': z.object({ sessionId: sessionIdSchema }),
+  /** Something under a watched worktree changed on disk (debounced): the files pane reads its tree again. */
+  'fs.treeChanged': z.object({ worktreeId: worktreeIdSchema }),
   /** Deploy lifecycle; the output itself streams over the pty channel like any other terminal. */
   'deploy.progress': z.object({
     deployId: z.string(),

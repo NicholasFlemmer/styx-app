@@ -61,7 +61,10 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
     const repo = repos.repos.byProject(project.id) ?? fail('not-found', 'project has no repo');
     if (!repoHasGit(repo)) fail('git-error', `${project.name} is not a git repository`);
     const path = worktreeLocation(project.path, branch);
-    if (projectSettingsFor(repos, project.id).syncOnSpawn.value && (await git.remotes(project.path)).length > 0)
+    if (
+      projectSettingsFor(repos, project.id).syncOnSpawn.value &&
+      (await git.remotes(project.path)).length > 0
+    )
       await git.fetch(project.path).catch(() => undefined);
     await git.worktreeAdd(project.path, { branch, base, path });
     const head = await git.headCommit(path);
@@ -167,6 +170,16 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
   bus.register('link.open', async ({ url }) => {
     if (!/^https:\/\//i.test(url)) fail('invalid-input', 'only https links open in the browser');
     await app.openExternal(url);
+    return {};
+  });
+
+  bus.register('fs.watchTree', async ({ worktreeId }, ctx) => {
+    requireWorktree(worktreeId);
+    await app.treeWatch.watch(ctx.senderId, worktreeId);
+    return {};
+  });
+  bus.register('fs.unwatchTree', async (_input, ctx) => {
+    await app.treeWatch.unwatch(ctx.senderId);
     return {};
   });
 

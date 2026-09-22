@@ -20,6 +20,7 @@ import { DetectService, defaultDeps as defaultDetectDeps } from './services/dete
 import { ExecaGitRunner, GitService } from './services/git';
 import { GrantService } from './services/grant-service';
 import { HunkService, type WatchFactory } from './services/hunk-service';
+import { TreeWatchService } from './services/tree-watch-service';
 import { IdeImportService } from './services/ide-import-service';
 import { MfaService, type MfaProvider } from './services/mfa-service';
 import type { NotificationService } from './services/notification-service';
@@ -221,6 +222,7 @@ export interface Container {
   grants: GrantService;
   projects: ProjectService;
   hunks: HunkService;
+  treeWatch: TreeWatchService;
   targets: TargetService;
   deploys: DeployService;
   skills: SkillsService;
@@ -358,6 +360,11 @@ export function buildContainer(opts: ContainerOptions): Container {
     git,
     ...(opts.watch ? { watch: opts.watch } : {}),
     onRescanned: (worktreeId) => void ledger.laneChanged(worktreeId),
+  });
+  const treeWatch = new TreeWatchService({
+    repos,
+    publisher,
+    ...(opts.watch ? { watch: opts.watch } : {}),
   });
   const worktrees = new WorktreeService({
     repos,
@@ -843,6 +850,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     grants,
     projects,
     hunks,
+    treeWatch,
     targets,
     deploys,
     skills,
@@ -885,6 +893,7 @@ export function buildContainer(opts: ContainerOptions): Container {
       runs.stopAll();
       devices.shutdown();
       await hunks.closeAll();
+      await treeWatch.closeAll();
       await broker.close();
       await grants.stop();
       const ssh = providers.get('ssh') as { revokeAll?: () => Promise<void> };

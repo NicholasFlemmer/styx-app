@@ -39,6 +39,7 @@ import { DeployButton } from '../../features/workspace/DeployButton';
 import { PublishButton } from '../../features/workspace/PublishButton';
 import { StatusBar } from '../../features/editor/StatusBar';
 import { TerminalPane } from '../../features/terminal/TerminalPane';
+import { onEvent } from '../../state/bridge';
 import { command } from '../../state/commands';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
 import { useUiStore } from '../../state/ui-store';
@@ -167,6 +168,18 @@ export function Workspace() {
     window.addEventListener('focus', refreshTree);
     return () => window.removeEventListener('focus', refreshTree);
   }, [refreshTree]);
+  // And the disk itself: main watches the worktree the pane shows and says when anything under it moved.
+  useEffect(() => {
+    if (worktreeId === null) return;
+    void command('fs.watchTree', { worktreeId });
+    const off = onEvent('fs.treeChanged', (e) => {
+      if (e.worktreeId === worktreeId) refreshTree();
+    });
+    return () => {
+      off();
+      void command('fs.unwatchTree', {});
+    };
+  }, [worktreeId, refreshTree]);
 
   const openFile = (path: string) => {
     setOpen((prev) => (prev.includes(path) ? prev : [...prev, path]));

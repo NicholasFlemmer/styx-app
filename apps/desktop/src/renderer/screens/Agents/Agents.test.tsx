@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { keys } from '../../keys';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
-import { Agents } from './Agents';
+import { Agents, denyOptionOf } from './Agents';
 
 const acme = fixtures.ids.project.acmeShop as ProjectId;
 const commandMock = vi.fn(async () => ({ ok: true, value: {} }));
@@ -104,6 +104,42 @@ describe('Agents board', () => {
       askId: fixtures.ids.ask.blogPlan,
       resolution: { kind: 'plan', outcome: 'rejected', note: null },
     });
+  });
+
+  it('Deny on a command approval (a decision ask) answers with its declining option', () => {
+    const model = useReadModel.getState().model;
+    const grantAsk = model.pendingAsks.byId[fixtures.ids.ask.codexGrant];
+    if (!grantAsk) throw new Error('fixture ask');
+    // The Codex card's head ask becomes a tool approval with Allow / Deny.
+    useReadModel.getState().replaceModel(
+      {
+        ...model,
+        pendingAsks: {
+          ...model.pendingAsks,
+          byId: {
+            ...model.pendingAsks.byId,
+            [grantAsk.id]: {
+              ...grantAsk,
+              kind: 'decision',
+              grantId: null,
+              payload: { kind: 'decision', prompt: 'Run `pnpm test`?', options: ['Allow', 'Deny'] },
+            },
+          },
+        },
+      },
+      'connected',
+    );
+    render(<Agents />);
+    const denies = column(copy.board.columns.needsYou).getAllByRole('button', {
+      name: copy.board.actions.deny,
+    });
+    fireEvent.click(denies[0] as HTMLElement);
+    expect(commandMock).toHaveBeenCalledWith('ask.respond', {
+      askId: grantAsk.id,
+      resolution: { kind: 'decision', chosen: 'Deny' },
+    });
+    expect(denyOptionOf(['Yes', 'No'])).toBe('No');
+    expect(denyOptionOf(['Allow once', 'Allow always'])).toBe('Allow always');
   });
 
   it('Archive sends session.archive and stays on the board', () => {

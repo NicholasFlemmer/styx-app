@@ -27,6 +27,10 @@
   .tabs {
     border-bottom: 0;
     height: auto;
+    /* The tab strip gives way (and scrolls inside itself) before it pushes + and ⤢ out of the 360px pane: with
+       three tabs plus the +N overflow the row grew past the pane and the whole shell could be scrolled sideways. */
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .overflow {
     position: relative;
