@@ -97,7 +97,8 @@ test('sim: onboarding-shell', async () => {
         w.setSize(900, 500);
         return w.getSize();
       });
-      if (!size || size[0] < 1100 || size[1] < 680) throw new Error(`window shrank to ${String(size)}`);
+      if (!size || (size[0] ?? 0) < 1100 || (size[1] ?? 0) < 680)
+        throw new Error(`window shrank to ${String(size)}`);
       await sim.shot('home-at-minimum');
       const overflow = await page().evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -159,8 +160,7 @@ test('sim: onboarding-shell', async () => {
       async () => {
         const t0 = await html().getAttribute('data-theme');
         const themeSetting = async () =>
-          (await sim.command<{ ok: boolean; value?: { app: { theme: string } } }>('settings.get', {})).value
-            ?.app.theme;
+          (await sim.command<{ app: { theme: string } }>('settings.get', {})).value?.app.theme;
         const s0 = await themeSetting();
         await page().keyboard.press('Meta+Shift+T');
         await page()
