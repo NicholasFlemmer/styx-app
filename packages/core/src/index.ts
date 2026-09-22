@@ -11,5 +11,6 @@ export * from './selectors';
 export * from './copy';
 export * from './keys/chords';
 export * from './diff/unified';
+export * from './arcade';
 export * as fixtures from './fixtures/demo';
 export * from './ipc/api';

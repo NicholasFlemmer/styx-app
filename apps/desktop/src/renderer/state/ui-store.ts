@@ -1,5 +1,5 @@
-import type { EventPayload, PaletteScope, ProjectId, ReadModel, SessionId } from '@styx/core';
-import { taskKey } from '@styx/core';
+import type { EventPayload, PaletteScope, ProjectId, ReadModel, SessionId, SnakeGame } from '@styx/core';
+import { newSnakeGame, pauseSnake, taskKey } from '@styx/core';
 import { useReadModel } from './read-model';
 import type { TaskLaunch } from '../features/tasks/task-launch';
 import { create } from 'zustand';
@@ -39,6 +39,23 @@ export type OnboardingStep = 1 | 2 | 3 | 4;
 
 /** Banner rows pushed by main (`banner.set` / `banner.clear`). */
 export type BannerEvent = EventPayload<'banner.set'>;
+
+/**
+ * Snake in the chat pane while a tab's agent works (owner addition, discrepancy row 110). The game lives here, not
+ * in the board, so it survives a tab switch, a trip to Settings and the hold: the app freezes it the moment the
+ * session leaves `working`, and only Resume (once the agent is working again) counts it back in.
+ */
+export interface ArcadeState {
+  sessionId: SessionId;
+  game: SnakeGame;
+  /** Frozen by the app (the session left `working`); the transcript shows in the board's place until Resume. */
+  held: boolean;
+  /** 3 · 2 · 1 before play resumes after a hold. */
+  countdown: number | null;
+}
+
+/** Per-machine high score, in the same persisted map as the pane sizes (never in `.styx/project.json`). */
+export const ARCADE_BEST_KEY = 'arcade.snakeBest';
 
 export interface PaletteUiState {
   query: string;
@@ -87,6 +104,7 @@ export interface UiState {
    * gone after a trip to Settings). Kept here, per session, for as long as the window lives.
    */
   composerText: Record<string, string>;
+  arcade: ArcadeState | null;
 }
 
 export interface UiActions {
@@ -131,6 +149,15 @@ export interface UiActions {
   prefillDraft(sessionId: SessionId, text: string): void;
   clearDraft(sessionId: SessionId): void;
   setComposerText(sessionId: SessionId, text: string): void;
+  /** Opens Snake for the tab (a fresh board from `seed`), replacing any game already open. */
+  openArcade(sessionId: SessionId, seed: number): void;
+  setArcadeGame(game: SnakeGame): void;
+  /** The session left `working`: the game pauses and gives the pane back to the transcript. */
+  holdArcade(): void;
+  /** Resume after a hold: the board returns and counts down from 3. */
+  resumeArcade(): void;
+  setArcadeCountdown(countdown: number | null): void;
+  closeArcade(): void;
 }
 
 export type UiStore = UiState & UiActions;
@@ -178,6 +205,7 @@ export const useUiStore = create<UiStore>()(
     dismissedBanners: [],
     drafts: {},
     composerText: {},
+    arcade: null,
 
     setScreen: (screen) =>
       set((s) => {
@@ -364,6 +392,36 @@ export const useUiStore = create<UiStore>()(
       set((s) => {
         if (text === '') delete s.composerText[sessionId];
         else if (s.composerText[sessionId] !== text) s.composerText[sessionId] = text;
+      }),
+    openArcade: (sessionId, seed) =>
+      set((s) => {
+        s.arcade = { sessionId, game: newSnakeGame(seed), held: false, countdown: null };
+      }),
+    setArcadeGame: (game) =>
+      set((s) => {
+        if (s.arcade !== null) s.arcade.game = game;
+      }),
+    holdArcade: () =>
+      set((s) => {
+        if (s.arcade === null) return;
+        s.arcade.game = pauseSnake(s.arcade.game);
+        s.arcade.held = true;
+        s.arcade.countdown = null;
+      }),
+    resumeArcade: () =>
+      set((s) => {
+        if (s.arcade === null || !s.arcade.held) return;
+        s.arcade.held = false;
+        // A game that was ready or over needs no run-up; a paused one counts down before it moves again.
+        s.arcade.countdown = s.arcade.game.phase === 'paused' ? 3 : null;
+      }),
+    setArcadeCountdown: (countdown) =>
+      set((s) => {
+        if (s.arcade !== null) s.arcade.countdown = countdown;
+      }),
+    closeArcade: () =>
+      set((s) => {
+        s.arcade = null;
       }),
   })),
 );

@@ -1,0 +1,94 @@
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    min-width: 0;
+  }
+  /* Title · score numeral · best, the ✕ at the far right; all on one baseline. */
+  .head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-3);
+  }
+  .title {
+    color: var(--tx);
+  }
+  .score {
+    line-height: 1;
+  }
+  .best {
+    margin-left: auto;
+    white-space: nowrap;
+  }
+  .newBest {
+    color: var(--act);
+  }
+  /* The ✕ is 10px; the 28px hit area comes from the invisible ::after (the Banner's dismiss recipe). */
+  .quit {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    padding: 0 var(--sp-1);
+    color: var(--mu);
+    line-height: 1;
+  }
+  .quit::after {
+    content: '';
+    position: absolute;
+    inset: -9px -6px;
+  }
+  .quit:hover {
+    color: var(--tx);
+  }
+  /* The board: the darker surface behind a 1px line; the line turns text-colour while the board has focus. */
+  .frame {
+    position: relative;
+    align-self: center;
+    flex: none;
+    box-sizing: content-box;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+    outline: none;
+  }
+  .frame:focus-visible {
+    border-color: var(--tx);
+  }
+  .svg {
+    display: block;
+    shape-rendering: crispEdges;
+  }
+  .body {
+    fill: var(--tx);
+  }
+  .food {
+    fill: var(--ac);
+  }
+  /* Ready / paused / over / the countdown sit over a dimmed board. */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--dim);
+  }
+  /* The word sits above the middle row, where the snake starts, so "Ready" never covers it. */
+  .state {
+    position: relative;
+    top: calc(-1 * var(--sp-10));
+    color: var(--tx);
+  }
+  .count {
+    color: var(--act);
+    line-height: 1;
+  }
+  .hint {
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

@@ -45,6 +45,8 @@ export type PaletteAction =
   /** Commit, push and PR in one step for the worktree the project is on (ADR-0021). */
   | { kind: 'publish'; projectId: ProjectId; worktreeId: WorktreeId }
   | { kind: 'open-session'; sessionId: SessionId }
+  /** Snake in the chat pane while the tab's agent works (owner addition, discrepancy row 110). */
+  | { kind: 'arcade'; sessionId: SessionId }
   | { kind: 'switch-project'; projectId: ProjectId };
 
 export interface PaletteItem {
@@ -219,6 +221,17 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
     first: false,
     action: { kind: 'agent-dock' },
   });
+  // Only while the tab the person is on is mid-turn: the game exists for that wait and for nothing else.
+  const waiting = ui.sessionId == null ? undefined : model.sessions.byId[ui.sessionId];
+  if (waiting !== undefined && waiting.state === 'working' && !waiting.purpose)
+    items.push({
+      id: `arcade:${waiting.id}`,
+      glyph: '■',
+      label: copy.arcade.action,
+      meta: fill(copy.arcade.actionMeta, { agent: copy.agents[waiting.agent] }),
+      first: false,
+      action: { kind: 'arcade', sessionId: waiting.id },
+    });
   return items;
 };
 

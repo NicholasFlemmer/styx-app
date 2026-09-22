@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { idFrom } from '../ids';
-import type { GrantId } from '../ids';
+import type { GrantId, SessionId } from '../ids';
 import { DEMO_NOW, demoReadModel, errorReadModel, ids } from '../fixtures/demo';
 import type { AuditEntry } from '../model/audit';
 import type { Grant } from '../model/grant';
@@ -334,6 +334,30 @@ describe('paletteResults', () => {
       // No audit row: it needs a project to audit. The dock is cross-project, so it stays.
       'Open agent dock',
     ]);
+  });
+
+  it('offers Snake only for a working tab the person is on (discrepancy #110)', () => {
+    const on = (sessionId: SessionId | null) =>
+      flattenPalette(paletteResults(model, { ...ui, sessionId }, '', 'actions', NOW)).filter(
+        (i) => i.action.kind === 'arcade',
+      );
+    expect(on(null)).toEqual([]);
+    // Codex is needs-you: nothing to wait for but the person.
+    expect(on(ids.session.codex)).toEqual([]);
+    const claude = on(ids.session.claude);
+    expect(claude.map((i) => `${i.glyph} ${i.label} · ${i.meta}`)).toEqual([
+      '■ Play while you wait · Snake · while Claude works',
+    ]);
+    expect(claude[0]?.action).toEqual({ kind: 'arcade', sessionId: ids.session.claude });
+    // The row is the last action, so the prototype's rows keep their places.
+    const all = flattenPalette(
+      paletteResults(model, { ...ui, sessionId: ids.session.claude }, '', 'actions', NOW),
+    );
+    expect(all.at(-1)?.action.kind).toBe('arcade');
+    expect(
+      flattenPalette(paletteResults(model, { ...ui, sessionId: ids.session.claude }, 'snake', 'all', NOW))[0]
+        ?.label,
+    ).toBe('Play while you wait');
   });
 
   it('lock state meta: locked / expired / unconnected, and after the grant', () => {

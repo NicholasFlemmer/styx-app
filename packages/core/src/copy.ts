@@ -1698,6 +1698,38 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     stopped: '{n} queued message returned to the composer.',
     stoppedMany: '{n} queued messages returned to the composer.',
   },
+  /**
+   * Snake, played in the chat pane while the tab's agent works (owner addition, discrepancy row 110). The game
+   * freezes the moment the session leaves `working`; the held line says why, and Resume only shows once the
+   * agent is working again.
+   */
+  arcade: {
+    action: 'Play while you wait',
+    actionMeta: 'Snake · while {agent} works',
+    title: 'Snake',
+    score: 'Score',
+    best: 'best {n}',
+    newBest: 'new best',
+    /** The word over the board while it is not moving. */
+    state: { ready: 'Ready', paused: 'Paused', over: 'Game over' },
+    ready: '⏎ or an arrow to start · hjkl works too',
+    playing: 'Space pauses · Esc quits',
+    paused: 'Paused · any arrow to continue',
+    over: 'Game over · ⏎ to play again · Esc quits',
+    /** Accessible name of the board. */
+    board: 'Snake board · score {n}',
+    /** Accessible name of the ✕. */
+    quit: 'Quit Snake',
+    resume: 'Resume',
+    leave: 'Quit',
+    /** The strip over the transcript while the game is held; `{agent}` is the short agent name. */
+    held: {
+      needsYou: '{agent} needs you · Snake is paused at {n}',
+      working: '{agent} is working again · Snake is paused at {n}',
+      done: '{agent} is done · Snake is paused at {n}',
+      stopped: '{agent} has stopped · Snake is paused at {n}',
+    },
+  },
   general: {
     cancel: 'Cancel',
     close: '✕',

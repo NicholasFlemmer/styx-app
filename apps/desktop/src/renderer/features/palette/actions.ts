@@ -1,11 +1,12 @@
 import { isDeployableTarget, type PaletteAction } from '@styx/core';
-import { invokerOf, rememberInvoker } from '../../overlays/stack';
+import { forgetInvoker, invokerOf, rememberInvoker } from '../../overlays/stack';
 import { command } from '../../state/commands';
 import { startLearnDeploy } from '../abilities/learn';
 import { startDebtAudit } from '../audit';
 import { openFolderAsProject } from '../../state/project-entry';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
+import { ARCADE_INVOKER } from '../arcade/ArcadePanel';
 
 export interface RunOptions {
   /** Mod+⏎: open agents in a new (pop-out) window. */
@@ -19,6 +20,9 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
   const ui = useUiStore.getState();
   const model = useReadModel.getState().model;
   const invoker = invokerOf(opts.paletteId);
+  // The game is not an overlay, so nothing goes inert under it: the palette's own focus return (next frame)
+  // would take focus off the board just after it took it. The board hands focus back itself, on quit.
+  if (action.kind === 'arcade') forgetInvoker(opts.paletteId);
   ui.popOverlay(opts.paletteId);
   const open = (overlay: Parameters<typeof ui.pushOverlay>[0]) => {
     const id = ui.pushOverlay(overlay);
@@ -67,6 +71,15 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
         return;
       }
       ui.openSession(session.projectId, session.id);
+      return;
+    }
+    case 'arcade': {
+      // Snake in the tab's chat pane (discrepancy row 110); Esc / ✕ on the board hands focus back here.
+      const session = model.sessions.byId[action.sessionId];
+      if (session === undefined) return;
+      ui.openSession(session.projectId, session.id);
+      ui.openArcade(session.id, Math.floor(Math.random() * 2 ** 32));
+      if (invoker !== null) rememberInvoker(ARCADE_INVOKER, invoker);
       return;
     }
     case 'review-ask': {

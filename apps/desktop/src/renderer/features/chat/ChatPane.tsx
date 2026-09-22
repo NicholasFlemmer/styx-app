@@ -71,6 +71,7 @@ import { CheckpointRow } from './CheckpointRow';
 import { mentionItems as toMentionItems, slashItems } from './slash-commands';
 import { thinkingLabel, elapsedLabel, workingLine } from './stream-state';
 import { inlineSegments, transcriptItems, type TranscriptItem } from './transcript-items';
+import { ArcadeHeldStrip, ArcadePanel } from '../arcade/ArcadePanel';
 
 const omitKey = <T,>(all: Record<string, T>, key: string): Record<string, T> => {
   const { [key]: _dropped, ...rest } = all;
@@ -249,6 +250,8 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   );
   // The composer's text, per session, in the store: it survives a tab switch and a trip to another screen.
   const composerText = useUi((u) => (activeId === null ? '' : (u.composerText[activeId] ?? '')));
+  const arcadeSession = useUi((u) => u.arcade?.sessionId ?? null);
+  const arcadeHeld = useUi((u) => u.arcade?.held ?? false);
   const setComposerText = useUi((u) => u.setComposerText);
   // Working line (discrepancy #55): hidden under the e2e/visual harness like the session controls — the demo
   // Claude session is `working`, so the line would otherwise land on the baked `workspace` baseline. Whether it
@@ -259,6 +262,11 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const meta = activeId === null ? '' : chatMeta(model, activeId, now);
   const items = useMemo(() => (activeId === null ? [] : transcriptItems(model, activeId)), [model, activeId]);
   const popped = activeId !== null && model.popouts.includes(activeId);
+  // Snake for this tab (discrepancy row 110): the board takes the transcript's place while it plays; held (the
+  // session left `working`), it folds to a strip over the transcript so the ask is what the pane shows. Never in
+  // the pop-out: that window is the transcript and nothing else.
+  const arcadeHere = !compact && activeId !== null && arcadeSession === activeId;
+  const arcadePlaying = arcadeHere && !arcadeHeld;
   const placeholder = activeId === null ? '' : composerPlaceholder(model, activeId);
   const session = activeId === null ? null : (model.sessions.byId[activeId] ?? null);
   const agent = session?.agent ?? null;
@@ -724,7 +732,23 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           {meta}
         </div>
       )}
-      {popped && !compact ? (
+      {arcadeHere && arcadeHeld && activeId !== null && <ArcadeHeldStrip sessionId={activeId} />}
+      {arcadePlaying && activeId !== null ? (
+        <ArcadePanel
+          sessionId={activeId}
+          {...(working !== null
+            ? {
+                footer: (
+                  <WorkingLine
+                    label={working.label}
+                    elapsedLabel={elapsedLabel(working.elapsedMs)}
+                    compact={compact}
+                  />
+                ),
+              }
+            : {})}
+        />
+      ) : popped && !compact ? (
         <div className={s['popped']}>
           <span className="t-label">{copy.chat.poppedOut}</span>
           <Button

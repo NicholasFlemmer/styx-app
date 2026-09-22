@@ -96,6 +96,25 @@ describe('Palette', () => {
     ]);
   });
 
+  it('"Play while you wait" opens Snake for the working tab and remembers the invoker (discrepancy row 110)', () => {
+    useUiStore.setState({ projectSession: { [acme]: fixtures.ids.session.claude } });
+    const button = document.createElement('button');
+    document.body.appendChild(button);
+    button.focus();
+    const id = useUiStore.getState().pushOverlay({ kind: 'palette' });
+    render(<Palette id={id} />);
+    const input = screen.getByRole('combobox');
+    fireEvent.change(input, { target: { value: 'snake' } });
+    expect(screen.getAllByRole('option')[0]?.textContent).toContain(copy.arcade.action);
+    fireEvent.keyDown(input, { key: 'Enter' });
+    const ui = useUiStore.getState();
+    expect(ui.overlays).toHaveLength(0);
+    expect(ui.arcade).toMatchObject({ sessionId: fixtures.ids.session.claude, held: false, countdown: null });
+    expect(ui.arcade?.game.phase).toBe('ready');
+    expect(ui.screen).toBe('workspace');
+    button.remove();
+  });
+
   it('Mod+Enter on an agent row requests a new window', () => {
     const id = useUiStore.getState().pushOverlay({ kind: 'palette' });
     render(<Palette id={id} />);

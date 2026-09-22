@@ -5,3 +5,4 @@ export * from './overlay';
 export * from './chrome';
 export * from './message';
 export * from './hooks';
+export * from './arcade';
