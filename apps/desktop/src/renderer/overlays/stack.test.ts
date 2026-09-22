@@ -25,7 +25,13 @@ describe('overlay stack (pure)', () => {
   });
 
   it('escapeTarget prefers the topmost trapping overlay over a toast', () => {
-    const sheet: Overlay = { id: 's', kind: 'sheet', sheet: 'grant', sessionId: 'x' as never, askId: 'a' as never };
+    const sheet: Overlay = {
+      id: 's',
+      kind: 'sheet',
+      sheet: 'grant',
+      sessionId: 'x' as never,
+      askId: 'a' as never,
+    };
     const toast: Overlay = { id: 't', ...ask };
     expect(escapeTarget([sheet, toast])?.id).toBe('s');
     expect(escapeTarget([toast])?.id).toBe('t');
@@ -66,6 +72,21 @@ describe('overlay stack (store)', () => {
     useUiStore.getState().popOverlay();
     expect(useUiStore.getState().overlays).toHaveLength(0);
     expect(document.activeElement).toBe(invoker);
+  });
+
+  it('an overlay opened from a menu row hands focus back to the button that opened the menu', () => {
+    document.body.innerHTML = `
+      <button id="anchor" aria-haspopup="menu" aria-expanded="true"></button>
+      <div role="menu"><button id="row"></button></div>`;
+    const row = document.getElementById('row') as HTMLButtonElement;
+    const anchor = document.getElementById('anchor') as HTMLButtonElement;
+    row.focus();
+    useUiStore.getState().pushOverlay({ kind: 'palette' });
+    // The menu closes with the row in it, as menus do.
+    row.remove();
+    anchor.setAttribute('aria-expanded', 'false');
+    useUiStore.getState().popOverlay();
+    expect(document.activeElement).toBe(anchor);
   });
 
   it('Esc-style pop removes only the top overlay', () => {

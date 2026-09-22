@@ -133,9 +133,21 @@ const activeElement = (): HTMLElement | null =>
     ? document.activeElement
     : null;
 
+/**
+ * A menu row unmounts with its menu the moment it opens an overlay, so focus could never go back to it. The
+ * button that opened the menu (`aria-haspopup="menu"` + `aria-expanded="true"`) is what the person came from.
+ */
+const anchorOfMenu = (el: HTMLElement): HTMLElement => {
+  if (el.closest('[role="menu"]') === null) return el;
+  const open = Array.from(
+    document.querySelectorAll<HTMLElement>('[aria-haspopup="menu"][aria-expanded="true"]'),
+  );
+  return open.at(-1) ?? el;
+};
+
 /** Records the element that had focus when `id` was pushed. */
 export const rememberInvoker = (id: string, el: HTMLElement | null = activeElement()): void => {
-  if (el !== null && typeof WeakRef === 'function') invokers.set(id, new WeakRef(el));
+  if (el !== null && typeof WeakRef === 'function') invokers.set(id, new WeakRef(anchorOfMenu(el)));
 };
 
 export const invokerOf = (id: string): HTMLElement | null => invokers.get(id)?.deref() ?? null;
