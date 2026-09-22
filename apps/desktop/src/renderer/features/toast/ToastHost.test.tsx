@@ -140,3 +140,38 @@ describe('ToastHost · deploy finish toast', () => {
     expect(toasts()).toEqual([]);
   });
 });
+
+describe('ToastHost · one needs-you toast per ask', () => {
+  it('a repeated ask.opened (reconnect, re-publish) adds no second toast, even under another toast', () => {
+    const listeners = new Map<string, (payload: unknown) => void>();
+    Object.assign(window, {
+      styx: {
+        platform: 'darwin',
+        env: { now: DEMO_NOW },
+        command: vi.fn(async () => ({ ok: true, value: {} })),
+        onEvent: (name: string, cb: (payload: unknown) => void) => {
+          listeners.set(name, cb);
+          return () => listeners.delete(name);
+        },
+      },
+    });
+    useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
+    useUiStore.setState({ overlays: [], screen: 'workspace', platform: 'darwin', projectId: acme });
+    render(<ToastHost />);
+    const ask = {
+      askId: fixtures.ids.ask.codexGrant,
+      sessionId: fixtures.ids.session.codex,
+      projectId: acme,
+    };
+    act(() => listeners.get('ask.opened')?.(ask));
+    expect(toasts()).toHaveLength(1);
+    // An error toast lands on top; the same ask arrives again.
+    act(() => {
+      useUiStore.getState().pushOverlay({ kind: 'toast', toast: { kind: 'error', code: 'x', message: 'y' } });
+      listeners.get('ask.opened')?.(ask);
+    });
+    expect(toasts().filter((o) => o.kind === 'toast' && o.toast.kind === 'ask')).toHaveLength(1);
+    cleanup();
+    Object.assign(window, { styx: undefined });
+  });
+});

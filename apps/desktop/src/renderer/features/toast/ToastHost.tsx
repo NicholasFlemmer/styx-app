@@ -15,7 +15,6 @@ import { motion, space } from '@styx/tokens';
 import { Toast } from '@styx/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  findOverlay,
   invokerOf,
   rememberInvoker,
   type Overlay,
@@ -216,8 +215,12 @@ export function ToastHost() {
       onEvent('ask.opened', ({ askId, sessionId, projectId }) => {
         const ui = useUiStore.getState();
         if (useReadModel.getState().model.settings.app.dnd) return;
-        const existing = findOverlay(ui.overlays, 'toast');
-        if (existing !== null && existing.toast.kind === 'ask' && existing.toast.askId === askId) return;
+        // One toast per ask: `ask.opened` can arrive more than once (a window reconnect, a re-published ask),
+        // and only the newest toast was checked before, so a second copy stacked under any other toast.
+        const already = ui.overlays.some(
+          (o) => o.kind === 'toast' && o.toast.kind === 'ask' && o.toast.askId === askId,
+        );
+        if (already) return;
         ui.pushOverlay({ kind: 'toast', toast: { kind: 'ask', askId, sessionId, projectId } });
       }),
     [],
