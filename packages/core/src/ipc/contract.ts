@@ -871,6 +871,11 @@ export const commands = {
     output: z.object({ terminalId: z.string() }),
   },
   'terminal.input': { input: z.object({ terminalId: z.string(), data: z.string() }), output: ok },
+  /** What the pty printed before this terminal attached (bounded); written first, then live bytes follow. */
+  'terminal.backlog': {
+    input: z.object({ terminalId: z.string() }),
+    output: z.object({ data: z.string(), seq: z.number().int().nonnegative() }),
+  },
   'terminal.resize': {
     input: z.object({
       terminalId: z.string(),

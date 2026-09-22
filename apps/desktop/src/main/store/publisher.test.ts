@@ -78,4 +78,27 @@ describe('Publisher', () => {
     expect(gone.sent).toHaveLength(0);
     expect(app.publisher.isRegistered(3)).toBe(false);
   });
+
+  it('keeps a bounded backlog per pty for terminals that attach late, with the seq it runs up to', () => {
+    const { app } = makeTestApp();
+    app.publisher.pty('r1', 'ready http://localhost:3999\n');
+    vi.advanceTimersByTime(16);
+    app.publisher.pty('r1', 'GET / 200\n');
+    // Pending bytes are flushed on read, so the backlog is never behind what the windows have.
+    expect(app.publisher.ptyBacklogOf('r1')).toEqual({
+      data: 'ready http://localhost:3999\nGET / 200\n',
+      seq: 2,
+    });
+    expect(app.publisher.ptyBacklogOf('nope')).toEqual({ data: '', seq: 0 });
+    // Bounded: only the tail of a long-running process is kept.
+    app.publisher.pty('r1', 'x'.repeat(70 * 1024));
+    expect(app.publisher.ptyBacklogOf('r1').data.length).toBe(64 * 1024);
+    // The backlog outlives its exit by one more exit (a failed run's strip opens after the process is gone).
+    app.publisher.ptyExit('r1', 1);
+    expect(app.publisher.ptyBacklogOf('r1').data.length).toBe(64 * 1024);
+    app.publisher.pty('r2', 'y');
+    app.publisher.ptyExit('r2', 0);
+    expect(app.publisher.ptyBacklogOf('r1')).toEqual({ data: '', seq: 0 });
+    expect(app.publisher.ptyBacklogOf('r2').data).toBe('y');
+  });
 });

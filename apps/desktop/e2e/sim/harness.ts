@@ -51,6 +51,25 @@ export interface SimContext {
 const OUT = resolve(__dirname, 'out');
 const REPORTS = resolve(__dirname, '../../../../docs/reports/user-sim');
 
+/**
+ * `innerText` applies CSS `text-transform`, so every t-label reads as "NEEDS YOU" while the copy says "Needs you".
+ * The sims check behaviour and copy, not case (the visual diff owns that), so the page runs with transforms off:
+ * a style on the current document and an init script for every reload. Nothing else about the look changes.
+ */
+const PLAIN_CASE = '* { text-transform: none !important; }';
+async function plainCase(page: Page): Promise<void> {
+  await page.addInitScript((css: string) => {
+    const add = () => {
+      const el = document.createElement('style');
+      el.textContent = css;
+      document.head.append(el);
+    };
+    if (document.head) add();
+    else document.addEventListener('DOMContentLoaded', add, { once: true });
+  }, PLAIN_CASE);
+  await page.addStyleTag({ content: PLAIN_CASE }).catch(() => undefined);
+}
+
 export async function runSim(
   area: string,
   opts: LaunchOptions,
@@ -67,6 +86,24 @@ export async function runSim(
     env: { STYX_E2E: '0', STYX_MFA: 'auto', ...(opts.env ?? {}) },
   };
   let launched = await launchStyx(launchOpts);
+  await plainCase(launched.page);
+  /**
+   * After a failed step, close whatever overlay it left open (palette, modal, sheet, menu) so the next step starts
+   * from the screen, not from behind a dialog. A person would press Esc too. Bounded: four presses at most.
+   */
+  const settle = async () => {
+    for (let i = 0; i < 4; i += 1) {
+      const open = await launched.page
+        .evaluate(
+          () =>
+            document.querySelector('[role="dialog"], [role="menu"], [data-overlay], [data-sheet]') !== null,
+        )
+        .catch(() => false);
+      if (!open) return;
+      await launched.page.keyboard.press('Escape').catch(() => undefined);
+      await launched.page.waitForTimeout(250);
+    }
+  };
   const ctx: SimContext = {
     get app() {
       return launched.app;
@@ -98,6 +135,7 @@ export async function runSim(
         const error = e instanceof Error ? e.message.split('\n').slice(0, 6).join('\n') : String(e);
         steps.push({ name, ok: false, ms: Date.now() - t0, error, shot });
         process.stdout.write(`  ✗ ${name}\n    ${error.split('\n')[0]}\n`);
+        await settle();
         return false;
       }
     },
@@ -115,6 +153,7 @@ export async function runSim(
     async relaunch(o = {}) {
       await launched.app.close().catch(() => undefined);
       launched = await launchStyx({ ...launchOpts, ...o, env: { ...launchOpts.env, ...(o.env ?? {}) } });
+      await plainCase(launched.page);
     },
   };
   const started = Date.now();

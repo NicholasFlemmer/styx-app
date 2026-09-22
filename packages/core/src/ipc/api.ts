@@ -36,7 +36,8 @@ export interface StyxApi {
   onDelta(cb: (batch: DeltaBatch) => void): () => void;
   onEvent<E extends EventName>(name: E, cb: (payload: EventPayload<E>) => void): () => void;
   pty: {
-    onData(cb: (id: string, data: string) => void): () => void;
+    /** `seq` numbers each batch per pty (1, 2, …); a late-attached terminal uses it to skip what its backlog covered. */
+    onData(cb: (id: string, data: string, seq: number) => void): () => void;
     onExit(cb: (id: string, exitCode: number | null) => void): () => void;
     write(id: string, data: string): void;
     resize(id: string, cols: number, rows: number): void;

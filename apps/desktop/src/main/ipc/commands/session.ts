@@ -115,6 +115,8 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
     return {};
   });
 
+  bus.register('terminal.backlog', ({ terminalId }) => app.publisher.ptyBacklogOf(terminalId));
+
   bus.register('terminal.resize', ({ terminalId, cols, rows }) => {
     terminals.resize(terminalId, cols, rows);
     return {};

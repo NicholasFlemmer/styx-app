@@ -52,6 +52,10 @@ export const EVENT_CHANNEL = 'styx:evt';
  * Sequences and fans out store deltas to every registered window (plan §7). Every mutation path is:
  * write DB → `upsert`/`remove`/… → one `store.delta { seq, deltas }` per ≤16 ms tick.
  */
+/** 64 KB of output per pty, 16 ptys: a screenful of scrollback, never a memory sink. */
+const PTY_BACKLOG_CHARS = 64 * 1024;
+const PTY_BACKLOG_PTYS = 16;
+
 export class Publisher {
   private seqNo = 0;
   private pending: Delta[] = [];
@@ -59,6 +63,13 @@ export class Publisher {
   private readonly windows = new Map<number, WindowLike>();
   private readonly ptyPending = new Map<string, string>();
   private readonly ptySeq = new Map<string, number>();
+  /**
+   * The last stretch of each pty's output, so a terminal that attaches after the process started (the run
+   * output strip, a reopened login) can show what was already printed instead of a blank until the next byte.
+   * Bounded per pty and in the number of ptys remembered; a pty's entry goes when it exits and one more exits after.
+   */
+  private readonly ptyBacklog = new Map<string, string>();
+  private readonly ptyExited: string[] = [];
   private ptyTimer: NodeJS.Timeout | null = null;
   private readonly tickMs: number;
   private extras: SnapshotExtras = {
@@ -244,6 +255,13 @@ export class Publisher {
       const seq = (this.ptySeq.get(id) ?? 0) + 1;
       this.ptySeq.set(id, seq);
       for (const w of windows) w.send(CHANNELS.pty, { id, data, seq });
+      // What went out is what a late terminal may ask for; the seq says up to which batch.
+      const kept = (this.ptyBacklog.get(id) ?? '') + data;
+      this.ptyBacklog.set(id, kept.length > PTY_BACKLOG_CHARS ? kept.slice(-PTY_BACKLOG_CHARS) : kept);
+      if (this.ptyBacklog.size > PTY_BACKLOG_PTYS) {
+        const oldest = this.ptyBacklog.keys().next().value;
+        if (oldest !== undefined && oldest !== id) this.ptyBacklog.delete(oldest);
+      }
     }
     this.ptyPending.clear();
   }
@@ -251,8 +269,21 @@ export class Publisher {
   ptyExit(id: string, exitCode: number | null): void {
     this.flushPty();
     this.ptyPending.delete(id);
-    this.ptySeq.delete(id);
+    // The seq stays (a late backlog read after the exit still names its last batch); the backlog outlives the
+    // exit by one more exit: a failed run's strip opens after the process is gone.
+    this.ptyExited.push(id);
+    while (this.ptyExited.length > 1) {
+      const gone = this.ptyExited.shift() ?? '';
+      this.ptyBacklog.delete(gone);
+      this.ptySeq.delete(gone);
+    }
     this.sendEvent('pty.exit', { id, exitCode });
+  }
+
+  /** What a pty printed so far (bounded) and the seq of the last batch it covers, for a terminal attaching late. */
+  ptyBacklogOf(id: string): { data: string; seq: number } {
+    this.flushPty();
+    return { data: this.ptyBacklog.get(id) ?? '', seq: this.ptySeq.get(id) ?? 0 };
   }
 
   dispose(): void {

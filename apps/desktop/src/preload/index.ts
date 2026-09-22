@@ -98,7 +98,7 @@ const api: StyxApi = {
       if (m.name === name) cb(m.payload as EventPayload<E>);
     }),
   pty: {
-    onData: (cb) => on<{ id: string; data: string; seq: number }>(PTY, (m) => cb(m.id, m.data)),
+    onData: (cb) => on<{ id: string; data: string; seq: number }>(PTY, (m) => cb(m.id, m.data, m.seq)),
     onExit: (cb) =>
       on<{ name: EventName; payload: unknown }>(EVT, (m) => {
         if (m.name === 'pty.exit') {

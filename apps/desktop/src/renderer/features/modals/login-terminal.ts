@@ -15,6 +15,28 @@ const reducedMotion = (): boolean =>
  * Same recipe as the session terminals (JetBrains Mono 12, tokens theme, DOM renderer — the modal is short-lived,
  * so no WebGL); disposed with the modal, and the pty is left to main (`connect.cliLogin` reports its exit).
  */
+/**
+ * Orders a late-attached terminal's input: live batches are held until the backlog (what the pty printed
+ * before) is written, then the held batches the backlog already covers (by seq) are dropped and the rest follow.
+ */
+export const lateAttachGate = (write: (data: string) => void) => {
+  let backlogSeq: number | null = null;
+  const held: { data: string; seq: number }[] = [];
+  return {
+    live(data: string, seq: number): void {
+      if (backlogSeq === null) held.push({ data, seq });
+      else if (seq > backlogSeq) write(data);
+    },
+    settle(backlog: { data: string; seq: number }): void {
+      if (backlogSeq !== null) return;
+      if (backlog.data !== '') write(backlog.data);
+      backlogSeq = backlog.seq;
+      for (const h of held) if (h.seq > backlog.seq) write(h.data);
+      held.length = 0;
+    },
+  };
+};
+
 export const createLoginTerminal = (
   terminalId: string,
   opts: { screenReader?: boolean } = {},
@@ -51,11 +73,20 @@ export const createLoginTerminal = (
     attached: false,
   };
   term.open(host);
-  const pty = bridge()?.pty;
+  const api = bridge();
+  const pty = api?.pty;
   if (pty !== undefined) {
-    entry.offData = pty.onData((id, data) => {
-      if (id === terminalId) term.write(data);
+    // The pty may have been printing before this terminal existed (a run's first lines, a reopened strip).
+    const gate = lateAttachGate((data) => term.write(data));
+    entry.offData = pty.onData((id, data, seq) => {
+      if (id === terminalId) gate.live(data, seq);
     });
+    const command = api?.command;
+    if (command === undefined) gate.settle({ data: '', seq: 0 });
+    else
+      void command('terminal.backlog', { terminalId })
+        .then((r) => gate.settle(r.ok ? r.value : { data: '', seq: 0 }))
+        .catch(() => gate.settle({ data: '', seq: 0 }));
     entry.offExit = pty.onExit((id) => {
       if (id === terminalId) entry.terminalId = null;
     });
