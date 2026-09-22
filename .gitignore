@@ -32,3 +32,6 @@ next-env.d.ts
 .playwright-mcp/
 *.tsbuildinfo
 apps/desktop/e2e/sim/out/
+
+# Cloudflare Worker local state (apps/api)
+.wrangler/
