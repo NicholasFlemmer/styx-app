@@ -47,3 +47,15 @@ failed exactly as before, twice. Two changes: `-p` followed by a bare port numbe
 `commandCarriesSecret` and the run's own remembering agree); and every `remember_command` refusal — secret-bearing
 command, unknown session — now comes back as the tool's error with the reason, so an agent can rephrase or tell
 the person, and never reports as done something Styx dropped.
+
+## Addendum (2026-09-22): tasks that taught nothing, and app-initiated grants
+
+- A learn task (Run locally, Deploy) that ends cleanly without having called `remember_command` used to read
+  "Finished" while the run row went back to its first-time state. The dialog now reads "Finished, but nothing was
+  learned" with what to do next (`learnedNothing` in `TaskDialog.tsx`, judged from the project's `devCommand` /
+  run and the target's deploy command).
+- Deploy to live and Publish request grants with no session. On a target whose policy asks, `GrantService.request`
+  used to fail with "a user decision needs a session" — no chat could ever show the ask. The press is the decision:
+  an app-initiated ask is approved on the spot as the grant sheet would (MFA where the target or scope demands it,
+  `once`, decidedBy `user`, the button named as the trigger). Agents always carry a session, so nothing they ask
+  takes this path.

@@ -141,3 +141,29 @@ metered with the session's request bucket and show on Home as `landed {branch} i
   grant threw inside the finish effects. `cancel` now ends as `denied`, the audit row unchanged.
 - Not yet: a landed lane's session card still offers Reopen after the tidy-up and refuses with "the lane was
   removed" (as after a manual Archive).
+
+## Addendum (2026-09-22): what the user simulations changed
+
+Six simulated walkthroughs of the built app (`apps/desktop/e2e/sim`, reports in `docs/reports/user-sim`) exercised
+every verb on the Repo lane with real git and fake CLIs. What they found in this ADR's ground, and the decisions:
+
+- **Land again after Undo landing.** Undo left a revert on the base, so the lane's commits were ancestors of it
+  and a second Land refused with "nothing to land". `WorktreeLanding.revertCommit` records the revert; the next
+  landing reverts it on the base first (`land.steps.reapply`) and then merges as usual. With nothing new on the
+  lane the reapply *is* the landing (a single commit), and Undo handles that shape (`git.parentCount`).
+- **Merges over uncommitted work.** `git merge` refuses to run over local edits to a file the merge touches, and
+  Bring in main / Resolve surfaced that as a raw git error with nothing started. Both now commit what the lane
+  left uncommitted first (`commitLane` → PublishService `through: 'commit'`, by name, secret files out), as Land
+  already did; the WIP commit is the undo point.
+- **Stop merging.** A lane whose agent could not finish the merge read "merging main with Claude…" with nothing
+  to click. `MergeResolveService.undo` while `resolving` interrupts the agent's turn, rolls the merge back and
+  marks the conflict again (`resolve.stopped`); the row's verb reads `Stop merging` (`stop-merge`).
+- **A waiting agent is not mid-turn.** Land on a lane whose agent is in `needs-you` says so (`land.waiting`).
+- **`.styx/project.json` is never "dirty".** Styx rewrites it on every Settings change and it is committed by
+  design; counting it as a tracked change kept `freshenBase` from fast-forwarding the base after every fetch and
+  blocked landings. `blockingChanges` (git.ts) ignores `.styx/` and untracked files; git still refuses a move that
+  would overwrite a dirty file, reported as `failed`.
+- **Fetch re-reads the remotes** so a remote added or removed outside Styx (or a fixture that never had one)
+  shows honestly on the Repo header and in Publish's no-remote notice.
+- **Publish with a busy agent** skips the pre-push merge and says so on the push line (`syncSkipped`) instead of
+  failing a publish whose commit already existed.
