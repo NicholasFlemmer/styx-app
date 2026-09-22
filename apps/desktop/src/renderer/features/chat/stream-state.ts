@@ -3,6 +3,16 @@ import { copy, fill, type ReadModel, type SessionId, type TranscriptMessage } fr
 /** Seconds for the "Thought for {s}s" / "{s}s" labels: rounded, never below 1s. */
 export const wholeSeconds = (ms: number): number => Math.max(1, Math.round(ms / 1000));
 
+/** `12s` under a minute, `3m 07s` past it (a long think in raw seconds reads as a number, not a duration). */
+export const elapsedLabel = (ms: number): string => {
+  const total = wholeSeconds(ms);
+  if (total < 60) return fill(copy.chat.working.elapsed, { s: total });
+  return fill(copy.chat.working.elapsedLong, {
+    m: Math.floor(total / 60),
+    s: String(total % 60).padStart(2, '0'),
+  });
+};
+
 /**
  * Header of a thinking block (discrepancy #55): "Thinking…" while streaming, "Thought for 4s" once done with a
  * known duration, and a bare "Thinking" when the stream ended without one (never a made-up "1s").

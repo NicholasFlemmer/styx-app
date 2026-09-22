@@ -147,6 +147,8 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
     setBusy(true);
     const set = await command('detect.setBinary', { agent, path: value });
     setBusy(false);
+    // A refused path reads under the field, as a refused Locate pick does; the text stays for a second try.
+    setLocateError(set.ok ? null : set.error.message);
     if (!set.ok) return;
     setPathText('');
     await verify();

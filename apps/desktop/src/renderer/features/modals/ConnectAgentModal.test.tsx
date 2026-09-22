@@ -324,6 +324,19 @@ describe('ConnectAgentModal', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it('a refused path in the field says why under it and keeps the text for a second try', async () => {
+    seed(fixtures.errorReadModel());
+    render(<ConnectAgentModal id="modal-1" agent="codex" />);
+    await waitFor(() => expect(calls('agent.verify')).toHaveLength(1));
+    setBinaryError = '/bin/ls did not run as Codex (no version reported). Pick the Codex executable itself.';
+    const field = screen.getByLabelText(copy.agentsPage.connect.pathField) as HTMLInputElement;
+    fireEvent.change(field, { target: { value: '/bin/ls' } });
+    fireEvent.click(screen.getByRole('button', { name: copy.agentsPage.actions.use }));
+    expect((await screen.findByRole('alert')).textContent).toBe(setBinaryError);
+    expect(field.value).toBe('/bin/ls');
+    expect(calls('agent.verify')).toHaveLength(1);
+  });
+
   it('a located binary offers Forget binary → detect.clearBinary, then a verify', async () => {
     seed(
       withCli('gemini', {

@@ -259,6 +259,9 @@ function CreateModal({ id }: { id: string }) {
   }));
   const [locationTouched, setLocationTouched] = useState(false);
   const [busy, setBusy] = useState(false);
+  // A refused Create (a folder that already holds files, a bad location) is said in the modal, next to the
+  // fields, not only as a toast that fades top-right.
+  const [error, setError] = useState<string | null>(null);
   const nameId = useId();
   const locationId = useId();
   const templateId = useId();
@@ -282,10 +285,24 @@ function CreateModal({ id }: { id: string }) {
       return;
     }
     setBusy(true);
+    setError(null);
     const r = await command('project.create', newProjectPayload(form, agent, projectId));
     setBusy(false);
-    if (!r.ok) return;
+    if (!r.ok) {
+      setError(r.error.message);
+      return;
+    }
     close();
+    // The project is there; only its GitHub repo is not. Said once, with where to do it from.
+    if (r.value.githubError !== null)
+      pushOverlay({
+        kind: 'toast',
+        toast: {
+          kind: 'error',
+          code: copy.newProject.githubFailed,
+          message: fill(copy.newProject.githubFailedDetail, { error: r.value.githubError }),
+        },
+      });
     if (r.value.sessionId !== null) openSession(r.value.projectId, r.value.sessionId);
     else {
       setProject(r.value.projectId);
@@ -458,6 +475,11 @@ function CreateModal({ id }: { id: string }) {
 
         {github !== undefined && form.createGithubRepo ? (
           <div className={s['note']}>{githubNote(github, form.name.trim())}</div>
+        ) : null}
+        {error !== null ? (
+          <div className={s['note']} role="alert" data-new-project-error="true">
+            {error}
+          </div>
         ) : null}
       </div>
     </Modal>

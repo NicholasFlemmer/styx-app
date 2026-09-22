@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fixtures, type ProjectFileV1 } from '@styx/core';
+import { fixtures, type ProjectFileV1, copy } from '@styx/core';
 import { describe, expect, it } from 'vitest';
 import { makeTestApp } from '../test-support';
 import type { RecentFolder } from './ide-import-service';
@@ -845,19 +845,20 @@ describe('project.create with createGithubRepo', () => {
     expect(entry?.triggeredBy).toBe('project.connectRemote');
   });
 
-  it('fails with provider-error when no GitHub target is connected', async () => {
+  it('with no GitHub target connected the project is still made; the missing repo is reported with it, not over it', async () => {
     const t = makeTestApp({ fixture: 'empty' });
     const location = mkdtempSync(join(tmpdir(), 'styx-new-'));
-    await expect(
-      t.app.projects.create({
-        name: 'lonely',
-        location,
-        gitInit: true,
-        template: null,
-        copyTargetsFrom: null,
-        createGithubRepo: true,
-      }),
-    ).rejects.toMatchObject({ code: 'provider-error' });
+    const p = await t.app.projects.create({
+      name: 'lonely',
+      location,
+      gitInit: true,
+      template: null,
+      copyTargetsFrom: null,
+      createGithubRepo: true,
+    });
+    expect(p.githubError).toBe(copy.connectRepo.noGithub);
+    expect(t.app.repos.projects.get(p.id)?.name).toBe('lonely');
+    expect(existsSync(join(location, 'lonely', '.git'))).toBe(true);
   });
 
   it('project.templates lists built-ins plus styx-template repos in the target org', async () => {
@@ -1105,6 +1106,31 @@ describe('project settings file', () => {
     expect(saved.permissionMode).toBe('acceptEdits');
     expect(saved.effort).toBe('high');
     expect(saved.taskPermissionMode).toBe('plan');
+  });
+
+  it('permissionMode, taskPermissionMode and effort reach .styx/project.json (the page says "committed"), and read back', async () => {
+    const t = makeTestApp({ fixture: 'empty' });
+    const dir = mkdtempSync(join(tmpdir(), 'styx-settings-file-'));
+    const project = await t.app.projects.add(dir, 'filed');
+    await t.app.projects.setSettings(project.id, {
+      permissionMode: 'acceptEdits',
+      taskPermissionMode: 'plan',
+      effort: 'high',
+    });
+    const file = JSON.parse(readFileSync(join(dir, '.styx', 'project.json'), 'utf8')) as {
+      agents?: Record<string, unknown>;
+    };
+    expect(file.agents).toMatchObject({
+      permissionMode: 'acceptEdits',
+      taskPermissionMode: 'plan',
+      effort: 'high',
+    });
+    await t.app.projects.resetSetting(project.id, 'effort');
+    const again = JSON.parse(readFileSync(join(dir, '.styx', 'project.json'), 'utf8')) as {
+      agents?: Record<string, unknown>;
+    };
+    expect(again.agents).not.toHaveProperty('effort');
+    expect(again.agents).toMatchObject({ permissionMode: 'acceptEdits' });
   });
 
   it('a project whose path is not absolute (a fixture display path) keeps its settings in the store but never gets a file written under the working directory', async () => {

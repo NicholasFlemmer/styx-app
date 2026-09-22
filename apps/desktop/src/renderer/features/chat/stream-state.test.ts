@@ -1,6 +1,6 @@
 import { fixtures, upsertRows, type ReadModel, type SessionId, type TranscriptMessage } from '@styx/core';
 import { describe, expect, it } from 'vitest';
-import { thinkingLabel, wholeSeconds, workingLine } from './stream-state';
+import { elapsedLabel, thinkingLabel, wholeSeconds, workingLine } from './stream-state';
 
 const claude = fixtures.ids.session.claude as SessionId;
 const codex = fixtures.ids.session.codex as SessionId;
@@ -17,6 +17,14 @@ describe('thinkingLabel', () => {
     ['done', null, 'Thinking'],
   ] as const)('%s / %s → %s', (status, ms, expected) => {
     expect(thinkingLabel(status, ms)).toBe(expected);
+  });
+
+  it('elapsedLabel reads seconds under a minute and minutes + zero-padded seconds past it', () => {
+    expect(elapsedLabel(0)).toBe('1s');
+    expect(elapsedLabel(59_400)).toBe('59s');
+    expect(elapsedLabel(60_000)).toBe('1m 00s');
+    expect(elapsedLabel(187_000)).toBe('3m 07s');
+    expect(elapsedLabel(2_400_000)).toBe('40m 00s');
   });
 
   it('wholeSeconds rounds and floors at 1', () => {

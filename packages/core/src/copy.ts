@@ -192,7 +192,14 @@ export const copy = {
     slash: { hint: 'Claude Code commands', none: 'No matching command' },
     /** Thinking blocks and the live working line (owner addition, docs/handoff-discrepancies #55; not in §10). */
     thinking: { streaming: 'Thinking…', done: 'Thought for {s}s', show: 'Show', hide: 'Hide' },
-    working: { thinking: 'Thinking…', working: 'Working…', tool: 'Running {tool}…', elapsed: '{s}s' },
+    working: {
+      thinking: 'Thinking…',
+      working: 'Working…',
+      tool: 'Running {tool}…',
+      elapsed: '{s}s',
+      /** Past a minute the raw count stops reading ("2400s"): minutes and seconds. */
+      elapsedLong: '{m}m {s}s',
+    },
   },
 
   /** Appended to every Claude Code session's system prompt (owner decision: steer to the shims instead of isolating). */
@@ -893,6 +900,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
 
   newProject: {
     title: 'New project',
+    /** The project was made; only its GitHub repo was not (toast heading + line). */
+    githubFailed: 'GitHub repo not created',
+    githubFailedDetail: '{error}. The project is here; Repo › Connect to GitHub makes the repo later.',
     name: 'Name',
     location: 'Location',
     browse: 'Browse',

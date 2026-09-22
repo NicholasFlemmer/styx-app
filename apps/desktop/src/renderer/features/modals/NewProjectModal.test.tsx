@@ -8,9 +8,14 @@ import { NewProjectModal, cloneDestinationIn } from './NewProjectModal';
 
 const acme = fixtures.ids.project.acmeShop;
 let sessionId: string | null = 'session-new';
+/** What project.create answers when a test wants a refusal or a made-but-no-GitHub-repo result. */
+let createResult: unknown = null;
 let picked: string | null = '/Users/me/Projects';
 const commandMock = vi.fn<(name: string, input?: unknown) => Promise<unknown>>(async (name) => {
-  if (name === 'project.create') return { ok: true as const, value: { projectId: 'project-new', sessionId } };
+  if (name === 'project.create')
+    return (
+      createResult ?? { ok: true as const, value: { projectId: 'project-new', sessionId, githubError: null } }
+    );
   if (name === 'project.clone') return { ok: true as const, value: { projectId: 'project-cloned' } };
   if (name === 'dialog.pickFolder') return { ok: true as const, value: { path: picked } };
   return { ok: true as const, value: {} };
@@ -25,6 +30,7 @@ describe('NewProjectModal', () => {
   beforeEach(() => {
     commandMock.mockClear();
     sessionId = 'session-new';
+    createResult = null;
     picked = '/Users/me/Projects';
     Object.assign(window, {
       styx: { platform: 'darwin', env: { now: fixtures.DEMO_NOW }, command: commandMock },
@@ -107,6 +113,44 @@ describe('NewProjectModal', () => {
     expect(ui.screen).toBe('workspace');
     expect(ui.projectId).toBe('project-new');
     expect(ui.projectSession['project-new']).toBe('session-new');
+  });
+
+  it('a refused Create is said in the modal next to the fields, and the modal stays', async () => {
+    createResult = {
+      ok: false,
+      error: { code: 'invalid-input', message: '/tmp/x/orders exists and is not empty' },
+    };
+    render(<NewProjectModal id="modal-1" />);
+    fireEvent.change(screen.getByLabelText('Name', { exact: true }), { target: { value: 'orders' } });
+    fireEvent.click(screen.getByRole('radio', { name: /^Empty folder/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Create/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toBe('/tmp/x/orders exists and is not empty'),
+    );
+    expect(useUiStore.getState().overlays.filter((o) => o.kind === 'modal')).toHaveLength(1);
+  });
+
+  it('a project made without its GitHub repo closes the modal and says so once, with where to do it later', async () => {
+    sessionId = null;
+    createResult = {
+      ok: true,
+      value: { projectId: 'project-new', sessionId: null, githubError: 'GitHub rejected the token (401)' },
+    };
+    render(<NewProjectModal id="modal-1" />);
+    fireEvent.change(screen.getByLabelText('Name', { exact: true }), { target: { value: 'orders' } });
+    fireEvent.click(screen.getByRole('radio', { name: /^Empty folder/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Create/ }));
+    await waitFor(() => expect(useUiStore.getState().projectId).toBe('project-new'));
+    const overlays = useUiStore.getState().overlays;
+    expect(overlays.filter((o) => o.kind === 'modal')).toHaveLength(0);
+    expect(overlays.find((o) => o.kind === 'toast')).toMatchObject({
+      toast: {
+        kind: 'error',
+        code: 'GitHub repo not created',
+        message:
+          'GitHub rejected the token (401). The project is here; Repo › Connect to GitHub makes the repo later.',
+      },
+    });
   });
 
   it('empty and template starts change the field, label and payload, and land on Home', async () => {

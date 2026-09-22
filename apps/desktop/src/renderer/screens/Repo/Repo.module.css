@@ -95,4 +95,9 @@
     color: var(--act);
     white-space: nowrap;
   }
+  /* The changes cell: counters, then `↓N main` and the overlaps tag; at the window minimum the tag wraps under. */
+  .changesCell {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
 }

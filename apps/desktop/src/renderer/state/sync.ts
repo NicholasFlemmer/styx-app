@@ -1,6 +1,7 @@
 import { fixtures, hasSeqGap, type DeltaBatch } from '@styx/core';
 import { bridge, hasSnapshot, onEvent, windowKind } from './bridge';
 import { useReadModel } from './read-model';
+import { startUiPersistence } from './persist-ui';
 import { useUiStore } from './ui-store';
 
 /**
@@ -28,6 +29,8 @@ export const connectSync = (): (() => void) => {
   let disposed = false;
   let syncing = false;
   const queue: DeltaBatch[] = [];
+  // What the person is looking at goes back to main as it changes, so the next launch opens there.
+  const stopPersist = windowKind() === 'main' ? startUiPersistence() : () => {};
 
   const drain = (): boolean => {
     queue.sort((a, b) => a.seq - b.seq);
@@ -101,6 +104,7 @@ export const connectSync = (): (() => void) => {
 
   return () => {
     disposed = true;
+    stopPersist();
     offDelta();
     offFocusSession();
     offBannerSet();

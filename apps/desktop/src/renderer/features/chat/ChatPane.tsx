@@ -68,7 +68,7 @@ import {
 } from './chat-attachments';
 import { CheckpointRow } from './CheckpointRow';
 import { mentionItems as toMentionItems, slashItems } from './slash-commands';
-import { thinkingLabel, wholeSeconds, workingLine } from './stream-state';
+import { thinkingLabel, elapsedLabel, workingLine } from './stream-state';
 import { inlineSegments, transcriptItems, type TranscriptItem } from './transcript-items';
 
 const omitKey = <T,>(all: Record<string, T>, key: string): Record<string, T> => {
@@ -738,7 +738,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           {working !== null && (
             <WorkingLine
               label={working.label}
-              elapsedLabel={fill(copy.chat.working.elapsed, { s: wholeSeconds(working.elapsedMs) })}
+              elapsedLabel={elapsedLabel(working.elapsedMs)}
               compact={compact}
             />
           )}

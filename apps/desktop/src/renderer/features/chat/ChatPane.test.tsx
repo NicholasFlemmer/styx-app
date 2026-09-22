@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
 import { ChatPane } from './ChatPane';
+import { elapsedLabel } from './stream-state';
 import { inlineSegments, transcriptItems } from './transcript-items';
 
 const acme = fixtures.ids.project.acmeShop as ProjectId;
@@ -695,7 +696,9 @@ describe('ChatPane', () => {
     const { container } = render(<ChatPane projectId={acme} />);
     const line = screen.getByRole('status');
     expect(line.getAttribute('aria-live')).toBe('off');
-    expect(line.textContent).toBe(`Working…${Math.round((fixtures.DEMO_NOW - userRow.createdAt) / 1000)}s`);
+    // 2400 s since the user row: past a minute the count reads as minutes and seconds.
+    expect(line.textContent).toBe(`Working…${elapsedLabel(fixtures.DEMO_NOW - userRow.createdAt)}`);
+    expect(line.textContent).toBe('Working…40m 00s');
     // Last child of the transcript log.
     expect(container.querySelector('[role="log"]')?.lastElementChild).toBe(line);
   });
@@ -728,7 +731,7 @@ describe('ChatPane', () => {
       },
     ]);
     const { unmount } = render(<ChatPane projectId={acme} />);
-    expect(screen.getByRole('status').textContent).toMatch(/^Running Bash…\d+s$/);
+    expect(screen.getByRole('status').textContent).toMatch(/^Running Bash…(\d+s|\d+m \d\ds)$/);
     unmount();
     useUiStore.getState().setSession(acme, codex);
     render(<ChatPane projectId={acme} />);
@@ -777,7 +780,7 @@ describe('ChatPane', () => {
     ]);
     render(<ChatPane projectId={acme} />);
     expect(screen.getByText('Thinking')).toBeTruthy();
-    expect(screen.getByRole('status').textContent).toMatch(/^Thinking…\d+s$/);
+    expect(screen.getByRole('status').textContent).toMatch(/^Thinking…(\d+s|\d+m \d\ds)$/);
   });
 
   it('compact (pop-out) pane shows the working line too', () => {

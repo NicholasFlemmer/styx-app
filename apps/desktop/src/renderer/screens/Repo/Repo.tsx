@@ -232,7 +232,7 @@ export function Repo() {
                 <StatusDot size={7} tone={lane.dot} />
                 {lane.owner}
               </TableCell>
-              <TableCell mono>
+              <TableCell mono className={s['changesCell']}>
                 {lane.changes}
                 {lane.sync !== null ? (
                   <>

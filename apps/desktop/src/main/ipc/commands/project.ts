@@ -66,7 +66,7 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
       sessionId = session.id;
     }
     if (input.openInIde) openInFallbackIde(project.path);
-    return { projectId: project.id, sessionId };
+    return { projectId: project.id, sessionId, githubError: project.githubError };
   });
 
   bus.register('project.templates', () => projects.templates());

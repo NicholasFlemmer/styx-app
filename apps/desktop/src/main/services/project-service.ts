@@ -718,7 +718,7 @@ export class ProjectService {
     template: string | null;
     copyTargetsFrom: string | null;
     createGithubRepo?: boolean;
-  }): Promise<Project> {
+  }): Promise<Project & { githubError: string | null }> {
     const location = resolve(input.location.replace(/^~(?=$|[\\/])/, this.home));
     const dir = basename(location) === input.name ? location : join(location, input.name);
     if (existsSync(dir) && (await readdir(dir)).length > 0 && !(await this.deps.git.isRepo(dir)))
@@ -740,8 +740,19 @@ export class ProjectService {
     }
     const project = await this.add(dir, input.name);
     if (input.copyTargetsFrom) this.copyTargets(input.copyTargetsFrom, project.id);
-    if (input.createGithubRepo) await this.createGithubRepo(project.id, input.gitInit);
-    return this.require(project.id);
+    // The project exists on disk and in Styx from here: a GitHub repo that could not be made is reported with
+    // the project, not thrown over it (a second Create would then refuse the folder as "not empty"). Repo ›
+    // Connect to GitHub does the same step later.
+    let githubError: string | null = null;
+    if (input.createGithubRepo) {
+      try {
+        await this.createGithubRepo(project.id, input.gitInit);
+      } catch (e) {
+        githubError = (e as Error).message;
+        logger.warn('project.create: GitHub repo not created', { project: input.name, error: githubError });
+      }
+    }
+    return { ...this.require(project.id), githubError };
   }
 
   // --- GitHub ------------------------------------------------------------------
@@ -1213,6 +1224,11 @@ export const applySettingsToFile = (file: ProjectFileV1, s: Partial<ProjectSetti
   };
   set(agents, 'default', s.defaultAgent);
   set(agents, 'model', s.model);
+  // The reader (`projectSettingsFromFile`) takes these three; the writer had left them out, so the Agent
+  // defaults page said "committed" of values that never reached the file.
+  set(agents, 'permissionMode', s.permissionMode);
+  set(agents, 'taskPermissionMode', s.taskPermissionMode);
+  set(agents, 'effort', s.effort);
   set(agents, 'autoApproveEdits', s.autoApproveEdits);
   set(agents, 'mayRequestTargets', s.mayRequestTargets);
   set(agents, 'notifyWhenNeedsMe', s.notifyWhenNeedsMe);

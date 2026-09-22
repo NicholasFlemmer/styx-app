@@ -213,7 +213,12 @@ export const commands = {
       copyTargetsFrom: projectIdSchema.nullable(),
       openInIde: z.boolean(),
     }),
-    output: z.object({ projectId: projectIdSchema, sessionId: sessionIdSchema.nullable() }),
+    output: z.object({
+      projectId: projectIdSchema,
+      sessionId: sessionIdSchema.nullable(),
+      /** The project was made but its GitHub repo was not (the reason); Repo › Connect to GitHub can do it later. */
+      githubError: z.string().nullable().default(null),
+    }),
   },
   'project.remove': {
     input: z.object({ projectId: projectIdSchema, deleteFiles: z.boolean().default(false) }),
