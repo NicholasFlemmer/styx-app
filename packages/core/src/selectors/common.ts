@@ -91,3 +91,20 @@ export const projectWorktreeOf = (
   if (pick !== undefined) return worktreeOf(model, pick) ?? null;
   return mainWorktreeOf(model, projectId);
 };
+
+/**
+ * How many projects Styx keeps without an account (owner request, discrepancy #113). One is enough to try the
+ * whole app; a second is where signing in starts to earn its keep.
+ */
+export const FREE_PROJECTS = 1;
+
+/** Projects that still exist (a removed one does not count against the free allowance). */
+export const liveProjectCount = (model: ReadModel): number =>
+  rows(model.projects).filter((p) => p.removedAt === null).length;
+
+/**
+ * Whether adding another project asks for an account. Signed in, never. Signed out, only once the free one is
+ * already there — so the app opens, the first project works, and nothing anyone already has is taken away.
+ */
+export const addingProjectNeedsAccount = (model: ReadModel): boolean =>
+  model.account.kind !== 'signed-in' && liveProjectCount(model) >= FREE_PROJECTS;

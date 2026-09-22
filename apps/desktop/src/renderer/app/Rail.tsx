@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type DragEvent, type Keyboard
 import { command } from '../state/commands';
 import { useModel, useUi } from '../state/hooks';
 import { useFloatingMenu } from '../state/use-floating-menu';
+import { guardAddProject } from '../state/account-gate';
 import { openFolderAsProject } from '../state/project-entry';
 import s from './Shell.module.css';
 
@@ -62,6 +63,8 @@ export function Rail() {
   };
   const choose = (item: AddMenuItem) => {
     closeMenu(true);
+    // Free for one project; a second asks for an account (discrepancy row 113).
+    if (!guardAddProject()) return;
     if (item === 'newProject') pushOverlay({ kind: 'modal', modal: 'new-project' });
     else if (item === 'addExisting') pushOverlay({ kind: 'modal', modal: 'add-existing' });
     else if (item === 'cloneUrl') pushOverlay({ kind: 'modal', modal: 'new-project', mode: 'clone' });

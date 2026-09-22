@@ -36,7 +36,7 @@ test('signed in: the pane shows the account, and an unreachable API never breaks
   await app.close();
 });
 
-test('signed out: both providers are offered, and a sign-in that cannot reach the API says so', async () => {
+test('signed out: the pane points at the dialog, and a sign-in that cannot reach the API says so', async () => {
   const { app, page } = await launchStyx({
     screen: 'settings',
     fixture: 'empty',
@@ -46,13 +46,16 @@ test('signed out: both providers are offered, and a sign-in that cannot reach th
   await page.click('[data-app-rail-item="app:account"]');
   const pane = page.locator('[data-account="signed-out"]');
   await expect(pane).toBeVisible();
-  await expect(page.locator('[data-account-signin="github"]')).toBeVisible();
-  await expect(page.locator('[data-account-signin="google"]')).toBeVisible();
 
-  await page.locator('[data-account-signin="github"]').click();
-  // No server to answer, so the flow never starts and the pane says why, still offering both providers.
-  await expect(page.locator('[data-account-error]')).toBeVisible({ timeout: 10_000 });
-  await expect(page.locator('[data-account-signin="github"]')).toBeVisible();
+  // Getting an account is the dialog's job now (discrepancy #113); the pane only points at it.
+  await page.locator('[data-account-signin]').click();
+  await expect(page.locator('[data-sign-in-provider="github"]')).toBeVisible();
+  await expect(page.locator('[data-sign-in-provider="google"]')).toBeVisible();
+
+  await page.locator('[data-sign-in-provider="github"]').click();
+  // No server to answer, so the flow never starts and the dialog says why, still offering both providers.
+  await expect(page.locator('[data-sign-in-error]')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('[data-sign-in-provider="github"]')).toBeVisible();
 
   await app.close();
 });

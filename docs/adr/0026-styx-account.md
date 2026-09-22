@@ -1,7 +1,7 @@
 # ADR-0026 — A Styx account: sign in with GitHub or Google
 
-**Status:** accepted (2026-09-22) · **Owner request:** "now I think we need to add an account to styx",
-then "continue with github and google please".
+**Status:** accepted (2026-09-22), decision 1 revised the same day (see the amendment) · **Owner request:**
+"now I think we need to add an account to styx", then "continue with github and google please".
 
 ## Context
 
@@ -23,9 +23,9 @@ weaken any of that.
 
 ### 1. The account is additive, never a gate
 
-Styx works fully signed out, forever. No feature in the app today is withheld from a signed-out user, and the
+**Superseded — see the amendment at the end.** As first built: Styx works fully signed out, forever, and the
 sign-in surface is one pane in Settings. A developer tool that stops working on a plane, or when an auth server
-is down, is not worth shipping. Anything paid that arrives later gates _that_ feature, not the app.
+is down, is not worth shipping.
 
 ### 2. Federated identity: GitHub and Google, never a password
 
@@ -114,3 +114,29 @@ account = { id, email, name, avatarUrl, provider, plan: "free"|"pro"|"team", pla
 - Onboarding is unchanged: a new user is not asked to sign in before working. The pane in Settings is the
   entry point, and the empty state says what an account is for.
 - Nothing in the app reads `plan` yet. It is surfaced so the licence exists before anything charges for it.
+
+## Amendment (2026-09-22): the account is asked for, and the second project needs one
+
+The owner's reading of the built result: "the ux of this is bizarre. surely it should be the first thing you
+see? what if we allowed users to add one project without an account but when they try add another they are
+asked to create an account? also why is there no well known modal for signing in. the account tab should be
+account details and settings."
+
+That reverses decision 1 and splits decision 4's surface. What it means:
+
+- **Sign-in is a modal, and it is the first thing a new install shows.** `SignInModal` is the conventional
+  dialog — title, one line, two provider buttons, Not now. The device code appears in the same dialog once a
+  provider is chosen, so the thread is never lost, and it closes itself when the browser side finishes. It is
+  pushed on first launch (onboarding not done, signed out) and nowhere else automatically.
+- **Settings › Account manages an account rather than getting one.** Signed in: name, email, plan, provider,
+  since, offline state, Refresh, Sign out. Signed out: one line and a Sign in button that opens the dialog.
+- **Styx is free for one project.** Adding a second while signed out opens the dialog with a line saying why
+  (`addingProjectNeedsAccount`, `FREE_PROJECTS = 1`). The renderer gates all four add routes through
+  `guardAddProject`; `project.add` / `clone` / `create` refuse in main as the backstop, so the rule is true
+  rather than merely presented.
+
+What survives from decision 1, and why it matters: the gate is on **adding**, never on what someone already
+has. A person with five projects who signs out keeps all five, and removed projects do not count against the
+free one. Nothing already on the machine is withheld because an auth server is unreachable — the only thing a
+signed-out person cannot do is grow. Decisions 4, 5 and 6 are untouched: tokens stay in the keychain, offline
+stays a note on a live session, and git identity stays a fallback.

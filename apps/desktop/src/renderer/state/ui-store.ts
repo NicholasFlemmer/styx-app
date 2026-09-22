@@ -254,6 +254,17 @@ export const useUiStore = create<UiStore>()(
         if (!model.settings.app.onboardingDone) s.screen = 'onboarding';
         else s.screen = projects.length === 0 ? 'home' : 'workspace';
         s.screenResolved = true;
+        // First launch, nobody signed in: the sign-in dialog is the first thing on screen (owner request,
+        // discrepancy row 113). It has a Not now, and it is pushed once — this only runs when the screen is
+        // first resolved, so it never nags on later starts.
+        if (!model.settings.app.onboardingDone && model.account.kind === 'signed-out') {
+          s.overlays = pushOverlayPure(s.overlays, {
+            id: overlayId('modal'),
+            kind: 'modal',
+            modal: 'sign-in',
+            reason: 'welcome',
+          });
+        }
       }),
     setResolvedTheme: (theme) =>
       set((s) => {

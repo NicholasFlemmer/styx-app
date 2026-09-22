@@ -45,7 +45,9 @@ export type ModalPayload =
    */
   | { modal: 'connect-agent'; agent: Agent; returnTo?: { modal: 'spawn'; projectId: ProjectId } }
   /** Approvals › Policies › + Rule: an auto-approve / ask rule; `policyId` edits an existing custom rule. */
-  | { modal: 'policy-rule'; policyId?: PolicyId };
+  | { modal: 'policy-rule'; policyId?: PolicyId }
+  /** The sign-in dialog (discrepancy row 113); `reason` only changes its one line of lead copy. */
+  | { modal: 'sign-in'; reason?: 'welcome' | 'second-project' | 'plain' };
 
 export type Overlay =
   | { id: string; kind: 'task'; taskKey: string | null }

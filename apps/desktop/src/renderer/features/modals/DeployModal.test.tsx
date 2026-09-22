@@ -179,7 +179,9 @@ describe('DeployModal', () => {
       error: null,
       terminalId: 'term:1',
     });
-    await waitFor(() => expect(loginTerminal.createLoginTerminal).toHaveBeenCalledWith('term:1', { screenReader: false }));
+    await waitFor(() =>
+      expect(loginTerminal.createLoginTerminal).toHaveBeenCalledWith('term:1', { screenReader: false }),
+    );
     expect(screen.getByText(copy.deploy.phases.running)).toBeTruthy();
   });
 

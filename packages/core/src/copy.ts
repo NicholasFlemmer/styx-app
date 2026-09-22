@@ -1749,6 +1749,25 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
    */
   account: {
     title: 'Account',
+    /** The sign-in dialog (owner request, discrepancy #113): the conventional modal, not a pane. */
+    modal: {
+      title: 'Sign in to Styx',
+      /** First launch. */
+      welcome: 'Sign in to keep your projects, plan and settings with you.',
+      /** Opened because the person is adding a project beyond the free one. */
+      secondProject: 'Styx is free for one project. Sign in to add more.',
+      /** Opened from the Account pane. */
+      plain: 'Sign in with the account you already use.',
+      later: 'Not now',
+      /** Under the provider buttons. */
+      note: 'Styx never sees your password.',
+      /** Once a provider is chosen. */
+      codeLabel: 'Enter this code in your browser',
+      switchProvider: 'Use a different provider',
+    },
+    /** The pane's own line when signed out: the pane is for details, the modal is for signing in. */
+    paneSignedOut: 'You are not signed in. Styx works, but only for one project.',
+    signIn: 'Sign in',
     /** Settings nav row and pane heading. */
     signedOutLead:
       'Sign in to carry your plan and your name across machines. Styx works the same either way.',

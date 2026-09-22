@@ -13,6 +13,7 @@ import { Button, CounterStrip, CounterTile, EmptyState } from '@styx/ui';
 import { useCallback } from 'react';
 import { command } from '../../state/commands';
 import { useModel, useNow, useUi } from '../../state/hooks';
+import { guardAddProject } from '../../state/account-gate';
 import { openFolderAsProject } from '../../state/project-entry';
 import { ActivityFeed } from './ActivityFeed';
 import s from './Home.module.css';
@@ -41,12 +42,16 @@ export function Home() {
     void command('project.select', { projectId });
     setScreen('workspace');
   };
-  const openNewProject = () => pushOverlay({ kind: 'modal', modal: 'new-project' });
-  const openClone = () => pushOverlay({ kind: 'modal', modal: 'new-project', mode: 'clone' });
+  // Every add route is gated the same way: free for one project, a second asks for an account (row 113).
+  const openNewProject = () => guardAddProject() && pushOverlay({ kind: 'modal', modal: 'new-project' });
+  const openClone = () =>
+    guardAddProject() && pushOverlay({ kind: 'modal', modal: 'new-project', mode: 'clone' });
   /** OS folder picker → `project.add` → the new project's Workspace (nothing happens when dismissed). */
-  const openFolder = () => openFolderAsProject();
+  const openFolder = () => {
+    if (guardAddProject()) void openFolderAsProject();
+  };
   /** Recents + scanned repos with checkboxes (the onboarding step-2 list, any time). */
-  const addExisting = () => pushOverlay({ kind: 'modal', modal: 'add-existing' });
+  const addExisting = () => guardAddProject() && pushOverlay({ kind: 'modal', modal: 'add-existing' });
 
   const empty = rows.length === 0;
 
