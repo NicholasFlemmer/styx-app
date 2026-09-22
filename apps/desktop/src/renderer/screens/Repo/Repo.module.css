@@ -54,10 +54,9 @@
   .actions {
     gap: var(--sp-3);
     white-space: nowrap;
-    /* Three verbs (Commit & push · Land · Diff) need ~148px; at the 1100px window minimum the cell has 142. They
-       wrap onto a second line there instead of running into the next column. */
-    flex-wrap: wrap;
-    row-gap: 2px;
+    /* Three verbs (Commit & push · Land · Diff) need ~148px; the prototype's .7fr column holds 142 at the 1100px
+       minimum (a few px more at 1280). They stay on one line and spill a few px into the PR column's empty right
+       half rather than wrap: a second line pushed every row below it down and broke the baked `repo` baseline. */
   }
   /* PR cell as a link when the PR's page is known: the mono text stays, underline says it opens. */
   .prLink {
