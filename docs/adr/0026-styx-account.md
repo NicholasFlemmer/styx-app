@@ -31,7 +31,7 @@ is down, is not worth shipping. Anything paid that arrives later gates _that_ fe
 
 Styx's own API is the authorization server; it federates upstream to GitHub and Google. The desktop app never
 sees a password, never sees a provider client secret, and never talks to GitHub or Google for authentication —
-only to `api.styx.dev`. Adding a third provider later is a server change, not an app release.
+only to the Styx API. Adding a third provider later is a server change, not an app release.
 
 Why not run our own email + password accounts: it needs password storage, reset email, deliverability and a
 breach surface, for no gain. Every Styx user already has a GitHub account.
@@ -75,8 +75,13 @@ with git configured sees no change, which is the right default: their git config
 
 ## The API contract
 
-The desktop app is written against this; the server lives in the repo (`apps/api`) and is deployed by the owner.
+The desktop app is written against this. The server lives in `apps/api` and runs on Cloud Run at
+`https://styx-api-994871833762.us-central1.run.app` (project `styx-api-20260922`, Firestore behind it);
 `STYX_API` overrides the base URL for development and tests, so nothing in CI touches the network.
+
+Cloud Run rather than Cloudflare Workers because the owner's deploy target is GCP. The handlers do not know
+either way: `handle()` takes a `Store` and a config, so the platform is one file (`store-firestore.ts`,
+`server.ts`) and the tests run the same code against an in-memory store.
 
 ```
 POST /v1/device/code      { provider: "github" | "google", client: "styx-desktop", version }

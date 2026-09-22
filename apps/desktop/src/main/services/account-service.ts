@@ -23,8 +23,11 @@ import type { CredentialVault } from './credential-vault';
  * - only a 401 from the API signs a person out. Offline is a note on a live session, not an ending.
  */
 
-/** Where the desktop app talks to. `STYX_API` overrides it for development and tests, so CI never leaves the box. */
-export const DEFAULT_API = 'https://api.styx.dev';
+/**
+ * Where the desktop app talks to: the Styx accounts API on Cloud Run (ADR-0026). `STYX_API` overrides it for
+ * development and tests, so nothing in CI leaves the machine.
+ */
+export const DEFAULT_API = 'https://styx-api-994871833762.us-central1.run.app';
 
 const ACCESS_REF = 'styx:v1:styx:account:oauth';
 const REFRESH_REF = 'styx:v1:styx:account:refresh';
