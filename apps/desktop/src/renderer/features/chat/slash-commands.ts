@@ -25,8 +25,10 @@ const HINTS: Readonly<Record<string, string>> = {
 
 /** `/name` rows for the composer popup, filtered by prefix then subsequence, best first. */
 export const slashItems = (session: Session | null, query: string): PopupItem[] => {
-  const names = session?.slashCommands ?? [];
-  const q = query.trim().toLowerCase();
+  // Claude advertises bare names, the ACP runners (Gemini) `/name`: one shape here, or the row read `//memory`
+  // and picking it put `//memory` in the composer.
+  const names = [...new Set((session?.slashCommands ?? []).map((n) => n.replace(/^\//, '')))];
+  const q = query.trim().toLowerCase().replace(/^\//, '');
   const scored: { name: string; rank: number }[] = [];
   for (const name of names) {
     const lower = name.toLowerCase();

@@ -25,6 +25,12 @@ describe('slashItems', () => {
     expect(slashItems(session(['compact', 'model']), query).map((i) => i.label)).toEqual(expected);
   });
 
+  it('names advertised with a leading slash (the ACP runners) read and insert as one slash', () => {
+    const items = slashItems(session(['/help', '/memory', 'memory']), '');
+    expect(items.map((i) => i.label)).toEqual(['/help', '/memory']);
+    expect(slashItems(session(['/help', '/memory']), 'mem').map((i) => i.label)).toEqual(['/memory']);
+  });
+
   it('prefix matches rank before substring, and substring before subsequence', () => {
     // `compact` has no c…a…p subsequence, so it drops out; `cpt` reaches it only as a subsequence.
     const items = slashItems(session(['recap', 'cap-plan', 'compact']), 'cap');
