@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { accountStateSchema } from './model/account';
 import { activityRowSchema } from './model/activity';
 import { auditEntrySchema } from './model/audit';
 import { sessionIdSchema } from './model/common';
@@ -109,6 +110,8 @@ export const deltaSchema = z.discriminatedUnion('op', [
   }),
   /** A deploy row by id; every phase change re-sends the whole row. */
   z.object({ op: z.literal('deploys.set'), deploy: deploySchema }),
+  /** The whole account state; main owns it and re-sends it on every change (ADR-0026). */
+  z.object({ op: z.literal('account.set'), account: accountStateSchema }),
   z.object({
     op: z.literal('checkpoints.replace'),
     sessionId: sessionIdSchema,
@@ -208,6 +211,8 @@ export const applyDelta = (model: ReadModel, delta: Delta): ReadModel => {
       } else devices[delta.projectId] = delta.device;
       return { ...model, devices };
     }
+    case 'account.set':
+      return { ...model, account: delta.account };
     case 'deploys.set':
       return { ...model, deploys: { ...model.deploys, [delta.deploy.deployId]: delta.deploy } };
   }

@@ -18,6 +18,7 @@ import type { Agent, Env, Provider, Scope, TargetPolicy } from '../model/common'
 import type { CliInstall, IdeInstall, SkillSummary } from '../model/discovery';
 import type { Deploy, DevRun } from '../model/run';
 import type { Checkpoint } from '../model/checkpoint';
+import type { AccountState } from '../model/account';
 import type { AgentLimits } from '../model/usage';
 import type { Grant } from '../model/grant';
 import type { AgentChange } from '../model/hunk';
@@ -1215,6 +1216,8 @@ export interface DemoFixture {
   checkpoints: Record<string, Checkpoint[]>;
   queues: Record<string, QueuedMessage[]>;
   limits: Record<string, AgentLimits>;
+  /** The Styx account on this machine (ADR-0026). */
+  account: AccountState;
 }
 
 const acmeProjectSettings = (): EffectiveProjectSettings =>
@@ -1256,6 +1259,21 @@ export const demoFixture = (): DemoFixture => ({
   checkpoints: {},
   queues: {},
   limits: {},
+  // Signed in, so the Account pane and its e2e have a person to show; the app never needs one.
+  account: {
+    kind: 'signed-in',
+    account: {
+      id: 'acct_demo',
+      email: 'nic@acme.dev',
+      name: 'Nic Flemmer',
+      avatarUrl: null,
+      provider: 'github',
+      plan: 'pro',
+      planUntil: null,
+    },
+    signedInAt: DEMO_NOW - 9 * DAY,
+    staleSince: null,
+  },
 });
 
 /** Prototype "Empty states": no projects, sessions or targets; builtins and detection intact. */
@@ -1275,6 +1293,8 @@ export const emptyFixture = (): DemoFixture => ({
   activity: [],
   skills: [],
   projectSettings: {},
+  // A brand-new machine has nobody signed in; the app works exactly the same.
+  account: { kind: 'signed-out', error: null },
 });
 
 /** Prototype "Error states": AWS acme-prod expired 2h ago, codex missing from PATH, fix/checkout conflicts with main. */
@@ -1382,6 +1402,7 @@ export const fixtureReadModel = (f: DemoFixture): ReadModel => ({
   checkpoints: f.checkpoints,
   queues: f.queues,
   limits: f.limits,
+  account: f.account,
 });
 
 export const demoReadModel = (): ReadModel => fixtureReadModel(demoFixture());

@@ -21,6 +21,7 @@ export type IconName =
   | 'approvals'
   | 'tasks'
   | 'general'
+  | 'account'
   | 'editor'
   | 'connections'
   | 'skills'
@@ -73,6 +74,15 @@ const GLYPHS: Record<IconName, Glyph> = {
   approvals: { box: 16, parts: [stroke('M8 1.5 L14.5 8 L8 14.5 L1.5 8 Z M5.5 8 L7.5 10 L10.5 6.5')] },
   /** Tasks: a window with a play marker. */
   tasks: { box: 16, parts: [stroke('M1.5 2.5 H14.5 V13.5 H1.5 Z'), solid('M6 5.5 L11 8 L6 10.5 Z')] },
+  /** Account: a head and shoulders, squared off like the rest of the set. */
+  account: {
+    box: 16,
+    parts: [
+      stroke(
+        'M8 2.5 A2.75 2.75 0 1 1 8 8 A2.75 2.75 0 1 1 8 2.5 M2.5 14 V12.5 A3 3 0 0 1 5.5 9.5 H10.5 A3 3 0 0 1 13.5 12.5 V14',
+      ),
+    ],
+  },
   /** General: three sliders. */
   general: {
     box: 16,

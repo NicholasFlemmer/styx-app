@@ -555,6 +555,8 @@ export const sectionRows = (model: ReadModel, section: SettingsSection, ctx: Row
     case 'project:env':
       return envRows(model, ctx);
     case 'project:targets':
+    // Both are panes of their own, not label/value rows.
+    case 'app:account':
       return [];
   }
 };

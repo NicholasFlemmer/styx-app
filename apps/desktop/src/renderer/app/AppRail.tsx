@@ -10,6 +10,7 @@ import s from './Shell.module.css';
 /** The icon each App settings section wears on the rail. */
 const SECTION_ICON: Record<AppSection, IconName> = {
   'app:general': 'general',
+  'app:account': 'account',
   'app:editor': 'editor',
   'app:agents': 'connections',
   'app:skills': 'skills',

@@ -82,8 +82,33 @@ export const isTokenRefusal = (message: string): boolean =>
   /could not read Username|Authentication failed|The requested URL returned error: 40[13]/i.test(message);
 
 /** Wraps system git (≥2.38 for merge-tree --write-tree). All paths are absolute. */
+/** The author Styx commits as when git has no identity of its own. */
+export interface GitIdentity {
+  name: string;
+  email: string;
+}
+
+/** The fallback since v1: replaced by the signed-in Styx account when there is one (ADR-0026 §6). */
+export const STYX_IDENTITY: GitIdentity = { name: 'Styx', email: 'styx@localhost' };
+
 export class GitService {
+  /**
+   * `identity` is only ever the *fallback*: every commit-making path tries the machine's own `user.name` /
+   * `user.email` first, because a configured git is the more specific answer (ADR-0026 §6).
+   */
+  private identity: () => GitIdentity = () => STYX_IDENTITY;
+
   constructor(private readonly git: GitRunner = new ExecaGitRunner()) {}
+
+  /** Late-bound so the account service, built after git, can supply the signed-in author. */
+  bindIdentity(identity: () => GitIdentity): void {
+    this.identity = identity;
+  }
+
+  private identityArgs(): string[] {
+    const { name, email } = this.identity();
+    return ['-c', `user.name=${name}`, '-c', `user.email=${email}`];
+  }
 
   async version(): Promise<string> {
     const { stdout } = await this.git.run(['--version'], process.cwd());
@@ -527,7 +552,7 @@ export class GitService {
       )
         throw new Error(`git commit failed (${r.exitCode}): ${r.stderr.trim()}`);
     }
-    await this.git.run(['-c', 'user.name=Styx', '-c', 'user.email=styx@localhost', ...args], path);
+    await this.git.run([...this.identityArgs(), ...args], path);
   }
 
   /** Runs a commit-making command as the user, with Styx's identity only when git has none (see `commit`). */
@@ -539,11 +564,7 @@ export class GitService {
         r.stderr,
       )
     ) {
-      const r2 = await this.git.run(
-        ['-c', 'user.name=Styx', '-c', 'user.email=styx@localhost', ...args],
-        path,
-        { reject: false },
-      );
+      const r2 = await this.git.run([...this.identityArgs(), ...args], path, { reject: false });
       return { ok: r2.exitCode === 0, output: (r2.stderr || r2.stdout).trim() };
     }
     return { ok: false, output: (r.stderr || r.stdout).trim() };

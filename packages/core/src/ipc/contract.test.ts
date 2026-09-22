@@ -17,6 +17,7 @@ describe('ipc contract', () => {
     const families = new Set(COMMAND_NAMES.map((n) => n.split('.')[0]));
     expect([...families].sort()).toEqual(
       [
+        'account',
         'agent',
         'ask',
         'audit',
@@ -196,6 +197,7 @@ describe('ipc contract', () => {
       checkpoints: m.checkpoints,
       queues: m.queues,
       limits: m.limits,
+      account: m.account,
     };
     const r = commands['store.snapshot'].output.safeParse(snapshot);
     expect(r.success).toBe(true);

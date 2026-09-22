@@ -30,6 +30,7 @@ const snapshotOf = (seq: number): ReadModelSnapshot => {
     checkpoints: {},
     queues: {},
     limits: {},
+    account: f.account,
   };
 };
 

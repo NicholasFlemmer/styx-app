@@ -73,7 +73,7 @@ describe('LandButton (discrepancy #111: landing must not live only on the Repo t
   });
 
   it.each([
-    ['main itself', ids.worktree.main, {}],
+    ['main itself', ids.worktree.acmeMain, {}],
     ['a conflicted lane', ids.worktree.fixCheckout, { conflict: { file: 'a.ts', against: 'main' } }],
     ['a lane already merged', ids.worktree.fixCheckout, { mergedAt: fixtures.DEMO_NOW }],
     [
@@ -82,7 +82,7 @@ describe('LandButton (discrepancy #111: landing must not live only on the Repo t
       { resolution: { state: 'resolving', sessionId: null, files: [], mergeCommit: null, reason: null } },
     ],
   ])('offers nothing for %s', (_name, worktreeId, patch) => {
-    if (worktreeId === ids.worktree.main) {
+    if (worktreeId === ids.worktree.acmeMain) {
       // Main is what the project shows when no session owns a lane.
       useReadModel.getState().replaceModel(
         {

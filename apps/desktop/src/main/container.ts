@@ -17,7 +17,7 @@ import { AuditService } from './services/audit-service';
 import { CheckpointService, screenshotSourceFor } from './services/checkpoint-service';
 import type { CredentialVault } from './services/credential-vault';
 import { DetectService, defaultDeps as defaultDetectDeps } from './services/detect-service';
-import { ExecaGitRunner, GitService } from './services/git';
+import { ExecaGitRunner, GitService, STYX_IDENTITY } from './services/git';
 import { GrantService } from './services/grant-service';
 import { HunkService, type WatchFactory } from './services/hunk-service';
 import { TreeWatchService } from './services/tree-watch-service';
@@ -62,6 +62,8 @@ import { TargetService } from './services/target-service';
 import { TerminalService } from './services/terminal-service';
 import { TranscriptService } from './services/transcript-service';
 import { UsageService } from './services/usage-service';
+import { AccountService } from './services/account-service';
+import { version as APP_VERSION } from '../../package.json';
 import { projectSettingsFor } from './store/projection';
 import { Publisher } from './store/publisher';
 
@@ -248,6 +250,8 @@ export interface Container {
   ledger: LaneLedgerService;
   /** Usage page: the latest rate limits per CLI and the on-demand Codex refresh. */
   usage: UsageService;
+  /** The Styx account (ADR-0026): device flow, keychain tokens, offline-tolerant session. */
+  account: AccountService;
   terminals: TerminalService;
   broker: BrokerHost;
   windows: WindowsPort;
@@ -520,6 +524,22 @@ export function buildContainer(opts: ContainerOptions): Container {
     ...(opts.probe !== undefined ? { probe: opts.probe } : {}),
   });
   const usage = new UsageService({ repos, publisher, clock, env: process.env });
+  // The account never gates anything, so it is built with whatever is to hand: a fetch, the vault, the
+  // per-machine kv store. `STYX_API` points it at a local server in development and at a fake in tests.
+  const account = new AccountService({
+    fetch: opts.fetch ?? fetch,
+    vault: opts.vault,
+    store: repos.uiState,
+    publish: (state) => publisher.accountSet(state),
+    openExternal: (url) => void opts.openExternal(url),
+    now: () => clock.now(),
+    version: APP_VERSION,
+    ...(process.env['STYX_API'] !== undefined ? { apiBase: process.env['STYX_API'] } : {}),
+  });
+  account.load();
+  // Signed in, Styx commits as the person when git has no identity of its own (ADR-0026 §6). A machine with
+  // `user.name` set never reaches this: git's own config wins.
+  git.bindIdentity(() => account.gitIdentity() ?? STYX_IDENTITY);
   const screens = new ScreensStore(join(runtime.userData, 'screens'));
   const deviceHooks = opts.deviceHooks ?? NO_DEVICE_HOOKS;
   const devices = new DeviceService({
@@ -541,6 +561,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     devices: () => devices.all(),
     deploys: () => deploys.all(),
     limits: () => usage.all(),
+    account: () => account.current(),
   });
   const refresh = new RefreshScheduler({
     repos,
@@ -872,6 +893,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     land,
     worktrees,
     usage,
+    account,
     terminals,
     broker,
     windows: opts.windows,

@@ -22,6 +22,7 @@ import {
 import { useEffect, useState } from 'react';
 import { PROJECT_POLICY_BANNER } from '../../features/banners/BannerStack';
 import { cliTargetMeta } from '../../features/modals/modals';
+import { AccountPane } from './AccountPane';
 import { AgentsPane } from './AgentsPane';
 import { SkillsPane } from './SkillsPane';
 import { command } from '../../state/commands';
@@ -68,7 +69,9 @@ export function Settings() {
             </span>
           ) : null}
         </header>
-        {section === 'project:targets' ? (
+        {section === 'app:account' ? (
+          <AccountPane />
+        ) : section === 'project:targets' ? (
           <Targets model={model} projectId={projectId} />
         ) : section === 'app:skills' ? (
           <SkillsPane projectId={projectId} />

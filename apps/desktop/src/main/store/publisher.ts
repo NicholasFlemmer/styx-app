@@ -1,5 +1,7 @@
 import {
   CHANNELS,
+  SIGNED_OUT,
+  type AccountState,
   type ActivityRow,
   type AgentChange,
   type AppSettings,
@@ -43,6 +45,8 @@ export interface SnapshotExtras {
   devices: () => DeviceSession[];
   deploys: () => Deploy[];
   limits: () => Record<string, AgentLimits>;
+  /** The Styx account (ADR-0026), owned by AccountService in memory and persisted per machine. */
+  account: () => AccountState;
 }
 
 /** The single `styx:evt` channel carries every main → renderer event as `{ name, payload }`. */
@@ -77,6 +81,7 @@ export class Publisher {
     devices: () => [],
     deploys: () => [],
     limits: () => ({}),
+    account: () => SIGNED_OUT,
   };
 
   constructor(private readonly deps: PublisherDeps) {
@@ -212,6 +217,10 @@ export class Publisher {
     this.emit({ op: 'limits.set', limits });
   }
 
+  accountSet(account: AccountState): void {
+    this.emit({ op: 'account.set', account });
+  }
+
   // --- snapshot ------------------------------------------------------------
 
   snapshot(): ReadModelSnapshot {
@@ -224,6 +233,7 @@ export class Publisher {
         devices: this.extras.devices,
         deploys: this.extras.deploys,
         limits: this.extras.limits,
+        account: this.extras.account,
       },
       this.seqNo,
     );

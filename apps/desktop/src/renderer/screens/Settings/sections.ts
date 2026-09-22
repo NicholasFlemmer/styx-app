@@ -6,6 +6,7 @@ import { copy } from '@styx/core';
  */
 export const APP_SECTIONS = [
   'app:general',
+  'app:account',
   'app:editor',
   'app:agents',
   'app:skills',
@@ -24,6 +25,7 @@ export const DEFAULT_SETTINGS_SECTION: SettingsSection = 'project:targets';
 
 export const SECTION_LABEL: Record<SettingsSection, string> = {
   'app:general': copy.settings.app.general,
+  'app:account': copy.account.title,
   'app:editor': copy.settings.app.editor,
   'app:agents': copy.agentsPage.title,
   'app:skills': copy.skills.title,

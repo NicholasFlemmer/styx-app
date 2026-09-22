@@ -172,6 +172,17 @@ export function seed(
     repos.discovery.replaceIdes(fixture.ides);
     repos.discovery.replaceClis(fixture.clis);
     repos.settings.patch(fixture.appSettings);
+    // The fixture's Styx account (ADR-0026) lands where AccountService reads it. Tokens are never seeded: the
+    // demo account is signed in for the pane's sake and cannot reach the API, which is exactly the offline case.
+    if (fixture.account.kind === 'signed-in') {
+      repos.uiState.set('account', {
+        account: fixture.account.account,
+        signedInAt: fixture.account.signedInAt,
+        accessExpiresAt: 0,
+      });
+    } else {
+      repos.uiState.delete('account');
+    }
   });
   run();
   return { seeded: true };

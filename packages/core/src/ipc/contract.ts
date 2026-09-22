@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { deltaSchema, effectiveProjectSettingsSchema } from '../deltas';
+import { accountProviderSchema, accountStateSchema } from '../model/account';
 import { activityRowSchema } from '../model/activity';
 import { auditEntrySchema } from '../model/audit';
 import {
@@ -144,6 +145,8 @@ const readModelSnapshotSchema = z.object({
   checkpoints: z.record(z.string(), z.array(checkpointSchema)),
   queues: z.record(z.string(), z.array(queuedMessageSchema)),
   limits: z.record(z.string(), agentLimitsSchema),
+  /** The Styx account on this machine (ADR-0026); never carries a token. */
+  account: accountStateSchema,
 });
 export type ReadModelSnapshot = z.infer<typeof readModelSnapshotSchema>;
 
@@ -576,6 +579,21 @@ export const commands = {
    * session on its own any more — a CLI that exits leaves it idle in its lane.
    */
   'session.markDone': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
+
+  // --- account (ADR-0026) --------------------------------------------------
+  /**
+   * Starts the device flow for a provider: main asks the API for a code, publishes `signing-in` with it and
+   * opens the browser, then polls until the person finishes, cancels or the code expires.
+   */
+  'account.signIn': { input: z.object({ provider: accountProviderSchema }), output: ok },
+  /** Abandons a flow in progress; the code is dropped and the state returns to signed-out. */
+  'account.cancelSignIn': { input: z.object({}), output: ok },
+  /** Clears the account and its keychain entries; the API is told best-effort. */
+  'account.signOut': { input: z.object({}), output: ok },
+  /** Re-reads the account (plan changes, a renamed profile) and clears `staleSince` when the API answers. */
+  'account.refresh': { input: z.object({}), output: ok },
+  /** Re-opens the verification page for the flow in progress, for a browser that never opened. */
+  'account.openVerification': { input: z.object({}), output: ok },
   'session.archive': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   /**
    * Brings a finished (not archived) session back (Done card → Reopen; owner addition #97): the row returns to `idle`

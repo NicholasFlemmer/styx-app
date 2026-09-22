@@ -1,4 +1,5 @@
 import {
+  SIGNED_OUT,
   DEFAULT_PROJECT_SETTINGS,
   mergeSettings,
   type AgentChange,
@@ -26,6 +27,8 @@ export interface ProjectionDeps {
   deploys?: () => ReadModelSnapshot['deploys'];
   /** Latest rate limits per agent (UsageService); absent in tests. */
   limits?: () => ReadModelSnapshot['limits'];
+  /** The Styx account (AccountService, ADR-0026); absent in tests, where nobody is signed in. */
+  account?: () => ReadModelSnapshot['account'];
 }
 
 /** Effective per-project settings: builtin defaults ← app ← `.styx/project.json` overrides stored in `projects.settings_json`. */
@@ -79,6 +82,7 @@ export function buildSnapshot(deps: ProjectionDeps, seq: number): ReadModelSnaps
     checkpoints,
     queues,
     limits: deps.limits?.() ?? {},
+    account: deps.account?.() ?? SIGNED_OUT,
     deploys: deps.deploys?.() ?? [],
   };
 }

@@ -80,6 +80,7 @@ export const copy = {
     /** The App settings sections, in the order of the Settings nav. */
     sections: {
       'app:general': 'General settings',
+      'app:account': 'Styx account',
       'app:editor': 'Editor',
       'app:agents': 'Agent connections',
       'app:skills': 'Skills',
@@ -1741,6 +1742,38 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       stopped: '{agent} has stopped · Snake is paused at {n}',
       free: 'Snake is paused at {n}',
     },
+  },
+  /**
+   * The Styx account (ADR-0026). Signing in is optional and changes nothing about how the app works; the pane
+   * says what it is for rather than pressing anyone to sign in.
+   */
+  account: {
+    title: 'Account',
+    /** Settings nav row and pane heading. */
+    signedOutLead:
+      'Sign in to carry your plan and your name across machines. Styx works the same either way.',
+    signInWith: 'Continue with {provider}',
+    providers: { github: 'GitHub', google: 'Google' },
+    /** While the device flow runs. */
+    codeLabel: 'Enter this code in your browser',
+    waiting: 'Waiting for the browser…',
+    openAgain: 'Open the page again',
+    cancel: 'Cancel',
+    expired: 'That code expired before it was used.',
+    denied: 'The sign-in was turned down.',
+    failed: 'Could not reach the Styx API.',
+    /** Signed in. */
+    signedInVia: 'Signed in with {provider}',
+    signedInSince: 'since {when}',
+    plan: 'Plan',
+    plans: { free: 'Free', pro: 'Pro', team: 'Team' },
+    planUntil: 'until {when}',
+    signOut: 'Sign out',
+    refresh: 'Refresh',
+    /** The API could not be reached; the session stands. */
+    stale: 'Offline since {when} · your account still works',
+    /** Where the account is used today, so the pane is honest about what it does. */
+    usedFor: 'Used to sign commits Styx makes when git has no name of its own.',
   },
   general: {
     cancel: 'Cancel',
