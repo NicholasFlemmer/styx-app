@@ -371,7 +371,9 @@ export function buildContainer(opts: ContainerOptions): Container {
     git,
     publisher,
     clock,
-    stopSession: (id) => sessions.stop(id),
+    // The lane is being removed, so the session is finished rather than idle: nothing marks a session done on
+    // its own any more (discrepancy #111), but a session whose workspace is gone is the one exception.
+    endSession: (id) => sessions.markDone(id),
     unwatch: (id) => hunks.unwatch(id),
   });
   const githubAdapter = providers.get('github');

@@ -5,5 +5,5 @@
   { "key": "ctrl+k ctrl+t", "command": "workbench.action.selectTheme", "when": "editorTextFocus" },
   { "key": "", "command": "ignored.empty-key" },
   { "command": "ignored.no-key" },
-  { "key": "alt+z", "command": "-editor.action.toggleWordWrap", },
+  { "key": "alt+z", "command": "-editor.action.toggleWordWrap" }
 ]

@@ -4,5 +4,5 @@
   "editor.fontFamily": "JetBrains Mono, Menlo, monospace",
   "editor.fontSize": 13,
   "github.copilot.enable": { "*": true },
-  "terminal.integrated.env.osx": { "SECRET_LOOKING_KEY": "not read" },
+  "terminal.integrated.env.osx": { "SECRET_LOOKING_KEY": "not read" }
 }

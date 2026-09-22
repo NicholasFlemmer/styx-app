@@ -14,7 +14,12 @@ describe.skipIf(!available)('PtyService', () => {
     const chunks: string[] = [];
     pty.on('data', (_id, d) => chunks.push(d));
     const exited = new Promise<number>((resolve) => pty.on('exit', (_id, code) => resolve(code)));
-    await pty.spawn({ id: 's1', cwd: process.cwd(), shell: '/bin/sh', args: ['-c', 'echo __hello__; exit 3'] });
+    await pty.spawn({
+      id: 's1',
+      cwd: process.cwd(),
+      shell: '/bin/sh',
+      args: ['-c', 'echo __hello__; exit 3'],
+    });
     const code = await exited;
     expect(code).toBe(3);
     expect(chunks.join('')).toContain('__hello__');

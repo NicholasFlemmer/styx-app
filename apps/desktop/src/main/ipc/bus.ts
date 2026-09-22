@@ -94,7 +94,11 @@ export class CommandBus {
     );
   }
 
-  dispatch<N extends CommandName>(sender: SenderInfo, name: N, input: CommandInput<N>): Promise<CommandResult<N>>;
+  dispatch<N extends CommandName>(
+    sender: SenderInfo,
+    name: N,
+    input: CommandInput<N>,
+  ): Promise<CommandResult<N>>;
   dispatch(sender: SenderInfo, name: unknown, input: unknown): Promise<CommandResult>;
   async dispatch(sender: SenderInfo, name: unknown, input: unknown): Promise<CommandResult> {
     if (!this.originAllowed(sender.frameUrl) || !this.deps.isRegistered(sender.senderId)) {

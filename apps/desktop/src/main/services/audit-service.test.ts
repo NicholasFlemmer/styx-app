@@ -13,8 +13,22 @@ function svc() {
 describe('AuditService', () => {
   it('appends hash-chained rows and verifies the chain', () => {
     const { audit } = svc();
-    const a = audit.append({ actorKind: 'you', actorLabel: 'you', action: 'granted', triggeredBy: 'grant sheet', scope: ['read', 'write'], duration: '1h', targetLabel: 'supabase-prod' });
-    const b = audit.append({ actorKind: 'agent', actorLabel: 'Codex', action: 'used', triggeredBy: '$ supabase db push', grantId: a.grantId ?? null });
+    const a = audit.append({
+      actorKind: 'you',
+      actorLabel: 'you',
+      action: 'granted',
+      triggeredBy: 'grant sheet',
+      scope: ['read', 'write'],
+      duration: '1h',
+      targetLabel: 'supabase-prod',
+    });
+    const b = audit.append({
+      actorKind: 'agent',
+      actorLabel: 'Codex',
+      action: 'used',
+      triggeredBy: '$ supabase db push',
+      grantId: a.grantId ?? null,
+    });
     expect(a.seq).toBe(1);
     expect(b.seq).toBe(2);
     expect(b.prevHash).toBe(a.hash);
@@ -34,7 +48,12 @@ describe('AuditService', () => {
 
   it('exports JSON with the chain head', () => {
     const { audit } = svc();
-    const r = audit.append({ actorKind: 'you', actorLabel: 'you', action: 'exported', triggeredBy: 'settings' });
+    const r = audit.append({
+      actorKind: 'you',
+      actorLabel: 'you',
+      action: 'exported',
+      triggeredBy: 'settings',
+    });
     const out = JSON.parse(audit.exportJson()) as { chainHead: string; entries: { id: string }[] };
     expect(out.chainHead).toBe(r.hash);
     expect(out.entries[0]?.id).toBe(r.id);
@@ -61,7 +80,11 @@ describe('AuditService redaction', () => {
     expect(dumped).not.toContain('plain');
     expect(row.triggeredBy).toBe('$ gh auth login --with-token [redacted]');
     expect(row.targetLabel).toBe('label [redacted]');
-    expect(JSON.parse(row.detailJson ?? '{}')).toEqual({ reason: 'use [redacted]', token: '[redacted]', nested: { accessKey: '[redacted]' } });
+    expect(JSON.parse(row.detailJson ?? '{}')).toEqual({
+      reason: 'use [redacted]',
+      token: '[redacted]',
+      nested: { accessKey: '[redacted]' },
+    });
     expect(audit.verifyChain()).toEqual({ ok: true, count: 1 });
   });
 });

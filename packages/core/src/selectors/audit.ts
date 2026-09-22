@@ -57,10 +57,16 @@ export const auditWhat = (entry: AuditEntry, policies: readonly Policy[]): strin
         : fill(copy.audit.actions.usedAuto, { scope: scopes, n: ord });
     }
     case 'granted': {
-      const base = fill(copy.audit.actions.granted, { scopes, agent, duration: entry.duration ?? copy.audit.none });
+      const base = fill(copy.audit.actions.granted, {
+        scopes,
+        agent,
+        duration: entry.duration ?? copy.audit.none,
+      });
       const ord = policyOrd(policies, entry);
       // Spec §1: policy auto-approvals are logged "auto: policy #n".
-      return entry.detail['decidedBy'] === 'policy' && ord !== null ? `${base} (${fill(copy.policies.autoLabel, { n: ord })})` : base;
+      return entry.detail['decidedBy'] === 'policy' && ord !== null
+        ? `${base} (${fill(copy.policies.autoLabel, { n: ord })})`
+        : base;
     }
     case 'denied':
       return fill(copy.audit.actions.denied, { scopes, agent });

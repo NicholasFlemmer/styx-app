@@ -424,14 +424,19 @@ describe('ChatPane', () => {
     const atRest = fixtures.demoReadModel();
     const codexRow = atRest.sessions.byId[codex];
     if (codexRow === undefined) throw new Error('fixture');
-    useReadModel.getState().replaceModel(
-      { ...atRest, sessions: upsertRows(atRest.sessions, [{ ...codexRow, state: 'idle' }]) },
-      'connected',
-    );
+    useReadModel
+      .getState()
+      .replaceModel(
+        { ...atRest, sessions: upsertRows(atRest.sessions, [{ ...codexRow, state: 'idle' }]) },
+        'connected',
+      );
     useUiStore.getState().setSession(acme, codex);
     const { unmount } = render(<ChatPane projectId={acme} />);
-    expect(screen.getByRole('button', { name: 'Model' })).toBeTruthy();
+    // Nothing to configure on a pty runner, but an unfinished session can always be marked done
+    // (owner request, discrepancy #111), so that verb stands in for the prototype's static hint.
     expect(screen.queryByRole('combobox', { name: 'Permissions' })).toBeNull();
+    expect(screen.getByRole('button', { name: copy.chat.controls.markDone })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Model' })).toBeNull();
     unmount();
     const model = fixtures.demoReadModel();
     const s = model.sessions.byId[claude];
@@ -451,7 +456,32 @@ describe('ChatPane', () => {
     render(<ChatPane projectId={acme} />);
     expect(screen.queryByRole('combobox', { name: 'Permissions' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Stop · esc' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Model' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: copy.chat.controls.markDone })).toBeTruthy();
+  });
+
+  it('Mark done sends session.markDone, and a finished session offers nothing (discrepancy #111)', () => {
+    const model = fixtures.demoReadModel();
+    const s = model.sessions.byId[claude];
+    if (s === undefined) throw new Error('fixture');
+    // The agent stopped and its CLI exited: idle, no process. Stop is gone; Mark done is the verb.
+    useReadModel
+      .getState()
+      .replaceModel(
+        { ...model, sessions: upsertRows(model.sessions, [{ ...s, state: 'idle', pid: null }]) },
+        'connected',
+      );
+    const { unmount } = render(<ChatPane projectId={acme} />);
+    expect(screen.queryByRole('button', { name: 'Stop · esc' })).toBeNull();
+    const done = screen.getByRole('button', { name: copy.chat.controls.markDone });
+    expect(done.getAttribute('title')).toBe(copy.chat.controls.markDoneTitle);
+    fireEvent.click(done);
+    expect(commands).toContainEqual({ name: 'session.markDone', input: { sessionId: claude } });
+    unmount();
+    // Mid-turn, Stop is the verb that matters; Mark done would end the run under the agent's feet.
+    useReadModel.getState().replaceModel(model, 'connected');
+    render(<ChatPane projectId={acme} />);
+    expect(screen.getByRole('button', { name: 'Stop · esc' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: copy.chat.controls.markDone })).toBeNull();
   });
 
   it('renders a full model name on the session as an extra option; Stop hides once the turn ends', () => {
@@ -530,12 +560,13 @@ describe('ChatPane', () => {
     );
   });
 
-  it('a Codex session still on the pty keeps the static Model ▾ hint', () => {
+  it('a Codex session still on the pty has nothing to configure (Mark done aside)', () => {
     useReadModel.getState().replaceModel(codexLive({ runner: 'pty' }), 'connected');
     useUiStore.getState().setSession(acme, codex);
     render(<ChatPane projectId={acme} />);
-    expect(screen.getByRole('button', { name: 'Model' })).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: 'Model' })).toBeNull();
     expect(screen.queryByRole('combobox', { name: 'Effort' })).toBeNull();
+    expect(screen.getByRole('button', { name: copy.chat.controls.markDone })).toBeTruthy();
   });
 
   const secretQuestion: AskQuestion = {

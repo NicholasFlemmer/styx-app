@@ -8,9 +8,17 @@ import type { CredentialVault } from '../services/credential-vault';
 export function fixtureSecretFor(target: Pick<Target, 'provider'>): string {
   switch (target.provider) {
     case 'aws':
-      return JSON.stringify({ accessKeyId: 'FIXTURE-ACCESS-KEY', secretAccessKey: 'FIXTURE-SECRET', region: 'us-east-1' });
+      return JSON.stringify({
+        accessKeyId: 'FIXTURE-ACCESS-KEY',
+        secretAccessKey: 'FIXTURE-SECRET',
+        region: 'us-east-1',
+      });
     case 'gcp':
-      return JSON.stringify({ client_email: 'fixture@example.iam.gserviceaccount.com', private_key: 'FIXTURE', project_id: 'fixture' });
+      return JSON.stringify({
+        client_email: 'fixture@example.iam.gserviceaccount.com',
+        private_key: 'FIXTURE',
+        project_id: 'fixture',
+      });
     case 'ssh':
       return JSON.stringify({ keyPath: '/dev/null' });
     default:

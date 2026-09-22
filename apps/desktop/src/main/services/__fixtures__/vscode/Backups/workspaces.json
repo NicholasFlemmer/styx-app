@@ -1,1 +1,5 @@
-{"rootURIWorkspaces":[{"id":"x","configURIPath":"file:///Users/me/work/infra/infra.code-workspace"}],"folderWorkspaceInfos":[{"folderUri":"file:///Users/me/gmaps-scraper"}],"emptyWorkspaceInfos":[]}
+{
+  "rootURIWorkspaces": [{ "id": "x", "configURIPath": "file:///Users/me/work/infra/infra.code-workspace" }],
+  "folderWorkspaceInfos": [{ "folderUri": "file:///Users/me/gmaps-scraper" }],
+  "emptyWorkspaceInfos": []
+}

@@ -4,5 +4,5 @@
   "editor.fontFamily": "Berkeley Mono, Menlo, monospace",
   "editor.fontSize": 13,
   "cursor.cpp.disabledLanguages": ["plaintext"],
-  "cursorpyright.analysis.autoImportCompletions": true,
+  "cursorpyright.analysis.autoImportCompletions": true
 }

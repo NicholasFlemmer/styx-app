@@ -13,7 +13,14 @@ export { StyxSshAgent } from './ssh-agent';
 export class ProviderRegistry {
   private readonly adapters: Map<Provider, ProviderAdapter>;
   constructor(deps: AdapterDeps, ssh: SshAdapterOptions = {}) {
-    const list: ProviderAdapter[] = [new GitHubAdapter(deps), new VercelAdapter(deps), new SupabaseAdapter(deps), new AwsAdapter(deps), new GcpAdapter(deps), new SshAdapter(deps, ssh)];
+    const list: ProviderAdapter[] = [
+      new GitHubAdapter(deps),
+      new VercelAdapter(deps),
+      new SupabaseAdapter(deps),
+      new AwsAdapter(deps),
+      new GcpAdapter(deps),
+      new SshAdapter(deps, ssh),
+    ];
     this.adapters = new Map(list.map((a) => [a.provider, a]));
   }
   get(provider: Provider): ProviderAdapter {

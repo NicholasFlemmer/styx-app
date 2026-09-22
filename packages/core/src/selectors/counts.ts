@@ -17,12 +17,10 @@ export const workingCount = (model: ReadModel): number =>
 /** Targets in the project whose derived state is `locked`. */
 /** Targets an agent cannot use right now: `locked` plus `expired` (the prototype's error state counts both). */
 export const lockedCount = (model: ReadModel, projectId: ProjectId, now: number): number =>
-  rows(model.targets).filter(
-    (t) => {
-      const kind = targetDerivedState(model, t.id, now).kind;
-      return t.projectId === projectId && (kind === 'locked' || kind === 'expired');
-    },
-  ).length;
+  rows(model.targets).filter((t) => {
+    const kind = targetDerivedState(model, t.id, now).kind;
+    return t.projectId === projectId && (kind === 'locked' || kind === 'expired');
+  }).length;
 
 /** Live grants across all projects (includes persistent `always` grants). */
 export const activeGrants = (model: ReadModel, now: number): Grant[] =>

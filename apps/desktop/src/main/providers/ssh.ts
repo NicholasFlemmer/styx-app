@@ -4,7 +4,16 @@ import { join } from 'node:path';
 import { execa } from 'execa';
 import { makeCredentialRef } from '../services/credential-vault';
 import { StyxSshAgent } from './ssh-agent';
-import type { AdapterDeps, ConnectInput, GrantInfo, IssuedCredential, ProviderAdapter, Scope, TargetInfo, TestResult } from './types';
+import type {
+  AdapterDeps,
+  ConnectInput,
+  GrantInfo,
+  IssuedCredential,
+  ProviderAdapter,
+  Scope,
+  TargetInfo,
+  TestResult,
+} from './types';
 import { hasVerb } from './types';
 
 export interface SshAdapterOptions {
@@ -32,7 +41,10 @@ export class SshAdapter implements ProviderAdapter {
   readonly tools = ['ssh', 'scp', 'rsync', 'sftp'];
   private readonly agents = new Map<string, StyxSshAgent>();
 
-  constructor(private readonly deps: AdapterDeps, private readonly opts: SshAdapterOptions = {}) {}
+  constructor(
+    private readonly deps: AdapterDeps,
+    private readonly opts: SshAdapterOptions = {},
+  ) {}
 
   async connect(input: ConnectInput, targetId: string) {
     if (input.method !== 'ssh') throw new Error('SSH connect expects host/user/key');
@@ -40,8 +52,15 @@ export class SshAdapter implements ProviderAdapter {
     const keyPath = expandHome(input.keyPath);
     await readFile(keyPath, 'utf8'); // key must be readable now; it is read again per grant, never copied
     const ref = makeCredentialRef('ssh', targetId, 'ssh-key-path');
-    await this.deps.vault.set(ref, JSON.stringify({ keyPath, ...(input.passphrase ? { passphrase: input.passphrase } : {}) }));
-    return { credentialRef: ref, config: { host: input.host, user: input.user, port: input.port ?? 22 }, label: `SSH ${input.user}@${input.host}` };
+    await this.deps.vault.set(
+      ref,
+      JSON.stringify({ keyPath, ...(input.passphrase ? { passphrase: input.passphrase } : {}) }),
+    );
+    return {
+      credentialRef: ref,
+      config: { host: input.host, user: input.user, port: input.port ?? 22 },
+      label: `SSH ${input.user}@${input.host}`,
+    };
   }
 
   private async secret(target: TargetInfo): Promise<{ keyPath: string; passphrase?: string }> {
@@ -55,7 +74,10 @@ export class SshAdapter implements ProviderAdapter {
 
   private socketPath(grantId: string): string {
     if ((this.opts.platform ?? process.platform) === 'win32') return `\\\\.\\pipe\\styx-agent-${grantId}`;
-    return join(this.opts.socketDir ?? join(tmpdir(), `styx-${process.getuid?.() ?? 0}`), `agent-${grantId}.sock`);
+    return join(
+      this.opts.socketDir ?? join(tmpdir(), `styx-${process.getuid?.() ?? 0}`),
+      `agent-${grantId}.sock`,
+    );
   }
 
   async test(target: TargetInfo): Promise<TestResult> {
@@ -66,8 +88,25 @@ export class SshAdapter implements ProviderAdapter {
         const host = String(target.config['host']);
         const user = String(target.config['user']);
         const port = String(target.config['port'] ?? 22);
-        const r = await execa('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', '-o', 'StrictHostKeyChecking=accept-new', '-p', port, `${user}@${host}`, 'true'], { env: { ...process.env, ...issued.env }, reject: false, timeout: 15_000 });
-        return r.exitCode === 0 ? { ok: true, identity: `${user}@${host}` } : { ok: false, error: String(r.stderr ?? '').trim() || `ssh exited ${r.exitCode}` };
+        const r = await execa(
+          'ssh',
+          [
+            '-o',
+            'BatchMode=yes',
+            '-o',
+            'ConnectTimeout=5',
+            '-o',
+            'StrictHostKeyChecking=accept-new',
+            '-p',
+            port,
+            `${user}@${host}`,
+            'true',
+          ],
+          { env: { ...process.env, ...issued.env }, reject: false, timeout: 15_000 },
+        );
+        return r.exitCode === 0
+          ? { ok: true, identity: `${user}@${host}` }
+          : { ok: false, error: String(r.stderr ?? '').trim() || `ssh exited ${r.exitCode}` };
       } finally {
         await this.revoke(issued);
       }
@@ -83,8 +122,12 @@ export class SshAdapter implements ProviderAdapter {
     const socketPath = this.socketPath(grant.id);
     await agent.start(socketPath, pem, passphrase);
     this.agents.set(grant.id, agent);
-    const env: Record<string, string> = { SSH_AUTH_SOCK: socketPath, GIT_SSH_COMMAND: 'ssh -o IdentitiesOnly=no' };
-    if (typeof target.config['host'] === 'string') env['STYX_SSH_HOST'] = `${String(target.config['user'] ?? '')}@${target.config['host']}`;
+    const env: Record<string, string> = {
+      SSH_AUTH_SOCK: socketPath,
+      GIT_SSH_COMMAND: 'ssh -o IdentitiesOnly=no',
+    };
+    if (typeof target.config['host'] === 'string')
+      env['STYX_SSH_HOST'] = `${String(target.config['user'] ?? '')}@${target.config['host']}`;
     return { kind: 'ssh-agent', socketPath, env, expiresAt: grant.expiresAt, scoped: true, handle: grant.id };
   }
 
@@ -114,12 +157,15 @@ export class SshAdapter implements ProviderAdapter {
     if (tool !== 'ssh') return hasVerb(argv, /^--delete(-[a-z]+)?$/) ? ['delete'] : ['write'];
     // ssh [-opts] user@host [command…] — classify the remote command only.
     const hostIdx = argv.findIndex((a) => !a.startsWith('-') && a.includes('@'));
-    const remote = (hostIdx >= 0 ? argv.slice(hostIdx + 1) : argv.filter((a) => !a.startsWith('-')).slice(1)).join(' ');
+    const remote = (
+      hostIdx >= 0 ? argv.slice(hostIdx + 1) : argv.filter((a) => !a.startsWith('-')).slice(1)
+    ).join(' ');
     if (/\b(rm -rf|rm -r|rm -fr|dropdb|DROP |truncate|mkfs|shred)\b/i.test(remote)) return ['delete'];
     // Fail closed: shell metacharacters, command chains, pipes, redirects, or substitutions could hide anything
     // behind a benign-looking first word (`ls; rm …`), so they can never classify as read.
     if (/[;&|$`\n><]/.test(remote) || /\(|\{/.test(remote)) return ['write'];
-    if (/\b(deploy|systemctl restart|docker compose up|pm2 (restart|reload))\b/.test(remote)) return ['deploy'];
+    if (/\b(deploy|systemctl restart|docker compose up|pm2 (restart|reload))\b/.test(remote))
+      return ['deploy'];
     // A bare `ssh host` is an interactive login: anything can happen in it.
     if (remote === '') return ['write'];
     if (/^(ls|cat|tail|head|df|uptime|true|hostname|whoami)\b/.test(remote)) return ['read'];

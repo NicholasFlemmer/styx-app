@@ -122,7 +122,17 @@ function BoardCardView({ card, onFocusCard }: { card: BoardCard; onFocusCard: (i
             >
               {copy.board.actions.archive}
             </Button>
-          ) : null}
+          ) : card.needs ? null : (
+            // The Done column fills only when the person says so (owner request, discrepancy #111); a card with
+            // an ask on it keeps its two verbs, and answering comes first.
+            <Button
+              variant="ghost"
+              onClick={() => void command('session.markDone', { sessionId: card.sessionId })}
+              data-card-action="markDone"
+            >
+              {copy.board.actions.markDone}
+            </Button>
+          )}
         </>
       }
     />

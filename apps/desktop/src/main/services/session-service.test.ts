@@ -281,13 +281,19 @@ describe('SessionService spawn + stream runner', () => {
     expect(stream.permissions).toEqual([{ id: session.id, requestId: 'req-1', allow: true }]);
     expect(a.sessions.get(session.id)?.state).toBe('working');
 
-    // stop → kill → exit → done with ended_at + exit code
+    // stop → kill → exit → idle with the exit code and no process (discrepancy #111: only the person
+    // finishes a session, so the lane stays this agent's until Mark done).
     a.sessions.stop(session.id);
+    const stopped = a.sessions.get(session.id)!;
+    expect(stopped.state).toBe('idle');
+    expect(stopped.endedAt).toBeNull();
+    expect(stopped.exitCode).toBe(0);
+    expect(stopped.pid).toBeNull();
+    a.sessions.markDone(session.id);
     const done = a.sessions.get(session.id)!;
     expect(done.state).toBe('done');
     expect(done.endedAt).toBe(DEMO_NOW);
     expect(done.exitCode).toBe(0);
-    expect(done.pid).toBeNull();
     await vi.waitFor(() => expect(existsSync(join(t!.userData, 'agents', session.id))).toBe(false));
   });
 
@@ -316,7 +322,8 @@ describe('SessionService spawn + stream runner', () => {
       message: 'Session stopped',
     });
     expect(a.repos.pendingAsks.openBySession(session.id)).toEqual([]);
-    expect(a.sessions.get(session.id)?.state).toBe('done');
+    // Stopping ends the run, not the session (discrepancy #111).
+    expect(a.sessions.get(session.id)?.state).toBe('idle');
   });
 
   it('auto-approve covers edits inside the worktree only: outside paths, a hidden policy file, a missing path and a titled ACP tool all ask', async () => {
@@ -843,9 +850,12 @@ describe('SessionService pty runner + CLI hooks', () => {
 
     a.sessions.onHook(session.id, 'claude', 'SessionEnd', { reason: 'clear' });
     expect(a.sessions.get(session.id)?.state).toBe('idle');
+    // The CLI ended its own session: idle, not done — the person decides that (discrepancy #111).
     a.sessions.onHook(session.id, 'claude', 'SessionEnd', { reason: 'exit' });
-    expect(a.sessions.get(session.id)).toMatchObject({ state: 'done', exitCode: null });
+    expect(a.sessions.get(session.id)).toMatchObject({ state: 'idle', exitCode: null, pid: null });
     pty.exit(session.id, 3);
+    expect(a.sessions.get(session.id)).toMatchObject({ state: 'idle', exitCode: 3 });
+    a.sessions.markDone(session.id);
     expect(a.sessions.get(session.id)).toMatchObject({ state: 'done', exitCode: 3 });
   });
 
@@ -935,6 +945,16 @@ describe('SessionService pty runner + CLI hooks', () => {
       error: { code: 'invalid-transition' },
     });
     expect(await a.bus.dispatch(sender, 'session.stop', { sessionId: session.id })).toMatchObject({
+      ok: true,
+    });
+    // Stop ends the run; the session waits in its lane until it is marked done (discrepancy #111), and
+    // archiving still refuses until then.
+    expect(a.sessions.get(session.id)).toMatchObject({ state: 'idle', endedAt: null });
+    expect(await a.bus.dispatch(sender, 'session.archive', { sessionId: session.id })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-transition' },
+    });
+    expect(await a.bus.dispatch(sender, 'session.markDone', { sessionId: session.id })).toMatchObject({
       ok: true,
     });
     expect(a.sessions.get(session.id)).toMatchObject({ state: 'done', endedAt: DEMO_NOW });
@@ -1035,6 +1055,7 @@ describe('SessionService Claude Code parity (stream)', () => {
       error: { code: 'invalid-transition' },
     });
     await a.bus.dispatch(sender, 'session.stop', { sessionId: session.id });
+    await a.bus.dispatch(sender, 'session.markDone', { sessionId: session.id });
     expect(a.sessions.get(session.id)).toMatchObject({ state: 'done', endedAt: DEMO_NOW, exitCode: 0 });
     a.repos.worktrees.upsert({ ...a.repos.worktrees.get(worktree.id)!, owner: { kind: 'user' } });
 
@@ -1042,13 +1063,15 @@ describe('SessionService Claude Code parity (stream)', () => {
     expect(await a.bus.dispatch(sender, 'session.reopen', { sessionId: session.id })).toMatchObject({
       ok: true,
     });
+    // Reopened and relaunched, but idle: a launch is not a turn, so the agent waits for a message rather than
+    // appearing to work on nothing (owner request, discrepancy #111).
     expect(a.sessions.get(session.id)).toMatchObject({
-      state: 'working',
+      state: 'idle',
       endedAt: null,
       exitCode: null,
       pid: 777,
       cliSessionId: 'cli-sess-3',
-      lastActivityAt: DEMO_NOW + 5_000,
+      lastActivityAt: DEMO_NOW,
     });
     // Same worktree, taken back; the CLI resumes its own conversation and replays nothing.
     expect(a.repos.worktrees.get(worktree.id)?.owner).toEqual({ kind: 'session', sessionId: session.id });
@@ -1072,6 +1095,7 @@ describe('SessionService Claude Code parity (stream)', () => {
 
     // Once archived it stays archived; a session whose CLI never reported an id says it starts over.
     await a.bus.dispatch(sender, 'session.stop', { sessionId: session.id });
+    await a.bus.dispatch(sender, 'session.markDone', { sessionId: session.id });
     a.sessions.archive(session.id);
     expect(await a.bus.dispatch(sender, 'session.reopen', { sessionId: session.id })).toMatchObject({
       ok: false,
@@ -1079,6 +1103,7 @@ describe('SessionService Claude Code parity (stream)', () => {
     });
     const fresh = await a.sessions.spawn(spawnInput('claude', ids.worktree.testFlaky, ''));
     a.sessions.stop(fresh.session.id);
+    a.sessions.markDone(fresh.session.id);
     await a.sessions.reopen(fresh.session.id);
     expect(stream.spawned[3]!.args).not.toContain('--resume');
     expect(systemLines(a, fresh.session.id)).toEqual([
@@ -1787,7 +1812,8 @@ describe('SessionService partial messages (stream rows patched live)', () => {
       a.publisher.flush();
       expect(deltas(win, 'transcript.patch').length).toBe(patchesBefore + 1); // the trailing text flushed once
       expect(deltas(win, 'transcript.replace')).toHaveLength(1);
-      expect(a.sessions.get(id)?.state).toBe(how === 'interrupt' ? 'idle' : 'done');
+      // Every one of these ends the run, and none of them finishes the session (discrepancy #111).
+      expect(a.sessions.get(id)?.state).toBe('idle');
       stream.effect(id, { type: 'streamDelta', key: 'm:1', text: '…more' });
       stream.effect(id, { type: 'streamStop', key: 'm:1' });
       stream.effect(id, { type: 'streamFinal', key: 'm:1', body: 'Partial answer…more' });
@@ -2372,7 +2398,7 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
     await a.sessions.sendMessage(session.id, 'orphan');
     a.sessions.stop(session.id);
-    expect(a.sessions.get(session.id)?.state).toBe('done');
+    expect(a.sessions.get(session.id)?.state).toBe('idle');
     expect(a.repos.queuedMessages.bySession(session.id)).toEqual([]);
     a.publisher.flush();
     expect(win.events('queue.returned')).toEqual([{ sessionId: session.id, bodies: ['orphan'] }]);
@@ -2430,7 +2456,10 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     const { app: a } = app();
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
     await expect(a.sessions.sendMessage(session.id, '')).rejects.toMatchObject({ code: 'invalid-input' });
+    // Stop alone leaves the session open for another message (it relaunches the CLI); only a session the
+    // person marked done refuses one (discrepancy #111).
     a.sessions.stop(session.id);
+    a.sessions.markDone(session.id);
     await expect(a.sessions.sendMessage(session.id, 'late')).rejects.toMatchObject({
       code: 'invalid-transition',
     });

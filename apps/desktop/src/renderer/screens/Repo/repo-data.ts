@@ -1,4 +1,5 @@
 import {
+  landLabelOf,
   laneOverlapSummary,
   projectSettingsOfOrDefault,
   agentLabel,
@@ -19,6 +20,8 @@ import {
 import type { DotTone } from '@styx/ui';
 
 const DAY = 24 * 60 * 60_000;
+
+export { landLabelOf };
 
 export type LaneAction = 'open' | 'diff' | 'resolve' | 'archive' | 'undo-merge' | 'stop-merge' | 'undo-land';
 
@@ -113,18 +116,6 @@ export const publishLabelOf = (
 ): string | null => {
   if (w.branch === null || w.conflict !== null || w.mergedAt !== null) return null;
   return w.isMain || hasOpenPr(w.pr) ? copy.publish.button : copy.publish.buttonPr;
-};
-
-/** The lane's landing verb (ADR-0025 phase C), by the project's merging mode; see `Lane.landLabel`. */
-export const landLabelOf = (
-  w: Pick<Worktree, 'branch' | 'isMain' | 'conflict' | 'mergedAt' | 'resolution'>,
-  integration: 'auto' | 'review',
-  base: string,
-): string | null => {
-  if (w.isMain || w.branch === null || w.conflict !== null || w.mergedAt !== null) return null;
-  if (w.resolution !== null && (w.resolution.state === 'resolving' || w.resolution.state === 'checking'))
-    return null;
-  return integration === 'auto' ? copy.repo.actions.land : fill(copy.repo.actions.mergeIntoBase, { base });
 };
 
 /** Lane order (prototype): main, then live worktrees in model order, merged ones last (they only await Archive). */

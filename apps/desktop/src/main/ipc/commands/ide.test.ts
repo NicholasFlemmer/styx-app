@@ -225,7 +225,9 @@ describe('detect.setBinary (Locate binary)', () => {
     const { app, sender } = t;
     const folder = join(home, '.claude');
     mkdirSync(folder);
-    expect(await app.bus.dispatch(sender, 'detect.setBinary', { agent: 'claude', path: folder })).toMatchObject({
+    expect(
+      await app.bus.dispatch(sender, 'detect.setBinary', { agent: 'claude', path: folder }),
+    ).toMatchObject({
       ok: false,
       error: {
         code: 'invalid-input',
@@ -234,14 +236,20 @@ describe('detect.setBinary (Locate binary)', () => {
     });
     const settings = join(folder, 'settings.json');
     writeFileSync(settings, '{}');
-    expect(await app.bus.dispatch(sender, 'detect.setBinary', { agent: 'claude', path: settings })).toMatchObject({
+    expect(
+      await app.bus.dispatch(sender, 'detect.setBinary', { agent: 'claude', path: settings }),
+    ).toMatchObject({
       ok: false,
-      error: { message: `${settings} did not run as Claude Code (no version reported). Pick the Claude Code executable itself.` },
+      error: {
+        message: `${settings} did not run as Claude Code (no version reported). Pick the Claude Code executable itself.`,
+      },
     });
     const codex = join(home, 'codex');
     writeFileSync(codex, '#!/bin/sh\necho 0.42.0\n');
     chmodSync(codex, 0o755);
-    expect(await app.bus.dispatch(sender, 'detect.setBinary', { agent: 'claude', path: codex })).toMatchObject({
+    expect(
+      await app.bus.dispatch(sender, 'detect.setBinary', { agent: 'claude', path: codex }),
+    ).toMatchObject({
       ok: false,
       error: { message: `${codex} is the Codex CLI, not Claude Code.` },
     });

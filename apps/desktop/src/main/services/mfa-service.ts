@@ -14,7 +14,9 @@ export interface MfaProvider {
 /** macOS: Touch ID via Electron's systemPreferences (LocalAuthentication); the OS handles the password fallback. */
 export class TouchIdProvider implements MfaProvider {
   label = 'Touch ID';
-  constructor(private readonly sp: { canPromptTouchID(): boolean; promptTouchID(reason: string): Promise<void> }) {}
+  constructor(
+    private readonly sp: { canPromptTouchID(): boolean; promptTouchID(reason: string): Promise<void> },
+  ) {}
   async available(): Promise<boolean> {
     return this.sp.canPromptTouchID();
   }
@@ -54,7 +56,10 @@ const defaultPsRunner: PsRunner = async (file, args) => {
 /** Windows Hello via WinRT UserConsentVerifier. Prefers the native addon when present, else a PowerShell 5.1 shim. */
 export class WindowsHelloProvider implements MfaProvider {
   label = 'Windows Hello';
-  private native: { checkAvailability(): Promise<string>; requestVerification(reason: string): Promise<string> } | null = null;
+  private native: {
+    checkAvailability(): Promise<string>;
+    requestVerification(reason: string): Promise<string>;
+  } | null = null;
 
   constructor(private readonly opts: { run?: PsRunner; tmpDir?: string; loadNative?: boolean } = {}) {}
 

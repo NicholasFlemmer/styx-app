@@ -19,7 +19,7 @@ const bus = () => {
       screenReader: false,
       dnd: false,
       onboardingDone: true,
-    trackAgentEdits: false,
+      trackAgentEdits: false,
     },
   }));
   b.register('project.select', ({ projectId }) => {
@@ -87,11 +87,25 @@ describe('CommandBus', () => {
 describe('CommandBus.dispatchInternal', () => {
   it('serves main-process callers without a sender frame but still validates name and input', async () => {
     const b = bus();
-    expect(await b.dispatchInternal('settings.get', {})).toMatchObject({ ok: true, value: { app: { theme: 'dark' } } });
-    expect(await b.dispatchInternal('nope.command' as never, {} as never)).toMatchObject({ ok: false, error: { code: 'invalid-input' } });
-    expect(await b.dispatchInternal('project.select', { projectId: 42 } as never)).toMatchObject({ ok: false, error: { code: 'invalid-input' } });
-    expect(await b.dispatchInternal('project.select', { projectId: 'boom' } as never)).toMatchObject({ ok: false, error: { code: 'not-found' } });
+    expect(await b.dispatchInternal('settings.get', {})).toMatchObject({
+      ok: true,
+      value: { app: { theme: 'dark' } },
+    });
+    expect(await b.dispatchInternal('nope.command' as never, {} as never)).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-input' },
+    });
+    expect(await b.dispatchInternal('project.select', { projectId: 42 } as never)).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-input' },
+    });
+    expect(await b.dispatchInternal('project.select', { projectId: 'boom' } as never)).toMatchObject({
+      ok: false,
+      error: { code: 'not-found' },
+    });
     // The renderer path is unchanged: a fake sender is still refused.
-    expect(await b.dispatch({ senderId: -1, frameUrl: 'file://internal' }, 'settings.get', {})).toMatchObject({ ok: false, error: { code: 'forbidden' } });
+    expect(await b.dispatch({ senderId: -1, frameUrl: 'file://internal' }, 'settings.get', {})).toMatchObject(
+      { ok: false, error: { code: 'forbidden' } },
+    );
   });
 });

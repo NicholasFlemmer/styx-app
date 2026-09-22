@@ -49,7 +49,10 @@ const pendingOf = (t: TestApp): AgentChange[] =>
 
 const read = (repo: string, file: string): string => readFileSync(join(repo, file), 'utf8');
 
-const hunkRow = (t: TestApp, over: Partial<AgentChange> & Pick<AgentChange, 'id' | 'file' | 'hunkHash'>): AgentChange => {
+const hunkRow = (
+  t: TestApp,
+  over: Partial<AgentChange> & Pick<AgentChange, 'id' | 'file' | 'hunkHash'>,
+): AgentChange => {
   const now = t.clock.now();
   return {
     sessionId: claude,
@@ -96,7 +99,10 @@ describe('HunkService', () => {
 
     expect(read(repo, 'checkout.ts')).toBe('a\nb\nc\n');
     expect((await t.app.git.status(repo)).clean).toBe(true);
-    expect(t.app.repos.agentChanges.get(hunk.id)).toMatchObject({ status: 'rejected', decidedAt: t.clock.now() });
+    expect(t.app.repos.agentChanges.get(hunk.id)).toMatchObject({
+      status: 'rejected',
+      decidedAt: t.clock.now(),
+    });
     expect(pendingOf(t)).toEqual([]);
     // The rescan after the revert zeroes the worktree counters and re-publishes the session's hunks.
     expect(t.app.repos.worktrees.get(fixCheckout)?.changes).toEqual({ added: 0, removed: 0, files: 0 });
@@ -104,7 +110,10 @@ describe('HunkService', () => {
     expect(events.length).toBeGreaterThanOrEqual(2);
     expect(events.at(-1)).toEqual({ sessionId: claude, worktreeId: fixCheckout, pending: 0 });
     expect(
-      t.win.batches().flatMap((b) => b.deltas).filter((d) => d.op === 'hunks.replace').length,
+      t.win
+        .batches()
+        .flatMap((b) => b.deltas)
+        .filter((d) => d.op === 'hunks.replace').length,
     ).toBeGreaterThanOrEqual(2);
   });
 
@@ -114,7 +123,11 @@ describe('HunkService', () => {
     writeFileSync(join(repo, 'checkout.ts'), 'a\nB\nc\n');
     writeFileSync(join(repo, 'pay.ts'), 'one\ntwo\nthree\n');
     await t.app.hunks.rescan(claude);
-    expect(pendingOf(t).map((h) => h.file).sort()).toEqual(['checkout.ts', 'pay.ts']);
+    expect(
+      pendingOf(t)
+        .map((h) => h.file)
+        .sort(),
+    ).toEqual(['checkout.ts', 'pay.ts']);
 
     expect(await t.app.hunks.revertAll(claude)).toBe(2);
 
@@ -139,9 +152,19 @@ describe('HunkService', () => {
     t.app.git.applyPatch = async (_path, patch) => {
       gitCalls.push(patch);
     };
-    const policy = hunkRow(t, { id: 'h-policy' as AgentChange['id'], file: '.styx/project.json', hunkHash: 'hp' });
+    const policy = hunkRow(t, {
+      id: 'h-policy' as AgentChange['id'],
+      file: '.styx/project.json',
+      hunkHash: 'hp',
+    });
     const code = hunkRow(t, { id: 'h-code' as AgentChange['id'], file: 'src/a.ts', hunkHash: 'hc' });
-    const reverted = hunkRow(t, { id: 'h-reverted' as AgentChange['id'], file: 'src/b.ts', hunkHash: 'hr', status: 'rejected', decidedAt: 1 });
+    const reverted = hunkRow(t, {
+      id: 'h-reverted' as AgentChange['id'],
+      file: 'src/b.ts',
+      hunkHash: 'hr',
+      status: 'rejected',
+      decidedAt: 1,
+    });
     for (const h of [policy, code, reverted]) t.app.repos.agentChanges.upsert(h);
     const pendingBefore = pendingOf(t).length; // 3 demo hunks + policy + code
     expect(pendingBefore).toBe(5);
@@ -152,12 +175,22 @@ describe('HunkService', () => {
 
     expect(n).toBe(pendingBefore - 1);
     expect(gitCalls).toEqual([]);
-    expect(t.app.repos.agentChanges.get('h-code')).toMatchObject({ status: 'accepted', decidedAt: fixtures.DEMO_NOW + 60_000 });
+    expect(t.app.repos.agentChanges.get('h-code')).toMatchObject({
+      status: 'accepted',
+      decidedAt: fixtures.DEMO_NOW + 60_000,
+    });
     expect(t.app.repos.agentChanges.get('h-policy')).toMatchObject({ status: 'pending', decidedAt: null });
     expect(t.app.repos.agentChanges.get('h-reverted')).toMatchObject({ status: 'rejected', decidedAt: 1 });
     expect(pendingOf(t).map((h) => h.id)).toEqual(['h-policy']);
-    expect(t.win.events('hunks.changed')).toEqual([{ sessionId: claude, worktreeId: fixCheckout, pending: 1 }]);
-    expect(t.win.batches().flatMap((b) => b.deltas).some((d) => d.op === 'hunks.replace')).toBe(true);
+    expect(t.win.events('hunks.changed')).toEqual([
+      { sessionId: claude, worktreeId: fixCheckout, pending: 1 },
+    ]);
+    expect(
+      t.win
+        .batches()
+        .flatMap((b) => b.deltas)
+        .some((d) => d.op === 'hunks.replace'),
+    ).toBe(true);
 
     // Nothing pending but the policy file: done is a no-op and publishes nothing.
     t.win.sent.length = 0;

@@ -20,6 +20,8 @@ function backup(file: string): void {
   const dir = dirname(file);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   copyFileSync(file, join(dir, `styx.db.bak-${stamp}`));
-  const baks = readdirSync(dir).filter((f) => f.startsWith('styx.db.bak-')).sort();
+  const baks = readdirSync(dir)
+    .filter((f) => f.startsWith('styx.db.bak-'))
+    .sort();
   for (const old of baks.slice(0, Math.max(0, baks.length - 3))) unlinkSync(join(dir, old));
 }

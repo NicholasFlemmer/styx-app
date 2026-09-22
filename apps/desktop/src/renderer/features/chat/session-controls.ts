@@ -210,6 +210,11 @@ export interface SessionControls {
   pause: boolean;
   /** The session is already held: the control reads Resume. */
   paused: boolean;
+  /**
+   * `Mark done` (owner request, discrepancy #111): offered for every session that is not finished yet, whether
+   * or not a process is attached — the common case is an agent that has stopped, whose CLI has already exited.
+   */
+  markDone: boolean;
 }
 
 const NO_CONTROLS: SessionControls = {
@@ -220,6 +225,7 @@ const NO_CONTROLS: SessionControls = {
   stop: false,
   pause: false,
   paused: false,
+  markDone: false,
 };
 
 /** A process is attached and the session has not ended: live settings can reach it. */
@@ -229,7 +235,11 @@ export const isLive = (session: Pick<Session, 'pid' | 'state'>): boolean =>
 export const sessionControls = (
   session: Pick<Session, 'agent' | 'runner' | 'pid' | 'state' | 'pausedReason'> | null | undefined,
 ): SessionControls => {
-  if (session === null || session === undefined || !isLive(session)) return NO_CONTROLS;
+  if (session === null || session === undefined) return NO_CONTROLS;
+  // Every unfinished session can be marked done, including one whose CLI has exited (pid null): that is exactly
+  // the session the person wants to close off.
+  const markDone = session.state !== 'done';
+  if (!isLive(session)) return { ...NO_CONTROLS, markDone };
   const claude = session.agent === 'claude';
   const streaming = session.runner === 'stream';
   // A structured runner takes `session.configure`: Claude's stream-json, Codex's app-server, Gemini's and
@@ -249,11 +259,12 @@ export const sessionControls = (
     // Pausing means parking a `can_use_tool` request, which only the stream runner produces.
     pause: streaming && (session.state === 'working' || heldByUser),
     paused: heldByUser,
+    markDone,
   };
 };
 
 export const hasControls = (c: SessionControls): boolean =>
-  c.mode || c.model || c.effort || c.stop || c.pause;
+  c.mode || c.model || c.effort || c.stop || c.pause || c.markDone;
 
 /** Which spawn-time selects an agent tile exposes: every agent but the shell takes a mode and a model; effort per `takesEffort`. */
 export const spawnControlsFor = (

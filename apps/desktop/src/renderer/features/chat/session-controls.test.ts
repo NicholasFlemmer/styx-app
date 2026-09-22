@@ -148,6 +148,7 @@ describe('session controls (Claude Code parity, discrepancy #54)', () => {
       stop: true,
       pause: true,
       paused: false,
+      markDone: true,
     });
     expect(sessionControls({ ...s, state: 'idle' })).toEqual({
       mode: true,
@@ -157,6 +158,7 @@ describe('session controls (Claude Code parity, discrepancy #54)', () => {
       stop: false,
       pause: false,
       paused: false,
+      markDone: true,
     });
     // Cursor over ACP (stream): mode and model; ACP has no effort.
     expect(sessionControls({ ...s, agent: 'cursor' })).toEqual({
@@ -167,6 +169,7 @@ describe('session controls (Claude Code parity, discrepancy #54)', () => {
       stop: true,
       pause: true,
       paused: false,
+      markDone: true,
     });
     // Codex over its app-server (stream): every setting applies at the next turn, effort included.
     expect(sessionControls({ ...s, agent: 'codex' })).toEqual({
@@ -177,6 +180,7 @@ describe('session controls (Claude Code parity, discrepancy #54)', () => {
       stop: true,
       pause: true,
       paused: false,
+      markDone: true,
     });
     // A pty runner has no tool boundary to hold at and nothing to configure, but ^C has always worked.
     expect(sessionControls({ ...s, agent: 'codex', runner: 'pty' })).toEqual({
@@ -187,6 +191,7 @@ describe('session controls (Claude Code parity, discrepancy #54)', () => {
       stop: true,
       pause: false,
       paused: false,
+      markDone: true,
     });
     expect(sessionControls({ ...s, agent: 'shell' })).toMatchObject({
       mode: false,
@@ -204,6 +209,8 @@ describe('session controls (Claude Code parity, discrepancy #54)', () => {
       pause: false,
       paused: false,
     });
+    // The CLI has exited: nothing to configure or stop, but the session is still the person's to finish
+    // (owner request, discrepancy #111) — this is the very case Mark done exists for.
     expect(sessionControls({ ...s, pid: null })).toEqual({
       mode: false,
       model: false,
@@ -212,7 +219,11 @@ describe('session controls (Claude Code parity, discrepancy #54)', () => {
       stop: false,
       pause: false,
       paused: false,
+      markDone: true,
     });
+    // Finished: nothing at all, Mark done included.
+    expect(sessionControls({ ...s, state: 'done', pid: null }).markDone).toBe(false);
+    expect(hasControls(sessionControls({ ...s, state: 'done', pid: null }))).toBe(false);
     expect(hasControls(sessionControls(s))).toBe(true);
     expect(hasControls(sessionControls(null))).toBe(false);
   });

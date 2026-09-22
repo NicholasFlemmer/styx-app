@@ -10,7 +10,11 @@ export interface CredentialVault {
   listRefs(): Promise<string[]>;
 }
 
-export function makeCredentialRef(provider: string, targetId: string, kind: 'oauth' | 'key' | 'ssh-key-path' | 'refresh' | 'passphrase' | 'cli'): string {
+export function makeCredentialRef(
+  provider: string,
+  targetId: string,
+  kind: 'oauth' | 'key' | 'ssh-key-path' | 'refresh' | 'passphrase' | 'cli',
+): string {
   return `styx:v1:${provider}:${targetId}:${kind}`;
 }
 
@@ -101,7 +105,11 @@ export class KeyringVault implements CredentialVault {
 
   async listRefs(): Promise<string[]> {
     const mod = await this.load();
-    if (mod.findCredentials) return mod.findCredentials(SERVICE).map((c) => c.account).filter((a) => !a.includes('#'));
+    if (mod.findCredentials)
+      return mod
+        .findCredentials(SERVICE)
+        .map((c) => c.account)
+        .filter((a) => !a.includes('#'));
     return [...this.index];
   }
 }

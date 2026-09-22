@@ -11,6 +11,23 @@ import { rows } from '../read-model';
  * other agents' prompts and tools, the Spawn modal and the Repo rows.
  */
 
+/**
+ * The lane's landing verb (ADR-0025 phase C), by the project's merging mode: `Land` in auto, `Merge into {base}`
+ * in review. `null` when there is nothing to land — main itself, a lane on no branch, a conflicted lane, one
+ * already merged, or one an agent is mid-merge on. Shared by the Repo row and the workspace's Land button
+ * (owner request, discrepancy #111: landing must not live only on the Repo tab).
+ */
+export const landLabelOf = (
+  w: Pick<Worktree, 'branch' | 'isMain' | 'conflict' | 'mergedAt' | 'resolution'>,
+  integration: 'auto' | 'review',
+  base: string,
+): string | null => {
+  if (w.isMain || w.branch === null || w.conflict !== null || w.mergedAt !== null) return null;
+  if (w.resolution !== null && (w.resolution.state === 'resolving' || w.resolution.state === 'checking'))
+    return null;
+  return integration === 'auto' ? copy.repo.actions.land : fill(copy.repo.actions.mergeIntoBase, { base });
+};
+
 /** A task line is one line, at most this long, so a pasted essay does not become the whole prompt. */
 export const TASK_MAX = 140;
 

@@ -31,6 +31,7 @@ const EVENTS: Record<SessionEventType, SessionEvent> = {
   ask: { type: 'ask', askId },
   'ask-resolved': { type: 'ask-resolved', askId },
   finish: { type: 'finish', exitCode: 0 },
+  exit: { type: 'exit', exitCode: 0 },
   error: { type: 'error', reason: 'conflict' },
   pause: { type: 'pause' },
   resolve: { type: 'resolve' },
@@ -46,6 +47,7 @@ const EXPECTED: Record<SessionState, Record<SessionEventType, SessionState | nul
     ask: 'needs-you',
     'ask-resolved': null,
     finish: 'done',
+    exit: 'idle',
     error: 'paused',
     pause: 'paused',
     resolve: null,
@@ -58,6 +60,7 @@ const EXPECTED: Record<SessionState, Record<SessionEventType, SessionState | nul
     ask: 'needs-you',
     'ask-resolved': null,
     finish: 'done',
+    exit: 'idle',
     error: 'paused',
     pause: 'paused',
     resolve: null,
@@ -70,6 +73,7 @@ const EXPECTED: Record<SessionState, Record<SessionEventType, SessionState | nul
     ask: 'needs-you',
     'ask-resolved': 'working',
     finish: 'done',
+    exit: 'idle',
     error: 'paused',
     pause: 'paused',
     resolve: null,
@@ -82,6 +86,7 @@ const EXPECTED: Record<SessionState, Record<SessionEventType, SessionState | nul
     ask: null,
     'ask-resolved': null,
     finish: null,
+    exit: null,
     error: null,
     pause: null,
     resolve: null,
@@ -94,6 +99,7 @@ const EXPECTED: Record<SessionState, Record<SessionEventType, SessionState | nul
     ask: null,
     'ask-resolved': 'paused',
     finish: 'done',
+    exit: null,
     error: 'paused',
     pause: 'paused',
     resolve: 'working',
@@ -160,6 +166,17 @@ describe('session machine: effects and guards', () => {
   it('finish cancels asks, revokes session grants and timers', () => {
     const r = transition('needs-you', EVENTS.finish, ctx());
     expect(r?.effects.map((e) => e.type)).toEqual(['cancelOpenAsks', 'revokeSessionGrants', 'cancelTimers']);
+  });
+
+  it('exit does the same clean-up as finish but leaves the session idle, not done (discrepancy #111)', () => {
+    const r = transition('needs-you', EVENTS.exit, ctx({ openAskCount: 1 }));
+    expect(r?.state).toBe('idle');
+    expect(r?.pausedReason).toBeNull();
+    expect(r?.effects.map((e) => e.type)).toEqual(['cancelOpenAsks', 'revokeSessionGrants', 'cancelTimers']);
+    // A run that ends mid-turn goes the same way.
+    expect(transition('working', EVENTS.exit, ctx())?.state).toBe('idle');
+    // Only the person finishes a session; the machine never reaches `done` without a `finish`.
+    expect(transition('working', { type: 'exit', exitCode: 1 }, ctx())?.state).not.toBe('done');
   });
 
   it.each(['cli-missing', 'conflict', 'auth-expired'] as const)(

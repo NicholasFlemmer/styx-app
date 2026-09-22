@@ -5,8 +5,19 @@ import { redact } from './logger';
 
 export type AuditActorKind = 'you' | 'system' | 'agent';
 export type AuditAction =
-  | 'requested' | 'granted' | 'denied' | 'used' | 'revoked' | 'expired'
-  | 'opened-pr' | 'merged-pr' | 'connected' | 'disconnected' | 'tested' | 'policy-changed' | 'exported';
+  | 'requested'
+  | 'granted'
+  | 'denied'
+  | 'used'
+  | 'revoked'
+  | 'expired'
+  | 'opened-pr'
+  | 'merged-pr'
+  | 'connected'
+  | 'disconnected'
+  | 'tested'
+  | 'policy-changed'
+  | 'exported';
 
 export interface AuditInput {
   time?: number;
@@ -40,16 +51,41 @@ export interface AuditRow extends Omit<AuditInput, 'scope' | 'detail' | 'time'> 
 }
 
 const COLS = [
-  'id', 'seq', 'time', 'actor_kind', 'actor_label', 'action', 'project_id', 'target_id', 'session_id', 'worktree_id', 'grant_id', 'policy_id',
-  'target_label', 'session_label', 'worktree_label', 'agent', 'scope_json', 'duration', 'triggered_by', 'detail_json', 'prev_hash', 'hash',
+  'id',
+  'seq',
+  'time',
+  'actor_kind',
+  'actor_label',
+  'action',
+  'project_id',
+  'target_id',
+  'session_id',
+  'worktree_id',
+  'grant_id',
+  'policy_id',
+  'target_label',
+  'session_label',
+  'worktree_label',
+  'agent',
+  'scope_json',
+  'duration',
+  'triggered_by',
+  'detail_json',
+  'prev_hash',
+  'hash',
 ] as const;
 
 /** Append-only, hash-chained audit log (spec §4.8, memo §8). Every grant/use/revoke/deny goes through here. */
 export class AuditService {
   private readonly insert;
   private readonly lastRow;
-  constructor(private readonly db: Db, private readonly now: () => number = Date.now) {
-    this.insert = db.prepare(`INSERT INTO audit_entries (${COLS.join(', ')}) VALUES (${COLS.map(() => '?').join(', ')})`);
+  constructor(
+    private readonly db: Db,
+    private readonly now: () => number = Date.now,
+  ) {
+    this.insert = db.prepare(
+      `INSERT INTO audit_entries (${COLS.join(', ')}) VALUES (${COLS.map(() => '?').join(', ')})`,
+    );
     this.lastRow = db.prepare('SELECT seq, hash FROM audit_entries ORDER BY seq DESC LIMIT 1');
   }
 
@@ -94,9 +130,28 @@ export class AuditService {
       };
       const hash = hashRow(row);
       this.insert.run(
-        row.id, row.seq, row.time, row.actorKind, row.actorLabel, row.action, row.projectId, row.targetId, row.sessionId, row.worktreeId,
-        row.grantId, row.policyId, row.targetLabel, row.sessionLabel, row.worktreeLabel, row.agent, row.scopeJson, row.duration,
-        row.triggeredBy, row.detailJson, row.prevHash, hash,
+        row.id,
+        row.seq,
+        row.time,
+        row.actorKind,
+        row.actorLabel,
+        row.action,
+        row.projectId,
+        row.targetId,
+        row.sessionId,
+        row.worktreeId,
+        row.grantId,
+        row.policyId,
+        row.targetLabel,
+        row.sessionLabel,
+        row.worktreeLabel,
+        row.agent,
+        row.scopeJson,
+        row.duration,
+        row.triggeredBy,
+        row.detailJson,
+        row.prevHash,
+        hash,
       );
       return { ...row, hash };
     });
@@ -106,22 +161,34 @@ export class AuditService {
   list(opts: { limit?: number; beforeSeq?: number; targetId?: string; sessionId?: string } = {}): AuditRow[] {
     const where: string[] = [];
     const params: unknown[] = [];
-    if (opts.beforeSeq !== undefined) { where.push('seq < ?'); params.push(opts.beforeSeq); }
-    if (opts.targetId) { where.push('target_id = ?'); params.push(opts.targetId); }
-    if (opts.sessionId) { where.push('session_id = ?'); params.push(opts.sessionId); }
+    if (opts.beforeSeq !== undefined) {
+      where.push('seq < ?');
+      params.push(opts.beforeSeq);
+    }
+    if (opts.targetId) {
+      where.push('target_id = ?');
+      params.push(opts.targetId);
+    }
+    if (opts.sessionId) {
+      where.push('session_id = ?');
+      params.push(opts.sessionId);
+    }
     const sql = `SELECT * FROM audit_entries ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY seq DESC LIMIT ?`;
     params.push(opts.limit ?? 200);
     return (this.db.prepare(sql).all(...params) as Record<string, unknown>[]).map(fromDbRow);
   }
 
   get(id: string): AuditRow | null {
-    const r = this.db.prepare('SELECT * FROM audit_entries WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    const r = this.db.prepare('SELECT * FROM audit_entries WHERE id = ?').get(id) as
+      Record<string, unknown> | undefined;
     return r ? fromDbRow(r) : null;
   }
 
   /** Walks the whole chain; returns the first broken seq or null when intact. */
   verifyChain(): { ok: true; count: number } | { ok: false; brokenAtSeq: number } {
-    const rows = (this.db.prepare('SELECT * FROM audit_entries ORDER BY seq ASC').all() as Record<string, unknown>[]).map(fromDbRow);
+    const rows = (
+      this.db.prepare('SELECT * FROM audit_entries ORDER BY seq ASC').all() as Record<string, unknown>[]
+    ).map(fromDbRow);
     let prev = '';
     for (const r of rows) {
       if (r.prevHash !== prev) return { ok: false, brokenAtSeq: r.seq };

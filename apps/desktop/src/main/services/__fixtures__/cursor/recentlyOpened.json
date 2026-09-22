@@ -1,1 +1,8 @@
-{"entries":[{"folderUri":"file:///Users/me/code/acme-shop","label":"acme-shop"},{"folderUri":"file:///Users/me/work/client-x"},{"fileUri":"file:///Users/me/notes.md"},{"folderUri":"file:///Users/me/code/acme-shop"}]}
+{
+  "entries": [
+    { "folderUri": "file:///Users/me/code/acme-shop", "label": "acme-shop" },
+    { "folderUri": "file:///Users/me/work/client-x" },
+    { "fileUri": "file:///Users/me/notes.md" },
+    { "folderUri": "file:///Users/me/code/acme-shop" }
+  ]
+}

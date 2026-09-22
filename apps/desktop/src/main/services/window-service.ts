@@ -46,7 +46,10 @@ export class WindowService {
       backgroundColor: colors[t].bg,
       ...(isMac
         ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 12, y: 13 } }
-        : { titleBarStyle: 'hidden' as const, titleBarOverlay: { height: 38, color: colors[t].s1, symbolColor: colors[t].mu } }),
+        : {
+            titleBarStyle: 'hidden' as const,
+            titleBarOverlay: { height: 38, color: colors[t].s1, symbolColor: colors[t].mu },
+          }),
       webPreferences: {
         preload: this.deps.preloadPath,
         contextIsolation: true,
@@ -99,7 +102,14 @@ export class WindowService {
       if (win.isDestroyed()) return;
       const b = win.getNormalBounds();
       const d = screen.getDisplayMatching(b);
-      this.deps.windowState.set(key, { x: b.x, y: b.y, width: b.width, height: b.height, displayId: String(d.id), maximized: win.isMaximized() });
+      this.deps.windowState.set(key, {
+        x: b.x,
+        y: b.y,
+        width: b.width,
+        height: b.height,
+        displayId: String(d.id),
+        maximized: win.isMaximized(),
+      });
     };
     win.on('resize', save);
     win.on('move', save);
@@ -148,7 +158,12 @@ export class WindowService {
     const key = `popout:${sessionId}`;
     const saved = this.deps.windowState.get(key) ?? POPOUT_DEFAULT;
     const opts = this.baseOptions(saved, { w: 320, h: 400 });
-    if (this.deps.platform !== 'darwin') opts.titleBarOverlay = { height: 32, color: colors[this.theme()].s1, symbolColor: colors[this.theme()].mu };
+    if (this.deps.platform !== 'darwin')
+      opts.titleBarOverlay = {
+        height: 32,
+        color: colors[this.theme()].s1,
+        symbolColor: colors[this.theme()].mu,
+      };
     const win = new BrowserWindow(opts);
     this.harden(win);
     const wcId = win.webContents.id;
@@ -226,7 +241,8 @@ export class WindowService {
     const t = this.theme();
     for (const w of this.allWindows()) {
       w.setBackgroundColor(colors[t].bg);
-      if (this.deps.platform !== 'darwin') w.setTitleBarOverlay?.({ color: colors[t].s1, symbolColor: colors[t].mu });
+      if (this.deps.platform !== 'darwin')
+        w.setTitleBarOverlay?.({ color: colors[t].s1, symbolColor: colors[t].mu });
     }
   }
 
@@ -245,8 +261,7 @@ export class WindowService {
     else if (action === 'maximize') {
       if (win.isMaximized()) win.unmaximize();
       else win.maximize();
-    }
-    else win.close();
+    } else win.close();
   }
 }
 
@@ -256,9 +271,14 @@ export function clampToDisplay(b: WindowBounds): WindowBounds {
   const displays = screen.getAllDisplays();
   const visible = displays.some((d) => {
     const a = d.workArea;
-    return b.x! + 40 < a.x + a.width && b.x! + b.width - 40 > a.x && b.y! + 20 < a.y + a.height && b.y! >= a.y - 10;
+    return (
+      b.x! + 40 < a.x + a.width && b.x! + b.width - 40 > a.x && b.y! + 20 < a.y + a.height && b.y! >= a.y - 10
+    );
   });
   return visible ? b : { width: b.width, height: b.height };
 }
 
-export const rendererPaths = (dirname: string) => ({ preloadPath: join(dirname, '../preload/index.js'), rendererFile: join(dirname, '../renderer/index.html') });
+export const rendererPaths = (dirname: string) => ({
+  preloadPath: join(dirname, '../preload/index.js'),
+  rendererFile: join(dirname, '../renderer/index.html'),
+});

@@ -5,11 +5,14 @@ import type { Publisher } from '../store/publisher';
 
 const VERB: Partial<Record<AuditEntry['action'], (e: AuditEntry) => string>> = {
   requested: (e) => `requested ${e.targetLabel ?? 'access'} ${(e.scope ?? []).join(' + ')}`,
-  granted: (e) => `granted ${e.targetLabel ?? 'access'} · ${(e.scope ?? []).join(' + ')} · ${e.duration ?? ''}`.trim(),
+  granted: (e) =>
+    `granted ${e.targetLabel ?? 'access'} · ${(e.scope ?? []).join(' + ')} · ${e.duration ?? ''}`.trim(),
   denied: (e) => `denied ${e.targetLabel ?? 'access'}`,
   used: (e) => `used ${e.targetLabel ?? 'a target'}${e.triggeredBy ? ` · ${e.triggeredBy}` : ''}`,
-  revoked: (e) => `revoked ${e.agent ?? 'agent'} → ${e.targetLabel ?? 'target'}${e.detail['reason'] ? ` (${String(e.detail['reason'])})` : ''}`,
-  expired: (e) => `revoked ${e.agent ?? 'agent'} → ${e.targetLabel ?? 'target'} (${String(e.detail['reason'] ?? 'expired')})`,
+  revoked: (e) =>
+    `revoked ${e.agent ?? 'agent'} → ${e.targetLabel ?? 'target'}${e.detail['reason'] ? ` (${String(e.detail['reason'])})` : ''}`,
+  expired: (e) =>
+    `revoked ${e.agent ?? 'agent'} → ${e.targetLabel ?? 'target'} (${String(e.detail['reason'] ?? 'expired')})`,
   'opened-pr': (e) => `opened PR #${String(e.detail['prNumber'] ?? '')}`,
   'merged-pr': (e) => `merged PR #${String(e.detail['prNumber'] ?? '')}`,
   connected: (e) => `connected ${e.targetLabel ?? 'target'}`,
@@ -25,7 +28,14 @@ export class ActivityService {
   ) {}
 
   append(row: Omit<ActivityRow, 'id' | 'at'> & { at?: number }): ActivityRow {
-    const full: ActivityRow = { id: `activity-${newId<'ActivityId'>()}`, at: row.at ?? this.clock.now(), who: row.who, what: row.what, projectId: row.projectId, sessionId: row.sessionId };
+    const full: ActivityRow = {
+      id: `activity-${newId<'ActivityId'>()}`,
+      at: row.at ?? this.clock.now(),
+      who: row.who,
+      what: row.what,
+      projectId: row.projectId,
+      sessionId: row.sessionId,
+    };
     this.repos.activity.insert(full);
     this.publisher.activityAppend([full]);
     return full;
@@ -36,6 +46,12 @@ export class ActivityService {
     if (!verb) return;
     const project = e.projectId ? this.repos.projects.get(e.projectId) : null;
     const what = project ? `${project.name} · ${verb(e)}` : verb(e);
-    this.append({ at: e.time, who: e.actorLabel, what, projectId: (e.projectId ?? null) as ProjectId | null, sessionId: (e.sessionId ?? null) as SessionId | null });
+    this.append({
+      at: e.time,
+      who: e.actorLabel,
+      what,
+      projectId: (e.projectId ?? null) as ProjectId | null,
+      sessionId: (e.sessionId ?? null) as SessionId | null,
+    });
   }
 }

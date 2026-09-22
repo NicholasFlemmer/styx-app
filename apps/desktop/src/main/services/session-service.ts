@@ -661,7 +661,9 @@ export class SessionService {
       const s = this.require(session.id);
       repos.sessions.upsert({ ...s, pid });
       this.deps.publisher.upsert('sessions', [s.id]);
-      this.applyEvent(session.id, { type: 'start' });
+      // A launch is not a turn: an agent spawned with no first message, or reopened to pick up later, is idle
+      // until something is actually sent (owner request, discrepancy #111). `start` belongs to the turn.
+      if (outgoing !== null) this.applyEvent(session.id, { type: 'start' });
       if (!launch.stream && launch.typeFirstMessage && outgoing) {
         setTimeout(() => this.typeIntoPty(session.id, outgoing), 400).unref?.();
       }
@@ -1032,9 +1034,25 @@ export class SessionService {
     }
     if (this.deps.pty.has(s.id)) {
       this.deps.pty.kill(s.id);
-      return; // `finish` follows from the pty exit event
+      return; // the exit event follows from the pty
     }
-    if (s.state !== 'done') this.applyEvent(s.id, { type: 'finish', exitCode: null });
+    if (s.state !== 'done')
+      this.applyEvent(
+        s.id,
+        s.purpose ? { type: 'finish', exitCode: null } : { type: 'exit', exitCode: null },
+      );
+  }
+
+  /**
+   * Mark done (owner request, discrepancy #111): the one way a chat session reaches the board's Done column.
+   * Kills whatever is still running first, so nothing keeps working on a lane the person has closed off.
+   */
+  markDone(sessionId: string): void {
+    const s = this.require(sessionId);
+    if (s.state === 'done') return;
+    if (this.deps.stream.has(s.id)) this.deps.stream.kill(s.id);
+    else if (this.deps.pty.has(s.id)) this.deps.pty.kill(s.id);
+    this.applyEvent(s.id, { type: 'finish', exitCode: this.require(sessionId).exitCode });
   }
 
   archive(sessionId: string): void {
@@ -1363,14 +1381,18 @@ export class SessionService {
       this.launches.delete(s.id);
     }
     if (s.state === 'done') {
-      // A SessionEnd hook already finished it; keep the real exit code.
+      // Already marked done; keep the real exit code.
       if (!s.purpose && s.exitCode === null && exitCode !== null) {
         this.deps.repos.sessions.upsert({ ...s, exitCode });
         this.deps.publisher.upsert('sessions', [s.id]);
       }
       return;
     }
-    this.applyEvent(s.id, { type: 'finish', exitCode });
+    // A background task ends with its process. A chat session does not: the CLI exiting (its own /exit, a Stop,
+    // a crash) leaves the session idle in its lane, and the next message relaunches it. Only the person marks a
+    // session done (owner request, discrepancy #111).
+    if (s.purpose) this.applyEvent(s.id, { type: 'finish', exitCode });
+    else this.applyEvent(s.id, { type: 'exit', exitCode });
   }
 
   /** Runs a launch's cleanup and remembers it until it settles, so the next `launch` for the session can wait. */
@@ -1858,8 +1880,10 @@ export class SessionService {
           return;
         case 'SessionEnd':
           this.agentMovedOn(s);
+          // The CLI ended its own session: idle for a chat (the person says when it is done), finished for a task.
           if (p['reason'] === 'clear') this.applyEvent(s.id, { type: 'quiet' });
-          else this.applyEvent(s.id, { type: 'finish', exitCode: null });
+          else if (s.purpose) this.applyEvent(s.id, { type: 'finish', exitCode: null });
+          else this.applyEvent(s.id, { type: 'exit', exitCode: null });
           return;
         case 'Notification': {
           const message = typeof p['message'] === 'string' ? p['message'] : null;
@@ -1954,8 +1978,14 @@ export class SessionService {
       pausedReason: t.pausedReason,
       lastActivityAt: event.type === 'activity' || event.type === 'start' ? now : s.lastActivityAt,
       endedAt: t.state === 'done' ? (s.endedAt ?? now) : null,
-      exitCode: event.type === 'finish' ? event.exitCode : event.type === 'reopen' ? null : s.exitCode,
-      pid: t.state === 'done' ? null : s.pid,
+      exitCode:
+        event.type === 'finish' || event.type === 'exit'
+          ? event.exitCode
+          : event.type === 'reopen'
+            ? null
+            : s.exitCode,
+      // The process is gone on both: `exit` says so outright, `done` ends whatever was still attached.
+      pid: t.state === 'done' || event.type === 'exit' ? null : s.pid,
     };
     if (t.state === 'done' && next.endedAt === null) next.endedAt = now;
     const changed = JSON.stringify(next) !== JSON.stringify(s);
@@ -1964,6 +1994,12 @@ export class SessionService {
       this.deps.publisher.upsert('sessions', [next.id]);
     }
     for (const effect of t.effects) this.runEffect(effect, next);
+    // The process went away with messages still held: they can never be delivered by it, so they go back to the
+    // composer exactly as they do when a session is finished.
+    if (event.type === 'exit') {
+      this.hookAsks.delete(s.id);
+      this.returnQueue(next);
+    }
     if (t.state === 'done' && s.state !== 'done') {
       this.hookAsks.delete(s.id);
       this.returnQueue(next);

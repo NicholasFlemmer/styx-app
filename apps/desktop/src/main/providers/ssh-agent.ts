@@ -75,7 +75,8 @@ export class StyxSshAgent {
   async start(socketPath: string, privateKey: string | Buffer, passphrase?: string): Promise<void> {
     const parsed = utils.parseKey(privateKey, passphrase) as unknown as ParsedKey | ParsedKey[] | Error;
     const key = Array.isArray(parsed) ? parsed[0] : parsed;
-    if (!key || key instanceof Error) throw new Error(`Cannot parse SSH key: ${(key as Error | undefined)?.message ?? 'unknown'}`);
+    if (!key || key instanceof Error)
+      throw new Error(`Cannot parse SSH key: ${(key as Error | undefined)?.message ?? 'unknown'}`);
     this.key = key;
     const posix = process.platform !== 'win32';
     if (posix) {
@@ -118,7 +119,9 @@ export class StyxSshAgent {
   }
 
   publicKey(): string | null {
-    return this.key ? `${this.key.type} ${this.key.getPublicSSH().toString('base64')} ${this.key.comment}`.trim() : null;
+    return this.key
+      ? `${this.key.type} ${this.key.getPublicSSH().toString('base64')} ${this.key.comment}`.trim()
+      : null;
   }
 
   async stop(): Promise<void> {

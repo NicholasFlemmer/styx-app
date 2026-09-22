@@ -24,7 +24,9 @@ export const ideFromRow = (r: Raw): IdeInstall =>
       keybindings: false,
       theme: false,
       ...Object.fromEntries(
-        Object.entries(asJson<Record<string, unknown>>(r['imported_json'], {})).filter(([k]) => k !== 'recentsSource'),
+        Object.entries(asJson<Record<string, unknown>>(r['imported_json'], {})).filter(
+          ([k]) => k !== 'recentsSource',
+        ),
       ),
     },
     detectedAt: Number(r['detected_at']),

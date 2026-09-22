@@ -40,7 +40,10 @@ const WIN_LOGIN_SCRIPT = [
  * path is a `command -v` hit, keyed by its base name (`claude.exe` → `claude`). Alias and function answers
  * (`claude: aliased to …`, a bare name) are not files and are dropped.
  */
-export function parseLoginEnv(stdout: string, platform: NodeJS.Platform): { path: string; which: Record<string, string> } {
+export function parseLoginEnv(
+  stdout: string,
+  platform: NodeJS.Platform,
+): { path: string; which: Record<string, string> } {
   let path = '';
   const which: Record<string, string> = {};
   const absolute = platform === 'win32' ? /^[A-Za-z]:[\\/]/ : /^\//;
@@ -72,7 +75,11 @@ export function mergePaths(primary: string, secondary: string, platform: NodeJS.
 }
 
 interface PtyModule {
-  spawn(file: string, args: string[], opts: { name: string; cols: number; rows: number; cwd: string; env: Record<string, string> }): IPty;
+  spawn(
+    file: string,
+    args: string[],
+    opts: { name: string; cols: number; rows: number; cwd: string; env: Record<string, string> },
+  ): IPty;
 }
 
 /** Owns node-pty processes for sessions and the 130px terminal pane. Loaded lazily so tests without the native module still import cleanly. */
@@ -140,7 +147,8 @@ export class PtyService extends EventEmitter<PtyEvents> {
   }
 
   defaultShell(): string {
-    if (this.platform === 'win32') return process.env['STYX_WIN_SHELL'] === 'wsl' ? 'wsl.exe' : 'powershell.exe';
+    if (this.platform === 'win32')
+      return process.env['STYX_WIN_SHELL'] === 'wsl' ? 'wsl.exe' : 'powershell.exe';
     return process.env['SHELL'] || '/bin/zsh';
   }
 
@@ -151,8 +159,18 @@ export class PtyService extends EventEmitter<PtyEvents> {
     const loginPath = await this.resolveLoginPath();
     const env: Record<string, string> = {};
     for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !STRIPPED_ENV.has(k)) env[k] = v;
-    Object.assign(env, { TERM: 'xterm-256color', COLORTERM: 'truecolor', LANG: env['LANG'] ?? 'en_US.UTF-8', PATH: loginPath }, opts.env ?? {});
-    const p = spawn(shell, args, { name: 'xterm-256color', cols: opts.cols ?? 120, rows: opts.rows ?? 30, cwd: opts.cwd, env });
+    Object.assign(
+      env,
+      { TERM: 'xterm-256color', COLORTERM: 'truecolor', LANG: env['LANG'] ?? 'en_US.UTF-8', PATH: loginPath },
+      opts.env ?? {},
+    );
+    const p = spawn(shell, args, {
+      name: 'xterm-256color',
+      cols: opts.cols ?? 120,
+      rows: opts.rows ?? 30,
+      cwd: opts.cwd,
+      env,
+    });
     this.ptys.set(opts.id, p);
     p.onData((d) => this.emit('data', opts.id, d));
     p.onExit(({ exitCode, signal }) => {

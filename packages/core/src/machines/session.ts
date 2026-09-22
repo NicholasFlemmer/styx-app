@@ -10,6 +10,12 @@ export type SessionEvent =
   | { type: 'ask'; askId: AskId }
   | { type: 'ask-resolved'; askId: AskId }
   | { type: 'finish'; exitCode: number | null }
+  /**
+   * The runner's process went away (it exited, the CLI ended its own session, Stop killed it). The session is
+   * idle, not finished: only the person marks a session done (owner request, discrepancy #111), and the next
+   * message relaunches the CLI in the same lane.
+   */
+  | { type: 'exit'; exitCode: number | null }
   | { type: 'error'; reason: Exclude<PausedReason, 'user'> }
   /** The user held the agent from the chat (distinct from `error`, which is a fault the app detected). */
   | { type: 'pause' }
@@ -72,12 +78,20 @@ const toNeedsYou: Cell<Extract<SessionEvent, { type: 'ask' }>> = (event, ctx) =>
 const afterAskResolved = (ctx: SessionContext): SessionTransition =>
   ctx.openAskCount > 0 ? ok('needs-you', [{ type: 'promoteAsk', sessionId: ctx.sessionId }]) : ok('working');
 
-const finish: Cell<Extract<SessionEvent, { type: 'finish' }>> = (_event, ctx) =>
-  ok('done', [
-    { type: 'cancelOpenAsks', sessionId: ctx.sessionId },
-    { type: 'revokeSessionGrants', sessionId: ctx.sessionId },
-    { type: 'cancelTimers', sessionId: ctx.sessionId },
-  ]);
+const cleanup = (ctx: SessionContext): SessionEffect[] => [
+  { type: 'cancelOpenAsks', sessionId: ctx.sessionId },
+  { type: 'revokeSessionGrants', sessionId: ctx.sessionId },
+  { type: 'cancelTimers', sessionId: ctx.sessionId },
+];
+
+const finish: Cell<Extract<SessionEvent, { type: 'finish' }>> = (_event, ctx) => ok('done', cleanup(ctx));
+
+/**
+ * The process went away: back to idle with the same clean-up a finish does — an ask nobody can answer any more
+ * is cancelled and the grants that went with the run are revoked — but the session stays in the board's
+ * Working column until the person marks it done.
+ */
+const exited: Cell<Extract<SessionEvent, { type: 'exit' }>> = (_event, ctx) => ok('idle', cleanup(ctx));
 
 const pause: Cell<Extract<SessionEvent, { type: 'error' }>> = (event, ctx) =>
   ok('paused', [{ type: 'setBanner', sessionId: ctx.sessionId, reason: event.reason }], event.reason);
@@ -99,6 +113,7 @@ const TABLE: Record<SessionState, Row> = {
     ask: toNeedsYou,
     'ask-resolved': invalid,
     finish,
+    exit: exited,
     error: pause,
     pause: holdByUser,
     resolve: invalid,
@@ -111,6 +126,7 @@ const TABLE: Record<SessionState, Row> = {
     ask: toNeedsYou,
     'ask-resolved': invalid,
     finish,
+    exit: exited,
     error: pause,
     pause: holdByUser,
     resolve: invalid,
@@ -124,6 +140,7 @@ const TABLE: Record<SessionState, Row> = {
     ask: stay('needs-you'),
     'ask-resolved': (_event, ctx) => afterAskResolved(ctx),
     finish,
+    exit: exited,
     error: pause,
     /** Pausing with an ask open is allowed: the ask stays open and answering it later still works. */
     pause: holdByUser,
@@ -138,6 +155,8 @@ const TABLE: Record<SessionState, Row> = {
     ask: invalid,
     'ask-resolved': invalid,
     finish: invalid,
+    /** Already finished: the process going away afterwards changes nothing. */
+    exit: invalid,
     error: invalid,
     pause: invalid,
     resolve: invalid,
@@ -152,6 +171,8 @@ const TABLE: Record<SessionState, Row> = {
     /** An ask may be answered from the inbox while paused; the session stays paused. */
     'ask-resolved': (_event, ctx) => ok('paused', [], ctx.pausedReason),
     finish,
+    /** Held or faulted: the banner is the story, and `resolve` is what relaunches. */
+    exit: invalid,
     error: pause,
     /** Already held: pausing again is a no-op rather than an error, so a double click is harmless. */
     pause: (_event, ctx) => ok('paused', [], ctx.pausedReason),
@@ -180,6 +201,7 @@ export const SESSION_EVENT_TYPES: readonly SessionEventType[] = [
   'ask',
   'ask-resolved',
   'finish',
+  'exit',
   'error',
   'pause',
   'resolve',

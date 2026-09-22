@@ -352,8 +352,9 @@ export class BrokerHost {
       deps.sessions.setNote(ctx.session.sessionId, p.note || null);
       if (p.state === 'working') deps.sessions.applyEvent(ctx.session.sessionId, { type: 'activity' });
       else if (p.state === 'idle') deps.sessions.applyEvent(ctx.session.sessionId, { type: 'quiet' });
-      else if (p.state === 'done')
-        deps.sessions.applyEvent(ctx.session.sessionId, { type: 'finish', exitCode: 0 });
+      // An agent reporting `done` has finished its work, not the session: only the person marks a session done
+      // (owner request, discrepancy #111), so the chat lands in idle and its lane stays its own.
+      else if (p.state === 'done') deps.sessions.applyEvent(ctx.session.sessionId, { type: 'quiet' });
       return { ok: true };
     });
 

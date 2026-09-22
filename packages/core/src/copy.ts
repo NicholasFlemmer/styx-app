@@ -107,6 +107,8 @@ export const copy = {
       open: 'Open',
       reviewGrant: 'Review grant',
       reviewPlan: 'Review plan',
+      /** Owner request (discrepancy #111): the person moves a card to Done. */
+      markDone: 'Mark done',
       archive: 'Archive',
       /** Done cards (owner addition, docs/handoff-discrepancies #97): Reopen is the CTA, Archive moves to the ghost slot. */
       reopen: 'Reopen',
@@ -146,6 +148,12 @@ export const copy = {
       model: 'Model',
       effort: 'Effort',
       stop: 'Stop · esc',
+      /**
+       * Owner request (discrepancy #111): a session is finished when the person says so. Nothing marks a chat
+       * session done on its own any more, so this is how it reaches the board's Done column.
+       */
+      markDone: 'Mark done',
+      markDoneTitle: 'Move this agent to Done · its lane stays',
       /** User-initiated hold (owner addition: §1's `paused` is the error branch only). */
       pause: 'Pause',
       resume: 'Resume',

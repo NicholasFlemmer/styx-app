@@ -383,7 +383,10 @@ describe('DetectService', () => {
       const { home, svc } = picker();
       const folder = join(home, 'stuff');
       mkdirSync(folder);
-      expect(await svc.probe('claude', folder)).toMatchObject({ found: false, problem: { kind: 'directory' } });
+      expect(await svc.probe('claude', folder)).toMatchObject({
+        found: false,
+        problem: { kind: 'directory' },
+      });
       const broken = bin(home, 'broken');
       expect(await svc.probe('claude', broken)).toMatchObject({
         found: false,
@@ -395,7 +398,11 @@ describe('DetectService', () => {
         found: false,
         problem: { kind: 'other-agent', agent: 'codex' },
       });
-      expect(await svc.probe('codex', codex)).toMatchObject({ found: true, version: '0.42.0', source: 'manual' });
+      expect(await svc.probe('codex', codex)).toMatchObject({
+        found: true,
+        version: '0.42.0',
+        source: 'manual',
+      });
     });
 
     it('resolves an .app bundle (or a folder holding the CLI) to the executable inside it', async () => {
@@ -470,8 +477,12 @@ describe('DetectService', () => {
       });
 
       const home2 = mkdtempSync(join(tmpdir(), 'styx-home-'));
-      mkdirSync(join(home2, 'Applications', 'Visual Studio Code - Insiders.app', 'Contents'), { recursive: true });
-      const insiders = (await new DetectService(ideDeps(home2)).detectIdes()).find((i) => i.kind === 'vscode')!;
+      mkdirSync(join(home2, 'Applications', 'Visual Studio Code - Insiders.app', 'Contents'), {
+        recursive: true,
+      });
+      const insiders = (await new DetectService(ideDeps(home2)).detectIdes()).find(
+        (i) => i.kind === 'vscode',
+      )!;
       expect(insiders).toMatchObject({
         found: true,
         product: 'VS Code Insiders',
@@ -486,7 +497,10 @@ describe('DetectService', () => {
       const code = bin(brewBin, 'code');
       const deps = ideDeps(home, {
         launcherDirs: [brewBin],
-        exec: async (b, args) => (b === code && args[0] === '--version' ? { stdout: '1.104.0\nabc', exitCode: 0 } : { stdout: '', exitCode: 1 }),
+        exec: async (b, args) =>
+          b === code && args[0] === '--version'
+            ? { stdout: '1.104.0\nabc', exitCode: 0 }
+            : { stdout: '', exitCode: 1 },
       });
       const vscode = (await new DetectService(deps).detectIdes()).find((i) => i.kind === 'vscode')!;
       expect(vscode).toMatchObject({ found: true, launcher: code, version: '1.104.0', location: null });

@@ -571,6 +571,11 @@ export const commands = {
     output: ok,
   },
   'session.stop': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
+  /**
+   * Mark done (owner request, discrepancy #111): the only way a chat session reaches Done. Nothing finishes a
+   * session on its own any more — a CLI that exits leaves it idle in its lane.
+   */
+  'session.markDone': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   'session.archive': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   /**
    * Brings a finished (not archived) session back (Done card → Reopen; owner addition #97): the row returns to `idle`

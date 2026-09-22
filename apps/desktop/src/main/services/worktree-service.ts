@@ -10,7 +10,8 @@ export interface WorktreeServiceDeps {
   publisher: Publisher;
   clock: Clock;
   /** Ends a session that still lives on the lane (its CLI is killed; `finish` follows). */
-  stopSession: (sessionId: string) => void;
+  /** Ends a session for good: its lane is about to go, so there is nothing left for it to be idle in. */
+  endSession: (sessionId: string) => void;
   /** Stops watching the lane's files for hunks. */
   unwatch: (worktreeId: string) => Promise<void>;
 }
@@ -27,7 +28,7 @@ export class WorktreeService {
     if (wt.archivedAt !== null) return;
     const project = repos.projects.get(wt.projectId) ?? fail('not-found', 'project not found');
     for (const s of repos.sessions.byProject(project.id))
-      if (s.worktreeId === wt.id && s.state !== 'done') this.deps.stopSession(s.id);
+      if (s.worktreeId === wt.id && s.state !== 'done') this.deps.endSession(s.id);
     await this.deps.unwatch(wt.id);
     await git.worktreeRemove(project.path, wt.path, true).catch(() => undefined);
     const current = repos.worktrees.get(wt.id) ?? wt;

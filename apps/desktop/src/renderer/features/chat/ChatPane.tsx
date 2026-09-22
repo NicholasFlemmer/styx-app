@@ -165,6 +165,18 @@ function SessionControlsRow({ session, catalogue }: { session: Session; catalogu
           {copy.chat.controls.stop}
         </Button>
       )}
+      {/* Nothing finishes a session on its own (discrepancy #111); this is how one reaches Done. */}
+      {c.markDone && !c.stop && (
+        <Button
+          variant="ghost"
+          className={s['stop']}
+          title={copy.chat.controls.markDoneTitle}
+          onClick={() => void command('session.markDone', { sessionId: session.id })}
+          data-session-control="markDone"
+        >
+          {copy.chat.controls.markDone}
+        </Button>
+      )}
     </>
   );
 }

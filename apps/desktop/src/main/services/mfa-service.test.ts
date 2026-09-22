@@ -8,7 +8,12 @@ describe('MfaService', () => {
   it('maps Touch ID outcomes', async () => {
     const ok = new TouchIdProvider({ canPromptTouchID: () => true, promptTouchID: async () => {} });
     expect(await ok.verify('x')).toBe('ok');
-    const cancelled = new TouchIdProvider({ canPromptTouchID: () => true, promptTouchID: async () => { throw new Error('User cancelled'); } });
+    const cancelled = new TouchIdProvider({
+      canPromptTouchID: () => true,
+      promptTouchID: async () => {
+        throw new Error('User cancelled');
+      },
+    });
     expect(await cancelled.verify('x')).toBe('cancelled');
     const none = new TouchIdProvider({ canPromptTouchID: () => false, promptTouchID: async () => {} });
     expect(await none.verify('x')).toBe('unavailable');
@@ -32,7 +37,13 @@ describe('WindowsHelloProvider (PowerShell fallback)', () => {
     const call = seen[0];
     if (!call) throw new Error('runner not called');
     expect(call.file).toBe('powershell.exe');
-    expect(call.args.slice(0, 5)).toEqual(['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File']);
+    expect(call.args.slice(0, 5)).toEqual([
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+    ]);
     expect(call.args[5]).toMatch(/hello\.ps1$/);
     expect(call.args[6]).toBe('-Reason');
     expect(call.args[7]).toBe(reason.replace('\n', ' ')); // one argv element; only control chars are touched
@@ -42,18 +53,43 @@ describe('WindowsHelloProvider (PowerShell fallback)', () => {
     expect(call.content).toContain('RequestVerificationAsync($Reason)');
     if (process.platform !== 'win32') expect(call.mode).toBe(0o600);
     expect(existsSync(call.args[5] ?? '')).toBe(false); // removed after the run
-    expect(helloArgs('x.ps1', '\u0000\u0001')).toEqual(['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'x.ps1', '-Reason', 'Styx']);
+    expect(helloArgs('x.ps1', '\u0000\u0001')).toEqual([
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      'x.ps1',
+      '-Reason',
+      'Styx',
+    ]);
   });
 
   it('maps availability and failures from the script output', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'styx-mfa-'));
-    const unavailable = new WindowsHelloProvider({ run: async () => 'UNAVAILABLE:DeviceNotPresent', tmpDir, loadNative: false });
+    const unavailable = new WindowsHelloProvider({
+      run: async () => 'UNAVAILABLE:DeviceNotPresent',
+      tmpDir,
+      loadNative: false,
+    });
     expect(await unavailable.available()).toBe(false);
     expect(await unavailable.verify('x')).toBe('unavailable');
-    const cancelled = new WindowsHelloProvider({ run: async () => 'RESULT:Canceled', tmpDir, loadNative: false });
+    const cancelled = new WindowsHelloProvider({
+      run: async () => 'RESULT:Canceled',
+      tmpDir,
+      loadNative: false,
+    });
     expect(await cancelled.verify('x')).toBe('cancelled');
-    const broken = new WindowsHelloProvider({ run: async () => { throw new Error('no powershell'); }, tmpDir, loadNative: false });
+    const broken = new WindowsHelloProvider({
+      run: async () => {
+        throw new Error('no powershell');
+      },
+      tmpDir,
+      loadNative: false,
+    });
     expect(await broken.verify('x')).toBe('unavailable');
-    expect(await new WindowsHelloProvider({ run: async () => 'garbage', tmpDir, loadNative: false }).verify('x')).toBe('failed');
+    expect(
+      await new WindowsHelloProvider({ run: async () => 'garbage', tmpDir, loadNative: false }).verify('x'),
+    ).toBe('failed');
   });
 });

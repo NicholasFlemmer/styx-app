@@ -275,7 +275,11 @@ describe('SshAdapter', () => {
   });
 
   it('serves an encrypted key when the passphrase is supplied (and fails without it)', async () => {
-    const keys = utils.generateKeyPairSync('ed25519', { comment: 'styx-test', passphrase: 'hunter2', cipher: 'aes256-cbc' });
+    const keys = utils.generateKeyPairSync('ed25519', {
+      comment: 'styx-test',
+      passphrase: 'hunter2',
+      cipher: 'aes256-cbc',
+    });
     const dir = mkdtempSync(join(tmpdir(), 'styx-ssh-'));
     const keyPath = join(dir, 'id_ed25519');
     writeFileSync(keyPath, keys.private, { mode: 0o600 });
@@ -300,7 +304,6 @@ describe('SshAdapter', () => {
       bad.issue(grant, target({ provider: 'ssh', credentialRef: c2.credentialRef, config: c2.config })),
     ).rejects.toThrow();
   });
-
 
   it('answers session-bind@openssh.com so identities still come back (OpenSSH >= 8.9)', async () => {
     const keys = utils.generateKeyPairSync('ed25519', { comment: 'styx-test' });
@@ -363,7 +366,6 @@ describe('SshAdapter', () => {
       await agent.stop();
     }
   });
-
 });
 
 describe('ProviderRegistry', () => {

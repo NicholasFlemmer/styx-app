@@ -88,7 +88,11 @@ describe('seedDemoRepos', () => {
     await seedDemoRepos({ repos: app.repos, userData, fixture: 'demo' });
     const fix = app.repos.worktrees.get(ids.worktree.fixCheckout)!;
     const parsed = parseUnifiedDiff(await app.git.diffWithUntracked(fix.path, fix.baseCommit ?? 'HEAD'));
-    expect(parsed.files.map((f) => f.path).sort()).toEqual(['checkout.test.ts', 'checkout.ts', 'validate.ts']);
+    expect(parsed.files.map((f) => f.path).sort()).toEqual([
+      'checkout.test.ts',
+      'checkout.ts',
+      'validate.ts',
+    ]);
     // Prototype rows quote with " where the repo lane diff uses '; compare modulo quote style.
     const norm = (s: string) => s.replace(/"/g, "'");
     const realAdds = new Map<string, string[]>();
@@ -107,12 +111,12 @@ describe('seedDemoRepos', () => {
     // The checkout.ts hunk is the lane diff's body (`+2 −0` header in the prototype; the app derives the real totals).
     const checkout = parsed.files.find((f) => f.path === 'checkout.ts')!;
     expect(checkout.removed).toBe(0);
-    expect(checkout.hunks.map((h) => h.lines.filter((l) => l.kind === 'add').map((l) => l.text)).flat()).toEqual([
-      "import { validate } from './validate'",
-      '  validate(cart)',
-      '  audit(receipt)',
-    ]);
-    expect(checkout.hunks.every((h) => h.hunkHash === parseUnifiedDiff(h.patch).files[0]?.hunks[0]?.hunkHash)).toBe(true);
+    expect(
+      checkout.hunks.map((h) => h.lines.filter((l) => l.kind === 'add').map((l) => l.text)).flat(),
+    ).toEqual(["import { validate } from './validate'", '  validate(cart)', '  audit(receipt)']);
+    expect(
+      checkout.hunks.every((h) => h.hunkHash === parseUnifiedDiff(h.patch).files[0]?.hunks[0]?.hunkHash),
+    ).toBe(true);
   });
 
   it('error fixture: fix/checkout conflicts with main in checkout.ts', async () => {

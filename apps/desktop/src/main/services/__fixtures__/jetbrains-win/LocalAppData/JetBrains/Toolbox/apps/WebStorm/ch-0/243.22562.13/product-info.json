@@ -5,5 +5,11 @@
   "productCode": "WS",
   "dataDirectoryName": "WebStorm2024.3",
   "svgIconPath": "bin/webstorm.svg",
-  "launch": [{ "os": "Windows", "launcherPath": "bin/webstorm64.exe", "vmOptionsFilePath": "bin/webstorm64.exe.vmoptions" }]
+  "launch": [
+    {
+      "os": "Windows",
+      "launcherPath": "bin/webstorm64.exe",
+      "vmOptionsFilePath": "bin/webstorm64.exe.vmoptions"
+    }
+  ]
 }

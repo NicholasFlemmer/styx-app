@@ -8,7 +8,11 @@ import { join } from 'node:path';
  */
 function bundled(): Record<string, string> | null {
   try {
-    return import.meta.glob('./migrations/*.sql', { query: '?raw', eager: true, import: 'default' }) as Record<string, string>;
+    return import.meta.glob('./migrations/*.sql', {
+      query: '?raw',
+      eager: true,
+      import: 'default',
+    }) as Record<string, string>;
   } catch {
     return null; // not running under vite (tsx scripts): import.meta.glob is undefined
   }
@@ -17,7 +21,8 @@ function bundled(): Record<string, string> | null {
 function fromDisk(): Record<string, string> {
   const dir = join(__dirname, 'migrations');
   const out: Record<string, string> = {};
-  for (const f of readdirSync(dir)) if (f.endsWith('.sql')) out[`./migrations/${f}`] = readFileSync(join(dir, f), 'utf8');
+  for (const f of readdirSync(dir))
+    if (f.endsWith('.sql')) out[`./migrations/${f}`] = readFileSync(join(dir, f), 'utf8');
   return out;
 }
 
@@ -45,10 +50,13 @@ export function migrate(db: BetterSqlite3.Database, migrations = listMigrations(
   db.pragma('busy_timeout = 5000');
   db.pragma('synchronous = NORMAL');
   db.exec('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
-  const row = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string } | undefined;
+  const row = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as
+    { value: string } | undefined;
   const current = row ? Number(row.value) : 0;
   if (current > migrations.length) {
-    throw new Error(`Database schema version ${current} is newer than this build supports (${migrations.length}). Downgrade is not supported.`);
+    throw new Error(
+      `Database schema version ${current} is newer than this build supports (${migrations.length}). Downgrade is not supported.`,
+    );
   }
   const pending = migrations.slice(current);
   const applied: string[] = [];
@@ -60,8 +68,11 @@ export function migrate(db: BetterSqlite3.Database, migrations = listMigrations(
         applied.push(m.name);
       }
       const violations = db.pragma('foreign_key_check') as unknown[];
-      if (violations.length > 0) throw new Error(`migration left ${violations.length} foreign key violation(s)`);
-      db.prepare("INSERT INTO meta (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(migrations.length));
+      if (violations.length > 0)
+        throw new Error(`migration left ${violations.length} foreign key violation(s)`);
+      db.prepare(
+        "INSERT INTO meta (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      ).run(String(migrations.length));
     });
     run();
   } finally {

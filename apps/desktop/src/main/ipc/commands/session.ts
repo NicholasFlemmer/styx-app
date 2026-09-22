@@ -48,6 +48,12 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
     return {};
   });
 
+  bus.register('session.markDone', ({ sessionId }) => {
+    app.broker.notifyStopping(sessionId);
+    sessions.markDone(sessionId);
+    return {};
+  });
+
   bus.register('session.archive', ({ sessionId }) => {
     sessions.archive(sessionId);
     return {};

@@ -36,6 +36,7 @@ import {
   statusBarTargets,
 } from '../../features/editor/status-bar';
 import { DeployButton } from '../../features/workspace/DeployButton';
+import { LandButton } from '../../features/workspace/LandButton';
 import { PublishButton } from '../../features/workspace/PublishButton';
 import { StatusBar } from '../../features/editor/StatusBar';
 import { TerminalPane } from '../../features/terminal/TerminalPane';
@@ -289,6 +290,7 @@ export function Workspace() {
               data-workspace-mode="design"
             />
           </div>
+          <LandButton projectId={projectId} />
           <PublishButton projectId={projectId} />
           <DeployButton projectId={projectId} />
         </div>

@@ -1,0 +1,18 @@
+@layer components {
+  /* Sits in the workspace mode strip, before Publish (Workspace.module.css places the group). */
+  .wrap {
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+  }
+  .button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  /* ⤵ before the text: landing into the base, at the size of Publish's ↑ and Deploy's ▲. */
+  .glyph {
+    font-size: 10px;
+  }
+}

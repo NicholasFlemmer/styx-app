@@ -11,5 +11,5 @@
   "buffer_font_size": 15,
   "ui_font_size": 16,
   "telemetry": { "diagnostics": false, "metrics": false },
-  "language_models": { "anthropic": { "api_url": "https://api.anthropic.com" } },
+  "language_models": { "anthropic": { "api_url": "https://api.anthropic.com" } }
 }
