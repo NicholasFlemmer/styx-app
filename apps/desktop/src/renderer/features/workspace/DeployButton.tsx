@@ -2,6 +2,7 @@ import { copy, type ProjectId, type TargetId } from '@styx/core';
 import { Button, Icon, StatusDot, Tag } from '@styx/ui';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useModel, useUi } from '../../state/hooks';
+import { useFloatingMenu } from '../../state/use-floating-menu';
 import { useReadModel } from '../../state/read-model';
 import { openTask } from '../tasks/task-launch';
 import { learnKey } from '../abilities/learn';
@@ -31,6 +32,7 @@ export function DeployButton({ projectId }: DeployButtonProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  useFloatingMenu(menuOpen);
 
   // Outside clicks close the picker without focus return; Esc / Tab close it and hand focus back to the button.
   useEffect(() => {

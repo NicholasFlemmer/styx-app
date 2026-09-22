@@ -1,7 +1,6 @@
 import {
   copy,
   fill,
-  idFrom,
   platformCopy,
   type EventPayload,
   type ProjectId,
@@ -49,6 +48,8 @@ export interface ConnectModalProps {
 
 interface OAuthFlow {
   flowId: string;
+  /** The placeholder target the flow made: the pasted token is saved against it. */
+  targetId: TargetId;
   browserUrl: string | null;
   phase: EventPayload<'connect.progress'>['phase'];
   message: string | null;
@@ -135,6 +136,10 @@ export function ConnectModal({
     setLogin(null);
     setAdvanced(false);
     setStatus(null);
+    // What was typed for one provider must not sit in the next one's form (an AWS key in the GCP form).
+    setToken('');
+    setKey({ name: '', accessKey: '', secret: '' });
+    setSsh({ host: '', user: '', keyPath: '', port: '', passphrase: '' });
   };
 
   // OAuth progress for the running flow: saved closes the modal, failed shows the message inline.
@@ -253,6 +258,7 @@ export function ConnectModal({
     if (!r.ok) return;
     setFlow({
       flowId: r.value.flowId,
+      targetId: r.value.targetId,
       browserUrl: r.value.browserUrl,
       phase: 'waiting-browser',
       message: null,
@@ -262,7 +268,7 @@ export function ConnectModal({
   const saveToken = async () => {
     if (flow === null || token === '' || busy) return;
     setBusy(true);
-    const r = await command('target.connect.saveToken', { targetId: idFrom<'TargetId'>(flow.flowId), token });
+    const r = await command('target.connect.saveToken', { targetId: flow.targetId, token });
     setBusy(false);
     if (r.ok) close();
   };
@@ -350,7 +356,9 @@ export function ConnectModal({
     setSsh((f) => ({ ...f, keyPath }));
   };
   const canConnectCli = projectId !== null && cliStatus !== null && account !== null && !busy;
-  const tokenMode = flow !== null && flow.browserUrl === null;
+  // GitHub runs the device flow by itself; every other provider's page opens in the browser and the token is
+  // pasted here, so the field shows for them from the start of the flow.
+  const tokenMode = flow !== null && (flow.browserUrl === null || provider !== 'github');
   const saveLabel = fill(copy.connect.key.save, { keychainShort: words.keychainShort });
 
   const envRow = (

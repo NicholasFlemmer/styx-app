@@ -168,6 +168,9 @@ export class TargetService {
     const browserUrl = TOKEN_PAGES[provider] ?? null;
     if (provider === 'github') void this.runDeviceFlow(flowId, target);
     else if (browserUrl) {
+      // No registered OAuth app for these: the token page opens in the browser and the modal takes the paste.
+      // (The page was returned but never opened, and the modal showed only "Waiting for browser…" — a dead end.)
+      void this.deps.openExternal(browserUrl).catch(() => undefined);
       this.deps.publisher.sendEvent('connect.progress', {
         flowId,
         phase: 'waiting-browser',

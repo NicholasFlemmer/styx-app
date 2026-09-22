@@ -231,6 +231,21 @@ describe('DesignPane', () => {
     await waitFor(() => expect(sets().at(-1)).toMatchObject({ visible: false }));
   });
 
+  it('stays put under a toast, but leaves the screen for a floating menu (the Deploy picker, the rail +)', async () => {
+    render(pane());
+    await waitFor(() => expect(sets().length).toBeGreaterThan(0));
+    commands.length = 0;
+    useUiStore.setState({
+      overlays: [{ id: 't1', kind: 'toast', toast: { kind: 'error', code: 'x', message: 'y' } }],
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(sets().every((s) => s.visible === true)).toBe(true);
+    act(() => useUiStore.getState().floatingMenu(1));
+    await waitFor(() => expect(sets().at(-1)).toMatchObject({ visible: false }));
+    act(() => useUiStore.getState().floatingMenu(-1));
+    await waitFor(() => expect(sets().at(-1)).toMatchObject({ visible: true }));
+  });
+
   it('stays hidden with no URL, and shows the hint instead', async () => {
     render(pane({ devUrl: null }));
     await waitFor(() => expect(sets().length).toBeGreaterThan(0));

@@ -65,3 +65,20 @@ describe('TargetService health', () => {
     expect(t.app.repos.targets.get(target.id)?.health).not.toBe('expired');
   });
 });
+
+describe('TargetService.connectStart (Advanced · OAuth / token)', () => {
+  it('a provider without an OAuth app opens its token page in the browser and returns the placeholder target for the paste', async () => {
+    const opened: string[] = [];
+    const t = makeTestApp({ openExternal: async (url) => void opened.push(url) });
+    const r = t.app.targets.connectStart(ids.project.acmeShop, 'vercel', 'preview');
+    expect(r.browserUrl).toBe('https://vercel.com/account/settings/tokens');
+    expect(r.authMethod).toBe('oauth');
+    await new Promise((res) => setTimeout(res, 0));
+    expect(opened).toEqual(['https://vercel.com/account/settings/tokens']);
+    expect(t.app.repos.targets.get(r.targetId)).toMatchObject({ provider: 'vercel', env: 'preview' });
+    expect(t.win.events('connect.progress').at(-1)).toMatchObject({
+      flowId: r.flowId,
+      phase: 'waiting-browser',
+    });
+  });
+});

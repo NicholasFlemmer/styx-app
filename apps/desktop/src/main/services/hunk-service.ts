@@ -8,7 +8,7 @@ import {
   type Worktree,
   type WorktreeId,
 } from '@styx/core';
-import { normalize } from 'node:path';
+import { normalize, relative, resolve } from 'node:path';
 import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
 import { fail } from '../ipc/bus';
@@ -36,8 +36,15 @@ export type WatchFactory = (path: string) => Promise<FsWatcherLike>;
 /** chokidar@5 (ESM) is loaded lazily so tests can inject a fake watcher. */
 export const chokidarWatch: WatchFactory = async (path) => {
   const { watch } = await import('chokidar');
+  // The ignore list is judged on the path *inside* the watched folder. Judged on the absolute path it matched
+  // the folder itself whenever a lane lives under `<project>/.styx/worktrees/…` (the default), and nothing in
+  // any such lane was ever watched.
+  const root = resolve(path);
   return watch(path, {
-    ignored: (p: string) => /(^|[\\/])(\.git|node_modules|\.styx)([\\/]|$)/.test(p),
+    ignored: (p: string) => {
+      const rel = relative(root, resolve(p));
+      return rel !== '' && /(^|[\\/])(\.git|node_modules|\.styx)([\\/]|$)/.test(rel);
+    },
     ignoreInitial: true,
     persistent: true,
     awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },

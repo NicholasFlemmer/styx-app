@@ -611,7 +611,13 @@ export const commands = {
       env: envSchema,
       name: targetNameSchema.optional(),
     }),
-    output: z.object({ flowId: z.string(), authMethod: authMethodSchema, browserUrl: z.string().nullable() }),
+    output: z.object({
+      flowId: z.string(),
+      authMethod: authMethodSchema,
+      browserUrl: z.string().nullable(),
+      /** The placeholder target the flow made; a pasted token is saved against it. */
+      targetId: targetIdSchema,
+    }),
   },
   'target.connect.saveKey': {
     input: z.object({

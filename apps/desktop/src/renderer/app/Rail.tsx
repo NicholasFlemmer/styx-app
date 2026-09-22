@@ -3,6 +3,7 @@ import { RailTile } from '@styx/ui';
 import { useCallback, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import { command } from '../state/commands';
 import { useModel, useUi } from '../state/hooks';
+import { useFloatingMenu } from '../state/use-floating-menu';
 import { openFolderAsProject } from '../state/project-entry';
 import s from './Shell.module.css';
 
@@ -31,9 +32,8 @@ export function Rail() {
   const addRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   // One fixed menu serves both the + tile (projectId null) and a project tile's right-click menu.
-  const [menu, setMenu] = useState<{ top: number; left: number; projectId: ProjectId | null } | null>(
-    null,
-  );
+  const [menu, setMenu] = useState<{ top: number; left: number; projectId: ProjectId | null } | null>(null);
+  useFloatingMenu(menu !== null); // the rail menu floats beside the rail; the design window must not paint over it
 
   // The rail clips overflow, so the menu is fixed next to the + tile; outside clicks close it without focus return.
   useEffect(() => {

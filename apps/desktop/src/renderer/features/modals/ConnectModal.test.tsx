@@ -44,7 +44,10 @@ const emit = (name: string, payload: unknown) => {
 const commandMock = vi.fn(async (name: string, _input?: unknown) => {
   switch (name) {
     case 'target.connect.start':
-      return { ok: true as const, value: { flowId: 'flow-1', authMethod: 'oauth', browserUrl } };
+      return {
+        ok: true as const,
+        value: { flowId: 'flow-1', authMethod: 'oauth', browserUrl, targetId: 'tgt-placeholder' },
+      };
     case 'target.connect.saveKey':
     case 'target.connect.saveSsh':
     case 'target.connect.saveToken':
@@ -302,9 +305,15 @@ describe('ConnectModal', () => {
       expect(screen.queryByRole('button', { name: copy.connect.cli.connect })).toBeNull();
       // The CLI step's optional Name yields to the key form's own Name field while Advanced is open.
       expect(screen.getAllByLabelText(copy.connect.key.name)).toHaveLength(1);
+      fireEvent.change(screen.getByLabelText(copy.connect.key.accessKey), { target: { value: 'AKIA-AWS' } });
 
       fireEvent.click(screen.getByRole('button', { name: copy.connect.back }));
       expect(screen.getByRole('dialog').textContent).toContain('Connect target · choose provider');
+      // What was typed for AWS does not follow the person into GCP's form.
+      fireEvent.click(screen.getByRole('button', { name: /^GCP/ }));
+      expandAdvanced();
+      expect((screen.getByLabelText(copy.connect.key.accessKey) as HTMLInputElement).value).toBe('');
+      fireEvent.click(screen.getByRole('button', { name: copy.connect.back }));
       fireEvent.click(screen.getByRole('button', { name: /^Vercel/ }));
       expandAdvanced();
       expect(screen.getByRole('dialog').textContent).toContain('Connect target · OAuth');
@@ -448,7 +457,10 @@ describe('ConnectModal', () => {
         env: 'preview',
       }),
     );
-    expect(screen.getByText(copy.connect.oauth.waiting)).toBeTruthy();
+    // Vercel has no OAuth app: main opened its token page, and the paste field is here from the start.
+    const token = await screen.findByLabelText(copy.connect.key.secret);
+    expect(token.getAttribute('type')).toBe('password');
+    expect(screen.queryByText(copy.connect.oauth.waiting)).toBeNull();
   });
 
   it('oauth (Advanced): a null browserUrl switches to a masked token field saved via target.connect.saveToken', async () => {
@@ -463,8 +475,9 @@ describe('ConnectModal', () => {
     fireEvent.change(token, { target: { value: 'ghp_abc' } });
     fireEvent.click(save);
     await waitFor(() => expect(useUiStore.getState().overlays).toHaveLength(0));
+    // saved against the placeholder target the flow made, never the flow id
     expect(commandMock).toHaveBeenCalledWith('target.connect.saveToken', {
-      targetId: 'flow-1',
+      targetId: 'tgt-placeholder',
       token: 'ghp_abc',
     });
   });

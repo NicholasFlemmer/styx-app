@@ -1,3 +1,4 @@
+import { idFrom } from '@styx/core';
 import type { Container } from '../../container';
 import type { CommandBus } from '../bus';
 
@@ -7,7 +8,12 @@ export function registerTargetCommands(bus: CommandBus, app: Container): void {
 
   bus.register('target.connect.start', ({ projectId, provider, env, name }) => {
     const r = targets.connectStart(projectId, provider, env, name);
-    return { flowId: r.flowId, authMethod: r.authMethod, browserUrl: r.browserUrl };
+    return {
+      flowId: r.flowId,
+      authMethod: r.authMethod,
+      browserUrl: r.browserUrl,
+      targetId: idFrom<'TargetId'>(r.targetId),
+    };
   });
 
   bus.register('target.connect.saveKey', async (input) => ({ targetId: (await targets.saveKey(input)).id }));

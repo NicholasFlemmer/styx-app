@@ -42,6 +42,7 @@ import {
 } from 'react';
 import { sizes } from '@styx/tokens';
 import { env } from '../../state/bridge';
+import { useFloatingMenu } from '../../state/use-floating-menu';
 import { command } from '../../state/commands';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
 import s from './ChatPane.module.css';
@@ -220,6 +221,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const setScreen = useUi((u) => u.setScreen);
   const setDiffCheckpoint = useUi((u) => u.setDiffCheckpoint);
   const [menuOpen, setMenuOpen] = useState(false);
+  useFloatingMenu(menuOpen); // the +N sessions menu floats over the pane and, with it, the design window
   /**
    * Attachments waiting to go with the next message (images read to base64, `@`-mentioned worktree files), per
    * session: what was attached in one tab must not ride along in another.

@@ -141,6 +141,7 @@ export function DesignPane({
   const [preset, setPreset] = useState<PreviewDevice>('desktop');
   const [landscape, setLandscape] = useState(false);
   const overlays = useUi((u) => u.overlays);
+  const floatingMenus = useUi((u) => u.floatingMenus);
   const url = devUrl ?? '';
   // Re-seed the field when the saved URL changes (React's documented adjust-state-during-render pattern, rather
   // than an effect, which would cascade a second render every time the URL round-trips through main).
@@ -342,8 +343,11 @@ export function DesignPane({
   const screenAccessId = useId();
 
   // --- native view ---------------------------------------------------------
-  // A native view sits above the DOM, so anything floating must take it off screen while it is open.
-  const covered = overlays.length > 0;
+  // A native view sits above the DOM, so anything floating must take it off screen while it is open: the
+  // palette, modals, sheets, drawers, and the DOM menus (`floatingMenus`). A toast is not "floating over" the
+  // page in that sense — it sits in a corner for a few seconds — and blanking the window for every toast made
+  // the page flicker away each time an agent needed something.
+  const covered = overlays.some((o) => o.kind !== 'toast') || floatingMenus > 0;
   // A live run is the source of truth for where the app is; the saved URL is the fallback for "I run it myself".
   // Local servers only (a committed project file could otherwise point the window at a remote page). A device
   // platform has no page: the simulator is the app.

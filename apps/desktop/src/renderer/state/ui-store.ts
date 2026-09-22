@@ -54,6 +54,11 @@ export interface UiState {
   /** Active session per project; `sessionId` is derived from it. */
   projectSession: Record<string, SessionId>;
   overlays: Overlay[];
+  /**
+   * Floating DOM menus that are not overlays (the Deploy picker, the rail +, the session overflow): while one is
+   * open the design window's native view must leave the screen or it paints over the menu.
+   */
+  floatingMenus: number;
   resolvedTheme: 'dark' | 'light';
   platform: BridgePlatform;
   paneSizes: Record<string, number>;
@@ -105,6 +110,8 @@ export interface UiActions {
   /** Mod+K: closes when the palette is the top overlay, opens otherwise. */
   togglePalette(): void;
   pushOverlay(overlay: OverlayInput): string;
+  /** A floating menu opened (+1) or closed (-1). */
+  floatingMenu(delta: 1 | -1): void;
   /** Pops the top overlay (or `id`), restoring focus to its invoker. */
   popOverlay(id?: string): void;
   closeOverlays(kind?: OverlayKind): void;
@@ -153,6 +160,7 @@ export const useUiStore = create<UiStore>()(
     projectId: null,
     projectSession: {},
     overlays: [],
+    floatingMenus: 0,
     resolvedTheme: 'dark',
     platform: platform(),
     paneSizes: {},
@@ -222,6 +230,10 @@ export const useUiStore = create<UiStore>()(
     setResolvedTheme: (theme) =>
       set((s) => {
         s.resolvedTheme = theme;
+      }),
+    floatingMenu: (delta) =>
+      set((s) => {
+        s.floatingMenus = Math.max(0, s.floatingMenus + delta);
       }),
     setPaneSize: (key, size) =>
       set((s) => {
