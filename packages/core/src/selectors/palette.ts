@@ -17,6 +17,7 @@ import {
 } from './common-settings';
 import { formatCountdown } from './format';
 import { fuzzyBest } from './fuzzy';
+import { sessionTabs } from './tabs';
 import { targetDerivedState } from './target-state';
 
 export type PaletteScope = 'all' | 'actions' | 'agents' | 'projects';
@@ -45,8 +46,8 @@ export type PaletteAction =
   /** Commit, push and PR in one step for the worktree the project is on (ADR-0021). */
   | { kind: 'publish'; projectId: ProjectId; worktreeId: WorktreeId }
   | { kind: 'open-session'; sessionId: SessionId }
-  /** Snake in the chat pane while the tab's agent works (owner addition, discrepancy row 110). */
-  | { kind: 'arcade'; sessionId: SessionId }
+  /** Snake in the project's chat pane (owner addition, discrepancy row 110). */
+  | { kind: 'arcade'; projectId: ProjectId }
   | { kind: 'switch-project'; projectId: ProjectId };
 
 export interface PaletteItem {
@@ -221,16 +222,19 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
     first: false,
     action: { kind: 'agent-dock' },
   });
-  // Only while the tab the person is on is mid-turn: the game exists for that wait and for nothing else.
-  const waiting = ui.sessionId == null ? undefined : model.sessions.byId[ui.sessionId];
-  if (waiting !== undefined && waiting.state === 'working' && !waiting.purpose)
+  // Snake in the chat pane (any tab on screen but one waiting on the person: that ask comes first). The tab is
+  // resolved the way the chat pane resolves it (the first tab until one is picked), not from the raw selection —
+  // before the first click the pane already shows a tab, and the palette must agree with it.
+  const onScreen = projectId === null ? null : sessionTabs(model, projectId, ui.sessionId ?? null).activeId;
+  const tab = onScreen === null ? undefined : model.sessions.byId[onScreen];
+  if (projectId !== null && tab !== undefined && tab.state !== 'needs-you')
     items.push({
-      id: `arcade:${waiting.id}`,
+      id: `arcade:${projectId}`,
       glyph: '■',
       label: copy.arcade.action,
-      meta: fill(copy.arcade.actionMeta, { agent: copy.agents[waiting.agent] }),
+      meta: copy.arcade.actionMeta,
       first: false,
-      action: { kind: 'arcade', sessionId: waiting.id },
+      action: { kind: 'arcade', projectId },
     });
   return items;
 };

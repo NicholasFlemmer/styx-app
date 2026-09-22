@@ -96,7 +96,7 @@ describe('Palette', () => {
     ]);
   });
 
-  it('"Play while you wait" opens Snake for the working tab and remembers the invoker (discrepancy row 110)', () => {
+  it('"Play while you wait" opens Snake in the project pane and remembers the invoker (discrepancy row 110)', () => {
     useUiStore.setState({ projectSession: { [acme]: fixtures.ids.session.claude } });
     const button = document.createElement('button');
     document.body.appendChild(button);
@@ -109,7 +109,7 @@ describe('Palette', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     const ui = useUiStore.getState();
     expect(ui.overlays).toHaveLength(0);
-    expect(ui.arcade).toMatchObject({ sessionId: fixtures.ids.session.claude, held: false, countdown: null });
+    expect(ui.arcade).toMatchObject({ projectId: acme, held: false, countdown: null });
     expect(ui.arcade?.game.phase).toBe('ready');
     expect(ui.screen).toBe('workspace');
     button.remove();

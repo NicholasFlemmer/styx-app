@@ -1699,13 +1699,17 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     stoppedMany: '{n} queued messages returned to the composer.',
   },
   /**
-   * Snake, played in the chat pane while the tab's agent works (owner addition, discrepancy row 110). The game
-   * freezes the moment the session leaves `working`; the held line says why, and Resume only shows once the
-   * agent is working again.
+   * Snake, played in the chat pane (owner addition, discrepancy row 110). The game freezes the moment the tab's
+   * agent needs the person; the held line says why, and Resume shows once the ask is answered.
    */
   arcade: {
+    /** The button in the chat pane's tab row (owner: "just make it available in a chat"). */
+    open: 'Snake',
+    openTitle: 'Play while you wait',
+    /** The same on the chat tab that is waiting on the person: answer first. */
+    openBlocked: '{agent} needs you first',
     action: 'Play while you wait',
-    actionMeta: 'Snake · while {agent} works',
+    actionMeta: 'Snake · in the chat pane',
     title: 'Snake',
     score: 'Score',
     best: 'best {n}',
@@ -1726,8 +1730,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     held: {
       needsYou: '{agent} needs you · Snake is paused at {n}',
       working: '{agent} is working again · Snake is paused at {n}',
-      done: '{agent} is done · Snake is paused at {n}',
       stopped: '{agent} has stopped · Snake is paused at {n}',
+      free: 'Snake is paused at {n}',
     },
   },
   general: {

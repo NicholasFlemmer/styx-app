@@ -105,16 +105,40 @@
     opacity: 0.5;
     cursor: default;
   }
-  .meta {
+  /* Meta line, and at its right end the Snake button (owner addition, discrepancy row 110). */
+  .metaRow {
     flex: none;
-    padding: 8px 14px;
+    display: flex;
+    align-items: stretch;
     border-bottom: 1px solid var(--ln);
+  }
+  .meta {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 14px;
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--mu);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .arcadeButton {
+    flex: none;
+    padding: 0 12px;
+    border-left: 1px solid var(--ln);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mu);
+  }
+  .arcadeButton:hover {
+    color: var(--tx);
+  }
+  .arcadeButton:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   /* Prototype bubbles inherit the transcript's 1.5 leading. */
   .pane [data-kind='user'] {

@@ -6,7 +6,7 @@ import { startDebtAudit } from '../audit';
 import { openFolderAsProject } from '../../state/project-entry';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
-import { ARCADE_INVOKER } from '../arcade/ArcadePanel';
+import { openArcade } from '../arcade/ArcadePanel';
 
 export interface RunOptions {
   /** Mod+⏎: open agents in a new (pop-out) window. */
@@ -73,15 +73,12 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
       ui.openSession(session.projectId, session.id);
       return;
     }
-    case 'arcade': {
-      // Snake in the tab's chat pane (discrepancy row 110); Esc / ✕ on the board hands focus back here.
-      const session = model.sessions.byId[action.sessionId];
-      if (session === undefined) return;
-      ui.openSession(session.projectId, session.id);
-      ui.openArcade(session.id, Math.floor(Math.random() * 2 ** 32));
-      if (invoker !== null) rememberInvoker(ARCADE_INVOKER, invoker);
+    case 'arcade':
+      // Snake in the project's chat pane (discrepancy row 110); Esc / ✕ on the board hands focus back here.
+      ui.setProject(action.projectId);
+      if (ui.screen !== 'workspace') ui.setScreen('workspace');
+      openArcade(action.projectId, invoker);
       return;
-    }
     case 'review-ask': {
       const session = model.sessions.byId[action.sessionId];
       if (session === undefined) return;

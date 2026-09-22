@@ -253,6 +253,8 @@ describe('paletteResults', () => {
       // Commit, push and PR for the branch the project is on (ADR-0021).
       '▲ Publish acme-shop · fix/checkout · commit · push · pull request',
       '■ Open agent dock · all projects · always on top',
+      // Snake on the tab the pane shows (owner addition, discrepancy #110).
+      '■ Play while you wait · Snake · in the chat pane',
     ]);
     expect(groups[1]?.items.map((i) => `${i.glyph} ${i.label} · ${i.meta}`)).toEqual([
       '● Claude · acme-shop · working',
@@ -293,8 +295,9 @@ describe('paletteResults', () => {
       worktreeId: ids.worktree.fixCheckout,
     });
     expect(all[13]?.action).toEqual({ kind: 'agent-dock' });
-    expect(all[14]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
-    expect(all[20]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
+    expect(all[14]?.action).toEqual({ kind: 'arcade', projectId: ids.project.acmeShop });
+    expect(all[15]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
+    expect(all[21]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
   });
 
   it('fuzzy on label + meta, best first; the first visible row is flagged; empty groups dropped', () => {
@@ -316,7 +319,7 @@ describe('paletteResults', () => {
   it('scope filtering (⇥) and scope cycling', () => {
     expect(paletteResults(model, ui, '', 'agents', NOW).map((g) => g.label)).toEqual(['Agents']);
     expect(paletteResults(model, ui, '', 'projects', NOW)[0]?.items[0]?.first).toBe(true);
-    expect(flat(model, '', 'actions')).toHaveLength(14);
+    expect(flat(model, '', 'actions')).toHaveLength(15);
     expect(nextPaletteScope('all')).toBe('actions');
     expect(nextPaletteScope('actions')).toBe('agents');
     expect(nextPaletteScope('agents')).toBe('projects');
@@ -336,28 +339,35 @@ describe('paletteResults', () => {
     ]);
   });
 
-  it('offers Snake only for a working tab the person is on (discrepancy #110)', () => {
+  it('offers Snake for the chat pane unless the tab on screen is waiting on the person (discrepancy #110)', () => {
     const on = (sessionId: SessionId | null) =>
       flattenPalette(paletteResults(model, { ...ui, sessionId }, '', 'actions', NOW)).filter(
         (i) => i.action.kind === 'arcade',
       );
-    expect(on(null)).toEqual([]);
-    // Codex is needs-you: nothing to wait for but the person.
+    const row = { kind: 'arcade', projectId: ids.project.acmeShop };
+    // No tab picked yet: the pane shows the first tab (Claude), so the palette offers the game.
+    expect(on(null).map((i) => i.action)).toEqual([row]);
+    // Codex is needs-you: that ask comes first.
     expect(on(ids.session.codex)).toEqual([]);
-    const claude = on(ids.session.claude);
-    expect(claude.map((i) => `${i.glyph} ${i.label} · ${i.meta}`)).toEqual([
-      '■ Play while you wait · Snake · while Claude works',
+    // Gemini is idle: the game does not need a running turn.
+    expect(on(ids.session.gemini).map((i) => i.action)).toEqual([row]);
+    // A session of another project is not this project's tab: the first tab here stands in.
+    expect(on(ids.session.blog).map((i) => i.action)).toEqual([row]);
+    expect(on(ids.session.claude).map((i) => `${i.glyph} ${i.label} · ${i.meta}`)).toEqual([
+      '■ Play while you wait · Snake · in the chat pane',
     ]);
-    expect(claude[0]?.action).toEqual({ kind: 'arcade', sessionId: ids.session.claude });
     // The row is the last action, so the prototype's rows keep their places.
-    const all = flattenPalette(
-      paletteResults(model, { ...ui, sessionId: ids.session.claude }, '', 'actions', NOW),
-    );
+    const all = flattenPalette(paletteResults(model, ui, '', 'actions', NOW));
     expect(all.at(-1)?.action.kind).toBe('arcade');
+    expect(flattenPalette(paletteResults(model, ui, 'snake', 'all', NOW))[0]?.label).toBe(
+      'Play while you wait',
+    );
+    // A project with no live tab has no pane to play in.
     expect(
-      flattenPalette(paletteResults(model, { ...ui, sessionId: ids.session.claude }, 'snake', 'all', NOW))[0]
-        ?.label,
-    ).toBe('Play while you wait');
+      flattenPalette(paletteResults(model, { projectId: ids.project.sideApi }, '', 'actions', NOW)).filter(
+        (i) => i.action.kind === 'arcade',
+      ),
+    ).toEqual([]);
   });
 
   it('lock state meta: locked / expired / unconnected, and after the grant', () => {

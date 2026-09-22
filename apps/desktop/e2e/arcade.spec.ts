@@ -63,7 +63,7 @@ test('palette → Play while you wait → board, keys, pause on blur, Esc back',
   await app.close();
 });
 
-test('another tab hides the board; the row is absent for a tab that is not working', async () => {
+test("the game is the pane's: another tab keeps it; a tab that needs you holds it and takes the row away", async () => {
   const { app, page } = await launchStyx({ screen: 'workspace', fixture: 'demo', theme: 'dark' });
   await page.waitForSelector('[data-chat-pane]', { timeout: 10_000 });
   await page.click('[data-session-tab]:first-child');
@@ -75,17 +75,34 @@ test('another tab hides the board; the row is absent for a tab that is not worki
   await page.keyboard.press('Enter');
   await expect(board).toHaveAttribute('data-arcade-phase', 'playing');
 
-  // Codex's tab: its transcript, no board; back on Claude's the game is there, paused where it was.
+  // Gemini's tab (idle): the board stays (paused, since the click took focus off it) and plays on.
+  await page.click('[data-session-tab]:nth-child(3)');
+  await expect(board).toBeVisible();
+  await expect(board).toHaveAttribute('data-arcade-phase', 'paused');
+  await page.locator('[data-arcade-frame]').click();
+  await page.keyboard.press('Space');
+  await expect(board).toHaveAttribute('data-arcade-phase', 'playing');
+
+  // Codex's tab needs you: the game is held under a strip, the transcript with the ask is back, and the
+  // palette no longer offers the game on this tab.
   await page.click('[data-session-tab]:nth-child(2)');
   await expect(board).toHaveCount(0);
   await expect(page.locator('[data-chat-pane] [role="log"]')).toHaveCount(1);
+  await expect(page.locator('[data-arcade-held]')).toHaveAttribute('data-arcade-held', 'waiting');
+  await expect(page.locator('[data-arcade-held]')).toContainText('Codex needs you');
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K');
   await page.getByRole('combobox').fill('snake');
   await expect(page.getByRole('option')).toHaveCount(0);
   await page.keyboard.press('Escape');
+
+  // Back on Claude's (working): Resume, then the countdown, then the snake moves again.
   await page.click('[data-session-tab]:first-child');
+  await expect(page.locator('[data-arcade-held]')).toHaveAttribute('data-arcade-held', 'resumable');
+  await page.click('[data-arcade-resume]');
   await expect(board).toBeVisible();
-  await expect(board).toHaveAttribute('data-arcade-phase', 'paused');
+  await expect(page.locator('[data-arcade-overlay]')).toHaveAttribute('data-arcade-overlay', 'countdown');
+  await expect(board).toHaveAttribute('data-arcade-phase', 'playing', { timeout: 3_000 });
+  await expect(page.locator('[data-arcade-overlay]')).toHaveCount(0);
 
   await app.close();
 });

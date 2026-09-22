@@ -6,42 +6,47 @@ import {
   startSnake,
   tickSnake,
   turnSnake,
+  type ProjectId,
   type ReadModel,
   type SessionId,
   type SnakeDirection,
 } from '@styx/core';
 import { Button, SnakeBoard, type SnakeBoardLabels } from '@styx/ui';
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
-import { restoreInvoker } from '../../overlays/stack';
+import { rememberInvoker, restoreInvoker } from '../../overlays/stack';
 import { command } from '../../state/commands';
 import { useModel, useUi } from '../../state/hooks';
 import { ARCADE_BEST_KEY, useUiStore, type ArcadeState } from '../../state/ui-store';
 import s from './ArcadePanel.module.css';
 
-/** The overlay-stack key under which the palette remembers what opened the game (focus goes back there on quit). */
+/** The overlay-stack key under which whatever opened the game is remembered (focus goes back there on quit). */
 export const ARCADE_INVOKER = 'arcade';
 
 /** One count of the 3 · 2 · 1. */
 const COUNTDOWN_MS = 400;
 
-/** Why the game is held, from the session's state; `working` means the agent came back and Resume is on offer. */
+/**
+ * Why the game is held, from the tab on screen: an ask on that tab holds it (no Resume until it is answered);
+ * anything else means the ask is dealt with and Resume is on offer.
+ */
 export const heldReason = (
   model: ReadModel,
   arcade: ArcadeState,
-): { line: string; canResume: boolean } | null => {
-  const session = model.sessions.byId[arcade.sessionId];
-  if (session === undefined) return null;
-  const vars = { agent: copy.agents[session.agent], n: String(arcade.game.score) };
+  sessionId: SessionId | null,
+): { line: string; canResume: boolean } => {
+  const session = sessionId === null ? undefined : model.sessions.byId[sessionId];
+  const n = String(arcade.game.score);
+  if (session === undefined) return { line: fill(copy.arcade.held.free, { n }), canResume: true };
+  const vars = { agent: copy.agents[session.agent], n };
   switch (session.state) {
     case 'needs-you':
       return { line: fill(copy.arcade.held.needsYou, vars), canResume: false };
     case 'working':
       return { line: fill(copy.arcade.held.working, vars), canResume: true };
-    case 'done':
-      return { line: fill(copy.arcade.held.done, vars), canResume: false };
     case 'idle':
     case 'paused':
-      return { line: fill(copy.arcade.held.stopped, vars), canResume: false };
+    case 'done':
+      return { line: fill(copy.arcade.held.stopped, vars), canResume: true };
   }
 };
 
@@ -60,6 +65,12 @@ export const quitArcade = (): void => {
   if (ui.arcade !== null) commitBest(ui.arcade.game.score);
   ui.closeArcade();
   restoreInvoker(ARCADE_INVOKER);
+};
+
+/** The Snake button / palette row: a fresh board in the project's pane, remembering what opened it. */
+export const openArcade = (projectId: ProjectId, invoker: HTMLElement | null): void => {
+  useUiStore.getState().openArcade(projectId, Math.floor(Math.random() * 2 ** 32));
+  if (invoker !== null) rememberInvoker(ARCADE_INVOKER, invoker);
 };
 
 const hintFor = (arcade: ArcadeState): string => {
@@ -90,40 +101,56 @@ const stateFor = (arcade: ArcadeState): string => {
 };
 
 /**
- * Keeps the store's game honest against the session (discrepancy row 110): the moment the session leaves
- * `working` the game is held (paused, board gone, transcript back — the ask is what the pane shows), and a
- * session that no longer exists takes the game with it. Mounted by the strip and the board alike.
+ * Keeps the store's game honest against the pane (discrepancy row 110): the moment the tab on screen needs the
+ * person the game is held (paused, board gone, transcript back — the ask is what the pane shows). A tab that
+ * finishes or stops does not touch the game (owner: "just when an agent needs you"), and a project that goes
+ * takes its game with it. Mounted by the strip and the board alike.
  */
-const useArcadeGuard = (sessionId: SessionId): void => {
+const useArcadeGuard = (projectId: ProjectId, sessionId: SessionId | null): void => {
   const state = useModel(
-    useCallback((m: ReadModel) => m.sessions.byId[sessionId]?.state ?? null, [sessionId]),
+    useCallback(
+      (m: ReadModel) => ({
+        project: m.projects.byId[projectId] !== undefined,
+        tab: sessionId === null ? null : (m.sessions.byId[sessionId]?.state ?? null),
+      }),
+      [projectId, sessionId],
+    ),
   );
   const held = useUi((u) => u.arcade?.held ?? false);
   useEffect(() => {
     const ui = useUiStore.getState();
-    if (ui.arcade === null || ui.arcade.sessionId !== sessionId) return;
-    if (state === null) {
+    if (ui.arcade === null || ui.arcade.projectId !== projectId) return;
+    if (!state.project) {
       quitArcade();
       return;
     }
-    if (state !== 'working' && !held) {
+    if (state.tab === 'needs-you' && !held) {
       commitBest(ui.arcade.game.score);
       ui.holdArcade();
     }
-  }, [state, held, sessionId]);
+  }, [state, held, projectId]);
 };
 
 /**
- * The strip over the transcript while the game is held: why, the score it stopped at, Resume once the agent is
- * working again, Quit always. Takes focus when it appears so a keyboard player is not left on a board that is
- * no longer there.
+ * The strip over the transcript while the game is held: why, the score it stopped at, Resume once the ask is
+ * answered, Quit always. Takes focus when it appears so a keyboard player is not left on a board that is no
+ * longer there.
  */
-export function ArcadeHeldStrip({ sessionId }: { sessionId: SessionId }) {
-  useArcadeGuard(sessionId);
+export function ArcadeHeldStrip({
+  projectId,
+  sessionId,
+}: {
+  projectId: ProjectId;
+  sessionId: SessionId | null;
+}) {
+  useArcadeGuard(projectId, sessionId);
   const arcade = useUi((u) => u.arcade);
   const resume = useUi((u) => u.resumeArcade);
   const reason = useModel(
-    useCallback((m: ReadModel) => (arcade === null ? null : heldReason(m, arcade)), [arcade]),
+    useCallback(
+      (m: ReadModel) => (arcade === null ? null : heldReason(m, arcade, sessionId)),
+      [arcade, sessionId],
+    ),
   );
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -156,8 +183,16 @@ export function ArcadeHeldStrip({ sessionId }: { sessionId: SessionId }) {
  * countdown runs here, and the high score is written when a game ends. The tab's working line sits under it as
  * `footer` so the person is still looking at the agent they are waiting for.
  */
-export function ArcadePanel({ sessionId, footer }: { sessionId: SessionId; footer?: ReactNode }) {
-  useArcadeGuard(sessionId);
+export function ArcadePanel({
+  projectId,
+  sessionId,
+  footer,
+}: {
+  projectId: ProjectId;
+  sessionId: SessionId | null;
+  footer?: ReactNode;
+}) {
+  useArcadeGuard(projectId, sessionId);
   const arcade = useUi((u) => u.arcade);
   const best = useUi((u) => u.paneSizes[ARCADE_BEST_KEY] ?? 0);
   const setGame = useUi((u) => u.setArcadeGame);
@@ -175,10 +210,10 @@ export function ArcadePanel({ sessionId, footer }: { sessionId: SessionId; foote
     if (phase !== 'playing' || held || countdown !== null) return;
     const id = setTimeout(() => {
       const cur = useUiStore.getState().arcade;
-      if (cur !== null && cur.sessionId === sessionId) setGame(tickSnake(cur.game));
+      if (cur !== null && cur.projectId === projectId) setGame(tickSnake(cur.game));
     }, snakeTickMs(score));
     return () => clearTimeout(id);
-  }, [phase, held, countdown, ticks, score, sessionId, setGame]);
+  }, [phase, held, countdown, ticks, score, projectId, setGame]);
 
   useEffect(() => {
     if (countdown === null) return;
@@ -200,15 +235,15 @@ export function ArcadePanel({ sessionId, footer }: { sessionId: SessionId; foote
     if (phase === 'over') commitBest(score);
   }, [phase, score]);
 
-  // The board leaving the screen mid-game (another tab, another screen) pauses it: the moves stop with the
-  // timeouts anyway, and a game that came back moving on its own would be over before the person had looked.
+  // The board leaving the screen mid-game (another screen, the pane closing) pauses it: the moves stop with
+  // the timeouts anyway, and a game that came back moving on its own would be over before the person had looked.
   useEffect(
     () => () => {
       const cur = useUiStore.getState().arcade;
-      if (cur !== null && cur.sessionId === sessionId && cur.game.phase === 'playing')
+      if (cur !== null && cur.projectId === projectId && cur.game.phase === 'playing')
         useUiStore.getState().setArcadeGame(pauseSnake(cur.game));
     },
-    [sessionId],
+    [projectId],
   );
 
   const onDirection = useCallback(
@@ -230,7 +265,7 @@ export function ArcadePanel({ sessionId, footer }: { sessionId: SessionId; foote
     setGame(pauseSnake(cur.game));
   }, [setGame]);
 
-  if (arcade === null || arcade.sessionId !== sessionId || arcade.held) return null;
+  if (arcade === null || arcade.projectId !== projectId || arcade.held) return null;
   const game = arcade.game;
   const bestBeaten = best > 0 && game.score > best;
   const labels: SnakeBoardLabels = {
@@ -244,7 +279,7 @@ export function ArcadePanel({ sessionId, footer }: { sessionId: SessionId; foote
     quit: copy.arcade.quit,
   };
   return (
-    <div className={s['panel']} data-arcade-panel={sessionId}>
+    <div className={s['panel']} data-arcade-panel={projectId}>
       <SnakeBoard
         cols={game.cols}
         rows={game.rows}

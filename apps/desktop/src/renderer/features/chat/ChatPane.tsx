@@ -71,7 +71,7 @@ import { CheckpointRow } from './CheckpointRow';
 import { mentionItems as toMentionItems, slashItems } from './slash-commands';
 import { thinkingLabel, elapsedLabel, workingLine } from './stream-state';
 import { inlineSegments, transcriptItems, type TranscriptItem } from './transcript-items';
-import { ArcadeHeldStrip, ArcadePanel } from '../arcade/ArcadePanel';
+import { ArcadeHeldStrip, ArcadePanel, openArcade, quitArcade } from '../arcade/ArcadePanel';
 
 const omitKey = <T,>(all: Record<string, T>, key: string): Record<string, T> => {
   const { [key]: _dropped, ...rest } = all;
@@ -250,7 +250,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   );
   // The composer's text, per session, in the store: it survives a tab switch and a trip to another screen.
   const composerText = useUi((u) => (activeId === null ? '' : (u.composerText[activeId] ?? '')));
-  const arcadeSession = useUi((u) => u.arcade?.sessionId ?? null);
+  const arcadeProject = useUi((u) => u.arcade?.projectId ?? null);
   const arcadeHeld = useUi((u) => u.arcade?.held ?? false);
   const setComposerText = useUi((u) => u.setComposerText);
   // Working line (discrepancy #55): hidden under the e2e/visual harness like the session controls — the demo
@@ -262,14 +262,18 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const meta = activeId === null ? '' : chatMeta(model, activeId, now);
   const items = useMemo(() => (activeId === null ? [] : transcriptItems(model, activeId)), [model, activeId]);
   const popped = activeId !== null && model.popouts.includes(activeId);
-  // Snake for this tab (discrepancy row 110): the board takes the transcript's place while it plays; held (the
-  // session left `working`), it folds to a strip over the transcript so the ask is what the pane shows. Never in
-  // the pop-out: that window is the transcript and nothing else.
-  const arcadeHere = !compact && activeId !== null && arcadeSession === activeId;
+  // Snake in this pane (discrepancy row 110): the board takes the transcript's place while it plays; held (the
+  // tab on screen needs the person), it folds to a strip over the transcript so the ask is what the pane shows.
+  // Never in the pop-out: that window is the transcript and nothing else.
+  const arcadeHere = !compact && activeId !== null && arcadeProject === projectId;
   const arcadePlaying = arcadeHere && !arcadeHeld;
+  // The button under the tab row (owner: "just make it available in a chat"). Hidden under the harness like the
+  // session controls: the baked `workspace` baseline has the prototype's bare meta line.
+  const arcadeButton = !compact && activeId !== null && env().e2e !== true;
   const placeholder = activeId === null ? '' : composerPlaceholder(model, activeId);
   const session = activeId === null ? null : (model.sessions.byId[activeId] ?? null);
   const agent = session?.agent ?? null;
+  const arcadeBlocked = session?.state === 'needs-you';
   const clis = model.discovery.clis;
   const catalogue = useMemo(
     () => (agent === null ? [] : modelCatalogueFor({ discovery: { ides: [], clis } }, agent)),
@@ -728,13 +732,37 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
         </div>
       )}
       {!compact && (
-        <div className={s['meta']} data-chat-meta="true">
-          {meta}
+        <div className={s['metaRow']}>
+          <div className={s['meta']} data-chat-meta="true">
+            {meta}
+          </div>
+          {arcadeButton && (
+            <button
+              type="button"
+              className={s['arcadeButton']}
+              aria-pressed={arcadeHere}
+              data-inv={arcadeHere ? 'true' : undefined}
+              disabled={arcadeBlocked && !arcadeHere}
+              title={
+                arcadeBlocked && !arcadeHere && session !== null
+                  ? fill(copy.arcade.openBlocked, { agent: copy.agents[session.agent] })
+                  : copy.arcade.openTitle
+              }
+              onClick={(e) => {
+                if (arcadeHere) quitArcade();
+                else openArcade(projectId, e.currentTarget);
+              }}
+              data-arcade-open={arcadeHere ? 'open' : 'closed'}
+            >
+              {copy.arcade.open}
+            </button>
+          )}
         </div>
       )}
-      {arcadeHere && arcadeHeld && activeId !== null && <ArcadeHeldStrip sessionId={activeId} />}
-      {arcadePlaying && activeId !== null ? (
+      {arcadeHere && arcadeHeld && <ArcadeHeldStrip projectId={projectId} sessionId={activeId} />}
+      {arcadePlaying ? (
         <ArcadePanel
+          projectId={projectId}
           sessionId={activeId}
           {...(working !== null
             ? {

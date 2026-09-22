@@ -41,14 +41,14 @@ export type OnboardingStep = 1 | 2 | 3 | 4;
 export type BannerEvent = EventPayload<'banner.set'>;
 
 /**
- * Snake in the chat pane while a tab's agent works (owner addition, discrepancy row 110). The game lives here, not
- * in the board, so it survives a tab switch, a trip to Settings and the hold: the app freezes it the moment the
- * session leaves `working`, and only Resume (once the agent is working again) counts it back in.
+ * Snake in a project's chat pane (owner addition, discrepancy row 110). The game lives here, not in the board,
+ * so it survives a tab switch, a tab finishing, a trip to Settings and the hold: the app freezes it the moment
+ * the tab on screen needs the person, and Resume (once that ask is answered) counts it back in.
  */
 export interface ArcadeState {
-  sessionId: SessionId;
+  projectId: ProjectId;
   game: SnakeGame;
-  /** Frozen by the app (the session left `working`); the transcript shows in the board's place until Resume. */
+  /** Frozen by the app (the tab on screen needs the person); the transcript shows in the board's place until Resume. */
   held: boolean;
   /** 3 · 2 · 1 before play resumes after a hold. */
   countdown: number | null;
@@ -149,10 +149,10 @@ export interface UiActions {
   prefillDraft(sessionId: SessionId, text: string): void;
   clearDraft(sessionId: SessionId): void;
   setComposerText(sessionId: SessionId, text: string): void;
-  /** Opens Snake for the tab (a fresh board from `seed`), replacing any game already open. */
-  openArcade(sessionId: SessionId, seed: number): void;
+  /** Opens Snake in the project's chat pane (a fresh board from `seed`), replacing any game already open. */
+  openArcade(projectId: ProjectId, seed: number): void;
   setArcadeGame(game: SnakeGame): void;
-  /** The session left `working`: the game pauses and gives the pane back to the transcript. */
+  /** The tab on screen needs the person: the game pauses and gives the pane back to the transcript. */
   holdArcade(): void;
   /** Resume after a hold: the board returns and counts down from 3. */
   resumeArcade(): void;
@@ -393,9 +393,9 @@ export const useUiStore = create<UiStore>()(
         if (text === '') delete s.composerText[sessionId];
         else if (s.composerText[sessionId] !== text) s.composerText[sessionId] = text;
       }),
-    openArcade: (sessionId, seed) =>
+    openArcade: (projectId, seed) =>
       set((s) => {
-        s.arcade = { sessionId, game: newSnakeGame(seed), held: false, countdown: null };
+        s.arcade = { projectId, game: newSnakeGame(seed), held: false, countdown: null };
       }),
     setArcadeGame: (game) =>
       set((s) => {
