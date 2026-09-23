@@ -4,40 +4,150 @@ import styles from './Ship.module.css';
 
 /**
  * Everything between an agent finishing and the change being live. Added once the app grew these (discrepancy
- * #117): the site had stopped at "review the branch", and the app had carried on to running, landing,
- * publishing and deploying. Each claim sits under a small piece of the app that shows it, in the app's own
- * words (copy.ts: run, queue, checkpoints, publish, deploy, skills).
+ * #117): the site had stopped at "review the branch", and the app had carried on to running, publishing,
+ * deploying and auditing. Four features get a row of their own with a drawing of the app beside them; three
+ * smaller ones share a row of cards. Drawings use the app's own words (copy.ts: design, publish, connectRepo,
+ * deploy, debtAudit, queue, checkpoints, skills).
  */
 
-const Running = () => (
+/* ---------- The four large drawings ---------- */
+
+const DesignShot = () => (
   <>
+    <div className={styles.strip}>
+      <span className={styles.chips}>
+        <span>Code</span>
+        <span data-inv="true">Design</span>
+      </span>
+      <span className={styles.muted}>Before · After</span>
+    </div>
     <div className={styles.bar}>
       <span className={styles.btn} data-inv="true">
         ■ Stop
       </span>
       <span className={styles.field}>pnpm dev</span>
+      <span className={styles.field} data-grow="true">
+        localhost:3000/checkout
+      </span>
       <span className={styles.chips}>
-        <span data-inv="true">Desktop</span>
+        <span>Desktop</span>
         <span>Tablet</span>
-        <span>Phone</span>
+        <span data-inv="true">Phone</span>
       </span>
     </div>
-    <div className={styles.page}>
-      <div className={styles.url}>localhost:3000</div>
-      <div className={styles.pageBody}>
-        <i style={{ width: '38%' }} />
-        <i style={{ width: '62%' }} />
-        <i style={{ width: '54%' }} />
+    <div className={styles.stage}>
+      <div className={styles.phone}>
+        <i style={{ width: '46%' }} />
+        <u />
+        <i style={{ width: '80%' }} />
+        <i style={{ width: '64%' }} />
+        <u data-small="true" />
+        <i style={{ width: '72%' }} />
         <b />
       </div>
+      <span className={styles.rotate}>↻ Rotate</span>
     </div>
     <div className={styles.status}>
-      <span className={styles.dot} /> Running · localhost:3000
+      <span className={styles.dot} /> dev · localhost:3000
     </div>
   </>
 );
 
-const Queue = () => (
+const GithubShot = () => (
+  <>
+    <div className={styles.label}>Publish · fix/checkout</div>
+    <div className={styles.note}>Drafted by Claude Code from the diff. Edit it before you send.</div>
+    <div className={styles.area}>
+      <strong>Fix rounding in checkout totals</strong>
+      <span className={styles.muted}>
+        Totals were rounded per line, so carts over ten items could be a cent out. Round once, at the end.
+      </span>
+    </div>
+    <div className={styles.chips}>
+      <span>Commit only</span>
+      <span>Commit &amp; push</span>
+      <span data-inv="true">Commit, push &amp; open PR</span>
+    </div>
+    <ul className={styles.steps}>
+      <li>✓ commit a41c9e2 · .env left out</li>
+      <li>✓ Brought in 3 commits from main · push</li>
+      <li>✓ Opened PR #214</li>
+    </ul>
+    <div className={styles.audit}>
+      <span>14:02</span>
+      <span>github · write</span>
+      <span className={styles.cmd}>you · published fix/checkout</span>
+      <span>revoked</span>
+    </div>
+  </>
+);
+
+const deployRows = [
+  ['Vercel', 'prod', 'built in · vercel deploy --prod'],
+  ['GCP', 'prod', 'gcloud run deploy api --source .'],
+  ['SSH', 'staging', "ssh box 'cd app && ./deploy.sh'"],
+] as const;
+
+const DeployShot = () => (
+  <>
+    <div className={styles.label}>Deploy commands</div>
+    <div className={styles.table}>
+      {deployRows.map(([target, env, command]) => (
+        <div key={target} className={styles.row}>
+          <span className={styles.strong}>{target}</span>
+          <span className={styles.muted}>{env}</span>
+          <span className={styles.cmd}>{command}</span>
+        </div>
+      ))}
+    </div>
+    <div className={styles.ask}>
+      <span className={styles.label}>GCP prod · deploy</span>
+      <span>Touch ID to continue</span>
+    </div>
+    <div className={styles.term}>
+      <span>$ gcloud run deploy api --source .</span>
+      <span>Building and deploying container…</span>
+      <span>Revision api-00042 is serving 100% of traffic.</span>
+      <span className={styles.strong}>✓ Deployed · GCP prod</span>
+    </div>
+  </>
+);
+
+const AuditShot = () => (
+  <>
+    <div className={styles.taskHead}>
+      <span className={styles.label}>Tech debt audit · Claude Code</span>
+      <span className={styles.muted}>Finished</span>
+    </div>
+    <div className={styles.report}>
+      <p>
+        <b>First hour</b> Mostly. The README says <code>npm start</code>; the script is called{' '}
+        <code>dev</code>.
+      </p>
+      <p>
+        <b>Will bite you</b>
+      </p>
+      <div className={styles.finding}>
+        <strong>“Prices are stored in pounds.” They are stored in pence.</strong>
+        <code>src/billing/totals.ts:88 · touched 14 times</code>
+        <span>
+          <em>Accident:</em> a new discount divides twice and every order is a hundred times too cheap.
+        </span>
+        <span>
+          <em>Fix:</em> one Money type at the edge · S
+        </span>
+      </div>
+      <p>
+        <b>Untidy</b>
+      </p>
+      <code className={styles.cmd}>src/lib/date.ts — a second date helper, unused</code>
+    </div>
+  </>
+);
+
+/* ---------- The three small drawings ---------- */
+
+const QueueShot = () => (
   <>
     <div className={styles.msg}>
       <span className={styles.who}>
@@ -66,13 +176,13 @@ const turns = [
   ['Turn 4', '5 files · +96 −41'],
 ] as const;
 
-const Undo = () => (
+const UndoShot = () => (
   <>
     {turns.map(([turn, changes], i) => {
       const last = i === turns.length - 1;
       return (
-        <div key={turn} className={styles.turn} data-last={last || undefined}>
-          <span className={styles.turnName}>{turn}</span>
+        <div key={turn} className={styles.turn}>
+          <span className={styles.strong}>{turn}</span>
           <span className={styles.muted}>{changes}</span>
           <span className={styles.btn} data-inv={last || undefined}>
             {last ? 'Revert this turn' : 'Review'}
@@ -84,41 +194,6 @@ const Undo = () => (
   </>
 );
 
-const Publish = () => (
-  <>
-    <div className={styles.label}>Publish · fix/checkout</div>
-    <div className={styles.field} data-wide="true">
-      Fix rounding in checkout totals
-    </div>
-    <div className={styles.chips}>
-      <span>Commit &amp; push</span>
-      <span data-inv="true">Commit, push &amp; open PR</span>
-    </div>
-    <ul className={styles.steps}>
-      <li>✓ commit a41c9e2</li>
-      <li>✓ push</li>
-      <li>✓ PR #214</li>
-    </ul>
-  </>
-);
-
-const Deploy = () => (
-  <>
-    <span className={styles.btn} data-inv="true" data-big="true">
-      ▲ Deploy to live · Vercel prod
-    </span>
-    <div className={styles.ask}>
-      <span className={styles.label}>Production · deploy</span>
-      <span>Touch ID to continue</span>
-    </div>
-    <ul className={styles.steps}>
-      <li>vercel deploy --prod</li>
-      <li>Deploying · Vercel prod…</li>
-      <li>✓ Deployed · Vercel prod</li>
-    </ul>
-  </>
-);
-
 const hosts = [
   ['Claude', true],
   ['Codex', true],
@@ -126,17 +201,17 @@ const hosts = [
   ['Cursor', true],
 ] as const;
 
-const Skills = () => (
+const SkillsShot = () => (
   <>
     <div className={styles.skill}>
-      <span className={styles.turnName}>release-notes</span>
+      <span className={styles.strong}>release-notes</span>
       <span className={styles.tags}>
         <span className="tag">Claude</span>
         <span className="tag">Codex</span>
       </span>
     </div>
     <div className={styles.skill}>
-      <span className={styles.turnName}>db-migrations</span>
+      <span className={styles.strong}>db-migrations</span>
       <span className={styles.tags}>
         <span className="tag">Shared</span>
       </span>
@@ -156,38 +231,75 @@ const Skills = () => (
   </>
 );
 
-const rows: readonly (readonly [string, string, ReactNode])[] = [
-  [
-    'See it running.',
-    'Styx works out how to start your app and shows it next to the code, at desktop, tablet or phone size. The first time, an agent figures out the command, and Styx remembers it.',
-    <Running key="run" />,
-  ],
+/* ---------- Content ---------- */
+
+type Feature = {
+  readonly title: string;
+  readonly body: string;
+  readonly facts: readonly string[];
+  readonly shot: ReactNode;
+};
+
+const features: readonly Feature[] = [
+  {
+    title: 'See what you’re building, next to the code.',
+    body: 'The Design tab shows your app running beside the files and the chat. Press Run locally and Styx starts it. The first time, an agent works out how, and Styx remembers the command.',
+    facts: [
+      'Desktop, tablet and phone sizes, and a rotate button.',
+      'A before and after picture of the app for every turn an agent takes.',
+      'It only shows pages on your own machine. A repo can’t point it anywhere else.',
+    ],
+    shot: <DesignShot />,
+  },
+  {
+    title: 'Straight to GitHub.',
+    body: 'No repo yet? Create one, private by default, or link one you already have. Publish then commits, pushes and opens the pull request in one step, with the message drafted by your agent from the changes.',
+    facts: [
+      'It uses the GitHub login you already have on this machine.',
+      'Files like .env and private keys are kept out of the commit.',
+      'The push gets its own short-lived access, recorded in the log and thrown away when it finishes.',
+    ],
+    shot: <GithubShot />,
+  },
+  {
+    title: 'Deploys the way you would do it yourself.',
+    body: 'Each place you deploy to runs the command you’d type: vercel, gcloud, a script over ssh. You don’t have to know it. On the first deploy an agent works it out, and Styx remembers.',
+    facts: [
+      'Anything live asks for your fingerprint first.',
+      'Progress stays on the button and in the status bar, so you can keep working.',
+      'Every deploy is in the log: who asked, where it went, what ran and how it ended.',
+    ],
+    shot: <DeployShot />,
+  },
+  {
+    title: 'Find what will slow the next person down.',
+    body: 'Tech debt audit has an agent read your project the way a new engineer would, and report what will actually trip someone up. It runs in the background and changes nothing.',
+    facts: [
+      'Every finding names the file and line, the mistake it leads to, and the size of the fix.',
+      'It checks your setup instructions against what the code really needs.',
+      'Switch projects while it works; the report waits under Tasks.',
+    ],
+    shot: <AuditShot />,
+  },
+];
+
+const cards = [
   [
     'Keep talking while it works.',
     'Type your next message while an agent is busy. It waits for the current turn to finish, or Codex takes it straight away.',
-    <Queue key="queue" />,
+    <QueueShot key="queue" />,
   ],
   [
     'Undo a turn.',
     'Every turn an agent takes is saved. If one goes wrong, put the project back to how it was before it, in one click.',
-    <Undo key="undo" />,
-  ],
-  [
-    'Publish in one step.',
-    'Commit, push and open a pull request together. A project that is not on GitHub yet can be connected from inside Styx.',
-    <Publish key="publish" />,
-  ],
-  [
-    'Deploy to live.',
-    'One button, named for where it goes. It asks for your fingerprint first, the same as it would ask on an agent’s behalf.',
-    <Deploy key="deploy" />,
+    <UndoShot key="undo" />,
   ],
   [
     'Skills for every agent.',
     'Install a skill once and choose which agents get it: Claude Code, Codex, Gemini CLI, Cursor, or all of them.',
-    <Skills key="skills" />,
+    <SkillsShot key="skills" />,
   ],
-];
+] as const;
 
 export const Ship = () => (
   <Section
@@ -196,8 +308,26 @@ export const Ship = () => (
     title="From a finished branch to live, without leaving."
     lede="Once an agent is done, everything else happens in the same window too. Anything that reaches production still asks you first."
   >
+    <div className={styles.features}>
+      {features.map((f, i) => (
+        <article key={f.title} className={styles.feature} data-flip={i % 2 === 1 || undefined}>
+          <div className={styles.copy}>
+            <h3>{f.title}</h3>
+            <p>{f.body}</p>
+            <ul>
+              {f.facts.map((fact) => (
+                <li key={fact}>{fact}</li>
+              ))}
+            </ul>
+          </div>
+          <div className={styles.shot} data-size="large" aria-hidden="true">
+            {f.shot}
+          </div>
+        </article>
+      ))}
+    </div>
     <ul className={styles.cards}>
-      {rows.map(([claim, detail, shot]) => (
+      {cards.map(([claim, detail, shot]) => (
         <li key={claim}>
           <div className={styles.shot} aria-hidden="true">
             {shot}
@@ -208,8 +338,8 @@ export const Ship = () => (
       ))}
     </ul>
     <p className={styles.also}>
-      Also in the app: a usage view that shows how close each agent is to its limit, background reviews of a
-      project’s technical debt, and an agent dock that keeps every chat above your other windows.
+      Also in the app: a usage view that shows how close each agent is to its limit, and an agent dock that
+      keeps every chat above your other windows.
     </p>
   </Section>
 );

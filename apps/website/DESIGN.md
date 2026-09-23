@@ -173,3 +173,10 @@ Then one section was added, **Shipping** (`components/Ship.tsx`), between "Your 
 running, keep talking while it works, undo a turn, publish in one step, deploy to live, skills for every agent, and
 a one-line "also" for usage, tech-debt reviews and the agent dock. Panel tones below it were flipped so the page
 still alternates. Snake is deliberately not on the site.
+
+Follow-up the same day (owner: "we aren't talking to the design pane, how it connects to github, tech debt, how
+deploy works"): Shipping now leads with four feature rows, words on one side and a drawing of the app on the
+other, sides alternating — the Design tab, GitHub (connect a repo, Publish, the short-lived push access), deploys
+(per-target commands, learned once, Touch ID for anything live, all in the log) and the tech debt audit. Queue,
+undo a turn and skills stay as three smaller cards. The Touch ID ask is still the only accent in the section.
+Plans and sign-in providers are not mentioned anywhere on the site (owner decision).

@@ -1,4 +1,75 @@
-/* Six claims, each under a small piece of the app drawn in its own vocabulary: rules, mono, square dots. */
+/* Four features, each a row: words on one side, a drawing of the app on the other, sides alternating. */
+.features {
+  border-top: 1px solid var(--ln);
+  margin-bottom: var(--sp-12);
+}
+.feature {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gutter);
+  row-gap: var(--sp-6);
+  align-items: center;
+  padding-block: var(--sp-12);
+  border-bottom: 1px solid var(--ln);
+}
+.copy {
+  grid-column: 1 / span 5;
+  min-width: 0;
+}
+.feature > .shot {
+  grid-column: 7 / span 6;
+}
+.feature[data-flip='true'] .copy {
+  grid-column: 8 / span 5;
+  grid-row: 1;
+}
+.feature[data-flip='true'] > .shot {
+  grid-column: 1 / span 6;
+  grid-row: 1;
+}
+.copy h3 {
+  font-size: var(--fs-24);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  margin-bottom: var(--sp-4);
+}
+.copy p {
+  color: var(--mu);
+  margin-bottom: var(--sp-5);
+}
+.copy ul {
+  border-top: 1px solid var(--ln);
+}
+.copy li {
+  display: flex;
+  gap: 10px;
+  padding-block: 10px;
+  border-bottom: 1px solid var(--ln);
+  font-size: var(--fs-13);
+}
+.copy li::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-top: 7px;
+  background: var(--tx);
+}
+@media (max-width: 900px) {
+  .copy,
+  .feature > .shot,
+  .feature[data-flip='true'] .copy,
+  .feature[data-flip='true'] > .shot {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .feature {
+    padding-block: var(--sp-8);
+  }
+}
+
+/* Three smaller claims, each under a small piece of the app drawn in its own vocabulary: rules, mono, square dots. */
 .cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -61,6 +132,11 @@
 }
 .shot > * {
   max-width: 100%;
+}
+.shot[data-size='large'] {
+  height: 340px;
+  gap: 10px;
+  padding: 18px;
 }
 .label {
   font: 600 10px / 1 var(--font-ui);
@@ -172,39 +248,6 @@
   flex: 0 1 auto;
   min-width: 76px;
 }
-.page {
-  width: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
-  border: 1px solid var(--ln);
-  display: flex;
-  flex-direction: column;
-}
-.url {
-  padding: 3px 8px;
-  border-bottom: 1px solid var(--ln);
-  color: var(--mu);
-  font-size: var(--fs-11);
-}
-.pageBody {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-}
-.pageBody i {
-  display: block;
-  height: 6px;
-  background: var(--s2);
-}
-.pageBody b {
-  display: block;
-  width: 64px;
-  height: 14px;
-  margin-top: 2px;
-  border: 1px solid var(--ln);
-}
 
 /* Keep talking */
 .msg {
@@ -273,8 +316,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.turnName {
+.strong {
   font-weight: 500;
+  color: var(--tx);
 }
 
 /* Publish, deploy */
@@ -339,4 +383,185 @@
 .box[data-inv='true'] {
   background: var(--tx);
   border-color: var(--tx);
+}
+
+/* Design */
+.strip {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ln);
+}
+.field[data-grow='true'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--mu);
+}
+.stage {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding-block: 10px;
+  background: var(--s1);
+  border: 1px solid var(--ln);
+  overflow: hidden;
+}
+.phone {
+  width: 116px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow: hidden;
+  padding: 14px 12px;
+  background: var(--bg);
+  border: 1px solid var(--tx);
+}
+.phone i {
+  display: block;
+  height: 5px;
+  background: var(--s2);
+}
+.phone u {
+  display: block;
+  height: 36px;
+  background: var(--s2);
+}
+.phone u[data-small='true'] {
+  height: 24px;
+}
+.phone b {
+  display: block;
+  height: 16px;
+  margin-top: auto;
+  background: var(--tx);
+}
+.rotate {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  font: 600 10px / 1 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mu);
+}
+
+/* GitHub */
+.note {
+  color: var(--mu);
+  font-family: var(--font-ui);
+  font-size: var(--fs-12);
+}
+.area {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--ln);
+  background: var(--s1);
+  font-family: var(--font-ui);
+  font-size: var(--fs-13);
+}
+.area strong {
+  font-weight: 600;
+}
+.audit {
+  width: 100%;
+  display: flex;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ln);
+  color: var(--mu);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+.cmd {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Deploy */
+.table {
+  width: 100%;
+  border-top: 1px solid var(--ln);
+}
+.row {
+  display: grid;
+  grid-template-columns: 56px 56px minmax(0, 1fr);
+  gap: 10px;
+  padding-block: 7px;
+  border-bottom: 1px solid var(--ln);
+  white-space: nowrap;
+}
+.row .cmd {
+  color: var(--mu);
+}
+.term {
+  width: 100%;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: var(--term);
+  color: var(--termtx);
+  font-size: var(--fs-11);
+}
+.term span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.term .strong {
+  color: var(--termtx);
+}
+
+/* Tech debt */
+.taskHead {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ln);
+}
+.report {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-13);
+}
+.report b {
+  font-weight: 700;
+}
+.report code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+}
+.finding {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 10px;
+  border-left: 2px solid var(--tx);
+}
+.finding strong {
+  font-weight: 600;
+}
+.finding code {
+  color: var(--mu);
+}
+.finding em {
+  font-style: normal;
+  color: var(--mu);
 }
