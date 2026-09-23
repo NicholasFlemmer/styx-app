@@ -23,7 +23,7 @@ export const Hero = () => (
           </a>
         </div>
         <p className={styles.micro}>
-          Mac now, Windows soon. Free for your first project. Your keys never leave your computer.
+          Mac now, Windows soon. Your keys never leave your computer.
         </p>
       </div>
       <div className={styles.demo} data-load="fade">

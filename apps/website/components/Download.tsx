@@ -7,7 +7,7 @@ export const Download = () => (
     tone="panel"
     id="download"
     title="Download"
-    lede={`Beta ${site.version} for Mac. Windows is on its way. Free for your first project; sign in with GitHub or Google to use it on more.`}
+    lede={`Beta ${site.version} for Mac. Windows is on its way.`}
   >
     <div className={styles.cards}>
       <div className={styles.card}>
