@@ -1,35 +1,342 @@
-.rows {
+/* Six claims, each under a small piece of the app drawn in its own vocabulary: rules, mono, square dots. */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   border-top: 1px solid var(--ln);
+  border-left: 1px solid var(--ln);
   margin-bottom: var(--sp-12);
 }
-.rows li {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  column-gap: var(--gutter);
-  row-gap: var(--sp-2);
-  padding-block: var(--sp-6);
+.cards > li {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-6);
+  border-right: 1px solid var(--ln);
   border-bottom: 1px solid var(--ln);
 }
-.rows h3 {
-  grid-column: 1 / span 5;
+.cards h3 {
+  margin-top: var(--sp-4);
   font-size: var(--fs-18);
   font-weight: 600;
   line-height: 1.35;
 }
-.rows p {
-  grid-column: 7 / span 6;
+.cards p {
   color: var(--mu);
-  max-width: 36em;
 }
-@media (max-width: 860px) {
-  .rows h3,
-  .rows p {
-    grid-column: 1 / -1;
+@media (max-width: 1100px) {
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .cards {
+    grid-template-columns: 1fr;
+  }
+  .cards > li {
+    padding: var(--sp-5) var(--sp-4);
   }
 }
 .also {
   color: var(--mu);
   max-width: 44em;
-  margin-top: calc(-1 * var(--sp-6));
   margin-bottom: var(--sp-12);
+}
+
+/* The vignette: a fixed-height slice of the app on the page background. */
+.shot {
+  width: 100%;
+  min-width: 0;
+  height: 196px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--ln);
+  font: 400 var(--fs-12) / 1.4 var(--font-mono);
+  user-select: none;
+}
+.shot > * {
+  max-width: 100%;
+}
+.label {
+  font: 600 10px / 1 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mu);
+}
+.muted {
+  color: var(--mu);
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--ln);
+  font: 600 10px / 1 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.btn[data-inv='true'] {
+  background: var(--tx);
+  color: var(--bg);
+  border-color: var(--tx);
+}
+.btn[data-big='true'] {
+  height: 32px;
+  padding: 0 12px;
+}
+.field {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--ln);
+  background: var(--s1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.field[data-wide='true'] {
+  flex: none;
+  width: 100%;
+  font-family: var(--font-ui);
+}
+.chips {
+  display: inline-flex;
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+}
+.chips > span {
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--ln);
+  font: 600 10px / 1 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.chips > span + span {
+  border-left: 0;
+}
+.chips > span[data-inv='true'] {
+  background: var(--tx);
+  color: var(--bg);
+  border-color: var(--tx);
+}
+.status {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--mu);
+  white-space: nowrap;
+}
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  flex: none;
+  background: var(--tx);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dot[data-blink='true'] {
+    animation: ship-blink 1.2s steps(2, jump-none) infinite;
+  }
+  @keyframes ship-blink {
+    to {
+      opacity: 0.25;
+    }
+  }
+}
+
+/* See it running */
+.bar {
+  width: 100%;
+  display: flex;
+  gap: 6px;
+  overflow: hidden;
+}
+.bar .field {
+  flex: 0 1 auto;
+  min-width: 76px;
+}
+.page {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid var(--ln);
+  display: flex;
+  flex-direction: column;
+}
+.url {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--ln);
+  color: var(--mu);
+  font-size: var(--fs-11);
+}
+.pageBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+}
+.pageBody i {
+  display: block;
+  height: 6px;
+  background: var(--s2);
+}
+.pageBody b {
+  display: block;
+  width: 64px;
+  height: 14px;
+  margin-top: 2px;
+  border: 1px solid var(--ln);
+}
+
+/* Keep talking */
+.msg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-13);
+}
+.who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 10px / 1 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mu);
+}
+.mine {
+  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--s2);
+  font-family: var(--font-ui);
+  font-size: var(--fs-13);
+  white-space: nowrap;
+}
+.composer {
+  width: 100%;
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid var(--tx);
+  background: var(--s1);
+  font-family: var(--font-ui);
+  font-size: var(--fs-13);
+}
+.typing {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.composer + .status {
+  margin-top: 0;
+}
+
+/* Undo a turn */
+.turn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ln);
+  white-space: nowrap;
+}
+.turn .muted {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.turnName {
+  font-weight: 500;
+}
+
+/* Publish, deploy */
+.steps {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--mu);
+}
+.steps li:last-child {
+  color: var(--tx);
+}
+/* The one thing that asks for you is the one thing in accent. */
+.ask {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--ac);
+  color: var(--acx);
+  font-family: var(--font-ui);
+  font-weight: 600;
+}
+.ask .label {
+  color: var(--acx);
+}
+
+/* Skills */
+.skill {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ln);
+}
+.tags {
+  display: inline-flex;
+  gap: 4px;
+}
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-13);
+}
+.checks > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.box {
+  width: 11px;
+  height: 11px;
+  border: 1px solid var(--mu);
+}
+.box[data-inv='true'] {
+  background: var(--tx);
+  border-color: var(--tx);
 }
