@@ -1,4 +1,10 @@
-import type { CommandInput, CommandName, CommandOutput, WorktreeId } from '@styx/core';
+import {
+  TREE_MAX_DEPTH,
+  type CommandInput,
+  type CommandName,
+  type CommandOutput,
+  type WorktreeId,
+} from '@styx/core';
 import { bridge } from '../../state/bridge';
 import { command } from '../../state/commands';
 import {
@@ -68,37 +74,24 @@ export interface LoadedTree {
   source: FileSource;
 }
 
-const IGNORED_DIRS = new Set(['.git', 'node_modules', '.styx']);
-const MAX_DEPTH = 4;
-
-const byKindThenName = (a: { kind: string; name: string }, b: { kind: string; name: string }): number =>
-  a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'dir' ? -1 : 1;
-
-const walk = async (
-  worktreeId: WorktreeId,
-  dir: string,
-  depth: number,
-  out: FileNode[],
-): Promise<boolean> => {
-  const r = await query('fs.listDir', { worktreeId, path: dir });
-  if (r === null) return false;
-  const entries = [...r.entries].sort(byKindThenName);
-  for (const e of entries) {
-    if (e.kind === 'dir' && IGNORED_DIRS.has(e.name)) continue;
-    const path = dir === '' ? e.name : `${dir}/${e.name}`;
-    out.push({ path, name: e.name, kind: e.kind, depth, status: e.gitStatus });
-    if (e.kind === 'dir' && depth < MAX_DEPTH) await walk(worktreeId, path, depth + 1, out);
-  }
-  return true;
-};
-
-/** Depth-first tree (dirs first) with git marks; the prototype tree when `fs.listDir` is unavailable. */
+/**
+ * The tree comes back from main in one call (discrepancy #115), already ordered and already carrying git
+ * marks. This used to walk directory by directory — one IPC round trip and one full `git status` each — which
+ * on a real project meant a hundred-odd of both on every project switch, serialised on the main thread.
+ */
+/** The worktree's tree, or the prototype fixture when main cannot answer (no bridge, worktree gone). */
 export const loadWorktreeTree = async (worktreeId: WorktreeId): Promise<LoadedTree> => {
-  const nodes: FileNode[] = [];
-  const ok = await walk(worktreeId, '', 0, nodes);
-  if (!ok || nodes.length === 0) {
+  const r = await query('fs.readTree', { worktreeId, maxDepth: TREE_MAX_DEPTH });
+  if (r === null || r.nodes.length === 0) {
     return { nodes: [...FIXTURE_TREE], changes: [...FIXTURE_CHANGES], source: 'fixture' };
   }
+  const nodes: FileNode[] = r.nodes.map((n) => ({
+    path: n.path,
+    name: n.name,
+    kind: n.kind,
+    depth: n.depth,
+    status: n.status,
+  }));
   const changes = nodes
     .filter((n): n is FileNode & { status: GitStatus } => n.kind === 'file' && n.status !== null)
     .map((n) => ({ path: n.path, status: n.status }));

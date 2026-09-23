@@ -39,35 +39,25 @@ const sideMain = fixtures.ids.worktree.sideMain;
 const acme = fixtures.ids.project.acmeShop as ProjectId;
 const claude = fixtures.ids.session.claude as SessionId;
 
-const listDir = (path: string) =>
-  path === ''
-    ? {
-        entries: [
-          { name: 'src', kind: 'dir', gitStatus: null },
-          { name: 'README.md', kind: 'file', gitStatus: null },
-        ],
-      }
-    : path === 'src'
-      ? { entries: [{ name: 'server.ts', kind: 'file', gitStatus: null }] }
-      : { entries: [] };
+/** The tree main now returns in one call (discrepancy #115): already ordered, already marked. */
+const treeNodes = () => [
+  { path: 'src', name: 'src', kind: 'dir' as const, depth: 0, status: null },
+  { path: 'src/server.ts', name: 'server.ts', kind: 'file' as const, depth: 1, status: null },
+  { path: 'README.md', name: 'README.md', kind: 'file' as const, depth: 0, status: null },
+  ...extraFiles.map((name) => ({
+    path: name,
+    name,
+    kind: 'file' as const,
+    depth: 0,
+    status: '?' as const,
+  })),
+];
 /** Files that "appear on disk" between reads (the refresh test adds one). */
 let extraFiles: string[] = [];
 const commandMock = vi.fn(async (name: string, input?: unknown) => {
-  if (name === 'fs.listDir') {
-    const base = listDir((input as { path: string }).path);
-    const path = (input as { path: string }).path;
-    return {
-      ok: true as const,
-      value:
-        path === ''
-          ? {
-              entries: [
-                ...base.entries,
-                ...extraFiles.map((name) => ({ name, kind: 'file' as const, gitStatus: '?' as const })),
-              ],
-            }
-          : base,
-    };
+  void input;
+  if (name === 'fs.readTree') {
+    return { ok: true as const, value: { nodes: treeNodes(), truncated: false } };
   }
   if (name === 'fs.readFile') return { ok: true as const, value: { text: '', eol: 'lf' } };
   return { ok: true as const, value: {} };
@@ -99,7 +89,7 @@ describe('Workspace screen', () => {
     await waitFor(() => expect(screen.getByRole('treeitem', { name: 'README.md' })).toBeTruthy());
     expect(screen.getByRole('treeitem', { name: 'src/' })).toBeTruthy();
     expect(screen.getByRole('treeitem', { name: 'server.ts' })).toBeTruthy();
-    expect(commandMock).toHaveBeenCalledWith('fs.listDir', { worktreeId: sideMain, path: '' });
+    expect(commandMock).toHaveBeenCalledWith('fs.readTree', { worktreeId: sideMain, maxDepth: 4 });
     expect(screen.getByTestId('monaco').getAttribute('data-worktree')).toBe(sideMain);
     const terminal = screen.getByTestId('terminal');
     expect(terminal.getAttribute('data-session')).toBe(''); // no session yet: the terminal belongs to the worktree
@@ -130,16 +120,18 @@ describe('Workspace screen', () => {
     expect(commandMock).toHaveBeenCalledWith('fs.watchTree', { worktreeId: sideMain });
     extraFiles = ['new-from-agent.ts'];
     expect(listeners.has('fs.treeChanged')).toBe(true);
-    const listsBefore = commandMock.mock.calls.filter((c) => c[0] === 'fs.listDir').length;
+    const listsBefore = commandMock.mock.calls.filter((c) => c[0] === 'fs.readTree').length;
     act(() => listeners.get('fs.treeChanged')?.({ worktreeId: sideMain }));
     await waitFor(() =>
-      expect(commandMock.mock.calls.filter((c) => c[0] === 'fs.listDir').length).toBeGreaterThan(listsBefore),
+      expect(commandMock.mock.calls.filter((c) => c[0] === 'fs.readTree').length).toBeGreaterThan(
+        listsBefore,
+      ),
     );
     await waitFor(() => expect(screen.getByRole('treeitem', { name: /new-from-agent\.ts/ })).toBeTruthy());
     // Another lane's change is not this pane's business.
-    const before = commandMock.mock.calls.filter((c) => c[0] === 'fs.listDir').length;
+    const before = commandMock.mock.calls.filter((c) => c[0] === 'fs.readTree').length;
     listeners.get('fs.treeChanged')?.({ worktreeId: 'someone-else' });
-    expect(commandMock.mock.calls.filter((c) => c[0] === 'fs.listDir').length).toBe(before);
+    expect(commandMock.mock.calls.filter((c) => c[0] === 'fs.readTree').length).toBe(before);
     unmount();
     expect(commandMock).toHaveBeenCalledWith('fs.unwatchTree', {});
     extraFiles = [];

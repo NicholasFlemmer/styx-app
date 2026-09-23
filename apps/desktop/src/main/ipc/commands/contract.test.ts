@@ -233,6 +233,44 @@ describe('command contract', () => {
       });
     });
 
+    it('reads the whole tree in one call: ordered, depth-limited, ignoring the heavy directories', async () => {
+      const { app, sender, worktreeId, root } = setup();
+      mkdirSync(join(root, 'node_modules', 'left'), { recursive: true });
+      writeFileSync(join(root, 'node_modules', 'left', 'index.js'), '');
+      mkdirSync(join(root, '.styx'), { recursive: true });
+      writeFileSync(join(root, '.styx', 'project.json'), '{}');
+      mkdirSync(join(root, 'deep', 'a', 'b', 'c', 'd'), { recursive: true });
+      writeFileSync(join(root, 'deep', 'a', 'b', 'c', 'd', 'far.ts'), '');
+      writeFileSync(join(root, 'README.md'), '# hi');
+
+      const r = await app.bus.dispatch(sender, 'fs.readTree', { worktreeId, maxDepth: 4 });
+      if (!r.ok) throw new Error('readTree failed');
+      const paths = r.value.nodes.map((n) => n.path);
+
+      // node_modules, .styx and .git are never descended into: they are why a real project felt slow.
+      expect(paths.some((p) => p.startsWith('node_modules'))).toBe(false);
+      expect(paths.some((p) => p.startsWith('.styx'))).toBe(false);
+      // Directories come before files at each level, which is the order the pane renders.
+      expect(paths[0]).toBe('deep');
+      expect(paths).toContain('src/a.ts');
+      expect(paths).toContain('README.md');
+      expect(r.value.nodes.find((n) => n.path === 'src')?.kind).toBe('dir');
+      expect(r.value.nodes.find((n) => n.path === 'src/a.ts')?.depth).toBe(1);
+      // maxDepth 4 means the walk stops before the fifth level.
+      expect(paths).toContain('deep/a/b/c');
+      expect(paths.some((p) => p.startsWith('deep/a/b/c/d'))).toBe(false);
+      expect(r.value.truncated).toBe(false);
+    });
+
+    it('refuses to walk outside the worktree', async () => {
+      const { app, sender } = setup();
+      const r = await app.bus.dispatch(sender, 'fs.readTree', {
+        worktreeId: 'wt-nope' as never,
+        maxDepth: 4,
+      });
+      expect(r).toMatchObject({ ok: false });
+    });
+
     it('rejects paths that resolve outside the worktree', async () => {
       const { app, sender, worktreeId } = setup();
       for (const path of ['../styx-outside.txt', 'src/../../styx-outside.txt', '/etc/passwd', '..']) {

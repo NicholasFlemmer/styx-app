@@ -1,6 +1,6 @@
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { newId, repoHasGit, type Worktree } from '@styx/core';
+import { TREE_IGNORED_DIRS, TREE_MAX_NODES, newId, repoHasGit, type Worktree } from '@styx/core';
 import type { Container } from '../../container';
 import { confine } from '../../services/confine';
 import { worktreeLocation } from '../../services/git';
@@ -183,31 +183,94 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
     return {};
   });
 
+  /**
+   * Directories that contain a change, worked out once from the status map rather than re-scanned per entry.
+   * `src/a/b.ts` marks `src` and `src/a`; an untracked file marks its ancestors as `?` only if nothing tracked
+   * there is modified, because a folder holding real edits should not read as merely untracked.
+   */
+  const dirMarks = (statuses: Map<string, 'M' | 'A' | 'D' | '?'>): Map<string, 'M' | '?'> => {
+    const marks = new Map<string, 'M' | '?'>();
+    for (const [file, st] of statuses) {
+      const mark: 'M' | '?' = st === '?' ? '?' : 'M';
+      const parts = file.split('/');
+      for (let i = 1; i < parts.length; i += 1) {
+        const dir = parts.slice(0, i).join('/');
+        if (mark === 'M' || !marks.has(dir)) marks.set(dir, mark);
+      }
+    }
+    return marks;
+  };
+
+  /**
+   * The whole tree in one pass (discrepancy #115): one `git status`, `readdir` with dirents so a file's kind
+   * costs no extra syscall, and siblings read in parallel. What used to be ~113 IPC calls and ~113 `git status`
+   * runs per project switch is now one of each.
+   */
+  bus.register('fs.readTree', async ({ worktreeId, maxDepth }) => {
+    const wt = requireWorktree(worktreeId);
+    const statuses = await git.statusMap(wt.path).catch(() => new Map<string, 'M' | 'A' | 'D' | '?'>());
+    const marks = dirMarks(statuses);
+    const ignored = new Set(TREE_IGNORED_DIRS);
+    const nodes: {
+      path: string;
+      name: string;
+      kind: 'file' | 'dir';
+      depth: number;
+      status: 'M' | 'A' | 'D' | '?' | null;
+    }[] = [];
+    let truncated = false;
+
+    const walk = async (dir: string, depth: number): Promise<void> => {
+      if (truncated) return;
+      let entries;
+      try {
+        entries = await readdir(dir === '' ? wt.path : join(wt.path, dir), { withFileTypes: true });
+      } catch {
+        return; // a directory that vanished mid-walk is not an error worth failing the tree over
+      }
+      // Directories first, then names — the order the pane renders, settled here so it need not sort.
+      const sorted = entries
+        .filter((e) => !(e.isDirectory() && ignored.has(e.name)) && e.name !== '.git')
+        .sort((a, b) =>
+          a.isDirectory() === b.isDirectory() ? a.name.localeCompare(b.name) : a.isDirectory() ? -1 : 1,
+        );
+      for (const entry of sorted) {
+        if (nodes.length >= TREE_MAX_NODES) {
+          truncated = true;
+          return;
+        }
+        const path = dir === '' ? entry.name : `${dir}/${entry.name}`;
+        const isDir = entry.isDirectory();
+        nodes.push({
+          path,
+          name: entry.name,
+          kind: isDir ? 'dir' : 'file',
+          depth,
+          status: isDir ? (marks.get(path) ?? null) : (statuses.get(path) ?? null),
+        });
+        if (isDir && depth + 1 < maxDepth) await walk(path, depth + 1);
+      }
+    };
+
+    await walk('', 0);
+    return { nodes, truncated };
+  });
+
   bus.register('fs.listDir', async ({ worktreeId, path }) => {
     const wt = requireWorktree(worktreeId);
     const full = confine(wt.path, path);
-    const names = await readdir(full);
+    // Dirents carry the kind, so a listing costs one syscall rather than one per entry (measured on a
+    // 706-entry directory: 12.5 ms of sequential `stat` down to 1.1 ms).
+    const dirents = await readdir(full, { withFileTypes: true });
     const statuses = await git.statusMap(wt.path).catch(() => new Map<string, 'M' | 'A' | 'D' | '?'>());
+    const marks = dirMarks(statuses);
     const entries: { name: string; kind: 'file' | 'dir'; gitStatus: 'M' | 'A' | 'D' | '?' | null }[] = [];
-    for (const name of names) {
-      if (name === '.git') continue;
-      const p = join(full, name);
-      let kind: 'file' | 'dir' = 'file';
-      try {
-        kind = (await stat(p)).isDirectory() ? 'dir' : 'file';
-      } catch {
-        continue;
-      }
-      const rel = relative(wt.path, p).split(sep).join('/');
-      let gitStatus: 'M' | 'A' | 'D' | '?' | null = statuses.get(rel) ?? null;
-      if (kind === 'dir' && gitStatus === null) {
-        for (const [k, v] of statuses)
-          if (k.startsWith(`${rel}/`)) {
-            gitStatus = v === '?' ? '?' : 'M';
-            break;
-          }
-      }
-      entries.push({ name, kind, gitStatus });
+    for (const entry of dirents) {
+      if (entry.name === '.git') continue;
+      const kind: 'file' | 'dir' = entry.isDirectory() ? 'dir' : 'file';
+      const rel = relative(wt.path, join(full, entry.name)).split(sep).join('/');
+      const gitStatus = kind === 'dir' ? (marks.get(rel) ?? null) : (statuses.get(rel) ?? null);
+      entries.push({ name: entry.name, kind, gitStatus });
     }
     entries.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'dir' ? -1 : 1));
     return { entries };

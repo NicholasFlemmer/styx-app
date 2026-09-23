@@ -868,6 +868,32 @@ export const commands = {
   },
   /** Opens an https link from a transcript in the default browser (main validates the scheme). */
   'link.open': { input: z.object({ url: z.string().url() }), output: ok },
+  /**
+   * The whole file tree in one call (discrepancy #115). Replaces a walk of one `fs.listDir` per directory: on a
+   * real project that was a hundred-odd IPC round trips and a hundred-odd full `git status` runs per project
+   * switch, all serialised on the main thread. Main walks it in one pass, with one status read.
+   */
+  'fs.readTree': {
+    input: z.object({
+      worktreeId: worktreeIdSchema,
+      /** Directories below this are not descended into. */
+      maxDepth: z.number().int().min(1).max(8).default(4),
+    }),
+    output: z.object({
+      nodes: z.array(
+        z.object({
+          path: z.string(),
+          name: z.string(),
+          kind: z.enum(['file', 'dir']),
+          depth: z.number().int().min(0),
+          status: z.enum(['M', 'A', 'D', '?']).nullable(),
+        }),
+      ),
+      /** True when the walk stopped at the node cap, so the pane can say the tree is partial. */
+      truncated: z.boolean().default(false),
+    }),
+  },
+
   'fs.listDir': {
     input: z.object({ worktreeId: worktreeIdSchema, path: z.string().default('') }),
     output: z.object({

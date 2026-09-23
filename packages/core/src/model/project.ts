@@ -137,3 +137,13 @@ export const worktreeSchema = z.object({
   archivedAt: timestampSchema.nullable(),
 });
 export type Worktree = z.infer<typeof worktreeSchema>;
+
+/**
+ * Directories the file pane never descends into (discrepancy #115). Shared so main's walker and the renderer
+ * agree; a mismatch would mean walking a tree the pane then throws away.
+ */
+export const TREE_IGNORED_DIRS: readonly string[] = ['.git', 'node_modules', '.styx'];
+
+/** How deep the tree goes, and the most nodes it will carry before saying it is partial. */
+export const TREE_MAX_DEPTH = 4;
+export const TREE_MAX_NODES = 20_000;
