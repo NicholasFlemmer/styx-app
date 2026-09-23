@@ -20,6 +20,7 @@ const bus = () => {
       dnd: false,
       onboardingDone: true,
       trackAgentEdits: false,
+      usageReports: true,
     },
   }));
   b.register('project.select', ({ projectId }) => {

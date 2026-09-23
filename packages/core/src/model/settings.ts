@@ -49,6 +49,12 @@ export const appSettingsSchema = z.object({
    * with ~100 hunks the watcher and its deltas slowed the whole app); the demo fixture turns it on.
    */
   trackAgentEdits: z.boolean().default(false),
+  /**
+   * Send anonymous usage counts to Styx (ADR-0026 addendum, discrepancy #114): which features get reached, so
+   * the product can be improved. A closed set of event names and nothing else — never a project, a path, a
+   * branch or anything an agent said. On by default, off in one click, and only while signed in.
+   */
+  usageReports: z.boolean().default(true),
 });
 export type AppSettings = z.infer<typeof appSettingsSchema>;
 
@@ -64,6 +70,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   dnd: false,
   onboardingDone: false,
   trackAgentEdits: false,
+  usageReports: true,
 };
 
 /**

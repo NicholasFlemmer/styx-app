@@ -62,7 +62,8 @@ import { TargetService } from './services/target-service';
 import { TerminalService } from './services/terminal-service';
 import { TranscriptService } from './services/transcript-service';
 import { UsageService } from './services/usage-service';
-import { AccountService } from './services/account-service';
+import { AccountService, DEFAULT_API } from './services/account-service';
+import { UsageReportService } from './services/usage-report-service';
 import { version as APP_VERSION } from '../../package.json';
 import { projectSettingsFor } from './store/projection';
 import { Publisher } from './store/publisher';
@@ -252,6 +253,8 @@ export interface Container {
   usage: UsageService;
   /** The Styx account (ADR-0026): device flow, keychain tokens, offline-tolerant session. */
   account: AccountService;
+  /** Anonymous usage counts (discrepancy row 114): a closed set of event names, nothing else. */
+  usageReports: UsageReportService;
   terminals: TerminalService;
   broker: BrokerHost;
   windows: WindowsPort;
@@ -540,6 +543,16 @@ export function buildContainer(opts: ContainerOptions): Container {
   // Signed in, Styx commits as the person when git has no identity of its own (ADR-0026 §6). A machine with
   // `user.name` set never reaches this: git's own config wins.
   git.bindIdentity(() => account.gitIdentity() ?? STYX_IDENTITY);
+  // Counts go out only while signed in and only while the setting is on; both are read at flush time, so
+  // turning it off or signing out stops the next batch rather than the one after.
+  const usageReports = new UsageReportService({
+    fetch: opts.fetch ?? fetch,
+    apiBase: () => process.env['STYX_API'] ?? DEFAULT_API,
+    token: () => account.accessToken(),
+    enabled: () => repos.settings.app().usageReports,
+    now: () => clock.now(),
+  });
+  usageReports.start();
   const screens = new ScreensStore(join(runtime.userData, 'screens'));
   const deviceHooks = opts.deviceHooks ?? NO_DEVICE_HOOKS;
   const devices = new DeviceService({
@@ -894,6 +907,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     worktrees,
     usage,
     account,
+    usageReports,
     terminals,
     broker,
     windows: opts.windows,
@@ -915,6 +929,7 @@ export function buildContainer(opts: ContainerOptions): Container {
       for (const s of repos.sessions.live()) broker.notifyStopping(s.id);
       retention.stop();
       checkpoints.stop();
+      await usageReports.shutdown();
       refresh.stop();
       cliWatch.stop();
       sessions.killAll();

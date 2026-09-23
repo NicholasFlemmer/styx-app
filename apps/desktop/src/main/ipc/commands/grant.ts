@@ -8,6 +8,7 @@ export function registerGrantCommands(bus: CommandBus, app: Container): void {
 
   bus.register('grant.approve', async ({ grantId, duration, scope }) => {
     const g = await grants.approve(grantId, duration, scope);
+    app.usageReports.record('grant.approved');
     return { grantId: g.id, expiresAt: openUntil(g) };
   });
 

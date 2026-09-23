@@ -456,6 +456,8 @@ async function boot(): Promise<void> {
   } catch (e) {
     logger.error('broker listen failed', { endpoint, error: (e as Error).message });
   }
+  // The heartbeat (discrepancy row 114): one count per launch is what daily actives and retention are made of.
+  container.usageReports.record('app.launched');
 
   nativeTheme.on('updated', () => {
     windowService.applyTheme();

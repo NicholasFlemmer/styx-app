@@ -320,11 +320,7 @@ describe('AccountService (ADR-0026)', () => {
     t.store.set('account', { account: ACCOUNT, signedInAt: 5 });
     t.service.load();
     await t.vault.set('styx:v1:styx:account:refresh', 'rt-1');
-    t.api.on(
-      '/v1/token/refresh',
-      { body: { ...grant(), accessToken: 'at-2' } },
-      { status: 401, body: {} },
-    );
+    t.api.on('/v1/token/refresh', { body: { ...grant(), accessToken: 'at-2' } }, { status: 401, body: {} });
     expect(await t.service.accessToken()).toBe('at-2');
     expect(t.api.calls.at(-1)).toMatchObject({ path: '/v1/token/refresh', body: { refreshToken: 'rt-1' } });
     // Inside its lifetime the cached token is reused: no second call.

@@ -5,7 +5,11 @@ import { type CommandBus, fail } from '../bus';
 export function registerSessionCommands(bus: CommandBus, app: Container): void {
   const { sessions, repos, terminals } = app;
 
-  bus.register('session.spawn', (input) => sessions.start(input));
+  bus.register('session.spawn', async (input) => {
+    const result = await sessions.start(input);
+    app.usageReports.record('agent.spawned');
+    return result;
+  });
 
   // Queue (Claude Code has no steer): filled by the queue work package in SessionService.
   bus.register('session.sendQueued', async ({ sessionId, messageId }) => {

@@ -1791,6 +1791,13 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     refresh: 'Refresh',
     /** The API could not be reached; the session stands. */
     stale: 'Offline since {when} · your account still works',
+    /** The usage-reports switch (discrepancy #114): said plainly, next to the account it belongs to. */
+    usage: {
+      label: 'Send usage counts',
+      hint: 'Which features get used, tied to your account. Never your code, projects, paths or prompts.',
+      /** Shown when signed out: there is no account to tie counts to, so nothing is sent either way. */
+      signedOut: 'Nothing is sent while you are signed out.',
+    },
     /** Where the account is used today, so the pane is honest about what it does. */
     usedFor: 'Used to sign commits Styx makes when git has no name of its own.',
   },

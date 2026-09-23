@@ -31,7 +31,9 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
 
   bus.register('project.add', async ({ path, name }) => {
     guardAdd();
-    return { projectId: (await projects.add(path, name)).id };
+    const project = await projects.add(path, name);
+    app.usageReports.record('project.added');
+    return { projectId: project.id };
   });
 
   bus.register('project.gitInit', async ({ projectId }) => {
@@ -54,6 +56,7 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
   bus.register('project.clone', async ({ url, into, openInIde }) => {
     guardAdd();
     const project = await projects.clone(url, into);
+    app.usageReports.record('project.added');
     if (openInIde) openInFallbackIde(project.path);
     return { projectId: project.id };
   });
@@ -89,6 +92,7 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
       sessionId = session.id;
     }
     if (input.openInIde) openInFallbackIde(project.path);
+    app.usageReports.record('project.added');
     return { projectId: project.id, sessionId, githubError: project.githubError };
   });
 

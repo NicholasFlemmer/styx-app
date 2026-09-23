@@ -1,10 +1,32 @@
 import { accountLabel, copy, fill, formatAge, type ReadModel } from '@styx/core';
-import { Button, LabelValueRow, StatusDot } from '@styx/ui';
+import { Button, Checkbox, LabelValueRow, StatusDot } from '@styx/ui';
 import { command } from '../../state/commands';
 import { useModel, useNow, useUi } from '../../state/hooks';
 import s from './AccountPane.module.css';
 
 const selectAccount = (m: ReadModel) => m.account;
+const selectUsageReports = (m: ReadModel) => m.settings.app.usageReports;
+
+/**
+ * The usage-reports switch (discrepancy row 114). It sits with the account because that is what counts are tied
+ * to, it says what is and is not sent in one line, and it is one click to turn off.
+ */
+function UsageRow({ signedIn }: { signedIn: boolean }) {
+  const enabled = useModel(selectUsageReports);
+  return (
+    <div className={s['usage']} data-usage-reports={enabled ? 'on' : 'off'}>
+      <Checkbox
+        checked={enabled}
+        onChange={(checked) => void command('settings.set', { patch: { usageReports: checked } })}
+        label={copy.account.usage.label}
+        data-usage-toggle="true"
+      />
+      <span className={['t-meta', s['usageHint']].join(' ')}>
+        {signedIn ? copy.account.usage.hint : copy.account.usage.signedOut}
+      </span>
+    </div>
+  );
+}
 
 const run = (name: 'account.signOut' | 'account.refresh') => void command(name, {});
 
@@ -52,6 +74,7 @@ export function AccountPane() {
           </div>
         )}
         <p className={s['note']}>{copy.account.usedFor}</p>
+        <UsageRow signedIn />
         <div className={s['actions']}>
           <Button onClick={() => run('account.refresh')}>{copy.account.refresh}</Button>
           <Button variant="ghost" onClick={() => run('account.signOut')} data-account-signout="true">
@@ -74,6 +97,7 @@ export function AccountPane() {
           {copy.account.signIn}
         </Button>
       </div>
+      <UsageRow signedIn={false} />
     </div>
   );
 }
