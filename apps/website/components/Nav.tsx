@@ -3,7 +3,7 @@ import { DownloadButton } from './DownloadButton';
 import { ThemeToggle } from './ThemeToggle';
 import styles from './Nav.module.css';
 
-const navIds = new Set(['how', 'access', 'agents', 'repo', 'security']);
+const navIds = new Set(['how', 'access', 'agents', 'repo', 'ship', 'security']);
 
 export const Nav = () => (
   <header className={styles.nav} id="top" data-load="rule">
