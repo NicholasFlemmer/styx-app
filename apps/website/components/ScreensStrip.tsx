@@ -1,7 +1,15 @@
 import { MockFrame } from './demo/MockFrame';
 import { WORKSPACE_FULL, WorkspaceMock } from './demo/WorkspaceMock';
 import { SCREEN } from './screens/AppChrome';
-import { AgentsScreen, ApprovalsScreen, DiffScreen, HomeScreen, OnboardingScreen, RepoScreen, SettingsScreen } from './screens/Screens';
+import {
+  AgentsScreen,
+  ApprovalsScreen,
+  DiffScreen,
+  HomeScreen,
+  OnboardingScreen,
+  RepoScreen,
+  SettingsScreen,
+} from './screens/Screens';
 import { Section } from './Section';
 import styles from './ScreensStrip.module.css';
 
@@ -12,7 +20,14 @@ const screens = [
   [
     'Workspace',
     <div key="workspace" className={styles.letterbox}>
-      <div style={{ width: WORKSPACE_FULL.w, height: WORKSPACE_FULL.h, transform: `scale(${scaleToScreen})`, transformOrigin: '0 0' }}>
+      <div
+        style={{
+          width: WORKSPACE_FULL.w,
+          height: WORKSPACE_FULL.h,
+          transform: `scale(${scaleToScreen})`,
+          transformOrigin: '0 0',
+        }}
+      >
         <WorkspaceMock step="sheet" compact={false} chrome="mac" />
       </div>
     </div>,
@@ -27,12 +42,16 @@ const screens = [
 
 export const ScreensStrip = () => (
   <Section
-    tone="panel"
     id="screens"
     title="The whole app, in one strip."
     lede="Eight screens, one language. Everything you saw above is in here, drawn from the same rules: one window, square dots, lime only where something needs you."
   >
-    <div className={styles.strip} role="region" aria-label="Screens of the app, scrolls sideways" tabIndex={0}>
+    <div
+      className={styles.strip}
+      role="region"
+      aria-label="Screens of the app, scrolls sideways"
+      tabIndex={0}
+    >
       {screens.map(([name, node]) => (
         <figure key={name} className={styles.shot}>
           <MockFrame full={SCREEN}>{node}</MockFrame>

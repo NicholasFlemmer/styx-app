@@ -7,7 +7,8 @@ type Theme = 'dark' | 'light';
 
 const STORAGE_KEY = 'styx-theme';
 
-const readTheme = (): Theme => (document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
+const readTheme = (): Theme =>
+  document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
 
 const subscribe = (onChange: () => void): (() => void) => {
   const observer = new MutationObserver(onChange);
@@ -27,7 +28,8 @@ export const setTheme = (theme: Theme): void => {
 export const toggleTheme = (): void => setTheme(readTheme() === 'dark' ? 'light' : 'dark');
 
 /** The app's ⌘⇧T / Ctrl+Shift+T, honoured on the site too. */
-const isThemeChord = (e: KeyboardEvent): boolean => (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 't';
+const isThemeChord = (e: KeyboardEvent): boolean =>
+  (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 't';
 
 export const ThemeToggle = () => {
   const theme = useSyncExternalStore(subscribe, readTheme, () => 'dark' as Theme);
@@ -44,8 +46,19 @@ export const ThemeToggle = () => {
 
   const next: Theme = theme === 'dark' ? 'light' : 'dark';
   return (
-    <button type="button" className={styles.toggle} onClick={toggleTheme} aria-label={`Switch to ${next} theme`} title="⌘⇧T">
-      <span className="sq" data-hollow={theme === 'light' ? 'true' : undefined} data-on={theme === 'dark' ? undefined : undefined} aria-hidden="true" />
+    <button
+      type="button"
+      className={styles.toggle}
+      onClick={toggleTheme}
+      aria-label={`Switch to ${next} theme`}
+      title="⌘⇧T"
+    >
+      <span
+        className="sq"
+        data-hollow={theme === 'light' ? 'true' : undefined}
+        data-on={theme === 'dark' ? undefined : undefined}
+        aria-hidden="true"
+      />
       <span suppressHydrationWarning>{next === 'light' ? 'Light' : 'Dark'}</span>
     </button>
   );

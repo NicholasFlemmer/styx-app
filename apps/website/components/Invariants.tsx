@@ -19,13 +19,14 @@ const rows = [
     'Every request and approval is logged in a way that cannot be edited or deleted. Taking a pass away adds a line.',
   ],
   [
-    'Send anything to us.',
-    'There is no account and no Styx server. Everything runs on your computer, and your agents talk to your services directly.',
+    'Send your work to us.',
+    'Your code, your projects, your prompts and your keys stay on your computer, and your agents talk to your services directly. Styx’s own server knows your account and, unless you switch it off, how often a handful of features get used. Never what you used them on.',
   ],
 ] as const;
 
 export const Invariants = () => (
   <Section
+    tone="panel"
     id="security"
     title="What Styx will never do."
     lede="An oath sworn on the Styx could not be broken, even by a god. These are ours, built into the software rather than written in a policy."

@@ -24,7 +24,12 @@ export const Counters = () => {
           <div key={label} className={styles.cell} data-on={on ? 'true' : undefined}>
             <span className={styles.num}>{pad(value)}</span>
             <span className={styles.lbl}>
-              <span className="sq" data-on={on ? 'true' : undefined} data-hollow={on ? undefined : 'true'} aria-hidden="true" />
+              <span
+                className="sq"
+                data-on={on ? 'true' : undefined}
+                data-hollow={on ? undefined : 'true'}
+                aria-hidden="true"
+              />
               {label}
             </span>
           </div>

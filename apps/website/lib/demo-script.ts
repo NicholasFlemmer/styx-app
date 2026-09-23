@@ -28,10 +28,12 @@ export const demoStepLabels: Readonly<Record<DemoStep, string>> = {
 export const demoStepDescriptions: Readonly<Record<DemoStep, string>> = {
   command: 'Codex tries to push a change to the live database. Styx catches it before it goes anywhere.',
   ask: 'The agent waits. A request appears in the chat, and the counter at the top reads 01 needs you.',
-  sheet: 'The approval sheet opens. It shows what Codex wants to do, how much to allow, and for how long: one hour. Touching production asks for Touch ID.',
+  sheet:
+    'The approval sheet opens. It shows what Codex wants to do, how much to allow, and for how long: one hour. Touching production asks for Touch ID.',
   mfa: 'Waiting for Touch ID.',
   granted: 'Approved. The chat notes the one-hour pass, the terminal continues, and the change is applied.',
-  logged: 'A notification confirms it is on the record: what Codex got, for how long, and where you approved it.',
+  logged:
+    'A notification confirms it is on the record: what Codex got, for how long, and where you approved it.',
 };
 
 export const stepIndex = (step: DemoStep): number => demoSteps.indexOf(step);
@@ -45,7 +47,8 @@ export const nextStep = (step: DemoStep): DemoStep => {
 export const reached = (current: DemoStep, step: DemoStep): boolean => stepIndex(current) >= stepIndex(step);
 
 /** True while the session is paused waiting on the user. */
-export const waitingOnYou = (current: DemoStep): boolean => reached(current, 'ask') && !reached(current, 'granted');
+export const waitingOnYou = (current: DemoStep): boolean =>
+  reached(current, 'ask') && !reached(current, 'granted');
 
 export const demoLoopMs = demoSteps.reduce((sum, step) => sum + demoDurations[step], 0);
 

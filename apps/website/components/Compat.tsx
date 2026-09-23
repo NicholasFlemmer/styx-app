@@ -3,16 +3,18 @@ import styles from './Compat.module.css';
 
 const agents = [
   ['Claude Code', 'Chat with it inside Styx, approve its plans, answer its questions.'],
+  ['Codex', 'Same chat, same approvals.'],
+  ['Gemini CLI', 'Same chat, same approvals.'],
   ['Cursor', 'Same chat, same approvals.'],
-  ['Codex', 'Runs in its own terminal inside Styx.'],
-  ['Gemini CLI', 'Runs in its own terminal inside Styx.'],
   ['Your terminal', 'A plain shell, with the same rules about what it can reach.'],
 ] as const;
 
 const editors = [
   ['VS Code', 'Recent folders, keybindings, theme and font come along.'],
   ['Cursor', 'Same as VS Code: recents, keybindings, theme and font.'],
+  ['Windsurf', 'Same as VS Code: recents, keybindings, theme and font.'],
   ['JetBrains IDEs', 'WebStorm, IntelliJ IDEA, PyCharm, GoLand, RustRover. Recent projects come along.'],
+  ['Zed', 'Detected and ready under “Open in”.'],
   ['Neovim', 'Detected and ready under “Open in”.'],
 ] as const;
 
@@ -30,7 +32,7 @@ export const Compat = () => (
     tone="panel"
     id="agents"
     title="Everything you already use, in one place."
-    lede="Styx runs the agents you have installed, connects to the services you are already logged into, and picks up your editor on first launch: recent folders, keybindings and theme come along, and anything can be opened back in it with one key. Nothing in your editor changes."
+    lede="Styx runs the agents you have installed and signs them in for you, connects to the services you are already logged into, and picks up your editor on first launch: recent folders, keybindings and theme come along, and anything can be opened back in it with one key. Nothing in your editor changes."
   >
     <div className={styles.cols}>
       <div className={styles.col}>

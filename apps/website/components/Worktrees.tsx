@@ -7,7 +7,12 @@ export const Worktrees = () => (
     title="Agents don't step on each other. Or on you."
     lede="Every agent works on its own copy of your project, on its own branch. You keep working on yours. When something clashes, the agent stops and tells you exactly where."
   >
-    <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Who is working on what, scrolls sideways on narrow screens">
+    <div
+      className={styles.tableWrap}
+      tabIndex={0}
+      role="region"
+      aria-label="Who is working on what, scrolls sideways on narrow screens"
+    >
       <table className={styles.lanes}>
         <thead>
           <tr>
@@ -67,16 +72,16 @@ export const Worktrees = () => (
     </div>
     <ul className={styles.facts}>
       <li>
-        <strong>Nothing merges on its own.</strong> An agent&apos;s work stays on its branch until you have read it and
-        said yes.
+        <strong>Nothing merges on its own.</strong> An agent&apos;s work stays on its branch until you press
+        Land, which brings in the latest main, runs your checks and merges it in one step.
       </li>
       <li>
-        <strong>Clashes stop the agent, not you.</strong> It pauses and names the file. You sort it out when you are
-        ready.
+        <strong>Clashes go back to the agent that made them.</strong> It is told what changed underneath it
+        and finishes the merge itself. Agents working on the same file are warned before it becomes a clash.
       </li>
       <li>
-        <strong>Finished work tidies itself away.</strong> Merged branches archive themselves; done agents stay on the
-        board for a week, then go.
+        <strong>Finished work tidies itself away.</strong> Landed branches archive themselves; agents you mark
+        done stay on the board for a week, then go.
       </li>
     </ul>
   </Section>

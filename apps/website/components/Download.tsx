@@ -3,7 +3,12 @@ import { Section } from './Section';
 import styles from './Download.module.css';
 
 export const Download = () => (
-  <Section id="download" title="Download" lede={`Beta ${site.version} for Mac. Windows is on its way. Nothing to sign up for.`}>
+  <Section
+    tone="panel"
+    id="download"
+    title="Download"
+    lede={`Beta ${site.version} for Mac. Windows is on its way. Free for your first project; sign in with GitHub or Google to use it on more.`}
+  >
     <div className={styles.cards}>
       <div className={styles.card}>
         <h3>Mac</h3>
@@ -15,12 +20,14 @@ export const Download = () => (
       <div className={styles.card} data-soon="true">
         <h3>Windows</h3>
         <p className={styles.soon}>Coming soon</p>
-        <p className={styles.meta}>Windows Hello for anything that touches production. Same app, same rules.</p>
+        <p className={styles.meta}>
+          Windows Hello for anything that touches production. Same app, same rules.
+        </p>
       </div>
     </div>
     <p className={styles.note}>
-      Styx works with the agents already installed on your computer. If one is missing, it tells you and points you to
-      the install guide.
+      Styx works with the agents already installed on your computer. If one is missing, it tells you and
+      points you to the install guide.
     </p>
   </Section>
 );

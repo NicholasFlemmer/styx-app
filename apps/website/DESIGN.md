@@ -153,3 +153,23 @@ same things. Facts (1h idle expiry, biometric for prod, append-only audit, one w
 keychain-only secrets, renderer never touches disk or network) come from `CLAUDE.md` and `docs/adr/`.
 Links that do not exist yet (download URLs, releases, source) live in `lib/site.ts` and default to
 page anchors.
+
+## 7. Catching up with the app (2026-09-23)
+
+The site was written on 2026-09-11 and shipped 2026-09-18; the app kept going. By 2026-09-23 several claims had
+become false rather than merely incomplete, and were corrected first:
+
+- "Nothing to sign up for" / "There is no account and no Styx server" — there is now an account (GitHub or
+  Google), free for one project and asked for on the second, and a Styx server that knows the account and counts
+  five feature events. The promise that still holds is the one kept: your work never leaves your computer.
+- Codex and Gemini CLI "run in their own terminal" — all four agents now chat inside Styx with approvals.
+- "a / r keep or drop a change", "Accept all" — nothing is accepted any more; an agent's edit is applied, and
+  review reverts it or marks it reviewed. The keyboard row, the workspace mock and the diff mock now use the app's
+  own verbs.
+- The editor list gained Windsurf and Zed.
+- "Clashes stop the agent, you sort it out" — a clashing merge now goes back to the agent that made it.
+
+Then one section was added, **Shipping** (`components/Ship.tsx`), between "Your code" and the screens strip: see it
+running, keep talking while it works, undo a turn, publish in one step, deploy to live, skills for every agent, and
+a one-line "also" for usage, tech-debt reviews and the agent dock. Panel tones below it were flipped so the page
+still alternates. Snake is deliberately not on the site.

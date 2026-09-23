@@ -21,6 +21,7 @@ export const sections = [
   { id: 'access', label: 'Approvals' },
   { id: 'agents', label: 'Works with' },
   { id: 'repo', label: 'Your code' },
+  { id: 'ship', label: 'Shipping' },
   { id: 'screens', label: 'Screens' },
   { id: 'security', label: 'Security' },
   { id: 'keyboard', label: 'Keyboard' },

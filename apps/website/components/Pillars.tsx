@@ -18,8 +18,8 @@ export const Pillars = () => (
       <div className={styles.col}>
         <h3>Every project</h3>
         <p>
-          All your repos in one window, each with its own agents, branches and services. A glance shows what needs
-          you; one keystroke takes you there. No more hunting through windows and terminals.
+          All your repos in one window, each with its own agents, branches and services. A glance shows what
+          needs you; one keystroke takes you there. No more hunting through windows and terminals.
         </p>
         <div className={styles.art} aria-hidden="true">
           <div className={styles.switcher}>
@@ -34,7 +34,11 @@ export const Pillars = () => (
                 </span>
                 <span className={styles.projectName}>{p.name}</span>
                 <span className={`${styles.projectMeta} mono`}>{p.meta}</span>
-                <span className="sq" data-on={p.needsYou ? 'true' : undefined} data-hollow={p.needsYou ? undefined : 'true'} />
+                <span
+                  className="sq"
+                  data-on={p.needsYou ? 'true' : undefined}
+                  data-hollow={p.needsYou ? undefined : 'true'}
+                />
               </div>
             ))}
           </div>
@@ -43,8 +47,8 @@ export const Pillars = () => (
       <div className={styles.col}>
         <h3>Every agent</h3>
         <p>
-          Claude Code, Codex, Gemini and Cursor, side by side, each on its own copy of your code. Read what they did,
-          change by change, keep what you like, or open it in your own editor with one key.
+          Claude Code, Codex, Gemini and Cursor, side by side, each on its own copy of your code. Read what
+          they did, change by change, keep what you like, or open it in your own editor with one key.
         </p>
         <div className={styles.art} aria-hidden="true">
           <div className={styles.board}>
@@ -76,9 +80,9 @@ export const Pillars = () => (
       <div className={styles.col}>
         <h3>Every key</h3>
         <p>
-          Log into Vercel, AWS, Google Cloud, Supabase, GitHub and your servers once, in one place. Agents never hold
-          the keys. They borrow access, for an hour, with your fingerprint for anything live. Every borrow is written
-          down.
+          Log into Vercel, AWS, Google Cloud, Supabase, GitHub and your servers once, in one place. Agents
+          never hold the keys. They borrow access, for an hour, with your fingerprint for anything live. Every
+          borrow is written down.
         </p>
         <div className={styles.art} aria-hidden="true">
           <table className={`${styles.targets} mono`}>

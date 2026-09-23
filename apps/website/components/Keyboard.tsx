@@ -12,7 +12,7 @@ const rows: ReadonlyArray<readonly [chords: readonly string[], what: string]> = 
   [[s.spawnAgent], 'Start a new agent'],
   [[s.approve], 'Approve the request in front of you'],
   [[s.deny], 'Turn it down'],
-  [[s.diffAccept, s.diffReject], 'Keep or drop a change'],
+  [[s.diffReject], 'Undo a change'],
   [[s.diffNext, s.diffPrev], 'Next or previous change'],
   [[s.diffDone], 'Finish reviewing'],
   [[s.popoutChat], 'Pop a chat out into its own window'],
@@ -22,7 +22,6 @@ const rows: ReadonlyArray<readonly [chords: readonly string[], what: string]> = 
 
 export const Keyboard = () => (
   <Section
-    tone="panel"
     id="keyboard"
     title="Fast, if you want it to be."
     lede="Everything has a key. The command bar is where you start when you don't know which one."

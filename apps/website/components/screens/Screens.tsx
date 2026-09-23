@@ -36,7 +36,15 @@ export const HomeScreen = () => (
       <tbody>
         {(
           [
-            ['acme-shop', '~/code/acme-shop', 'fix/checkout', 'Claude, Codex, Gemini', 'Vercel, Supabase, AWS, GitHub', '2m', true],
+            [
+              'acme-shop',
+              '~/code/acme-shop',
+              'fix/checkout',
+              'Claude, Codex, Gemini',
+              'Vercel, Supabase, AWS, GitHub',
+              '2m',
+              true,
+            ],
             ['blog-v2', '~/code/blog-v2', 'feat/mdx', 'Claude', 'Vercel, GitHub', '9m', true],
             ['infra-tools', '~/code/infra-tools', 'main', 'Gemini', 'AWS, GCP', '31m', false],
             ['client-x', '~/work/client-x', 'main', 'shell', 'GCP, GitHub', '1h', false],
@@ -45,7 +53,8 @@ export const HomeScreen = () => (
         ).map(([name, path, branch, agents, targets, t, on]) => (
           <tr key={name}>
             <td>
-              <span className="sq" data-on={on ? 'true' : undefined} data-hollow={on ? undefined : 'true'} /> <strong>{name}</strong>
+              <span className="sq" data-on={on ? 'true' : undefined} data-hollow={on ? undefined : 'true'} />{' '}
+              <strong>{name}</strong>
             </td>
             <td className="mono">{path}</td>
             <td className="mono">{branch}</td>
@@ -89,7 +98,14 @@ export const HomeScreen = () => (
   </AppChrome>
 );
 
-type Card = readonly [agent: string, branch: string, meta: string, action: string, second: string, on: boolean];
+type Card = readonly [
+  agent: string,
+  branch: string,
+  meta: string,
+  action: string,
+  second: string,
+  on: boolean,
+];
 const columns: ReadonlyArray<readonly [title: string, n: string, cards: readonly Card[]]> = [
   ['Needs you', '1', [['Codex', 'test/flaky', '“migration 0042” · 3m', 'Review grant', 'Deny', true]]],
   [
@@ -174,7 +190,9 @@ export const RepoScreen = () => (
     <div className={styles.block}>
       <div className="label">fix/checkout · src/checkout.ts</div>
       <div className={`${styles.diff} mono`}>
-        <div>{'  '}export async function checkout(cart) {'{'}</div>
+        <div>
+          {'  '}export async function checkout(cart) {'{'}
+        </div>
         <div data-add="true">+ validate(cart)</div>
         <div>{'    '}const total = sum(cart.items)</div>
         <div>{'    '}const receipt = await pay(total)</div>
@@ -203,7 +221,8 @@ export const ApprovalsScreen = () => (
         ).map(([agent, project, target, env, scope, meta]) => (
           <div key={agent} className={styles.inboxRow}>
             <div>
-              <strong>{agent}</strong> <span className={styles.muted}>{project}</span> → <strong>{target}</strong>{' '}
+              <strong>{agent}</strong> <span className={styles.muted}>{project}</span> →{' '}
+              <strong>{target}</strong>{' '}
               <span className="tag" data-on={env === 'prod' ? 'true' : undefined}>
                 {env}
               </span>{' '}
@@ -216,7 +235,9 @@ export const ApprovalsScreen = () => (
             </div>
           </div>
         ))}
-        <div className={`${styles.muted} mono ${styles.pad}`}>auto-approved today: 12 (preview deploys, github reads)</div>
+        <div className={`${styles.muted} mono ${styles.pad}`}>
+          auto-approved today: 12 (preview deploys, github reads)
+        </div>
       </div>
       <div className={styles.side}>
         <div className="label">Policies</div>
@@ -284,7 +305,12 @@ export const SettingsScreen = () => (
                 </td>
                 <td>{p}</td>
                 <td className="mono">
-                  <span className="sq" data-on={on ? 'true' : undefined} data-hollow={on ? undefined : 'true'} /> {s}
+                  <span
+                    className="sq"
+                    data-on={on ? 'true' : undefined}
+                    data-hollow={on ? undefined : 'true'}
+                  />{' '}
+                  {s}
                 </td>
                 <td>
                   <Btn>{a}</Btn>
@@ -302,8 +328,14 @@ export const SettingsScreen = () => (
 );
 
 const hunks: ReadonlyArray<readonly [title: string, lines: readonly string[]]> = [
-  ['checkout.ts · hunk 1 of 2', ['  import { sum } from "./cart"', '+ import { validate } from "./validate"']],
-  ['checkout.ts · hunk 2 of 2', ['  export async function checkout(cart) {', '+   validate(cart)', '    const total = sum(cart.items)']],
+  [
+    'checkout.ts · hunk 1 of 2',
+    ['  import { sum } from "./cart"', '+ import { validate } from "./validate"'],
+  ],
+  [
+    'checkout.ts · hunk 2 of 2',
+    ['  export async function checkout(cart) {', '+   validate(cart)', '    const total = sum(cart.items)'],
+  ],
 ];
 
 export const DiffScreen = () => (
@@ -323,8 +355,9 @@ export const DiffScreen = () => (
             <div className={styles.hunkHead}>
               <span className="label">{title}</span>
               <span className={styles.row}>
-                <Btn on>a · Accept</Btn>
-                <Btn>r · Reject</Btn>
+                {/* The app's own verbs: the agent's edit is already applied, so a hunk is kept by default and undone with r. */}
+                <span className="label">applied</span>
+                <Btn>r · Revert</Btn>
               </span>
             </div>
             <div className={`${styles.diff} mono`}>
@@ -336,7 +369,7 @@ export const DiffScreen = () => (
             </div>
           </div>
         ))}
-        <div className={`${styles.muted} mono ${styles.pad}`}>j / k next · previous · ⌘⏎ done</div>
+        <div className={`${styles.muted} mono ${styles.pad}`}>r revert · j / k next · previous · ⌘⏎ done</div>
       </div>
     </div>
   </AppChrome>
@@ -354,8 +387,8 @@ export const OnboardingScreen = () => (
       </div>
       <h2 className={styles.onboardingTitle}>Connect your editor.</h2>
       <p className={styles.onboardingBody}>
-        Styx embeds its own editor for reviewing and editing agent work. Connecting your IDE imports recents, keybindings and
-        theme, and sets where “Open in…” goes. Nothing in your IDE changes.
+        Styx embeds its own editor for reviewing and editing agent work. Connecting your IDE imports recents,
+        keybindings and theme, and sets where “Open in…” goes. Nothing in your IDE changes.
       </p>
       <table className={styles.table}>
         <tbody>
@@ -382,13 +415,16 @@ export const OnboardingScreen = () => (
         </tbody>
       </table>
       <div className={styles.imports}>
-        {['Import keybindings', 'Import theme & font', 'Import recent folders (feeds next step)', 'Install “Open in Styx” command'].map(
-          (l, i) => (
-            <div key={l} className={styles.policy}>
-              <span className={styles.check} data-on={i < 3 ? 'true' : undefined} /> {l}
-            </div>
-          ),
-        )}
+        {[
+          'Import keybindings',
+          'Import theme & font',
+          'Import recent folders (feeds next step)',
+          'Install “Open in Styx” command',
+        ].map((l, i) => (
+          <div key={l} className={styles.policy}>
+            <span className={styles.check} data-on={i < 3 ? 'true' : undefined} /> {l}
+          </div>
+        ))}
       </div>
       <div className={styles.row}>
         <Btn on>Continue</Btn>

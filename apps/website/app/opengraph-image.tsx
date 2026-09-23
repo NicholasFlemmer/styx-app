@@ -29,37 +29,53 @@ export default async function Image() {
   ]);
   const c = tokens.color.dark;
   return new ImageResponse(
-    (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: c.bg,
+        color: c.text,
+        fontFamily: 'Archivo',
+        padding: 64,
+        borderTop: `1px solid ${c.line}`,
+      }}
+    >
       <div
         style={{
-          width: '100%',
-          height: '100%',
           display: 'flex',
-          flexDirection: 'column',
-          background: c.bg,
-          color: c.text,
-          fontFamily: 'Archivo',
-          padding: 64,
-          borderTop: `1px solid ${c.line}`,
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: 22,
+          letterSpacing: '0.22em',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 22, letterSpacing: '0.22em' }}>
-          <span>STYX</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'JetBrains Mono', fontSize: 20, letterSpacing: 0, color: c.muted }}>
-            <div style={{ width: 12, height: 12, background: c.accent }} />
-            <span>01 NEEDS YOU</span>
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', marginTop: 'auto' }}>
-          <div style={{ fontSize: 76, lineHeight: 1.02, letterSpacing: '-0.03em', maxWidth: 1000 }}>
-            Every project. Every agent. Every key. One window.
-          </div>
-          <div style={{ marginTop: 36, fontFamily: 'JetBrains Mono', fontSize: 22, color: c.muted }}>
-            Nothing crosses into production without you.
-          </div>
+        <span>STYX</span>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            fontFamily: 'JetBrains Mono',
+            fontSize: 20,
+            letterSpacing: 0,
+            color: c.muted,
+          }}
+        >
+          <div style={{ width: 12, height: 12, background: c.accent }} />
+          <span>01 NEEDS YOU</span>
         </div>
       </div>
-    ),
+      <div style={{ display: 'flex', flexDirection: 'column', marginTop: 'auto' }}>
+        <div style={{ fontSize: 76, lineHeight: 1.02, letterSpacing: '-0.03em', maxWidth: 1000 }}>
+          Every project. Every agent. Every key. One window.
+        </div>
+        <div style={{ marginTop: 36, fontFamily: 'JetBrains Mono', fontSize: 22, color: c.muted }}>
+          Nothing crosses into production without you.
+        </div>
+      </div>
+    </div>,
     {
       ...size,
       fonts: [

@@ -122,10 +122,12 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
                   <span className={styles.hunkMeta}>codex · 1m</span>
                 </li>
                 <li data-add="true">
-                  <span className={styles.ln}>3</span>{'  '}add column status text
+                  <span className={styles.ln}>3</span>
+                  {'  '}add column status text
                 </li>
                 <li data-add="true">
-                  <span className={styles.ln}>4</span>{'  '}not null default &apos;open&apos;;
+                  <span className={styles.ln}>4</span>
+                  {'  '}not null default &apos;open&apos;;
                 </li>
                 <li>
                   <span className={styles.ln}>5</span>
@@ -134,7 +136,8 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
                   <span className={styles.ln}>6</span>create index orders_status_idx
                 </li>
                 <li data-add="true">
-                  <span className={styles.ln}>7</span>{'  '}on orders (status);
+                  <span className={styles.ln}>7</span>
+                  {'  '}on orders (status);
                 </li>
                 <li>
                   <span className={styles.ln}>8</span>
@@ -147,10 +150,10 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
                 <span className={`label ${styles.hunkLabel}`}>2 hunks · Codex</span>
                 <span className={styles.hunkActions}>
                   <span className={styles.miniBtn} data-inv="true">
-                    Accept all
+                    Review
                   </span>
-                  <span className={styles.miniBtn}>Review</span>
-                  <span className={styles.miniBtn}>Reject</span>
+                  <span className={styles.miniBtn}>Revert all</span>
+                  <span className={styles.miniBtn}>Mark reviewed</span>
                 </span>
               </div>
               <div className={`${styles.terminal} mono`}>
@@ -171,7 +174,9 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
                       <span className={styles.cursor} />
                     </div>
                   )}
-                  {reached(step, 'logged') && <div className={styles.termOk}>✓ pushed 1 migration (2.1s)</div>}
+                  {reached(step, 'logged') && (
+                    <div className={styles.termOk}>✓ pushed 1 migration (2.1s)</div>
+                  )}
                   {reached(step, 'logged') && (
                     <div>
                       $<span className={styles.cursor} />
@@ -191,18 +196,24 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
           <div className={styles.tabs}>
             <span className={styles.tab} data-inv="true">
               Codex <span className={`${styles.tabBranch} mono`}>test/flaky</span>
-              <span className="sq" data-on={needsYou ? 'true' : undefined} data-hollow={needsYou ? undefined : 'true'} />
+              <span
+                className="sq"
+                data-on={needsYou ? 'true' : undefined}
+                data-hollow={needsYou ? undefined : 'true'}
+              />
             </span>
             <span className={styles.tab}>
               Claude <span className={`${styles.tabBranch} mono`}>fix/checkout</span>
             </span>
           </div>
           <div className={styles.transcript}>
-            <div className={styles.msgUser}>Run migration 0042 on prod. The suite depends on the new orders.status column.</div>
+            <div className={styles.msgUser}>
+              Run migration 0042 on prod. The suite depends on the new orders.status column.
+            </div>
             <div className={styles.msgAgent}>
               <span className={styles.msgWho}>Codex</span>
-              Reading supabase/migrations/0042_orders_status.sql. It adds orders.status with a default and an index. Pushing
-              to the linked project.
+              Reading supabase/migrations/0042_orders_status.sql. It adds orders.status with a default and an
+              index. Pushing to the linked project.
             </div>
             <div className={`${styles.toolLine} mono`}>$ supabase db push --linked</div>
             {reached(step, 'ask') && (
@@ -257,7 +268,8 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
                   <span className="tag">postgres</span>
                 </div>
                 <blockquote className={`${styles.quote} mono`}>
-                  “to run migration 0042 — read schema, then apply. Test suite depends on the new orders.status column.”
+                  “to run migration 0042 — read schema, then apply. Test suite depends on the new
+                  orders.status column.”
                 </blockquote>
                 <div className="label">Scope</div>
                 <ul className={styles.scopes}>
@@ -279,8 +291,9 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
                   <span>always</span>
                 </div>
                 <p className={styles.note}>
-                  {chrome === 'win' ? 'Prod write requires Windows Hello.' : 'Prod write requires Touch ID.'} Token is scoped to
-                  this session and revoked on expiry or when the session ends. Logged to audit.
+                  {chrome === 'win' ? 'Prod write requires Windows Hello.' : 'Prod write requires Touch ID.'}{' '}
+                  Token is scoped to this session and revoked on expiry or when the session ends. Logged to
+                  audit.
                 </p>
               </div>
               <div className={styles.sheetFoot}>

@@ -23,7 +23,9 @@ export const WorkspaceDemo = () => {
   useEffect(() => {
     const el = figureRef.current;
     if (!el) return;
-    const io = new IntersectionObserver(([entry]) => setInView(Boolean(entry?.isIntersecting)), { threshold: 0.2 });
+    const io = new IntersectionObserver(([entry]) => setInView(Boolean(entry?.isIntersecting)), {
+      threshold: 0.2,
+    });
     io.observe(el);
     return () => io.disconnect();
   }, []);
@@ -60,14 +62,31 @@ export const WorkspaceDemo = () => {
           ))}
         </ol>
         <div className={styles.chrome} role="group" aria-label="Window chrome">
-          <button type="button" className={styles.chromeBtn} data-inv={chrome === 'mac' ? 'true' : undefined} aria-pressed={chrome === 'mac'} onClick={() => setChrome('mac')}>
+          <button
+            type="button"
+            className={styles.chromeBtn}
+            data-inv={chrome === 'mac' ? 'true' : undefined}
+            aria-pressed={chrome === 'mac'}
+            onClick={() => setChrome('mac')}
+          >
             Mac
           </button>
-          <button type="button" className={styles.chromeBtn} data-inv={chrome === 'win' ? 'true' : undefined} aria-pressed={chrome === 'win'} onClick={() => setChrome('win')}>
+          <button
+            type="button"
+            className={styles.chromeBtn}
+            data-inv={chrome === 'win' ? 'true' : undefined}
+            aria-pressed={chrome === 'win'}
+            onClick={() => setChrome('win')}
+          >
             Windows
           </button>
         </div>
-        <button type="button" className={styles.play} onClick={() => setPlaying((p) => !p)} aria-pressed={playing}>
+        <button
+          type="button"
+          className={styles.play}
+          onClick={() => setPlaying((p) => !p)}
+          aria-pressed={playing}
+        >
           {playing ? 'Pause' : 'Play'}
         </button>
         <p className="srOnly" aria-live="polite">

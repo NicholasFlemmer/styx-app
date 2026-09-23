@@ -39,8 +39,16 @@ export const MockFrame = ({ full, compact, compactBelow = 600, className, childr
   const isCompact = Boolean(fit?.compact) && compact !== undefined;
   const base = isCompact && compact ? compact : full;
   return (
-    <div ref={ref} className={[styles.frame, className ?? ''].join(' ').trim()} style={{ aspectRatio: `${base.w} / ${base.h}` }}>
-      <div className={styles.canvas} aria-hidden="true" style={{ width: base.w, height: base.h, transform: `scale(${fit?.k ?? 1})` }}>
+    <div
+      ref={ref}
+      className={[styles.frame, className ?? ''].join(' ').trim()}
+      style={{ aspectRatio: `${base.w} / ${base.h}` }}
+    >
+      <div
+        className={styles.canvas}
+        aria-hidden="true"
+        style={{ width: base.w, height: base.h, transform: `scale(${fit?.k ?? 1})` }}
+      >
         {typeof children === 'function' ? children(isCompact) : children}
       </div>
     </div>

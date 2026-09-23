@@ -7,7 +7,8 @@ import { site } from '@/lib/site';
 const noop = () => () => {};
 const readPlatform = (): Platform => detectPlatform(navigator.userAgent, navigator.platform);
 
-export const usePlatform = (): Platform => useSyncExternalStore(noop, readPlatform, () => 'other' as Platform);
+export const usePlatform = (): Platform =>
+  useSyncExternalStore(noop, readPlatform, () => 'other' as Platform);
 
 type Props = { primary?: boolean; small?: boolean; className?: string; note?: boolean };
 
@@ -16,7 +17,11 @@ export const DownloadButton = ({ primary = true, small = false, className, note 
   const platform = usePlatform();
   return (
     <>
-      <a className={['btn', small ? 'btnSm' : '', className ?? ''].join(' ').trim()} data-on={primary ? 'true' : undefined} href={site.links.downloadMac}>
+      <a
+        className={['btn', small ? 'btnSm' : '', className ?? ''].join(' ').trim()}
+        data-on={primary ? 'true' : undefined}
+        href={site.links.downloadMac}
+      >
         Download for macOS
       </a>
       {note && platform === 'win' && (

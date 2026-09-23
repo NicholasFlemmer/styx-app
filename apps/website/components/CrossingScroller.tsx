@@ -32,8 +32,15 @@ const RiverStrip = ({ step }: { step: DemoStep }) => {
       <span className={styles.bankNear}>Your side</span>
       <span className={styles.bankFar}>Production</span>
       <span className={styles.line} />
-      <span className={styles.request} data-side={pos.side} data-on={waiting ? 'true' : undefined} style={{ left: pos.left }} />
-      {step === 'logged' && <span className={`${styles.landed} mono`}>09:41:07 · granted write to Codex · 1h</span>}
+      <span
+        className={styles.request}
+        data-side={pos.side}
+        data-on={waiting ? 'true' : undefined}
+        style={{ left: pos.left }}
+      />
+      {step === 'logged' && (
+        <span className={`${styles.landed} mono`}>09:41:07 · granted write to Codex · 1h</span>
+      )}
     </div>
   );
 };

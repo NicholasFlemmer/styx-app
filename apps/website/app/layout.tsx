@@ -12,8 +12,24 @@ export const metadata: Metadata = {
   title: { default: site.title, template: '%s · Styx' },
   description: site.description,
   applicationName: site.name,
-  keywords: ['coding agents', 'Claude Code', 'Codex', 'Gemini CLI', 'Cursor', 'git worktrees', 'deploy grants', 'audit log', 'desktop app'],
-  openGraph: { title: site.title, description: site.description, type: 'website', siteName: site.name, url: '/' },
+  keywords: [
+    'coding agents',
+    'Claude Code',
+    'Codex',
+    'Gemini CLI',
+    'Cursor',
+    'git worktrees',
+    'deploy grants',
+    'audit log',
+    'desktop app',
+  ],
+  openGraph: {
+    title: site.title,
+    description: site.description,
+    type: 'website',
+    siteName: site.name,
+    url: '/',
+  },
   twitter: { card: 'summary_large_image', title: site.title, description: site.description },
   robots: { index: true, follow: true },
 };
@@ -33,7 +49,12 @@ const themeScript = `(function(){var t;try{t=localStorage.getItem('styx-theme')}
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" data-theme="dark" className={`${archivo.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      data-theme="dark"
+      className={`${archivo.variable} ${jetbrainsMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>

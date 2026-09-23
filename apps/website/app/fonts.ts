@@ -15,8 +15,16 @@ export const archivo = localFont({
 
 export const jetbrainsMono = localFont({
   src: [
-    { path: '../../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2', weight: '400', style: 'normal' },
-    { path: '../../../packages/tokens/fonts/jetbrains-mono-latin-500-normal.woff2', weight: '500', style: 'normal' },
+    {
+      path: '../../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: '../../../packages/tokens/fonts/jetbrains-mono-latin-500-normal.woff2',
+      weight: '500',
+      style: 'normal',
+    },
   ],
   variable: '--font-jetbrains',
   display: 'swap',

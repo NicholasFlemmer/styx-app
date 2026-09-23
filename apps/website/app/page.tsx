@@ -10,6 +10,7 @@ import { Invariants } from '@/components/Invariants';
 import { Keyboard } from '@/components/Keyboard';
 import { Nav } from '@/components/Nav';
 import { Pillars } from '@/components/Pillars';
+import { Ship } from '@/components/Ship';
 import { Worktrees } from '@/components/Worktrees';
 
 export default function Page() {
@@ -28,6 +29,7 @@ export default function Page() {
         <GrantFlow />
         <Compat />
         <Worktrees />
+        <Ship />
         <ScreensStrip />
         <Invariants />
         <Keyboard />

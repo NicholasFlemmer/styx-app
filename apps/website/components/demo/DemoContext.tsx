@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useContext, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from 'react';
 import type { DemoStep } from '@/lib/demo-script';
 
 export type Chrome = 'mac' | 'win';
@@ -21,7 +29,10 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
   const [step, setStep] = useState<DemoStep>('command');
   const [playing, setPlaying] = useState(true);
   const [chrome, setChrome] = useState<Chrome>('mac');
-  const value = useMemo(() => ({ step, setStep, playing, setPlaying, chrome, setChrome }), [step, playing, chrome]);
+  const value = useMemo(
+    () => ({ step, setStep, playing, setPlaying, chrome, setChrome }),
+    [step, playing, chrome],
+  );
   return <DemoCtx.Provider value={value}>{children}</DemoCtx.Provider>;
 };
 

@@ -1,0 +1,35 @@
+.rows {
+  border-top: 1px solid var(--ln);
+  margin-bottom: var(--sp-12);
+}
+.rows li {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gutter);
+  row-gap: var(--sp-2);
+  padding-block: var(--sp-6);
+  border-bottom: 1px solid var(--ln);
+}
+.rows h3 {
+  grid-column: 1 / span 5;
+  font-size: var(--fs-18);
+  font-weight: 600;
+  line-height: 1.35;
+}
+.rows p {
+  grid-column: 7 / span 6;
+  color: var(--mu);
+  max-width: 36em;
+}
+@media (max-width: 860px) {
+  .rows h3,
+  .rows p {
+    grid-column: 1 / -1;
+  }
+}
+.also {
+  color: var(--mu);
+  max-width: 44em;
+  margin-top: calc(-1 * var(--sp-6));
+  margin-bottom: var(--sp-12);
+}
