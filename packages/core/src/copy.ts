@@ -1594,7 +1594,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   },
   /** Support (owner request, #120): the status bar's link to Styx's Buy Me a Coffee page. */
   support: {
-    label: 'Support Styx',
+    label: '☕ Buy us a coffee',
     title: 'Buy me a coffee: Styx is made by one person, and this keeps it going',
   },
   /** Updates in place (owner request, #119): the banner, the Settings row, the reasons a check fails. */

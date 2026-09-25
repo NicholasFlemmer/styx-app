@@ -14,27 +14,45 @@
     text-transform: uppercase;
     color: var(--mu);
     overflow: hidden;
+    white-space: nowrap;
+  }
+  /* Items give way (ellipsis) before the coffee chip ever does. */
+  .bar > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* The branch stays whole; editor details (after the spacer) give way first. */
+  .bar > span:first-child {
+    flex-shrink: 0;
+  }
+  .spacer ~ span {
+    flex-shrink: 4;
   }
   .spacer {
     flex: 1;
   }
-  /* Owner request (#120): the one accent item, so it reads as the way to support Styx. */
+  /* Owner request (#120): the one filled item on the bar, so it catches the eye — accent chip, natural case. */
   .support {
     flex: none;
+    align-self: center;
     border: 0;
-    padding: 0;
-    background: none;
+    padding: 3px 10px;
+    background: var(--ac);
+    color: var(--acx);
     font: inherit;
-    letter-spacing: inherit;
-    text-transform: inherit;
-    color: var(--act);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: none;
     cursor: pointer;
   }
   .support:hover {
-    text-decoration: underline;
+    background: var(--tx);
+    color: var(--bg);
   }
   .support:focus-visible {
-    outline: 1px solid var(--ac);
+    outline: 1px solid var(--tx);
     outline-offset: 2px;
   }
 }

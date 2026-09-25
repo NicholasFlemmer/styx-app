@@ -13,10 +13,10 @@ describe('StatusBar', () => {
         branch="main"
         targets={[]}
         editor="Monaco · LF · TS"
-        support={{ label: 'Support Styx', title: 'Buy me a coffee', onOpen }}
+        support={{ label: '☕ Buy us a coffee', title: 'Buy me a coffee', onOpen }}
       />,
     );
-    const link = screen.getByRole('button', { name: 'Support Styx ↗' });
+    const link = screen.getByRole('button', { name: '☕ Buy us a coffee' });
     expect(link.getAttribute('title')).toBe('Buy me a coffee');
     expect(document.querySelector('[data-status-bar]')?.lastElementChild).toBe(link);
     fireEvent.click(link);
