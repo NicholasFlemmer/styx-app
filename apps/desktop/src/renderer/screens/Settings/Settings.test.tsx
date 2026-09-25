@@ -315,10 +315,42 @@ describe('sectionRows', () => {
     expect(geminiRows.find((r) => r.id === 'model')?.options.map((o) => o.value)).toEqual(['default']);
   });
 
+  it('General › Updates (#119): the status line is the value; Check now / Restart to update are the actions', () => {
+    const at = (update: Partial<typeof model.update>) =>
+      sectionRows({ ...model, update: { ...model.update, current: '0.2.0', ...update } }, 'app:general', {
+        ...ctx,
+        now: fixtures.DEMO_NOW,
+      }).find((r) => r.id === 'updates');
+    expect(at({ status: 'off' })).toMatchObject({
+      label: 'Updates',
+      value: 'status',
+      change: { kind: 'fixed' },
+      options: [{ value: 'status', label: 'Updates are off in this build' }],
+    });
+    expect(at({ status: 'idle', checkedAt: fixtures.DEMO_NOW - 5 * 60_000 })?.options).toEqual([
+      { value: 'status', label: '0.2.0 · up to date · checked 5m' },
+      { value: 'check', label: 'Check now' },
+    ]);
+    expect(at({ status: 'downloading', next: '0.2.1', percent: 40 })?.options).toEqual([
+      { value: 'status', label: 'Downloading 0.2.1 · 40%' },
+    ]);
+    expect(at({ status: 'ready', next: '0.2.1' })).toMatchObject({
+      change: { kind: 'update' },
+      options: [
+        { value: 'status', label: '0.2.1 is ready — restart to install' },
+        { value: 'install', label: 'Restart to update' },
+      ],
+    });
+    expect(at({ status: 'error', error: 'no connection' })?.options.map((o) => o.label)).toEqual([
+      '0.2.0 · could not check: no connection',
+      'Check now',
+    ]);
+  });
+
   it('prototype values match settingsRowsMap', () => {
     const values = (section: Parameters<typeof sectionRows>[1]) =>
       sectionRows(model, section, ctx).map((r) => r.options.find((o) => o.value === r.value)?.label);
-    expect(values('app:general')).toEqual(['System', 'Badge + sound', 'On']);
+    expect(values('app:general')).toEqual(['System', 'Badge + sound', 'On', 'Updates are off in this build']);
     expect(values('app:editor')).toEqual(['Monaco (embedded)', 'Styx', 'VS Code', 'Per repo', 'Off', 'On']);
     expect(values('app:agents')).toEqual([
       'Claude Code',

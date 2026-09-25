@@ -1,9 +1,9 @@
 {
   "name": "@styx/desktop",
   "productName": "Styx",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Styx \u2014 project, agent and repo switcher",
+  "description": "Styx — project, agent and repo switcher",
   "main": "./out/main/index.js",
   "author": "Styx",
   "scripts": {
@@ -20,6 +20,7 @@
     "package:mac": "pnpm run build && STYX_NOTARIZE=1 electron-builder --mac",
     "package:win": "pnpm run build && electron-builder --win",
     "release:preflight": "bash scripts/release-preflight.sh",
+    "release:publish": "bash scripts/release-publish.sh",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
@@ -37,6 +38,7 @@
     "chokidar": "^5.0.0",
     "drizzle-orm": "^0.45.2",
     "electron-log": "^5.4.4",
+    "electron-updater": "^6.8.9",
     "execa": "^10.0.1",
     "jose": "^6.2.11",
     "node-pty": "^1.1.0",

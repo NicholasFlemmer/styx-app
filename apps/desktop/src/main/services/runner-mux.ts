@@ -48,6 +48,11 @@ export class RunnerMux extends EventEmitter<StreamEvents> implements StreamRunne
     this.owner.get(id)?.send(id, text, blocks);
   }
 
+  acceptsImages(id: string): boolean {
+    const backend = this.owner.get(id);
+    return backend?.acceptsImages?.(id) ?? false;
+  }
+
   respondPermission(
     id: string,
     requestId: string,

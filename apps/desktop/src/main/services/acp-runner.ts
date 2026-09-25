@@ -1128,6 +1128,11 @@ export class AcpRunner extends EventEmitter<StreamEvents> implements StreamRunne
 
   // --- StreamRunnerLike -----------------------------------------------------
 
+  /** Only an agent whose `initialize` said `promptCapabilities.image` takes image blocks. */
+  acceptsImages(id: string): boolean {
+    return this.entries.get(id)?.imageInput === true;
+  }
+
   send(id: string, text: string, blocks: readonly ImageBlock[] = []): void {
     const entry = this.entries.get(id);
     if (!entry) return;

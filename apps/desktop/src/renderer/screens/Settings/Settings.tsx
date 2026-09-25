@@ -27,7 +27,7 @@ import { AgentsPane } from './AgentsPane';
 import { SkillsPane } from './SkillsPane';
 import { command } from '../../state/commands';
 import { useCopyPlatform, useModel, useNow, useUi } from '../../state/hooks';
-import { CLI_BINARY_AUTO, sectionRows, type SettingsRow } from './rows';
+import { CLI_BINARY_AUTO, UPDATE_CHECK, UPDATE_INSTALL, sectionRows, type SettingsRow } from './rows';
 import { isProjectSection, resolveSection, SECTION_LABEL, type SettingsSection } from './sections';
 import s from './Settings.module.css';
 
@@ -260,7 +260,8 @@ function Rows({
 }) {
   const platform = useUi((u) => u.platform);
   const copyPlatform = useCopyPlatform();
-  const rows = sectionRows(model, section, { projectId, platform, copyPlatform });
+  const now = useNow();
+  const rows = sectionRows(model, section, { projectId, platform, copyPlatform, now });
 
   const onChange = (row: SettingsRow, value: string) => {
     const change = row.change;
@@ -281,6 +282,10 @@ function Rows({
       case 'cli-binary':
         if (value === CLI_BINARY_AUTO) void command('detect.clearBinary', { agent: change.agent });
         else void command('detect.setBinary', { agent: change.agent, path: value });
+        return;
+      case 'update':
+        if (value === UPDATE_CHECK) void command('update.check', {});
+        else if (value === UPDATE_INSTALL) void command('update.install', {});
         return;
     }
   };

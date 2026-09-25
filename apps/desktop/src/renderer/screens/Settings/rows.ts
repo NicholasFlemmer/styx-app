@@ -9,6 +9,7 @@ import {
   copy,
   DEFAULT_PROJECT_SETTINGS,
   fill,
+  formatAge,
   formatChord,
   modelCatalogueFor,
   platformCopy,
@@ -37,7 +38,9 @@ export type RowChange =
   | { kind: 'project'; key: keyof ProjectSettings; patch: (value: string) => Partial<ProjectSettings> }
   | { kind: 'policy'; policyId: PolicyId }
   /** Pick among the binaries detected for one agent (`detect.setBinary`, value = binary path). */
-  | { kind: 'cli-binary'; agent: Agent };
+  | { kind: 'cli-binary'; agent: Agent }
+  /** Updates in place (#119): the row's value is the status line; `check` asks the feed, `install` restarts. */
+  | { kind: 'update' };
 
 export interface RowOption {
   value: string;
@@ -62,6 +65,8 @@ export interface RowContext {
   platform: Platform;
   /** Rendered-chrome platform: keychain / MFA words (spec §7). */
   copyPlatform: Platform;
+  /** The clock for relative times ("checked 5m ago"); the injected app clock in the screen, `Date.now()` otherwise. */
+  now?: number;
 }
 
 const ON = 'on';
@@ -138,7 +143,7 @@ const AGENT_OPTIONS: readonly RowOption[] = optionsOf(copy.agentProducts, [
   'shell',
 ]);
 
-const generalRows = (model: ReadModel): SettingsRow[] => {
+const generalRows = (model: ReadModel, now: number): SettingsRow[] => {
   const app = model.settings.app;
   const r = copy.settings.rows;
   const v = copy.settings.values;
@@ -167,7 +172,50 @@ const generalRows = (model: ReadModel): SettingsRow[] => {
       change: { kind: 'app', patch: (b) => ({ launchAtLogin: isOn(b) }) },
       overridden: false,
     },
+    updatesRow(model, now),
   ];
+};
+
+/** `STATUS` is the row's own value (the status line); the other options are what can be done from here. */
+export const UPDATE_STATUS = 'status';
+export const UPDATE_CHECK = 'check';
+export const UPDATE_INSTALL = 'install';
+
+/** The running version and what the updater is doing, in one line (#119). */
+export const updateStatusLine = (u: ReadModel['update'], now: number): string => {
+  const c = copy.update.status;
+  switch (u.status) {
+    case 'off':
+      return c.off;
+    case 'idle':
+      return u.checkedAt === null
+        ? fill(c.idle, { current: u.current })
+        : fill(c.idleChecked, { current: u.current, when: formatAge(u.checkedAt, now) });
+    case 'checking':
+      return fill(c.checking, { current: u.current });
+    case 'downloading':
+      return fill(c.downloading, { next: u.next ?? '', percent: u.percent ?? 0 });
+    case 'ready':
+      return fill(c.ready, { next: u.next ?? '' });
+    case 'error':
+      return fill(c.error, { current: u.current, error: u.error ?? '' });
+  }
+};
+
+const updatesRow = (model: ReadModel, now: number): SettingsRow => {
+  const u = model.update;
+  const options: RowOption[] = [{ value: UPDATE_STATUS, label: updateStatusLine(u, now) }];
+  if (u.status === 'idle' || u.status === 'error')
+    options.push({ value: UPDATE_CHECK, label: copy.update.check });
+  if (u.status === 'ready') options.push({ value: UPDATE_INSTALL, label: copy.update.restart });
+  return {
+    id: 'updates',
+    label: copy.update.row,
+    value: UPDATE_STATUS,
+    options,
+    change: u.status === 'off' ? { kind: 'fixed' } : { kind: 'update' },
+    overridden: false,
+  };
 };
 
 const editorRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
@@ -536,7 +584,7 @@ const envRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
 export const sectionRows = (model: ReadModel, section: SettingsSection, ctx: RowContext): SettingsRow[] => {
   switch (section) {
     case 'app:general':
-      return generalRows(model);
+      return generalRows(model, ctx.now ?? Date.now());
     case 'app:editor':
       return editorRows(model, ctx);
     case 'app:agents':

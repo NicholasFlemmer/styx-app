@@ -57,6 +57,7 @@ export const snapshotToModel = (snapshot: ReadModelSnapshot): ReadModel => ({
   queues: snapshot.queues,
   limits: snapshot.limits,
   account: snapshot.account,
+  update: snapshot.update,
 });
 
 export const useReadModel = create<ReadModelStore>()(

@@ -39,6 +39,35 @@ describe('deriveBanners', () => {
 });
 
 describe('mergeBanners', () => {
+  it('a downloaded update is an info banner offering Restart; it says so when agents are working (#119)', () => {
+    const base = fixtures.demoReadModel();
+    const ready = { ...base.update, current: '0.2.0', status: 'ready' as const, next: '0.2.1', percent: 100 };
+    const idleSessions = Object.fromEntries(
+      Object.entries(base.sessions.byId).map(([id, s]) => [id, { ...s, state: 'idle' as const }]),
+    );
+    const quiet = deriveBanners(
+      { ...base, update: ready, sessions: { ...base.sessions, byId: idleSessions } },
+      fixtures.DEMO_NOW,
+    );
+    expect(quiet).toEqual([
+      {
+        key: 'update-ready:0.2.1',
+        kind: 'update-ready',
+        text: 'Styx 0.2.1 is ready. It installs the next time Styx quits.',
+        cta: 'Restart to update',
+        action: { kind: 'install-update' },
+      },
+    ]);
+    const busy = deriveBanners({ ...base, update: ready }, fixtures.DEMO_NOW).find(
+      (b) => b.kind === 'update-ready',
+    );
+    expect(busy?.text).toMatch(/^Styx 0\.2\.1 is ready\. \d+ agents are working; restarting stops them/);
+    // Downloading, or nothing new: no banner.
+    expect(
+      deriveBanners({ ...base, update: { ...ready, status: 'downloading' } }, fixtures.DEMO_NOW),
+    ).toEqual([]);
+  });
+
   it('lets banner.set events override derived rows and hides dismissed keys', () => {
     const derived = deriveBanners(fixtures.errorReadModel(), fixtures.DEMO_NOW);
     const key = `auth-expired:${fixtures.ids.target.awsProd}`;

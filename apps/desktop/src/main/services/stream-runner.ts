@@ -635,6 +635,8 @@ export interface StreamRunnerLike extends EventEmitter<StreamEvents> {
   spawn(opts: StreamSpawnOptions): Promise<{ pid: number }>;
   /** One user turn; `blocks` (images) only reach a stdin runner — an argv runner is text-only and drops them. */
   send(id: string, text: string, blocks?: readonly ImageBlock[]): void;
+  /** Whether this session's agent takes base64 image blocks in a turn; otherwise images go by path. */
+  acceptsImages?(id: string): boolean;
   /**
    * Answers a `can_use_tool` request. `updatedInput` replaces the echoed tool input on allow (AskUserQuestion answers
    * travel that way); `message` is the deny reason.
@@ -772,6 +774,11 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
     }
     this.entries.delete(entry.opts.id);
     this.emit('exit', entry.opts.id, code);
+  }
+
+  /** Claude Code's stdin protocol carries image blocks; the one-process-per-turn argv runner is text only. */
+  acceptsImages(id: string): boolean {
+    return this.entries.get(id)?.opts.input.kind === 'stdin';
   }
 
   send(id: string, text: string, blocks: readonly ImageBlock[] = []): void {

@@ -100,6 +100,13 @@ describe('Workspace screen', () => {
     expect(document.querySelector('[data-workspace]')?.getAttribute('data-workspace')).toBe('main');
   });
 
+  it('the status bar ends with Support Styx, which opens the Buy Me a Coffee page in the browser (#120)', async () => {
+    useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
+    render(<Workspace />);
+    fireEvent.click(await screen.findByRole('button', { name: `${copy.support.label} ↗` }));
+    expect(commandMock).toHaveBeenCalledWith('link.open', { url: 'https://buymeacoffee.com/heystyx' });
+  });
+
   it('watches the worktree it shows and re-reads the tree when main says something on disk moved', async () => {
     extraFiles = [];
     const listeners = new Map<string, (payload: unknown) => void>();

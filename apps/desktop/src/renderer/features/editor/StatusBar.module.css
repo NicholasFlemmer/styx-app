@@ -18,4 +18,23 @@
   .spacer {
     flex: 1;
   }
+  /* Owner request (#120): the one accent item, so it reads as the way to support Styx. */
+  .support {
+    flex: none;
+    border: 0;
+    padding: 0;
+    background: none;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: var(--act);
+    cursor: pointer;
+  }
+  .support:hover {
+    text-decoration: underline;
+  }
+  .support:focus-visible {
+    outline: 1px solid var(--ac);
+    outline-offset: 2px;
+  }
 }

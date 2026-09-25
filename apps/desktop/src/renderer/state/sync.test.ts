@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtures, type DeltaBatch, type ReadModelSnapshot } from '@styx/core';
+import { fixtures, type DeltaBatch, type ReadModelSnapshot, UPDATE_OFF } from '@styx/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from './read-model';
 import { connectSync } from './sync';
@@ -33,6 +33,7 @@ const snapshotOf = (seq: number): ReadModelSnapshot => {
     queues: {},
     limits: {},
     account: f.account,
+    update: UPDATE_OFF,
   };
 };
 

@@ -21,6 +21,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir, userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
+import { autoUpdater } from 'electron-updater';
 import { execa } from 'execa';
 import { brokerEndpoint } from '@styx/broker';
 import type { AppSettings } from '@styx/core';
@@ -34,6 +35,7 @@ import { attachPtyChannel } from './ipc/pty-channel';
 import { createVault } from './services/credential-vault';
 import { seedFixtureVault } from './db/seed-vault';
 import { logger } from './services/logger';
+import type { Updater } from './services/update-service';
 import {
   FakeMfaProvider,
   TouchIdProvider,
@@ -412,6 +414,7 @@ async function boot(): Promise<void> {
       await execa(l.file, l.args, { shell: l.shell, detached: l.detached, stdio: 'ignore' });
     },
     onAppSettings: applyAppSettings,
+    updater: realUpdater(fixtureName),
   });
   applyAppSettings(repos.settings.app());
 
@@ -485,6 +488,29 @@ async function boot(): Promise<void> {
     void c.bus.dispatchInternal('detect.clis', {}).catch(() => undefined);
     void c.bus.dispatchInternal('detect.ides', {}).catch(() => undefined);
   }
+}
+
+/**
+ * electron-updater's `autoUpdater` for a packaged build (#119): signed builds only (macOS, Windows), never under a
+ * fixture or the e2e harness, and only when the build carries its feed (`app-update.yml`, written by electron-builder
+ * from `publish` in electron-builder.yml). `STYX_UPDATE_URL` points a build at another feed (a local one when testing
+ * an update end to end); whatever the feed, an update installs only if it carries the running app's signature.
+ */
+function realUpdater(fixture: string | null): Updater | null {
+  if (!app.isPackaged || fixture !== null || env['STYX_E2E'] === '1') return null;
+  if (!isMac && platform !== 'win32') return null;
+  const override = env['STYX_UPDATE_URL'];
+  if (override === undefined && !existsSync(join(process.resourcesPath, 'app-update.yml'))) return null;
+  const updater = autoUpdater;
+  updater.logger = {
+    info: (m: unknown) => logger.info('updater', { message: String(m) }),
+    warn: (m: unknown) => logger.warn('updater', { message: String(m) }),
+    error: (m: unknown) => logger.warn('updater', { message: String(m).split('\n')[0] }),
+    debug: (m: unknown) => logger.debug('updater', { message: String(m) }),
+  };
+  if (override !== undefined && /^https?:\/\//.test(override))
+    updater.setFeedURL({ provider: 'generic', url: override });
+  return updater;
 }
 
 app.whenReady().then(() => {

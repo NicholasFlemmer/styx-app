@@ -1,6 +1,31 @@
 .footer {
   border-top: 1px solid var(--ln);
 }
+/* The support band (owner request): first thing in the footer, full width, the page's one accent call besides Download. */
+.support {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-6);
+  padding-block: var(--sp-8);
+  border-bottom: 1px solid var(--ln);
+}
+.supportText {
+  margin: 0;
+  max-width: 40em;
+  font-size: var(--fs-15);
+  color: var(--mu);
+}
+.supportText strong {
+  color: var(--tx);
+  font-weight: 600;
+}
+@media (max-width: 860px) {
+  .support {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
 .inner {
   display: grid;
   grid-template-columns: minmax(0, 5fr) minmax(0, 4fr) minmax(0, 3fr);

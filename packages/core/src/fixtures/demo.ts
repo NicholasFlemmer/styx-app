@@ -19,6 +19,7 @@ import type { CliInstall, IdeInstall, SkillSummary } from '../model/discovery';
 import type { Deploy, DevRun } from '../model/run';
 import type { Checkpoint } from '../model/checkpoint';
 import type { AccountState } from '../model/account';
+import { UPDATE_OFF } from '../model/update';
 import type { AgentLimits } from '../model/usage';
 import type { Grant } from '../model/grant';
 import type { AgentChange } from '../model/hunk';
@@ -1403,6 +1404,7 @@ export const fixtureReadModel = (f: DemoFixture): ReadModel => ({
   queues: f.queues,
   limits: f.limits,
   account: f.account,
+  update: UPDATE_OFF,
 });
 
 export const demoReadModel = (): ReadModel => fixtureReadModel(demoFixture());

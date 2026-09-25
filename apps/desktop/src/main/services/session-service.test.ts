@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { copy, fixtures, MAX_FILE_ATTACHMENT_BYTES, MAX_IMAGE_BYTES } from '@styx/core';
+import { ATTACHMENTS_DIR, copy, fixtures, MAX_FILE_ATTACHMENT_BYTES, MAX_UPLOAD_BYTES } from '@styx/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
 import { PtyService } from './pty-service';
@@ -1972,18 +1972,32 @@ describe('SessionService attachments + slash commands', () => {
   it.each([
     ['empty body and no attachments', '', [], 'invalid-input', /empty/],
     [
-      'image over 5 MB',
+      'an attached file over 25 MB',
       'x',
-      [{ ...png, data: Buffer.alloc(MAX_IMAGE_BYTES + 1).toString('base64') }],
+      [
+        {
+          kind: 'upload' as const,
+          name: 'movie.mp4',
+          mediaType: 'video/mp4',
+          data: Buffer.alloc(MAX_UPLOAD_BYTES + 1).toString('base64'),
+        },
+      ],
       'invalid-input',
-      /shot\.png is larger than 5 MB/,
+      /movie\.mp4 is larger than 25 MB/,
     ],
     [
-      'file over 200 KB',
+      'an attached key file',
       'x',
-      [{ kind: 'file' as const, path: 'big.txt' }],
+      [
+        {
+          kind: 'upload' as const,
+          name: 'id_ed25519',
+          mediaType: '',
+          data: Buffer.from('k').toString('base64'),
+        },
+      ],
       'invalid-input',
-      /big\.txt is larger than 200 KB/,
+      /id_ed25519 looks like a key or credentials file/,
     ],
     [
       'relative escape',
@@ -2021,22 +2035,67 @@ describe('SessionService attachments + slash commands', () => {
     expect(stream.sent).toEqual([]);
   });
 
-  it('pty sessions get files inlined too; images are dropped with a system line', async () => {
+  it('pty sessions get files inlined too; an image is saved in the worktree and named by path instead of dropped', async () => {
     const { app: a } = app();
-    worktreeDir(a, ids.worktree.testFlaky);
+    const root = worktreeDir(a, ids.worktree.testFlaky);
     const { session } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
     a.sessions.onHook(session.id, 'codex', 'notify', { type: 'agent-turn-complete' }); // idle: sends now
     await a.sessions.sendMessage(session.id, 'look', [png, { kind: 'file', path: 'src/a.ts' }]);
     await typed();
-    expect(pty.writes.slice(-2)).toEqual([
-      { id: session.id, data: 'look\n\n<file path="src/a.ts">\nexport const a = 1;\n\n</file>' },
-      { id: session.id, data: '\r' },
-    ]);
-    const last = a.repos.transcripts.last(session.id).slice(-2);
-    expect(last.map((m) => m.payload.kind)).toEqual(['user', 'system']);
-    expect(last[1]!.body).toMatch(/Image dropped: Codex .* images need a stream session/);
-    expect(last[0]!.payload).toMatchObject({
-      attachments: [{ kind: 'image' }, { kind: 'file', path: 'src/a.ts' }],
+    const typedText = pty.writes.at(-2)?.data ?? '';
+    expect(typedText.startsWith('look\n\n<file path="src/a.ts">\nexport const a = 1;\n\n</file>\n\n')).toBe(
+      true,
+    );
+    expect(typedText).toContain('Attached with this message, saved in your worktree');
+    const saved = /- (\S+shot\.png) \(image\/png, 8 B\)/.exec(typedText)?.[1] ?? '';
+    expect(saved.startsWith(join(root, ATTACHMENTS_DIR, session.id))).toBe(true);
+    expect(readFileSync(saved).toString('base64')).toBe(png.data);
+    expect(pty.writes.at(-1)).toEqual({ id: session.id, data: '\r' });
+    const last = a.repos.transcripts.last(session.id).at(-1)!;
+    expect(last.payload).toMatchObject({
+      kind: 'user',
+      attachments: [
+        { kind: 'image', name: 'shot.png' },
+        { kind: 'file', path: 'src/a.ts' },
+      ],
+    });
+    // Archiving the session takes what was attached with it.
+    a.sessions.close(session.id);
+    await vi.waitFor(() => expect(existsSync(join(root, ATTACHMENTS_DIR, session.id))).toBe(false));
+  });
+
+  it('any file type reaches a stream session: a PDF is saved in the worktree and named by path; a small text file is inlined', async () => {
+    const { app: a } = app();
+    const root = worktreeDir(a, ids.worktree.featPromo);
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    const pdf = {
+      kind: 'upload' as const,
+      name: 'spec.pdf',
+      mediaType: 'application/pdf',
+      data: Buffer.from('%PDF\u0000').toString('base64'),
+    };
+    const txt = {
+      kind: 'upload' as const,
+      name: 'notes.txt',
+      mediaType: 'text/plain',
+      data: Buffer.from('ship it').toString('base64'),
+    };
+    await a.sessions.sendMessage(session.id, '', [pdf, txt]);
+    const sent = stream.sent.at(-1)!;
+    expect(sent.text).toContain('<file path="notes.txt">\nship it\n</file>');
+    const pdfPath = /- (\S+spec\.pdf) \(application\/pdf, 5 B\)/.exec(sent.text)?.[1] ?? '';
+    expect(pdfPath.startsWith(join(root, ATTACHMENTS_DIR, session.id))).toBe(true);
+    expect(readFileSync(pdfPath).toString()).toBe('%PDF\u0000');
+    expect(userRows(a, session.id).at(-1)).toMatchObject({
+      body: 'spec.pdf, notes.txt',
+      payload: {
+        kind: 'user',
+        attachments: [
+          { kind: 'file', name: 'spec.pdf' },
+          { kind: 'file', name: 'notes.txt' },
+        ],
+      },
     });
   });
 
@@ -2417,7 +2476,7 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     expect(stream.sent.map((m) => m.text)).toEqual(['wake up', 'held']);
   });
 
-  it('attachments: files are inlined into the held text; images cannot wait and are dropped with a system line', async () => {
+  it('attachments: a held message keeps its files and images as paths; nothing is dropped, and they go out with it', async () => {
     const { app: a } = app();
     // The fixture worktree path is a literal `~/code/…`: re-point it at a temp dir so the test never writes into
     // the repo.
@@ -2439,15 +2498,20 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     // Paths, never contents: a held row is persisted and mirrored to the renderer, so the file is read again
     // (confined, fresh) only when the message goes out.
     expect(held[0]!.body).toBe('review');
-    expect(held[0]!.files).toEqual(['src/a.ts']);
+    expect(held[0]!.files[0]).toBe('src/a.ts');
+    expect(held[0]!.files[1]).toMatch(new RegExp(`^${ATTACHMENTS_DIR}/${session.id}/[0-9a-f]+/shot\\.png$`));
     expect(held[0]!.body).not.toContain('export const a = 1;');
-    expect(systemLines(a, session.id)).toEqual(['Image dropped: only text can wait for the next turn.']);
+    expect(systemLines(a, session.id)).toEqual([]);
     expect(stream.sent).toEqual([]);
     // When it goes out the file is inlined for the CLI, while the transcript row keeps metadata only.
     stream.effect(session.id, { type: 'session', event: 'quiet' });
     // The held message is read from disk and inlined before it goes out; wait for it rather than sleep.
     await vi.waitFor(() => expect(stream.sent.at(-1)?.text ?? '').toContain('<file path="src/a.ts">'));
     expect(stream.sent.at(-1)?.text).toContain('export const a = 1;');
+    // The image waited on disk and goes out as an image block after all.
+    expect(stream.sent.at(-1)?.blocks).toEqual([
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: png.data } },
+    ]);
     const row = a.repos.transcripts.last(session.id).findLast((m) => m.payload.kind === 'user');
     expect(row?.body).toBe('review');
   });

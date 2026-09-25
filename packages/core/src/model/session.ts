@@ -158,23 +158,43 @@ export const fileListEntrySchema = z.object({
 export type FileListEntry = z.infer<typeof fileListEntrySchema>;
 
 /** What a user message carried besides text (shown as chips; the bytes themselves are never stored in the transcript). */
+/**
+ * What a user row records about its attachments (never the bytes). An image may have been saved into the worktree
+ * (`path`) when the agent could not take it inline; a `file` is either a worktree file (`@` mention) or something
+ * attached from anywhere, saved under `ATTACHMENTS_DIR` — then `name` is what the person attached.
+ */
 export const attachmentSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('image'),
     name: z.string(),
     mediaType: z.string(),
     bytes: z.number().int().nonnegative(),
+    path: z.string().optional(),
   }),
-  z.object({ kind: z.literal('file'), path: z.string().min(1), bytes: z.number().int().nonnegative() }),
+  z.object({
+    kind: z.literal('file'),
+    path: z.string().min(1),
+    bytes: z.number().int().nonnegative(),
+    name: z.string().optional(),
+    mediaType: z.string().optional(),
+  }),
 ]);
 export type Attachment = z.infer<typeof attachmentSchema>;
 
 /** Image types the Anthropic API accepts as base64 image blocks. */
 export const IMAGE_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const;
 export const imageMediaTypeSchema = z.enum(IMAGE_MEDIA_TYPES);
-/** Caps: 5 MB per image (API limit), 200 KB per attached text file (inlined into the turn). */
+/**
+ * Caps: 5 MB per image sent inline (API limit); text files up to 200 KB are inlined into the turn, anything
+ * larger or binary is saved in the worktree and referenced by path; 25 MB per attached file and 50 MB per
+ * message cross from the composer to main.
+ */
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_FILE_ATTACHMENT_BYTES = 200 * 1024;
+export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+export const MAX_MESSAGE_UPLOAD_BYTES = 50 * 1024 * 1024;
+/** Where attached files are saved, inside the session's worktree (excluded from git locally, never committed). */
+export const ATTACHMENTS_DIR = '.styx/attachments';
 
 /**
  * One question inside an `AskUserQuestion` set. `options` may be empty (a pure free-text ask); `multiSelect`
