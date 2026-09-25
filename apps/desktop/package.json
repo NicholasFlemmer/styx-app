@@ -1,7 +1,7 @@
 {
   "name": "@styx/desktop",
   "productName": "Styx",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "description": "Styx — project, agent and repo switcher",
   "main": "./out/main/index.js",
