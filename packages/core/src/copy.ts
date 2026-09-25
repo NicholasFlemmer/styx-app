@@ -1603,6 +1603,13 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     bannerBusy:
       'Styx {version} is ready. {n} agents are working; restarting stops them, and they pick up again when you reopen.',
     restart: 'Restart to update',
+    /** The dialog that opens once per version when a download finishes (owner request: an update must be obvious). */
+    modal: {
+      title: 'Styx {version} is ready',
+      lead: 'The update downloaded in the background. Restart now to start using it, or keep working: it installs the next time Styx quits.',
+      busy: '{n} agents are working. Restarting stops them; they pick up where they left off when Styx reopens.',
+      later: 'Later',
+    },
     row: 'Updates',
     status: {
       off: 'Updates are off in this build',
