@@ -12,7 +12,7 @@ export const site = {
   url: process.env['NEXT_PUBLIC_SITE_URL'] ?? 'http://localhost:3100',
   version: desktop.version,
   links: {
-    downloadMac: process.env['NEXT_PUBLIC_DOWNLOAD_MAC'] ?? '#download',
+    downloadMac: process.env['NEXT_PUBLIC_DOWNLOAD_MAC'] ?? '/#download',
   },
 } as const;
 

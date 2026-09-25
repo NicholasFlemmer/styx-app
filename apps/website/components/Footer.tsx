@@ -1,5 +1,6 @@
 import { sections } from '@/lib/site';
 import { ThemeToggle } from './ThemeToggle';
+import { CookieSettingsLink } from './CookieSettingsLink';
 import styles from './Footer.module.css';
 
 export const Footer = () => (
@@ -14,13 +15,18 @@ export const Footer = () => (
       </div>
       <nav aria-label="Footer" className={styles.links}>
         {sections.map((s) => (
-          <a key={s.id} href={`#${s.id}`}>
+          <a key={s.id} href={`/#${s.id}`}>
             {s.label}
           </a>
         ))}
       </nav>
       <div className={styles.meta}>
         <ThemeToggle />
+        <nav aria-label="Legal" className={styles.legal}>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+          <CookieSettingsLink label="Cookie settings" />
+        </nav>
         <span>© {new Date().getFullYear()} Styx</span>
       </div>
     </div>

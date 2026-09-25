@@ -6,6 +6,9 @@ import '@styx/tokens/css/motion.css';
 import './globals.css';
 import { archivo, jetbrainsMono } from './fonts';
 import { site } from '@/lib/site';
+import { GTM_ID, consentDefaultsScript, gtmScript } from '@/lib/analytics';
+import { Consent } from '@/components/Consent';
+import { Tracking } from '@/components/Tracking';
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
@@ -57,8 +60,30 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {GTM_ID ? (
+          <>
+            {/* consent defaults must run before GTM, or tags fire ahead of the choice */}
+            <script dangerouslySetInnerHTML={{ __html: consentDefaultsScript }} />
+            <script dangerouslySetInnerHTML={{ __html: gtmScript(GTM_ID) }} />
+          </>
+        ) : null}
       </head>
-      <body>{children}</body>
+      <body>
+        {GTM_ID ? (
+          <noscript>
+            <iframe
+              src={`https://www.googletagmanager.com/ns.html?id=${GTM_ID}`}
+              height="0"
+              width="0"
+              style={{ display: 'none', visibility: 'hidden' }}
+              title="Google Tag Manager"
+            />
+          </noscript>
+        ) : null}
+        {children}
+        {GTM_ID ? <Tracking /> : null}
+        <Consent />
+      </body>
     </html>
   );
 }
