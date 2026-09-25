@@ -1,6 +1,7 @@
 import type { Repos } from '../db/repos';
 import type { Publisher } from '../store/publisher';
-import { chokidarWatch, type FsWatcherLike, type WatchFactory } from './hunk-service';
+import { type FsWatcherLike, type WatchFactory } from './hunk-service';
+import { worktreeWatch } from './worktree-watch';
 import { logger } from './logger';
 
 const DEBOUNCE_MS = 250;
@@ -15,7 +16,7 @@ export interface TreeWatchDeps {
  * Watches the worktree the files pane shows and says `fs.treeChanged` (debounced) when anything under it moves —
  * a file an agent wrote mid-turn, one made in Finder, a `git checkout`. Without it the tree was read once per
  * worktree on mount and a new file showed only after leaving and re-entering the Workspace. One watcher per
- * window; the hunk watcher's ignore list (.git, node_modules, .styx) keeps it cheap.
+ * window, native and recursive, skipping build output (`worktree-watch.ts`).
  */
 export class TreeWatchService {
   private readonly watchers = new Map<
@@ -32,7 +33,7 @@ export class TreeWatchService {
     const wt = this.deps.repos.worktrees.get(worktreeId);
     if (!wt) return;
     try {
-      const watcher = await (this.deps.watch ?? chokidarWatch)(wt.path);
+      const watcher = await (this.deps.watch ?? worktreeWatch)(wt.path);
       const entry = { worktreeId, watcher, timer: null as NodeJS.Timeout | null };
       watcher.on('all', () => {
         if (entry.timer) clearTimeout(entry.timer);

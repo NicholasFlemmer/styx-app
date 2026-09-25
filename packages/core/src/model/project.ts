@@ -142,7 +142,37 @@ export type Worktree = z.infer<typeof worktreeSchema>;
  * Directories the file pane never descends into (discrepancy #115). Shared so main's walker and the renderer
  * agree; a mismatch would mean walking a tree the pane then throws away.
  */
-export const TREE_IGNORED_DIRS: readonly string[] = ['.git', 'node_modules', '.styx'];
+export const TREE_IGNORED_DIRS: readonly string[] = [
+  '.git',
+  '.styx',
+  'node_modules',
+  // Build and cache output of the common toolchains (performance, 2026-09-25): a dev server rewrites these many
+  // times a second, and Next.js's `.next` alone is thousands of files. The watcher skips the same folders.
+  '.next',
+  '.nuxt',
+  '.svelte-kit',
+  '.turbo',
+  '.vercel',
+  '.netlify',
+  '.expo',
+  '.cache',
+  '.parcel-cache',
+  '.angular',
+  '.gradle',
+  '.dart_tool',
+  '.venv',
+  'venv',
+  '__pycache__',
+  '.pytest_cache',
+  '.mypy_cache',
+  'dist',
+  'build',
+  'out',
+  'coverage',
+  'target',
+  'Pods',
+  'DerivedData',
+];
 
 /** How deep the tree goes, and the most nodes it will carry before saying it is partial. */
 export const TREE_MAX_DEPTH = 4;
