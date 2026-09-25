@@ -13,6 +13,7 @@ import type { Checkpoint } from './model/checkpoint';
 import type { AgentLimits } from './model/usage';
 import type { AccountState } from './model/account';
 import { SIGNED_OUT } from './model/account';
+import { UPDATE_OFF, type UpdateState } from './model/update';
 import type { AppSettings, EffectiveProjectSettings } from './model/settings';
 import type { Target } from './model/target';
 
@@ -124,6 +125,8 @@ export interface ReadModel extends ReadModelTables {
   limits: Readonly<Record<string, AgentLimits>>;
   /** The Styx account on this machine (ADR-0026); signed out until someone signs in. Never carries a token. */
   account: AccountState;
+  /** Updates in place (#119): the running version and whether a newer one is on its way or ready. */
+  update: UpdateState;
 }
 
 export const TABLE_NAMES: readonly TableName[] = [
@@ -163,6 +166,7 @@ export const emptyReadModel = (app: AppSettings): ReadModel => ({
   checkpoints: {},
   queues: {},
   account: SIGNED_OUT,
+  update: UPDATE_OFF,
   limits: {},
 });
 

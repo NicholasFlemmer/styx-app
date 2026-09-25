@@ -1,5 +1,4 @@
 import {
-  IMAGE_MEDIA_TYPES,
   chatMeta,
   composerPlaceholder,
   copy,
@@ -60,9 +59,10 @@ import {
 } from './session-controls';
 import {
   composerChips,
-  isImageError,
+  isAttachError,
+  pendingBytes,
   messageChips,
-  readImage,
+  readAttachment,
   sendAttachments,
   withMention,
   type Pending,
@@ -486,11 +486,15 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
     persistWidth(clampChatWidth(base + (e.key === 'ArrowLeft' ? CHAT_KEY_STEP : -CHAT_KEY_STEP)));
   };
 
-  const addImages = (files: readonly File[]) => {
+  /** Any file from a paste, a drop or the picker (images inline where the agent takes them; the rest by path). */
+  const addFiles = (files: readonly File[]) => {
+    let reserved = pendingBytes(pending);
     for (const file of files) {
-      const id = `img:${file.name}:${file.size}:${Date.now()}`;
-      void readImage(file, id).then((r) => {
-        if (isImageError(r)) {
+      const id = `att:${file.name}:${file.size}:${Date.now()}`;
+      const already = reserved;
+      reserved += file.size;
+      void readAttachment(file, id, already).then((r) => {
+        if (isAttachError(r)) {
           pushOverlay({ kind: 'toast', toast: { kind: 'error', code: 'attachment', message: r.message } });
           return;
         }
@@ -829,19 +833,18 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
       )}
       <div data-keyscope="composer">
         {/*
-          Paste and drop already worked but nothing said so. The picker is images only: a `file` attachment is
-          confined to the session's worktree in main, so an arbitrary path off disk would be refused — worktree
-          files have their own route through `@`.
+          Any file, from anywhere: the picker, a paste and a drop all read the file's bytes here and main saves it
+          into the session's worktree (images the agent takes inline stay in memory). Worktree files also have
+          their own route through `@`.
         */}
         <input
           ref={imageInput}
           type="file"
-          accept={IMAGE_MEDIA_TYPES.join(',')}
           multiple
           hidden
-          data-chat-image-input="true"
+          data-chat-file-input="true"
           onChange={(e) => {
-            addImages(Array.from(e.currentTarget.files ?? []));
+            addFiles(Array.from(e.currentTarget.files ?? []));
             e.currentTarget.value = '';
           }}
         />
@@ -864,8 +867,8 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           attachments={composerChips(pending)}
           onRemoveAttachment={(id) => setPending((prev) => prev.filter((p) => p.id !== id))}
           canSend={pending.length > 0}
-          onPaste={addImages}
-          onDrop={addImages}
+          onPaste={addFiles}
+          onDrop={addFiles}
           onAttachClick={() => imageInput.current?.click()}
           attachLabel={copy.chat.composer.attach}
           dropHint={copy.chat.attach.dropHint}

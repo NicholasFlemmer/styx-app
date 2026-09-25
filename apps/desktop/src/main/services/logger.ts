@@ -112,15 +112,8 @@ export function redactArgv(argv: readonly string[]): string[] {
  * `.styx/project.json` or the target row, and be echoed in transcripts and audit rows. Compared token by token,
  * so spacing never counts as a difference.
  */
-/**
- * Files whose whole content is a secret by convention: never shown to a drafting model, never staged by an
- * app-driven commit (an agent's own `git add` is its business; Publish is Styx's).
- */
-const SECRET_FILE =
-  /(^|\/)(\.env(\.[^/]*)?|\.npmrc|\.netrc|\.pgpass|credentials\.json|service[-_]?account[^/]*\.json|id_(rsa|ed25519|ecdsa|dsa)(\.pub)?)$|\.(pem|key|p12|pfx|jks|keystore)$/i;
-const SECRET_FILE_ALLOW = /(^|\/)\.env\.(example|sample|template)$/i;
-export const isSecretFile = (path: string): boolean =>
-  SECRET_FILE.test(path) && !SECRET_FILE_ALLOW.test(path);
+/** The secret-file rule lives in core (the composer refuses such a file before it is read); re-exported here. */
+export { isSecretFile } from '@styx/core';
 
 /**
  * Masks secret-bearing lines in a unified diff before it leaves for a drafting model: `KEY=value` lines whose key

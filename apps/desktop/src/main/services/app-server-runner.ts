@@ -566,6 +566,11 @@ export class AppServerRunner extends EventEmitter<StreamEvents> implements Strea
     this.emit('effect', entry.opts.id, { type: 'session', event: 'quiet' });
   }
 
+  /** Codex takes images (as local paths Styx writes for it). */
+  acceptsImages(id: string): boolean {
+    return this.entries.has(id);
+  }
+
   send(id: string, text: string, blocks: readonly ImageBlock[] = []): void {
     const entry = this.entries.get(id);
     if (!entry) return;

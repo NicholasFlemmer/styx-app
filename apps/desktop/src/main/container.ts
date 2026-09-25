@@ -63,6 +63,7 @@ import { TerminalService } from './services/terminal-service';
 import { TranscriptService } from './services/transcript-service';
 import { UsageService } from './services/usage-service';
 import { AccountService, DEFAULT_API } from './services/account-service';
+import { UpdateService, type Updater } from './services/update-service';
 import { UsageReportService } from './services/usage-report-service';
 import { version as APP_VERSION } from '../../package.json';
 import { projectSettingsFor } from './store/projection';
@@ -198,6 +199,8 @@ export interface ContainerOptions {
   /** The merge resolver's checks runner and Mergiraf hook (ADR-0025 phase B); faked in tests. */
   runChecks?: (cwd: string, command: string) => Promise<ChecksResult>;
   mergiraf?: (file: string, cwd: string) => Promise<boolean>;
+  /** electron-updater's `autoUpdater` in a packaged build with a feed (#119); absent in development and tests. */
+  updater?: Updater | null;
 }
 
 export interface Container {
@@ -253,6 +256,8 @@ export interface Container {
   usage: UsageService;
   /** The Styx account (ADR-0026): device flow, keychain tokens, offline-tolerant session. */
   account: AccountService;
+  /** Updates in place (#119). */
+  updates: UpdateService;
   /** Anonymous usage counts (discrepancy row 114): a closed set of event names, nothing else. */
   usageReports: UsageReportService;
   terminals: TerminalService;
@@ -569,12 +574,20 @@ export function buildContainer(opts: ContainerOptions): Container {
     onFrame: (projectId, seq) => publisher.sendEvent('device.frame', { projectId, seq }),
   });
   runs.bindDevices(devices);
+  // Updates in place (#119): off unless index.ts hands over a real updater (packaged, signed, a feed configured).
+  const updates = new UpdateService({
+    updater: opts.updater ?? null,
+    version: APP_VERSION,
+    clock,
+    publish: (state) => publisher.updateSet(state),
+  });
   publisher.bindExtras({
     runs: () => runs.all(),
     devices: () => devices.all(),
     deploys: () => deploys.all(),
     limits: () => usage.all(),
     account: () => account.current(),
+    update: () => updates.current(),
   });
   const refresh = new RefreshScheduler({
     repos,
@@ -907,6 +920,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     worktrees,
     usage,
     account,
+    updates,
     usageReports,
     terminals,
     broker,
@@ -918,6 +932,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     openInIde: opts.openInIde,
     onAppSettings: opts.onAppSettings ?? (() => undefined),
     async start() {
+      updates.start();
       grants.start();
       retention.start();
       checkpoints.start();
@@ -931,6 +946,7 @@ export function buildContainer(opts: ContainerOptions): Container {
       checkpoints.stop();
       await usageReports.shutdown();
       refresh.stop();
+      updates.stop();
       cliWatch.stop();
       sessions.killAll();
       runs.stopAll();

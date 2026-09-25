@@ -9,6 +9,7 @@ import {
   type ReadModel,
   type SessionId,
   type Worktree,
+  SUPPORT_URL,
 } from '@styx/core';
 import { Tab } from '@styx/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -341,7 +342,17 @@ export function Workspace() {
           screenReader={screenReader}
           columnHeight={() => column.current?.clientHeight ?? 0}
         />
-        <StatusBar branch={branchLabel} targets={targets} editor={editorStatus} extras={editorExtras} />
+        <StatusBar
+          branch={branchLabel}
+          targets={targets}
+          editor={editorStatus}
+          extras={editorExtras}
+          support={{
+            label: copy.support.label,
+            title: copy.support.title,
+            onOpen: () => void command('link.open', { url: SUPPORT_URL }),
+          }}
+        />
       </div>
       <ChatPane projectId={projectId} />
     </div>

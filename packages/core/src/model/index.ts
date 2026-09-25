@@ -15,4 +15,5 @@ export * from './run';
 export * from './checkpoint';
 export * from './usage';
 export * from './account';
+export * from './update';
 export * from './usage-report';

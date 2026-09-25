@@ -22,7 +22,7 @@ export default defineConfig({
         exclude: [
           '@styx/core', '@styx/broker', '@styx/tokens',
           '@aws-sdk/client-sts', '@msgpack/msgpack', '@modelcontextprotocol/sdk', 'chokidar', 'drizzle-orm',
-          'electron-log', 'execa', 'jose', 'parse-diff', 'ulid', 'zod',
+          'electron-log', 'electron-updater', 'execa', 'jose', 'parse-diff', 'ulid', 'zod',
         ],
       }),
     ],

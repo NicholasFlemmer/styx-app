@@ -1,9 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import {
   AGENT_LABEL,
+  ATTACHMENTS_DIR,
   MODEL_ALIASES,
   copy,
   deliveryWhileWorking,
@@ -54,7 +56,13 @@ import type { GitService } from './git';
 import { worktreeLocation } from './git';
 import { isPolicyFile } from './hunk-service';
 import { logger, redact } from './logger';
-import { attachmentName, inlineFiles, prepareAttachments, type AttachmentInput } from './message-attachments';
+import {
+  NO_ATTACHMENTS,
+  attachmentName,
+  composeTurn,
+  prepareAttachments,
+  type AttachmentInput,
+} from './message-attachments';
 import type { NotificationService } from './notification-service';
 import type { PtyLog } from './pty-log';
 import type { PtyService } from './pty-service';
@@ -702,33 +710,36 @@ export class SessionService {
     const s = this.require(sessionId);
     if (s.state === 'done') fail('invalid-transition', 'session has finished');
     if (body === '' && attachments.length === 0) fail('invalid-input', 'message is empty');
-    // Plain text stays synchronous up to the write (callers and the pty tests rely on it); only attachments await I/O.
-    const prepared =
-      attachments.length === 0
-        ? { meta: [], images: [], files: [] }
-        : await prepareAttachments(
-            (this.deps.repos.worktrees.get(s.worktreeId) ?? fail('not-found', 'worktree missing')).path,
-            attachments,
-          );
-    const shown = body !== '' ? body : prepared.meta.map(attachmentName).join(', ');
     // A Styx-authored turn (a merge to finish, ADR-0025) is never the human's words: it lands as a `system` row and
     // goes out now — the resolver only sends when the agent is idle or paused.
     const fromStyx = opts.from === 'styx';
-    if (!fromStyx && opts.now !== true && this.queuesNow(s)) {
-      if (prepared.images.length > 0)
-        this.deps.transcript.system(
-          s.id,
-          `${prepared.images.length === 1 ? 'Image' : 'Images'} dropped: only text can wait for the next turn.`,
-        );
-      // Paths, not contents: the files are read again, confined, when the message goes out (and the typed text
-      // is scrubbed like any transcript row, since the row is persisted and mirrored to the renderer).
-      this.enqueue(
-        s,
-        redact(shown),
-        attachments.flatMap((a) => (a.kind === 'file' ? [a.path] : [])),
-      );
+    const queued = !fromStyx && opts.now !== true && this.queuesNow(s);
+    // Plain text stays synchronous up to the write (callers and the pty tests rely on it); only attachments await I/O.
+    // A held message keeps every attachment as a path (uploads saved first), read again when it goes out.
+    const worktreePath = () =>
+      (this.deps.repos.worktrees.get(s.worktreeId) ?? fail('not-found', 'worktree missing')).path;
+    let prepared =
+      attachments.length === 0
+        ? NO_ATTACHMENTS
+        : await prepareAttachments(worktreePath(), attachments, {
+            sessionId: s.id,
+            imageBlocks: this.acceptsImages(s),
+            hold: queued,
+          });
+    const shown = body !== '' ? body : prepared.meta.map(attachmentName).join(', ');
+    if (queued && this.queuesNow(this.require(s.id))) {
+      // Paths, not contents (the typed text is scrubbed like any transcript row: the row is persisted and mirrored
+      // to the renderer). Nothing attached is dropped: images and files wait on disk with the message.
+      this.enqueue(s, redact(shown), prepared.held);
       return;
     }
+    if (queued)
+      // The turn ended while the attachments were being saved: send now, reading them from where they landed.
+      prepared = await prepareAttachments(
+        worktreePath(),
+        prepared.held.map((path) => ({ kind: 'file' as const, path })),
+        { sessionId: s.id, imageBlocks: this.acceptsImages(s) },
+      );
     const userRow = fromStyx
       ? this.deps.transcript.system(s.id, shown)
       : this.deps.transcript.append(s.id, shown, {
@@ -741,19 +752,24 @@ export class SessionService {
       const ok = await this.relaunch(s);
       if (!ok) return;
     }
-    const text = this.withNotes(s.id, inlineFiles(body, prepared.files));
+    const text = this.withNotes(s.id, composeTurn(body, prepared));
     if (this.deps.stream.has(s.id)) {
       this.deps.stream.send(s.id, text, prepared.images);
       this.render(s.id, `> ${shown}\r\n`); // the terminal (and its log) never sees file contents
     } else if (this.deps.pty.has(s.id)) {
-      if (prepared.images.length > 0)
-        this.deps.transcript.system(
-          s.id,
-          `${prepared.images.length === 1 ? 'Image' : 'Images'} dropped: ${AGENT_LABEL[s.agent]} runs in a terminal here; images need a stream session (Claude Code).`,
-        );
       this.typeIntoPty(s.id, text);
     }
     this.applyEvent(s.id, { type: 'activity' });
+  }
+
+  /**
+   * Whether the session's agent takes base64 image blocks (otherwise an image is saved and named by path, which
+   * every agent can open). A terminal session never does; a session about to be relaunched is judged by its runner.
+   */
+  private acceptsImages(s: Session): boolean {
+    if (this.deps.stream.has(s.id)) return this.deps.stream.acceptsImages?.(s.id) ?? true;
+    if (this.deps.pty.has(s.id)) return false;
+    return s.runner === 'stream' && (s.agent === 'claude' || s.agent === 'codex');
   }
 
   /**
@@ -1060,6 +1076,16 @@ export class SessionService {
     if (s.state !== 'done') fail('invalid-transition', 'only finished sessions can be archived');
     this.deps.repos.sessions.upsert({ ...s, archivedAt: this.deps.clock.now() });
     this.deps.publisher.upsert('sessions', [s.id]);
+    this.dropAttachments(s);
+  }
+
+  /** What was attached in an archived session goes with it (the transcript keeps names and sizes only). */
+  private dropAttachments(s: Session): void {
+    const worktree = this.deps.repos.worktrees.get(s.worktreeId);
+    if (!worktree) return;
+    void rm(join(worktree.path, ATTACHMENTS_DIR, s.id), { recursive: true, force: true }).catch(
+      () => undefined,
+    );
   }
 
   /**
@@ -1120,6 +1146,7 @@ export class SessionService {
     if (cur.state !== 'done') this.applyEvent(cur.id, { type: 'finish', exitCode: null });
     const done = this.require(sessionId);
     this.deps.repos.sessions.upsert({ ...done, archivedAt: this.deps.clock.now() });
+    this.dropAttachments(done);
     this.deps.publisher.upsert('sessions', [done.id]);
   }
 

@@ -11,6 +11,12 @@ asarUnpack:
   - "**/*.node"
   - "node_modules/node-pty/**"
   - "resources/**"
+# Updates in place (#119): with a publish feed configured, electron-builder writes `app-update.yml` into the app and
+# `latest-mac.yml` / `latest.yml` next to the artefacts. A build never uploads anything itself (`--publish never` is the
+# default outside CI); `pnpm release:publish` puts a finished build on the feed. `${os}` is `mac` or `win`.
+publish:
+  - provider: generic
+    url: https://storage.googleapis.com/styx-desktop-releases/${os}
 # Notarization runs in the afterSign hook (build/notarize.cjs) with the `styx-notary` keychain profile, so no
 # Apple password is ever an env var. electron-builder's own integration is off to avoid a second submission.
 afterSign: build/notarize.cjs

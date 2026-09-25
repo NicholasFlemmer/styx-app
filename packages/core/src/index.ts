@@ -1,4 +1,6 @@
 export * from './ids';
+export * from './secret-files';
+export * from './support';
 export * from './model';
 export * from './project-file';
 export * from './dev-url';

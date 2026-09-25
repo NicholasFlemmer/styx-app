@@ -51,6 +51,9 @@ export const runBannerAction = (action: BannerAction): void => {
     case 'review-project-policy':
       reviewProjectPolicy(action.projectId);
       return;
+    case 'install-update':
+      void command('update.install', {});
+      return;
   }
 };
 
@@ -86,7 +89,7 @@ export function BannerStack() {
       {banners.map((b) => (
         <Banner
           key={b.key}
-          tone={b.kind === 'project-policy' ? 'info' : 'error'}
+          tone={b.kind === 'project-policy' || b.kind === 'update-ready' ? 'info' : 'error'}
           text={b.text}
           action={{ label: b.cta, onClick: () => runBannerAction(b.action) }}
           onDismiss={() => dismissBanner(b.key)}

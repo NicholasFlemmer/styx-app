@@ -12,6 +12,7 @@
     "package:mac": "pnpm -F @styx/desktop package:mac",
     "package:win": "pnpm -F @styx/desktop package:win",
     "release:preflight": "pnpm -F @styx/desktop release:preflight",
+    "release:publish": "pnpm -F @styx/desktop release:publish",
     "rebuild:native": "pnpm -F @styx/desktop rebuild:native",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { deltaSchema, effectiveProjectSettingsSchema } from '../deltas';
 import { accountProviderSchema, accountStateSchema } from '../model/account';
+import { UPDATE_OFF, updateStateSchema } from '../model/update';
 import { activityRowSchema } from '../model/activity';
 import { auditEntrySchema } from '../model/audit';
 import {
@@ -147,6 +148,8 @@ const readModelSnapshotSchema = z.object({
   limits: z.record(z.string(), agentLimitsSchema),
   /** The Styx account on this machine (ADR-0026); never carries a token. */
   account: accountStateSchema,
+  /** Updates in place (#119). */
+  update: updateStateSchema.default(UPDATE_OFF),
 });
 export type ReadModelSnapshot = z.infer<typeof readModelSnapshotSchema>;
 
@@ -545,7 +548,11 @@ export const commands = {
     input: z.object({
       sessionId: sessionIdSchema,
       body: z.string(),
-      /** Images go to the CLI as base64 image blocks; files are read by main (inside the worktree) and inlined. */
+      /**
+       * Images go to the CLI as base64 image blocks when it takes them; files in the worktree are read by main;
+       * `upload` is any other file the person attached (bytes, any type): main saves it under the worktree's
+       * `ATTACHMENTS_DIR` and the turn inlines it (small text) or names its path for the agent's file tools.
+       */
       attachments: z
         .array(
           z.discriminatedUnion('kind', [
@@ -557,6 +564,14 @@ export const commands = {
               data: z.string().min(1),
             }),
             z.object({ kind: z.literal('file'), path: z.string().min(1) }),
+            z.object({
+              kind: z.literal('upload'),
+              name: z.string().min(1).max(255),
+              /** What the browser called it; '' when it could not tell. */
+              mediaType: z.string().max(255),
+              /** base64 without a data: prefix. */
+              data: z.string().min(1),
+            }),
           ]),
         )
         .max(20)
@@ -586,6 +601,11 @@ export const commands = {
    * opens the browser, then polls until the person finishes, cancels or the code expires.
    */
   'account.signIn': { input: z.object({ provider: accountProviderSchema }), output: ok },
+  // --- updates in place (#119) ---------------------------------------------
+  /** Asks the update feed now (Settings › General › Updates); the answer arrives as `update.set`. */
+  'update.check': { input: z.object({}), output: ok },
+  /** Quits and installs a downloaded update, then reopens Styx; refused unless one is `ready`. */
+  'update.install': { input: z.object({}), output: ok },
   /** Abandons a flow in progress; the code is dropped and the state returns to signed-out. */
   'account.cancelSignIn': { input: z.object({}), output: ok },
   /** Clears the account and its keychain entries; the API is told best-effort. */
@@ -1125,7 +1145,14 @@ export const events = {
   }),
   'banner.set': z.object({
     bannerKey: z.string().min(1),
-    kind: z.enum(['auth-expired', 'cli-missing', 'cli-outdated', 'conflict', 'project-policy']),
+    kind: z.enum([
+      'auth-expired',
+      'cli-missing',
+      'cli-outdated',
+      'conflict',
+      'project-policy',
+      'update-ready',
+    ]),
     text: z.string(),
     cta: z.string(),
     action: z.discriminatedUnion('kind', [
@@ -1138,6 +1165,8 @@ export const events = {
         projectId: projectIdSchema,
         hash: policyHashSchema,
       }),
+      /** A downloaded update: quit, install it and reopen (#119). */
+      z.object({ kind: z.literal('install-update') }),
     ]),
     sessionId: sessionIdSchema.nullable(),
     reason: pausedReasonSchema.nullable(),

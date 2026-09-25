@@ -66,6 +66,22 @@ export const deriveBanners = (model: ReadModel, now: number): BannerRow[] => {
       action: { kind: 'resolve', worktreeId: w.id },
     });
   }
+  // Updates in place (#119): a downloaded build waits for the next quit; the banner offers it now.
+  if (model.update.status === 'ready' && model.update.next !== null) {
+    const working = rows(model.sessions).filter(
+      (s) => s.archivedAt === null && (s.state === 'working' || s.state === 'needs-you'),
+    ).length;
+    out.push({
+      key: `update-ready:${model.update.next}`,
+      kind: 'update-ready',
+      text:
+        working === 0
+          ? fill(copy.update.banner, { version: model.update.next })
+          : fill(copy.update.bannerBusy, { version: model.update.next, n: working }),
+      cta: copy.update.restart,
+      action: { kind: 'install-update' },
+    });
+  }
   return out;
 };
 

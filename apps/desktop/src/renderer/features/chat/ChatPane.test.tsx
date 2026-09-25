@@ -11,7 +11,7 @@ import {
   type Session,
   type SessionId,
 } from '@styx/core';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
@@ -292,16 +292,22 @@ describe('ChatPane', () => {
     expect(useUiStore.getState().paneSizes['chat']).toBe(720);
   });
 
-  it('attach: the composer offers a picker that feeds the same path as paste and drop', () => {
+  it('attach: the composer offers a picker for any file type that feeds the same path as paste and drop', async () => {
     render(<ChatPane projectId={acme} />);
     const attach = screen.getByRole('button', { name: copy.chat.composer.attach });
-    const input = document.querySelector('[data-chat-image-input]') as HTMLInputElement;
+    const input = document.querySelector('[data-chat-file-input]') as HTMLInputElement;
     expect(input).toBeTruthy();
-    expect(input.accept).toContain('image/png');
+    expect(input.accept).toBe('');
     expect(input.multiple).toBe(true);
     const clicked = vi.spyOn(input, 'click');
     fireEvent.click(attach);
     expect(clicked).toHaveBeenCalled();
+    // A PDF picked from anywhere becomes a chip and goes with the next message as an upload.
+    const pdf = new File(['%PDF-1.7'], 'spec.pdf', { type: 'application/pdf' });
+    fireEvent.change(input, { target: { files: [pdf] } });
+    await waitFor(() =>
+      expect(document.querySelector('[data-composer-attachments]')?.textContent).toContain('spec.pdf'),
+    );
   });
 
   it('✕ on a session tab closes that chat', () => {

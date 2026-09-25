@@ -13,6 +13,8 @@ export const site = {
   version: desktop.version,
   links: {
     downloadMac: process.env['NEXT_PUBLIC_DOWNLOAD_MAC'] ?? '/#download',
+    /** Buy Me a Coffee (owner request): the footer's support band. */
+    support: 'https://buymeacoffee.com/heystyx',
   },
 } as const;
 

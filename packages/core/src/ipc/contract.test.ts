@@ -42,6 +42,7 @@ describe('ipc contract', () => {
         'settings',
         'store',
         'target',
+        'update',
         'usage',
         'terminal',
         'ui',
