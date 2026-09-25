@@ -473,7 +473,11 @@ async function boot(): Promise<void> {
       if (net.isOnline()) void container?.refresh.runNow('wake');
     }, 5000).unref?.();
   });
-  app.on('browser-window-focus', () => void container?.refresh.runNow('focus'));
+  app.on('browser-window-focus', () => {
+    void container?.refresh.runNow('focus');
+    // A release published while Styx was open is found when the person comes back to it (#119).
+    void container?.updates.onFocus();
+  });
 
   windowService.openMain();
   if (pendingUrl) {

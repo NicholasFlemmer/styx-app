@@ -36,4 +36,4 @@ for f in $(sed -n 's/^  - url: //p' "$rel/latest-mac.yml"); do
   if [ -f "$rel/$f.blockmap" ]; then upload "$rel/$f.blockmap" "gs://$BUCKET/mac/$f.blockmap"; fi
 done
 upload --cache-control="no-cache, max-age=0" "$rel/latest-mac.yml" "gs://$BUCKET/mac/latest-mac.yml"
-echo "Published $version (was ${live:-nothing}). Installed copies pick it up within four hours, or at their next launch."
+echo "Published $version (was ${live:-nothing}). Open copies show "Update available" within 30 minutes, when their window is next focused, or at launch."
