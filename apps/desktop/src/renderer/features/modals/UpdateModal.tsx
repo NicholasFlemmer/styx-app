@@ -15,15 +15,17 @@ const selectWorking = (m: ReadModel): number =>
     .length;
 
 /**
- * An update finished downloading (owner request, #119: "not obvious enough"): a dialog says so, once per version,
- * with the restart one click away. Later closes it; the banner stays until Styx restarts.
+ * An update was found (owner request, #119: "not obvious enough"): a dialog says so at once, once per version, with
+ * the download's progress; Restart to update lights up when it is done. Later closes it; the banner stays once the
+ * update is ready.
  */
 export function UpdateModal({ id }: UpdateModalProps) {
   const update = useModel(selectUpdate);
   const working = useModel(selectWorking);
   const popOverlay = useUi((u) => u.popOverlay);
   const close = () => popOverlay(id);
-  const gone = update.status !== 'ready' || update.next === null;
+  const ready = update.status === 'ready';
+  const gone = (update.status !== 'ready' && update.status !== 'downloading') || update.next === null;
   useEffect(() => {
     if (gone) popOverlay(id);
   }, [gone, id, popOverlay]);
@@ -31,7 +33,9 @@ export function UpdateModal({ id }: UpdateModalProps) {
   return (
     <Modal
       width={560}
-      title={fill(copy.update.modal.title, { version: update.next ?? '' })}
+      title={fill(ready ? copy.update.modal.title : copy.update.modal.available, {
+        version: update.next ?? '',
+      })}
       onClose={close}
       bodyPad="20px 16px"
       footer={
@@ -42,6 +46,7 @@ export function UpdateModal({ id }: UpdateModalProps) {
           <Button
             size="footer"
             variant="primary"
+            disabled={!ready}
             onClick={() => void command('update.install', {})}
             data-update-restart="true"
           >
@@ -51,7 +56,11 @@ export function UpdateModal({ id }: UpdateModalProps) {
       }
     >
       <div className={s['body']} data-update-modal="true">
-        <p className={s['lead']}>{copy.update.modal.lead}</p>
+        <p className={s['lead']} data-update-phase={ready ? 'ready' : 'downloading'}>
+          {ready
+            ? copy.update.modal.lead
+            : fill(copy.update.modal.downloading, { percent: update.percent ?? 0 })}
+        </p>
         {working > 0 && <p className={s['busy']}>{fill(copy.update.modal.busy, { n: working })}</p>}
       </div>
     </Modal>
@@ -66,10 +75,11 @@ export function useUpdatePrompt(): void {
   const update = useModel(selectUpdate);
   const pushOverlay = useUi((u) => u.pushOverlay);
   const shown = useRef(new Set<string>());
-  const ready = update.status === 'ready' ? update.next : null;
+  // As soon as an update is found (it downloads straight away), not only once it is ready: it must be obvious.
+  const found = update.status === 'downloading' || update.status === 'ready' ? update.next : null;
   useEffect(() => {
-    if (ready === null || shown.current.has(ready)) return;
-    shown.current.add(ready);
+    if (found === null || shown.current.has(found)) return;
+    shown.current.add(found);
     pushOverlay({ kind: 'modal', modal: 'update' });
-  }, [ready, pushOverlay]);
+  }, [found, pushOverlay]);
 }

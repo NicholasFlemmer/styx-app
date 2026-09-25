@@ -34,22 +34,38 @@ describe('UpdateModal (#119)', () => {
     Object.assign(window, { styx: undefined });
   });
 
-  it('opens once per downloaded version, not while downloading', () => {
-    useReadModel
-      .getState()
-      .replaceModel(withUpdate({ status: 'downloading', next: '0.2.1', percent: 40 }), 'connected');
+  it('opens as soon as an update is found, once per version', () => {
+    useReadModel.getState().replaceModel(withUpdate({ status: 'idle' }), 'connected');
     const { rerender } = render(<Prompter />);
     expect(useUiStore.getState().overlays).toEqual([]);
+    act(() =>
+      useReadModel
+        .getState()
+        .replaceModel(withUpdate({ status: 'downloading', next: '0.2.1', percent: 3 }), 'connected'),
+    );
+    rerender(<Prompter />);
+    expect(useUiStore.getState().overlays).toMatchObject([{ kind: 'modal', modal: 'update' }]);
+    act(() => useUiStore.setState({ overlays: [] }));
     act(() =>
       useReadModel
         .getState()
         .replaceModel(withUpdate({ status: 'ready', next: '0.2.1', percent: 100 }), 'connected'),
     );
     rerender(<Prompter />);
-    expect(useUiStore.getState().overlays).toMatchObject([{ kind: 'modal', modal: 'update' }]);
-    act(() => useUiStore.setState({ overlays: [] }));
-    rerender(<Prompter />);
     expect(useUiStore.getState().overlays).toEqual([]);
+  });
+
+  it('while downloading: "Update available", progress, Restart disabled', () => {
+    useReadModel
+      .getState()
+      .replaceModel(withUpdate({ status: 'downloading', next: '0.2.1', percent: 42 }), 'connected');
+    useUiStore.setState({ overlays: [{ id: 'm1', kind: 'modal', modal: 'update' }] });
+    render(<UpdateModal id="m1" />);
+    expect(screen.getByRole('dialog', { name: 'Update available: Styx 0.2.1' })).toBeTruthy();
+    expect(document.querySelector('[data-update-phase]')?.textContent).toContain('42%');
+    expect((screen.getByRole('button', { name: 'Restart to update' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
   });
 
   it('Restart to update installs; Later closes; agents at work are named', () => {
