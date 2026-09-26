@@ -13,6 +13,8 @@ if grep -qE "'\[[A-Z ]+\]'" "$ROOT/apps/website/lib/legal.ts"; then
   echo "lib/legal.ts still has [PLACEHOLDERS] (entity, address, email or courts). Fill them in before deploying." >&2
   exit 1
 fi
+# The Download buttons: one address that `pnpm release:publish` keeps on the newest signed DMG.
+NEXT_PUBLIC_DOWNLOAD_MAC="${NEXT_PUBLIC_DOWNLOAD_MAC:-https://storage.googleapis.com/styx-desktop-releases/mac/Styx-latest-arm64.dmg}" \
 NEXT_PUBLIC_SITE_URL=https://heystyx.com NEXT_PUBLIC_GTM_ID="${GTM_ID:?set GTM_ID, e.g. GTM_ID=GTM-XXXXXXX apps/website/deploy/deploy.sh}" pnpm -F @styx/website build
 
 STAGE="$(mktemp -d)"
