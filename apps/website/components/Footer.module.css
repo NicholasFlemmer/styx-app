@@ -71,3 +71,18 @@
     justify-self: start;
   }
 }
+
+.legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+.legal a,
+.legal button {
+  color: var(--mu);
+  text-decoration: none !important;
+}
+.legal a:hover,
+.legal button:hover {
+  color: var(--tx);
+}
