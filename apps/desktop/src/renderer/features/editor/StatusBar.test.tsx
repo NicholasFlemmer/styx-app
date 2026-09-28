@@ -27,4 +27,21 @@ describe('StatusBar', () => {
     render(<StatusBar branch="main" targets={[]} editor="Monaco" />);
     expect(document.querySelector('[data-status-support]')).toBeNull();
   });
+
+  it('Feedback sits just before the coffee chip and opens the dialog (#123)', () => {
+    const onFeedback = vi.fn();
+    render(
+      <StatusBar
+        branch="main"
+        targets={[]}
+        editor="Monaco"
+        feedback={{ label: 'Feedback', title: 'Tell me', onOpen: onFeedback }}
+        support={{ label: '☕ Buy us a coffee', title: 'Buy me a coffee', onOpen: vi.fn() }}
+      />,
+    );
+    const button = screen.getByRole('button', { name: 'Feedback' });
+    expect(button.nextElementSibling?.getAttribute('data-status-support')).toBe('true');
+    fireEvent.click(button);
+    expect(onFeedback).toHaveBeenCalledTimes(1);
+  });
 });

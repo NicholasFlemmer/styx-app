@@ -56,6 +56,9 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
     case 'agent-dock':
       void command('window.agentDock', { open: true });
       return;
+    case 'feedback':
+      open({ kind: 'modal', modal: 'feedback' });
+      return;
     case 'debt-audit': {
       const projectId = action.projectId;
       void startDebtAudit(model, projectId);

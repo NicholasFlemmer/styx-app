@@ -26,6 +26,7 @@ describe('ipc contract', () => {
         'device',
         'detect',
         'dialog',
+        'feedback',
         'fs',
         'grant',
         'hunk',

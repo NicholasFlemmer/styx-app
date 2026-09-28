@@ -886,6 +886,17 @@ export const commands = {
     }),
     output: z.object({ paths: z.array(z.string()), truncated: z.boolean() }),
   },
+  /**
+   * Feedback (owner request, #123): the person's words, and an email only if they typed one. Main adds the app's
+   * version, OS and install id and sends it to the Styx API; nothing about a project can ride along.
+   */
+  'feedback.send': {
+    input: z.object({
+      message: z.string().trim().min(1).max(5000),
+      email: z.union([z.string().trim().email().max(200), z.literal('')]).optional(),
+    }),
+    output: ok,
+  },
   /** Opens an https link from a transcript in the default browser (main validates the scheme). */
   'link.open': { input: z.object({ url: z.string().url() }), output: ok },
   /**

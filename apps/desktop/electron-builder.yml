@@ -20,6 +20,10 @@ publish:
 # Notarization runs in the afterSign hook (build/notarize.cjs) with the `styx-notary` keychain profile, so no
 # Apple password is ever an env var. electron-builder's own integration is off to avoid a second submission.
 afterSign: build/notarize.cjs
+# The .dmg is signed with the same Developer ID and notarized too (build/notarize-dmg.cjs), not only the app in it.
+afterAllArtifactBuild: build/notarize-dmg.cjs
+dmg:
+  sign: true
 mac:
   category: public.app-category.developer-tools
   hardenedRuntime: true

@@ -42,6 +42,8 @@ export type PaletteAction =
   | { kind: 'open-folder' }
   | { kind: 'clone-url' }
   | { kind: 'agent-dock' }
+  /** The feedback dialog (owner request, #123). */
+  | { kind: 'feedback' }
   | { kind: 'debt-audit'; projectId: ProjectId }
   /** Commit, push and PR in one step for the worktree the project is on (ADR-0021). */
   | { kind: 'publish'; projectId: ProjectId; worktreeId: WorktreeId }
@@ -221,6 +223,14 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
     meta: copy.palette.actions.agentDockMeta,
     first: false,
     action: { kind: 'agent-dock' },
+  });
+  items.push({
+    id: 'feedback',
+    glyph: '■',
+    label: copy.feedback.title,
+    meta: copy.palette.actions.feedbackMeta,
+    first: false,
+    action: { kind: 'feedback' },
   });
   // Snake in the chat pane (any tab on screen but one waiting on the person: that ask comes first). The tab is
   // resolved the way the chat pane resolves it (the first tab until one is picked), not from the raw selection —

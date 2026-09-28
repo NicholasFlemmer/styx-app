@@ -8,12 +8,14 @@ export interface StatusBarProps {
   editor: string;
   /** Appended after `editor`: caret, wrap, read-only notice (owner addition, discrepancies #58). */
   extras?: readonly string[];
+  /** Before the coffee chip, as a plain item that is still a button: "Feedback" (owner request, #123). */
+  feedback?: { label: string; title: string; onOpen: () => void };
   /** Last, as a filled accent chip: "☕ Buy us a coffee" (owner request, #120). */
   support?: { label: string; title: string; onOpen: () => void };
 }
 
 /** Editor status bar (26px, `--s1`): branch · targets in play · spacer · engine/eol/language · support. */
-export function StatusBar({ branch, targets, editor, extras = [], support }: StatusBarProps) {
+export function StatusBar({ branch, targets, editor, extras = [], feedback, support }: StatusBarProps) {
   return (
     <div className={s['bar']} data-status-bar="true">
       <span>{branch}</span>
@@ -25,6 +27,17 @@ export function StatusBar({ branch, targets, editor, extras = [], support }: Sta
       {extras.map((x) => (
         <span key={x}>{x}</span>
       ))}
+      {feedback !== undefined && (
+        <button
+          type="button"
+          className={s['feedback']}
+          title={feedback.title}
+          onClick={feedback.onOpen}
+          data-status-feedback="true"
+        >
+          {feedback.label}
+        </button>
+      )}
       {support !== undefined && (
         <button
           type="button"

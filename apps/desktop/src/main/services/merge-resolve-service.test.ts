@@ -1,6 +1,6 @@
 import { execa } from 'execa';
 import { EventEmitter } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { copy, fixtures } from '@styx/core';
@@ -378,4 +378,84 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
     expect((await t.app.resolver.resolve(fixCheckout)).started).toBe(true);
     expect(await t.app.resolver.resolve(fixCheckout)).toEqual({ started: false, merged: 0 });
   });
+
+  it(
+    'git busy while verifying: waited out, then committed — never left at "checking"',
+    { timeout: 30_000 },
+    async () => {
+      const { t, stream, wt } = await rig({ checksCommand: null });
+      await t.app.resolver.resolve(fixCheckout);
+      writeFileSync(join(wt, 'a.ts'), 'merged\n');
+      const lock = join((await sh(['rev-parse', '--absolute-git-dir'], wt)).trim(), 'index.lock');
+      writeFileSync(lock, '');
+      stream.quiet(claude);
+      await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('checking'), { timeout: 5_000 });
+      // Another git process lets go shortly after.
+      await new Promise((r) => setTimeout(r, 100));
+      rmSync(lock);
+      await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('done'), { timeout: 10_000 });
+      expect(await parents(wt)).toBe(2);
+    },
+  );
+
+  it(
+    'a verify that keeps failing goes back to resolving with the reason; Land verifies it again once git is free',
+    { timeout: 30_000 },
+    async () => {
+      const { t, stream, wt } = await rig({ checksCommand: null });
+      await t.app.resolver.resolve(fixCheckout);
+      writeFileSync(join(wt, 'a.ts'), 'merged\n');
+      const lock = join((await sh(['rev-parse', '--absolute-git-dir'], wt)).trim(), 'index.lock');
+      writeFileSync(lock, '');
+      stream.quiet(claude);
+      await vi.waitFor(() => expect(lane(t).resolution?.failure ?? '').toContain('index.lock'), {
+        timeout: 15_000,
+      });
+      expect(lane(t).resolution?.state).toBe('resolving');
+      expect(
+        systemLines(t, claude).some((l) => l.startsWith('Styx could not finish checking the merge:')),
+      ).toBe(true);
+      rmSync(lock);
+      await t.app.resolver.verifyNow(fixCheckout);
+      expect(lane(t).resolution?.state).toBe('done');
+    },
+  );
+
+  it(
+    'recover: a lane left at "checking" by a Styx that quit is movable again, and Stop merging works on it',
+    {
+      timeout: 30_000,
+    },
+    async () => {
+      const { t, wt } = await rig();
+      await t.app.resolver.resolve(fixCheckout);
+      const res = lane(t).resolution;
+      if (res === null) throw new Error('resolution');
+      // Stuck at checking with nothing running: Stop merging still undoes it.
+      t.app.repos.worktrees.upsert({ ...lane(t), resolution: { ...res, state: 'checking' } });
+      await t.app.resolver.undo(fixCheckout);
+      expect(lane(t).resolution?.state).toBe('failed');
+      expect(await t.app.git.mergeInProgress(wt)).toBe(false);
+      // And at startup, checking goes back to resolving.
+      t.app.repos.worktrees.upsert({ ...lane(t), resolution: { ...res, state: 'checking' } });
+      t.app.resolver.recover();
+      expect(lane(t).resolution?.state).toBe('resolving');
+    },
+  );
+
+  it(
+    "the lane's own agent can start the resolve from inside its turn (the `land` tool)",
+    { timeout: 30_000 },
+    async () => {
+      const { t, stream } = await rig();
+      const s = t.app.repos.sessions.get(claude);
+      if (!s) throw new Error('session');
+      t.app.repos.sessions.upsert({ ...s, state: 'working' });
+      await expect(t.app.resolver.resolve(fixCheckout, { caller: 'someone-else' })).rejects.toMatchObject({
+        code: 'invalid-input',
+      });
+      expect((await t.app.resolver.resolve(fixCheckout, { caller: claude })).started).toBe(true);
+      expect(stream.sent).toHaveLength(1);
+    },
+  );
 });

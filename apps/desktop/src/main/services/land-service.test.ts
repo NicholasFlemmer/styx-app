@@ -327,6 +327,59 @@ describe('LandService (ADR-0025 phase C)', { timeout: 30_000 }, () => {
     );
   });
 
+  it("the lane's own agent lands it from inside its turn: mid-turn is not a refusal for the caller", async () => {
+    const { t, repo } = await rig();
+    const s = t.app.repos.sessions.get(claude);
+    if (!s) throw new Error('session');
+    t.app.repos.sessions.upsert({ ...s, state: 'working' });
+    // Anyone else still waits for the turn to end…
+    await expect(t.app.land.land(testFlaky, { title: 'x', body: '' }, { caller: claude })).rejects.toThrow(
+      'Nothing to land',
+    );
+    // …but the owner's `land` call brings main in (it is behind by one) and lands.
+    const r = await t.app.land.land(
+      fixCheckout,
+      { title: 'Fix the checkout total', body: '' },
+      { caller: claude },
+    );
+    expect(r.steps).toContain('brought in main (1)');
+    expect(await sh(['rev-parse', 'HEAD'], repo)).toBe(r.commit);
+    expect(t.app.repos.worktrees.get(fixCheckout)?.mergedAt).not.toBeNull();
+  });
+
+  it('a merge its agent finished is verified by the landing, not left at "resolving" until a turn ends', async () => {
+    const { t, repo, wt1 } = await rig({ checksCommand: null });
+    // The lane is mid-merge of main, resolved by hand (no markers), with the resolver waiting on the turn's end.
+    await sh(['add', '.'], wt1);
+    await sh(['commit', '-q', '-m', 'lane work'], wt1);
+    await sh(['merge', '--no-commit', '--no-ff', 'main'], wt1).catch(() => undefined);
+    const lane = t.app.repos.worktrees.get(fixCheckout);
+    if (!lane) throw new Error('lane');
+    const preHead = await sh(['rev-parse', 'HEAD'], wt1);
+    t.app.repos.worktrees.upsert({
+      ...lane,
+      resolution: {
+        state: 'resolving',
+        sessionId: claude,
+        files: ['c.ts'],
+        preHead,
+        preTree: null,
+        mergeCommit: null,
+        attempts: 2,
+        startedAt: t.clock.now(),
+        finishedAt: null,
+        failure: 'conflict markers remain in c.ts',
+      },
+    });
+    const s = t.app.repos.sessions.get(claude);
+    if (!s) throw new Error('session');
+    t.app.repos.sessions.upsert({ ...s, state: 'working' });
+    const r = await t.app.land.land(fixCheckout, { title: 'Land it', body: '' }, { caller: claude });
+    expect(t.app.repos.worktrees.get(fixCheckout)?.resolution?.state).toBe('done');
+    expect(await sh(['show', 'HEAD:c.ts'], repo)).toBe('c');
+    expect(await sh(['rev-parse', 'HEAD'], repo)).toBe(r.commit);
+  });
+
   it("landings of one project run one after another: the second brings the first's landing in before it merges", async () => {
     const { t, repo, wt2 } = await rig({ checksCommand: null });
     writeFileSync(join(wt2, 'd.ts'), 'd\n');

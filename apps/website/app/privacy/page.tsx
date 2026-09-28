@@ -126,6 +126,14 @@ export default function PrivacyPage() {
         interest in understanding how Styx is used; you can object by turning them off.
       </p>
 
+      <h3>Feedback</h3>
+      <p>
+        If you send feedback from the app, we receive your message, your email address if you type one (or
+        your account&apos;s, if you are signed in), Styx&apos;s version, your operating system and your
+        install id. We use it to read and answer what you wrote and to improve Styx, and keep it for a year.
+        Nothing from your projects is attached.
+      </p>
+
       <h2>5. This website</h2>
       <h3>Hosting</h3>
       <p>
@@ -223,6 +231,10 @@ export default function PrivacyPage() {
           <tr>
             <td>Usage counts and download counts</td>
             <td>Six months</td>
+          </tr>
+          <tr>
+            <td>Feedback you send</td>
+            <td>One year</td>
           </tr>
           <tr>
             <td>Install id, version and operating system</td>

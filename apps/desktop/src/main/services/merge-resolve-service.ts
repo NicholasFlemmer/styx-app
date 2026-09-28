@@ -65,10 +65,18 @@ export interface MergeResolveDeps {
   runChecks: (cwd: string, command: string) => Promise<ChecksResult>;
   /** Mergiraf's `solve` on one conflicted file when the tool is installed; resolves to whether it was fully solved. */
   mergiraf?: (file: string, cwd: string) => Promise<boolean>;
+  /** Waits between retries when git is locked by another process; instant in tests. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /** How many turns the agent gets before the merge is undone and the lane left as it was. */
 export const MAX_ATTEMPTS = 2;
+/**
+ * git refuses while another git process holds the index or a ref (an agent's own `git status`, a checkpoint, an
+ * editor). That is a moment's wait, not a failed merge: verify is tried again after each of these delays.
+ */
+const LOCKED = /index\.lock|cannot lock ref|unable to create '[^']*\.lock'/i;
+export const LOCK_RETRY_MS: readonly number[] = [250, 1000, 3000];
 const OUTPUT_TAIL = 4000;
 const LIST_MAX = 3;
 const CHECKS_TIMEOUT_MS = 15 * 60_000;
@@ -85,9 +93,30 @@ const CHECKS_TIMEOUT_MS = 15 * 60_000;
  * half-merged tree is the one state an agent must never inherit.
  */
 export class MergeResolveService {
+  /** One verify per lane at a time: the turn settling and a `land` call can both ask for it. */
+  private readonly verifying = new Map<string, Promise<void>>();
+
   constructor(private readonly deps: MergeResolveDeps) {}
 
-  async resolve(worktreeId: string): Promise<{ started: boolean; merged: number }> {
+  /**
+   * At startup: a lane left at `checking` by a Styx that quit (or crashed) mid-verify goes back to `resolving`, so
+   * the next turn, a `land` or Stop merging can move it. Nothing is checking at startup, so nothing is lost.
+   */
+  recover(): void {
+    for (const wt of this.deps.repos.worktrees.all()) {
+      if (wt.resolution?.state !== 'checking') continue;
+      this.save({ ...wt, resolution: { ...wt.resolution, state: 'resolving' } });
+    }
+  }
+
+  /**
+   * `caller` is the session asking through the `land` tool: when it owns the lane, its being mid-turn is no reason
+   * to refuse (it is waiting on this very call), and the resolve turn reaches it as its next message.
+   */
+  async resolve(
+    worktreeId: string,
+    opts: { caller?: string | null } = {},
+  ): Promise<{ started: boolean; merged: number }> {
     const { repos, git, clock } = this.deps;
     const wt = repos.worktrees.get(worktreeId) ?? fail('not-found', `worktree ${worktreeId} not found`);
     if (wt.isMain) fail('invalid-input', 'the main worktree is the base; nothing to bring in');
@@ -99,7 +128,8 @@ export class MergeResolveService {
     const base = this.deps.baseOf(project.id);
     const owner = wt.owner.kind === 'session' ? repos.sessions.get(wt.owner.sessionId) : null;
     const live = owner !== null && owner.state !== 'done' && owner.archivedAt === null ? owner : null;
-    if (live !== null && (live.state === 'working' || live.state === 'needs-you'))
+    const byOwner = live !== null && opts.caller === live.id;
+    if (live !== null && !byOwner && (live.state === 'working' || live.state === 'needs-you'))
       fail('invalid-input', fill(copy.sync.busy, { agent: copy.agentProducts[live.agent], base }));
     if (await git.mergeInProgress(wt.path))
       fail('invalid-input', 'a merge is already in progress in this lane');
@@ -191,7 +221,67 @@ export class MergeResolveService {
       .all()
       .find((w) => w.resolution?.sessionId === sessionId && w.resolution.state === 'resolving');
     if (!wt || wt.resolution === null) return;
-    await this.verify(wt, wt.resolution);
+    await this.verifyOnce(wt.id);
+  }
+
+  /**
+   * Verify now rather than when a turn ends: the lane's agent called `land` (saying it is done, from inside its
+   * turn), or the agent went quiet without the settle being seen. A no-op unless a merge is being finished.
+   */
+  async verifyNow(worktreeId: string): Promise<void> {
+    const res = this.deps.repos.worktrees.get(worktreeId)?.resolution;
+    if (res === null || res === undefined) return;
+    if (res.state !== 'resolving' && res.state !== 'checking') return;
+    await this.verifyOnce(worktreeId);
+  }
+
+  private verifyOnce(worktreeId: string): Promise<void> {
+    const inflight = this.verifying.get(worktreeId);
+    if (inflight !== undefined) return inflight;
+    const run = this.verifySafely(worktreeId).finally(() => this.verifying.delete(worktreeId));
+    this.verifying.set(worktreeId, run);
+    return run;
+  }
+
+  /**
+   * `verify`, made safe to leave: a locked index is waited out, and anything else that throws puts the lane back
+   * to `resolving` with the reason. Before this a throw left the lane at `checking` for good — Land refused,
+   * Stop merging did nothing, and only hand-editing the database moved it.
+   */
+  private async verifySafely(worktreeId: string): Promise<void> {
+    const { repos, transcript } = this.deps;
+    const sleep = this.deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+    for (let attempt = 0; ; attempt += 1) {
+      const wt = repos.worktrees.get(worktreeId);
+      const res = wt?.resolution ?? null;
+      if (!wt || res === null || (res.state !== 'resolving' && res.state !== 'checking')) return;
+      try {
+        await this.verify(wt, res);
+        return;
+      } catch (e) {
+        const message = (e as Error).message;
+        const delay = LOCK_RETRY_MS[attempt];
+        if (LOCKED.test(message) && delay !== undefined) {
+          logger.info('merge resolve: git is busy, verifying again shortly', { worktreeId, delay });
+          await sleep(delay);
+          continue;
+        }
+        const now = repos.worktrees.get(worktreeId) ?? wt;
+        const reason = firstLine(message);
+        this.save({
+          ...now,
+          resolution: { ...(now.resolution ?? res), state: 'resolving', failure: reason },
+        });
+        const session = res.sessionId === null ? null : repos.sessions.get(res.sessionId);
+        if (session !== null && session.state !== 'done')
+          transcript.system(
+            session.id,
+            fill(copy.resolve.verifyError, { reason, agent: copy.agentProducts[session.agent] }),
+          );
+        logger.warn('merge resolve: verify failed', { worktreeId, error: message });
+        return;
+      }
+    }
   }
 
   /** Puts the lane back to before its last resolved merge, while nothing has been committed on top. */
@@ -199,7 +289,12 @@ export class MergeResolveService {
     const { repos, git } = this.deps;
     const wt = repos.worktrees.get(worktreeId) ?? fail('not-found', `worktree ${worktreeId} not found`);
     const res = wt.resolution;
-    if (res !== null && res.state === 'resolving') return this.stop(wt, res);
+    // `checking` with no verify running is a verify that died: stopping it must still be possible.
+    if (
+      res !== null &&
+      (res.state === 'resolving' || (res.state === 'checking' && !this.verifying.has(wt.id)))
+    )
+      return this.stop(wt, res);
     if (res === null || res.state !== 'done' || res.mergeCommit === null)
       fail('invalid-transition', 'nothing to undo on this lane');
     if ((await git.headCommit(wt.path)) !== res.mergeCommit)

@@ -65,6 +65,7 @@ import { UsageService } from './services/usage-service';
 import { AccountService, DEFAULT_API } from './services/account-service';
 import { UpdateService, type Updater } from './services/update-service';
 import { installIdFrom, UsageReportService } from './services/usage-report-service';
+import { FeedbackService } from './services/feedback-service';
 import { version as APP_VERSION } from '../../package.json';
 import { projectSettingsFor } from './store/projection';
 import { Publisher } from './store/publisher';
@@ -190,6 +191,12 @@ export interface ContainerOptions {
   disableRefresh?: boolean;
   /** Re-detect agent CLIs before every spawn / relaunch and on focus (default on; off for fixture rows and tests). */
   redetectClis?: boolean;
+  /**
+   * Whether usage counts may leave this process (#122). Off unless the caller says so: only a real, packaged
+   * Styx is a person using the product. Tests, `pnpm dev` and fixture runs each make a fresh install id, and
+   * counting them turned four test runs into four "installs" on the first day.
+   */
+  sendUsage?: boolean;
   /** Home dir the skills service scans (`~/.claude/skills` …); fixtures point it at a seeded temp dir. */
   skillsHome?: string;
   /** Runs a CLI status command for AgentService (`claude auth status --json` …); faked in tests. */
@@ -260,6 +267,8 @@ export interface Container {
   updates: UpdateService;
   /** Anonymous usage counts (discrepancy row 114): a closed set of event names, nothing else. */
   usageReports: UsageReportService;
+  /** Feedback to the owner (#123): the person's message, sent when they press Send. */
+  feedback: FeedbackService;
   terminals: TerminalService;
   broker: BrokerHost;
   windows: WindowsPort;
@@ -558,10 +567,18 @@ export function buildContainer(opts: ContainerOptions): Container {
     installId: () => installIdFrom(repos.uiState),
     version: APP_VERSION,
     os: process.platform,
-    enabled: () => repos.settings.app().usageReports,
+    enabled: () => opts.sendUsage === true && repos.settings.app().usageReports,
     now: () => clock.now(),
   });
   usageReports.start();
+  const feedback = new FeedbackService({
+    fetch: opts.fetch ?? fetch,
+    apiBase: () => process.env['STYX_API'] ?? DEFAULT_API,
+    token: () => account.accessToken(),
+    installId: () => installIdFrom(repos.uiState),
+    version: APP_VERSION,
+    os: process.platform,
+  });
   const screens = new ScreensStore(join(runtime.userData, 'screens'));
   const deviceHooks = opts.deviceHooks ?? NO_DEVICE_HOOKS;
   const devices = new DeviceService({
@@ -822,6 +839,8 @@ export function buildContainer(opts: ContainerOptions): Container {
         ? { mergiraf: mergirafSolver(() => pty.resolveLoginPath(), runtime.platform) }
         : {}),
   });
+  // A lane left at `checking` by a Styx that quit mid-verify is movable again (Land, Stop merging, the next turn).
+  resolver.recover();
   const land = new LandService({
     repos,
     onLanded: () => usageReports.record('lane.landed'),
@@ -927,6 +946,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     account,
     updates,
     usageReports,
+    feedback,
     terminals,
     broker,
     windows: opts.windows,
