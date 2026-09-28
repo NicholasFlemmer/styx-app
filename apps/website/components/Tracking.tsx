@@ -27,7 +27,7 @@ export const Tracking = () => {
       if (!a) return;
       const href = a.getAttribute('href') ?? '';
       const label = (a.textContent ?? '').trim().slice(0, 60);
-      if (/download/i.test(label) || /\.dmg($|\?)/i.test(href)) {
+      if (/download/i.test(label) || /\.dmg($|\?)/i.test(href) || /\/download\/mac/.test(href)) {
         track('download_click', { platform: 'mac', link_text: label, link_url: href, location: placeOf(a) });
       } else if (/^https?:\/\//.test(href) && !href.includes(location.host)) {
         track('outbound_click', { link_url: href, link_text: label });

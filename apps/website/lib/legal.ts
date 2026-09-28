@@ -12,7 +12,7 @@ export const legal = {
   /** Whose law governs the terms, and whose courts hear disputes. */
   governingLaw: 'the Republic of South Africa',
   courts: 'the courts of South Africa',
-  effective: '25 September 2026',
+  effective: '28 September 2026',
 } as const;
 
 export const legalReady = !Object.values(legal).some((v) => v.includes('['));

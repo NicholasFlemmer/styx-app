@@ -4,12 +4,13 @@ import { z } from 'zod';
  * Usage reporting (owner request, discrepancy #114): how many people use Styx and which parts they reach.
  *
  * The shape of this file is the privacy promise. There is a **closed set of event names and nothing else** — no
- * properties, no free-form strings, no ids of anything but the account. A project name, a path, a branch, a
- * repo, a prompt or an agent's output cannot be sent because there is nowhere to put them. That is deliberate:
- * a leak has to be impossible by construction, not merely avoided by care.
+ * properties, no free-form strings, no ids of anything but a random install id and, when signed in, the account.
+ * A project name, a path, a branch, a repo, a prompt or an agent's output cannot be sent because there is
+ * nowhere to put them. That is deliberate: a leak has to be impossible by construction, not merely avoided by
+ * care.
  *
- * Events are only sent while signed in (they are counts per account) and only while the person leaves the
- * setting on.
+ * Events are sent signed in or not (discrepancy #122: counts belong to a random install id, and to the account
+ * as well while there is one), and only while the person leaves the setting on.
  */
 
 export const usageEventSchema = z.enum([
@@ -23,6 +24,12 @@ export const usageEventSchema = z.enum([
   'grant.approved',
   /** A deploy was started. */
   'deploy.run',
+  /** Onboarding was finished: how many installs get from download to set up. */
+  'onboarding.completed',
+  /** A message was sent to an agent: the day-to-day use, rather than the setting up. */
+  'message.sent',
+  /** A lane was landed on main: agent work that actually shipped. */
+  'lane.landed',
 ]);
 export type UsageEvent = z.infer<typeof usageEventSchema>;
 export const USAGE_EVENTS: readonly UsageEvent[] = usageEventSchema.options;
@@ -42,7 +49,18 @@ export type UsageReportRow = z.infer<typeof usageReportRowSchema>;
 /** A batch is small by design: the client flushes often and drops rather than hoarding. */
 export const USAGE_BATCH_MAX = 100;
 
+/**
+ * `inst_` and 22 url-safe characters from 16 random bytes, made once on first run. Random rather than derived
+ * from the machine, so it points at nothing but itself, and a fresh one is a fresh start.
+ */
+export const installIdSchema = z.string().regex(/^inst_[A-Za-z0-9_-]{16,64}$/);
+
 export const usageBatchSchema = z.object({
+  installId: installIdSchema,
+  /** The app's version, e.g. `0.2.6`: which releases are out there. */
+  version: z.string().max(24),
+  /** `process.platform`: `darwin` / `win32` / `linux`. */
+  os: z.string().max(12),
   events: z.array(usageReportRowSchema).max(USAGE_BATCH_MAX),
 });
 export type UsageBatch = z.infer<typeof usageBatchSchema>;

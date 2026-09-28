@@ -50,6 +50,8 @@ export interface LandDeps {
   runChecks: (cwd: string, command: string) => Promise<ChecksResult>;
   /** Removes a lane's checkout and marks it archived (`WorktreeService.archive`): the tidy-up after a landing. */
   archive: (worktreeId: string) => Promise<void>;
+  /** A lane reached the base: counted as `lane.landed` (discrepancy #122), however it was landed. */
+  onLanded?: () => void;
 }
 
 export interface LandFile {
@@ -259,6 +261,7 @@ export class LandService {
       sessionId: owner?.id ?? null,
     });
     logger.info('land: landed', { branch, base, commit, pushed, auto });
+    this.deps.onLanded?.();
     this.refused.delete(wt.id);
     // The base moved: earlier landings of this project are past their Undo window.
     await this.settle(project.id).catch((e: Error) => logger.warn('land: tidy failed', { error: e.message }));

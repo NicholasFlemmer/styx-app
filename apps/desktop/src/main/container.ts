@@ -64,7 +64,7 @@ import { TranscriptService } from './services/transcript-service';
 import { UsageService } from './services/usage-service';
 import { AccountService, DEFAULT_API } from './services/account-service';
 import { UpdateService, type Updater } from './services/update-service';
-import { UsageReportService } from './services/usage-report-service';
+import { installIdFrom, UsageReportService } from './services/usage-report-service';
 import { version as APP_VERSION } from '../../package.json';
 import { projectSettingsFor } from './store/projection';
 import { Publisher } from './store/publisher';
@@ -548,12 +548,16 @@ export function buildContainer(opts: ContainerOptions): Container {
   // Signed in, Styx commits as the person when git has no identity of its own (ADR-0026 §6). A machine with
   // `user.name` set never reaches this: git's own config wins.
   git.bindIdentity(() => account.gitIdentity() ?? STYX_IDENTITY);
-  // Counts go out only while signed in and only while the setting is on; both are read at flush time, so
-  // turning it off or signing out stops the next batch rather than the one after.
+  // Counts go out only while the setting is on, under this install's random id, and tied to the account too
+  // while signed in (discrepancy #122). Both are read at flush time, so turning it off stops the next batch
+  // rather than the one after.
   const usageReports = new UsageReportService({
     fetch: opts.fetch ?? fetch,
     apiBase: () => process.env['STYX_API'] ?? DEFAULT_API,
     token: () => account.accessToken(),
+    installId: () => installIdFrom(repos.uiState),
+    version: APP_VERSION,
+    os: process.platform,
     enabled: () => repos.settings.app().usageReports,
     now: () => clock.now(),
   });
@@ -820,6 +824,7 @@ export function buildContainer(opts: ContainerOptions): Container {
   });
   const land = new LandService({
     repos,
+    onLanded: () => usageReports.record('lane.landed'),
     git,
     publisher,
     clock,

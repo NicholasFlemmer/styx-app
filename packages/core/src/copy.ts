@@ -1837,8 +1837,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     usage: {
       label: 'Send usage counts',
       hint: 'Which features get used, tied to your account. Never your code, projects, paths or prompts.',
-      /** Shown when signed out: there is no account to tie counts to, so nothing is sent either way. */
-      signedOut: 'Nothing is sent while you are signed out.',
+      /** Shown when signed out: counts still go, under a random install id rather than an account (#122). */
+      signedOut: 'Which features get used, counted anonymously. Never your code, projects, paths or prompts.',
     },
     /** Where the account is used today, so the pane is honest about what it does. */
     usedFor: 'Used to sign commits Styx makes when git has no name of its own.',
