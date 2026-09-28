@@ -14,7 +14,7 @@ export const Download = () => (
         <h3>Mac</h3>
         <p className={styles.meta}>Touch ID for anything that touches production</p>
         <a className="btn" data-on="true" href={site.links.downloadMac}>
-          Download for macOS
+          Download for Mac
         </a>
       </div>
       <div className={styles.card} data-soon="true">

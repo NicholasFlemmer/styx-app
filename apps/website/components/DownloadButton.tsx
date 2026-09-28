@@ -22,7 +22,7 @@ export const DownloadButton = ({ primary = true, small = false, className, note 
         data-on={primary ? 'true' : undefined}
         href={site.links.downloadMac}
       >
-        Download for macOS
+        Download for Mac
       </a>
       {note && platform === 'win' && (
         <span suppressHydrationWarning style={{ color: 'var(--mu)', fontSize: 'var(--fs-13)' }}>

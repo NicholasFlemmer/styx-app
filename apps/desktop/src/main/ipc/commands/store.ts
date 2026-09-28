@@ -44,6 +44,7 @@ export function registerStoreCommands(bus: CommandBus, app: Container): void {
 
   bus.register('onboarding.complete', () => {
     publisher.settingsSet(repos.settings.patch({ onboardingDone: true }));
+    app.usageReports.record('onboarding.completed');
     return {};
   });
 

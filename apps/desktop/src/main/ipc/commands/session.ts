@@ -23,6 +23,7 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
 
   bus.register('session.sendMessage', async ({ sessionId, body, attachments }) => {
     await sessions.sendMessage(sessionId, body, attachments);
+    app.usageReports.record('message.sent');
     return {};
   });
 

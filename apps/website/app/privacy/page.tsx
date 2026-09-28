@@ -24,10 +24,13 @@ const Summary = () => (
       last used Styx.
     </li>
     <li>
-      While you&apos;re signed in, Styx counts five things you do (launches, projects added, agents started,
-      access approved, deploys run), unless you turn it off.
+      Styx counts a few things you do (like launches, agents started and deploys run) under a random id for
+      your copy of the app, unless you turn it off. Signed in, the counts are tied to your account too.
     </li>
-    <li>Our website uses Google Analytics only if you accept cookies.</li>
+    <li>
+      Our website counts downloads without cookies or anything about you, and uses Google Analytics only if
+      you accept cookies.
+    </li>
     <li>We don&apos;t sell your data, and we don&apos;t use it for advertising.</li>
   </ul>
 );
@@ -96,21 +99,31 @@ export default function PrivacyPage() {
       </p>
 
       <h2>4. Usage counts</h2>
-      <p>While you are signed in, Styx sends a daily count of these five events, and nothing else:</p>
+      <p>Styx sends a daily count of these eight events, and nothing else:</p>
       <ul>
         <li>the app was opened;</li>
+        <li>setup was finished;</li>
         <li>a project was added;</li>
         <li>an agent was started;</li>
+        <li>a message was sent to an agent;</li>
         <li>an access request was approved;</li>
-        <li>a deploy was run.</li>
+        <li>a deploy was run;</li>
+        <li>an agent&apos;s work was landed on the main branch.</li>
       </ul>
       <p>
-        The counts are tied to your account, so we can see how many people use Styx and which parts they
-        reach. They never include a project, file, path, branch, command, prompt or anything your agents
-        produce: the app is built so that it cannot attach them. Nothing is sent while you are signed out. You
-        can turn counts off at any time in Styx under <strong>Settings › Account › Send usage counts</strong>.
-        We keep them for six months and then delete them. We rely on our legitimate interest in understanding
-        how Styx is used; you can object by turning them off.
+        With the counts, Styx sends its version number, your operating system (macOS or Windows), and an
+        install id: a random code your copy of Styx makes the first time it runs. The install id is not made
+        from your computer, your name or anything else about you, and on its own we cannot tell who it belongs
+        to. While you are signed in, the counts are also tied to your account.
+      </p>
+      <p>
+        This lets us see how many people use Styx and which parts they reach. The counts never include a
+        project, file, path, branch, command, prompt, the text of a message or anything your agents produce:
+        the app is built so that it cannot attach them. Our server does not store your IP address with them.
+        You can turn counts off at any time in Styx under{' '}
+        <strong>Settings › Account › Send usage counts</strong>. We keep them for six months and then delete
+        them, and an install we have not heard from in six months is forgotten. We rely on our legitimate
+        interest in understanding how Styx is used; you can object by turning them off.
       </p>
 
       <h2>5. This website</h2>
@@ -118,6 +131,13 @@ export default function PrivacyPage() {
       <p>
         heystyx.com is hosted on Google Cloud. Like any web server, it records each request (IP address,
         browser, page and time) to keep the service running and secure. These logs are kept for 30 days.
+      </p>
+      <h3>Download counts</h3>
+      <p>
+        The Download button goes through our server, which adds one to a daily count and sends you on to the
+        file. The count records only where the click came from: a short tag in the link (such as{' '}
+        <code>?from=hn</code>) or the name of the website you came from. No cookie is set, and your IP address
+        and browser are not stored with it.
       </p>
       <h3>Analytics and cookies</h3>
       <p>
@@ -201,8 +221,12 @@ export default function PrivacyPage() {
             <td>Until you ask us to delete it</td>
           </tr>
           <tr>
-            <td>Usage counts</td>
+            <td>Usage counts and download counts</td>
             <td>Six months</td>
+          </tr>
+          <tr>
+            <td>Install id, version and operating system</td>
+            <td>Six months after we last hear from that install</td>
           </tr>
           <tr>
             <td>Sign-in codes and tokens</td>
@@ -222,9 +246,10 @@ export default function PrivacyPage() {
       <h2>9. Your rights</h2>
       <p>
         You can ask us to show you the personal information we hold about you, correct it, delete it, give you
-        a copy, or stop using it. You can withdraw consent to cookies at any time. To delete your account and
-        its usage counts, email <a href={`mailto:${legal.email}`}>{legal.email}</a> from the address on your
-        account; we will do it within 30 days and confirm when it&apos;s done.
+        a copy, or stop using it. You can withdraw consent to cookies at any time. Turning off usage counts
+        stops them at once. To delete your account and its usage counts, email{' '}
+        <a href={`mailto:${legal.email}`}>{legal.email}</a> from the address on your account; we will do it
+        within 30 days and confirm when it&apos;s done.
       </p>
       <p>
         If you are unhappy with how we handle your information, please tell us first. You can also complain to

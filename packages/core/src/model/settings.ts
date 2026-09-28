@@ -52,7 +52,8 @@ export const appSettingsSchema = z.object({
   /**
    * Send anonymous usage counts to Styx (ADR-0026 addendum, discrepancy #114): which features get reached, so
    * the product can be improved. A closed set of event names and nothing else — never a project, a path, a
-   * branch or anything an agent said. On by default, off in one click, and only while signed in.
+   * branch or anything an agent said. On by default, off in one click; signed out, counted under a random
+   * install id rather than an account (#122).
    */
   usageReports: z.boolean().default(true),
 });
