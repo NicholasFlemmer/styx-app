@@ -248,7 +248,11 @@ export class LaneSyncService {
    * On conflict the merge is aborted so the tree is left exactly as it was, the lane is marked and the session
    * pauses; the chat gets the reason either way.
    */
-  async sync(worktreeId: string): Promise<SyncResult> {
+  /**
+   * `caller` is the session asking through the `land` tool: when it owns the lane it is mid-turn because it is
+   * waiting on this call, which is no reason to refuse. Its conflicts are left to the caller, which resolves them.
+   */
+  async sync(worktreeId: string, opts: { caller?: string | null } = {}): Promise<SyncResult> {
     const { repos, git, publisher } = this.deps;
     const wt = repos.worktrees.get(worktreeId) ?? fail('not-found', `worktree ${worktreeId} not found`);
     if (wt.isMain) fail('invalid-input', 'the main worktree is the base; nothing to bring in');
@@ -258,7 +262,8 @@ export class LaneSyncService {
     const base = this.baseOf(project.id);
     const owner = wt.owner.kind === 'session' ? repos.sessions.get(wt.owner.sessionId) : null;
     const live = owner !== null && owner.state !== 'done' ? owner : null;
-    if (live !== null && live.state === 'working')
+    const byOwner = live !== null && opts.caller === live.id;
+    if (live !== null && live.state === 'working' && !byOwner)
       fail('invalid-input', fill(copy.sync.busy, { agent: AGENT_LABEL[live.agent] ?? live.agent, base }));
 
     if ((await git.remotes(project.path)).length > 0) await git.fetch(project.path).catch(() => undefined);
@@ -288,8 +293,13 @@ export class LaneSyncService {
         if (live.state !== 'paused') this.deps.sessionEvent(live.id, { type: 'error', reason: 'conflict' });
       }
       logger.info('lane sync: conflict', { branch, base, file });
-      // Auto mode: the resolver takes it from here (its own merge, checkpointed, handed to the agent).
-      if ((this.deps.integrationOf?.(wt.projectId) ?? 'auto') === 'auto' && this.deps.resolveConflict)
+      // Auto mode: the resolver takes it from here (its own merge, checkpointed, handed to the agent). A landing
+      // by the lane's own agent starts the resolver itself, with the caller, so it is not started twice here.
+      if (
+        !byOwner &&
+        (this.deps.integrationOf?.(wt.projectId) ?? 'auto') === 'auto' &&
+        this.deps.resolveConflict
+      )
         void this.deps
           .resolveConflict(wt.id)
           .catch((e: Error) =>

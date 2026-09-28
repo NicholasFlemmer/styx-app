@@ -31,6 +31,7 @@ export const copy = {
       cloneUrl: 'Clone URL…',
       cloneUrlMeta: 'git clone',
       agentDockMeta: 'all projects · always on top',
+      feedbackMeta: 'goes straight to the person who makes Styx',
       debtAuditMeta: 'review this repo in the background',
       /** Commit, push and PR in one step for the branch the project is on (owner request, ADR-0021). */
       publish: 'Publish {project} · {branch}',
@@ -1592,6 +1593,22 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     conflictReview:
       '{base} conflicts with this lane in {file}. Resolve on Repo asks {agent} to merge it, both sides kept.',
   },
+  /** Feedback (owner request, #123): the status bar's Feedback item, the palette row and the dialog. */
+  feedback: {
+    status: 'Feedback',
+    statusTitle: 'Tell the person who makes Styx what works, what does not, and what you wish it did',
+    title: 'Send feedback',
+    lead: 'What works, what does not, what you wish Styx did. It goes straight to the person who makes it, and every message is read.',
+    message: 'Your feedback',
+    placeholder: 'I was trying to… and…',
+    email: 'Your email (optional, for a reply)',
+    note: 'Sent with the version of Styx and your operating system. Never your code, projects or files.',
+    send: 'Send',
+    sending: 'Sending…',
+    close: 'Close',
+    sent: 'Thank you. Your feedback was sent.',
+    failed: 'Could not send it: {reason}. Try again, or email hello@heystyx.com.',
+  },
   /** Support (owner request, #120): the status bar's link to Styx's Buy Me a Coffee page. */
   support: {
     label: '☕ Buy us a coffee',
@@ -1703,6 +1720,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     retry: 'The merge is not finished: {reason}. Asked {agent} once more.',
     failed: 'Could not finish bringing in {base}: {reason}. The merge was undone; the lane is as it was.',
     busy: '{agent} is mid-turn; the merge will be tried when it settles.',
+    /** Verifying the merge threw (git busy past the retries, a crash): the lane goes back to resolving, not stuck. */
+    verifyError:
+      'Styx could not finish checking the merge: {reason}. It checks again when {agent} next finishes a turn or lands; Stop merging is on the Repo lane.',
     undone: 'Undid the merge of {base}: the lane is back to how it was before it.',
     stopped:
       'Stopped bringing in {base}: the merge was undone and the lane is as it was. Resolve is on the Repo lane.',

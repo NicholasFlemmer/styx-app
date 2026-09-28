@@ -347,6 +347,11 @@ export function Workspace() {
           targets={targets}
           editor={editorStatus}
           extras={editorExtras}
+          feedback={{
+            label: copy.feedback.status,
+            title: copy.feedback.statusTitle,
+            onOpen: () => useUiStore.getState().pushOverlay({ kind: 'modal', modal: 'feedback' }),
+          }}
           support={{
             label: copy.support.label,
             title: copy.support.title,

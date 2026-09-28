@@ -361,6 +361,10 @@ async function boot(): Promise<void> {
   };
 
   container = buildContainer({
+    // A packaged build a person is using, or one pointed at a local API on purpose; never dev, fixtures or e2e.
+    sendUsage:
+      env['STYX_API'] !== undefined ||
+      (app.isPackaged && fixtureName === null && env['STYX_E2E'] !== '1'),
     disableRefresh: fixtureName !== null && env['STYX_KEYCHAIN'] === 'memory',
     // Fixture rows are fake binaries; re-detecting would swap them for whatever this machine has.
     redetectClis: fixtureName === null,

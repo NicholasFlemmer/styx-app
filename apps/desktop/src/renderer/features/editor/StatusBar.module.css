@@ -32,6 +32,23 @@
   .spacer {
     flex: 1;
   }
+  /* Owner request (#123): reads like the bar's other items, but is a button and never gives way. */
+  .feedback {
+    flex: none;
+    border: 0;
+    padding: 0;
+    background: none;
+    color: var(--tx);
+    font: inherit;
+    cursor: pointer;
+  }
+  .feedback:hover {
+    color: var(--act);
+  }
+  .feedback:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: 2px;
+  }
   /* Owner request (#120): the one filled item on the bar, so it catches the eye — accent chip, natural case. */
   .support {
     flex: none;

@@ -325,6 +325,33 @@ describe('command contract', () => {
     });
   });
 
+  describe('feedback.send', () => {
+    it('sends the words through to the API and refuses an empty message or a bad email before it', async () => {
+      const posted: unknown[] = [];
+      const { app, sender } = makeTestApp({
+        fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+          if (String(input).endsWith('/v1/feedback')) posted.push(JSON.parse(String(init?.body)));
+          return new Response('{"ok":true}');
+        }) as typeof fetch,
+      });
+      expect(await app.bus.dispatch(sender, 'feedback.send', { message: '   ' })).toMatchObject({
+        ok: false,
+      });
+      expect(await app.bus.dispatch(sender, 'feedback.send', { message: 'hi', email: 'nope' })).toMatchObject(
+        {
+          ok: false,
+        },
+      );
+      expect(posted).toEqual([]);
+      expect(await app.bus.dispatch(sender, 'feedback.send', { message: 'Great app', email: '' })).toEqual({
+        ok: true,
+        value: {},
+      });
+      expect(posted).toMatchObject([{ message: 'Great app' }]);
+      expect('email' in (posted[0] as object)).toBe(false);
+    });
+  });
+
   describe('link.open', () => {
     it.each(['http://example.com/x', 'file:///etc/passwd', 'javascript:alert(1)', 'ftp://host/f'])(
       'refuses %s before the shell sees it',

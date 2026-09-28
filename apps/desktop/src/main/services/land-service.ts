@@ -32,11 +32,18 @@ export interface LandDeps {
    * resolver. `baseRefOf` is what git is asked about; `baseOf` is the name people see.
    */
   laneSync: {
-    sync(worktreeId: string): Promise<{ merged: number; conflict: { file: string } | null }>;
+    sync(
+      worktreeId: string,
+      opts?: { caller?: string | null },
+    ): Promise<{ merged: number; conflict: { file: string } | null }>;
     freshenBase(projectId: string): Promise<FreshenResult>;
     baseRefOf(projectId: string): string;
   };
-  resolver: { resolve(worktreeId: string): Promise<{ started: boolean }> };
+  resolver: {
+    resolve(worktreeId: string, opts?: { caller?: string | null }): Promise<{ started: boolean }>;
+    /** Verifies a merge being finished now, rather than when the agent's turn ends. */
+    verifyNow?(worktreeId: string): Promise<void>;
+  };
   /**
    * Publish's own steps (ADR-0021): the lane's commit (secret files stay out, the user's identity) and the base's
    * push (the same grant, audit and activity path as the Publish button).
@@ -131,7 +138,7 @@ export class LandService {
     caller: string | null,
   ): Promise<LandResult> {
     const { repos, git, clock } = this.deps;
-    const wt = repos.worktrees.get(worktreeId) ?? fail('not-found', `worktree ${worktreeId} not found`);
+    let wt = repos.worktrees.get(worktreeId) ?? fail('not-found', `worktree ${worktreeId} not found`);
     if (wt.isMain) fail('invalid-input', 'the main worktree is the base; nothing to land');
     if (wt.archivedAt !== null) fail('invalid-input', 'the lane is archived');
     const branch = wt.branch ?? fail('invalid-input', copy.publish.noBranch);
@@ -144,8 +151,23 @@ export class LandService {
       fail('invalid-input', fill(copy.land.busy, { agent, branch }));
     if (!byOwner && owner !== null && owner.state === 'needs-you')
       fail('invalid-input', fill(copy.land.waiting, { agent, branch }));
-    if (wt.resolution !== null && (wt.resolution.state === 'resolving' || wt.resolution.state === 'checking'))
-      fail('invalid-transition', fill(copy.land.resolving, { base, agent }));
+    const finishing = (r: typeof wt.resolution) =>
+      r !== null && (r.state === 'resolving' || r.state === 'checking');
+    if (finishing(wt.resolution) && wt.resolution !== null) {
+      // An agent calling `land` on its own lane is saying the merge is finished — from inside its turn, so the
+      // settle that would verify it has not come. Nor has it for an agent that is not working any more. Verify
+      // now rather than refuse; the refusal stays for a merge that is genuinely still being done.
+      const resolver = wt.resolution.sessionId === null ? null : repos.sessions.get(wt.resolution.sessionId);
+      if (byOwner || resolver === null || resolver.state !== 'working')
+        await this.deps.resolver.verifyNow?.(wt.id);
+      wt = repos.worktrees.get(wt.id) ?? wt;
+      if (finishing(wt.resolution))
+        fail(
+          'invalid-transition',
+          fill(copy.land.resolving, { base, agent }) +
+            (wt.resolution?.failure ? `\n${wt.resolution.failure}` : ''),
+        );
+    }
     // The base is merged in its own checkout: it has to be on the base, and clean.
     const current = await git.currentBranch(project.path);
     if (current !== base)
@@ -196,9 +218,10 @@ export class LandService {
       commit = reapplied;
     } else {
       // 2. The base comes into the lane; a conflict is the resolver's and the landing waits for it.
-      const synced = await this.deps.laneSync.sync(wt.id);
+      const by = byOwner ? { caller } : {};
+      const synced = await this.deps.laneSync.sync(wt.id, by);
       if (synced.conflict !== null) {
-        await this.deps.resolver.resolve(wt.id).catch(() => undefined);
+        await this.deps.resolver.resolve(wt.id, by).catch(() => undefined);
         fail('invalid-transition', fill(copy.land.resolving, { base, agent }));
       }
       if (synced.merged > 0) steps.push(fill(copy.land.steps.sync, { base, n: synced.merged }));

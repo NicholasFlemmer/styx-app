@@ -253,6 +253,8 @@ describe('paletteResults', () => {
       // Commit, push and PR for the branch the project is on (ADR-0021).
       '▲ Publish acme-shop · fix/checkout · commit · push · pull request',
       '■ Open agent dock · all projects · always on top',
+      // Feedback to the owner (discrepancy #123).
+      '■ Send feedback · goes straight to the person who makes Styx',
       // Snake on the tab the pane shows (owner addition, discrepancy #110).
       '■ Play while you wait · Snake · in the chat pane',
     ]);
@@ -295,9 +297,10 @@ describe('paletteResults', () => {
       worktreeId: ids.worktree.fixCheckout,
     });
     expect(all[13]?.action).toEqual({ kind: 'agent-dock' });
-    expect(all[14]?.action).toEqual({ kind: 'arcade', projectId: ids.project.acmeShop });
-    expect(all[15]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
-    expect(all[21]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
+    expect(all[14]?.action).toEqual({ kind: 'feedback' });
+    expect(all[15]?.action).toEqual({ kind: 'arcade', projectId: ids.project.acmeShop });
+    expect(all[16]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
+    expect(all[22]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
   });
 
   it('fuzzy on label + meta, best first; the first visible row is flagged; empty groups dropped', () => {
@@ -319,7 +322,7 @@ describe('paletteResults', () => {
   it('scope filtering (⇥) and scope cycling', () => {
     expect(paletteResults(model, ui, '', 'agents', NOW).map((g) => g.label)).toEqual(['Agents']);
     expect(paletteResults(model, ui, '', 'projects', NOW)[0]?.items[0]?.first).toBe(true);
-    expect(flat(model, '', 'actions')).toHaveLength(15);
+    expect(flat(model, '', 'actions')).toHaveLength(16);
     expect(nextPaletteScope('all')).toBe('actions');
     expect(nextPaletteScope('actions')).toBe('agents');
     expect(nextPaletteScope('agents')).toBe('projects');
@@ -334,8 +337,9 @@ describe('paletteResults', () => {
       'Add from recent projects…',
       'Open folder…',
       'Clone URL…',
-      // No audit row: it needs a project to audit. The dock is cross-project, so it stays.
+      // No audit row: it needs a project to audit. The dock and feedback are cross-project, so they stay.
       'Open agent dock',
+      'Send feedback',
     ]);
   });
 

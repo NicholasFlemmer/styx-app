@@ -49,7 +49,9 @@ export type ModalPayload =
   /** The sign-in dialog (discrepancy row 113); `reason` only changes its one line of lead copy. */
   | { modal: 'sign-in'; reason?: 'welcome' | 'second-project' | 'plain' }
   /** A downloaded update (#119): Restart to update, or Later (the banner stays). */
-  | { modal: 'update' };
+  | { modal: 'update' }
+  /** Feedback to the owner (#123): status bar, palette. */
+  | { modal: 'feedback' };
 
 export type Overlay =
   | { id: string; kind: 'task'; taskKey: string | null }
