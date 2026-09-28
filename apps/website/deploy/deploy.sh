@@ -14,7 +14,8 @@ if grep -qE "'\[[A-Z ]+\]'" "$ROOT/apps/website/lib/legal.ts"; then
   exit 1
 fi
 # The Download buttons go through /download/mac, which counts the download and redirects to the newest DMG
-# (nginx.conf; discrepancy #122).
+# (nginx.conf; discrepancy #122): the one address, Styx-latest-arm64.dmg, that `pnpm release:publish` keeps on
+# the newest signed build.
 NEXT_PUBLIC_DOWNLOAD_MAC="${NEXT_PUBLIC_DOWNLOAD_MAC:-https://heystyx.com/download/mac}" \
 NEXT_PUBLIC_SITE_URL=https://heystyx.com NEXT_PUBLIC_GTM_ID="${GTM_ID:?set GTM_ID, e.g. GTM_ID=GTM-XXXXXXX apps/website/deploy/deploy.sh}" pnpm -F @styx/website build
 

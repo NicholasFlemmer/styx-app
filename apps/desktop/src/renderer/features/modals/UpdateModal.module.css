@@ -1,0 +1,17 @@
+@layer components {
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .lead,
+  .busy {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--mu);
+  }
+  .busy {
+    color: var(--tx);
+  }
+}

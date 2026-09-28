@@ -13,6 +13,7 @@ import { LandModal } from '../features/modals/LandModal';
 import { PublishModal } from '../features/modals/PublishModal';
 import { PolicyRuleModal } from '../features/modals/PolicyRuleModal';
 import { SignInModal } from '../features/modals/SignInModal';
+import { UpdateModal } from '../features/modals/UpdateModal';
 import { SpawnModal } from '../features/modals/SpawnModal';
 import { Palette } from '../features/palette/Palette';
 import { SkillDrawer } from '../features/skills/SkillDrawer';
@@ -57,6 +58,8 @@ const render = (o: Overlay) => {
           );
         case 'publish':
           return <PublishModal key={o.id} id={o.id} worktreeId={o.worktreeId} />;
+        case 'update':
+          return <UpdateModal key={o.id} id={o.id} />;
         case 'sign-in':
           return (
             <SignInModal key={o.id} id={o.id} {...(o.reason !== undefined ? { reason: o.reason } : {})} />

@@ -36,4 +36,9 @@ for f in $(sed -n 's/^  - url: //p' "$rel/latest-mac.yml"); do
   if [ -f "$rel/$f.blockmap" ]; then upload "$rel/$f.blockmap" "gs://$BUCKET/mac/$f.blockmap"; fi
 done
 upload --cache-control="no-cache, max-age=0" "$rel/latest-mac.yml" "gs://$BUCKET/mac/latest-mac.yml"
-echo "Published $version (was ${live:-nothing}). Installed copies pick it up within four hours, or at their next launch."
+# The website's Download button points at one address that always holds the newest DMG (no redeploy per release).
+dmg=$(sed -n 's/^  - url: \(.*\.dmg\)$/\1/p' "$rel/latest-mac.yml" | head -1)
+if [ -n "$dmg" ]; then
+  upload --cache-control="no-cache, max-age=0" "$rel/$dmg" "gs://$BUCKET/mac/Styx-latest-arm64.dmg"
+fi
+echo "Published $version (was ${live:-nothing}). Open copies show "Update available" within 30 minutes, when their window is next focused, or at launch."

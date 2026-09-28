@@ -122,6 +122,17 @@ describe('UpdateService (#119)', () => {
     }
   });
 
+  it('focus asks again once the last check is older than ten minutes', async () => {
+    const { svc, updater, clock } = setup();
+    if (updater === null) throw new Error('updater');
+    await svc.check();
+    await svc.onFocus();
+    expect(updater.checks).toBe(1);
+    clock.advance(10 * 60_000);
+    await svc.onFocus();
+    expect(updater.checks).toBe(2);
+  });
+
   it('plainReason: offline shapes read as "no connection"; anything else as the server not answering', () => {
     for (const m of ['ENOTFOUND', 'EAI_AGAIN x', 'ECONNREFUSED', 'net::ERR_NAME_NOT_RESOLVED', 'ETIMEDOUT'])
       expect(plainReason(new Error(m))).toBe('no connection');

@@ -8,7 +8,7 @@ export interface StatusBarProps {
   editor: string;
   /** Appended after `editor`: caret, wrap, read-only notice (owner addition, discrepancies #58). */
   extras?: readonly string[];
-  /** Last, in accent: "Support Styx" (owner request, #120). */
+  /** Last, as a filled accent chip: "☕ Buy us a coffee" (owner request, #120). */
   support?: { label: string; title: string; onOpen: () => void };
 }
 
@@ -33,7 +33,7 @@ export function StatusBar({ branch, targets, editor, extras = [], support }: Sta
           onClick={support.onOpen}
           data-status-support="true"
         >
-          {support.label} ↗
+          {support.label}
         </button>
       )}
     </div>

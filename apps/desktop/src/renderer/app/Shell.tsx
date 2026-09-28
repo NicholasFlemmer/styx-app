@@ -1,4 +1,5 @@
 import { BannerStack } from '../features/banners/BannerStack';
+import { useUpdatePrompt } from '../features/modals/UpdateModal';
 import { AppTitlebar } from '../features/titlebar/AppTitlebar';
 import { useUi } from '../state/hooks';
 import { AppRail } from './AppRail';
@@ -14,6 +15,8 @@ import s from './Shell.module.css';
 export function Shell() {
   const screen = useUi((u) => u.screen);
   const chromeHidden = screen === 'onboarding';
+  // A downloaded update opens its dialog once per version (#119).
+  useUpdatePrompt();
   return (
     <div id="layer-app" className={s['shell']} data-chrome-hidden={chromeHidden ? 'true' : undefined}>
       <AppTitlebar />

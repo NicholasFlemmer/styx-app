@@ -21,9 +21,10 @@ export interface UpdateServiceDeps {
   version: string;
   clock: Clock;
   publish: (state: UpdateState) => void;
-  /** First look after launch (default 15 s) and then every `intervalMs` (default 4 h). */
+  /** First look after launch (default 15 s), then every `intervalMs` (default 30 min), and on focus after `focusGapMs` (10 min). */
   firstCheckMs?: number;
   intervalMs?: number;
+  focusGapMs?: number;
 }
 
 /**
@@ -37,6 +38,7 @@ export class UpdateService {
   private state: UpdateState;
   private timers: NodeJS.Timeout[] = [];
   private lastPercent = -1;
+  private lastCheck = 0;
 
   constructor(private readonly deps: UpdateServiceDeps) {
     this.state =
@@ -90,7 +92,7 @@ export class UpdateService {
   start(): void {
     if (this.deps.updater === null) return;
     const first = setTimeout(() => void this.check(), this.deps.firstCheckMs ?? 15_000);
-    const every = setInterval(() => void this.check(), this.deps.intervalMs ?? 4 * 60 * 60_000);
+    const every = setInterval(() => void this.check(), this.deps.intervalMs ?? 30 * 60_000);
     first.unref?.();
     every.unref?.();
     this.timers.push(first, every);
@@ -101,10 +103,20 @@ export class UpdateService {
     this.timers = [];
   }
 
+  /**
+   * The window came to the front: ask again if the last check is older than `focusGapMs`, so a release published
+   * while Styx was open is found the next time the person looks at it, and its dialog opens by itself.
+   */
+  async onFocus(): Promise<void> {
+    if (this.deps.clock.now() - this.lastCheck < (this.deps.focusGapMs ?? 10 * 60_000)) return;
+    await this.check();
+  }
+
   /** Asks the feed now. Never throws: the outcome arrives through the updater's events. */
   async check(): Promise<void> {
     const u = this.deps.updater;
     if (u === null || this.state.status === 'downloading' || this.state.status === 'ready') return;
+    this.lastCheck = this.deps.clock.now();
     try {
       await u.checkForUpdates();
     } catch (e) {

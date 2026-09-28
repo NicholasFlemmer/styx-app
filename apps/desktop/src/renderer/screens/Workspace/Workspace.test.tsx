@@ -103,7 +103,7 @@ describe('Workspace screen', () => {
   it('the status bar ends with Support Styx, which opens the Buy Me a Coffee page in the browser (#120)', async () => {
     useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
     render(<Workspace />);
-    fireEvent.click(await screen.findByRole('button', { name: `${copy.support.label} ↗` }));
+    fireEvent.click(await screen.findByRole('button', { name: '☕ Buy us a coffee' }));
     expect(commandMock).toHaveBeenCalledWith('link.open', { url: 'https://buymeacoffee.com/heystyx' });
   });
 

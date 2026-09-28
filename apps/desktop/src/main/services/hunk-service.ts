@@ -15,6 +15,7 @@ import { fail } from '../ipc/bus';
 import type { Publisher } from '../store/publisher';
 import type { GitService } from './git';
 import { logger } from './logger';
+import { worktreeWatch } from './worktree-watch';
 
 export const HUNK_DEBOUNCE_MS = 300;
 
@@ -33,7 +34,7 @@ export interface FsWatcherLike {
 
 export type WatchFactory = (path: string) => Promise<FsWatcherLike>;
 
-/** chokidar@5 (ESM) is loaded lazily so tests can inject a fake watcher. */
+/** The fallback where the platform has no recursive `fs.watch` (see `worktree-watch.ts`); chokidar@5 (ESM) is loaded lazily. */
 export const chokidarWatch: WatchFactory = async (path) => {
   const { watch } = await import('chokidar');
   // The ignore list is judged on the path *inside* the watched folder. Judged on the absolute path it matched
@@ -107,7 +108,7 @@ export class HunkService {
   async watch(session: Session, worktree: Worktree): Promise<void> {
     if (!this.enabled() || worktree.isMain || this.watchers.has(worktree.id)) return;
     try {
-      const watcher = await (this.deps.watch ?? chokidarWatch)(worktree.path);
+      const watcher = await (this.deps.watch ?? worktreeWatch)(worktree.path);
       const entry = { watcher, sessionId: session.id, timer: null as NodeJS.Timeout | null };
       watcher.on('all', () => this.schedule(worktree.id));
       this.watchers.set(worktree.id, entry);
