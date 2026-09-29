@@ -1,5 +1,9 @@
+import type { Metadata } from 'next';
 import { Nav } from '@/components/Nav';
 import { Footer } from '@/components/Footer';
+
+/** A missing page is never a search result. */
+export const metadata: Metadata = { title: 'Not found', robots: { index: false, follow: true } };
 
 export default function NotFound() {
   return (

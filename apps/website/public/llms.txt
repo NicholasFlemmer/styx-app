@@ -1,0 +1,32 @@
+# Styx
+
+> Styx is a Mac app for developers who run AI coding agents. It puts every project and every agent (Claude Code, OpenAI Codex, Gemini CLI and Cursor's agent) in one window, on top of the editor you already use, and makes agents ask before they touch production.
+
+Styx is free to download for macOS on Apple silicon. Windows is coming. It is made by one person in South Africa.
+
+## What it does
+
+- One window for every project and every agent. A board shows which agents are working, which are done, and which are waiting on you; one keystroke opens the one that needs you.
+- Each agent works in its own git worktree and branch, so agents do not collide with each other or with you. Finished work is merged back ("landed") after your project's checks pass.
+- It sits on top of your existing editor: it imports your recent projects, keybindings and theme, and "Open in…" sends any file back to VS Code, Cursor or another IDE.
+- It uses the agent subscriptions and logins you already have (Claude, ChatGPT/Codex, Gemini, Cursor). Styx does not resell model access.
+- Agents never hold your keys. When an agent wants to deploy or use a database or server (Vercel, AWS, Google Cloud, Supabase, GitHub, SSH), it asks. You approve it for a set time; anything that writes to production needs Touch ID. Access expires on its own.
+- Every request, approval, use and revoke goes into an append-only, hash-chained audit log on your Mac.
+- It also runs projects locally, connects deploy targets, reviews agents' changes hunk by hunk, and can run a background tech-debt review of a repository.
+
+## What it is not
+
+- It is a guardrail, not a sandbox: agents run as you, on your machine. Commands that go through Styx's tools are gated; an agent that deliberately goes around them is not stopped. Use least-privilege credentials for production.
+
+## Privacy
+
+- Your code, projects, prompts, agent conversations and credentials stay on your Mac. Credentials are kept in the macOS Keychain.
+- Styx counts a small, fixed set of product events (like launches and agents started) under a random install id, and can be turned off in Settings.
+
+## Links
+
+- [Home and download](https://heystyx.com/): features, screenshots and the Download for Mac button
+- [Download for Mac](https://heystyx.com/download/mac): the latest signed, notarized build
+- [Privacy policy](https://heystyx.com/privacy)
+- [Terms of service](https://heystyx.com/terms)
+- Contact: hello@heystyx.com

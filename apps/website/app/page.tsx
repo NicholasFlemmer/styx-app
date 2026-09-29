@@ -1,4 +1,6 @@
+import type { Metadata } from 'next';
 import { Compat } from '@/components/Compat';
+import { StructuredData } from '@/components/StructuredData';
 import { Counters } from '@/components/Counters';
 import { DemoProvider } from '@/components/demo/DemoContext';
 import { ScreensStrip } from '@/components/ScreensStrip';
@@ -13,9 +15,13 @@ import { Pillars } from '@/components/Pillars';
 import { Ship } from '@/components/Ship';
 import { Worktrees } from '@/components/Worktrees';
 
+/** The home page's own canonical; the legal pages set theirs, and the 404 is noindex. */
+export const metadata: Metadata = { alternates: { canonical: '/' } };
+
 export default function Page() {
   return (
     <>
+      <StructuredData />
       <a href="#main" className="srOnly">
         Skip to content
       </a>
