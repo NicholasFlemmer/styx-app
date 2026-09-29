@@ -27,7 +27,7 @@ Styx is free to download for macOS on Apple silicon. Windows is coming. It is ma
 
 - [Home and download](https://heystyx.com/): features, screenshots and the Download for Mac button
 - [Download for Mac](https://heystyx.com/download/mac): the latest signed, notarized build
-- [Styx vs Conductor](https://heystyx.com/compare/conductor): how Styx compares with another Mac ADE, including where Conductor is ahead
+- [Compare](https://heystyx.com/compare): how Styx compares with other ADEs and coding agent apps, including where each is ahead
 - [Privacy policy](https://heystyx.com/privacy)
 - [Terms of service](https://heystyx.com/terms)
 - Contact: hello@heystyx.com
