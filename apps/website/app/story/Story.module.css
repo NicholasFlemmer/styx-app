@@ -1,0 +1,64 @@
+.page {
+  border-top: 1px solid var(--ln);
+  padding-block: var(--sp-10) var(--sp-16);
+}
+.head {
+  max-width: 44em;
+  margin-bottom: var(--sp-6);
+}
+.kicker {
+  margin: 0 0 var(--sp-3);
+  font: 500 var(--fs-13) / 1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--act);
+}
+.head h1 {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-32);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.lede {
+  margin: 0;
+  font-size: var(--fs-18);
+  line-height: 1.5;
+  color: var(--mu);
+}
+/* Floating surface rule: a 1px text-colour border, square corners, no shadow. */
+.player {
+  margin: 0;
+  border: 1px solid var(--tx);
+  background: var(--bg);
+  aspect-ratio: 16 / 9;
+}
+.player video {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.cta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  margin-top: var(--sp-6);
+}
+.note {
+  font: 400 var(--fs-13) / 1 var(--font-mono);
+  color: var(--mu);
+}
+.transcript {
+  max-width: 44em;
+  margin-top: var(--sp-10);
+  padding-top: var(--sp-6);
+  border-top: 1px solid var(--ln);
+}
+.transcript h2 {
+  margin: 0 0 var(--sp-4);
+  font-size: var(--fs-18);
+}
+.transcript p {
+  margin: 0 0 var(--sp-4);
+  font-size: var(--fs-15);
+  line-height: 1.7;
+}

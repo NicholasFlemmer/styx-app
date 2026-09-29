@@ -1,0 +1,145 @@
+WEBVTT
+
+00:00:00.640 --> 00:00:02.680
+Right now, I've got four coding agents
+
+00:00:02.680 --> 00:00:04.230
+running across five projects.
+
+00:00:04.580 --> 00:00:05.760
+One of them has been waiting on me
+
+00:00:05.760 --> 00:00:08.280
+for 20 minutes and I have no idea which
+
+00:00:08.280 --> 00:00:09.080
+one.
+
+00:00:09.480 --> 00:00:11.590
+I'm Nic and that's why I built Styx.
+
+00:00:12.160 --> 00:00:13.610
+If you run Claude Code,
+
+00:00:14.320 --> 00:00:15.900
+Codex, Gemini or Cursor on more than
+
+00:00:15.900 --> 00:00:17.550
+one project, you know the feeling.
+
+00:00:18.140 --> 00:00:20.020
+Every agent lives in its own terminal
+
+00:00:20.020 --> 00:00:22.300
+on its own branch in some window you're
+
+00:00:22.300 --> 00:00:24.380
+not looking at. And every tool that
+
+00:00:24.380 --> 00:00:26.380
+promises to fix it wants you to move
+
+00:00:26.380 --> 00:00:28.910
+in a new editor, a new workspace,
+
+00:00:29.200 --> 00:00:30.510
+one project at a time.
+
+00:00:31.140 --> 00:00:32.290
+Then there's access.
+
+00:00:32.620 --> 00:00:34.460
+The useful agents need to touch real
+
+00:00:34.460 --> 00:00:36.010
+things like your deploys,
+
+00:00:36.060 --> 00:00:37.470
+your database, your servers.
+
+00:00:37.920 --> 00:00:39.560
+So you either paste in a token and
+
+00:00:39.560 --> 00:00:41.790
+hope or you sit there and watch it.
+
+00:00:42.160 --> 00:00:44.590
+I've done both and I didn't love either.
+
+00:00:45.660 --> 00:00:47.350
+Styx fixes that in three ways.
+
+00:00:47.700 --> 00:00:49.610
+First, everything's in one window.
+
+00:00:49.860 --> 00:00:51.470
+Every project, every agent.
+
+00:00:51.760 --> 00:00:53.440
+You can see what's waiting on you and
+
+00:00:53.440 --> 00:00:55.430
+one keystroke takes you straight there.
+
+00:00:55.900 --> 00:00:56.700
+Second,
+
+00:00:57.120 --> 00:00:58.390
+it doesn't replace anything.
+
+00:00:58.720 --> 00:01:00.600
+It sits on top of the editor you already
+
+00:01:00.600 --> 00:01:02.820
+use and runs on the Claude and Codex
+
+00:01:02.820 --> 00:01:04.690
+subscriptions you already pay for.
+
+00:01:05.380 --> 00:01:07.050
+It picks up your recent folders,
+
+00:01:07.420 --> 00:01:09.780
+key bindings and theme and one key
+
+00:01:09.780 --> 00:01:11.730
+opens anything back in your editor.
+
+00:01:12.760 --> 00:01:13.560
+Third,
+
+00:01:13.600 --> 00:01:15.960
+it holds your keys so your agents don't
+
+00:01:15.960 --> 00:01:16.760
+have to.
+
+00:01:16.960 --> 00:01:18.410
+When an agent wants production,
+
+00:01:18.480 --> 00:01:20.960
+it stops and asks and you approve it
+
+00:01:20.960 --> 00:01:22.510
+for a set window of time.
+
+00:01:23.120 --> 00:01:25.140
+Every request and every approval goes
+
+00:01:25.140 --> 00:01:26.970
+into a log nobody can edit,
+
+00:01:27.120 --> 00:01:28.690
+not the agents and not me.
+
+00:01:29.460 --> 00:01:31.390
+Every project, every agent,
+
+00:01:31.560 --> 00:01:33.130
+every key in one window.
+
+00:01:33.680 --> 00:01:35.580
+It's free right now and it's on Mac
+
+00:01:35.580 --> 00:01:36.380
+today.
