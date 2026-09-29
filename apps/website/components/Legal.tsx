@@ -9,10 +9,15 @@ export const LegalPage = ({
   title,
   summary,
   children,
+  meta = `Effective ${legal.effective}`,
+  summaryLabel = 'In short',
 }: {
   title: string;
   summary: ReactNode;
   children: ReactNode;
+  /** The line under the title: the legal pages' effective date, or a comparison's "checked on". */
+  meta?: string;
+  summaryLabel?: string;
 }) => (
   <>
     <a href="#main" className="srOnly">
@@ -23,11 +28,11 @@ export const LegalPage = ({
       <div className={`wrap ${styles.cols}`}>
         <header className={styles.head}>
           <h1>{title}</h1>
-          <p className={styles.meta}>Effective {legal.effective}</p>
+          <p className={styles.meta}>{meta}</p>
         </header>
         <div className={styles.body}>
-          <aside className={styles.summary} aria-label="In short">
-            <h2>In short</h2>
+          <aside className={styles.summary} aria-label={summaryLabel}>
+            <h2>{summaryLabel}</h2>
             {summary}
           </aside>
           {children}

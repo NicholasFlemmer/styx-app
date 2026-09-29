@@ -13,6 +13,8 @@ export const site = {
     'Run Claude Code, Codex, Gemini and Cursor across every project in one Mac app. See which agent needs you. Nothing reaches production without your OK.',
   /** The brand line, for share cards where there is room for it. */
   tagline: 'Styx: every project, every agent, every key, one window',
+  /** The category people search for (Warp's term, June 2025); used as a label, never as the headline. */
+  category: 'agentic development environment (ADE)',
   shareDescription:
     'The desktop app where your work converges: every repo you touch, the AI coding agents building in them, and every login they need to ship. Nothing crosses into production without you.',
   email: 'hello@heystyx.com',

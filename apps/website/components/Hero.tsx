@@ -22,7 +22,9 @@ export const Hero = () => (
             What happens at the crossing
           </a>
         </div>
-        <p className={styles.micro}>Mac now, Windows soon. Your keys never leave your computer.</p>
+        <p className={styles.micro}>
+          An agentic development environment (ADE) for Mac. Windows soon. Your keys never leave your computer.
+        </p>
       </div>
       <div className={styles.demo} data-load="fade">
         <WorkspaceDemo />
