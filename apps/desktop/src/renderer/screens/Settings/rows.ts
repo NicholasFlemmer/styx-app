@@ -40,7 +40,9 @@ export type RowChange =
   /** Pick among the binaries detected for one agent (`detect.setBinary`, value = binary path). */
   | { kind: 'cli-binary'; agent: Agent }
   /** Updates in place (#119): the row's value is the status line; `check` asks the feed, `install` restarts. */
-  | { kind: 'update' };
+  | { kind: 'update' }
+  /** The walkthrough (#124): the value says whether it was seen; `show` plays it. */
+  | { kind: 'tour' };
 
 export interface RowOption {
   value: string;
@@ -173,8 +175,23 @@ const generalRows = (model: ReadModel, now: number): SettingsRow[] => {
       overridden: false,
     },
     updatesRow(model, now),
+    {
+      id: 'tour',
+      label: copy.tour.row,
+      value: TOUR_STATUS,
+      options: [
+        { value: TOUR_STATUS, label: app.tourDone ? copy.tour.seen : copy.tour.notSeen },
+        { value: TOUR_SHOW, label: copy.tour.show },
+      ],
+      change: { kind: 'tour' },
+      overridden: false,
+    },
   ];
 };
+
+/** The walkthrough row's two values: its own status line, and the action that plays it. */
+export const TOUR_STATUS = 'status';
+export const TOUR_SHOW = 'show';
 
 /** `STATUS` is the row's own value (the status line); the other options are what can be done from here. */
 export const UPDATE_STATUS = 'status';

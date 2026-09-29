@@ -24,7 +24,7 @@ import { join, resolve } from 'node:path';
 import { autoUpdater } from 'electron-updater';
 import { execa } from 'execa';
 import { brokerEndpoint } from '@styx/broker';
-import type { AppSettings } from '@styx/core';
+import { copy, type AppSettings } from '@styx/core';
 import { clockFromEnv } from './clock';
 import { buildContainer, type Container, type DialogsPort, type WindowsPort } from './container';
 import { openDatabase } from './db/open';
@@ -218,6 +218,39 @@ function electronSurface(): ElectronLike {
   };
 }
 
+/**
+ * The menu bar (#124). Electron's default menus, plus a Help menu that opens the walkthrough and the feedback
+ * dialog in the main window and links to the website. Built once at boot; the window picks the action up as a
+ * `menu.action` event.
+ */
+function installAppMenu(): void {
+  const send = (action: 'tour' | 'feedback') => {
+    if (!container) return;
+    container.windows.focusMain();
+    container.publisher.sendEvent('menu.action', { action });
+  };
+  const m = copy.tour.menu;
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      ...(isMac ? [{ role: 'appMenu' as const }] : []),
+      { role: 'fileMenu' as const },
+      { role: 'editMenu' as const },
+      { role: 'viewMenu' as const },
+      { role: 'windowMenu' as const },
+      {
+        role: 'help' as const,
+        label: m.help,
+        submenu: [
+          { label: m.tour, click: () => send('tour') },
+          { label: m.feedback, click: () => send('feedback') },
+          { type: 'separator' as const },
+          { label: m.site, click: () => void shell.openExternal('https://heystyx.com') },
+        ],
+      },
+    ]),
+  );
+}
+
 async function boot(): Promise<void> {
   const userData = app.getPath('userData');
   const vault = createVault(env['STYX_KEYCHAIN']);
@@ -360,11 +393,11 @@ async function boot(): Promise<void> {
     if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: s.launchAtLogin });
   };
 
+  installAppMenu();
   container = buildContainer({
     // A packaged build a person is using, or one pointed at a local API on purpose; never dev, fixtures or e2e.
     sendUsage:
-      env['STYX_API'] !== undefined ||
-      (app.isPackaged && fixtureName === null && env['STYX_E2E'] !== '1'),
+      env['STYX_API'] !== undefined || (app.isPackaged && fixtureName === null && env['STYX_E2E'] !== '1'),
     disableRefresh: fixtureName !== null && env['STYX_KEYCHAIN'] === 'memory',
     // Fixture rows are fake binaries; re-detecting would swap them for whatever this machine has.
     redetectClis: fixtureName === null,

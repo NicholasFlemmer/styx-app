@@ -1606,6 +1606,13 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     done: 'Done',
     palette: 'Show the walkthrough',
     paletteMeta: 'a one-minute tour of the window',
+    /** Settings › General: the row, and what its value says. */
+    row: 'Walkthrough',
+    seen: 'Seen',
+    notSeen: 'Not seen yet',
+    show: 'Show the walkthrough',
+    /** The Help menu in the menu bar. */
+    menu: { help: 'Help', tour: 'Show Walkthrough', feedback: 'Send Feedback…', site: 'Visit heystyx.com' },
     steps: {
       rail: {
         title: 'Every project, one window',

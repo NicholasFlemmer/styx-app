@@ -133,23 +133,30 @@ function TourCard({ onClose }: { onClose: (finished: boolean) => void }) {
     [onClose, start, ui],
   );
 
+  /** Switches to where a step happens (screen, Settings section, Approvals tab). */
+  const applyGo = useCallback(
+    (go: Go | undefined) => {
+      if (!go) return;
+      const u = ui();
+      if (go.settingsSection !== undefined) u.setSettingsSection(go.settingsSection);
+      if (go.approvalsTab !== undefined) u.setApprovalsTab(go.approvalsTab);
+      if (u.screen !== go.screen) u.setScreen(go.screen);
+    },
+    [ui],
+  );
+
   /** Moves to step `n`, switching to its screen first; past either end, the tour is over. */
   const goTo = useCallback(
     (n: number, towards: 1 | -1) => {
       if (n >= steps.length) return finish(true);
       const target = steps[Math.max(0, n)];
       if (!target) return;
-      const u = ui();
-      if (target.go) {
-        if (target.go.settingsSection !== undefined) u.setSettingsSection(target.go.settingsSection);
-        if (target.go.approvalsTab !== undefined) u.setApprovalsTab(target.go.approvalsTab);
-        if (u.screen !== target.go.screen) u.setScreen(target.go.screen);
-      }
+      applyGo(target.go);
       setDir(towards);
       setFound(false);
       setI(Math.max(0, n));
     },
-    [finish, steps, ui],
+    [applyGo, finish, steps],
   );
 
   // Wait for the step's anchor to render (a screen switch takes a frame or two); skip the step if it never does.
@@ -157,6 +164,8 @@ function TourCard({ onClose }: { onClose: (finished: boolean) => void }) {
     let frames = 0;
     let raf = 0;
     const seek = () => {
+      // Opened from anywhere (Settings, the Help menu), the first step still happens where it belongs.
+      if (frames === 0) applyGo(step.go);
       if (step.anchor === null || boxOf(step.anchor) !== null) {
         setFound(true);
         return;
@@ -171,7 +180,7 @@ function TourCard({ onClose }: { onClose: (finished: boolean) => void }) {
     };
     raf = requestAnimationFrame(seek);
     return () => cancelAnimationFrame(raf);
-  }, [step.anchor, i, dir, goTo]);
+  }, [step.anchor, step.go, i, dir, goTo, applyGo]);
 
   useEffect(() => {
     const onResize = () => setTick((t) => t + 1);

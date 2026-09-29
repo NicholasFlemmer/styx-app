@@ -2,6 +2,7 @@ import { fixtures, hasSeqGap, type DeltaBatch } from '@styx/core';
 import { bridge, hasSnapshot, onEvent, windowKind } from './bridge';
 import { useReadModel } from './read-model';
 import { startUiPersistence } from './persist-ui';
+import { openTour } from '../features/tour/open-tour';
 import { useUiStore } from './ui-store';
 
 /**
@@ -99,6 +100,12 @@ export const connectSync = (): (() => void) => {
     if (session === undefined) return;
     useUiStore.getState().openSession(session.projectId, session.id);
   });
+  // The Help menu (#124): only the main window has a walkthrough and a feedback dialog to open.
+  const offMenu = onEvent('menu.action', ({ action }) => {
+    if (windowKind() !== 'main') return;
+    if (action === 'tour') openTour();
+    else useUiStore.getState().pushOverlay({ kind: 'modal', modal: 'feedback' });
+  });
 
   void resync();
 
@@ -107,6 +114,7 @@ export const connectSync = (): (() => void) => {
     stopPersist();
     offDelta();
     offFocusSession();
+    offMenu();
     offBannerSet();
     offBannerClear();
     offNavGo();

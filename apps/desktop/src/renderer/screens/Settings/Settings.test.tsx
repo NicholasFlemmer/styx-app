@@ -347,10 +347,24 @@ describe('sectionRows', () => {
     ]);
   });
 
+  it('Settings › General has a Walkthrough row whose Show plays it (#124)', () => {
+    const row = sectionRows(model, 'app:general', ctx).find((r) => r.id === 'tour');
+    expect(row?.label).toBe('Walkthrough');
+    expect(row?.change).toEqual({ kind: 'tour' });
+    expect(row?.options.map((o) => o.label)).toEqual(['Seen', 'Show the walkthrough']);
+  });
+
   it('prototype values match settingsRowsMap', () => {
     const values = (section: Parameters<typeof sectionRows>[1]) =>
       sectionRows(model, section, ctx).map((r) => r.options.find((o) => o.value === r.value)?.label);
-    expect(values('app:general')).toEqual(['System', 'Badge + sound', 'On', 'Updates are off in this build']);
+    expect(values('app:general')).toEqual([
+      'System',
+      'Badge + sound',
+      'On',
+      'Updates are off in this build',
+      // The walkthrough row (#124): the demo machine has seen it.
+      'Seen',
+    ]);
     expect(values('app:editor')).toEqual(['Monaco (embedded)', 'Styx', 'VS Code', 'Per repo', 'Off', 'On']);
     expect(values('app:agents')).toEqual([
       'Claude Code',
