@@ -19,7 +19,7 @@ export const LegalPage = ({
   /** The line under the title: the legal pages' effective date, or a comparison's "checked on". */
   meta?: string;
   summaryLabel?: string;
-  navCurrent?: 'compare';
+  navCurrent?: 'story' | 'compare';
 }) => (
   <>
     <a href="#main" className="srOnly">

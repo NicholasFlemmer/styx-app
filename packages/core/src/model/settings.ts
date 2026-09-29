@@ -56,6 +56,8 @@ export const appSettingsSchema = z.object({
    * install id rather than an account (#122).
    */
   usageReports: z.boolean().default(true),
+  /** The first-run walkthrough (owner request, #124) was finished or skipped; replayable from the palette. */
+  tourDone: z.boolean().default(false),
 });
 export type AppSettings = z.infer<typeof appSettingsSchema>;
 
@@ -72,6 +74,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   onboardingDone: false,
   trackAgentEdits: false,
   usageReports: true,
+  tourDone: false,
 };
 
 /**

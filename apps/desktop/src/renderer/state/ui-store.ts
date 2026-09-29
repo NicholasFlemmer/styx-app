@@ -105,10 +105,13 @@ export interface UiState {
    */
   composerText: Record<string, string>;
   arcade: ArcadeState | null;
+  /** The first-run walkthrough is on screen (#124): started once after onboarding, or from the palette. */
+  tourOpen: boolean;
 }
 
 export interface UiActions {
   setScreen(screen: Screen): void;
+  setTourOpen(open: boolean): void;
   setProject(projectId: ProjectId | null): void;
   setSession(projectId: ProjectId, sessionId: SessionId): void;
   /** Focus a session: switches project and screen too. */
@@ -206,7 +209,12 @@ export const useUiStore = create<UiStore>()(
     drafts: {},
     composerText: {},
     arcade: null,
+    tourOpen: false,
 
+    setTourOpen: (open) =>
+      set((s) => {
+        s.tourOpen = open;
+      }),
     setScreen: (screen) =>
       set((s) => {
         s.screen = screen;

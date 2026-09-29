@@ -255,6 +255,7 @@ describe('paletteResults', () => {
       '■ Open agent dock · all projects · always on top',
       // Feedback to the owner (discrepancy #123).
       '■ Send feedback · goes straight to the person who makes Styx',
+      '■ Show the walkthrough · a one-minute tour of the window',
       // Snake on the tab the pane shows (owner addition, discrepancy #110).
       '■ Play while you wait · Snake · in the chat pane',
     ]);
@@ -298,9 +299,10 @@ describe('paletteResults', () => {
     });
     expect(all[13]?.action).toEqual({ kind: 'agent-dock' });
     expect(all[14]?.action).toEqual({ kind: 'feedback' });
-    expect(all[15]?.action).toEqual({ kind: 'arcade', projectId: ids.project.acmeShop });
-    expect(all[16]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
-    expect(all[22]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
+    expect(all[15]?.action).toEqual({ kind: 'tour' });
+    expect(all[16]?.action).toEqual({ kind: 'arcade', projectId: ids.project.acmeShop });
+    expect(all[17]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
+    expect(all[23]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
   });
 
   it('fuzzy on label + meta, best first; the first visible row is flagged; empty groups dropped', () => {
@@ -322,7 +324,7 @@ describe('paletteResults', () => {
   it('scope filtering (⇥) and scope cycling', () => {
     expect(paletteResults(model, ui, '', 'agents', NOW).map((g) => g.label)).toEqual(['Agents']);
     expect(paletteResults(model, ui, '', 'projects', NOW)[0]?.items[0]?.first).toBe(true);
-    expect(flat(model, '', 'actions')).toHaveLength(16);
+    expect(flat(model, '', 'actions')).toHaveLength(17);
     expect(nextPaletteScope('all')).toBe('actions');
     expect(nextPaletteScope('actions')).toBe('agents');
     expect(nextPaletteScope('agents')).toBe('projects');
@@ -340,6 +342,7 @@ describe('paletteResults', () => {
       // No audit row: it needs a project to audit. The dock and feedback are cross-project, so they stay.
       'Open agent dock',
       'Send feedback',
+      'Show the walkthrough',
     ]);
   });
 
