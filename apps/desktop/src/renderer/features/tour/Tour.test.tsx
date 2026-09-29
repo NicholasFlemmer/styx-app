@@ -14,14 +14,19 @@ const withSettings = (app: Partial<ReadModel['settings']['app']>): ReadModel => 
 };
 
 /** The window's anchors, each with a real size (jsdom lays nothing out). */
-const ANCHORS = ['data-rail', 'data-titlebar-needs', 'data-app-rail-item', 'data-titlebar-palette'];
+const ANCHORS = [
+  'data-rail',
+  'data-titlebar-needs',
+  'data-approvals-tab',
+  'data-titlebar-palette',
+  'data-spawn-agent',
+];
 function Anchors({ without = [] as string[] }) {
   return (
     <div>
       {!without.includes('rail') && <nav data-rail="true">rail</nav>}
       {!without.includes('needs') && <span data-titlebar-needs="true">02 needs you</span>}
-      {!without.includes('agents') && <button data-app-rail-item="agents">Agents</button>}
-      {!without.includes('approvals') && <button data-app-rail-item="approvals">Approvals</button>}
+      {!without.includes('approvals') && <button data-approvals-tab="inbox">Inbox</button>}
       {!without.includes('palette') && <button data-titlebar-palette="true">Switch…</button>}
     </div>
   );
@@ -36,7 +41,19 @@ describe('first-run walkthrough (#124)', () => {
     vi.useFakeTimers();
     commandMock.mockClear();
     Object.assign(window, { styx: { platform: 'darwin', env: {}, command: commandMock } });
-    useUiStore.setState({ overlays: [], tourOpen: false, screen: 'home', platform: 'darwin' });
+    // No project open: the tour is Home's three cards, Approvals and the closing card.
+    useUiStore.setState({
+      overlays: [],
+      tourOpen: false,
+      screen: 'home',
+      platform: 'darwin',
+      projectId: null,
+    });
+    // Animation frames on the fake clock, so a step waiting for its anchor can be driven.
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) =>
+      setTimeout(() => cb(Date.now()), 16),
+    );
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
     useReadModel.getState().replaceModel(withSettings({ tourDone: false }), 'connected');
     rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
       const sized = ANCHORS.some((a) => this.hasAttribute(a));
@@ -56,6 +73,7 @@ describe('first-run walkthrough (#124)', () => {
   afterEach(() => {
     cleanup();
     rect.mockRestore();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
     Object.assign(window, { styx: undefined });
   });
@@ -68,25 +86,31 @@ describe('first-run walkthrough (#124)', () => {
       </>,
     );
     act(() => useUiStore.getState().setTourOpen(true));
+    act(() => vi.advanceTimersByTime(50));
     expect(screen.getByRole('dialog', { name: copy.tour.steps.rail.title })).toBeTruthy();
-    expect(counter()).toBe('01 / 06');
+    expect(counter()).toBe('01 / 05');
     expect(document.querySelector('[data-tour-ring]')).not.toBeNull();
     // Focus is on Next, inside the card.
     expect(document.activeElement?.getAttribute('data-tour-next')).toBe('true');
 
-    for (const key of ['needs', 'agents', 'approvals', 'palette', 'done']) {
-      fireEvent.click(screen.getByRole('button', { name: key === 'done' ? copy.tour.next : copy.tour.next }));
+    for (const key of ['needs', 'palette', 'approvals', 'done']) {
+      fireEvent.click(screen.getByRole('button', { name: copy.tour.next }));
+      act(() => vi.advanceTimersByTime(50));
       expect(stepKey()).toBe(key);
     }
+    // It switched to Approvals for that step.
+    expect(useUiStore.getState().screen).toBe('approvals');
     // The closing card: no anchor, no ring, Done instead of Next, the chord in words.
     expect(document.querySelector('[data-tour-ring]')).toBeNull();
     expect(screen.queryByRole('button', { name: copy.tour.skip })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: copy.tour.done }));
     expect(useUiStore.getState().tourOpen).toBe(false);
+    // And went back to where it started.
+    expect(useUiStore.getState().screen).toBe('home');
     expect(commandMock).toHaveBeenCalledWith('settings.set', { patch: { tourDone: true } });
   });
 
-  it('skips a step whose anchor is not on screen', () => {
+  it('skips a step whose anchor never renders, and leaves out project steps with no project open', () => {
     render(
       <>
         <Anchors without={['approvals']} />
@@ -94,7 +118,35 @@ describe('first-run walkthrough (#124)', () => {
       </>,
     );
     act(() => useUiStore.getState().setTourOpen(true));
+    act(() => vi.advanceTimersByTime(50));
+    // No project: spawn and the other workspace cards are not counted even though an anchor exists.
     expect(counter()).toBe('01 / 05');
+    for (let n = 0; n < 3; n++) {
+      fireEvent.click(screen.getByRole('button', { name: copy.tour.next }));
+      act(() => vi.advanceTimersByTime(50));
+    }
+    // Approvals has no anchor: after waiting for it, the tour moves on by itself.
+    act(() => vi.advanceTimersByTime(2000));
+    expect(stepKey()).toBe('done');
+  });
+
+  it('with a project open, the workspace cards join in', () => {
+    useUiStore.setState({ projectId: fixtures.ids.project.acmeShop });
+    render(
+      <>
+        <Anchors />
+        <Tour />
+      </>,
+    );
+    act(() => useUiStore.getState().setTourOpen(true));
+    act(() => vi.advanceTimersByTime(50));
+    expect(counter()).toBe('01 / 15');
+    for (let n = 0; n < 3; n++) {
+      fireEvent.click(screen.getByRole('button', { name: copy.tour.next }));
+      act(() => vi.advanceTimersByTime(50));
+    }
+    expect(stepKey()).toBe('spawn');
+    expect(useUiStore.getState().screen).toBe('workspace');
   });
 
   it('keyboard: → next, ← back, Esc skips and still counts as seen', () => {
@@ -105,10 +157,13 @@ describe('first-run walkthrough (#124)', () => {
       </>,
     );
     act(() => useUiStore.getState().setTourOpen(true));
+    act(() => vi.advanceTimersByTime(50));
     const card = screen.getByRole('dialog');
     fireEvent.keyDown(card, { key: 'ArrowRight' });
+    act(() => vi.advanceTimersByTime(50));
     expect(stepKey()).toBe('needs');
     fireEvent.keyDown(card, { key: 'ArrowLeft' });
+    act(() => vi.advanceTimersByTime(50));
     expect(stepKey()).toBe('rail');
     fireEvent.keyDown(card, { key: 'Escape' });
     expect(useUiStore.getState().tourOpen).toBe(false);
@@ -124,6 +179,7 @@ describe('first-run walkthrough (#124)', () => {
       </>,
     );
     act(() => useUiStore.getState().setTourOpen(true));
+    act(() => vi.advanceTimersByTime(50));
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     expect(commandMock).not.toHaveBeenCalled();
   });

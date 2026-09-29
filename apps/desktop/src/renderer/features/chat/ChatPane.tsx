@@ -677,7 +677,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
         />
       )}
       {!compact && (
-        <div className={s['tabsRow']}>
+        <div className={s['tabsRow']} data-session-tabs="true">
           <TabRow aria-label="Sessions" className={s['tabs']}>
             {tabs.visible.map((t) => (
               <Tab
@@ -727,6 +727,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           <button
             type="button"
             className={s['plus']}
+            data-spawn-agent="true"
             aria-label={copy.board.actions.spawn.replace(/^\+\s*/, '')}
             onClick={() => pushOverlay({ kind: 'modal', modal: 'spawn', projectId })}
           >

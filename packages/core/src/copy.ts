@@ -1615,21 +1615,57 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
         title: 'What’s waiting on you',
         body: 'When an agent has a question or asks for access, this count goes up. Click it to jump straight there.',
       },
-      agents: {
-        title: 'Every agent, one board',
-        body: 'See every agent across all your projects: who needs you, who’s working and what’s done.',
-      },
-      approvals: {
-        title: 'Agents ask before production',
-        body: 'When an agent wants to deploy or touch a database, the request lands here. Approve it for a set time, with Touch ID for anything live.',
-      },
       palette: {
         title: 'Everything is one keystroke away',
         body: 'Press {chord} to switch projects, start an agent, deploy or approve, from anywhere.',
       },
+      spawn: {
+        title: 'Start an agent',
+        body: 'Pick Claude Code, Codex, Gemini or Cursor. Each one works in its own copy of the repo, on its own branch, so agents never trip over each other or you.',
+      },
+      tabs: {
+        title: 'Your agents, side by side',
+        body: 'Every agent in this project gets a tab. A lit square means it needs you.',
+      },
+      composer: {
+        title: 'Talk to it here',
+        body: 'Tell the agent what to do, drop in files or screenshots, and answer it when it asks. Messages queue while it works.',
+      },
+      editor: {
+        title: 'Watch the work land',
+        body: 'The agent’s changes show up here as it makes them. Review them line by line, and open any file in your own editor with one key.',
+      },
+      land: {
+        title: 'Land it, or publish it',
+        body: 'Land merges the agent’s branch into main once your checks pass. Publish commits, pushes and opens a pull request instead.',
+      },
+      deploy: {
+        title: 'Ship it',
+        body: 'Deploy to Vercel, Google Cloud, AWS and more, from here. Anything live asks for your approval first.',
+      },
+      design: {
+        title: 'See it running',
+        body: 'The Design tab runs your project locally and shows it next to the code, so you can see what the agent built.',
+      },
+      repo: {
+        title: 'Every lane, one table',
+        body: 'Each agent’s branch, its changes and whether it’s ready to land, across the whole project.',
+      },
+      approvals: {
+        title: 'Agents ask before production',
+        body: 'When an agent wants to deploy or touch a database, the request lands here. Approve it for a set time, with Touch ID for anything live. Every request is logged.',
+      },
+      targets: {
+        title: 'Connect where you ship',
+        body: 'Add Vercel, AWS, Google Cloud, Supabase, GitHub or a server. Styx uses the logins you already have and keeps the keys in your Mac’s Keychain.',
+      },
+      feedback: {
+        title: 'Tell me what’s broken',
+        body: 'Anything confusing, missing or broken? This goes straight to the person who makes Styx, and every message is read.',
+      },
       done: {
         title: 'You’re set',
-        body: 'Open a project and start an agent with + in the chat. Each one gets its own branch. Something confusing? The Feedback button in the status bar comes straight to me.',
+        body: 'Open a project and press + to start your first agent. You can replay this walkthrough any time from {chord}.',
       },
     },
   },

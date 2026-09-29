@@ -207,6 +207,7 @@ export function Repo() {
       </div>
       <Table
         className={s['lanes']}
+        data-repo-lanes="true"
         columns={LANE_COLUMNS}
         header={[
           copy.repo.columns.branch,
