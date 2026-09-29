@@ -11,8 +11,8 @@ export const Hero = () => (
           <span>One window.</span>
         </h1>
         <p className={styles.lede}>
-          Styx is where everything converges: every repo you work in, the AI agents building in them, and
-          every login they need to ship. Switch between all of it from one window. And like the river
+          Styx is where everything converges: every repo you work in, the AI coding agents building in them,
+          and every login they need to ship. Switch between all of it from one window. And like the river
           it&apos;s named after, nothing crosses over without you. Deploying, or touching live data, asks you
           first.
         </p>
@@ -22,9 +22,7 @@ export const Hero = () => (
             What happens at the crossing
           </a>
         </div>
-        <p className={styles.micro}>
-          Mac now, Windows soon. Your keys never leave your computer.
-        </p>
+        <p className={styles.micro}>Mac now, Windows soon. Your keys never leave your computer.</p>
       </div>
       <div className={styles.demo} data-load="fade">
         <WorkspaceDemo />

@@ -6,9 +6,16 @@ import desktop from '../../desktop/package.json';
  */
 export const site = {
   name: 'Styx',
-  title: 'Styx: every project, every agent, every key, one window',
+  /** The search result's title (≤60 characters): what people type, not the slogan. */
+  title: 'Styx: Claude Code, Codex and Cursor agents in one Mac app',
+  /** The search result's snippet (≤155 characters, or Google cuts it off). */
   description:
-    'The desktop app where your work converges: every repo you touch, the AI agents building in them, and every login they need to ship. One window for all of it, and nothing crosses into production without you. Mac now, Windows soon.',
+    'Run Claude Code, Codex, Gemini and Cursor across every project in one Mac app. See which agent needs you. Nothing reaches production without your OK.',
+  /** The brand line, for share cards where there is room for it. */
+  tagline: 'Styx: every project, every agent, every key, one window',
+  shareDescription:
+    'The desktop app where your work converges: every repo you touch, the AI coding agents building in them, and every login they need to ship. Nothing crosses into production without you.',
+  email: 'hello@heystyx.com',
   url: process.env['NEXT_PUBLIC_SITE_URL'] ?? 'http://localhost:3100',
   version: desktop.version,
   links: {
