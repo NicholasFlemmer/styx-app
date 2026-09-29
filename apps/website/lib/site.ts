@@ -20,6 +20,8 @@ export const site = {
   email: 'hello@heystyx.com',
   /** When the home page's words last changed (the sitemap's lastmod). Bump it with a copy change, not a deploy. */
   updated: '29 September 2026',
+  /** When the founder video on /story last changed (the sitemap's lastmod for it). */
+  storyUpdated: '29 September 2026',
   url: process.env['NEXT_PUBLIC_SITE_URL'] ?? 'http://localhost:3100',
   version: desktop.version,
   links: {

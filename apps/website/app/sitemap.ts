@@ -16,6 +16,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const latest = new Date(Math.max(...compared.map((d) => d.getTime())));
   return [
     { url: `${site.url}/`, lastModified: dayOf(site.updated), changeFrequency: 'monthly', priority: 1 },
+    {
+      url: `${site.url}/story`,
+      lastModified: dayOf(site.storyUpdated),
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
     { url: `${site.url}/compare`, lastModified: latest, changeFrequency: 'monthly', priority: 0.6 },
     ...COMPETITORS.map((c, i) => ({
       url: `${site.url}/compare/${c.slug}`,

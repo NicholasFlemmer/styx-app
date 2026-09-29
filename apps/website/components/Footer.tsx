@@ -28,6 +28,7 @@ export const Footer = () => (
             {s.label}
           </a>
         ))}
+        <a href="/story">Why I built it</a>
         <a href="/compare">Compare</a>
       </nav>
       <div className={styles.meta}>
