@@ -94,3 +94,8 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* A page that opens with a paragraph rather than a heading (the comparison) still gets air under the box. */
+.summary + p,
+.summary + script + p {
+  margin-top: var(--sp-6);
+}

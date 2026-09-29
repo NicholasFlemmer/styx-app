@@ -16,7 +16,10 @@ export const metadata: Metadata = {
   description: site.description,
   applicationName: site.name,
   keywords: [
+    'agentic development environment',
+    'ADE',
     'AI coding agents',
+    'Conductor alternative',
     'Claude Code',
     'OpenAI Codex',
     'Gemini CLI',

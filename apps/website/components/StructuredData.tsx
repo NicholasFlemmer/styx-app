@@ -36,7 +36,7 @@ const graph = () => {
         url: `${site.url}/`,
         image: `${site.url}/opengraph-image`,
         applicationCategory: 'DeveloperApplication',
-        applicationSubCategory: 'AI coding agent manager',
+        applicationSubCategory: 'Agentic development environment (ADE)',
         operatingSystem: 'macOS',
         processorRequirements: 'Apple silicon',
         softwareVersion: site.version,
