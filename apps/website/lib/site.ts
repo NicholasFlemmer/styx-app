@@ -18,6 +18,8 @@ export const site = {
   shareDescription:
     'The desktop app where your work converges: every repo you touch, the AI coding agents building in them, and every login they need to ship. Nothing crosses into production without you.',
   email: 'hello@heystyx.com',
+  /** When the home page's words last changed (the sitemap's lastmod). Bump it with a copy change, not a deploy. */
+  updated: '29 September 2026',
   url: process.env['NEXT_PUBLIC_SITE_URL'] ?? 'http://localhost:3100',
   version: desktop.version,
   links: {
