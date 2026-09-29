@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { site } from '@/lib/site';
+import { COMPETITORS } from '@/lib/compare';
 
 export const dynamic = 'force-static';
 
@@ -7,7 +8,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
   return [
     { url: `${site.url}/`, lastModified: now, changeFrequency: 'monthly', priority: 1 },
-    { url: `${site.url}/compare/conductor`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${site.url}/compare`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
+    ...COMPETITORS.map((c) => ({
+      url: `${site.url}/compare/${c.slug}`,
+      lastModified: now,
+      changeFrequency: 'monthly' as const,
+      priority: 0.6,
+    })),
     { url: `${site.url}/privacy`, lastModified: now, changeFrequency: 'yearly', priority: 0.3 },
     { url: `${site.url}/terms`, lastModified: now, changeFrequency: 'yearly', priority: 0.3 },
   ];

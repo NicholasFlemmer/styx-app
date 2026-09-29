@@ -28,7 +28,7 @@ export const Footer = () => (
             {s.label}
           </a>
         ))}
-        <a href="/compare/conductor">Styx vs Conductor</a>
+        <a href="/compare">Compare</a>
       </nav>
       <div className={styles.meta}>
         <ThemeToggle />

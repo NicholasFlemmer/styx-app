@@ -26,6 +26,9 @@
   color: var(--mu);
   text-decoration: none;
 }
+.links a[aria-current='page'] {
+  color: var(--tx);
+}
 .links a:hover {
   color: var(--tx);
 }

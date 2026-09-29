@@ -11,6 +11,7 @@ export const LegalPage = ({
   children,
   meta = `Effective ${legal.effective}`,
   summaryLabel = 'In short',
+  navCurrent,
 }: {
   title: string;
   summary: ReactNode;
@@ -18,12 +19,13 @@ export const LegalPage = ({
   /** The line under the title: the legal pages' effective date, or a comparison's "checked on". */
   meta?: string;
   summaryLabel?: string;
+  navCurrent?: 'compare';
 }) => (
   <>
     <a href="#main" className="srOnly">
       Skip to content
     </a>
-    <Nav />
+    <Nav {...(navCurrent !== undefined ? { current: navCurrent } : {})} />
     <main id="main" className={styles.page}>
       <div className={`wrap ${styles.cols}`}>
         <header className={styles.head}>
