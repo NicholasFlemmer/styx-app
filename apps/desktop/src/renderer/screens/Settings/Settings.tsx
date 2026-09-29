@@ -230,7 +230,13 @@ function Targets({ model, projectId }: { model: ReadModel; projectId: ProjectId 
         </div>
       ) : null}
       <div className={s['connectRow']}>
-        <Button variant="dashed" size="regular" onClick={openConnect} disabled={projectId === null}>
+        <Button
+          variant="dashed"
+          size="regular"
+          onClick={openConnect}
+          disabled={projectId === null}
+          data-connect-target="true"
+        >
           {copy.targets.connectRow}
         </Button>
         <Button
