@@ -1094,6 +1094,8 @@ export const events = {
   'pty.data': z.object({ id: z.string().min(1), data: z.string(), seq: z.number().int().nonnegative() }),
   'pty.exit': z.object({ id: z.string().min(1), exitCode: z.number().int().nullable() }),
   'ask.opened': z.object({ askId: askIdSchema, sessionId: sessionIdSchema, projectId: projectIdSchema }),
+  /** The app menu's Help items (#124): the main window opens the walkthrough or the feedback dialog. */
+  'menu.action': z.object({ action: z.enum(['tour', 'feedback']) }),
   /** A dock card was clicked: the main window brings that session forward. */
   'session.focus': z.object({ sessionId: sessionIdSchema }),
   /** Something under a watched worktree changed on disk (debounced): the files pane reads its tree again. */

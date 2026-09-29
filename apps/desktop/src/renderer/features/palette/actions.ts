@@ -1,6 +1,7 @@
 import { isDeployableTarget, type PaletteAction } from '@styx/core';
 import { forgetInvoker, invokerOf, rememberInvoker } from '../../overlays/stack';
 import { command } from '../../state/commands';
+import { openTour } from '../tour/open-tour';
 import { startLearnDeploy } from '../abilities/learn';
 import { startDebtAudit } from '../audit';
 import { openFolderAsProject } from '../../state/project-entry';
@@ -60,9 +61,7 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
       open({ kind: 'modal', modal: 'feedback' });
       return;
     case 'tour':
-      // The walkthrough points at Home's rail, counters and app rail: it plays from there.
-      if (ui.screen !== 'home') ui.setScreen('home');
-      ui.setTourOpen(true);
+      openTour();
       return;
     case 'debt-audit': {
       const projectId = action.projectId;

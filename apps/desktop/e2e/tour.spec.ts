@@ -48,3 +48,31 @@ test('walkthrough: palette → fifteen steps across Home, the workspace, Repo, A
   await expect(page.locator('[data-screen-ready="home"]')).toBeVisible();
   await app.close();
 });
+
+test('walkthrough opens any time: from Help › Show Walkthrough, and from Settings › General', async () => {
+  const { app, page } = await launchStyx({ screen: 'settings', env: { STYX_DEMO_REPOS: '0' } });
+  await page.waitForSelector('[data-screen-ready="settings"]');
+  const tour = page.locator('[data-tour="true"]');
+
+  // The menu bar's Help menu, clicked through Electron itself.
+  const labels = await app.evaluate(({ Menu }) => {
+    const help = Menu.getApplicationMenu()?.items.find((i) => i.role === 'help');
+    const items = help?.submenu?.items ?? [];
+    items.find((i) => i.label === 'Show Walkthrough')?.click();
+    return items.map((i) => i.label).filter((l) => l !== '');
+  });
+  expect(labels).toEqual(['Show Walkthrough', 'Send Feedback…', 'Visit heystyx.com']);
+  await expect(tour).toHaveAttribute('data-tour-ready', 'true');
+  // It moved to Home for its first card, and goes back to Settings when skipped.
+  await expect(page.locator('[data-screen-ready="home"]')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(tour).toHaveCount(0);
+  await expect(page.locator('[data-screen-ready="settings"]')).toBeVisible();
+
+  // Settings › General › Walkthrough › Show the walkthrough.
+  await page.click('[data-app-rail-item="app:general"]');
+  await page.locator('[data-settings-row="tour"] select').selectOption('show');
+  await expect(tour).toHaveAttribute('data-tour-ready', 'true');
+  await page.keyboard.press('Escape');
+  await app.close();
+});
