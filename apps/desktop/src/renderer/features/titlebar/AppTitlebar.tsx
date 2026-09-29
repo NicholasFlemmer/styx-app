@@ -34,12 +34,14 @@ export function AppTitlebar() {
             hint={formatChord(shortcuts.palette, platform())}
             placeholder={copy.palette.titlebarField}
             onClick={() => openPalette('all')}
+            data-titlebar-palette="true"
           />
           <TitlebarCounter
             count={needs}
             label={counterLabel(copy.counters.titlebarNeedsYou)}
             tone="accent"
             live
+            data-titlebar-needs="true"
           />
           <TitlebarCounter
             count={locked}

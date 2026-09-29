@@ -59,6 +59,11 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
     case 'feedback':
       open({ kind: 'modal', modal: 'feedback' });
       return;
+    case 'tour':
+      // The walkthrough points at Home's rail, counters and app rail: it plays from there.
+      if (ui.screen !== 'home') ui.setScreen('home');
+      ui.setTourOpen(true);
+      return;
     case 'debt-audit': {
       const projectId = action.projectId;
       void startDebtAudit(model, projectId);

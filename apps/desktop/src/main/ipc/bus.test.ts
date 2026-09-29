@@ -21,6 +21,7 @@ const bus = () => {
       onboardingDone: true,
       trackAgentEdits: false,
       usageReports: true,
+      tourDone: true,
     },
   }));
   b.register('project.select', ({ projectId }) => {

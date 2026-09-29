@@ -1,5 +1,6 @@
 import { BannerStack } from '../features/banners/BannerStack';
 import { useUpdatePrompt } from '../features/modals/UpdateModal';
+import { Tour, useFirstRunTour } from '../features/tour/Tour';
 import { AppTitlebar } from '../features/titlebar/AppTitlebar';
 import { useUi } from '../state/hooks';
 import { AppRail } from './AppRail';
@@ -17,6 +18,8 @@ export function Shell() {
   const chromeHidden = screen === 'onboarding';
   // A downloaded update opens its dialog once per version (#119).
   useUpdatePrompt();
+  // The first-run walkthrough starts itself once after onboarding (#124).
+  useFirstRunTour();
   return (
     <div id="layer-app" className={s['shell']} data-chrome-hidden={chromeHidden ? 'true' : undefined}>
       <AppTitlebar />
@@ -27,6 +30,7 @@ export function Shell() {
         {chromeHidden ? null : <Nav />}
         <ScreenOutlet />
       </div>
+      <Tour />
     </div>
   );
 }

@@ -21,6 +21,9 @@ export const Hero = () => (
           <a href="#access" className={styles.secondary}>
             What happens at the crossing
           </a>
+          <a href="/story" className={styles.secondary}>
+            Watch why I built it · 1:42
+          </a>
         </div>
         <p className={styles.micro}>
           An agentic development environment (ADE) for Mac. Windows soon. Your keys never leave your computer.

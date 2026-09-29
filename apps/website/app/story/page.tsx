@@ -60,7 +60,7 @@ export default function StoryPage() {
       <a href="#main" className="srOnly">
         Skip to content
       </a>
-      <Nav />
+      <Nav current="story" />
       <main id="main" className={styles.page}>
         <script
           type="application/ld+json"

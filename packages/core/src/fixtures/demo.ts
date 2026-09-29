@@ -1251,6 +1251,8 @@ export const demoFixture = (): DemoFixture => ({
     ...DEFAULT_APP_SETTINGS,
     fallbackIde: 'vscode',
     onboardingDone: true,
+    // A seeded, set-up machine: the first-run walkthrough has been seen (#124).
+    tourDone: true,
     trackAgentEdits: true,
   },
   projectSettings: { [ids.project.acmeShop]: acmeProjectSettings() },

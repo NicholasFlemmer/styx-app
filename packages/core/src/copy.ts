@@ -1593,6 +1593,46 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     conflictReview:
       '{base} conflicts with this lane in {file}. Resolve on Repo asks {agent} to merge it, both sides kept.',
   },
+  /**
+   * First-run walkthrough (owner request, #124): one card per part of the window, pointed at the real thing.
+   * Plain language, one idea per step; the counter is zero-padded like every counter in Styx.
+   */
+  tour: {
+    label: 'Styx walkthrough',
+    step: '{n} / {total}',
+    next: 'Next',
+    back: 'Back',
+    skip: 'Skip',
+    done: 'Done',
+    palette: 'Show the walkthrough',
+    paletteMeta: 'a one-minute tour of the window',
+    steps: {
+      rail: {
+        title: 'Every project, one window',
+        body: 'Your projects live down this rail. Click one to open it, or + to add another.',
+      },
+      needs: {
+        title: 'What’s waiting on you',
+        body: 'When an agent has a question or asks for access, this count goes up. Click it to jump straight there.',
+      },
+      agents: {
+        title: 'Every agent, one board',
+        body: 'See every agent across all your projects: who needs you, who’s working and what’s done.',
+      },
+      approvals: {
+        title: 'Agents ask before production',
+        body: 'When an agent wants to deploy or touch a database, the request lands here. Approve it for a set time, with Touch ID for anything live.',
+      },
+      palette: {
+        title: 'Everything is one keystroke away',
+        body: 'Press {chord} to switch projects, start an agent, deploy or approve, from anywhere.',
+      },
+      done: {
+        title: 'You’re set',
+        body: 'Open a project and start an agent with + in the chat. Each one gets its own branch. Something confusing? The Feedback button in the status bar comes straight to me.',
+      },
+    },
+  },
   /** Feedback (owner request, #123): the status bar's Feedback item, the palette row and the dialog. */
   feedback: {
     status: 'Feedback',
