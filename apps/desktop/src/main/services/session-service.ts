@@ -4,6 +4,7 @@ import { rm } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import {
+  type AgentProblem,
   AGENT_LABEL,
   ATTACHMENTS_DIR,
   MODEL_ALIASES,
@@ -126,6 +127,11 @@ export interface SessionHooks {
   limitsReported?: (limits: AgentLimits) => void;
   /** The session reached `done` (ADR-0025 phase C: a lane may land on its own). */
   sessionFinished?: (sessionId: SessionId) => void;
+  /**
+   * An agent could not get going (#125): its CLI is missing, would not launch, is signed out, is too old, reported
+   * an error before finishing a turn, or exited with an error within its first seconds. Once per session and reason.
+   */
+  agentProblem?: (sessionId: SessionId, problem: AgentProblem) => void;
 }
 
 export interface SpawnInput {
@@ -164,6 +170,12 @@ const isInside = (root: string, p: string): boolean => {
   const full = resolve(base, p);
   return full === base || full.startsWith(base + sep);
 };
+
+/** An agent CLI that exits with an error this soon after launch, before any turn, never really started (#125). */
+const EARLY_EXIT_MS = 30_000;
+/** What agent CLIs say when they are signed out ("please run /login", "invalid api key", "not authenticated"…). */
+const SIGNED_OUT =
+  /(\/login|log ?in again|not (signed|logged) in|sign in (first|to)|unauthori[sz]ed|not authenticated|authentication (failed|required)|invalid api key|api key (is )?(missing|invalid)|\b401\b)/i;
 
 const EDIT_TOOL = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
 const PERMISSION_OPTIONS = ['Allow', 'Deny'] as const;
@@ -337,6 +349,12 @@ export class SessionService {
   private readonly cleanups = new Map<string, Promise<void>>();
   /** Lines Styx owes an agent with its next turn (ADR-0025): the launch preamble, notes that arrived while it was not working. */
   private readonly notes = new Map<string, string[]>();
+  /** When each live process started, for "exited at once" (#125). Wall-clock on purpose: it measures a real wait. */
+  private readonly launchedAt = new Map<string, number>();
+  /** Sessions that have finished at least one turn: after that, an error is a hiccup, not "could not get going". */
+  private readonly turnDone = new Set<string>();
+  /** `<session>|<problem>` already reported, so a retry loop counts once. */
+  private readonly problemsNoted = new Set<string>();
   /** Live broker tokens by session, for scrubbing the terminal view; dropped when the process exits. */
   private readonly liveTokens = new Map<string, string>();
   /** Asks opened from a CLI hook (`permission_prompt` / `agent_needs_input`), cancelled once the agent moves on. */
@@ -559,6 +577,7 @@ export class SessionService {
     const firstMessage = opts.replayFirstMessage ? session.firstMessage : null;
     const binary = session.agent === 'shell' ? this.deps.pty.defaultShell() : (cli?.binary ?? null);
     if (session.agent !== 'shell' && (binary === null || cli?.found === false)) {
+      this.noteProblem(session.id, 'cli-missing');
       this.applyEvent(session.id, { type: 'error', reason: 'cli-missing' });
       return;
     }
@@ -669,6 +688,7 @@ export class SessionService {
       const s = this.require(session.id);
       repos.sessions.upsert({ ...s, pid });
       this.deps.publisher.upsert('sessions', [s.id]);
+      this.launchedAt.set(session.id, Date.now());
       // A launch is not a turn: an agent spawned with no first message, or reopened to pick up later, is idle
       // until something is actually sent (owner request, discrepancy #111). `start` belongs to the turn.
       if (outgoing !== null) this.applyEvent(session.id, { type: 'start' });
@@ -677,6 +697,7 @@ export class SessionService {
       }
     } catch (e) {
       logger.error('session spawn failed', { sessionId: session.id, error: (e as Error).message });
+      this.noteProblem(session.id, 'launch');
       this.launches.delete(session.id);
       this.trackCleanup(session.id, launch);
       this.applyEvent(session.id, { type: 'error', reason: 'cli-missing' });
@@ -787,6 +808,13 @@ export class SessionService {
       return;
     }
     this.notes.set(s.id, [...(this.notes.get(s.id) ?? []), text]);
+  }
+
+  private noteProblem(sessionId: string, problem: AgentProblem): void {
+    const key = `${sessionId}|${problem}`;
+    if (this.problemsNoted.has(key)) return;
+    this.problemsNoted.add(key);
+    this.hooks?.agentProblem?.(sessionId as SessionId, problem);
   }
 
   /** The text the CLI gets: what Styx owed the agent, then the message. */
@@ -1400,6 +1428,18 @@ export class SessionService {
   }
 
   private onProcessExit(s: Session, exitCode: number | null): void {
+    const launchedAt = this.launchedAt.get(s.id);
+    this.launchedAt.delete(s.id);
+    // Gone with an error before it ever finished a turn, and quickly: the agent never really started.
+    if (
+      exitCode !== null &&
+      exitCode !== 0 &&
+      launchedAt !== undefined &&
+      Date.now() - launchedAt < EARLY_EXIT_MS &&
+      !this.turnDone.has(s.id) &&
+      s.state !== 'done'
+    )
+      this.noteProblem(s.id, 'exited');
     this.ptyTails.delete(s.id);
     this.liveTokens.delete(s.id);
     const launch = this.launches.get(s.id);
@@ -1517,6 +1557,7 @@ export class SessionService {
           return;
         }
         if (effect.event === 'quiet' && next?.state === 'idle') {
+          this.turnDone.add(s.id);
           this.hooks?.turnSettled?.(s.id);
           // Whatever order Claude's Stop hook and its `result` arrive in, the queue drains here and only here.
           this.drainQueue(s.id);
@@ -1528,6 +1569,9 @@ export class SessionService {
         return;
       case 'error': {
         const outdated = parseCliOutdated(effect.message);
+        if (outdated !== null) this.noteProblem(s.id, 'outdated');
+        else if (SIGNED_OUT.test(effect.message)) this.noteProblem(s.id, 'sign-in');
+        else if (!this.turnDone.has(s.id)) this.noteProblem(s.id, 'error');
         if (outdated !== null) this.raiseOutdatedBanner(s, effect.message, outdated);
         else this.deps.transcript.system(s.id, redact(`error: ${effect.message}`));
         if (s.purpose && s.state !== 'done') {

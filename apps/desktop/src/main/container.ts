@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { APP_ID, DEVICE_NAME, copy, fill, type AppSettings } from '@styx/core';
@@ -50,7 +51,7 @@ import {
 } from './services/device-service';
 import { isLoopbackUrl, RunService, type ProbeAnswer } from './services/run-service';
 import { ScreensStore } from './services/screens-store';
-import { commandCarriesSecret, logger } from './services/logger';
+import { commandCarriesSecret, logFilePath, logger, redactedTail } from './services/logger';
 import { SessionService } from './services/session-service';
 import { StreamRunner, type StreamRunnerLike } from './services/stream-runner';
 import { RunnerMux } from './services/runner-mux';
@@ -206,6 +207,8 @@ export interface ContainerOptions {
   /** The merge resolver's checks runner and Mergiraf hook (ADR-0025 phase B); faked in tests. */
   runChecks?: (cwd: string, command: string) => Promise<ChecksResult>;
   mergiraf?: (file: string, cwd: string) => Promise<boolean>;
+  /** Styx's log file, for opt-in feedback diagnostics (#125); tests point it at a temp file, null for none. */
+  logFile?: string | null;
   /** electron-updater's `autoUpdater` in a packaged build with a feed (#119); absent in development and tests. */
   updater?: Updater | null;
 }
@@ -578,6 +581,11 @@ export function buildContainer(opts: ContainerOptions): Container {
     installId: () => installIdFrom(repos.uiState),
     version: APP_VERSION,
     os: process.platform,
+    diagnostics: async () => {
+      const path = opts.logFile === undefined ? logFilePath() : opts.logFile;
+      if (path === null) return null;
+      return redactedTail(await readFile(path, 'utf8'));
+    },
   });
   const screens = new ScreensStore(join(runtime.userData, 'screens'));
   const deviceHooks = opts.deviceHooks ?? NO_DEVICE_HOOKS;
@@ -896,6 +904,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     },
     limitsReported: (limits) => usage.report(limits),
     // ADR-0025 phase C: a finished lane lands by itself when the project asked for that.
+    // #125: why an agent did not get going, as a count with no details.
+    agentProblem: (_id, problem) => usageReports.record(`agent.failed.${problem}`),
     sessionFinished: (id) =>
       void land
         .onSessionFinished(id)

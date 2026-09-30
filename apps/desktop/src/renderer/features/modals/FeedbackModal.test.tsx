@@ -58,6 +58,7 @@ describe('FeedbackModal (#123)', () => {
     expect(commandMock).toHaveBeenCalledWith('feedback.send', {
       message: 'Love the board',
       email: 'me@example.com',
+      diagnostics: false,
     });
     const done = document.querySelector('[data-feedback-close]');
     if (done === null) throw new Error('close button');
@@ -76,7 +77,27 @@ describe('FeedbackModal (#123)', () => {
       expect(commandMock).toHaveBeenCalledWith('feedback.send', {
         message: 'Needs Windows',
         email: 'dev@example.com',
+        diagnostics: false,
       }),
+    );
+  });
+
+  it('diagnostics are off until ticked (#125); ticked, the send asks main to attach the log and the note says what goes', async () => {
+    render(<FeedbackModal id="fb" />);
+    expect(screen.getByText(copy.feedback.note)).toBeTruthy();
+    const box = screen.getByRole('checkbox', { name: copy.feedback.diagnostics }) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    fireEvent.click(box);
+    expect(screen.getByText(copy.feedback.diagnosticsNote)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(copy.feedback.message), {
+      target: { value: 'Agent never starts' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: copy.feedback.send }));
+    await waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith(
+        'feedback.send',
+        expect.objectContaining({ diagnostics: true }),
+      ),
     );
   });
 

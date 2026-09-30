@@ -15,14 +15,17 @@ export interface FeedbackDeps {
   installId: () => string;
   version: string;
   os: string;
+  /** The end of Styx's log, secrets masked; only read when the person ticked "Include diagnostics" (#125). */
+  diagnostics?: () => Promise<string | null>;
 }
 
 export class FeedbackService {
   constructor(private readonly deps: FeedbackDeps) {}
 
   /** Sends one message. Unlike usage counts this is something the person is waiting on, so failures are said. */
-  async send(message: string, email: string | null): Promise<void> {
+  async send(message: string, email: string | null, diagnostics = false): Promise<void> {
     const token = await this.deps.token().catch(() => null);
+    const log = diagnostics ? await (this.deps.diagnostics?.() ?? Promise.resolve(null)).catch(() => null) : null;
     let r: Response;
     try {
       r = await this.deps.fetch(`${this.deps.apiBase().replace(/\/+$/, '')}/v1/feedback`, {
@@ -35,6 +38,7 @@ export class FeedbackService {
         body: JSON.stringify({
           message,
           ...(email === null ? {} : { email }),
+          ...(log === null || log === '' ? {} : { diagnostics: log }),
           installId: this.deps.installId(),
           version: this.deps.version,
           os: this.deps.os,

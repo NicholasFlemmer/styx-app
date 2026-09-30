@@ -1686,6 +1686,10 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     placeholder: 'I was trying to… and…',
     email: 'Your email (optional, for a reply)',
     note: 'Sent with the version of Styx and your operating system. Never your code, projects or files.',
+    /** Opt-in (#125): the end of Styx's own log goes with the message, so a problem can be seen, not guessed at. */
+    diagnostics: 'Include diagnostics (helps me find what went wrong)',
+    diagnosticsNote:
+      'Adds the last part of Styx’s own log, with passwords, keys and tokens masked. It can include the names and folders of your projects, never their contents.',
     send: 'Send',
     sending: 'Sending…',
     close: 'Close',

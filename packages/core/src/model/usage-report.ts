@@ -30,9 +30,32 @@ export const usageEventSchema = z.enum([
   'message.sent',
   /** A lane was landed on main: agent work that actually shipped. */
   'lane.landed',
+  // --- Where new people get stuck (owner request, #125): still names only, one per reason. ---
+  /** The first-run walkthrough came on screen / was played to the end / was closed early. */
+  'tour.shown',
+  'tour.finished',
+  'tour.skipped',
+  /** An agent could not start or stopped at once, by reason: its CLI is not installed; the process would not
+   * launch; the CLI says it is not signed in; the CLI is too old; the CLI reported another error; the CLI
+   * exited with an error within its first seconds, before finishing a turn. */
+  'agent.failed.cli-missing',
+  'agent.failed.launch',
+  'agent.failed.sign-in',
+  'agent.failed.outdated',
+  'agent.failed.error',
+  'agent.failed.exited',
+  /** A window's page crashed; one of the app's helper processes (graphics, network) crashed; the previous run
+   * ended without quitting (a crash, a force quit, or the Mac losing power), noticed at the next launch. */
+  'app.crashed.window',
+  'app.crashed.helper',
+  'app.ended-unexpectedly',
 ]);
 export type UsageEvent = z.infer<typeof usageEventSchema>;
 export const USAGE_EVENTS: readonly UsageEvent[] = usageEventSchema.options;
+
+/** The events the renderer may note itself (the walkthrough lives there); everything else is recorded by main. */
+export const RENDERER_USAGE_EVENTS = ['tour.shown', 'tour.finished', 'tour.skipped'] as const satisfies readonly UsageEvent[];
+export type AgentProblem = 'cli-missing' | 'launch' | 'sign-in' | 'outdated' | 'error' | 'exited';
 
 /**
  * One name, when it happened, and how many times — the whole vocabulary. `count` exists so a burst collapses

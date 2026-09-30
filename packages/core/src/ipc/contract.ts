@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { deltaSchema, effectiveProjectSettingsSchema } from '../deltas';
 import { accountProviderSchema, accountStateSchema } from '../model/account';
 import { UPDATE_OFF, updateStateSchema } from '../model/update';
+import { RENDERER_USAGE_EVENTS } from '../model/usage-report';
 import { activityRowSchema } from '../model/activity';
 import { auditEntrySchema } from '../model/audit';
 import {
@@ -894,9 +895,16 @@ export const commands = {
     input: z.object({
       message: z.string().trim().min(1).max(5000),
       email: z.union([z.string().trim().email().max(200), z.literal('')]).optional(),
+      /**
+       * Opt-in (#125), off unless the person ticks it: main attaches the end of Styx's own log, secrets masked, so
+       * a problem can be seen rather than guessed at. The renderer never sees or sends the log itself.
+       */
+      diagnostics: z.boolean().default(false),
     }),
     output: ok,
   },
+  /** The walkthrough's own counts (#125); the only usage events the renderer may note, and only while counts are on. */
+  'usage.note': { input: z.object({ event: z.enum(RENDERER_USAGE_EVENTS) }), output: ok },
   /** Opens an https link from a transcript in the default browser (main validates the scheme). */
   'link.open': { input: z.object({ url: z.string().url() }), output: ok },
   /**

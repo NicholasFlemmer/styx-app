@@ -1,5 +1,5 @@
 import { copy, fill, type ReadModel } from '@styx/core';
-import { Button, Field, Input, Modal, Textarea } from '@styx/ui';
+import { Button, Checkbox, Field, Input, Modal, Textarea } from '@styx/ui';
 import { useId, useState } from 'react';
 import { command } from '../../state/commands';
 import { useModel, useUi } from '../../state/hooks';
@@ -22,6 +22,8 @@ export function FeedbackModal({ id }: FeedbackModalProps) {
   const accountEmail = useModel(selectEmail);
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState(accountEmail);
+  // Off unless ticked (#125): the log goes only when the person chooses to send it.
+  const [diagnostics, setDiagnostics] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: 'editing', error: null });
   const messageId = useId();
   const emailId = useId();
@@ -31,7 +33,7 @@ export function FeedbackModal({ id }: FeedbackModalProps) {
   const send = async () => {
     if (!canSend) return;
     setPhase({ kind: 'sending' });
-    const r = await command('feedback.send', { message: message.trim(), email: email.trim() });
+    const r = await command('feedback.send', { message: message.trim(), email: email.trim(), diagnostics });
     setPhase(r.ok ? { kind: 'sent' } : { kind: 'editing', error: r.error.message });
   };
 
@@ -98,7 +100,13 @@ export function FeedbackModal({ id }: FeedbackModalProps) {
               onChange={(e) => setEmail(e.currentTarget.value)}
             />
           </Field>
-          <p className={s['note']}>{copy.feedback.note}</p>
+          <Checkbox
+            checked={diagnostics}
+            onChange={setDiagnostics}
+            label={copy.feedback.diagnostics}
+            data-feedback-diagnostics="true"
+          />
+          <p className={s['note']}>{diagnostics ? copy.feedback.diagnosticsNote : copy.feedback.note}</p>
           {phase.kind === 'editing' && phase.error !== null && (
             <p className={s['error']} role="alert" data-feedback-error="true">
               {fill(copy.feedback.failed, { reason: phase.error })}

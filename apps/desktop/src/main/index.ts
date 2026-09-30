@@ -498,6 +498,20 @@ async function boot(): Promise<void> {
   }
   // The heartbeat (discrepancy row 114): one count per launch is what daily actives and retention are made of.
   container.usageReports.record('app.launched');
+  // #125: a run that did not quit cleanly (a crash, a force quit, the Mac losing power) leaves this marker behind,
+  // and the next launch counts it. Only the fact is sent; nothing about what was running.
+  runMarker = join(userData, 'running');
+  if (existsSync(runMarker)) container.usageReports.record('app.ended-unexpectedly');
+  writeFileSync(runMarker, String(Date.now()));
+  // #125: crashes while running, as counts. A window's page that died for any reason but a clean exit, and a
+  // helper process (graphics, network, a utility) that crashed or ran out of memory.
+  app.on('render-process-gone', (_e, _wc, details) => {
+    if (details.reason !== 'clean-exit') container?.usageReports.record('app.crashed.window');
+  });
+  app.on('child-process-gone', (_e, details) => {
+    if (['crashed', 'oom', 'launch-failed', 'integrity-failure', 'abnormal-exit'].includes(details.reason))
+      container?.usageReports.record('app.crashed.helper');
+  });
 
   nativeTheme.on('updated', () => {
     windowService.applyTheme();
@@ -571,6 +585,8 @@ app.on('window-all-closed', () => {
 });
 
 let quitting = false;
+/** `<userData>/running` while the app runs; removed on a clean quit (#125). */
+let runMarker: string | null = null;
 app.on('before-quit', (e) => {
   if (quitting || !container) return;
   e.preventDefault();
@@ -582,6 +598,8 @@ app.on('before-quit', (e) => {
     .catch((err: Error) => logger.warn('shutdown error', { error: err.message }))
     .finally(() => {
       osNotifierRef?.dispose();
+      // A clean quit: the next launch should not count this run as ended unexpectedly (#125).
+      if (runMarker !== null) rmSync(runMarker, { force: true });
       app.quit();
     });
 });

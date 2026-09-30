@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { FeedbackService } from './feedback-service';
 
 /** Feedback (#123): the message, the email only if given, version / OS / install id, the token when signed in. */
-const setup = (over: { token?: string | null; respond?: () => Promise<Response> } = {}) => {
+const setup = (
+  over: { token?: string | null; respond?: () => Promise<Response>; log?: string | null } = {},
+) => {
   const sent: { url: string; body: Record<string, unknown>; auth: string | null }[] = [];
   const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     sent.push({
@@ -19,6 +21,7 @@ const setup = (over: { token?: string | null; respond?: () => Promise<Response> 
     installId: () => 'inst_abcdefghijklmnopqrstuv',
     version: '0.2.7',
     os: 'darwin',
+    diagnostics: async () => (over.log === undefined ? 'line 1\nline 2' : over.log),
   });
   return { service, sent };
 };
@@ -36,6 +39,17 @@ describe('FeedbackService', () => {
       version: '0.2.7',
       os: 'darwin',
     });
+  });
+
+  it('attaches the log only when the person ticked diagnostics (#125), and never an empty one', async () => {
+    const t = setup();
+    await t.service.send('Broken', null);
+    expect('diagnostics' in (t.sent[0]?.body ?? {})).toBe(false);
+    await t.service.send('Broken', null, true);
+    expect(t.sent[1]?.body['diagnostics']).toBe('line 1\nline 2');
+    const none = setup({ log: null });
+    await none.service.send('Broken', null, true);
+    expect('diagnostics' in (none.sent[0]?.body ?? {})).toBe(false);
   });
 
   it('leaves the email out when none was typed, and adds the token when signed in', async () => {
@@ -59,5 +73,18 @@ describe('FeedbackService', () => {
     await expect(
       setup({ respond: async () => new Response('', { status: 500 }) }).service.send('x', null),
     ).rejects.toThrow('the server answered 500');
+  });
+});
+
+describe('redactedTail (#125)', () => {
+  it('keeps the end, starts on a whole line, and masks secrets again', async () => {
+    const { redactedTail } = await import('./logger');
+    const log = ['old line', 'GH_TOKEN=ghp_' + 'a'.repeat(36), 'last line'].join('\n');
+    const tail = redactedTail(log, 60);
+    expect(tail.startsWith('GH_TOKEN=') || tail.startsWith('last line')).toBe(true);
+    expect(tail).not.toContain('old line');
+    expect(tail).not.toContain('a'.repeat(36));
+    expect(tail.endsWith('last line')).toBe(true);
+    expect(redactedTail('short')).toBe('short');
   });
 });

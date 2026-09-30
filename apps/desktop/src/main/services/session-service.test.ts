@@ -717,6 +717,62 @@ describe('SessionService.tell + the launch preamble (ADR-0025)', () => {
   });
 });
 
+describe('why an agent did not get going (#125)', () => {
+  it('a missing CLI counts once as cli-missing, however often it is retried', async () => {
+    const { app: a } = app();
+    const record = vi.spyOn(a.usageReports, 'record');
+    a.repos.discovery.saveCli({
+      agent: 'codex',
+      binary: null,
+      version: null,
+      found: false,
+      authState: 'unknown',
+      capabilities: {},
+      checkedAt: DEMO_NOW,
+      account: null,
+      verifiedAt: null,
+      verifyError: null,
+    });
+    const { session } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
+    a.detect.detectClis = async () => [];
+    await a.sessions.resume(session.id).catch(() => undefined);
+    expect(record.mock.calls.map((c) => c[0]).filter((n) => n.startsWith('agent.failed'))).toEqual([
+      'agent.failed.cli-missing',
+    ]);
+  });
+
+  it('a signed-out CLI counts as sign-in; another error before the first turn as error; after a turn, nothing', async () => {
+    const { app: a } = app();
+    const record = vi.spyOn(a.usageReports, 'record');
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'error', message: 'Invalid API key · Please run /login' });
+    stream.effect(session.id, { type: 'error', message: 'Something odd happened' });
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    stream.effect(session.id, { type: 'error', message: 'Overloaded, try again' });
+    expect(record.mock.calls.map((c) => c[0]).filter((n) => n.startsWith('agent.failed'))).toEqual([
+      'agent.failed.sign-in',
+      'agent.failed.error',
+    ]);
+  });
+
+  it('a CLI that exits with an error straight after launch counts as exited; a clean exit does not', async () => {
+    const { app: a } = app();
+    const record = vi.spyOn(a.usageReports, 'record');
+    const first = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
+    pty.exit(first.session.id, 1);
+    const cursor = a.repos.sessions.get(ids.session.cursor)!;
+    a.repos.sessions.upsert({ ...cursor, state: 'done', endedAt: DEMO_NOW, pid: null, exitCode: 0 });
+    // A real folder: a Gemini launch writes its settings into the worktree, and the fixture's path is a display path.
+    const promo = a.repos.worktrees.get(ids.worktree.featPromo)!;
+    a.repos.worktrees.upsert({ ...promo, path: mkdtempSync(join(tmpdir(), 'styx-early-exit-')) });
+    const second = await a.sessions.spawn(spawnInput('gemini', ids.worktree.featPromo));
+    pty.exit(second.session.id, 0);
+    expect(record.mock.calls.map((c) => c[0]).filter((n) => n.startsWith('agent.failed'))).toEqual([
+      'agent.failed.exited',
+    ]);
+  });
+});
+
 describe('SessionService pty runner + CLI hooks', () => {
   it('spawns codex on a pty, typing routes to the pty, and hooks drive the state', async () => {
     const { app: a } = app();

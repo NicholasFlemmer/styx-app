@@ -99,7 +99,7 @@ export default function PrivacyPage() {
       </p>
 
       <h2>4. Usage counts</h2>
-      <p>Styx sends a daily count of these eight events, and nothing else:</p>
+      <p>Styx sends a daily count of these events, and nothing else:</p>
       <ul>
         <li>the app was opened;</li>
         <li>setup was finished;</li>
@@ -108,7 +108,16 @@ export default function PrivacyPage() {
         <li>a message was sent to an agent;</li>
         <li>an access request was approved;</li>
         <li>a deploy was run;</li>
-        <li>an agent&apos;s work was landed on the main branch.</li>
+        <li>an agent&apos;s work was landed on the main branch;</li>
+        <li>the walkthrough was shown, finished or skipped;</li>
+        <li>
+          an agent could not start, with one of six fixed reasons: its program is not installed, it would not
+          launch, it is not signed in, it is out of date, it reported an error, or it closed straight away;
+        </li>
+        <li>
+          Styx crashed: a window, one of its helper processes, or the app itself (noticed the next time you open
+          it).
+        </li>
       </ul>
       <p>
         With the counts, Styx sends its version number, your operating system (macOS or Windows), and an
@@ -132,6 +141,13 @@ export default function PrivacyPage() {
         your account&apos;s, if you are signed in), Styx&apos;s version, your operating system and your
         install id. We use it to read and answer what you wrote and to improve Styx, and keep it for a year.
         Nothing from your projects is attached.
+      </p>
+      <p>
+        If you tick <strong>Include diagnostics</strong> when you send feedback (it is off unless you do), we also
+        receive the last part of Styx&apos;s own log file, so we can see what went wrong. Passwords, keys and
+        tokens are masked before it leaves your computer. The log can include the names and folders of your
+        projects and the names of the agents you use, but never the contents of your files or anything your agents
+        wrote. It is kept with your feedback, for a year.
       </p>
 
       <h2>5. This website</h2>

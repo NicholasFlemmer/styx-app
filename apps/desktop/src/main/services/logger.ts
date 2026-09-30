@@ -142,6 +142,29 @@ export function commandCarriesSecret(command: string): boolean {
   return masked.some((t, i) => t !== tokens[i]);
 }
 
+/** Styx's log file (`~/Library/Logs/Styx/main.log` on a Mac); null where electron-log has no file transport. */
+export const logFilePath = (): string | null => {
+  try {
+    return log.transports.file.getFile().path;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * The end of a log, for a diagnostics attachment the person opted into (#125): at most `maxBytes`, starting on a
+ * whole line, every line through `redact()` again (lines are redacted when written; this is belt and braces).
+ */
+export const redactedTail = (text: string, maxBytes = 32 * 1024): string => {
+  const tail = text.length > maxBytes ? text.slice(text.length - maxBytes) : text;
+  const start = text.length > maxBytes ? tail.indexOf('\n') + 1 : 0;
+  return tail
+    .slice(start)
+    .split('\n')
+    .map((line) => redact(line))
+    .join('\n');
+};
+
 /** Every log line passes through `redact()`: the message too, since callers interpolate error text into it (L-b). */
 export const logger = {
   info: (msg: string, meta?: unknown) => log.info(redact(msg), meta === undefined ? '' : redact(meta)),

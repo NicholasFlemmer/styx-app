@@ -302,8 +302,13 @@ export function Tour() {
   const open = useUi((u) => u.tourOpen);
   const setTourOpen = useUi((u) => u.setTourOpen);
   const tourDone = useModel(selectTourDone);
+  // #125: whether people see the walkthrough, and whether they get to the end of it (counts only).
+  useEffect(() => {
+    if (open) void command('usage.note', { event: 'tour.shown' });
+  }, [open]);
   const close = useCallback(
-    (_finished: boolean) => {
+    (finished: boolean) => {
+      void command('usage.note', { event: finished ? 'tour.finished' : 'tour.skipped' });
       setTourOpen(false);
       // Finished or skipped, it has been seen: it does not start by itself again.
       if (!tourDone) void command('settings.set', { patch: { tourDone: true } });
@@ -315,9 +320,11 @@ export function Tour() {
 }
 
 /**
- * Starts the walkthrough once, for someone who has just finished onboarding and has never seen it: on Home, with
- * nothing else on screen (the welcome sign-in dialog goes first). Never under the e2e harness, whose screens it
- * would cover; the palette row still opens it there.
+ * Starts the walkthrough for someone who has finished onboarding and has not yet finished or skipped it: on
+ * whatever screen they are on (its steps move between screens themselves), once nothing else is on screen (the
+ * welcome sign-in dialog and any toast go first). It used to wait for Home, and a relaunch opens on the
+ * Workspace, so anyone who missed it once never saw it (#125); now each launch offers it until it has been seen.
+ * Never under the e2e harness, whose screens it would cover; the palette row still opens it there.
  */
 export function useFirstRunTour(): void {
   const tourDone = useModel(selectTourDone);
@@ -328,7 +335,7 @@ export function useFirstRunTour(): void {
   const setTourOpen = useUi((u) => u.setTourOpen);
   const started = useRef(false);
   const ready =
-    onboardingDone && !tourDone && screen === 'home' && overlays === 0 && !open && env().e2e !== true;
+    onboardingDone && !tourDone && screen !== 'onboarding' && overlays === 0 && !open && env().e2e !== true;
   useEffect(() => {
     if (!ready || started.current) return;
     // A beat after Home paints, so the anchors exist and the eye has landed.

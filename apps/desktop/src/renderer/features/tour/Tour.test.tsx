@@ -181,7 +181,13 @@ describe('first-run walkthrough (#124)', () => {
     act(() => useUiStore.getState().setTourOpen(true));
     act(() => vi.advanceTimersByTime(50));
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
-    expect(commandMock).not.toHaveBeenCalled();
+    expect(commandMock.mock.calls.filter((c) => (c as unknown[])[0] === 'settings.set')).toEqual([]);
+    // Its counts still go (#125): shown, then skipped.
+    expect(
+      commandMock.mock.calls
+        .filter((c) => (c as unknown[])[0] === 'usage.note')
+        .map((c) => (c as unknown[])[1]),
+    ).toEqual([{ event: 'tour.shown' }, { event: 'tour.skipped' }]);
   });
 
   function Starter() {
@@ -190,6 +196,13 @@ describe('first-run walkthrough (#124)', () => {
   }
 
   it('starts by itself once after onboarding, on Home, with nothing else open', () => {
+    render(<Starter />);
+    act(() => vi.advanceTimersByTime(800));
+    expect(useUiStore.getState().tourOpen).toBe(true);
+  });
+
+  it('starts on any screen until it has been seen (#125): a relaunch opens on the Workspace and still offers it', () => {
+    useUiStore.setState({ screen: 'workspace' });
     render(<Starter />);
     act(() => vi.advanceTimersByTime(800));
     expect(useUiStore.getState().tourOpen).toBe(true);
@@ -204,7 +217,7 @@ describe('first-run walkthrough (#124)', () => {
       'onboarding not finished',
       () => useReadModel.getState().replaceModel(withSettings({ onboardingDone: false }), 'connected'),
     ],
-    ['not on Home', () => useUiStore.setState({ screen: 'workspace' })],
+    ['still in onboarding', () => useUiStore.setState({ screen: 'onboarding' })],
     [
       'a dialog is open',
       () =>
