@@ -1,5 +1,6 @@
 import { DownloadButton } from './DownloadButton';
 import { WorkspaceDemo } from './WorkspaceDemo';
+import { site } from '@/lib/site';
 import styles from './Hero.module.css';
 
 export const Hero = () => (
@@ -25,6 +26,30 @@ export const Hero = () => (
             Watch why I built it · 1:42
           </a>
         </div>
+        {/* Product Hunt's featured badge, in the site's theme: both load, CSS shows the one that matches. */}
+        <a
+          className={styles.ph}
+          href={site.links.productHunt}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Styx on Product Hunt"
+        >
+          <img
+            className={styles.phLight}
+            alt="Styx - An agentic development environment (ADE) for Mac | Product Hunt"
+            width={250}
+            height={54}
+            src={site.links.productHuntBadge('light')}
+          />
+          <img
+            className={styles.phDark}
+            alt=""
+            aria-hidden="true"
+            width={250}
+            height={54}
+            src={site.links.productHuntBadge('dark')}
+          />
+        </a>
         <p className={styles.micro}>
           An agentic development environment (ADE) for Mac. Windows soon. Your keys never leave your computer.
         </p>

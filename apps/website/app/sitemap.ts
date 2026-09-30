@@ -17,6 +17,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: `${site.url}/`, lastModified: dayOf(site.updated), changeFrequency: 'monthly', priority: 1 },
     {
+      url: `${site.url}/launch`,
+      lastModified: dayOf(site.launchUpdated),
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    {
       url: `${site.url}/story`,
       lastModified: dayOf(site.storyUpdated),
       changeFrequency: 'monthly',
