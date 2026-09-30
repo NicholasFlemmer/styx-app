@@ -8,6 +8,8 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
   bus.register('session.spawn', async (input) => {
     const result = await sessions.start(input);
     app.usageReports.record('agent.spawned');
+    // #127: the spawn dialog's first message is a message sent, the same as one from the composer.
+    if (input.firstMessage.trim() !== '') app.usageReports.record('message.sent');
     return result;
   });
 

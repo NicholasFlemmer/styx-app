@@ -906,6 +906,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     // ADR-0025 phase C: a finished lane lands by itself when the project asked for that.
     // #125: why an agent did not get going, as a count with no details.
     agentProblem: (_id, problem) => usageReports.record(`agent.failed.${problem}`),
+    // #127: the first finished turn per session, so work asked for in the agent's own terminal counts too.
+    agentWorked: () => usageReports.record('agent.worked'),
     sessionFinished: (id) =>
       void land
         .onSessionFinished(id)

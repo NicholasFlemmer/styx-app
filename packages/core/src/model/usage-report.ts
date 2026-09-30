@@ -49,12 +49,19 @@ export const usageEventSchema = z.enum([
   'app.crashed.window',
   'app.crashed.helper',
   'app.ended-unexpectedly',
+  /** An agent finished its first piece of work in a session (#127), however it was asked: the composer, the
+   * spawn dialog's first message, or typing straight into the agent's terminal. Once per session. */
+  'agent.worked',
 ]);
 export type UsageEvent = z.infer<typeof usageEventSchema>;
 export const USAGE_EVENTS: readonly UsageEvent[] = usageEventSchema.options;
 
 /** The events the renderer may note itself (the walkthrough lives there); everything else is recorded by main. */
-export const RENDERER_USAGE_EVENTS = ['tour.shown', 'tour.finished', 'tour.skipped'] as const satisfies readonly UsageEvent[];
+export const RENDERER_USAGE_EVENTS = [
+  'tour.shown',
+  'tour.finished',
+  'tour.skipped',
+] as const satisfies readonly UsageEvent[];
 export type AgentProblem = 'cli-missing' | 'launch' | 'sign-in' | 'outdated' | 'error' | 'exited';
 
 /**

@@ -132,6 +132,8 @@ export interface SessionHooks {
    * an error before finishing a turn, or exited with an error within its first seconds. Once per session and reason.
    */
   agentProblem?: (sessionId: SessionId, problem: AgentProblem) => void;
+  /** An agent finished its first turn in this session (#127): it was asked for something and did it. Once. */
+  agentWorked?: (sessionId: SessionId) => void;
 }
 
 export interface SpawnInput {
@@ -1557,6 +1559,7 @@ export class SessionService {
           return;
         }
         if (effect.event === 'quiet' && next?.state === 'idle') {
+          if (!this.turnDone.has(s.id)) this.hooks?.agentWorked?.(s.id);
           this.turnDone.add(s.id);
           this.hooks?.turnSettled?.(s.id);
           // Whatever order Claude's Stop hook and its `result` arrive in, the queue drains here and only here.

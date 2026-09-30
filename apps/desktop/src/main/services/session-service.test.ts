@@ -773,6 +773,31 @@ describe('why an agent did not get going (#125)', () => {
   });
 });
 
+describe('an agent that got going (#127)', () => {
+  it('counts agent.worked once per session, on its first finished turn, however the work was asked for', async () => {
+    const { app: a } = app();
+    const record = vi.spyOn(a.usageReports, 'record');
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    expect(record.mock.calls.map((c) => c[0])).not.toContain('agent.worked');
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    stream.effect(session.id, { type: 'session', event: 'activity' });
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    expect(record.mock.calls.map((c) => c[0]).filter((n) => n === 'agent.worked')).toEqual(['agent.worked']);
+  });
+
+  it('a first message in the spawn dialog counts as a message sent; an empty one does not', async () => {
+    const { app: a } = app();
+    const record = vi.spyOn(a.usageReports, 'record');
+    await a.bus.dispatch(sender, 'session.spawn', {
+      ...spawnInput('claude', ids.worktree.featPromo),
+      firstMessage: '  ',
+    });
+    expect(record.mock.calls.map((c) => c[0])).toEqual(['agent.spawned']);
+    await a.bus.dispatch(sender, 'session.spawn', spawnInput('codex', ids.worktree.testFlaky));
+    expect(record.mock.calls.map((c) => c[0]).slice(1)).toEqual(['agent.spawned', 'message.sent']);
+  });
+});
+
 describe('SessionService pty runner + CLI hooks', () => {
   it('spawns codex on a pty, typing routes to the pty, and hooks drive the state', async () => {
     const { app: a } = app();
