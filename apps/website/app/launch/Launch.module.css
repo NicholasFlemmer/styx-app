@@ -2,9 +2,63 @@
   border-top: 1px solid var(--ln);
   padding-block: var(--sp-10) var(--sp-16);
 }
-.head,
-.body {
+/* Words on the left, the product on the right; stacked under 1024px with the pictures after the header. */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 40em) minmax(0, 1fr);
+  grid-template-areas:
+    'head media'
+    'main media';
+  column-gap: var(--sp-16, 64px);
+  align-items: start;
+}
+.head {
+  grid-area: head;
   max-width: 40em;
+}
+.main {
+  grid-area: main;
+  max-width: 40em;
+}
+.media {
+  grid-area: media;
+  position: sticky;
+  /* Below the sticky site nav, never under it. */
+  top: calc(var(--nav-h) + var(--sp-6));
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+/* A floating surface: the screenshot in a 1px text-colour frame, square. */
+.shot {
+  margin: 0;
+}
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--tx);
+}
+.shot figcaption {
+  margin-top: var(--sp-2);
+  font: 400 var(--fs-13) / 1.5 var(--font-mono);
+  color: var(--mu);
+}
+.shot + .shot img {
+  max-width: 300px;
+}
+@media (max-width: 1023px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'head'
+      'media'
+      'main';
+  }
+  .media {
+    position: static;
+    margin-bottom: var(--sp-8);
+  }
 }
 .kicker {
   margin: 0 0 var(--sp-3);
