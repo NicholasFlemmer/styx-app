@@ -197,6 +197,14 @@ export default function PrivacyPage() {
             <td>United States</td>
           </tr>
           <tr>
+            <td>Product Hunt</td>
+            <td>
+              Our Product Hunt badge and card on this site load their images from Product Hunt, which sees
+              your IP address when they do
+            </td>
+            <td>United States</td>
+          </tr>
+          <tr>
             <td>GitHub</td>
             <td>
               The skills catalogue in the app is fetched from GitHub, which sees your IP address when it is

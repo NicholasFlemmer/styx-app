@@ -41,6 +41,25 @@
 .secondary {
   font-size: var(--fs-15);
 }
+.ph {
+  display: inline-block;
+  margin-top: var(--sp-6);
+  line-height: 0;
+}
+.ph img {
+  width: 250px;
+  height: 54px;
+}
+/* One badge per theme: the site's own data-theme decides, not the OS, so it follows the toggle. */
+.phDark {
+  display: none;
+}
+:global(html[data-theme='dark']) .phLight {
+  display: none;
+}
+:global(html[data-theme='dark']) .phDark {
+  display: block;
+}
 .micro {
   margin-top: var(--sp-5);
   font-size: var(--fs-13);

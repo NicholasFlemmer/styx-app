@@ -6,7 +6,7 @@ import styles from './Nav.module.css';
 const navIds = new Set(['how', 'access', 'agents', 'repo', 'ship', 'security']);
 
 /** `current` marks the page's own item (Story, Compare); section anchors are never current. */
-export const Nav = ({ current }: { current?: 'story' | 'compare' } = {}) => (
+export const Nav = ({ current }: { current?: 'launch' | 'story' | 'compare' } = {}) => (
   <header className={styles.nav} id="top" data-load="rule">
     <div className={`wrap ${styles.inner}`}>
       <a href="/" className={styles.wordmark}>
@@ -20,6 +20,9 @@ export const Nav = ({ current }: { current?: 'story' | 'compare' } = {}) => (
               {s.label}
             </a>
           ))}
+        <a href="/launch" {...(current === 'launch' ? { 'aria-current': 'page' as const } : {})}>
+          Launch
+        </a>
         <a href="/story" {...(current === 'story' ? { 'aria-current': 'page' as const } : {})}>
           Story
         </a>

@@ -28,6 +28,7 @@ export const Footer = () => (
             {s.label}
           </a>
         ))}
+        <a href="/launch">Launch</a>
         <a href="/story">Story</a>
         <a href="/compare">Compare</a>
       </nav>
