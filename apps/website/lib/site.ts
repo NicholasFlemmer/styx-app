@@ -22,6 +22,8 @@ export const site = {
   updated: '29 September 2026',
   /** When the founder video on /story last changed (the sitemap's lastmod for it). */
   storyUpdated: '29 September 2026',
+  /** When the 21-second demo on /demo last changed. */
+  demoUpdated: '30 September 2026',
   /** When the launch article last changed. */
   launchUpdated: '30 September 2026',
   url: process.env['NEXT_PUBLIC_SITE_URL'] ?? 'http://localhost:3100',

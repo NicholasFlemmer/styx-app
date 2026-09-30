@@ -28,6 +28,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly',
       priority: 0.7,
     },
+    {
+      url: `${site.url}/demo`,
+      lastModified: dayOf(site.demoUpdated),
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
     { url: `${site.url}/compare`, lastModified: latest, changeFrequency: 'monthly', priority: 0.6 },
     ...COMPETITORS.map((c, i) => ({
       url: `${site.url}/compare/${c.slug}`,
