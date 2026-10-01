@@ -1,58 +1,33 @@
 import {
-  activeLanes,
   activeLanesLabel,
   laneLine,
   copy,
   fill,
-  modelCatalogueFor,
   platformCopy,
   projectNameOf,
-  projectSettingsOfOrDefault,
-  type Agent,
   type ProjectId,
-  type ReadModel,
 } from '@styx/core';
 import { Button, Checkbox, Field, Input, Modal, Select, StatusDot, Textarea } from '@styx/ui';
-import { useCallback, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useId, useRef, type KeyboardEvent } from 'react';
 import { invokerOf, rememberInvoker } from '../../overlays/stack';
-import { command } from '../../state/commands';
-import { useCopyPlatform, useModel, useUi } from '../../state/hooks';
+import { useCopyPlatform, useUi } from '../../state/hooks';
 import {
   decodeEffort,
-  decodeModel,
   decodePermissionMode,
-  effortLevelsFor,
   effortOptionsFor,
   encodeNullable,
   modelOptionsFor,
   permissionModeHint,
   permissionModeOptionsFor,
-  reconcileSessionSettings,
-  spawnControlsFor,
 } from '../chat/session-controls';
-import {
-  SPAWN_AGENTS,
-  autoBranchFor,
-  cliMissing,
-  cliNotConnected,
-  cliOf,
-  cliVersionLabel,
-  defaultSessionSettings,
-  defaultToggles,
-  projectWorktrees,
-  spawnPayload,
-  spawnValid,
-  worktreeChoices,
-  type SpawnForm,
-} from './modals';
+import { SPAWN_AGENTS, cliOf, cliVersionLabel } from './modals';
+import { useSpawnForm } from './use-spawn-form';
 import s from './SpawnModal.module.css';
 
 export interface SpawnModalProps {
   id: string;
   projectId: ProjectId;
 }
-
-const selectModel = (m: ReadModel) => m;
 
 /**
  * Spawn agent (spec §4.11, modal 600): five agent tiles, inline CLI-missing row, Worktree / Branch / First message,
@@ -62,28 +37,31 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
   const popOverlay = useUi((u) => u.popOverlay);
   const pushOverlay = useUi((u) => u.pushOverlay);
   const openSession = useUi((u) => u.openSession);
-  const setScreen = useUi((u) => u.setScreen);
-  const setOnboardingStep = useUi((u) => u.setOnboardingStep);
   /** Keyboard Mod follows the OS; the `mod` glyph in the Spawn label follows the rendered chrome (spec §7). */
   const platform = useUi((u) => u.platform);
   const copyPlatform = useCopyPlatform();
-  const model = useModel(selectModel);
-  const project = projectNameOf(model, projectId);
   const words = platformCopy(copyPlatform);
-
-  const [form, setForm] = useState<SpawnForm>(() => {
-    const agent = projectSettingsOfOrDefault(model, projectId).defaultAgent;
-    return {
-      agent,
-      worktree: worktreeChoices(model, projectId).initial,
-      branch: autoBranchFor(model, projectId, agent),
-      firstMessage: '',
-      toggles: defaultToggles(model, projectId),
-      ...defaultSessionSettings(model, projectId),
-    };
-  });
-  const [branchTouched, setBranchTouched] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const {
+    model,
+    form,
+    setForm,
+    pickAgent,
+    pickModel,
+    setBranch,
+    catalogue,
+    missing,
+    notConnected,
+    valid,
+    spawn: start,
+    locateError,
+    locateBinary,
+    installGuide: openInstallGuide,
+    worktrees,
+    choices,
+    lanes,
+    settings,
+  } = useSpawnForm(projectId);
+  const project = projectNameOf(model, projectId);
   const worktreeId = useId();
   const branchId = useId();
   const messageId = useId();
@@ -93,39 +71,12 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
   const chosenTile = useRef<HTMLButtonElement>(null);
 
   const close = () => popOverlay(id);
-  /** The tile drives the model / effort lists: a pick the new agent does not offer resets to its default (#83). */
-  const pickAgent = (agent: Agent) =>
-    setForm((f) =>
-      reconcileSessionSettings(
-        agent,
-        { ...f, agent, branch: branchTouched ? f.branch : autoBranchFor(model, projectId, agent) },
-        modelCatalogueFor(model, agent),
-      ),
-    );
-  const catalogue = modelCatalogueFor(model, form.agent);
-  /** A model without the current effort (Codex `gpt-5.5` has no `ultra`) drops the effort back to default. */
-  const pickModel = (value: string) =>
-    setForm((f) => {
-      const next = { ...f, model: decodeModel(value) };
-      return next.effort !== null && !effortLevelsFor(f.agent, next.model, catalogue).includes(next.effort)
-        ? { ...next, effort: null }
-        : next;
-    });
-  const missing = cliMissing(model, form.agent);
-  /** Installed but signed out: warns without blocking (the CLI may still hold an API key Styx cannot see). */
-  const notConnected = !missing && cliNotConnected(model, form.agent);
-  const valid = spawnValid(model, form) && !busy;
-
-  const spawn = useCallback(async () => {
-    if (!spawnValid(model, form) || busy) return;
-    setBusy(true);
-    const r = await command('session.spawn', spawnPayload(model, projectId, form));
-    setBusy(false);
-    if (!r.ok) return;
+  const spawn = async () => {
+    const sessionId = await start();
+    if (sessionId === null) return;
     close();
-    openSession(projectId, r.value.sessionId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, form, busy, projectId]);
+    openSession(projectId, sessionId);
+  };
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const mod = platform === 'darwin' ? e.metaKey : e.ctrlKey;
@@ -134,21 +85,9 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
       void spawn();
     }
   };
-  /**
-   * OS file picker → `detect.setBinary`; the `discovery.set` delta clears the missing row when the probe succeeds.
-   * A refused pick (a folder, a file that does not run, another agent's CLI) says why, so the user can pick again.
-   */
-  const [locateError, setLocateError] = useState<string | null>(null);
-  const locateBinary = async () => {
-    const r = await command('dialog.pickFile', { title: copy.errors.locateBinary });
-    if (!r.ok || r.value.path === null) return;
-    const set = await command('detect.setBinary', { agent: form.agent, path: r.value.path });
-    setLocateError(set.ok ? null : set.error.message);
-  };
   const installGuide = () => {
     close();
-    setOnboardingStep(3);
-    setScreen('onboarding');
+    openInstallGuide();
   };
   /** Connect agent modal for this CLI; it re-opens this Spawn modal for the project when done. */
   const fixConnection = () => {
@@ -162,13 +101,7 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
     });
     if (invoker !== null) rememberInvoker(next, invoker);
   };
-
-  const worktrees = projectWorktrees(model, projectId);
-  const choices = worktreeChoices(model, projectId);
-  /** What is already running in this project (ADR-0025), so a second lane on the same files is a choice, not a surprise. */
-  const lanes = activeLanes(model, projectId);
   const agentName = copy.agentProducts[form.agent];
-  const settings = spawnControlsFor(form.agent);
 
   return (
     <Modal
@@ -271,10 +204,7 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
               }
               disabled={form.worktree !== 'new'}
               spellCheck={false}
-              onChange={(e) => {
-                setBranchTouched(true);
-                setForm({ ...form, branch: e.currentTarget.value });
-              }}
+              onChange={(e) => setBranch(e.currentTarget.value)}
             />
           </Field>
         </div>

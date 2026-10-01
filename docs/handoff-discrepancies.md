@@ -157,3 +157,10 @@ Log of places where `Styx.dc.html` (visuals win) and `Styx Spec.dc.html` (behavi
 A project whose dev URL or command is known opens on Preview until the person picks an instrument; any other opens on Code. The pick persists as before (`workspace-mode`: 0 code, 1 preview, 2 changes, 3 terminal).
 
 Land left the strip for the lane header; Publish and Deploy stay and shrink before the tabs do. The walkthrough's editor step points at the Code tab, and its land step at the lane header's Land. | §4.1, §4.7 | ADR-0027 |
+| 133 | ADR-0027 phase 4, New task.
+
+**What changed.** The nav's New task, Mod+Shift+N and the empty chat open New task in the workspace (`NewTask`, `ui.newTask`) instead of the Spawn modal. It has the headline "What should an agent do in {project}?", one box and Start (Mod+⏎; Escape or "Back to the work" returns). The agent tiles carry versions. Every Spawn field sits under the box, already filled from the project's defaults: where, branch, permissions, model, effort and the three toggles, with the same CLI-missing and signed-out rows. The form logic moved into `useSpawnForm`, shared with the Spawn modal, which the Agents board's "+ Spawn agent" and the palette still open.
+
+**Starters.** Three general starter tasks start in one click with their own words: explain the project, run the tests and fix what fails, and make the README get a newcomer running. They are general rather than read from the repo, and the heading says "Or start with one of these".
+
+**Beside it.** "Already running in {project}" lists the lanes, and any of them opens. | §4.11 | ADR-0027 |

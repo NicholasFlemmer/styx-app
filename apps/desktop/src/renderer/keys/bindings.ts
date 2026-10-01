@@ -85,10 +85,11 @@ const popoutOrDock = (): boolean => {
   return true;
 };
 
+/** Mod+Shift+N: New task in the active project's workspace (ADR-0027 §1). */
 const spawn = (): boolean => {
   const ui = useUiStore.getState();
   if (ui.projectId === null) return false;
-  ui.pushOverlay({ kind: 'modal', modal: 'spawn', projectId: ui.projectId });
+  ui.openNewTask(ui.projectId);
   return true;
 };
 

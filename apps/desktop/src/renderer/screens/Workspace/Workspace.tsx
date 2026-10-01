@@ -15,6 +15,7 @@ import { Tab } from '@styx/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChatPane } from '../../features/chat/ChatPane';
 import { ChangesPage } from '../../features/changes/ChangesPage';
+import { NewTask } from '../../features/new-task/NewTask';
 import { FilesPane } from '../../features/editor/FilesPane';
 import { DesignPane } from '../../features/preview';
 import { FileTabs, type FileTab } from '../../features/editor/FileTabs';
@@ -100,6 +101,7 @@ export function Workspace() {
   const editorFile = useUi((u) => u.editorFile);
   const setEditorFile = useUi((u) => u.setEditorFile);
   const setScreen = useUi((u) => u.setScreen);
+  const newTask = useUi((u) => u.newTask);
   const model = useModel(useCallback((m: ReadModel) => m, []));
   const now = useNow();
   const column = useRef<HTMLDivElement>(null);
@@ -255,6 +257,15 @@ export function Workspace() {
     return (
       <div className={s['root']} data-workspace="empty">
         <span className={['t-label', s['empty']].join(' ')}>{copy.empty.noProject}</span>
+      </div>
+    );
+  }
+
+  // New task takes the workspace (ADR-0027 §1) until an agent starts or the person goes back to the work.
+  if (newTask !== null && newTask.projectId === projectId) {
+    return (
+      <div className={s['root']} data-workspace="new-task">
+        <NewTask projectId={projectId} initialText={newTask.text} />
       </div>
     );
   }

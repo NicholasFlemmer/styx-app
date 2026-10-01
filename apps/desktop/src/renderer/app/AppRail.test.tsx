@@ -134,7 +134,7 @@ describe('rail + project nav (ADR-0027 §1, §5)', () => {
     expect(screen.getByRole('button', { name: copy.debtAudit.action })).toBeTruthy();
   });
 
-  it('lists the project’s lanes, your turn first, and opens one in the workspace; New task opens the spawn dialog', () => {
+  it('lists the project’s lanes, your turn first, and opens one in the workspace; New task takes the workspace', () => {
     act(() => useUiStore.setState({ screen: 'repo' }));
     render(<Nav />);
     const list = screen.getByRole('list', { name: copy.lanes.nav.label });
@@ -153,6 +153,9 @@ describe('rail + project nav (ADR-0027 §1, §5)', () => {
     expect(ui.projectSession[ids.project.acmeShop]).toBe(id);
     expect(list.querySelector(`[data-nav-lane="${id}"]`)?.getAttribute('aria-current')).toBe('page');
     fireEvent.click(screen.getByRole('button', { name: `+ ${copy.lanes.nav.newTask}` }));
-    expect(useUiStore.getState().overlays.at(-1)).toMatchObject({ kind: 'modal', modal: 'spawn' });
+    expect(useUiStore.getState().newTask).toEqual({ projectId: ids.project.acmeShop, text: '' });
+    expect(useUiStore.getState().screen).toBe('workspace');
+    // While New task has the workspace, no lane is current.
+    expect(list.querySelector('[aria-current="page"]')).toBeNull();
   });
 });

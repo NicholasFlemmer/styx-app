@@ -1128,6 +1128,45 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     },
   },
 
+  /** New task, in the workspace (ADR-0027 §1): one box and Start; the Spawn dialog's fields under it. */
+  newTask: {
+    headline: 'What should an agent do',
+    in: 'in {project}?',
+    label: 'The task',
+    placeholder: 'Describe what you want done. Reference files with @.',
+    safe: 'Works on its own copy, so main is safe until you land it.',
+    start: 'Start',
+    back: 'Back to the work',
+    agent: 'Agent',
+    startersHeading: 'Or start with one of these',
+    startThis: 'Start this',
+    running: 'Already running in {project}',
+    runningNone:
+      'Nothing running yet. Each task gets its own copy of the repo, so they never trip over each other.',
+    starters: [
+      {
+        title: 'Explain how this project fits together',
+        body: 'A short tour of the code: where things live and how a request flows through. Changes nothing.',
+        meta: 'A few minutes, reads only',
+        prompt:
+          'Give me a short tour of this codebase: what it does, how it is laid out, the files that matter most, and how a typical request or action flows through it. Do not change anything.',
+      },
+      {
+        title: 'Run the tests and fix what fails',
+        body: 'If everything passes, it says so and stops.',
+        meta: 'A few minutes, usually 1 or 2 files',
+        prompt:
+          'Find how this project runs its tests, run them, and fix whatever fails. Keep each fix small. If everything passes, say so and change nothing.',
+      },
+      {
+        title: 'Make the README get a newcomer running',
+        body: 'Install, setup and first run, checked by following it in this copy.',
+        meta: 'A few minutes, 1 file',
+        prompt:
+          'Check that the README tells a newcomer how to install, set up and run this project. Follow it yourself in this worktree, and fix the README wherever it is missing a step or wrong.',
+      },
+    ],
+  },
   spawn: {
     title: 'Spawn agent · {project}',
     worktree: 'Worktree',

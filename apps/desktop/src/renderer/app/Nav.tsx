@@ -42,7 +42,8 @@ export function Nav() {
   const screen = useUi((u) => u.screen);
   const setScreen = useUi((u) => u.setScreen);
   const openSession = useUi((u) => u.openSession);
-  const pushOverlay = useUi((u) => u.pushOverlay);
+  const openNewTask = useUi((u) => u.openNewTask);
+  const newTask = useUi((u) => u.newTask);
   const settingsSection = useUi((u) => u.settingsSection);
   const setSettingsSection = useUi((u) => u.setSettingsSection);
   const boardScope = useUi((u) => u.boardScope);
@@ -63,7 +64,9 @@ export function Nav() {
       : rows(model.worktrees).filter((w) => w.projectId === projectId && w.archivedAt === null).length;
   const grants = activeGrants(model, now).length;
   const section = resolveSection(settingsSection);
-  const inWorkspace = screen === 'workspace';
+  const newTaskHere = newTask !== null && newTask.projectId === projectId;
+  // The lane is what the workspace shows unless New task has taken it.
+  const inWorkspace = screen === 'workspace' && !newTaskHere;
 
   return (
     <nav className={s['nav']} aria-label="Sections" data-nav="true">
@@ -111,8 +114,9 @@ export function Nav() {
         type="button"
         className={s['navNewTask']}
         disabled={projectId === null}
+        aria-current={newTaskHere && screen === 'workspace' ? 'page' : undefined}
         onClick={() => {
-          if (projectId !== null) pushOverlay({ kind: 'modal', modal: 'spawn', projectId });
+          if (projectId !== null) openNewTask(projectId);
         }}
         data-nav-new-task="true"
       >

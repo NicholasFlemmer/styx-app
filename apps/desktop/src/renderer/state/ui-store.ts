@@ -93,6 +93,11 @@ export interface UiState {
   learning: Record<string, SessionId>;
   /** What the Agents board shows: every project's sessions (the default, and the app rail's tile) or the current project's (the project nav's row). */
   boardScope: 'all' | 'project';
+  /**
+   * The project whose workspace shows New task in place of the lane (ADR-0027 §1), with any text to start from
+   * (the palette's "Start as a task"); null when the workspace shows the lane.
+   */
+  newTask: { projectId: ProjectId; text: string } | null;
   taskLaunches: Record<string, TaskLaunch>;
   /**
    * Text handed back to a session's composer (a queued message taken back, or Stop returning the queue), by
@@ -143,6 +148,8 @@ export interface UiActions {
   setTaskLaunch(key: string, launch: TaskLaunch): void;
   setLearning(key: string, sessionId: SessionId | null): void;
   setBoardScope(scope: 'all' | 'project'): void;
+  /** Opens New task in the project's workspace (and goes there); null closes it. */
+  openNewTask(projectId: ProjectId | null, text?: string): void;
   setOnboardingStep(step: OnboardingStep): void;
   setEditorFile(file: string | null): void;
   setBanner(banner: BannerEvent): void;
@@ -201,6 +208,7 @@ export const useUiStore = create<UiStore>()(
     settingsSection: 'project:targets',
     learning: {},
     boardScope: 'all',
+    newTask: null,
     taskLaunches: {},
     onboardingStep: initialFromEnv?.step ?? 1,
     editorFile: null,
@@ -238,6 +246,7 @@ export const useUiStore = create<UiStore>()(
         s.projectId = projectId;
         s.projectSession[projectId] = sessionId;
         s.screen = 'workspace';
+        s.newTask = null;
         s.screenResolved = true;
       });
     },
@@ -375,6 +384,16 @@ export const useUiStore = create<UiStore>()(
     setBoardScope: (scope) =>
       set((s) => {
         s.boardScope = scope;
+      }),
+    openNewTask: (projectId, text = '') =>
+      set((s) => {
+        if (projectId === null) {
+          s.newTask = null;
+          return;
+        }
+        s.newTask = { projectId, text };
+        s.projectId = projectId;
+        s.screen = 'workspace';
       }),
     setOnboardingStep: (step) =>
       set((s) => {

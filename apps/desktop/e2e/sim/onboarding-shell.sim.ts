@@ -199,17 +199,17 @@ test('sim: onboarding-shell', async () => {
       },
     );
 
-    await sim.step('Mod+Shift+N opens Spawn agent; Escape closes it and focus returns', async () => {
+    await sim.step('Mod+Shift+N opens New task in the workspace; Escape goes back to the work', async () => {
       await page().locator('[data-app-rail-item="home"]').click();
       await page().locator('[data-project-id]').first().click();
       await page().waitForSelector('[data-screen-ready="workspace"]', { timeout: 10_000 });
       const before = await page().evaluate(() => document.activeElement?.outerHTML.slice(0, 80) ?? '');
       await page().keyboard.press('Meta+Shift+N');
-      await page().waitForSelector('[data-spawn-modal]', { timeout: 5000 });
+      await page().waitForSelector('[data-new-task]', { timeout: 5000 });
       await page().keyboard.press('Escape');
       await page().waitForTimeout(200);
-      if ((await page().locator('[data-spawn-modal]').count()) > 0)
-        throw new Error('Escape did not close the spawn modal');
+      if ((await page().locator('[data-new-task]').count()) > 0)
+        throw new Error('Escape did not close New task');
       const after = await page().evaluate(() => document.activeElement?.outerHTML.slice(0, 80) ?? '');
       return `focus before: ${before || '(body)'} · after: ${after || '(body)'}`;
     });

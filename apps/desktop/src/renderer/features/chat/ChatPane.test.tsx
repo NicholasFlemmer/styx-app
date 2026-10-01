@@ -816,7 +816,7 @@ describe('ChatPane', () => {
     useReadModel.getState().replaceModel({ ...empty, sessions: { byId: {}, ids: [] } }, 'connected');
     const { unmount } = render(<ChatPane projectId={acme} />);
     fireEvent.click(screen.getByRole('button', { name: `+ ${copy.lanes.nav.newTask}` }));
-    expect(useUiStore.getState().overlays.some((o) => o.kind === 'modal')).toBe(true);
+    expect(useUiStore.getState().newTask).toEqual({ projectId: acme, text: '' });
     unmount();
     useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
     render(<ChatPane projectId={acme} />);

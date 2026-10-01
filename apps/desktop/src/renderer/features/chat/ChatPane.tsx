@@ -255,6 +255,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const activeSessionId = useSessionId();
   const sessionId = pinnedId ?? activeSessionId;
   const pushOverlay = useUi((u) => u.pushOverlay);
+  const openNewTask = useUi((u) => u.openNewTask);
   const setScreen = useUi((u) => u.setScreen);
   const setDiffCheckpoint = useUi((u) => u.setDiffCheckpoint);
   /**
@@ -817,11 +818,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
       )}
       {!compact && session === null && (
         <div className={s['noLane']} data-chat-empty="true">
-          <Button
-            variant="secondary"
-            onClick={() => pushOverlay({ kind: 'modal', modal: 'spawn', projectId })}
-            data-spawn-agent="true"
-          >
+          <Button variant="secondary" onClick={() => openNewTask(projectId)} data-spawn-agent="true">
             + {copy.lanes.nav.newTask}
           </Button>
         </div>

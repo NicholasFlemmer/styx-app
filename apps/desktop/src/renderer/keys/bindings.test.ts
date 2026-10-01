@@ -106,10 +106,10 @@ describe('shell bindings', () => {
     expect(selectSessionId(useUiStore.getState())).toBe(lanes[1]?.sessionId);
   });
 
-  it('Mod+Shift+N opens the spawn modal for the active project', () => {
+  it('Mod+Shift+N opens New task in the active project’s workspace (ADR-0027 §1)', () => {
     press({ key: 'n', metaKey: true, shiftKey: true });
-    const top = useUiStore.getState().overlays[0];
-    expect(top?.kind === 'modal' && top.modal === 'spawn').toBe(true);
+    expect(useUiStore.getState().newTask).toEqual({ projectId: fixtures.ids.project.acmeShop, text: '' });
+    expect(useUiStore.getState().screen).toBe('workspace');
   });
 
   it('Mod+Enter approves the head ask of the active session with 1h and its scope', () => {
