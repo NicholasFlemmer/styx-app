@@ -21,6 +21,7 @@ import {
   type ProjectId,
   type ProjectSettings,
   type ReadModel,
+  tourSeen,
 } from '@styx/core';
 import { shortcuts } from '@styx/tokens';
 import {
@@ -180,7 +181,7 @@ const generalRows = (model: ReadModel, now: number): SettingsRow[] => {
       label: copy.tour.row,
       value: TOUR_STATUS,
       options: [
-        { value: TOUR_STATUS, label: app.tourDone ? copy.tour.seen : copy.tour.notSeen },
+        { value: TOUR_STATUS, label: tourSeen(app) ? copy.tour.seen : copy.tour.notSeen },
         { value: TOUR_SHOW, label: copy.tour.show },
       ],
       change: { kind: 'tour' },

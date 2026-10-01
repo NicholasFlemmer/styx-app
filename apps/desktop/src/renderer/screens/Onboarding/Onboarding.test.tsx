@@ -92,11 +92,19 @@ describe('Onboarding', () => {
     Object.assign(window, { styx: undefined });
   });
 
-  it('renders the four-step strip with the current step inverted and detected IDE rows', () => {
+  it('lists the four steps down the side, each with why it matters, the current one marked, and detected IDE rows', () => {
     render(<Onboarding />);
-    const cells = screen.getAllByRole('listitem');
-    expect(cells.map((c) => c.textContent)).toEqual(['01Editor', '02Projects', '03Agents', '04Targets']);
-    expect(cells.map((c) => c.getAttribute('data-inv'))).toEqual(['true', null, null, null]);
+    const cells = within(screen.getByRole('list', { name: copy.onboarding.stepsLabel })).getAllByRole(
+      'listitem',
+    );
+    expect(cells.map((c) => c.textContent)).toEqual([
+      `1${copy.onboarding.stepTitles.editor}${copy.onboarding.stepWhy.editor}`,
+      `2${copy.onboarding.stepTitles.projects}${copy.onboarding.stepWhy.projects}`,
+      `3${copy.onboarding.stepTitles.agents}${copy.onboarding.stepWhy.agents}`,
+      `4${copy.onboarding.stepTitles.targets}${copy.onboarding.stepWhy.targets}`,
+    ]);
+    expect(cells.map((c) => c.getAttribute('data-state'))).toEqual(['now', 'next', 'next', 'next']);
+    expect(cells[0]?.getAttribute('aria-current')).toBe('step');
     expect(screen.getByRole('heading').textContent).toBe(copy.onboarding.editor.headline);
     // Main owns discovery (it re-detects on real profiles at startup); the screen only reads the rows.
     expect(calls('detect.ides')).toHaveLength(0);
@@ -367,7 +375,9 @@ describe('Onboarding', () => {
       { kind: 'modal', modal: 'connect', projectId: null, provider: 'aws' },
     ]);
     fireEvent.click(screen.getByRole('button', { name: copy.onboarding.footer.finish }));
-    await waitFor(() => expect(useUiStore.getState().screen).toBe('home'));
+    // With a project to work in, finishing lands on New task in it (ADR-0027 §1).
+    await waitFor(() => expect(useUiStore.getState().screen).toBe('workspace'));
+    expect(useUiStore.getState().newTask).not.toBeNull();
     expect(commandMock).toHaveBeenCalledWith('onboarding.complete', {});
   });
 
@@ -380,8 +390,17 @@ describe('Onboarding', () => {
     fireEvent.click(screen.getByRole('button', { name: copy.onboarding.footer.back }));
     expect(useUiStore.getState().onboardingStep).toBe(1);
     fireEvent.click(screen.getByRole('button', { name: copy.onboarding.footer.skip }));
-    await waitFor(() => expect(useUiStore.getState().screen).toBe('home'));
+    await waitFor(() => expect(useUiStore.getState().screen).toBe('workspace'));
     expect(commandMock).toHaveBeenCalledWith('onboarding.complete', {});
+  });
+
+  it('with no project yet, finishing goes to All projects', async () => {
+    useReadModel.getState().replaceModel(fixtures.emptyReadModel(), 'connected');
+    useUiStore.setState({ onboardingStep: 4, newTask: null });
+    render(<Onboarding />);
+    fireEvent.click(screen.getByRole('button', { name: copy.onboarding.footer.skip }));
+    await waitFor(() => expect(useUiStore.getState().screen).toBe('home'));
+    expect(useUiStore.getState().newTask).toBeNull();
   });
 
   it('repoMeta formats prototype strings', () => {

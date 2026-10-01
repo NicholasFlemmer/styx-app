@@ -15,19 +15,22 @@ const withSettings = (app: Partial<ReadModel['settings']['app']>): ReadModel => 
 
 /** The window's anchors, each with a real size (jsdom lays nothing out). */
 const ANCHORS = [
-  'data-rail',
+  'data-rails',
   'data-titlebar-needs',
   'data-approvals-tab',
   'data-titlebar-palette',
-  'data-spawn-agent',
+  'data-app-rail-item',
+  'data-nav-lanes',
 ];
 function Anchors({ without = [] as string[] }) {
   return (
     <div>
-      {!without.includes('rail') && <nav data-rail="true">rail</nav>}
+      {!without.includes('rail') && <nav data-rails="true">rail</nav>}
       {!without.includes('needs') && <span data-titlebar-needs="true">02 needs you</span>}
-      {!without.includes('approvals') && <button data-approvals-tab="inbox">Inbox</button>}
+      {!without.includes('board') && <button data-app-rail-item="agents">Agents</button>}
+      {!without.includes('approvals') && <button data-approvals-tab="inbox">Requests</button>}
       {!without.includes('palette') && <button data-titlebar-palette="true">Switch…</button>}
+      {!without.includes('lanes') && <div data-nav-lanes="true">lanes</div>}
     </div>
   );
 }
@@ -88,12 +91,12 @@ describe('first-run walkthrough (#124)', () => {
     act(() => useUiStore.getState().setTourOpen(true));
     act(() => vi.advanceTimersByTime(50));
     expect(screen.getByRole('dialog', { name: copy.tour.steps.rail.title })).toBeTruthy();
-    expect(counter()).toBe('01 / 05');
+    expect(counter()).toBe('01 / 06');
     expect(document.querySelector('[data-tour-ring]')).not.toBeNull();
     // Focus is on Next, inside the card.
     expect(document.activeElement?.getAttribute('data-tour-next')).toBe('true');
 
-    for (const key of ['needs', 'palette', 'approvals', 'done']) {
+    for (const key of ['needs', 'palette', 'board', 'access', 'done']) {
       fireEvent.click(screen.getByRole('button', { name: copy.tour.next }));
       act(() => vi.advanceTimersByTime(50));
       expect(stepKey()).toBe(key);
@@ -107,7 +110,7 @@ describe('first-run walkthrough (#124)', () => {
     expect(useUiStore.getState().tourOpen).toBe(false);
     // And went back to where it started.
     expect(useUiStore.getState().screen).toBe('home');
-    expect(commandMock).toHaveBeenCalledWith('settings.set', { patch: { tourDone: true } });
+    expect(commandMock).toHaveBeenCalledWith('settings.set', { patch: { tourDone: true, tourVersion: 2 } });
   });
 
   it('skips a step whose anchor never renders, and leaves out project steps with no project open', () => {
@@ -119,9 +122,9 @@ describe('first-run walkthrough (#124)', () => {
     );
     act(() => useUiStore.getState().setTourOpen(true));
     act(() => vi.advanceTimersByTime(50));
-    // No project: spawn and the other workspace cards are not counted even though an anchor exists.
-    expect(counter()).toBe('01 / 05');
-    for (let n = 0; n < 3; n++) {
+    // No project: the lane and workspace cards are not counted even though an anchor exists.
+    expect(counter()).toBe('01 / 06');
+    for (let n = 0; n < 4; n++) {
       fireEvent.click(screen.getByRole('button', { name: copy.tour.next }));
       act(() => vi.advanceTimersByTime(50));
     }
@@ -140,12 +143,10 @@ describe('first-run walkthrough (#124)', () => {
     );
     act(() => useUiStore.getState().setTourOpen(true));
     act(() => vi.advanceTimersByTime(50));
-    expect(counter()).toBe('01 / 15');
-    for (let n = 0; n < 3; n++) {
-      fireEvent.click(screen.getByRole('button', { name: copy.tour.next }));
-      act(() => vi.advanceTimersByTime(50));
-    }
-    expect(stepKey()).toBe('spawn');
+    expect(counter()).toBe('01 / 14');
+    fireEvent.click(screen.getByRole('button', { name: copy.tour.next }));
+    act(() => vi.advanceTimersByTime(50));
+    expect(stepKey()).toBe('lanes');
     expect(useUiStore.getState().screen).toBe('workspace');
   });
 
@@ -167,11 +168,11 @@ describe('first-run walkthrough (#124)', () => {
     expect(stepKey()).toBe('rail');
     fireEvent.keyDown(card, { key: 'Escape' });
     expect(useUiStore.getState().tourOpen).toBe(false);
-    expect(commandMock).toHaveBeenCalledWith('settings.set', { patch: { tourDone: true } });
+    expect(commandMock).toHaveBeenCalledWith('settings.set', { patch: { tourDone: true, tourVersion: 2 } });
   });
 
   it('replayed after it was seen, it does not write the setting again', () => {
-    useReadModel.getState().replaceModel(withSettings({ tourDone: true }), 'connected');
+    useReadModel.getState().replaceModel(withSettings({ tourDone: true, tourVersion: 2 }), 'connected');
     render(
       <>
         <Anchors />
@@ -201,6 +202,13 @@ describe('first-run walkthrough (#124)', () => {
     expect(useUiStore.getState().tourOpen).toBe(true);
   });
 
+  it('someone who saw the walkthrough before the layout changed is offered the new one once (ADR-0027)', () => {
+    useReadModel.getState().replaceModel(withSettings({ tourDone: true, tourVersion: 0 }), 'connected');
+    render(<Starter />);
+    act(() => vi.advanceTimersByTime(800));
+    expect(useUiStore.getState().tourOpen).toBe(true);
+  });
+
   it('starts on any screen until it has been seen (#125): a relaunch opens on the Workspace and still offers it', () => {
     useUiStore.setState({ screen: 'workspace' });
     render(<Starter />);
@@ -211,7 +219,8 @@ describe('first-run walkthrough (#124)', () => {
   it.each([
     [
       'already seen',
-      () => useReadModel.getState().replaceModel(withSettings({ tourDone: true }), 'connected'),
+      () =>
+        useReadModel.getState().replaceModel(withSettings({ tourDone: true, tourVersion: 2 }), 'connected'),
     ],
     [
       'onboarding not finished',

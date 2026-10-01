@@ -8,7 +8,7 @@ import {
   type ReadModel,
   type UsageTable,
 } from '@styx/core';
-import { Button, Label, TABLE_COLUMNS, Table, TableCell, TableRow } from '@styx/ui';
+import { Button, Label, TABLE_COLUMNS, Table, TableCell, TableRow, AgentDot } from '@styx/ui';
 import { useCallback, useState } from 'react';
 import { command } from '../../state/commands';
 import { useModel, useNow } from '../../state/hooks';
@@ -90,11 +90,17 @@ function UsageBlock({
   );
 }
 
+/** A window this full is close enough to the limit that a long task may stop partway. */
+const HOT_PERCENT = 80;
+
 /** One agent's report: plan, each window as "5 h · 42% used · resets in 2h 10m" over a small bar, and the report's age. */
 function LimitRowView({ row }: { row: LimitRow }) {
   return (
     <TableRow data-usage-limit={row.agent}>
-      <TableCell strong>{row.label}</TableCell>
+      <TableCell strong className={s['agentCell']}>
+        <AgentDot agent={row.agent} />
+        {row.label}
+      </TableCell>
       <TableCell mono muted>
         {row.plan ?? copy.general.none}
       </TableCell>
@@ -102,7 +108,13 @@ function LimitRowView({ row }: { row: LimitRow }) {
         {row.windows.map((w) => (
           <span key={w.label} className={s['window']} data-usage-window={w.label}>
             <span className={s['bar']} aria-hidden="true">
-              <span className={s['fill']} style={{ width: `${w.usedPercent}%` }} data-usage-fill="true" />
+              <span
+                className={s['fill']}
+                style={{ width: `${w.usedPercent}%` }}
+                data-usage-fill="true"
+                // Close to the limit (ADR-0027): the one place lime is the bar's colour.
+                data-hot={w.usedPercent >= HOT_PERCENT ? 'true' : undefined}
+              />
             </span>
             <span className={s['windowText']}>{w.resets === null ? w.used : `${w.used} · ${w.resets}`}</span>
           </span>

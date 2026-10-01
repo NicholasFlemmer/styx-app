@@ -26,6 +26,27 @@ const short = {
   terminalText: 'termtx',
   dim: 'dim',
 };
+// ADR-0027 §7: lane tokens, emitted beside the handoff block so that block stays byte-identical in values.
+const laneShort = {
+  agentClaude: 'agent-claude',
+  agentCodex: 'agent-codex',
+  agentGemini: 'agent-gemini',
+  agentCursor: 'agent-cursor',
+  agentShell: 'agent-shell',
+  paper: 'paper',
+  paperSurface: 'paper-s2',
+  paperLine: 'paper-ln',
+  paperText: 'paper-tx',
+  paperMuted: 'paper-mu',
+  paperAccentText: 'paper-act',
+  paperAdd: 'paper-add',
+  paperRemove: 'paper-del',
+  remove: 'del',
+};
+const laneVars = (theme) =>
+  Object.entries(laneShort)
+    .map(([k, v]) => `--${v}:${tokens.colorLane[theme][k].replace(/0\./g, '.').replace(/,\s*/g, ',')}`)
+    .join('; ') + ';';
 const vars = (theme) =>
   Object.entries(short)
     .map(([k, v]) => `--${v}:${tokens.color[theme][k].replace(/0\./g, '.').replace(/,\s*/g, ',')}`)
@@ -75,15 +96,17 @@ const css = `/* Styx design tokens — generated from tokens.json by scripts/bui
 @layer tokens {
   :root, [data-theme="dark"] {
     ${vars('dark')}
+    ${laneVars('dark')}
   }
   [data-theme="light"] {
     ${vars('light')}
+    ${laneVars('light')}
   }
   :root {
     --font-ui: 'Archivo', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-    --label: 600 10px/1 var(--font-ui); --label-tracking: .1em;
-    --body: 400 13px/1.5 var(--font-ui);
+    --label: ${tokens.type.label.weight} ${tokens.type.label.size}px/1 var(--font-ui); --label-tracking: ${tokens.type.label.tracking};
+    --body: 400 ${tokens.type.body.size}px/1.5 var(--font-ui);
     --code: 400 12.5px/1.75 var(--font-mono);
     --numeral-lg: 600 56px/1 var(--font-ui); --numeral-md: 600 28px/1 var(--font-ui);
     --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px; --sp-10:40px;
@@ -155,6 +178,7 @@ writeFileSync(join(root, 'css', 'fonts.css'), fontsCss);
 
 const ts = `// Generated from tokens.json by scripts/build.mjs. Do not edit.
 export const colors = ${JSON.stringify({ dark: Object.fromEntries(Object.entries(short).map(([k, v]) => [v, tokens.color.dark[k]])), light: Object.fromEntries(Object.entries(short).map(([k, v]) => [v, tokens.color.light[k]])) }, null, 2)} as const;
+export const laneColors = ${JSON.stringify({ dark: Object.fromEntries(Object.entries(laneShort).map(([k, v]) => [v, tokens.colorLane.dark[k]])), light: Object.fromEntries(Object.entries(laneShort).map(([k, v]) => [v, tokens.colorLane.light[k]])) }, null, 2)} as const;
 export const terminalAnsi = ${JSON.stringify(ansi, null, 2)} as const;
 export const sizes = ${JSON.stringify({ ...tokens.size, modalNewProject: 600, footerButton: 44, modalTop: 90, paletteTop: 110, diffFilesPane: 220 }, null, 2)} as const;
 export const space = ${JSON.stringify(tokens.space)} as const;

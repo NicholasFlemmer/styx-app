@@ -127,10 +127,8 @@
     flex: none;
     padding: 0 12px;
     border-left: 1px solid var(--ln);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: var(--mu);
   }
   .arcadeButton:hover {
@@ -168,10 +166,8 @@
     padding: 0 12px 0 0;
     border: 0;
     background: transparent;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     line-height: normal;
     color: var(--mu);
   }
@@ -283,5 +279,36 @@
     border: 0;
     line-height: normal;
     white-space: nowrap;
+  }
+  /* ADR-0027 §3: "3 earlier turns · Show them" above the receipts. */
+  .earlier {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--mu);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .link:hover {
+    color: var(--tx);
+  }
+  .foldTurn {
+    align-self: flex-start;
+  }
+  /* No lane yet: the pane offers a new task instead of a header. */
+  .noLane {
+    flex: none;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--ln);
   }
 }

@@ -58,6 +58,11 @@ export const appSettingsSchema = z.object({
   usageReports: z.boolean().default(true),
   /** The first-run walkthrough (owner request, #124) was finished or skipped; replayable from the palette. */
   tourDone: z.boolean().default(false),
+  /**
+   * Which walkthrough was seen (ADR-0027): a new layout gets a new walkthrough, offered once again to everyone
+   * who saw an older one. 0 for anyone who saw only the first.
+   */
+  tourVersion: z.number().int().nonnegative().default(0),
 });
 export type AppSettings = z.infer<typeof appSettingsSchema>;
 
@@ -75,7 +80,15 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   trackAgentEdits: false,
   usageReports: true,
   tourDone: false,
+  tourVersion: 0,
 };
+
+/** The walkthrough for the current layout (ADR-0027: 2, organised around the lane). */
+export const TOUR_VERSION = 2;
+
+/** Whether this walkthrough has been finished or skipped; an older one does not count. */
+export const tourSeen = (app: Pick<AppSettings, 'tourDone' | 'tourVersion'>): boolean =>
+  app.tourDone && app.tourVersion >= TOUR_VERSION;
 
 /**
  * Per-project settings: the merge of builtin defaults, app-level defaults, and `.styx/project.json`.

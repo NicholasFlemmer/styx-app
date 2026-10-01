@@ -15,7 +15,8 @@ test('grant flow propagates through chat, counters, approvals, audit and targets
   const needsYou = page.getByText(/02 needs you/i).first();
   await expect(needsYou).toBeVisible();
 
-  await page.getByRole('tab', { name: /codex/i }).click();
+  // The Codex lane, waiting on you, from the project nav (ADR-0027 §1).
+  await page.locator('[data-nav-lane][data-lane-status="your-turn"]').first().click();
   await page.getByRole('button', { name: /^review request$/i }).click();
   const sheet = page.getByRole('dialog', { name: /supabase/i });
   await expect(sheet).toBeVisible();
@@ -25,9 +26,9 @@ test('grant flow propagates through chat, counters, approvals, audit and targets
   await expect(page.getByText(/01 needs you/i).first()).toBeVisible();
   await expect(page.getByText(/01 locked/i).first()).toBeVisible();
 
-  await page.getByRole('button', { name: /^approvals/i }).click();
+  await page.getByRole('button', { name: /^access/i }).click();
   await page.waitForSelector('[data-screen-ready="approvals"]');
-  await expect(page.getByRole('tab', { name: /inbox · 2/i })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /requests · 2/i })).toBeVisible();
   await page.getByRole('tab', { name: /audit log/i }).click();
   await expect(page.getByText(/granted read\+write to Codex · 1h/)).toBeVisible();
 

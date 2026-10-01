@@ -21,6 +21,9 @@ export const copy = {
       grant: 'Grant {agent} → {target}',
       spawn: 'Spawn agent in {project}',
       spawnMeta: '{agent} ▾',
+      /** ADR-0027: whatever was typed, started as a task in the current project. */
+      newTask: 'Start “{text}” as a task in {project}',
+      newTaskMeta: 'New task',
       newProject: 'New project…',
       newProjectMeta: 'empty · template · agent',
       /** Owner additions (not in §10, spec tone): existing repos reachable from the palette too. */
@@ -75,9 +78,11 @@ export const copy = {
     label: 'App',
     home: { title: 'All projects' },
     agents: { title: 'All agents' },
-    approvals: { title: 'Approvals' },
+    approvals: { title: 'Access' },
     tasks: { title: 'Tasks' },
     usage: { title: 'Usage' },
+    /** The one Settings tile at the foot of the rail (ADR-0027 §5). */
+    settings: { title: 'Settings' },
     /** The App settings sections, in the order of the Settings nav. */
     sections: {
       'app:general': 'General settings',
@@ -97,13 +102,24 @@ export const copy = {
   },
 
   board: {
-    columns: { needsYou: 'Needs you', working: 'Working', done: 'Done' },
+    /** ADR-0027: Done splits into what waits to land and what has. */
+    columns: { needsYou: 'Your turn', working: 'Working', ready: 'Ready to land', landed: 'Landed' },
+    sub: {
+      needsYou: 'Agents waiting on you',
+      working: 'Nothing needed from you',
+      ready: 'Read it, then land it or send it back',
+      landed: 'On main',
+    },
+    title: 'Agents',
+    thisProject: 'This project only',
+    allProjects: 'All projects',
     /** Which sessions the board shows (owner layout #87): the app rail's tile = every project; the project nav = one. */
     scope: { all: 'All projects', project: '{project}' },
     empty: {
       needsYou: 'Nothing waiting on you.',
       working: 'No agents running. Spawn one below, or ask in the palette.',
-      done: 'Finished sessions land here for 7 days.',
+      ready: 'Finished work waits here until it lands.',
+      landed: 'Landed work stays here for 7 days.',
     },
     actions: {
       open: 'Open',
@@ -122,6 +138,103 @@ export const copy = {
   },
 
   chat: {
+    /** Tool calls in plain words (ADR-0027 §4). */
+    steps: {
+      read: 'Read {target}',
+      readAny: 'Read a file',
+      write: 'Wrote {target}',
+      writeAny: 'Wrote a file',
+      edit: 'Edited {target}',
+      editAny: 'Edited a file',
+      run: 'Ran {command}',
+      runAny: 'Ran a command',
+      search: 'Searched for “{pattern}”',
+      find: 'Looked for {pattern}',
+      searchAny: 'Searched the code',
+      fetch: 'Read {target}',
+      fetchAny: 'Read a web page',
+      web: 'Searched the web for “{query}”',
+      webAny: 'Searched the web',
+      helper: 'Asked a helper agent',
+      plan: 'Updated its plan',
+      count: '{n} steps',
+      countOne: '1 step',
+      failed: '{n} failed',
+      showTools: 'Show the tool calls',
+      hideTools: 'Hide the tool calls',
+    },
+    /** A turn's result on paper (ADR-0027 §3). */
+    turn: {
+      doneSeconds: 'Done in {n} s',
+      doneMinutes: 'Done in {n} min',
+      doneHours: 'Done in {h} h {m} min',
+      change: '{files} files, +{added} −{removed}',
+      changeOne: '1 file, +{added} −{removed}',
+      showChanges: 'Show changes',
+      undo: 'Undo this turn',
+      undoConfirm: 'Undo it',
+      undoCancel: 'Keep it',
+      undoAsk: 'Put the files back as they were before this turn?',
+      kept: 'Kept when you carry on',
+      undone: 'Undone',
+      busy: 'Wait for the agent to finish before undoing',
+      before: 'Before',
+      after: 'After',
+      receiptKept: 'Kept {time}',
+      receiptUndone: 'Undone {time}',
+      receiptAnswered: 'Answered {time}',
+      earlier: '{n} earlier turns',
+      earlierOne: '1 earlier turn',
+      showAll: 'Show them',
+      hideAll: 'Fold them',
+    },
+    /** The workspace centre's instruments on the lane (ADR-0027 §2). */
+    instruments: {
+      label: 'Lane view',
+      preview: 'Preview',
+      changes: 'Changes',
+      code: 'Code',
+      terminal: 'Terminal',
+    },
+    /** The Changes instrument: the lane as a page you sign off (ADR-0027 §3). */
+    changes: {
+      state: {
+        ready: 'Ready to land',
+        working: 'Still working',
+        'needs-you': 'Waiting on you',
+        idle: 'Waiting for your next message',
+        paused: 'Paused',
+        done: 'Finished',
+      },
+      byAgent: '{agent}, {turns}',
+      turns: '{n} turns',
+      turnsOne: '1 turn',
+      overlapNone: 'No other lane touches these files',
+      overlap: 'Also changed in {branches}',
+      whatItDid: 'What it did, turn by turn',
+      turn: 'Turn {n}',
+      show: 'Show',
+      hide: 'Hide',
+      loading: 'Reading the diff…',
+      loose: 'Changes not tied to a turn',
+      looseBody:
+        'Edits made outside a recorded turn: in your editor, or by an agent before turns were recorded.',
+      emptyHeadline: 'Nothing has changed yet',
+      emptyBody: 'When the agent edits files, each turn shows up here with its diff.',
+      noLane: 'Pick a lane in the nav to see what it changed.',
+      ask: 'Ask for changes',
+      review: 'Review hunk by hunk',
+    },
+    /** The lane header over the chat (ADR-0027 §1). */
+    lane: {
+      noChanges: 'No changes yet',
+      files: '{n} files changed',
+      filesOne: '1 file changed',
+      kept: '{n} turns kept',
+      keptOne: '1 turn kept',
+      menu: 'Lane actions',
+      close: 'Close this chat',
+    },
     waitingOnYou: 'waiting on you',
     composerPlaceholder: 'Message {agent}…',
     composer: { file: '@file', command: '/command', model: 'Model ▾', send: '⏎ send', attach: 'attach' },
@@ -660,7 +773,10 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   },
 
   approvals: {
-    tabs: { inbox: 'Inbox', inboxCount: 'Inbox · {n}', policies: 'Policies', auditLog: 'Audit log' },
+    /** ADR-0027: the place is Access, what agents may touch. */
+    title: 'Access',
+    lead: 'Every request an agent makes to a deploy target or server, across projects.',
+    tabs: { inbox: 'Requests', inboxCount: 'Requests · {n}', policies: 'Policies', auditLog: 'Audit log' },
     review: 'Review',
     deny: 'Deny',
     footer: 'auto-approved today: {n} ({detail})',
@@ -807,6 +923,20 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
 
   onboarding: {
     steps: { editor: 'Editor', projects: 'Projects', agents: 'Agents', targets: 'Targets' },
+    /** ADR-0027: each step says in one line why it matters; the side list says what comes after. */
+    stepTitles: {
+      editor: 'Your editor',
+      projects: 'Your projects',
+      agents: 'Your agents',
+      targets: 'Where you deploy',
+    },
+    stepWhy: {
+      editor: 'Where “Open in” goes, and your keybindings',
+      projects: 'The repos agents can work in',
+      agents: 'Which ones Styx can run for you',
+      targets: 'Optional, you can skip it',
+    },
+    then: 'Next: pick a project and give an agent its first task. Most take a few minutes.',
     /** Accessible name of the step strip (spec §9); not a §10 string. */
     stepsLabel: 'Steps',
     editor: {
@@ -851,8 +981,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   },
 
   connect: {
-    title: 'Connect target · {step}',
-    stepPick: 'choose provider',
+    title: 'Connect a target: {step}',
+    stepPick: 'pick a provider',
     methods: { cli: 'Provider CLI', oauth: 'OAuth', key: 'IAM / key', ssh: 'SSH' },
     /** Primary path: reuse the login the provider's CLI already holds; keys stay under Advanced. */
     cli: {
@@ -1029,8 +1159,47 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     },
   },
 
+  /** New task, in the workspace (ADR-0027 §1): one box and Start; the Spawn dialog's fields under it. */
+  newTask: {
+    headline: 'What should an agent do',
+    in: 'in {project}?',
+    label: 'The task',
+    placeholder: 'Describe what you want done. Reference files with @.',
+    safe: 'Works on its own copy, so main is safe until you land it.',
+    start: 'Start',
+    back: 'Back to the work',
+    agent: 'Agent',
+    startersHeading: 'Or start with one of these',
+    startThis: 'Start this',
+    running: 'Already running in {project}',
+    runningNone:
+      'Nothing running yet. Each task gets its own copy of the repo, so they never trip over each other.',
+    starters: [
+      {
+        title: 'Explain how this project fits together',
+        body: 'A short tour of the code: where things live and how a request flows through. Changes nothing.',
+        meta: 'A few minutes, reads only',
+        prompt:
+          'Give me a short tour of this codebase: what it does, how it is laid out, the files that matter most, and how a typical request or action flows through it. Do not change anything.',
+      },
+      {
+        title: 'Run the tests and fix what fails',
+        body: 'If everything passes, it says so and stops.',
+        meta: 'A few minutes, usually 1 or 2 files',
+        prompt:
+          'Find how this project runs its tests, run them, and fix whatever fails. Keep each fix small. If everything passes, say so and change nothing.',
+      },
+      {
+        title: 'Make the README get a newcomer running',
+        body: 'Install, setup and first run, checked by following it in this copy.',
+        meta: 'A few minutes, 1 file',
+        prompt:
+          'Check that the README tells a newcomer how to install, set up and run this project. Follow it yourself in this worktree, and fix the README wherever it is missing a step or wrong.',
+      },
+    ],
+  },
   spawn: {
-    title: 'Spawn agent · {project}',
+    title: 'Start an agent in {project}',
     worktree: 'Worktree',
     worktreeDefault: 'New from main',
     /** Plain-folder projects (no git): the only worktree option; `New from main` is disabled. */
@@ -1058,7 +1227,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   },
 
   repo: {
-    title: 'Worktrees',
+    /** ADR-0027: named for what it holds. */
+    title: 'Lanes',
     remoteLine: '{remote} · {branch} ↑{ahead} ↓{behind}',
     fetch: 'Fetch',
     addWorktree: '+ Worktree',
@@ -1072,7 +1242,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       summary: '+{added} −{removed} · {files} {filesWord}',
       waitingOnGrant: 'waiting on grant',
       merged: 'merged {when}',
-      conflict: 'CONFLICT · {file} vs {against}',
+      conflict: 'Conflict in {file} with {against}',
       /** Appended to a lane's changes when the base branch has moved on (owner addition, ADR-0023). */
       behind: '↓{n} {base}',
       /** ADR-0025 phase B: the lane while an agent finishes the base merge, and after. */
@@ -1253,7 +1423,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       commandPlaceholderAndroid: 'npx expo run:android',
     },
     openIn: 'Open in {ide}',
-    terminal: 'TERMINAL · {branch}',
+    terminal: 'Terminal, {branch}',
+    /** The terminal's resize handle and its tab in the workspace (ADR-0027 §2). */
+    terminalName: 'Terminal',
     editorStatus: 'Monaco · {eol} · {lang}',
     /** Editor readout appended to the prototype's status text (owner addition, discrepancies #58; not in §10). */
     editorCursor: 'Ln {line}, Col {col}',
@@ -1264,7 +1436,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   },
 
   settings: {
-    groups: { app: 'App', project: 'Project · {project}' },
+    groups: { app: 'App', project: 'This project, {project}', label: 'Settings sections' },
     app: {
       general: 'General',
       editor: 'Editor',
@@ -1375,6 +1547,23 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   },
 
   home: {
+    /** The head of All projects (ADR-0027): a greeting, then what is going on in one line. */
+    greeting: { morning: 'Good morning', afternoon: 'Good afternoon', evening: 'Good evening' },
+    greetingNamed: '{greeting}, {name}',
+    title: 'All projects',
+    summary: {
+      needsOne: '1 thing needs you.',
+      needs: '{n} things need you.',
+      nothingNeeds: 'Nothing needs you.',
+      workingOne: '1 agent is working.',
+      working: '{n} agents are working.',
+      quiet: 'No agents are working.',
+    },
+    readyToLand: 'Ready to land',
+    newTask: 'New task',
+    nothingRunning: 'Nothing running.',
+    startTask: 'Start a task',
+    moreLanes: '+{n} more',
     columns: {
       project: 'Project',
       path: 'Path',
@@ -1389,7 +1578,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       openFolder: '+ Open folder',
       cloneUrl: '+ Clone URL',
     },
-    activity: 'Activity',
+    activity: 'What happened',
   },
 
   /** Rail "+" menu (owner addition, not in §10): the three ways a project enters Styx. */
@@ -1615,8 +1804,32 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     menu: { help: 'Help', tour: 'Show Walkthrough', feedback: 'Send Feedback…', site: 'Visit heystyx.com' },
     steps: {
       rail: {
-        title: 'Every project, one window',
-        body: 'Your projects live down this rail. Click one to open it, or + to add another.',
+        title: 'Your places and your projects',
+        body: 'Down this side: All projects, Agents, Access, Tasks and Usage, then each of your projects, then Settings at the foot.',
+      },
+      lanes: {
+        title: 'Your work, by whose turn it is',
+        body: 'Every task in this project is listed here by what it is for. “Your turn” means an agent is waiting on you, and it is always at the top.',
+      },
+      newTask: {
+        title: 'Start a task',
+        body: 'Say what you want done and press Start. Each task runs in its own copy of the repo, so main is safe until you land it.',
+      },
+      lane: {
+        title: 'One task, one lane',
+        body: 'The agent, its branch, and what the lane holds so far. When it is ready, Land puts it on main.',
+      },
+      chat: {
+        title: 'Talk to it, see what it did',
+        body: 'Ask, steer, drop in files. Its work reads as plain steps, and each finished turn comes back as a card you can open or undo. Carrying on keeps it.',
+      },
+      instruments: {
+        title: 'Look at the work four ways',
+        body: 'Preview runs your app, Changes reads the lane as a page, Code is the full editor, Terminal is the lane’s shell.',
+      },
+      changes: {
+        title: 'Sign it off',
+        body: 'Changes shows what the agent did, turn by turn, with each diff. Undo any turn, ask for changes, or land it.',
       },
       needs: {
         title: 'What’s waiting on you',
@@ -1624,47 +1837,19 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       },
       palette: {
         title: 'Everything is one keystroke away',
-        body: 'Press {chord} to switch projects, start an agent, deploy or approve, from anywhere.',
+        body: 'Press {chord} to switch projects, deploy or approve. Type a sentence and it starts as a task.',
       },
-      spawn: {
-        title: 'Start an agent',
-        body: 'Pick Claude Code, Codex, Gemini or Cursor. Each one works in its own copy of the repo, on its own branch, so agents never trip over each other or you.',
+      board: {
+        title: 'Everything going on',
+        body: 'Every agent across your projects: what needs you, what is working, what is ready to land and what has landed.',
       },
-      tabs: {
-        title: 'Your agents, side by side',
-        body: 'Every agent in this project gets a tab. A lit square means it needs you.',
-      },
-      composer: {
-        title: 'Talk to it here',
-        body: 'Tell the agent what to do, drop in files or screenshots, and answer it when it asks. Messages queue while it works.',
-      },
-      editor: {
-        title: 'Watch the work land',
-        body: 'The agent’s changes show up here as it makes them. Review them line by line, and open any file in your own editor with one key.',
-      },
-      land: {
-        title: 'Land it, or publish it',
-        body: 'Land merges the agent’s branch into main once your checks pass. Publish commits, pushes and opens a pull request instead.',
+      access: {
+        title: 'Agents ask before production',
+        body: 'When an agent wants to deploy or touch a database, the request lands here. Allow it for a set time, with Touch ID for anything live. Every request is logged.',
       },
       deploy: {
         title: 'Ship it',
         body: 'Deploy to Vercel, Google Cloud, AWS and more, from here. Anything live asks for your approval first.',
-      },
-      design: {
-        title: 'See it running',
-        body: 'The Design tab runs your project locally and shows it next to the code, so you can see what the agent built.',
-      },
-      repo: {
-        title: 'Every lane, one table',
-        body: 'Each agent’s branch, its changes and whether it’s ready to land, across the whole project.',
-      },
-      approvals: {
-        title: 'Agents ask before production',
-        body: 'When an agent wants to deploy or touch a database, the request lands here. Approve it for a set time, with Touch ID for anything live. Every request is logged.',
-      },
-      targets: {
-        title: 'Connect where you ship',
-        body: 'Add Vercel, AWS, Google Cloud, Supabase, GitHub or a server. Styx uses the logins you already have and keeps the keys in your Mac’s Keychain.',
       },
       feedback: {
         title: 'Tell me what’s broken',
@@ -1672,7 +1857,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       },
       done: {
         title: 'You’re set',
-        body: 'Open a project and press + to start your first agent. You can replay this walkthrough any time from {chord}.',
+        body: 'Start a task and watch it come back. You can replay this walkthrough any time from {chord}.',
       },
     },
   },
@@ -1842,6 +2027,27 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     line: '{agent} on {branch} · {files} files · {task}',
     noTask: 'no task yet',
     noFiles: 'no files yet',
+    /** The project nav's work list (ADR-0027 §1): each lane by its task and whose move it is. */
+    nav: {
+      label: 'Work in this project',
+      work: 'Work',
+      count: '{n} lanes',
+      countOne: '1 lane',
+      newTask: 'New task',
+      project: 'Project',
+      lanesAndBranches: 'Lanes and branches',
+      untitled: '{agent}, no task yet',
+      empty: 'Nothing running yet.',
+      status: {
+        'your-turn': 'Your turn',
+        working: 'Working, {age}',
+        idle: 'Waiting for you',
+        paused: 'Paused',
+        ready: 'Ready to land',
+        landed: 'Landed {age} ago',
+        finished: 'Finished {age} ago',
+      },
+    },
   },
   /** Messages held back while the agent is mid-turn. */
   queue: {

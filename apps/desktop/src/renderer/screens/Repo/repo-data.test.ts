@@ -86,7 +86,7 @@ describe('Repo lanes (prototype `lanes`)', () => {
   it('error fixture: the conflicting lane reads CONFLICT and its action becomes Resolve, dot unchanged', () => {
     const conflict = laneRows(fixtures.errorReadModel(), acme, NOW).find((l) => l.branch === 'fix/checkout');
     expect(conflict).toMatchObject({
-      changes: 'CONFLICT · checkout.ts vs main',
+      changes: 'Conflict in checkout.ts with main',
       actionLabel: 'Resolve',
       action: 'resolve',
       dot: 'text',
@@ -294,6 +294,6 @@ describe('lane resolution states (ADR-0025 phase B)', () => {
     const failed = withResolution(base('failed', { failure: 'markers' }), {
       conflict: { file: 'src/a.ts', against: 'main' },
     });
-    expect(row(failed)).toMatchObject({ changes: 'CONFLICT · src/a.ts vs main', action: 'resolve' });
+    expect(row(failed)).toMatchObject({ changes: 'Conflict in src/a.ts with main', action: 'resolve' });
   });
 });

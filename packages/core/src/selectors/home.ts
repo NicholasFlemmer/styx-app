@@ -5,6 +5,8 @@ import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
 import { liveSessions, projectBranch } from './common';
 import { formatAge } from './format';
+import { navLanes, type NavLane } from './lanes';
+import { fill } from '../copy';
 
 export interface HomeActivityRow {
   id: string;
@@ -35,6 +37,8 @@ export interface HomeProjectRow {
   targets: string;
   /** "2m" · "1h" · "2d" · "—" */
   last: string;
+  /** The project's lanes that have not landed, most urgent first (ADR-0027): what the row shows instead of names. */
+  lanes: NavLane[];
 }
 
 const joinOrDash = (parts: readonly string[]): string =>
@@ -66,6 +70,28 @@ export const homeProjectRows = (model: ReadModel, now: number): HomeProjectRow[]
         agents: joinOrDash(agents),
         targets: joinOrDash(providers),
         last: formatAge(p.lastActivityAt, now),
+        lanes: navLanes(model, p.id, now).filter((l) => l.status !== 'landed' && l.status !== 'finished'),
       };
     });
+};
+
+/** "Good morning, Nic" from the local hour and the account's first name; "All projects" with no name. */
+export const homeGreeting = (hour: number, name: string | null): string => {
+  const first = name?.trim().split(/\s+/)[0] ?? '';
+  if (first === '') return copy.home.title;
+  const g =
+    hour < 12
+      ? copy.home.greeting.morning
+      : hour < 18
+        ? copy.home.greeting.afternoon
+        : copy.home.greeting.evening;
+  return fill(copy.home.greetingNamed, { greeting: g, name: first });
+};
+
+/** "2 things need you. 3 agents are working." */
+export const homeSummary = (needs: number, working: number): string => {
+  const s = copy.home.summary;
+  const a = needs === 0 ? s.nothingNeeds : needs === 1 ? s.needsOne : fill(s.needs, { n: needs });
+  const b = working === 0 ? s.quiet : working === 1 ? s.workingOne : fill(s.working, { n: working });
+  return `${a} ${b}`;
 };

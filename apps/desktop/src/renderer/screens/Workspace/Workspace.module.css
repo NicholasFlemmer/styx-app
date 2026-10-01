@@ -13,15 +13,23 @@
     align-items: stretch;
     border-bottom: 1px solid var(--ln);
     background: var(--s1);
+    /* At the window's minimum width the strip never spills under the chat; `clip` only trims sideways, so the
+       Deploy menu still drops below the strip. */
+    overflow-x: clip;
+    overflow-y: visible;
   }
   /* The tabs are their own tablist (a tablist may only own tabs); the publish and deploy buttons are siblings that hug the right edge. */
+  /* The instruments are the strip's navigation: they keep their width; Publish and Deploy give way first. */
   .tabs {
     display: flex;
     align-items: stretch;
+    flex: none;
   }
   .modes > [data-publish-button],
   .modes > [data-deploy-button] {
     margin-left: auto;
+    min-width: 0;
+    flex-shrink: 1;
   }
   .modes > [data-publish-button] + [data-deploy-button] {
     margin-left: 0;
@@ -32,6 +40,21 @@
     flex-direction: column;
     min-width: 0;
     min-height: 0;
+    container-type: inline-size;
+    container-name: column;
+  }
+  /* A narrow centre (the window's minimum with the file tree open): the instruments tighten so all four fit. */
+  @container column (max-width: 400px) {
+    .tabs > [role='tab'] {
+      padding-left: 9px;
+      padding-right: 9px;
+      font-size: 12px;
+    }
+    /* No room for them here: Publish and Deploy stay one keystroke away in the palette. */
+    .modes > [data-publish-button],
+    .modes > [data-deploy-button] {
+      display: none;
+    }
   }
   .empty {
     padding: 14px 16px;

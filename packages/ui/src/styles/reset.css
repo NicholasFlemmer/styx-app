@@ -19,8 +19,8 @@
   body {
     background: var(--bg);
     color: var(--tx);
-    font-family: var(--font-ui);
-    font-size: var(--body);
+    /* --body is a font shorthand (weight size/line-height family); it was once given to font-size, which dropped it. */
+    font: var(--body);
     -webkit-font-smoothing: antialiased;
     overflow: hidden;
     user-select: none;

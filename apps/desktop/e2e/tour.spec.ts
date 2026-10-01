@@ -5,7 +5,7 @@ import { launchStyx } from './launch';
  * The first-run walkthrough (#124), played from the palette: every step points at something on Home, the keys
  * move through it, and it closes itself after the last card. (It never starts by itself under the harness.)
  */
-test('walkthrough: palette → fifteen steps across Home, the workspace, Repo, Approvals and Targets → back home', async () => {
+test('walkthrough: palette → fourteen steps across Home, the lane, the board and Access → back home (ADR-0027)', async () => {
   const { app, page } = await launchStyx({ screen: 'home', env: { STYX_DEMO_REPOS: '0' } });
   await page.waitForSelector('[data-screen-ready="home"]');
   await page.waitForTimeout(1200);
@@ -16,10 +16,10 @@ test('walkthrough: palette → fifteen steps across Home, the workspace, Repo, A
   await page.keyboard.press('Enter');
   const tour = page.locator('[data-tour="true"]');
   await expect(tour).toHaveAttribute('data-tour-step', 'rail');
-  await expect(page.getByRole('dialog', { name: 'Every project, one window' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Your places and your projects' })).toBeVisible();
 
   const seen: string[] = [];
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < 14; i++) {
     await expect(tour).toHaveAttribute('data-tour-ready', 'true');
     seen.push((await tour.getAttribute('data-tour-step')) ?? '');
     if (process.env['TOUR_SHOTS'])
@@ -28,18 +28,17 @@ test('walkthrough: palette → fifteen steps across Home, the workspace, Repo, A
   }
   expect(seen).toEqual([
     'rail',
+    'lanes',
+    'newTask',
+    'lane',
+    'chat',
+    'instruments',
+    'changes',
     'needs',
     'palette',
-    'spawn',
-    'tabs',
-    'composer',
-    'editor',
-    'land',
+    'board',
+    'access',
     'deploy',
-    'design',
-    'repo',
-    'approvals',
-    'targets',
     'feedback',
     'done',
   ]);
@@ -70,7 +69,8 @@ test('walkthrough opens any time: from Help › Show Walkthrough, and from Setti
   await expect(page.locator('[data-screen-ready="settings"]')).toBeVisible();
 
   // Settings › General › Walkthrough › Show the walkthrough.
-  await page.click('[data-app-rail-item="app:general"]');
+  await page.click('[data-app-rail-item="settings"]');
+  await page.click('[data-settings-nav-item="app:general"]');
   await page.locator('[data-settings-row="tour"] select').selectOption('show');
   await expect(tour).toHaveAttribute('data-tour-ready', 'true');
   await page.keyboard.press('Escape');

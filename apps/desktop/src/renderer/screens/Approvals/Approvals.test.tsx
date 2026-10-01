@@ -38,7 +38,7 @@ describe('Approvals', () => {
   it('renders the three tabs with the inbox count and the policies pane', () => {
     render(<Approvals />);
     const tabs = screen.getAllByRole('tab');
-    expect(tabs.map((t) => t.textContent)).toEqual(['Inbox · 3', 'Policies', 'Audit log']);
+    expect(tabs.map((t) => t.textContent)).toEqual(['Requests · 3', 'Policies', 'Audit log']);
     expect(tabs[0]?.getAttribute('aria-selected')).toBe('true');
     const pane = screen.getByRole('complementary', { name: 'Policies' });
     const boxes = within(pane).getAllByRole('checkbox');
@@ -52,7 +52,7 @@ describe('Approvals', () => {
 
   it('inbox rows show agent → target, env/scope tags, quoted reason and age; footer counts auto-approvals', () => {
     render(<Approvals />);
-    const rows = screen.getByRole('table', { name: 'Inbox' });
+    const rows = screen.getByRole('table', { name: 'Requests' });
     const first = within(rows).getAllByRole('row')[0];
     if (first === undefined) throw new Error('no inbox rows');
     expect(first.textContent).toContain('Codex');
@@ -65,7 +65,7 @@ describe('Approvals', () => {
 
   it('Review opens the session in the workspace with the grant sheet; Deny sends grant.deny', () => {
     render(<Approvals />);
-    const rows = within(screen.getByRole('table', { name: 'Inbox' })).getAllByRole('row');
+    const rows = within(screen.getByRole('table', { name: 'Requests' })).getAllByRole('row');
     const first = rows[0];
     if (first === undefined) throw new Error('no inbox rows');
     fireEvent.click(within(first).getByRole('button', { name: 'Review' }));

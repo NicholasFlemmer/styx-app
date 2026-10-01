@@ -19,6 +19,7 @@ import {
 import {
   branchOf,
   byRecentActivity,
+  activeLaneOf,
   projectBranch,
   projectNameOf,
   projectSettingsOfOrDefault,
@@ -185,11 +186,18 @@ describe('targetDerivedState', () => {
 describe('boardColumns', () => {
   const model = demoReadModel();
   const cols = boardColumns(model, NOW);
-  it('needs-you 02 · working 04 (incl. idle) · done 02, labels and flags', () => {
+  it('your turn 02 · working 04 (incl. idle) · ready to land 00 · landed 02 (ADR-0027), labels and flags', () => {
     expect(cols.map((c) => [c.key, c.label, c.count, c.hot, c.spawn, c.empty])).toEqual([
-      ['needs-you', 'Needs you', '02', true, false, false],
+      ['needs-you', 'Your turn', '02', true, false, false],
       ['working', 'Working', '04', false, true, false],
-      ['done', 'Done', '02', false, false, false],
+      ['ready', 'Ready to land', '00', false, false, true],
+      ['landed', 'Landed', '02', false, false, false],
+    ]);
+    expect(cols.map((c) => c.sub)).toEqual([
+      'Agents waiting on you',
+      'Nothing needed from you',
+      'Read it, then land it or send it back',
+      'On main',
     ]);
   });
   it('cards carry agent, age, project · branch, note and CTA', () => {
@@ -204,10 +212,22 @@ describe('boardColumns', () => {
       ['Gemini', '31m', 'Open'],
       ['shell', '1h', 'Open'],
     ]);
-    expect(cols[2]?.items.map((c) => [c.agent, c.age, c.note, c.cta])).toEqual([
+    // Done splits on whether there is anything to land (`isReadyToLand`): Cursor's lane merged, and Claude's
+    // side-api session finished on main, so both are on main.
+    expect(cols[2]?.items).toEqual([]);
+    expect(cols[3]?.items.map((c) => [c.agent, c.age, c.note, c.cta])).toEqual([
       ['Cursor', '1d', 'PR #212 opened, merged yesterday', 'Reopen'],
       ['Claude', '2d', '2 commits pushed', 'Reopen'],
     ]);
+    // A finished lane on its own branch with unmerged changes is ready to land.
+    const claude = model.sessions.byId[ids.session.claude] as Session;
+    const done = {
+      ...model,
+      sessions: upsertRows(model.sessions, [
+        { ...claude, state: 'done' as const, endedAt: NOW, pid: null, exitCode: 0 },
+      ]),
+    };
+    expect(boardColumns(done, NOW)[2]?.items.map((c) => c.sessionId)).toEqual([claude.id]);
     expect(cols[0]?.items[0]).toMatchObject({
       needs: true,
       paused: false,
@@ -216,12 +236,41 @@ describe('boardColumns', () => {
       state: 'needs-you',
     });
   });
+  it('leaves background tasks off the board, scopes to one project, and puts a lane with no worktree with the landed', () => {
+    const claude = model.sessions.byId[ids.session.claude] as Session;
+    const task = {
+      ...model,
+      sessions: upsertRows(model.sessions, [{ ...claude, purpose: 'learn-run' as const }]),
+    };
+    expect(
+      boardColumns(task, NOW)
+        .flatMap((c) => c.items)
+        .map((i) => i.sessionId),
+    ).not.toContain(claude.id);
+    const scoped = boardColumns(model, NOW, ids.project.blogV2).flatMap((c) => c.items);
+    expect(scoped.every((i) => i.projectId === ids.project.blogV2)).toBe(true);
+    const orphan = {
+      ...model,
+      sessions: upsertRows(model.sessions, [
+        {
+          ...claude,
+          state: 'done' as const,
+          endedAt: NOW,
+          pid: null,
+          exitCode: 0,
+          worktreeId: 'wt_gone' as typeof claude.worktreeId,
+        },
+      ]),
+    };
+    expect(boardColumns(orphan, NOW)[3]?.items.map((i) => i.sessionId)).toContain(claude.id);
+  });
   it('empty columns carry the spec §10 copy', () => {
     const empty = boardColumns({ ...model, sessions: { byId: {}, ids: [] } }, NOW);
     expect(empty.map((c) => [c.count, c.empty, c.emptyText])).toEqual([
       ['00', true, 'Nothing waiting on you.'],
       ['00', true, 'No agents running. Spawn one below, or ask in the palette.'],
-      ['00', true, 'Finished sessions land here for 7 days.'],
+      ['00', true, 'Finished work waits here until it lands.'],
+      ['00', true, 'Landed work stays here for 7 days.'],
     ]);
   });
   it('needs-you with a decision/question ask → Review; paused → paused note in Working; null note → empty', () => {
@@ -386,12 +435,21 @@ describe('common', () => {
       '—',
     );
   });
-  it('the active chat tab wins: its lane is what the workspace, nav and Publish show; a tab of another project or a done one falls back', () => {
+  it('the lane on screen wins, finished ones included (ADR-0027 §1); another project’s falls back to the default', () => {
     expect(projectBranch(model, ids.project.acmeShop, ids.session.codex)).toBe('test/flaky');
     expect(projectBranch(model, ids.project.acmeShop, ids.session.gemini)).toBe('main');
-    // blog's session is not acme-shop's: the default tab rule applies.
+    // blog's session is not acme-shop's: the default lane rule applies.
     expect(projectBranch(model, ids.project.acmeShop, ids.session.blog)).toBe('fix/checkout');
-    expect(projectBranch(model, ids.project.acmeShop, ids.session.cursor)).toBe('fix/checkout');
+    // The done Cursor lane, picked from the nav, is what the workspace shows.
+    expect(projectBranch(model, ids.project.acmeShop, ids.session.cursor)).toBe('feat/promo');
+  });
+  it('activeLaneOf: the picked session of this project, done or not; else the first live one; else none', () => {
+    expect(activeLaneOf(model, ids.project.acmeShop, ids.session.cursor)).toBe(ids.session.cursor);
+    expect(activeLaneOf(model, ids.project.acmeShop, ids.session.codex)).toBe(ids.session.codex);
+    const fallback = activeLaneOf(model, ids.project.acmeShop, ids.session.blog);
+    expect(fallback).toBe(activeLaneOf(model, ids.project.acmeShop, null));
+    expect(model.sessions.byId[fallback ?? '']?.projectId).toBe(ids.project.acmeShop);
+    expect(activeLaneOf(model, idFrom<'ProjectId'>('nope') as ProjectId, null)).toBeNull();
   });
   it('plain folder (repo.defaultBranch null, main worktree on no branch): not git, branch — / null', () => {
     const repo = model.repos.byId[ids.repo.sideApi];

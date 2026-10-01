@@ -1,4 +1,12 @@
 @layer screens {
+  .agentCell {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .fill[data-hot='true'] {
+    background: var(--ac);
+  }
   .screen {
     flex: 1;
     display: flex;
@@ -18,8 +26,11 @@
   }
   .title {
     margin: 0;
-    font-size: 18px;
+    /* ADR-0027 §6: today's heading face at the page-title size. */
+    font-size: 28px;
     font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
   }
   /* Lead line (Settings › Agents recipe): muted 12.5px / 1.5, one column wide. */
   .lead {

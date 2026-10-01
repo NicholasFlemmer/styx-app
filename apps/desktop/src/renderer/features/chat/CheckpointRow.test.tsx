@@ -245,25 +245,34 @@ describe('ChatPane checkpoint actions', () => {
     Object.assign(window, { styx: undefined });
   });
 
-  it('Review opens the Diff screen on the checkpoint; a confirmed Revert dispatches checkpoint.revert', async () => {
+  /** The paper card of the turn whose checkpoint is `id` (ADR-0027 §3). */
+  const card = (n: number): HTMLElement => {
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-kind="turn-result"]'));
+    const found = cards[n];
+    if (found === undefined) throw new Error(`no card ${n} of ${cards.length}`);
+    return found;
+  };
+
+  it('each turn with changes ends on paper: Show changes opens the Diff on its checkpoint; a confirmed Undo reverts it', async () => {
     render(<ChatPane projectId={acme} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Review · Turn 1' }));
+    fireEvent.click(within(card(0)).getByRole('button', { name: copy.chat.turn.showChanges }));
     expect(useUiStore.getState().diffCheckpointId).toBe('cp-1');
     expect(useUiStore.getState().screen).toBe('diff');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Revert this turn · Turn 2' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Revert this turn · Turn 2 · Yes' }));
+    expect(card(1).textContent).toContain('Done.');
+    fireEvent.click(within(card(1)).getByRole('button', { name: copy.chat.turn.undo }));
+    fireEvent.click(within(card(1)).getByRole('button', { name: copy.chat.turn.undoConfirm }));
     await waitFor(() =>
       expect(commands).toEqual([{ name: 'checkpoint.revert', input: { checkpointId: 'cp-2' } }]),
     );
     expect(useUiStore.getState().overlays).toEqual([]);
   });
 
-  it('a refused revert lands as an error toast; a working session disables Revert', async () => {
+  it('a refused undo lands as an error toast; a working session disables Undo but not Show changes', async () => {
     answer = { ok: false, error: { code: 'invalid-transition', message: 'The agent is still working.' } };
     render(<ChatPane projectId={acme} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Revert this turn · Turn 1' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Revert this turn · Turn 1 · Yes' }));
+    fireEvent.click(within(card(0)).getByRole('button', { name: copy.chat.turn.undo }));
+    fireEvent.click(within(card(0)).getByRole('button', { name: copy.chat.turn.undoConfirm }));
     await waitFor(() => expect(useUiStore.getState().overlays).toHaveLength(1));
     expect(useUiStore.getState().overlays[0]).toMatchObject({
       kind: 'toast',
@@ -271,10 +280,13 @@ describe('ChatPane checkpoint actions', () => {
     });
 
     act(() => useReadModel.getState().replaceModel(withTurns('working'), 'connected'));
-    expect(screen.getByRole('button', { name: 'Revert this turn · Turn 1' })).toHaveProperty(
+    expect(within(card(0)).getByRole('button', { name: copy.chat.turn.undo })).toHaveProperty(
       'disabled',
       true,
     );
-    expect(screen.getByRole('button', { name: 'Review · Turn 1' })).toHaveProperty('disabled', false);
+    expect(within(card(0)).getByRole('button', { name: copy.chat.turn.showChanges })).toHaveProperty(
+      'disabled',
+      false,
+    );
   });
 });

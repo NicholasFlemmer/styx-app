@@ -1,4 +1,4 @@
-import { copy, fill, formatChord, type ReadModel } from '@styx/core';
+import { TOUR_VERSION, copy, fill, formatChord, tourSeen, type ReadModel } from '@styx/core';
 import { shortcuts } from '@styx/tokens';
 import { Button, useFocusTrap, useReturnFocus } from '@styx/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -33,34 +33,37 @@ interface Step {
   needsProject?: boolean;
 }
 
+/**
+ * The walkthrough for the layout organised around the lane (ADR-0027, `TOUR_VERSION` 2): where things live, how a
+ * task starts, what a lane is, how its work comes back and is signed off, then what waits on you across projects.
+ */
 export const TOUR_STEPS: readonly Step[] = [
-  { key: 'rail', anchor: '[data-rail="true"]', go: { screen: 'home' } },
-  { key: 'needs', anchor: '[data-titlebar-needs="true"]', go: { screen: 'home' } },
-  { key: 'palette', anchor: '[data-titlebar-palette="true"]', go: { screen: 'home' } },
-  { key: 'spawn', anchor: '[data-spawn-agent="true"]', go: { screen: 'workspace' }, needsProject: true },
-  { key: 'tabs', anchor: '[data-session-tabs="true"]', go: { screen: 'workspace' }, needsProject: true },
-  { key: 'composer', anchor: '[data-keyscope="composer"]', go: { screen: 'workspace' }, needsProject: true },
-  { key: 'editor', anchor: '[data-keyscope="editor"]', go: { screen: 'workspace' }, needsProject: true },
-  { key: 'land', anchor: '[data-land-button="true"]', go: { screen: 'workspace' }, needsProject: true },
-  { key: 'deploy', anchor: '[data-deploy-button="true"]', go: { screen: 'workspace' }, needsProject: true },
+  { key: 'rail', anchor: '[data-rails="true"]', go: { screen: 'home' } },
+  { key: 'lanes', anchor: '[data-nav-lanes="true"]', go: { screen: 'workspace' }, needsProject: true },
+  { key: 'newTask', anchor: '[data-nav-new-task="true"]', go: { screen: 'workspace' }, needsProject: true },
+  { key: 'lane', anchor: '[data-lane-header="true"]', go: { screen: 'workspace' }, needsProject: true },
+  { key: 'chat', anchor: '[data-keyscope="composer"]', go: { screen: 'workspace' }, needsProject: true },
   {
-    key: 'design',
-    anchor: '[data-workspace-mode="design"]',
+    key: 'instruments',
+    anchor: '[data-instruments="true"]',
     go: { screen: 'workspace' },
     needsProject: true,
   },
-  { key: 'repo', anchor: '[data-repo-lanes="true"]', go: { screen: 'repo' }, needsProject: true },
   {
-    key: 'approvals',
+    key: 'changes',
+    anchor: '[data-workspace-mode="changes"]',
+    go: { screen: 'workspace' },
+    needsProject: true,
+  },
+  { key: 'needs', anchor: '[data-titlebar-needs="true"]', go: { screen: 'home' } },
+  { key: 'palette', anchor: '[data-titlebar-palette="true"]', go: { screen: 'home' } },
+  { key: 'board', anchor: '[data-app-rail-item="agents"]', go: { screen: 'agents' } },
+  {
+    key: 'access',
     anchor: '[data-approvals-tab="inbox"]',
     go: { screen: 'approvals', approvalsTab: 'inbox' },
   },
-  {
-    key: 'targets',
-    anchor: '[data-connect-target="true"]',
-    go: { screen: 'settings', settingsSection: 'project:targets' },
-    needsProject: true,
-  },
+  { key: 'deploy', anchor: '[data-deploy-button="true"]', go: { screen: 'workspace' }, needsProject: true },
   {
     key: 'feedback',
     anchor: '[data-status-feedback="true"]',
@@ -294,7 +297,7 @@ function TourCard({ onClose }: { onClose: (finished: boolean) => void }) {
   );
 }
 
-const selectTourDone = (m: ReadModel) => m.settings.app.tourDone;
+const selectTourDone = (m: ReadModel) => tourSeen(m.settings.app);
 const selectOnboardingDone = (m: ReadModel) => m.settings.app.onboardingDone;
 
 /** The walkthrough, mounted once in the shell; `tourOpen` in the UI store says whether it is showing. */
@@ -311,7 +314,7 @@ export function Tour() {
       void command('usage.note', { event: finished ? 'tour.finished' : 'tour.skipped' });
       setTourOpen(false);
       // Finished or skipped, it has been seen: it does not start by itself again.
-      if (!tourDone) void command('settings.set', { patch: { tourDone: true } });
+      if (!tourDone) void command('settings.set', { patch: { tourDone: true, tourVersion: TOUR_VERSION } });
     },
     [setTourOpen, tourDone],
   );

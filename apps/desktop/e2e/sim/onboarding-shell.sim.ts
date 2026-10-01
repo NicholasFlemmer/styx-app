@@ -75,10 +75,10 @@ test('sim: onboarding-shell', async () => {
       },
     );
     await sim.step(
-      'Finish lands on Home; a reload does not show onboarding again (flag persisted)',
+      'Finish lands on New task in the first project (or Home with none); a reload does not show onboarding again',
       async () => {
         await page().getByRole('button', { name: copy.onboarding.footer.finish }).click();
-        await page().waitForSelector('[data-screen-ready="home"]', { timeout: 20_000 });
+        await page().waitForSelector('[data-new-task], [data-screen-ready="home"]', { timeout: 20_000 });
         await page().reload();
         await page().waitForSelector('[data-screen-ready]', { timeout: 20_000 });
         const step = await page().locator('[data-onboarding-step]').count();
@@ -145,13 +145,13 @@ test('sim: onboarding-shell', async () => {
         await page().waitForSelector('[data-screen-ready="home"]', { timeout: 10_000 });
         await page().locator('[data-project-id]').first().click();
         await page().waitForSelector('[data-screen-ready="workspace"]', { timeout: 10_000 });
-        const tabs = page().locator('[data-session-tab]');
-        const n = await tabs.count();
-        if (n < 2) return `only ${n} session tabs; skipped focus-agent`;
+        const lanes = page().locator('[data-nav-lane]');
+        const n = await lanes.count();
+        if (n < 2) return `only ${n} lanes; skipped focus-agent`;
         await page().keyboard.press('Meta+2');
-        const second = tabs.nth(1);
-        if ((await second.getAttribute('aria-selected')) !== 'true')
-          throw new Error('Mod+2 did not select the second tab');
+        const second = lanes.nth(1);
+        if ((await second.getAttribute('aria-current')) !== 'page')
+          throw new Error('Mod+2 did not open the second lane');
       },
     );
 
@@ -199,17 +199,17 @@ test('sim: onboarding-shell', async () => {
       },
     );
 
-    await sim.step('Mod+Shift+N opens Spawn agent; Escape closes it and focus returns', async () => {
+    await sim.step('Mod+Shift+N opens New task in the workspace; Escape goes back to the work', async () => {
       await page().locator('[data-app-rail-item="home"]').click();
       await page().locator('[data-project-id]').first().click();
       await page().waitForSelector('[data-screen-ready="workspace"]', { timeout: 10_000 });
       const before = await page().evaluate(() => document.activeElement?.outerHTML.slice(0, 80) ?? '');
       await page().keyboard.press('Meta+Shift+N');
-      await page().waitForSelector('[data-spawn-modal]', { timeout: 5000 });
+      await page().waitForSelector('[data-new-task]', { timeout: 5000 });
       await page().keyboard.press('Escape');
       await page().waitForTimeout(200);
-      if ((await page().locator('[data-spawn-modal]').count()) > 0)
-        throw new Error('Escape did not close the spawn modal');
+      if ((await page().locator('[data-new-task]').count()) > 0)
+        throw new Error('Escape did not close New task');
       const after = await page().evaluate(() => document.activeElement?.outerHTML.slice(0, 80) ?? '');
       return `focus before: ${before || '(body)'} · after: ${after || '(body)'}`;
     });

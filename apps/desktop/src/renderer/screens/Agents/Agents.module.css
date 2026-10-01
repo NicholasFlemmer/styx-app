@@ -1,9 +1,42 @@
 @layer screens {
-  /* Prototype `data-screen-label="Agents"`: three equal columns filling the content region. */
+  .screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+  /* ADR-0027: page title in today's heading face at the page-title size, the scope, and the actions. */
+  .pagehead {
+    flex: none;
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+    padding: 20px 24px 14px;
+    border-bottom: 1px solid var(--ln);
+  }
+  .title {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .scope {
+    margin: 0 0 2px;
+    font-size: 13px;
+    color: var(--mu);
+  }
+  .acts {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+  }
+  /* Your turn · Working · Ready to land · Landed. */
   .board {
     flex: 1;
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     min-width: 0;
     min-height: 0;
   }
@@ -14,17 +47,38 @@
     min-width: 0;
     min-height: 0;
   }
+  .column {
+    overflow-y: auto;
+  }
   .head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
     padding: 16px 16px 12px;
     border-bottom: 1px solid var(--ln);
     flex: none;
   }
-  /* Column label: 700 · 10px · .1em; the border only shows filled when hot (data-on). */
   .label {
-    border-color: transparent;
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .count {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mu);
+    font-variant-numeric: tabular-nums;
+  }
+  .count[data-on='true'] {
+    background: var(--ac);
+    color: var(--acx);
+    padding: 1px 6px;
+  }
+  .sub {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--mu);
   }
   .empty {
     padding: 24px 16px;

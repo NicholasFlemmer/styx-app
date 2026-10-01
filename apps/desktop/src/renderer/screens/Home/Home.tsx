@@ -2,12 +2,15 @@ import {
   activeGrants,
   copy,
   homeActivity,
+  homeGreeting,
   homeProjectRows,
+  homeSummary,
   needsYouCount,
-  projectCount,
+  readyToLandCount,
   workingCount,
   type ProjectId,
   type ReadModel,
+  type SessionId,
 } from '@styx/core';
 import { Button, CounterStrip, CounterTile, EmptyState } from '@styx/ui';
 import { useCallback } from 'react';
@@ -21,9 +24,14 @@ import { ProjectTable } from './ProjectTable';
 
 const selectNeedsYou = (m: ReadModel) => needsYouCount(m);
 const selectWorking = (m: ReadModel) => workingCount(m);
-const selectProjects = (m: ReadModel) => projectCount(m);
+const selectReady = (m: ReadModel) => readyToLandCount(m);
+const selectName = (m: ReadModel) => (m.account.kind === 'signed-in' ? m.account.account.name : null);
 
-/** Home / All projects (spec §4.2): counter strip → project table (or empty state) → add row → activity feed. */
+/**
+ * Home / All projects (spec §4.2, ADR-0027): a greeting and what is going on in one line, with Add a project and
+ * New task; the counters (needs you, working, ready to land, grants open); every project with its lanes; the add
+ * row; what happened.
+ */
 export function Home() {
   const now = useNow();
   const setProject = useUi((u) => u.setProject);
@@ -32,7 +40,11 @@ export function Home() {
 
   const needsYou = useModel(selectNeedsYou);
   const working = useModel(selectWorking);
-  const projects = useModel(selectProjects);
+  const ready = useModel(selectReady);
+  const name = useModel(selectName);
+  const openSession = useUi((u) => u.openSession);
+  const openNewTask = useUi((u) => u.openNewTask);
+  const currentProject = useUi((u) => u.projectId);
   const grants = useModel(useCallback((m: ReadModel) => activeGrants(m, now).length, [now]));
   const rows = useModel(useCallback((m: ReadModel) => homeProjectRows(m, now), [now]));
   const activity = useModel(useCallback((m: ReadModel) => homeActivity(m, now), [now]));
@@ -57,15 +69,37 @@ export function Home() {
 
   return (
     <div className={s['home']} data-home-empty={empty ? 'true' : undefined}>
-      <CounterStrip columns={4}>
+      <header className={s['hello']}>
+        <div>
+          <h2 className={s['title']}>{homeGreeting(new Date(now).getHours(), name)}</h2>
+          <p className={s['summary']}>{homeSummary(needsYou, working)}</p>
+        </div>
+        <div className={s['helloActs']}>
+          {empty ? null : (
+            <Button
+              variant="accent"
+              onClick={() => openNewTask(currentProject ?? rows[0]?.projectId ?? null)}
+              data-home-new-task="true"
+            >
+              {copy.home.newTask}
+            </Button>
+          )}
+        </div>
+      </header>
+      <CounterStrip columns={4} data-home-counters="true">
         {/* Not live: the titlebar counter already announces needs-you changes (one live region, spec §9). */}
-        <CounterTile value={needsYou} label={copy.counters.needsYou} />
+        <CounterTile value={needsYou} label={copy.counters.needsYou} attention={needsYou > 0} />
         <CounterTile value={working} label={copy.counters.agentsWorking} />
+        <CounterTile value={ready} label={copy.home.readyToLand} />
         <CounterTile value={grants} label={copy.counters.grantsActive} />
-        <CounterTile value={projects} label={copy.counters.projects} />
       </CounterStrip>
 
-      <ProjectTable rows={rows} onOpen={openProject} />
+      <ProjectTable
+        rows={rows}
+        onOpen={openProject}
+        onOpenLane={(projectId: ProjectId, sessionId: SessionId) => openSession(projectId, sessionId)}
+        onNewTask={(projectId: ProjectId) => openNewTask(projectId)}
+      />
       {empty ? (
         <EmptyState
           headline={copy.empty.projects.headline}

@@ -55,9 +55,10 @@ test('a turn that writes a file becomes a checkpoint row; Review shows its patch
     ).toBeVisible({
       timeout: 20_000,
     });
-    const row = chat.locator('[data-kind="checkpoint"][data-turn="1"]');
+    // The turn ends on paper (ADR-0027 §3): what changed, then Show changes and Undo this turn.
+    const row = chat.locator('[data-kind="turn-result"]').last();
     await expect(row).toBeVisible();
-    await expect(row).toContainText('Turn 1 · 1 files · +1 −0');
+    await expect(row).toContainText('1 file, +1 −0');
 
     // Where the session works, straight from main: the file is there, the branch has no new commit, the refs do.
     const snapshot = await page.evaluate(() =>
@@ -78,7 +79,7 @@ test('a turn that writes a file becomes a checkpoint row; Review shows its patch
     );
 
     // Review: the Diff screen in checkpoint mode shows the patch read-only; Done comes back.
-    await row.getByRole('button', { name: 'Review · Turn 1' }).click();
+    await row.getByRole('button', { name: 'Show changes' }).click();
     const diff = page.locator('[data-diff-checkpoint]');
     await expect(diff).toBeVisible();
     await expect(diff.locator('[data-diff-meta]')).toContainText('Turn 1 · 1 files · +1 −0');
@@ -87,15 +88,13 @@ test('a turn that writes a file becomes a checkpoint row; Review shows its patch
     await diff.getByRole('button', { name: 'Done' }).click();
     await expect(chat).toBeVisible();
 
-    // Revert asks first, then restores the worktree: the file is gone, the row reads Reverted, HEAD is untouched.
-    await row.getByRole('button', { name: 'Revert this turn · Turn 1' }).click();
-    const ask = row.locator('[data-checkpoint-confirm]');
-    await expect(ask).toContainText(
-      'Restore the workspace to before turn 1? Later turns are undone too, along with any edits you made since, and files created since then are deleted.',
-    );
-    await ask.getByRole('button', { name: 'Revert this turn · Turn 1 · Yes' }).click();
-    await expect(row).toHaveAttribute('data-reverted', 'true', { timeout: 20_000 });
-    await expect(row).toContainText('Reverted');
+    // Undo asks first, then restores the worktree: the file is gone, the card reads Undone, HEAD is untouched.
+    await row.getByRole('button', { name: 'Undo this turn' }).click();
+    const ask = row.locator('[data-turn-confirm]');
+    await expect(ask).toContainText('Put the files back as they were before this turn?');
+    await ask.getByRole('button', { name: 'Undo it' }).click();
+    await expect(row).toHaveAttribute('data-undone', 'true', { timeout: 20_000 });
+    await expect(row).toContainText('Undone');
     await expect(
       chat.locator('[data-kind="system"]').filter({ hasText: 'Workspace restored to before turn 1.' }),
     ).toBeVisible();
@@ -175,20 +174,20 @@ test('a turn keeps the design window page before and after; Review shows Before 
     test.info().annotations.push({ type: 'capturePage', description: JSON.stringify({ shown, hidden }) });
     expect(shown?.empty).toBe(false);
 
-    // Spawn Codex from the chat pane; the first turn is plain so it settles without a checkpoint row.
+    // Start Codex from New task (ADR-0027 §1); the first turn is plain so it settles without a checkpoint.
     await page.evaluate(() => (window as unknown as StyxWindow).styx.command('detect.clis', {}));
     const chat = page.locator('[data-chat-pane]');
-    await chat.getByRole('button', { name: 'Spawn agent' }).click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog.locator('[data-spawn-modal]')).toBeVisible();
-    await dialog.locator('[data-agent="codex"]').click();
-    await dialog.getByLabel('First message').fill('hi');
-    await dialog.getByRole('button', { name: /^Spawn/ }).click();
-    await expect(dialog).toHaveCount(0);
+    await page.locator('[data-nav-new-task]').click();
+    const task = page.locator('[data-new-task]');
+    await expect(task).toBeVisible();
+    await task.locator('[role="radio"][data-agent="codex"]').click();
+    await task.locator('[data-new-task-text]').fill('hi');
+    await task.locator('[data-new-task-start]').click();
+    await expect(task).toHaveCount(0, { timeout: 20_000 });
     const decision = chat.locator('[data-kind="decision"]');
     await expect(decision).toBeVisible({ timeout: 20_000 });
     await decision.getByRole('button', { name: 'Allow' }).click();
-    await expect(chat.locator('[data-kind="tool"][data-status="ok"]')).toBeVisible({ timeout: 20_000 });
+    await expect(chat.locator('[data-kind="steps"] li[data-status="ok"]')).toBeVisible({ timeout: 20_000 });
     const snapshot = async () =>
       (await page.evaluate(() => (window as unknown as StyxWindow).styx.command('store.snapshot', {})))
         .value as { sessions: Session[]; checkpoints: Record<string, Checkpoint[]> };
@@ -213,7 +212,7 @@ test('a turn keeps the design window page before and after; Review shows Before 
     await expect(
       chat.locator('[data-kind="system"]').filter({ hasText: 'Turn 2: 1 files changed.' }),
     ).toBeVisible({ timeout: 20_000 });
-    const row = chat.locator('[data-kind="checkpoint"][data-turn="2"]');
+    const row = chat.locator('[data-kind="turn-result"]').last();
     await expect(row).toBeVisible();
 
     // Main kept both PNGs beside the row and named them on it (`after` arrives after the settle line: poll).
@@ -229,7 +228,12 @@ test('a turn keeps the design window page before and after; Review shows Before 
     }
 
     // Review: Before turn 2 / After turn 2, both images served over styx-device:// and really decoded.
-    await row.getByRole('button', { name: 'Review · Turn 2' }).click();
+    // The card shows them too, then Show changes opens the Diff with Before / After.
+    await expect(row.getByRole('img', { name: 'Before' })).toHaveAttribute(
+      'src',
+      `styx-device://checkpoint/${checkpoint.id}/before`,
+    );
+    await row.getByRole('button', { name: 'Show changes' }).click();
     const diff = page.locator('[data-diff-checkpoint]');
     await expect(diff).toBeVisible();
     const screens = diff.locator('[data-checkpoint-screens]');

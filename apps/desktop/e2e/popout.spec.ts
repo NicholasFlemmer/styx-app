@@ -1,6 +1,6 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { PNG } from 'pngjs';
 import { launchStyx } from './launch';
 import { comparePng, type Rect } from './visual/compare';
@@ -80,7 +80,7 @@ test('⤢ opens a pop-out window with the compact chat; Mod+Shift+O docks it', a
     const chat = popout.locator('[data-chat-compact="true"]');
     await expect(chat).toBeVisible();
     await expect(popout.getByRole('tab')).toHaveCount(0);
-    await expect(popout.locator('[data-chat-meta]')).toHaveCount(0);
+    await expect(popout.locator('[data-lane-meta]')).toHaveCount(0);
     await expect(popout.getByText('Add input validation to checkout and cover it with tests.')).toBeVisible();
     const composer = popout.getByPlaceholder('Message Claude…');
     await expect(composer).toBeEnabled();
@@ -111,14 +111,14 @@ test('⤢ opens a pop-out window with the compact chat; Mod+Shift+O docks it', a
     expect(app.windows()).toHaveLength(1);
     await expect(pane.getByText('Popped out')).toHaveCount(0);
     await expect(page.getByPlaceholder('Message Claude…')).toBeEnabled();
-    await expect(page.getByRole('tab', { name: /^Claude/ })).toBeVisible();
+    await expect(page.locator('[data-lane-header]')).toContainText('Claude');
   } finally {
     await app.close();
   }
 });
 
 for (const theme of ['dark', 'light'] as const) {
-  test(`pop-out window matches the prototype crop · ${theme} · mac`, async () => {
+  test(`pop-out window matches its reference · ${theme} · mac`, async () => {
     const file = `popout-${theme}-mac.png`;
     const { app, page } = await launchStyx({
       screen: 'workspace',
@@ -139,10 +139,17 @@ for (const theme of ['dark', 'light'] as const) {
       await popout.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 
       const actualPath = test.info().outputPath(file);
-      const baselinePath = test.info().outputPath(`baseline-crop-${file}`);
       const diffPath = test.info().outputPath(file.replace(/\.png$/, '-diff.png'));
       await popout.screenshot({ path: actualPath, scale: 'css', animations: 'disabled', caret: 'hide' });
-      cropBaseline(file, baselinePath);
+      // ADR-0027: the app's own reference when there is one, else the prototype crop (kept as history).
+      // Its own name: the visual suite's `popout` state is the main window, a different picture.
+      const appRef = join(__dirname, 'visual', '__baseline__', 'app', `window-${file}`);
+      if (process.env['STYX_VISUAL_UPDATE'] === '1') {
+        mkdirSync(dirname(appRef), { recursive: true });
+        copyFileSync(actualPath, appRef);
+      }
+      const baselinePath = existsSync(appRef) ? appRef : test.info().outputPath(`baseline-crop-${file}`);
+      if (!existsSync(appRef)) cropBaseline(file, baselinePath);
 
       // Full-window ratio (reported): the prototype's pop-out shows an abridged conversation ("Plan: … Proceeding.")
       // that the demo fixture does not contain, so the transcript body can never match pixel for pixel.

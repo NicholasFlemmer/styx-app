@@ -1,10 +1,12 @@
 import { copy, fill } from '../copy';
 import type { ProjectId, SessionId, WorktreeId } from '../ids';
-import { AGENT_LABEL } from '../model/common';
+import { AGENT_LABEL, type Agent } from '../model/common';
 import type { Worktree } from '../model/project';
 import type { Session } from '../model/session';
 import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
+import { formatAge } from './format';
+import { isReadyToLand } from './common';
 
 /**
  * Lanes that know about each other (owner addition, ADR-0025): what one lane is doing, said in a line, for the
@@ -84,6 +86,82 @@ export const activeLanes = (
     return sa - sb;
   });
 };
+
+/** Whose move a lane is, for the project nav (ADR-0027 §1), in the order the nav lists them. */
+export type NavLaneStatus = 'your-turn' | 'working' | 'idle' | 'paused' | 'ready' | 'landed' | 'finished';
+const NAV_RANK: Record<NavLaneStatus, number> = {
+  'your-turn': 0,
+  working: 1,
+  idle: 2,
+  paused: 3,
+  ready: 4,
+  landed: 5,
+  finished: 5,
+};
+
+export interface NavLane {
+  sessionId: SessionId;
+  worktreeId: WorktreeId;
+  agent: Agent;
+  /** The task line; the agent's name with "no task yet" when the session has none. */
+  task: string;
+  status: NavLaneStatus;
+  statusLabel: string;
+}
+
+const navStatusOf = (model: ReadModel, s: Session, w: Worktree | undefined): NavLaneStatus => {
+  switch (s.state) {
+    case 'needs-you':
+      return 'your-turn';
+    case 'working':
+      return 'working';
+    case 'idle':
+      return 'idle';
+    case 'paused':
+      return 'paused';
+    case 'done':
+      // One rule with Home's counter and the board (`isReadyToLand`); a lane with nothing to land is finished.
+      if (isReadyToLand(model, s)) return 'ready';
+      return w !== undefined && w.mergedAt !== null ? 'landed' : 'finished';
+  }
+};
+
+/**
+ * The project nav's work list (ADR-0027 §1): every chat session of the project that is not archived, by whose
+ * move it is (your turn, working, waiting, paused, ready to land, landed), most recently active first within
+ * each. Background tasks (`purpose`) are not work the person started, so they stay on the Tasks rail.
+ */
+export const navLanes = (model: ReadModel, projectId: ProjectId, now: number): NavLane[] => {
+  const out: { lane: NavLane; at: number }[] = [];
+  for (const s of rows(model.sessions)) {
+    if (s.projectId !== projectId || s.archivedAt !== null || s.purpose) continue;
+    const w = model.worktrees.byId[s.worktreeId];
+    const status = navStatusOf(model, s, w);
+    const task = taskOf(s);
+    const at = s.lastActivityAt ?? s.startedAt;
+    // Landed counts from the merge, finished from the session's end, everything else from its last activity.
+    const since = status === 'landed' ? (w?.mergedAt ?? at) : status === 'finished' ? (s.endedAt ?? at) : at;
+    const age = formatAge(since, now);
+    out.push({
+      lane: {
+        sessionId: s.id,
+        worktreeId: s.worktreeId,
+        agent: s.agent,
+        task: task === '' ? fill(copy.lanes.nav.untitled, { agent: AGENT_LABEL[s.agent] }) : task,
+        status,
+        statusLabel: fill(copy.lanes.nav.status[status], { age }),
+      },
+      at,
+    });
+  }
+  return out
+    .sort((a, b) => NAV_RANK[a.lane.status] - NAV_RANK[b.lane.status] || b.at - a.at)
+    .map((x) => x.lane);
+};
+
+/** "3 lanes" / "1 lane". */
+export const navLanesLabel = (n: number): string =>
+  n === 1 ? copy.lanes.nav.countOne : fill(copy.lanes.nav.count, { n });
 
 /** "Claude on agent/claude-1 · 7 files · refuse a wrong Locate binary pick" */
 export const laneLine = (lane: Pick<ActiveLane, 'agent' | 'branch' | 'files' | 'task'>): string =>

@@ -17,7 +17,6 @@
     color: var(--acx);
     font: var(--label);
     letter-spacing: var(--label-tracking);
-    text-transform: uppercase;
   }
   .q {
     padding: 10px;
@@ -31,7 +30,6 @@
     color: var(--mu);
     font: var(--label);
     letter-spacing: var(--label-tracking);
-    text-transform: uppercase;
   }
   .prompt {
     color: var(--tx);

@@ -1253,6 +1253,7 @@ export const demoFixture = (): DemoFixture => ({
     onboardingDone: true,
     // A seeded, set-up machine: the first-run walkthrough has been seen (#124).
     tourDone: true,
+    tourVersion: 2,
     trackAgentEdits: true,
   },
   projectSettings: { [ids.project.acmeShop]: acmeProjectSettings() },

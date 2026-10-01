@@ -1,12 +1,13 @@
 import {
   boardColumns,
   copy,
+  projectNameOf,
   type BoardCard,
   type BoardColumn,
   type ReadModel,
   type SessionId,
 } from '@styx/core';
-import { Button, Card, Numeral, Tag } from '@styx/ui';
+import { Button, Card } from '@styx/ui';
 import { useCallback, useEffect, useRef } from 'react';
 import { approveGrantAsRequested, boardBindings } from '../../keys/bindings';
 import { keys } from '../../keys';
@@ -16,8 +17,16 @@ import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
 import s from './Agents.module.css';
 
-const toneOf = (card: BoardCard): 'needs' | 'working' | 'done' =>
-  card.needs ? 'needs' : card.state === 'done' ? 'done' : 'working';
+const toneOf = (card: BoardCard, column: BoardColumn['key']): 'needs' | 'working' | 'ready' | 'landed' =>
+  card.needs ? 'needs' : column === 'ready' ? 'ready' : column === 'landed' ? 'landed' : 'working';
+
+/** Ready to land opens the lane on its Changes page (ADR-0027 §3): read it, then land it or send it back. */
+const openChanges = (card: BoardCard): void => {
+  const ui = useUiStore.getState();
+  ui.openSession(card.projectId, card.sessionId);
+  ui.setPaneSize('workspace-mode', 2);
+  void command('ui.persist', { paneSizes: { 'workspace-mode': 2 } });
+};
 
 /**
  * Primary CTA (spec §4.3): Open · Review grant · Review plan; a Done card reopens (owner addition, discrepancy #97)
@@ -85,7 +94,15 @@ const runDeny = (card: BoardCard): void => {
   }
 };
 
-function BoardCardView({ card, onFocusCard }: { card: BoardCard; onFocusCard: (id: SessionId) => void }) {
+function BoardCardView({
+  card,
+  column,
+  onFocusCard,
+}: {
+  card: BoardCard;
+  column: BoardColumn['key'];
+  onFocusCard: (id: SessionId) => void;
+}) {
   // Needs-you cards are focusable (tabIndex -1: reached from their buttons / the Approve chord) and carry the
   // `board` key scope so Mod+⏎ / Mod+⌫ resolve to this card (spec §6).
   const focusable = card.needs
@@ -104,11 +121,17 @@ function BoardCardView({ card, onFocusCard }: { card: BoardCard; onFocusCard: (i
       project={card.project}
       branch={card.branch}
       note={card.note}
-      tone={toneOf(card)}
+      tone={toneOf(card, column)}
+      agentKind={card.agentKind}
       data-session={card.sessionId}
       {...focusable}
       actions={
         <>
+          {column === 'ready' ? (
+            <Button variant="primary" onClick={() => openChanges(card)} data-card-action="changes">
+              {copy.chat.instruments.changes}
+            </Button>
+          ) : null}
           <Button onClick={() => runCta(card)}>{card.cta}</Button>
           {card.needs ? (
             <Button variant="ghost" onClick={() => runDeny(card)}>
@@ -151,13 +174,20 @@ function Column({
   return (
     <section className={s['column']} aria-label={column.label} data-column={column.key}>
       <div className={s['head']}>
-        <Tag size="md" tone="strong" on={column.hot} className={s['label']}>
+        <h3 className={s['label']}>
           {column.label}
-        </Tag>
-        <Numeral size="M" value={column.items.length} aria-label={`${column.count} ${column.label}`} />
+          <span
+            className={s['count']}
+            data-on={column.hot && column.items.length > 0 ? 'true' : undefined}
+            aria-label={`${column.count} ${column.label}`}
+          >
+            {column.items.length}
+          </span>
+        </h3>
+        <p className={s['sub']}>{column.sub}</p>
       </div>
       {column.items.map((card) => (
-        <BoardCardView key={card.sessionId} card={card} onFocusCard={onFocusCard} />
+        <BoardCardView key={card.sessionId} card={card} column={column.key} onFocusCard={onFocusCard} />
       ))}
       {column.empty ? <div className={s['empty']}>{column.emptyText}</div> : null}
       {column.spawn ? (
@@ -219,11 +249,37 @@ export function Agents() {
     [focusedCard],
   );
 
+  const setBoardScope = useUi((u) => u.setBoardScope);
+  const openNewTask = useUi((u) => u.openNewTask);
   return (
-    <div className={s['board']} data-board="agents">
-      {columns.map((column) => (
-        <Column key={column.key} column={column} onSpawn={onSpawn} onFocusCard={onFocusCard} />
-      ))}
+    <div className={s['screen']}>
+      <header className={s['pagehead']}>
+        <h2 className={s['title']}>{copy.board.title}</h2>
+        <p className={s['scope']}>
+          {scopeId === null ? copy.board.allProjects : projectNameOf(useReadModel.getState().model, scopeId)}
+        </p>
+        <div className={s['acts']}>
+          {projectId !== null ? (
+            <Button
+              aria-pressed={boardScope === 'project'}
+              onClick={() => setBoardScope(boardScope === 'project' ? 'all' : 'project')}
+              data-board-scope="true"
+            >
+              {boardScope === 'project' ? copy.board.allProjects : copy.board.thisProject}
+            </Button>
+          ) : null}
+          {projectId !== null ? (
+            <Button variant="accent" onClick={() => openNewTask(projectId)}>
+              {copy.home.newTask}
+            </Button>
+          ) : null}
+        </div>
+      </header>
+      <div className={s['board']} data-board="agents">
+        {columns.map((column) => (
+          <Column key={column.key} column={column} onSpawn={onSpawn} onFocusCard={onFocusCard} />
+        ))}
+      </div>
     </div>
   );
 }

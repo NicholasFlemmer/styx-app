@@ -4,10 +4,8 @@
     align-items: center;
     gap: 6px;
     font-family: var(--font-ui);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: var(--mu);
     white-space: nowrap;
   }

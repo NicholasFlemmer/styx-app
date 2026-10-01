@@ -33,10 +33,12 @@ export interface TerminalPaneProps {
   screenReader: boolean;
   /** Height of the editor column, for the 60 % cap. */
   columnHeight: () => number;
+  /** The workspace's Terminal tab (ADR-0027 §2): the terminal takes the whole column; no handle, no collapse. */
+  fill?: boolean;
 }
 
 /**
- * Terminal pane (spec §4.1: 130px, drag-resizable, collapsible): `TERMINAL · {branch}` label, one xterm per
+ * Terminal pane (spec §4.1: 130px, drag-resizable, collapsible): `Terminal, {branch}` label, one xterm per
  * session kept alive across tab switches, 6px drag handle on the top edge, double-click collapses.
  */
 export function TerminalPane({
@@ -45,13 +47,14 @@ export function TerminalPane({
   branch,
   screenReader,
   columnHeight,
+  fill: filling = false,
 }: TerminalPaneProps) {
   const host = useRef<HTMLDivElement>(null);
   const entry = useRef<TerminalEntry | null>(null);
   const height = useUi((u) => u.paneSizes[PANE_KEY] ?? sizes.terminal);
   const last = useUi((u) => u.paneSizes[LAST_KEY] ?? sizes.terminal);
   const setPaneSize = useUi((u) => u.setPaneSize);
-  const collapsed = height <= TERMINAL_COLLAPSED;
+  const collapsed = !filling && height <= TERMINAL_COLLAPSED;
 
   useEffect(() => {
     const el = host.current;
@@ -124,25 +127,27 @@ export function TerminalPane({
 
   return (
     <div
-      className={s['pane']}
-      style={{ height }}
+      className={[s['pane'], filling ? s['fill'] : undefined].filter(Boolean).join(' ')}
+      style={filling ? undefined : { height }}
       data-keyscope="terminal"
       data-terminal="true"
       data-collapsed={collapsed ? 'true' : undefined}
     >
-      <div
-        className={s['handle']}
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label={copy.workspace.terminal.split(' ·')[0]}
-        aria-valuenow={height}
-        aria-valuemin={TERMINAL_COLLAPSED}
-        tabIndex={0}
-        onKeyDown={onHandleKeyDown}
-        onPointerDown={onPointerDown}
-        onDoubleClick={toggle}
-      />
-      <div className={s['label']} onDoubleClick={toggle}>
+      {filling ? null : (
+        <div
+          className={s['handle']}
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label={copy.workspace.terminalName}
+          aria-valuenow={height}
+          aria-valuemin={TERMINAL_COLLAPSED}
+          tabIndex={0}
+          onKeyDown={onHandleKeyDown}
+          onPointerDown={onPointerDown}
+          onDoubleClick={toggle}
+        />
+      )}
+      <div className={s['label']} onDoubleClick={filling ? undefined : toggle}>
         {fill(copy.workspace.terminal, { branch })}
       </div>
       <div ref={host} className={s['host']} hidden={collapsed} />

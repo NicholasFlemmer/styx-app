@@ -133,15 +133,9 @@ const attachImage = async (page: Page, how: 'paste' | 'drop', name: string): Pro
   await page.dispatchEvent(root, 'drop', { dataTransfer: dt });
 };
 
-/** Opens a session tab: the visible tab, or the +N overflow menu's row when the strip holds it there. */
+/** Opens a lane from the project nav (ADR-0027 §1: every lane is listed there; there is no overflow). */
 const clickTab = async (page: Page, sessionId: string): Promise<void> => {
-  const tab = page.locator(`[data-session-tab="${sessionId}"]`);
-  if ((await tab.count()) > 0) {
-    await tab.click();
-    return;
-  }
-  await page.locator('[data-session-overflow]').click();
-  await page.locator(`[data-session-menu-item="${sessionId}"]`).click();
+  await page.locator(`[data-nav-lane="${sessionId}"]`).click();
 };
 
 const drag = async (page: Page, handle: Locator, dx: number, dy: number): Promise<void> => {
@@ -479,7 +473,7 @@ test('sim: workspace-chat', async () => {
       'the terminal strip opens a shell in the editor lane; a typed command prints and pwd is the lane',
       async () => {
         const term = page().locator('[data-terminal]');
-        await expect(term).toContainText(`TERMINAL · ${lane.branch}`, { timeout: 5000 });
+        await expect(term).toContainText(`Terminal, ${lane.branch}`, { timeout: 5000 });
         // A prompt means the pty is up; xterm needs focus before keys reach it.
         await page()
           .locator('[data-terminal] .xterm-helper-textarea, [data-terminal] .xterm')
@@ -606,11 +600,9 @@ test('sim: workspace-chat', async () => {
       if (!wt) throw new Error('codex worktree missing');
       codexLane.path = wt.path;
       codexLane.branch = wt.branch ?? '';
-      await expect(page().locator(`[data-session-tab="${ids.codexNew}"]`)).toHaveAttribute(
-        'data-inv',
-        'true',
-        { timeout: 10_000 },
-      );
+      await expect(page().locator(`[data-nav-lane="${ids.codexNew}"]`)).toHaveAttribute('data-inv', 'true', {
+        timeout: 10_000,
+      });
       return `session ${s.id} runner ${s.runner} on ${codexLane.branch} (${codexLane.path})`;
     });
 
@@ -644,10 +636,10 @@ test('sim: workspace-chat', async () => {
         const decision = chat().locator('[data-kind="decision"]');
         await expect(decision).toBeVisible({ timeout: 20_000 });
         await expect(decision).toContainText('echo hi > sim-a.txt');
-        await expect(chat().locator('[data-chat-meta]')).toContainText('waiting on you', { timeout: 10_000 });
-        await expect(page().locator(`[data-session-tab="${ids.codexNew}"] [data-tone="accent"]`)).toHaveCount(
-          1,
-        );
+        await expect(chat().locator('[data-lane-meta]')).toContainText('waiting on you', { timeout: 10_000 });
+        await expect(
+          page().locator(`[data-nav-lane="${ids.codexNew}"][data-lane-status="your-turn"]`),
+        ).toHaveCount(1);
         await sim.shot('codex-approval');
         await decision.getByRole('button', { name: 'Allow', exact: true }).click();
         await expect(chat().locator('[data-kind="tool"][data-status="ok"]')).toBeVisible({ timeout: 20_000 });
@@ -657,7 +649,7 @@ test('sim: workspace-chat', async () => {
         await expect
           .poll(() => existsSync(join(codexLane.path, 'sim-a.txt')), { timeout: 10_000 })
           .toBe(true);
-        await expect(chat().locator('[data-chat-meta]')).not.toContainText('waiting on you', {
+        await expect(chat().locator('[data-lane-meta]')).not.toContainText('waiting on you', {
           timeout: 20_000,
         });
       },
@@ -678,7 +670,7 @@ test('sim: workspace-chat', async () => {
             timeout: 10_000,
           },
         );
-        const meta = await chat().locator('[data-chat-meta]').innerText();
+        const meta = await chat().locator('[data-lane-meta]').innerText();
         if (!meta.startsWith(`codex · ${codexLane.branch} · `)) throw new Error(`meta "${meta}"`);
         if (!/tokens/.test(meta)) throw new Error(`meta has no token usage: "${meta}"`);
         await sim.shot('codex-checkpoint-row');
@@ -744,7 +736,7 @@ test('sim: workspace-chat', async () => {
         await expect(stop).toBeVisible({ timeout: 5000 });
         await expect(stop).toHaveText('Stop · esc');
         await decision.getByRole('button', { name: 'Deny', exact: true }).click();
-        await expect(chat().locator('[data-chat-meta]')).not.toContainText('waiting on you', {
+        await expect(chat().locator('[data-lane-meta]')).not.toContainText('waiting on you', {
           timeout: 20_000,
         });
         await expect
@@ -871,11 +863,9 @@ test('sim: workspace-chat', async () => {
         .not.toBeNull();
       ids.geminiNew =
         (await snapshot(sim)).sessions.find((s) => s.agent === 'gemini' && s.firstMessage === 'hi')?.id ?? '';
-      await expect(page().locator(`[data-session-tab="${ids.geminiNew}"]`)).toHaveAttribute(
-        'data-inv',
-        'true',
-        { timeout: 10_000 },
-      );
+      await expect(page().locator(`[data-nav-lane="${ids.geminiNew}"]`)).toHaveAttribute('data-inv', 'true', {
+        timeout: 10_000,
+      });
       await expect(chat().locator('[data-kind="agent"]').filter({ hasText: 'pong' })).toBeVisible({
         timeout: 20_000,
       });
@@ -945,10 +935,7 @@ test('sim: workspace-chat', async () => {
       "the draft is per session: tab switches and a trip to Settings keep each tab's text",
       async () => {
         await clickTab(page(), ids.codexNew);
-        await expect(page().locator(`[data-session-tab="${ids.codexNew}"]`)).toHaveAttribute(
-          'data-inv',
-          'true',
-        );
+        await expect(page().locator(`[data-nav-lane="${ids.codexNew}"]`)).toHaveAttribute('data-inv', 'true');
         await composer().fill('draft for codex');
         await clickTab(page(), ids.geminiNew);
         await expect(composer()).toHaveValue('', { timeout: 5000 });
@@ -1065,7 +1052,7 @@ test('sim: workspace-chat', async () => {
       await sim.shot('composer-attachment-sent');
       // The fake answers with its scripted ask (whichever tab this is on); allow it so the session settles.
       const activeTab =
-        (await page().locator('[data-session-tab][aria-selected="true"]').getAttribute('data-session-tab')) ??
+        (await page().locator('[data-nav-lane][aria-current="page"]').getAttribute('data-nav-lane')) ??
         ids.codexNew;
       const decision = chat().locator('[data-kind="decision"]').last();
       await expect(decision.getByRole('button', { name: 'Allow', exact: true })).toBeVisible({
@@ -1132,42 +1119,28 @@ test('sim: workspace-chat', async () => {
 
     // ------------------------------------------------------------------ 7. tabs
     await sim.step(
-      'five live sessions: three tabs plus a ▾ overflow; the active session always has a tab',
+      'five live sessions: the nav lists every lane, your turn first, and the open one is current',
       async () => {
-        const tabs = page().locator('[data-session-tab]');
-        await expect(tabs).toHaveCount(3, { timeout: 5000 });
-        const overflow = page().locator('[data-session-overflow]');
-        await expect(overflow).toBeVisible();
-        await expect(overflow).toHaveText(/\+2/);
-        const labels = await tabs.allInnerTexts();
-        await overflow.click();
-        const menu = page().getByRole('menu', { name: 'Sessions' });
-        await expect(menu).toBeVisible({ timeout: 3000 });
-        const items = await menu.getByRole('menuitem').allInnerTexts();
-        await expect(menu.getByRole('menuitem').first()).toBeFocused();
-        await menu.getByRole('menuitem').first().click();
-        await expect(menu).toHaveCount(0);
-        await expect(tabs).toHaveCount(3);
-        const after = await tabs.allInnerTexts();
-        const norm = (l: string[]) => l.map((x) => x.replace(/\s+/g, ' ').trim());
-        const dup = norm(labels).filter((l, i, a) => a.indexOf(l) !== i);
-        if (dup.length > 0)
+        const lanes = page().locator('[data-nav-lane]');
+        await expect(lanes).toHaveCount(5, { timeout: 5000 });
+        const statuses = await lanes.evaluateAll((els) => els.map((e) => e.getAttribute('data-lane-status')));
+        const firstOther = statuses.findIndex((x) => x !== 'your-turn');
+        if (statuses.slice(firstOther).includes('your-turn'))
           sim.finding({
-            severity: 'minor',
-            title: 'two sessions of the same agent get identical tab labels',
-            repro: 'acme-shop already has a Codex session; spawn another Codex',
-            expected: 'tabs a person can tell apart (branch, number, or first-message hint on hover)',
-            observed: `tabs read ${norm(labels).join(' | ')}`,
-            where: 'packages/core/src/selectors/tabs.ts sessionTabs (label = agentLabel only)',
+            severity: 'major',
+            title: 'a lane waiting on you is listed below one that is not',
+            repro: 'five live sessions in acme-shop',
+            expected: 'every "Your turn" lane first',
+            observed: statuses.join(' | '),
           });
-        await sim.shot('tabs-overflow');
-        return `tabs ${norm(labels).join(' | ')} · menu ${norm(items).join(' | ')} → ${norm(after).join(' | ')}`;
+        await lanes.nth(1).click();
+        await expect(lanes.nth(1)).toHaveAttribute('aria-current', 'page');
       },
     );
 
     await sim.step('tab dots: working = text, needs-you = accent with !, idle = line', async () => {
       const tone = async (id: string) => {
-        const tab = page().locator(`[data-session-tab="${id}"]`);
+        const tab = page().locator(`[data-nav-lane="${id}"]`);
         if ((await tab.count()) === 0) return 'not-visible';
         const dot = tab.locator('[data-tone]');
         return (await dot.count()) === 0 ? 'no-dot' : ((await dot.first().getAttribute('data-tone')) ?? '?');
@@ -1182,7 +1155,7 @@ test('sim: workspace-chat', async () => {
       if (seen['claudeDemo'] !== 'text') throw new Error(`working tab dot ${seen['claudeDemo']}`);
       if (seen['codexDemo'] !== 'accent') throw new Error(`needs-you tab dot ${seen['codexDemo']}`);
       await expect(
-        page().locator(`[data-session-tab="${ids.codexDemo}"] [role="img"][aria-label="needs you"]`),
+        page().locator(`[data-nav-lane="${ids.codexDemo}"][data-lane-status="your-turn"]`),
       ).toHaveCount(1);
       if (seen['codexNew'] !== 'line') throw new Error(`idle tab dot ${seen['codexNew']}`);
       return JSON.stringify(seen);
@@ -1239,7 +1212,7 @@ test('sim: workspace-chat', async () => {
 
     await sim.step('✕ on a tab closes the session (ends + archives) and the tab goes away', async () => {
       await clickTab(page(), ids.geminiNew);
-      const tab = page().locator(`[data-session-tab="${ids.geminiNew}"]`);
+      const tab = page().locator(`[data-nav-lane="${ids.geminiNew}"]`);
       await expect(tab).toHaveAttribute('data-inv', 'true');
       await tab.locator('[data-tab-close]').click();
       const dialogs = await page().getByRole('dialog').count();

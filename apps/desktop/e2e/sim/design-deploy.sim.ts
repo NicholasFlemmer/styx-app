@@ -1405,7 +1405,7 @@ test('sim: design-deploy', async () => {
         'Escape in the Connect target modal: does it close (handoff: Escape closes any overlay)?',
         async () => {
           await page()
-            .getByRole('button', { name: /Connect target · OAuth/ })
+            .getByRole('button', { name: /Connect a target: OAuth/ })
             .click();
           const dialog = page().getByRole('dialog');
           await dialog.waitFor({ timeout: 8000 });
@@ -1433,7 +1433,7 @@ test('sim: design-deploy', async () => {
           const dialog = page().getByRole('dialog');
           if ((await dialog.count()) === 0)
             await page()
-              .getByRole('button', { name: /Connect target · OAuth/ })
+              .getByRole('button', { name: /Connect a target: OAuth/ })
               .click();
           await dialog.locator('[data-provider]').first().waitFor({ timeout: 5000 });
           const tiles = await dialog.locator('[data-provider]').allInnerTexts();
@@ -1459,7 +1459,7 @@ test('sim: design-deploy', async () => {
         const dialog = page().getByRole('dialog');
         if ((await dialog.count()) === 0) {
           await page()
-            .getByRole('button', { name: /Connect target · OAuth/ })
+            .getByRole('button', { name: /Connect a target: OAuth/ })
             .click();
           await dialog.waitFor({ timeout: 5000 });
         }
@@ -1641,7 +1641,7 @@ test('sim: design-deploy', async () => {
         'Connect · SSH: validation (empty, bad port), Save to a refused loopback port, the resulting row',
         async () => {
           await page()
-            .getByRole('button', { name: /Connect target · OAuth/ })
+            .getByRole('button', { name: /Connect a target: OAuth/ })
             .click();
           const dialog = await onProviderGrid();
           await dialog.locator('[data-provider="ssh"]').click();

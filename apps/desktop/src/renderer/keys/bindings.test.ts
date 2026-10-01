@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtures, sessionTabs, upsertRows, type ProjectId } from '@styx/core';
+import { fixtures, navLanes, upsertRows, type ProjectId } from '@styx/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../state/read-model';
 import { selectSessionId, useUiStore } from '../state/ui-store';
@@ -99,17 +99,17 @@ describe('shell bindings', () => {
     expect(useUiStore.getState().overlays[0]?.kind).toBe('palette');
   });
 
-  it('Mod+1–4 focus the nth session tab of the project', () => {
+  it('Mod+1–4 open the nth lane of the project, in the nav’s order (ADR-0027 §1)', () => {
     const model = useReadModel.getState().model;
-    const tabs = sessionTabs(model, fixtures.ids.project.acmeShop as ProjectId, null);
+    const lanes = navLanes(model, fixtures.ids.project.acmeShop as ProjectId, Date.now());
     press({ key: '2', metaKey: true });
-    expect(selectSessionId(useUiStore.getState())).toBe(tabs.visible[1]?.sessionId);
+    expect(selectSessionId(useUiStore.getState())).toBe(lanes[1]?.sessionId);
   });
 
-  it('Mod+Shift+N opens the spawn modal for the active project', () => {
+  it('Mod+Shift+N opens New task in the active project’s workspace (ADR-0027 §1)', () => {
     press({ key: 'n', metaKey: true, shiftKey: true });
-    const top = useUiStore.getState().overlays[0];
-    expect(top?.kind === 'modal' && top.modal === 'spawn').toBe(true);
+    expect(useUiStore.getState().newTask).toEqual({ projectId: fixtures.ids.project.acmeShop, text: '' });
+    expect(useUiStore.getState().screen).toBe('workspace');
   });
 
   it('Mod+Enter approves the head ask of the active session with 1h and its scope', () => {
@@ -146,18 +146,16 @@ describe('shell bindings', () => {
       },
     );
     // `system` preference on a dark OS: the visible look is dark, so the toggle goes to light, not to dark.
-    useReadModel
-      .getState()
-      .replaceModel(
-        {
-          ...fixtures.demoReadModel(),
-          settings: {
-            ...fixtures.demoReadModel().settings,
-            app: { ...fixtures.demoReadModel().settings.app, theme: 'system' },
-          },
+    useReadModel.getState().replaceModel(
+      {
+        ...fixtures.demoReadModel(),
+        settings: {
+          ...fixtures.demoReadModel().settings,
+          app: { ...fixtures.demoReadModel().settings.app, theme: 'system' },
         },
-        'connected',
-      );
+      },
+      'connected',
+    );
     useUiStore.setState({ resolvedTheme: 'dark' });
     press({ key: 't', metaKey: true, shiftKey: true });
     useUiStore.setState({ resolvedTheme: 'light' });
