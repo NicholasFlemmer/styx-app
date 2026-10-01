@@ -1,5 +1,8 @@
 import { copy, fill } from '../copy';
 import type { SessionId } from '../ids';
+import { AGENT_LABEL } from '../model/common';
+import type { Session } from '../model/session';
+import { taskOf } from './lanes';
 import type { ReadModel } from '../read-model';
 
 /**
@@ -125,4 +128,98 @@ export const laneSummaryLabel = (sum: LaneSummary): string => {
   if (sum.kept === 0) return files;
   const turns = sum.kept === 1 ? l.keptOne : fill(l.kept, { n: sum.kept });
   return `${turns}, ${files}`;
+};
+
+export type LaneState = 'ready' | Exclude<Session['state'], 'done'> | 'done';
+
+export interface ChangesTurn {
+  checkpointId: string;
+  turn: number;
+  /** What the person asked for in that turn (its first line), else "Turn n". */
+  title: string;
+  change: string;
+  undone: boolean;
+}
+
+export interface LaneChanges {
+  sessionId: SessionId;
+  state: LaneState;
+  stateLabel: string;
+  /** The task, as the lane header shows it. */
+  headline: string;
+  /** "Claude, 3 turns". */
+  byLine: string;
+  /** "No other lane touches these files" / "Also changed in agent/codex-1". */
+  overlap: string;
+  /** The agent's last reply: what it says it did. */
+  lastReply: string | null;
+  turns: ChangesTurn[];
+  /** The lane has changed files no recorded turn accounts for (an older lane, or edits made by hand). */
+  loose: boolean;
+  files: number;
+}
+
+const TITLE_MAX = 100;
+const REPLY_MAX = 1200;
+
+const clipTo = (text: string, max: number): string =>
+  text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+
+/**
+ * The lane as the Changes page shows it (ADR-0027 §3): where it stands, what it was for, what the agent last said,
+ * and every settled turn with changes (newest last) with the request that started it.
+ */
+export const laneChanges = (model: ReadModel, sessionId: SessionId): LaneChanges | null => {
+  const session = model.sessions.byId[sessionId];
+  if (session === undefined) return null;
+  const transcript = [...(model.transcripts[sessionId] ?? [])].sort((a, b) => a.seq - b.seq);
+  const byId = new Map(transcript.map((m) => [m.id as string, m]));
+  const turns: ChangesTurn[] = [];
+  for (const c of model.checkpoints[sessionId] ?? []) {
+    if (c.ref === null || c.files === 0) continue;
+    const asked = c.messageId === null ? '' : (byId.get(c.messageId)?.body ?? '');
+    const first =
+      asked
+        .split('\n')
+        .map((l) => l.trim())
+        .find((l) => l !== '') ?? '';
+    turns.push({
+      checkpointId: c.id,
+      turn: c.turn,
+      title: first === '' ? fill(copy.chat.changes.turn, { n: c.turn }) : clipTo(first, TITLE_MAX),
+      change: changeLabel(c),
+      undone: c.revertedAt !== null,
+    });
+  }
+  turns.sort((a, b) => a.turn - b.turn);
+  const reply = [...transcript].reverse().find((m) => m.payload.kind === 'agent' && m.body.trim() !== '');
+  const w = model.worktrees.byId[session.worktreeId];
+  const branches: string[] = [];
+  for (const o of w?.overlaps ?? []) {
+    const other = model.worktrees.byId[o.worktreeId];
+    if (other !== undefined && other.archivedAt === null && other.branch !== null)
+      branches.push(other.branch);
+  }
+  const files = w?.changes.files ?? 0;
+  const state: LaneState = session.state === 'done' ? (files > 0 ? 'ready' : 'done') : session.state;
+  const kept = turns.filter((t) => !t.undone).length;
+  const task = taskOf(session);
+  return {
+    sessionId,
+    state,
+    stateLabel: copy.chat.changes.state[state],
+    headline: task === '' ? fill(copy.lanes.nav.untitled, { agent: AGENT_LABEL[session.agent] }) : task,
+    byLine: fill(copy.chat.changes.byAgent, {
+      agent: AGENT_LABEL[session.agent],
+      turns: kept === 1 ? copy.chat.changes.turnsOne : fill(copy.chat.changes.turns, { n: kept }),
+    }),
+    overlap:
+      branches.length === 0
+        ? copy.chat.changes.overlapNone
+        : fill(copy.chat.changes.overlap, { branches: branches.join(', ') }),
+    lastReply: reply === undefined ? null : clipTo(reply.body.trim(), REPLY_MAX),
+    turns,
+    loose: turns.length === 0 && files > 0,
+    files,
+  };
 };

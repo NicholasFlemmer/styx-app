@@ -40,8 +40,8 @@ export const TOUR_STEPS: readonly Step[] = [
   { key: 'spawn', anchor: '[data-nav-new-task="true"]', go: { screen: 'workspace' }, needsProject: true },
   { key: 'tabs', anchor: '[data-nav-lanes="true"]', go: { screen: 'workspace' }, needsProject: true },
   { key: 'composer', anchor: '[data-keyscope="composer"]', go: { screen: 'workspace' }, needsProject: true },
-  { key: 'editor', anchor: '[data-keyscope="editor"]', go: { screen: 'workspace' }, needsProject: true },
-  { key: 'land', anchor: '[data-land-button="true"]', go: { screen: 'workspace' }, needsProject: true },
+  { key: 'editor', anchor: '[data-workspace-mode="code"]', go: { screen: 'workspace' }, needsProject: true },
+  { key: 'land', anchor: '[data-lane-land="true"]', go: { screen: 'workspace' }, needsProject: true },
   { key: 'deploy', anchor: '[data-deploy-button="true"]', go: { screen: 'workspace' }, needsProject: true },
   {
     key: 'design',

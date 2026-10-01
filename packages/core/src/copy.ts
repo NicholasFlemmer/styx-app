@@ -174,6 +174,43 @@ export const copy = {
       showAll: 'Show them',
       hideAll: 'Fold them',
     },
+    /** The workspace centre's instruments on the lane (ADR-0027 §2). */
+    instruments: {
+      label: 'Lane view',
+      preview: 'Preview',
+      changes: 'Changes',
+      code: 'Code',
+      terminal: 'Terminal',
+    },
+    /** The Changes instrument: the lane as a page you sign off (ADR-0027 §3). */
+    changes: {
+      state: {
+        ready: 'Ready to land',
+        working: 'Still working',
+        'needs-you': 'Waiting on you',
+        idle: 'Waiting for your next message',
+        paused: 'Paused',
+        done: 'Finished',
+      },
+      byAgent: '{agent}, {turns}',
+      turns: '{n} turns',
+      turnsOne: '1 turn',
+      overlapNone: 'No other lane touches these files',
+      overlap: 'Also changed in {branches}',
+      whatItDid: 'What it did, turn by turn',
+      turn: 'Turn {n}',
+      show: 'Show',
+      hide: 'Hide',
+      loading: 'Reading the diff…',
+      loose: 'Changes not tied to a turn',
+      looseBody:
+        'Edits made outside a recorded turn: in your editor, or by an agent before turns were recorded.',
+      emptyHeadline: 'Nothing has changed yet',
+      emptyBody: 'When the agent edits files, each turn shows up here with its diff.',
+      noLane: 'Pick a lane in the nav to see what it changed.',
+      ask: 'Ask for changes',
+      review: 'Review hunk by hunk',
+    },
     /** The lane header over the chat (ADR-0027 §1). */
     lane: {
       noChanges: 'No changes yet',
@@ -1316,6 +1353,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     },
     openIn: 'Open in {ide}',
     terminal: 'Terminal, {branch}',
+    /** The terminal's resize handle and its tab in the workspace (ADR-0027 §2). */
+    terminalName: 'Terminal',
     editorStatus: 'Monaco · {eol} · {lang}',
     /** Editor readout appended to the prototype's status text (owner addition, discrepancies #58; not in §10). */
     editorCursor: 'Ln {line}, Col {col}',
@@ -1701,8 +1740,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
         body: 'Tell the agent what to do, drop in files or screenshots, and answer it when it asks. Messages queue while it works.',
       },
       editor: {
-        title: 'Watch the work land',
-        body: 'The agent’s changes show up here as it makes them. Review them line by line, and open any file in your own editor with one key.',
+        title: 'Your code, one tab away',
+        body: 'Changes reads what the agent did as a page you can sign off. Code is the full editor, with every agent edit marked; open any file in your own editor with one key.',
       },
       land: {
         title: 'Land it, or publish it',
@@ -1714,7 +1753,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       },
       design: {
         title: 'See it running',
-        body: 'The Design tab runs your project locally and shows it next to the code, so you can see what the agent built.',
+        body: 'Preview runs your project locally and shows it beside the chat, so you can see what the agent built.',
       },
       repo: {
         title: 'Every lane, one table',

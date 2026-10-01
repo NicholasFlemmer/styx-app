@@ -13,15 +13,22 @@
     align-items: stretch;
     border-bottom: 1px solid var(--ln);
     background: var(--s1);
+    /* At the window's minimum width the strip never spills under the chat: the tabs give way first. */
+    overflow: hidden;
   }
   /* The tabs are their own tablist (a tablist may only own tabs); the publish and deploy buttons are siblings that hug the right edge. */
+  /* The instruments are the strip's navigation: they keep their width; Publish and Deploy give way first. */
   .tabs {
     display: flex;
     align-items: stretch;
+    flex: none;
   }
   .modes > [data-publish-button],
   .modes > [data-deploy-button] {
     margin-left: auto;
+    min-width: 0;
+    flex-shrink: 1;
+    overflow: hidden;
   }
   .modes > [data-publish-button] + [data-deploy-button] {
     margin-left: 0;

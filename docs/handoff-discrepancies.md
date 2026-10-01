@@ -147,3 +147,13 @@ Log of places where `Styx.dc.html` (visuals win) and `Styx Spec.dc.html` (behavi
 - **Receipts.** Turns before the latest fold into one-line receipts (`Receipt`: what was asked, kept / undone / answered, and the time), with "Show them". While the agent works, the turn before the latest stays open too, because a steer starts a new row mid-turn.
 
 **Walkthrough.** The steps that pointed at the tab row now point at New task and the nav's lane list. | §4.1, §8 | ADR-0027 |
+| 132 | ADR-0027 phase 3, the workspace's instruments. The centre's Code / Design switch becomes four tabs on the lane:
+
+- **Preview** (the design window; `data-workspace-mode="design"` is kept for the tests and the walkthrough).
+- **Changes**: the lane as a paper page (`ChangesPage`, `laneChanges`). It shows where the lane stands, its task, whether another lane touches the same files, and what the agent last said. Then comes every settled turn, titled by what was asked; each turn's diff is fetched on Show and can be undone on its own (asks first). Edits no turn accounts for point at the hunk review. The decision bar has Land (accent), Ask for changes (focuses the composer) and Review hunk by hunk (the key-driven review screen, unchanged).
+- **Code**: the files pane, tabs, editor and hunk bar, unchanged. The file tree shows only here.
+- **Terminal**: the terminal fills the column.
+
+A project whose dev URL or command is known opens on Preview until the person picks an instrument; any other opens on Code. The pick persists as before (`workspace-mode`: 0 code, 1 preview, 2 changes, 3 terminal).
+
+Land left the strip for the lane header; Publish and Deploy stay and shrink before the tabs do. The walkthrough's editor step points at the Code tab, and its land step at the lane header's Land. | §4.1, §4.7 | ADR-0027 |

@@ -37,6 +37,11 @@
     min-height: 0;
     position: relative;
   }
+  /* The Terminal tab (ADR-0027 §2): the whole column. */
+  .fill {
+    flex: 1;
+    border-top: 0;
+  }
 }
 
 /* xterm paints its own surface; keep the pane background and drop the default padding. */

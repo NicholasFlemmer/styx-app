@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { copy } from '../copy';
 import { demoReadModel, ids } from '../fixtures/demo';
 import type { Checkpoint } from '../model/checkpoint';
 import type { ReadModel } from '../read-model';
-import { changeLabel, laneSummary, laneSummaryLabel, stepOf, stepsLabel, turnDoneLabel } from './turns';
+import {
+  changeLabel,
+  laneChanges,
+  laneSummary,
+  laneSummaryLabel,
+  stepOf,
+  stepsLabel,
+  turnDoneLabel,
+} from './turns';
 
 describe('stepOf (ADR-0027 §4)', () => {
   it.each([
@@ -123,5 +132,151 @@ describe('laneSummary', () => {
     [{ kept: 3, undone: 0, files: 7, added: 90, removed: 4 }, '3 turns kept, 7 files changed'],
   ])('%j → %s', (sum, label) => {
     expect(laneSummaryLabel(sum)).toBe(label);
+  });
+});
+
+describe('laneChanges (ADR-0027 §3)', () => {
+  const claude = ids.session.claude;
+  const base = demoReadModel();
+  const firstUser = (base.transcripts[claude] ?? []).find((m) => m.payload.kind === 'user');
+  const cp = (over: Partial<Checkpoint>): Checkpoint => ({
+    id: 'cp',
+    sessionId: claude,
+    worktreeId: 'wt' as Checkpoint['worktreeId'],
+    turn: 1,
+    messageId: null,
+    baseRef: 'b',
+    ref: 'r',
+    files: 2,
+    added: 10,
+    removed: 1,
+    createdAt: 0,
+    settledAt: 1,
+    revertedAt: null,
+    screens: [],
+    ...over,
+  });
+  const patched = (patch: {
+    checkpoints?: Checkpoint[];
+    session?: Partial<NonNullable<ReadModel['sessions']['byId'][string]>>;
+    worktree?: Partial<NonNullable<ReadModel['worktrees']['byId'][string]>>;
+  }): ReadModel => {
+    const m = demoReadModel();
+    const s = m.sessions.byId[claude];
+    if (s === undefined) throw new Error('fixture');
+    const w = m.worktrees.byId[s.worktreeId];
+    if (w === undefined) throw new Error('fixture');
+    return {
+      ...m,
+      sessions: { ...m.sessions, byId: { ...m.sessions.byId, [claude]: { ...s, ...patch.session } } },
+      worktrees: { ...m.worktrees, byId: { ...m.worktrees.byId, [w.id]: { ...w, ...patch.worktree } } },
+      checkpoints: { ...m.checkpoints, [claude]: patch.checkpoints ?? [] },
+    };
+  };
+
+  it('lists settled turns with changes, oldest first, titled by what was asked, and says what the agent last said', () => {
+    const m = patched({
+      checkpoints: [
+        cp({ id: 'c2', turn: 2, revertedAt: 9 }),
+        cp({ id: 'c1', turn: 1, messageId: firstUser?.id ?? null }),
+        cp({ id: 'cx', turn: 3, ref: null }),
+        cp({ id: 'c0', turn: 4, files: 0 }),
+      ],
+    });
+    const c = laneChanges(m, claude);
+    expect(c?.turns.map((t) => [t.checkpointId, t.title, t.undone])).toEqual([
+      ['c1', firstUser?.body.split('\n')[0]?.trim(), false],
+      ['c2', 'Turn 2', true],
+    ]);
+    expect(c?.turns[0]?.change).toBe('2 files, +10 −1');
+    expect(c?.byLine).toBe('Claude, 1 turn');
+    expect(c?.lastReply).not.toBeNull();
+    expect(c?.loose).toBe(false);
+    expect(c?.stateLabel).toBe(copy.chat.changes.state[c?.state ?? 'ready']);
+  });
+
+  it.each([
+    ['working', 0, 'working'],
+    ['idle', 0, 'idle'],
+    ['needs-you', 0, 'needs-you'],
+    ['done', 3, 'ready'],
+    ['done', 0, 'done'],
+  ] as const)('a %s session with %i files reads %s', (state, files, expected) => {
+    const m = patched({
+      session: { state, pausedReason: null, endedAt: state === 'done' ? 1 : null },
+      worktree: { changes: { files, added: files, removed: 0 } },
+    });
+    expect(laneChanges(m, claude)?.state).toBe(expected);
+  });
+
+  it('flags files no turn accounts for; names overlapping lanes; counts turns; names an untitled lane', () => {
+    const m = demoReadModel();
+    const s = m.sessions.byId[claude];
+    const other = Object.values(m.worktrees.byId).find((w) => w.id !== s?.worktreeId && w.branch !== null);
+    if (s === undefined || other === undefined) throw new Error('fixture');
+    const loose = patched({
+      worktree: {
+        changes: { files: 4, added: 9, removed: 0 },
+        overlaps: [
+          { worktreeId: other.id, files: ['a.ts'] },
+          { worktreeId: 'wt_gone' as typeof other.id, files: [] },
+        ],
+      },
+      session: { firstMessage: null, note: null },
+      checkpoints: [cp({ id: 'a', turn: 1 }), cp({ id: 'b', turn: 2 })].filter(() => false),
+    });
+    const c = laneChanges(loose, claude);
+    expect(c?.loose).toBe(true);
+    expect(c?.overlap).toBe(`Also changed in ${other.branch}`);
+    expect(c?.headline).toBe('Claude, no task yet');
+    expect(c?.byLine).toBe('Claude, 0 turns');
+    // A turn whose request row is gone is still listed, by number.
+    expect(
+      laneChanges(patched({ checkpoints: [cp({ id: 'g', messageId: 'gone' })] }), claude)?.turns[0]?.title,
+    ).toBe('Turn 1');
+    const two = laneChanges(
+      patched({ checkpoints: [cp({ id: 'a', turn: 1 }), cp({ id: 'b', turn: 2 })] }),
+      claude,
+    );
+    expect(two?.byLine).toBe('Claude, 2 turns');
+    expect(two?.overlap).toBe('No other lane touches these files');
+  });
+
+  it('is null for an unknown session; copes with no transcript, no reply and a missing worktree; clips a long reply', () => {
+    expect(laneChanges(demoReadModel(), 'nope' as typeof claude)).toBeNull();
+    const m = demoReadModel();
+    const s = m.sessions.byId[claude];
+    if (s === undefined) throw new Error('fixture');
+    const bare: ReadModel = {
+      ...m,
+      sessions: {
+        ...m.sessions,
+        byId: { ...m.sessions.byId, [claude]: { ...s, worktreeId: 'wt_gone' as typeof s.worktreeId } },
+      },
+      transcripts: { ...m.transcripts, [claude]: [] },
+    };
+    expect(laneChanges(bare, claude)).toMatchObject({ lastReply: null, files: 0, loose: false });
+    const noTranscript: ReadModel = { ...bare, transcripts: {} };
+    expect(laneChanges(noTranscript, claude)?.lastReply).toBeNull();
+    const reply = (m.transcripts[claude] ?? []).find((x) => x.payload.kind === 'agent');
+    if (reply === undefined) throw new Error('fixture');
+    const long: ReadModel = {
+      ...m,
+      transcripts: { ...m.transcripts, [claude]: [{ ...reply, seq: 999, body: 'y'.repeat(2000) }] },
+    };
+    const clipped = laneChanges(long, claude)?.lastReply ?? '';
+    expect(clipped.length).toBe(1200);
+    expect(clipped.endsWith('…')).toBe(true);
+    const longAsk: ReadModel = {
+      ...long,
+      transcripts: {
+        ...long.transcripts,
+        [claude]: [
+          { ...reply, id: 'u' as typeof reply.id, payload: { kind: 'user' }, body: 'z'.repeat(150) },
+        ],
+      },
+      checkpoints: { [claude]: [cp({ id: 'c', messageId: 'u' })] },
+    };
+    expect(laneChanges(longAsk, claude)?.turns[0]?.title.length).toBe(100);
   });
 });

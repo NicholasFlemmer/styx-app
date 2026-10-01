@@ -14,10 +14,11 @@ import s from './LandButton.module.css';
 export interface LandButtonProps {
   projectId: ProjectId;
   /**
-   * `toolbar` (default): the workspace mode strip. `lane`: the lane header over the chat (ADR-0027 §1), which
-   * marks itself differently so the walkthrough and tests can tell the two apart.
+   * `toolbar` (default): the workspace mode strip. `lane`: the lane header over the chat (ADR-0027 §1). `page`: the
+   * Changes page's decision bar, where landing is the move (accent). Each marks itself differently so the
+   * walkthrough and tests can tell them apart.
    */
-  placement?: 'toolbar' | 'lane';
+  placement?: 'toolbar' | 'lane' | 'page';
 }
 
 /**
@@ -45,12 +46,16 @@ export function LandButton({ projectId, placement = 'toolbar' }: LandButtonProps
   if (lane === null) return null;
   return (
     <div
-      className={placement === 'lane' ? s['inLane'] : s['wrap']}
-      {...(placement === 'lane' ? { 'data-lane-land': 'true' } : { 'data-land-button': 'true' })}
+      className={placement === 'toolbar' ? s['wrap'] : s['inLane']}
+      {...(placement === 'lane'
+        ? { 'data-lane-land': 'true' }
+        : placement === 'page'
+          ? { 'data-changes-land': 'true' }
+          : { 'data-land-button': 'true' })}
     >
       <Button
-        size="compact"
-        variant="secondary"
+        size={placement === 'page' ? 'regular' : 'compact'}
+        variant={placement === 'page' ? 'accent' : 'secondary'}
         className={s['button'] ?? ''}
         onClick={() => pushOverlay({ kind: 'modal', modal: 'land', worktreeId: lane.worktreeId })}
         title={`${lane.label} · ${lane.branch ?? ''}`.trim()}

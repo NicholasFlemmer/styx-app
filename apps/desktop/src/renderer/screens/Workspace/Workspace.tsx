@@ -14,6 +14,7 @@ import {
 import { Tab } from '@styx/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChatPane } from '../../features/chat/ChatPane';
+import { ChangesPage } from '../../features/changes/ChangesPage';
 import { FilesPane } from '../../features/editor/FilesPane';
 import { DesignPane } from '../../features/preview';
 import { FileTabs, type FileTab } from '../../features/editor/FileTabs';
@@ -37,7 +38,6 @@ import {
   statusBarTargets,
 } from '../../features/editor/status-bar';
 import { DeployButton } from '../../features/workspace/DeployButton';
-import { LandButton } from '../../features/workspace/LandButton';
 import { PublishButton } from '../../features/workspace/PublishButton';
 import { StatusBar } from '../../features/editor/StatusBar';
 import { TerminalPane } from '../../features/terminal/TerminalPane';
@@ -47,8 +47,13 @@ import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
 import { useUiStore } from '../../state/ui-store';
 import s from './Workspace.module.css';
 
-/** Which half of the editor column is showing; persisted alongside the pane sizes. */
+/** Which instrument the centre shows (ADR-0027 §2); persisted alongside the pane sizes. */
 const WORKSPACE_MODE_KEY = 'workspace-mode';
+/** The instruments on a lane, and how each is stored in `paneSizes` (0 and 1 kept from Code / Design). */
+type Instrument = 'code' | 'design' | 'changes' | 'terminal';
+const INSTRUMENT_CODE: Record<Instrument, number> = { code: 0, design: 1, changes: 2, terminal: 3 };
+const instrumentOf = (n: number | undefined, fallback: Instrument): Instrument =>
+  n === 0 ? 'code' : n === 1 ? 'design' : n === 2 ? 'changes' : n === 3 ? 'terminal' : fallback;
 /** git needs a moment after a turn ends before its marks are final; one re-read, not one per delta. */
 const TREE_REFRESH_DEBOUNCE_MS = 400;
 
@@ -234,14 +239,17 @@ export function Workspace() {
     applyWordWrap(wrapPref === 1);
   }, [wrapPref]);
   const ide = fallbackIde(model);
-  // Code / Design lives in the ui store's pane sizes so it survives a screen switch like the other pane prefs.
-  const modePref = useUi((u) => u.paneSizes[WORKSPACE_MODE_KEY] ?? 0);
-  const mode: 'code' | 'design' = modePref === 1 ? 'design' : 'code';
-  const setMode = (next: 'code' | 'design') => {
-    setPaneSize(WORKSPACE_MODE_KEY, next === 'design' ? 1 : 0);
-    void command('ui.persist', { paneSizes: { [WORKSPACE_MODE_KEY]: next === 'design' ? 1 : 0 } });
-  };
   const devUrl = projectId === null ? null : (model.settings.project[projectId]?.devUrl.value ?? null);
+  const devCommand =
+    projectId === null ? null : (model.settings.project[projectId]?.devCommand.value ?? null);
+  // The instrument lives in the ui store's pane sizes so it survives a screen switch like the other pane prefs.
+  // Until the person picks one, a project that knows how to run its app opens on Preview, any other on Code.
+  const modePref = useUi((u) => u.paneSizes[WORKSPACE_MODE_KEY]);
+  const mode = instrumentOf(modePref, devUrl !== null || devCommand !== null ? 'design' : 'code');
+  const setMode = (next: Instrument) => {
+    setPaneSize(WORKSPACE_MODE_KEY, INSTRUMENT_CODE[next]);
+    void command('ui.persist', { paneSizes: { [WORKSPACE_MODE_KEY]: INSTRUMENT_CODE[next] } });
+  };
 
   if (projectId === null || worktree === null || worktreeId === null) {
     return (
@@ -255,43 +263,60 @@ export function Workspace() {
   const branchLabel = worktree.branch ?? copy.workspace.noGit;
 
   return (
-    <div className={s['root']} data-workspace={worktree.branch ?? 'no-git'}>
-      <FilesPane
-        nodes={tree.nodes}
-        activePath={activePath}
-        onOpen={openFile}
-        changes={tree.changes}
-        ideName={ide}
-        onOpenInIde={() =>
-          void command(
-            'worktree.openInIde',
-            activePath === null ? { worktreeId } : { worktreeId, file: activePath },
-          )
-        }
-      />
+    <div className={s['root']} data-workspace={worktree.branch ?? 'no-git'} data-instrument={mode}>
+      {mode === 'code' ? (
+        <FilesPane
+          nodes={tree.nodes}
+          activePath={activePath}
+          onOpen={openFile}
+          changes={tree.changes}
+          ideName={ide}
+          onOpenInIde={() =>
+            void command(
+              'worktree.openInIde',
+              activePath === null ? { worktreeId } : { worktreeId, file: activePath },
+            )
+          }
+        />
+      ) : null}
       <div ref={column} className={s['column']}>
         {/*
-          Code / Design share the editor column rather than splitting it: the design window needs the full width
-          to be worth having at tablet and desktop sizes, and the owner ranks it above the editor.
+          The instruments on the lane (ADR-0027 §2): Preview (the design window, which needs the full width to be
+          worth having at tablet and desktop sizes), Changes (the lane as a page), Code (today's editor) and
+          Terminal. Publish and Deploy stay on the strip; Land is in the lane header.
         */}
         <div className={s['modes']}>
-          <div className={s['tabs']} role="tablist" aria-label={copy.workspace.design.design}>
+          <div className={s['tabs']} role="tablist" aria-label={copy.chat.instruments.label}>
             <Tab
               variant="approvals"
-              label={copy.workspace.design.code}
+              label={copy.chat.instruments.preview}
+              inv={mode === 'design'}
+              onClick={() => setMode('design')}
+              data-workspace-mode="design"
+            />
+            <Tab
+              variant="approvals"
+              label={copy.chat.instruments.changes}
+              inv={mode === 'changes'}
+              onClick={() => setMode('changes')}
+              data-workspace-mode="changes"
+            />
+            <Tab
+              variant="approvals"
+              label={copy.chat.instruments.code}
               inv={mode === 'code'}
               onClick={() => setMode('code')}
               data-workspace-mode="code"
             />
             <Tab
               variant="approvals"
-              label={copy.workspace.design.design}
-              inv={mode === 'design'}
-              onClick={() => setMode('design')}
-              data-workspace-mode="design"
+              label={copy.chat.instruments.terminal}
+              inv={mode === 'terminal'}
+              onClick={() => setMode('terminal')}
+              data-workspace-mode="terminal"
             />
           </div>
-          <LandButton projectId={projectId} />
+          {/* Land lives in the lane header over the chat (ADR-0027 §1); Publish and Deploy stay here. */}
           <PublishButton projectId={projectId} />
           <DeployButton projectId={projectId} />
         </div>
@@ -302,12 +327,14 @@ export function Workspace() {
             devUrl={devUrl}
             active
             run={model.runs[projectId] ?? null}
-            devCommand={model.settings.project[projectId]?.devCommand.value ?? null}
+            devCommand={devCommand}
             device={model.devices[projectId] ?? null}
             devPlatform={model.settings.project[projectId]?.devPlatform.value ?? null}
             devDevice={model.settings.project[projectId]?.devDevice.value ?? null}
           />
-        ) : (
+        ) : mode === 'changes' ? (
+          <ChangesPage projectId={projectId} sessionId={activeSessionId} />
+        ) : mode === 'code' ? (
           <>
             <FileTabs tabs={tabs} activePath={activePath} onSelect={openFile} onClose={closeFile} />
             <MonacoEditor
@@ -321,8 +348,8 @@ export function Workspace() {
               onWordWrap={(on) => setPaneSize(WORD_WRAP_KEY, on ? 1 : 0)}
             />
           </>
-        )}
-        {changes.length > 0 && hunkAgent !== null && (
+        ) : null}
+        {mode === 'code' && changes.length > 0 && hunkAgent !== null && (
           <HunkBar
             label={hunkBarLabel(changes.length, hunkAgent, hunkNote)}
             onReview={() => setScreen('diff')}
@@ -341,6 +368,7 @@ export function Workspace() {
           branch={branchLabel}
           screenReader={screenReader}
           columnHeight={() => column.current?.clientHeight ?? 0}
+          fill={mode === 'terminal'}
         />
         <StatusBar
           branch={branchLabel}
