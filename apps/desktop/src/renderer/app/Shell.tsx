@@ -2,6 +2,7 @@ import { BannerStack } from '../features/banners/BannerStack';
 import { useUpdatePrompt } from '../features/modals/UpdateModal';
 import { Tour, useFirstRunTour } from '../features/tour/Tour';
 import { AppTitlebar } from '../features/titlebar/AppTitlebar';
+import { isProjectSection, resolveSection } from '../screens/Settings/sections';
 import { useUi } from '../state/hooks';
 import { AppRail, RailSettings } from './AppRail';
 import { Nav } from './Nav';
@@ -16,6 +17,8 @@ import s from './Shell.module.css';
 export function Shell() {
   const screen = useUi((u) => u.screen);
   const chromeHidden = screen === 'onboarding';
+  // App settings stand apart from the project: no project nav beside them (its own options open with it).
+  const appSettings = useUi((u) => u.screen === 'settings' && !isProjectSection(resolveSection(u.settingsSection)));
   // A downloaded update opens its dialog once per version (#119).
   useUpdatePrompt();
   // The first-run walkthrough starts itself once after onboarding (#124).
@@ -33,7 +36,7 @@ export function Shell() {
             <RailSettings />
           </div>
         )}
-        {chromeHidden ? null : <Nav />}
+        {chromeHidden || appSettings ? null : <Nav />}
         <ScreenOutlet />
       </div>
       <Tour />

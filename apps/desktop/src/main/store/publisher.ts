@@ -24,7 +24,7 @@ import {
   type TranscriptMessage,
 } from '@styx/core';
 import type { Repos } from '../db/repos';
-import { buildSnapshot } from './projection';
+import { TRANSCRIPT_PAGE, TRANSCRIPT_WINDOW, buildSnapshot } from './projection';
 
 /** The slice of `WebContents` the publisher needs (fakeable in tests). */
 export interface WindowLike {
@@ -78,6 +78,8 @@ export class Publisher {
   private readonly ptyBacklog = new Map<string, string>();
   private readonly ptyExited: string[] = [];
   private ptyTimer: NodeJS.Timeout | null = null;
+  /** Sessions whose transcript was opened further back than the default window ("Show earlier messages"). */
+  private readonly transcriptWindows = new Map<string, number>();
   private readonly tickMs: number;
   private extras: SnapshotExtras = {
     runs: () => [],
@@ -164,6 +166,26 @@ export class Publisher {
     if (ids.length > 0) this.emit({ op: 'remove', table, ids: [...ids] });
   }
 
+  /** How many of a session's latest rows the renderer holds. */
+  transcriptWindow(sessionId: string): number {
+    return this.transcriptWindows.get(sessionId) ?? TRANSCRIPT_WINDOW;
+  }
+
+  /** Re-sends a session's transcript within its current window (after a row was rewritten in place). */
+  transcriptReplace(sessionId: SessionId): void {
+    this.emit({
+      op: 'transcript.replace',
+      sessionId,
+      messages: this.deps.repos.transcripts.last(sessionId, this.transcriptWindow(sessionId)),
+    });
+  }
+
+  /** "Show earlier messages": widens the session's window by a page and re-sends it, so a long thread reads from the top. */
+  transcriptEarlier(sessionId: SessionId): void {
+    this.transcriptWindows.set(sessionId, this.transcriptWindow(sessionId) + TRANSCRIPT_PAGE);
+    this.transcriptReplace(sessionId);
+  }
+
   transcriptAppend(sessionId: SessionId, messages: TranscriptMessage[]): void {
     if (messages.length > 0) this.emit({ op: 'transcript.append', sessionId, messages });
   }
@@ -236,6 +258,7 @@ export class Publisher {
       {
         repos: this.deps.repos,
         popouts: this.deps.popouts,
+        transcriptWindow: (sid) => this.transcriptWindow(sid),
         runs: this.extras.runs,
         devices: this.extras.devices,
         deploys: this.extras.deploys,

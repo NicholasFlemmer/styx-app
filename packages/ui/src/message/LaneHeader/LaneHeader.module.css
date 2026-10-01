@@ -47,6 +47,24 @@
     -webkit-box-orient: vertical;
     overflow-wrap: anywhere;
   }
+  /* Opened: the whole task, scrolling past a third of the window (a pasted brief can be long). */
+  .task[data-expanded='true'] {
+    display: block;
+    max-height: 33vh;
+    overflow-y: auto;
+    white-space: pre-wrap;
+  }
+  .taskToggle {
+    cursor: pointer;
+  }
+  .taskToggle:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: 2px;
+  }
+  .taskToggle:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
   .sum {
     display: flex;
     align-items: center;

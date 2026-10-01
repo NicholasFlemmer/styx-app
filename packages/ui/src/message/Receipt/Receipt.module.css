@@ -17,7 +17,25 @@
   .receipt:hover {
     background: var(--s2);
   }
+  .chevron {
+    flex: none;
+    width: 12px;
+    font-size: 12px;
+    color: var(--mu);
+  }
+  /* Open: the head of the turn below it, in lime so the turn reads as one block. */
+  .receipt[data-open='true'] {
+    border-color: var(--ac);
+    background: var(--ac);
+    color: var(--acx);
+  }
+  .receipt[data-open='true'] .chevron,
+  .receipt[data-open='true'] .meta,
+  .receipt[data-open='true'][data-state='undone'] .title {
+    color: var(--acx);
+  }
   .title {
+    flex: 1;
     font-weight: 600;
     min-width: 0;
     overflow: hidden;

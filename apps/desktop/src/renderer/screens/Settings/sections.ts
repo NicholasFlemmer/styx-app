@@ -20,6 +20,9 @@ export type AppSection = (typeof APP_SECTIONS)[number];
 export type ProjectSection = (typeof PROJECT_SECTIONS)[number];
 export type SettingsSection = AppSection | ProjectSection;
 
+/** Where the rail's Settings opens: the app's own settings, apart from any project. */
+export const DEFAULT_APP_SECTION: AppSection = 'app:general';
+
 /** Prototype state script: `settingsNav: 'Targets'`. */
 export const DEFAULT_SETTINGS_SECTION: SettingsSection = 'project:targets';
 

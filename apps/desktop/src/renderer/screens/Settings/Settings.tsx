@@ -39,7 +39,6 @@ import {
 } from './rows';
 import {
   APP_SECTIONS,
-  PROJECT_SECTIONS,
   isProjectSection,
   resolveSection,
   SECTION_LABEL,
@@ -56,9 +55,9 @@ const POLICY_OPTIONS = (['ask-mfa', 'ask', 'always'] as const).map((value) => ({
 const isPolicy = (v: string): v is TargetPolicy => v in copy.targets.policy;
 
 /**
- * Settings (spec §4.6, ADR-0027 §5): a nav of every section, "This project" first and "App" after, then one
- * section at a time: header, then the Targets table or the label/value rows. The project's own options are also
- * rows in the project nav; the app sections used to be rail tiles and now live only here.
+ * Settings (spec §4.6, ADR-0027 §5), one section at a time: header, then the Targets table or the label/value rows.
+ * The app's sections (opened from the rail, with no project beside them) have their own nav; a project's options
+ * are rows in the project nav, which stays beside them.
  */
 export function Settings() {
   const projectId = useUi((u) => u.projectId);
@@ -74,30 +73,22 @@ export function Settings() {
 
   return (
     <div className={s['screen']} data-settings-section={section}>
-      <nav className={s['snav']} aria-label={copy.settings.groups.label} data-settings-nav="true">
-        <div className={s['snavGroup']}>{fill(copy.settings.groups.project, { project: projectName })}</div>
-        {PROJECT_SECTIONS.map((id) => (
-          <NavItem
-            key={id}
-            dense
-            label={SECTION_LABEL[id]}
-            inv={section === id}
-            onClick={() => setSettingsSection(id)}
-            data-settings-nav-item={id}
-          />
-        ))}
-        <div className={s['snavGroup']}>{copy.settings.groups.app}</div>
-        {APP_SECTIONS.map((id) => (
-          <NavItem
-            key={id}
-            dense
-            label={SECTION_LABEL[id]}
-            inv={section === id}
-            onClick={() => setSettingsSection(id)}
-            data-settings-nav-item={id}
-          />
-        ))}
-      </nav>
+      {/* App settings get their own nav; a project's options are rows in the project nav beside this screen. */}
+      {isProjectSection(section) ? null : (
+        <nav className={s['snav']} aria-label={copy.settings.groups.label} data-settings-nav="true">
+          <div className={s['snavGroup']}>{copy.settings.groups.app}</div>
+          {APP_SECTIONS.map((id) => (
+            <NavItem
+              key={id}
+              dense
+              label={SECTION_LABEL[id]}
+              inv={section === id}
+              onClick={() => setSettingsSection(id)}
+              data-settings-nav-item={id}
+            />
+          ))}
+        </nav>
+      )}
       <section className={s['main']} aria-labelledby="settings-title">
         <header className={s['header']}>
           <h2 id="settings-title" className={s['title']}>

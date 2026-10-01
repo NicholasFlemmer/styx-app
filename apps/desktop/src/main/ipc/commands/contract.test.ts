@@ -42,6 +42,32 @@ describe('command contract', () => {
     ).toBe(true);
   });
 
+  it('session.loadEarlier widens a long thread so it reads from the top', async () => {
+    const { app, sender, win } = makeTestApp();
+    const sid = fixtures.ids.session.claude;
+    const start = app.repos.transcripts.nextSeq(sid);
+    for (let i = 0; i < 260; i++) app.transcript.system(sid, `line ${i}`);
+    const total = start + 260;
+    const before = await app.bus.dispatch(sender, 'store.snapshot', {});
+    if (!before.ok) throw new Error('snapshot failed');
+    expect(before.value.transcripts[sid]).toHaveLength(200);
+    expect(before.value.transcripts[sid]?.[0]?.seq).toBe(total - 200);
+    expect(await app.bus.dispatch(sender, 'session.loadEarlier', { sessionId: sid })).toEqual({
+      ok: true,
+      value: {},
+    });
+    app.publisher.flush();
+    expect(
+      win
+        .batches()
+        .flatMap((b) => b.deltas)
+        .some((d) => d.op === 'transcript.replace'),
+    ).toBe(true);
+    const after = await app.bus.dispatch(sender, 'store.snapshot', {});
+    if (!after.ok) throw new Error('snapshot failed');
+    expect(after.value.transcripts[sid]).toHaveLength(total);
+  });
+
   it('ui.persist and onboarding.complete write ui_state / app_settings', async () => {
     const { app, sender } = makeTestApp({ fixture: 'empty' });
     await app.bus.dispatch(sender, 'ui.persist', {

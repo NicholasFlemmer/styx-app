@@ -26,6 +26,7 @@ import {
   Composer,
   Icon,
   LaneHeader,
+  OpenTurn,
   Markdown,
   Message,
   Receipt,
@@ -45,6 +46,7 @@ import {
   useState,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from 'react';
 import { sizes } from '@styx/tokens';
 import { env } from '../../state/bridge';
@@ -319,6 +321,8 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const transcripts = activeId === null ? undefined : model.transcripts[activeId];
   const checkpoints = activeId === null ? undefined : model.checkpoints[activeId];
   const live = session !== null && (session.state === 'working' || session.state === 'needs-you');
+  // Main sends a long thread's latest rows only; seq counts from 0, so a later first row means more above it.
+  const olderOnMain = (transcripts?.[0]?.seq ?? 0) > 0;
   const lane = useMemo(() => {
     const at = new Map((transcripts ?? []).map((m) => [m.id as string, m.createdAt]));
     return laneItems(items, {
@@ -661,13 +665,21 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   };
 
   /** The lane's rows (ADR-0027 §3 / §4): steps, results on paper, receipts, then everything else as before. */
-  const renderLaneItem = (item: LaneItem) => {
+  const renderLaneItem = (item: LaneItem): ReactNode => {
     switch (item.kind) {
       case 'earlier':
         return (
           <div key={item.id} className={s['earlier']} data-turns-earlier="true">
             <span>{item.label}</span>
-            <button type="button" className={s['link']} onClick={() => setShowAllTurns((v) => !v)}>
+            <button
+              type="button"
+              className={s['earlierToggle']}
+              aria-expanded={!item.folded}
+              onClick={() => {
+                setShowAllTurns((v) => !v);
+                setExpandedTurns(new Set());
+              }}
+            >
               {item.folded ? copy.chat.turn.showAll : copy.chat.turn.hideAll}
             </button>
           </div>
@@ -683,17 +695,20 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
             data-turn-receipt={item.turnId}
           />
         );
-      case 'fold':
+      case 'turn':
+        // An earlier turn opened from its receipt: the receipt, lime, heads it; a lime rule runs down its rows.
         return (
-          <button
+          <OpenTurn
             key={item.id}
-            type="button"
-            className={[s['link'], s['foldTurn']].join(' ')}
-            aria-expanded="true"
-            onClick={() => setExpandedTurns((set) => toggleIn(set, item.turnId))}
+            title={item.title}
+            meta={item.meta}
+            state={item.state}
+            onFold={() => setExpandedTurns((set) => toggleIn(set, item.turnId))}
+            headProps={{ 'data-turn-receipt': item.turnId }}
+            data-turn-open={item.turnId}
           >
-            {copy.chat.turn.hideAll}
-          </button>
+            {item.items.map(renderLaneItem)}
+          </OpenTurn>
         );
       case 'steps':
         return (
@@ -853,6 +868,17 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
         </div>
       ) : (
         <Transcript compact={compact}>
+          {olderOnMain && activeId !== null && (
+            <div className={s['earlier']} data-transcript-older="true">
+              <button
+                type="button"
+                className={s['link']}
+                onClick={() => void command('session.loadEarlier', { sessionId: activeId })}
+              >
+                {copy.chat.turn.olderMessages}
+              </button>
+            </div>
+          )}
           {lane.map(renderLaneItem)}
           {working !== null && (
             <WorkingLine

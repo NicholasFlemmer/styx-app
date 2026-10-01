@@ -28,8 +28,7 @@
   .modes > [data-publish-button],
   .modes > [data-deploy-button] {
     margin-left: auto;
-    min-width: 0;
-    flex-shrink: 1;
+    flex: none;
   }
   .modes > [data-publish-button] + [data-deploy-button] {
     margin-left: 0;
@@ -44,6 +43,18 @@
     container-name: column;
   }
   /* A narrow centre (the window's minimum with the file tree open): the instruments tighten so all four fit. */
+  /* A middling centre (1280 with the files open): Publish and Deploy keep their glyphs and drop their words (still
+     their accessible names, and the button's title), so nothing is drawn over anything. */
+  @container column (max-width: 540px) {
+    .modes [data-strip-label] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
   @container column (max-width: 400px) {
     .tabs > [role='tab'] {
       padding-left: 9px;

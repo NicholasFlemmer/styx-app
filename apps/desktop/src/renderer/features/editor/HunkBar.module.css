@@ -7,9 +7,31 @@
     align-items: center;
     gap: 8px;
     padding: 0 12px;
+    overflow: hidden;
   }
+  /* One line, trimmed: the buttons keep their words and the label gives way (its full text is the title). */
   .label {
     flex: 1;
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bar > button {
+    flex: none;
+  }
+  /* A narrow centre (the window's minimum with the files open): the actions are what the bar is for. */
+  @container column (max-width: 400px) {
+    .bar {
+      gap: 4px;
+      padding: 0 8px;
+    }
+    .label {
+      display: none;
+    }
+    .bar > button {
+      padding-left: 8px;
+      padding-right: 8px;
+    }
   }
 }

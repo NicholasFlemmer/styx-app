@@ -3,6 +3,7 @@ import { RailTile } from '@styx/ui';
 import { useCallback } from 'react';
 import { openTask } from '../features/tasks/task-launch';
 import { findOverlay } from '../overlays/stack';
+import { DEFAULT_APP_SECTION, isProjectSection, resolveSection } from '../screens/Settings/sections';
 import { useModel, useNow, useUi } from '../state/hooks';
 import s from './Shell.module.css';
 
@@ -76,18 +77,25 @@ export function AppRail() {
   );
 }
 
-/** Settings at the foot of the rail (ADR-0027 §5): the one way into every app and project settings section. */
+/** Settings at the foot of the rail (ADR-0027 §5): the app's settings, apart from any project. */
 export function RailSettings() {
   const screen = useUi((u) => u.screen);
   const setScreen = useUi((u) => u.setScreen);
+  const section = resolveSection(useUi((u) => u.settingsSection));
+  const setSettingsSection = useUi((u) => u.setSettingsSection);
+  const appSettings = screen === 'settings' && !isProjectSection(section);
   return (
     <div className={s['railFoot']}>
       <RailTile
         icon="general"
         title={copy.appRail.settings.title}
-        active={screen === 'settings'}
+        active={appSettings}
         current="page"
-        onClick={() => setScreen('settings')}
+        onClick={() => {
+          // The app's settings, not a project's: those live in the project nav.
+          if (isProjectSection(section)) setSettingsSection(DEFAULT_APP_SECTION);
+          setScreen('settings');
+        }}
         data-app-rail-item="settings"
       />
     </div>
