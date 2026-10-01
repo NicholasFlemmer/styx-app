@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Styx next: ask, watch, decide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+
+/* Styx tokens, verbatim */
+:root {
+  --page:#181916; --bg:#0d0e0c; --s1:#121411; --s2:#1c1e1a; --ln:#2d302a; --tx:#e9ebe3; --mu:#858a81;
+  --ac:#d6ff3d; --acx:#0d0e0c; --act:#d6ff3d; --add:rgba(214,255,61,.13);
+  /* Paper: the light theme, used for work that has come back */
+  --p-bg:#f7f8f3; --p-s2:#e1e3db; --p-ln:#b3b7ab; --p-tx:#14160f; --p-mu:#5d6259; --p-act:#6e8f00; --p-add:rgba(150,200,0,.2);
+  --del:rgba(255,120,90,.16);
+  --ui: 'Archivo', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--page); color: var(--tx); font: 400 15px/1.5 var(--ui); padding: 64px 0 120px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
+
+/* ---------- the document around the artboards ---------- */
+.intro, .note { width: 1280px; margin: 0 auto; }
+.intro h1 { font: 700 56px/1.02 var(--ui); font-stretch: 125%; letter-spacing: -.01em; max-width: 16ch; }
+.intro p { margin-top: 20px; max-width: 62ch; color: var(--mu); font-size: 17px; }
+.intro p strong { color: var(--tx); font-weight: 600; }
+.note { display: grid; grid-template-columns: 56px 1fr; gap: 0 20px; margin-top: 96px; margin-bottom: 24px; }
+.note .n { font: 700 40px/1 var(--ui); font-stretch: 125%; color: var(--ac); }
+.note h2 { font: 700 26px/1.1 var(--ui); font-stretch: 112%; }
+.note p { grid-column: 2; margin-top: 8px; max-width: 70ch; color: var(--mu); }
+
+/* ---------- window chrome ---------- */
+.win { width: 1280px; height: 800px; margin: 0 auto; background: var(--bg); border: 1px solid var(--ln); display: grid; grid-template-rows: 38px 1fr; overflow: hidden; }
+.bar { display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid var(--ln); background: var(--s1); font-size: 13px; }
+.lights { display: flex; gap: 8px; margin-right: 10px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); }
+.proj { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.proj .sq { width: 18px; height: 18px; background: var(--ac); color: var(--acx); font: 700 11px/18px var(--ui); text-align: center; }
+.bar .tabs { display: flex; gap: 2px; margin-left: 18px; }
+.bar .tabs span { padding: 5px 10px; color: var(--mu); }
+.bar .tabs span[data-inv] { background: var(--tx); color: var(--bg); }
+.bar .tabs b { display: inline-block; min-width: 16px; margin-left: 6px; padding: 0 4px; background: var(--ac); color: var(--acx); font-size: 11px; text-align: center; }
+.bar .right { margin-left: auto; display: flex; gap: 18px; color: var(--mu); }
+
+/* ---------- 1. Ask ---------- */
+.ask { padding: 56px 120px 0; display: grid; grid-template-rows: auto auto auto 1fr; }
+.ask h3 { font: 700 46px/1.05 var(--ui); font-stretch: 125%; letter-spacing: -.01em; }
+.ask h3 span { color: var(--mu); }
+.composer { margin-top: 28px; border: 1px solid var(--tx); background: var(--s1); }
+.composer .text { padding: 20px 22px 8px; font-size: 19px; min-height: 104px; color: var(--tx); }
+.composer .text .caret { display: inline-block; width: 2px; height: 22px; background: var(--ac); vertical-align: -4px; margin-left: 1px; }
+.composer .row { display: flex; align-items: center; gap: 10px; padding: 12px 14px 12px 22px; border-top: 1px solid var(--ln); font-size: 13px; color: var(--mu); }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--ln); color: var(--tx); }
+.chip .dot { width: 8px; height: 8px; background: #e08a5c; }
+.go { margin-left: auto; padding: 10px 22px; background: var(--ac); color: var(--acx); font-weight: 700; font-size: 14px; }
+.starters { margin-top: 36px; }
+.starters h4 { font: 600 15px/1 var(--ui); color: var(--mu); margin-bottom: 12px; }
+.starter { display: grid; grid-template-columns: 1fr 240px 120px; align-items: center; padding: 13px 0; border-top: 1px solid var(--ln); }
+.starter:last-child { border-bottom: 1px solid var(--ln); }
+.starter .t { font-size: 17px; font-weight: 500; }
+.starter .t small { display: block; font-size: 13px; color: var(--mu); font-weight: 400; margin-top: 2px; }
+.starter .m { color: var(--mu); font-size: 13px; }
+.starter .a { justify-self: end; font-size: 13px; font-weight: 600; padding: 7px 14px; border: 1px solid var(--ln); }
+.starter:first-of-type .a { border-color: var(--tx); }
+.recent { align-self: end; padding-bottom: 28px; display: flex; gap: 18px; align-items: center; }
+.recent .lbl { font-size: 13px; color: var(--mu); width: 110px; }
+.sheet-thumb { width: 220px; height: 64px; background: var(--p-bg); color: var(--p-tx); padding: 10px 12px; font-size: 12px; line-height: 1.3; position: relative; }
+.sheet-thumb b { display: block; font: 700 13px/1.2 var(--ui); font-stretch: 110%; }
+.sheet-thumb em { position: absolute; bottom: 8px; left: 12px; font-style: normal; color: var(--p-mu); font-size: 11px; }
+.sheet-thumb.landed::after { content: 'Landed'; position: absolute; right: 8px; bottom: 8px; font-size: 11px; color: var(--p-act); font-weight: 600; }
+
+/* ---------- 2. Working ---------- */
+.work { display: grid; grid-template-columns: 1fr 560px; min-height: 0; }
+.work .left { padding: 40px 48px 0 56px; display: grid; grid-template-rows: auto 1fr auto; min-height: 0; }
+.asked { font-size: 13px; color: var(--mu); }
+.work h3 { font: 700 30px/1.12 var(--ui); font-stretch: 118%; margin-top: 6px; max-width: 22ch; }
+.meta { display: flex; gap: 16px; margin-top: 14px; font-size: 13px; color: var(--mu); }
+.meta .live { color: var(--tx); display: inline-flex; align-items: center; gap: 7px; }
+.meta .live i { width: 8px; height: 8px; background: var(--ac); animation: blink 1.4s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }
+.steps { list-style: none; margin-top: 30px; position: relative; align-self: start; }
+.steps::before { content: ''; position: absolute; left: 7px; top: 8px; bottom: 34px; width: 2px; background: var(--ln); }
+.steps .fill { position: absolute; left: 7px; top: 8px; height: 230px; width: 2px; background: var(--ac); }
+.steps li { position: relative; padding: 0 0 22px 34px; }
+.steps li::before { content: ''; position: absolute; left: 0; top: 4px; width: 16px; height: 16px; background: var(--bg); border: 2px solid var(--ln); }
+.steps li.done::before { background: var(--ac); border-color: var(--ac); }
+.steps li.now::before { background: var(--bg); border-color: var(--ac); box-shadow: inset 0 0 0 3px var(--bg), inset 0 0 0 8px var(--ac); }
+.steps li .s { font-size: 16px; }
+.steps li.next .s { color: var(--mu); }
+.steps li .d { font-size: 13px; color: var(--mu); margin-top: 3px; }
+.files { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+.files span { font: 400 12px/1 var(--mono); padding: 5px 7px; background: var(--s2); color: var(--tx); }
+.files span b { color: var(--act); font-weight: 500; }
+.tell { display: flex; gap: 10px; align-items: center; padding: 16px 0 22px; border-top: 1px solid var(--ln); }
+.tell .in { flex: 1; padding: 11px 14px; border: 1px solid var(--ln); color: var(--mu); font-size: 15px; }
+.tell .stop { padding: 10px 16px; border: 1px solid var(--ln); font-size: 13px; }
+.closer { font-size: 13px; color: var(--mu); text-decoration: underline; text-underline-offset: 3px; }
+.preview { border-left: 1px solid var(--ln); background: var(--s1); display: grid; grid-template-rows: 44px 1fr 40px; }
+.preview .url { display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--ln); font: 400 12px var(--mono); color: var(--mu); }
+.preview .url b { color: var(--tx); font-weight: 400; }
+.preview .foot { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-top: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+.stage { padding: 26px; display: grid; place-items: start center; }
+
+/* the customer's app (Acme Shop) shown inside previews: deliberately not Styx-styled */
+.acme { width: 100%; background: #ffffff; color: #1f2430; font-family: system-ui, -apple-system, sans-serif; border-radius: 10px; overflow: hidden; }
+.acme.dark { background: #1b1f2a; color: #e8ebf2; }
+.acme .top { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #e7e9ef; font-weight: 700; font-size: 14px; }
+.acme.dark .top { border-color: #2c3242; }
+.acme .top i { font-style: normal; font-weight: 500; font-size: 12px; color: #7b8294; }
+.acme .body { padding: 18px; }
+.acme h5 { font-size: 18px; margin-bottom: 14px; }
+.acme .set { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eef0f4; font-size: 13px; }
+.acme.dark .set { border-color: #2c3242; }
+.acme .set small { display: block; color: #7b8294; font-size: 12px; margin-top: 2px; }
+.tog { width: 36px; height: 20px; border-radius: 10px; background: #d5d9e2; position: relative; flex: none; }
+.tog::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+.tog.on { background: #5b6cff; }
+.tog.on::after { left: 18px; }
+.acme .new { outline: 2px dashed var(--ac); outline-offset: 4px; }
+
+/* ---------- 3. Result: the paper ---------- */
+.result { display: grid; grid-template-columns: 1fr; place-items: start center; overflow: hidden; position: relative; }
+.paper { width: 900px; margin-top: 24px; background: var(--p-bg); color: var(--p-tx); padding: 32px 52px 120px; position: relative; }
+.paper .ready { display: flex; gap: 14px; align-items: center; font-size: 14px; color: var(--p-mu); }
+.paper .ready .ok { color: var(--p-act); font-weight: 600; display: inline-flex; align-items: center; gap: 7px; }
+.paper .ready .ok i { width: 10px; height: 10px; background: var(--p-act); }
+.paper h3 { font: 700 32px/1.08 var(--ui); font-stretch: 125%; letter-spacing: -.01em; margin-top: 12px; max-width: 28ch; }
+.paper .sum { margin-top: 12px; font-size: 16px; line-height: 1.55; max-width: 60ch; }
+.paper .sum + .sum { margin-top: 10px; }
+.ba { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--p-ln); }
+.ba > div { padding: 12px 14px; background: var(--p-s2); }
+.ba > div + div { border-left: 1px solid var(--p-ln); }
+.ba .cap { font-size: 13px; color: var(--p-mu); margin-bottom: 10px; display: flex; justify-content: space-between; }
+.ba .acme .body { padding: 12px 14px; }
+.ba .acme h5 { font-size: 15px; margin-bottom: 6px; }
+.ba .acme .top { padding: 10px 14px; font-size: 12px; }
+.ba .acme .set { padding: 9px 0; font-size: 12px; }
+.facts { display: grid; grid-template-columns: 1.4fr 1fr; gap: 40px; margin-top: 20px; }
+.facts h4 { font: 600 15px/1 var(--ui); margin-bottom: 12px; }
+.chg { display: grid; grid-template-columns: 1fr 90px; align-items: center; padding: 7px 0; border-top: 1px solid var(--p-ln); font: 400 13px/1.3 var(--mono); }
+.chg .bars { display: flex; height: 8px; gap: 2px; justify-content: flex-end; }
+.chg .bars .p { background: var(--p-act); }
+.chg .bars .m { background: #c45a3a; }
+.check { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--p-ln); font-size: 14px; }
+.check i { width: 10px; height: 10px; background: var(--p-act); flex: none; }
+.check.warn i { background: #c48a00; }
+.decide { position: absolute; left: 0; right: 0; bottom: 0; height: 84px; display: flex; align-items: center; gap: 12px; padding: 0 calc((1280px - 900px) / 2 + 52px); background: var(--bg); border-top: 1px solid var(--tx); }
+.decide .land { padding: 13px 28px; background: var(--ac); color: var(--acx); font-weight: 700; font-size: 15px; }
+.decide .b { padding: 12px 18px; border: 1px solid var(--ln); font-size: 14px; }
+.decide .r { margin-left: auto; font-size: 13px; color: var(--mu); }
+.decide kbd { font: 500 11px var(--mono); padding: 2px 5px; border: 1px solid currentColor; margin-left: 8px; opacity: .7; }
+
+/* ---------- 4. Today ---------- */
+.today { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; }
+.col { border-right: 1px solid var(--ln); padding: 26px 22px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.col:last-child { border-right: 0; }
+.col h3 { font: 700 22px/1 var(--ui); font-stretch: 118%; display: flex; align-items: baseline; gap: 10px; }
+.col h3 .c { font-size: 14px; font-weight: 600; color: var(--mu); font-stretch: 100%; }
+.col h3 .c[data-on] { background: var(--ac); color: var(--acx); padding: 2px 6px; }
+.col .sub { font-size: 13px; color: var(--mu); margin-top: -6px; }
+.card { border: 1px solid var(--ln); background: var(--s1); padding: 16px; }
+.card .who { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--mu); }
+.card .who .dot { width: 8px; height: 8px; background: #e08a5c; }
+.card .who .dot.cx { background: #7aa7ff; }
+.card .who .dot.gm { background: #b48cff; }
+.card .what { font-size: 16px; font-weight: 600; margin-top: 8px; line-height: 1.3; }
+.card .q { margin-top: 10px; padding: 12px; background: var(--s2); font-size: 14px; }
+.card .acts { display: flex; gap: 8px; margin-top: 12px; }
+.card .acts button { padding: 7px 12px; border: 1px solid var(--ln); font-size: 13px; }
+.card .acts .yes { background: var(--ac); color: var(--acx); border-color: var(--ac); font-weight: 700; }
+.card.ask-card { border-color: var(--ac); }
+.prog { margin-top: 12px; height: 4px; background: var(--s2); position: relative; }
+.prog i { position: absolute; inset: 0 auto 0 0; background: var(--tx); }
+.card .now { font-size: 13px; color: var(--mu); margin-top: 8px; }
+.mini { margin-top: 12px; height: 92px; overflow: hidden; border-radius: 6px; }
+.mini .acme { transform: scale(.5); transform-origin: top left; width: 200%; }
+.paper-card { background: var(--p-bg); color: var(--p-tx); padding: 16px; }
+.paper-card .who { color: var(--p-mu); }
+.paper-card .what { font: 700 17px/1.2 var(--ui); font-stretch: 112%; margin-top: 8px; }
+.paper-card .line { font-size: 13px; color: var(--p-mu); margin-top: 6px; }
+.paper-card .acts { display: flex; gap: 8px; margin-top: 12px; }
+.paper-card .acts button { padding: 7px 12px; border: 1px solid var(--p-ln); font-size: 13px; color: var(--p-tx); }
+.paper-card .acts .yes { background: var(--p-tx); color: var(--p-bg); border-color: var(--p-tx); font-weight: 700; }
+
+@media (prefers-reduced-motion: reduce) { .meta .live i { animation: none; } }
+</style>
+</head>
+<body>
+
+<header class="intro">
+  <h1>Ask, watch it work, decide.</h1>
+  <p>Four screens for the next Styx. The workspace stops looking like an IDE: <strong>you ask in plain words, watch the agent work in plain words, and the result comes back as a page you can sign off</strong>. The editor, terminal and files are still there, one click away under “Look closer”.</p>
+</header>
+
+<!-- ============ 1 ============ -->
+<section class="note">
+  <span class="n">1</span>
+  <h2>Ask</h2>
+  <p>The first thing after adding a project. One box, sensible defaults (Claude, a fresh lane, named for you), and three first tasks Styx picked by reading the repo. Each one finishes in a few minutes, so a new person sees a result before they have to learn anything. The old spawn dialog becomes “More options”.</p>
+</section>
+<div class="win" role="img" aria-label="Mockup: Ask screen">
+  <div class="bar">
+    <span class="lights"><i></i><i></i><i></i></span>
+    <span class="proj"><span class="sq">A</span>acme-shop</span>
+    <span class="tabs"><span data-inv>Ask</span><span>Today<b>2</b></span><span>Lanes</span><span>Access</span></span>
+    <span class="right"><span>Look closer</span><span>Settings</span></span>
+  </div>
+  <div class="ask">
+    <h3>What should an agent do<br><span>in acme-shop?</span></h3>
+    <div class="composer">
+      <div class="text">Add a dark-mode switch to the Settings page and remember the choice<span class="caret"></span></div>
+      <div class="row">
+        <span class="chip"><span class="dot"></span>Claude</span>
+        <span class="chip">New lane</span>
+        <span>Works on its own copy, so main is safe until you land it.</span>
+        <button class="go">Start</button>
+      </div>
+    </div>
+    <div class="starters">
+      <h4>Or try one of these first. Styx picked them from this repo.</h4>
+      <div class="starter"><div class="t">Explain how checkout works<small>A short tour of the code behind /checkout, with the files that matter</small></div><div class="m">About 2 minutes, changes nothing</div><button class="a">Start this</button></div>
+      <div class="starter"><div class="t">Fix the failing test in cart.test.ts<small>1 test has been failing since Tuesday</small></div><div class="m">About 4 minutes, 1 file</div><button class="a">Start this</button></div>
+      <div class="starter"><div class="t">Write the missing setup section in the README<small>New people can’t run the project from the README alone</small></div><div class="m">About 3 minutes, 1 file</div><button class="a">Start this</button></div>
+    </div>
+    <div class="recent">
+      <span class="lbl">Recent work</span>
+      <div class="sheet-thumb landed"><b>Faster product search</b><em>Yesterday</em></div>
+      <div class="sheet-thumb"><b>Home page promo banner</b><em>Ready to land</em></div>
+      <div class="sheet-thumb landed"><b>Fixed the flaky login test</b><em>Monday</em></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 2 ============ -->
+<section class="note">
+  <span class="n">2</span>
+  <h2>Working</h2>
+  <p>What the agent is doing, written as steps a person would describe, not a log. Files appear as small chips so the code is there without being the point. On the right, the app itself, running from the agent’s lane and refreshing as it changes. For projects without a preview, the right side shows the changes as they land instead.</p>
+</section>
+<div class="win" role="img" aria-label="Mockup: Working screen">
+  <div class="bar">
+    <span class="lights"><i></i><i></i><i></i></span>
+    <span class="proj"><span class="sq">A</span>acme-shop</span>
+    <span class="tabs"><span>Ask</span><span data-inv>Today<b>2</b></span><span>Lanes</span><span>Access</span></span>
+    <span class="right"><span>Look closer</span><span>Settings</span></span>
+  </div>
+  <div class="work">
+    <div class="left">
+      <div>
+        <div class="asked">You asked</div>
+        <h3>Add a dark-mode switch to the Settings page and remember the choice</h3>
+        <div class="meta"><span class="live"><i></i>Working</span><span>Claude</span><span>2 min 41 s</span></div>
+      </div>
+      <ol class="steps">
+        <span class="fill"></span>
+        <li class="done"><div class="s">Read how Settings and the theme work</div><div class="d">8 files read</div></li>
+        <li class="done"><div class="s">Added a dark palette next to the light one</div><div class="files"><span>theme.css <b>+42</b></span></div></li>
+        <li class="done"><div class="s">Put the switch on the Settings page</div><div class="files"><span>Settings.tsx <b>+18</b></span><span>Toggle.tsx <b>+6</b></span></div></li>
+        <li class="now"><div class="s">Making the choice stick after a reload</div><div class="d">Writing it to local storage</div></li>
+        <li class="next"><div class="s">Run the tests</div></li>
+      </ol>
+      <div class="tell">
+        <div class="in">Tell it more while it works…</div>
+        <button class="stop">Stop</button>
+        <a class="closer">Look closer</a>
+      </div>
+    </div>
+    <aside class="preview">
+      <div class="url"><b>localhost:3000/settings</b>running from this lane</div>
+      <div class="stage">
+        <div class="acme dark">
+          <div class="top">Acme Shop<i>Account</i></div>
+          <div class="body">
+            <h5>Settings</h5>
+            <div class="set"><div>Email updates<small>Orders and offers</small></div><span class="tog on"></span></div>
+            <div class="set new"><div>Dark mode<small>Easier on the eyes at night</small></div><span class="tog on"></span></div>
+            <div class="set"><div>Currency<small>Prices shown in</small></div><span>EUR</span></div>
+            <div class="set"><div>Language</div><span>English</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="foot"><span>Updated 4 s ago</span><span>The outlined part is new</span></div>
+    </aside>
+  </div>
+</div>
+
+<!-- ============ 3 ============ -->
+<section class="note">
+  <span class="n">3</span>
+  <h2>Result</h2>
+  <p>The work comes back on paper: a page that says what was done, shows it before and after, lists what changed and whether the checks passed, then asks for one decision. Land it puts the work on main. Ask for changes sends it back with your note. This page is also what a teammate sees when you share it.</p>
+</section>
+<div class="win" role="img" aria-label="Mockup: Result screen">
+  <div class="bar">
+    <span class="lights"><i></i><i></i><i></i></span>
+    <span class="proj"><span class="sq">A</span>acme-shop</span>
+    <span class="tabs"><span>Ask</span><span data-inv>Today<b>2</b></span><span>Lanes</span><span>Access</span></span>
+    <span class="right"><span>Look closer</span><span>Settings</span></span>
+  </div>
+  <div class="result">
+    <article class="paper">
+      <div class="ready"><span class="ok"><i></i>Ready to land</span><span>Claude took 6 minutes</span></div>
+      <h3>Settings has a dark-mode switch, and it remembers your choice</h3>
+      <p class="sum">I added a dark palette alongside the existing light one and a switch on the Settings page. The choice is saved in the browser, so it survives a reload. Nothing else on the site changes unless someone turns it on.</p>
+      <div class="ba">
+        <div>
+          <div class="cap"><span>Before</span><span>/settings</span></div>
+          <div class="acme"><div class="top">Acme Shop<i>Account</i></div><div class="body"><h5>Settings</h5><div class="set"><div>Email updates</div><span class="tog on"></span></div></div></div>
+        </div>
+        <div>
+          <div class="cap"><span>After, switched on</span><span>/settings</span></div>
+          <div class="acme dark"><div class="top">Acme Shop<i>Account</i></div><div class="body"><h5>Settings</h5><div class="set"><div>Dark mode</div><span class="tog on"></span></div></div></div>
+        </div>
+      </div>
+      <div class="facts">
+        <div>
+          <h4>What changed</h4>
+          <div class="chg"><span>src/styles/theme.css</span><span class="bars"><i class="p" style="width:60px"></i></span></div>
+          <div class="chg"><span>src/pages/Settings.tsx</span><span class="bars"><i class="p" style="width:30px"></i><i class="m" style="width:4px"></i></span></div>
+          <div class="chg"><span>src/lib/preferences.ts</span><span class="bars"><i class="p" style="width:16px"></i></span></div>
+          <div class="chg"><span>src/components/Toggle.tsx</span><span class="bars"><i class="p" style="width:9px"></i><i class="m" style="width:3px"></i></span></div>
+        </div>
+        <div>
+          <h4>Checks</h4>
+          <div class="check"><i></i>48 tests pass, 2 of them new</div>
+          <div class="check"><i></i>The site builds</div>
+          <div class="check warn"><i></i>No one else is changing these files</div>
+        </div>
+      </div>
+    </article>
+    <div class="decide">
+      <button class="land">Land it</button>
+      <button class="b">Ask for changes</button>
+      <button class="b">Discard</button>
+      <span class="r">Look closer at the diff<kbd>D</kbd></span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 4 ============ -->
+<section class="note">
+  <span class="n">4</span>
+  <h2>Today</h2>
+  <p>Every task in the project at a glance, ordered by who has to move. A question from an agent is answered on the card. Running work shows its live preview. Finished work is a stack of paper waiting to be landed. This replaces the board and becomes the screen most people keep open.</p>
+</section>
+<div class="win" role="img" aria-label="Mockup: Today screen">
+  <div class="bar">
+    <span class="lights"><i></i><i></i><i></i></span>
+    <span class="proj"><span class="sq">A</span>acme-shop</span>
+    <span class="tabs"><span>Ask</span><span data-inv>Today<b>2</b></span><span>Lanes</span><span>Access</span></span>
+    <span class="right"><span>Look closer</span><span>Settings</span></span>
+  </div>
+  <div class="today">
+    <section class="col">
+      <h3>Your turn <span class="c" data-on>2</span></h3>
+      <p class="sub">Agents waiting on you</p>
+      <div class="card ask-card">
+        <div class="who"><span class="dot cx"></span>Codex, fixing checkout totals</div>
+        <div class="what">Wants to deploy a preview to Vercel</div>
+        <div class="q">To check the fix on a real URL. Preview only, for one hour.</div>
+        <div class="acts"><button class="yes">Allow for 1 hour</button><button>Not now</button></div>
+      </div>
+      <div class="card">
+        <div class="who"><span class="dot"></span>Claude, promo banner</div>
+        <div class="what">Should the banner close for good, or come back next visit?</div>
+        <div class="acts"><button>For good</button><button>Next visit</button><button>Answer…</button></div>
+      </div>
+    </section>
+    <section class="col">
+      <h3>Working <span class="c">2</span></h3>
+      <p class="sub">Nothing needed from you</p>
+      <div class="card">
+        <div class="who"><span class="dot"></span>Claude, 2 min 41 s</div>
+        <div class="what">Dark-mode switch on Settings</div>
+        <div class="prog"><i style="width:70%"></i></div>
+        <div class="now">Making the choice stick after a reload</div>
+        <div class="mini"><div class="acme dark"><div class="top">Acme Shop<i>Account</i></div><div class="body"><h5>Settings</h5><div class="set"><div>Dark mode</div><span class="tog on"></span></div></div></div></div>
+      </div>
+      <div class="card">
+        <div class="who"><span class="dot gm"></span>Gemini, 9 min</div>
+        <div class="what">Explain how checkout works</div>
+        <div class="prog"><i style="width:40%"></i></div>
+        <div class="now">Reading the payment code</div>
+      </div>
+    </section>
+    <section class="col">
+      <h3>Ready to land <span class="c">2</span></h3>
+      <p class="sub">Read it, then land it or send it back</p>
+      <div class="paper-card">
+        <div class="who">Claude, 6 minutes</div>
+        <div class="what">Fixed the failing cart test</div>
+        <div class="line">The discount was rounded twice. 1 file, all 47 tests pass.</div>
+        <div class="acts"><button class="yes">Land it</button><button>Read it</button></div>
+      </div>
+      <div class="paper-card">
+        <div class="who">Codex, 12 minutes</div>
+        <div class="what">README now explains setup</div>
+        <div class="line">Install, environment and first run, checked by following it in a clean copy.</div>
+        <div class="acts"><button class="yes">Land it</button><button>Read it</button></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+</body>
+</html>
