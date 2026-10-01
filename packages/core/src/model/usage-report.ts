@@ -44,6 +44,8 @@ export const usageEventSchema = z.enum([
   'agent.failed.outdated',
   'agent.failed.error',
   'agent.failed.exited',
+  /** The agent's account hit a usage or rate limit, or ran out of quota or credit (#129). */
+  'agent.failed.limit',
   /** A window's page crashed; one of the app's helper processes (graphics, network) crashed; the previous run
    * ended without quitting (a crash, a force quit, or the Mac losing power), noticed at the next launch. */
   'app.crashed.window',
@@ -62,7 +64,7 @@ export const RENDERER_USAGE_EVENTS = [
   'tour.finished',
   'tour.skipped',
 ] as const satisfies readonly UsageEvent[];
-export type AgentProblem = 'cli-missing' | 'launch' | 'sign-in' | 'outdated' | 'error' | 'exited';
+export type AgentProblem = 'cli-missing' | 'launch' | 'sign-in' | 'outdated' | 'error' | 'exited' | 'limit';
 
 /**
  * One name, when it happened, and how many times — the whole vocabulary. `count` exists so a burst collapses

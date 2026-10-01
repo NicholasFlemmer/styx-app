@@ -785,6 +785,34 @@ describe('an agent that got going (#127)', () => {
     expect(record.mock.calls.map((c) => c[0]).filter((n) => n === 'agent.worked')).toEqual(['agent.worked']);
   });
 
+  it('a turn that ended in an error is not work (#129); the next clean one is', async () => {
+    const { app: a } = app();
+    const record = vi.spyOn(a.usageReports, 'record');
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'error', message: 'Something odd happened' });
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    expect(record.mock.calls.map((c) => c[0])).not.toContain('agent.worked');
+    stream.effect(session.id, { type: 'session', event: 'activity' });
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    expect(record.mock.calls.map((c) => c[0]).filter((n) => n === 'agent.worked')).toEqual(['agent.worked']);
+  });
+
+  it('names a spent limit or quota as limit, and an expired token as sign-in (#129)', async () => {
+    const { app: a } = app();
+    const record = vi.spyOn(a.usageReports, 'record');
+    const one = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(one.session.id, { type: 'error', message: 'Claude AI usage limit reached|1790000000' });
+    const two = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
+    stream.effect(two.session.id, {
+      type: 'error',
+      message: 'OAuth token has expired. Please obtain a new token',
+    });
+    expect(record.mock.calls.map((c) => c[0]).filter((n) => n.startsWith('agent.failed'))).toEqual([
+      'agent.failed.limit',
+      'agent.failed.sign-in',
+    ]);
+  });
+
   it('a first message in the spawn dialog counts as a message sent; an empty one does not', async () => {
     const { app: a } = app();
     const record = vi.spyOn(a.usageReports, 'record');

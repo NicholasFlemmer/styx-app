@@ -177,7 +177,14 @@ const isInside = (root: string, p: string): boolean => {
 const EARLY_EXIT_MS = 30_000;
 /** What agent CLIs say when they are signed out ("please run /login", "invalid api key", "not authenticated"…). */
 const SIGNED_OUT =
-  /(\/login|log ?in again|not (signed|logged) in|sign in (first|to)|unauthori[sz]ed|not authenticated|authentication (failed|required)|invalid api key|api key (is )?(missing|invalid)|\b401\b)/i;
+  /(\/login|log ?in again|(oauth )?token (has )?expired|not (signed|logged) in|sign in (first|to)|unauthori[sz]ed|not authenticated|authentication (failed|required)|invalid api key|api key (is )?(missing|invalid)|\b401\b)/i;
+
+/**
+ * The account has run out for now (#129): a usage or rate limit, a spent quota or credit balance. Not "overloaded":
+ * that is the provider's side and passes on its own.
+ */
+const OUT_OF_LIMIT =
+  /(usage limit|rate.?limit|quota|credit balance|too many requests|\b429\b|hit your (usage )?limit|limit reached)/i;
 
 const EDIT_TOOL = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
 const PERMISSION_OPTIONS = ['Allow', 'Deny'] as const;
@@ -357,6 +364,10 @@ export class SessionService {
   private readonly turnDone = new Set<string>();
   /** `<session>|<problem>` already reported, so a retry loop counts once. */
   private readonly problemsNoted = new Set<string>();
+  /** Sessions whose current turn reported an error (#129): that turn ending is not the agent having worked. */
+  private readonly turnFailed = new Set<string>();
+  /** Sessions already counted as `agent.worked`. */
+  private readonly worked = new Set<string>();
   /** Live broker tokens by session, for scrubbing the terminal view; dropped when the process exits. */
   private readonly liveTokens = new Map<string, string>();
   /** Asks opened from a CLI hook (`permission_prompt` / `agent_needs_input`), cancelled once the agent moves on. */
@@ -1559,7 +1570,11 @@ export class SessionService {
           return;
         }
         if (effect.event === 'quiet' && next?.state === 'idle') {
-          if (!this.turnDone.has(s.id)) this.hooks?.agentWorked?.(s.id);
+          // #129: only a turn that ended without an error is the agent having done something.
+          if (!this.turnFailed.delete(s.id) && !this.worked.has(s.id)) {
+            this.worked.add(s.id);
+            this.hooks?.agentWorked?.(s.id);
+          }
           this.turnDone.add(s.id);
           this.hooks?.turnSettled?.(s.id);
           // Whatever order Claude's Stop hook and its `result` arrive in, the queue drains here and only here.
@@ -1572,8 +1587,10 @@ export class SessionService {
         return;
       case 'error': {
         const outdated = parseCliOutdated(effect.message);
+        this.turnFailed.add(s.id);
         if (outdated !== null) this.noteProblem(s.id, 'outdated');
         else if (SIGNED_OUT.test(effect.message)) this.noteProblem(s.id, 'sign-in');
+        else if (OUT_OF_LIMIT.test(effect.message)) this.noteProblem(s.id, 'limit');
         else if (!this.turnDone.has(s.id)) this.noteProblem(s.id, 'error');
         if (outdated !== null) this.raiseOutdatedBanner(s, effect.message, outdated);
         else this.deps.transcript.system(s.id, redact(`error: ${effect.message}`));
