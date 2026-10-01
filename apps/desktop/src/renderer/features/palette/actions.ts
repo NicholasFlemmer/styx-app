@@ -38,8 +38,12 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
       void command('project.select', { projectId: action.projectId });
       return;
     }
+    // New task in the workspace (ADR-0027 §1): "Spawn agent in …" opens it empty, "Start … as a task" with the words.
     case 'spawn':
-      open({ kind: 'modal', modal: 'spawn', projectId: action.projectId });
+      ui.openNewTask(action.projectId);
+      return;
+    case 'new-task':
+      ui.openNewTask(action.projectId, action.text);
       return;
     // The four routes that add a project: free for one, a second asks for an account (discrepancy row 113).
     case 'new-project':

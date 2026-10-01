@@ -181,7 +181,7 @@ describe('inbox', () => {
       ['Cursor', 'blog-v2', 'Vercel', 'preview', false, 'deploy', 'preview deploy for #88', '14m'],
     ]);
     expect(inboxRows(model, NOW)[0]?.scopes).toEqual(['read', 'write']);
-    expect(inboxTabLabel(model, NOW)).toBe('Inbox · 3');
+    expect(inboxTabLabel(model, NOW)).toBe('Requests · 3');
   });
   it('headline scope and target label', () => {
     expect(headlineScope(['read', 'delete'])).toBe('delete');
@@ -231,6 +231,44 @@ describe('paletteResults', () => {
   const ui = { projectId: ids.project.acmeShop };
   const flat = (m: ReadModel, q = '', scope: 'all' | 'actions' | 'agents' | 'projects' = 'all') =>
     flattenPalette(paletteResults(m, ui, q, scope, NOW)).map((i) => `${i.glyph} ${i.label} · ${i.meta}`);
+
+  it('Start as a task (ADR-0027): first for a sentence; not for a word or two, which are commands', () => {
+    const sentence = paletteResults(model, ui, 'add tests for the promo banner', 'all', NOW);
+    const top = sentence[0]?.items[0];
+    expect(top).toMatchObject({
+      id: 'new-task',
+      glyph: '+',
+      label: 'Start “add tests for the promo banner” as a task in acme-shop',
+      meta: 'New task',
+      first: true,
+      action: { kind: 'new-task', projectId: ids.project.acmeShop, text: 'add tests for the promo banner' },
+    });
+    expect(
+      flattenPalette(paletteResults(model, ui, 'deploy', 'all', NOW)).some((i) => i.id === 'new-task'),
+    ).toBe(false);
+    expect(paletteResults(model, ui, 'qqzz xx', 'all', NOW)).toEqual([]);
+    expect(
+      flattenPalette(paletteResults(model, ui, 'a b', 'all', NOW)).some((i) => i.id === 'new-task'),
+    ).toBe(false);
+    expect(
+      flattenPalette(paletteResults(model, { projectId: null }, 'add some tests now', 'all', NOW)).some(
+        (i) => i.id === 'new-task',
+      ),
+    ).toBe(false);
+    // Only in the Actions scope (or all).
+    expect(
+      flattenPalette(paletteResults(model, ui, 'add some tests now', 'agents', NOW)).some(
+        (i) => i.id === 'new-task',
+      ),
+    ).toBe(false);
+    expect(flattenPalette(paletteResults(model, ui, 'add some tests now', 'actions', NOW))[0]?.id).toBe(
+      'new-task',
+    );
+    const words = `fix the ${'x'.repeat(80)}`;
+    const long = paletteResults(model, ui, words, 'all', NOW)[0]?.items.find((i) => i.id === 'new-task');
+    expect(long?.label.includes('…')).toBe(true);
+    expect(long?.action).toMatchObject({ text: words });
+  });
 
   it('groups Actions / Agents / Projects with the prototype rows and lock state in meta', () => {
     const groups = paletteResults(model, ui, '', 'all', NOW);

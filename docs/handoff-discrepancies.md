@@ -164,3 +164,20 @@ Land left the strip for the lane header; Publish and Deploy stay and shrink befo
 **Starters.** Three general starter tasks start in one click with their own words: explain the project, run the tests and fix what fails, and make the README get a newcomer running. They are general rather than read from the repo, and the heading says "Or start with one of these".
 
 **Beside it.** "Already running in {project}" lists the lanes, and any of them opens. | §4.11 | ADR-0027 |
+| 134 | ADR-0027 phase 5, the screens around the work.
+
+**All projects (Home).**
+- The head is a greeting with the account's first name ("Good morning, Nic"; "All projects" signed out), then one line ("2 things need you. 3 agents are working.") and New task.
+- The counters are Needs you (the number in accent), Agents working, **Ready to land** (replaces Projects, whose count is in the summary) and Grants active.
+- Each project is a row with its lanes as chips you can open, instead of the agent names; one with nothing running offers "Start a task".
+- What happened is in body text, not monospace.
+
+**Agents.**
+- A page head with "This project only" / "All projects" and New task.
+- Four columns: Your turn, Working, **Ready to land** (paper cards; Changes opens the lane on its Changes page) and **Landed** ("On main").
+- Each column has one line saying what it asks of you. Cards carry the agent's square.
+- One rule decides "ready to land" for the nav, Home and the board (`isReadyToLand`): finished, on its own branch, with unmerged changes. A finished session with nothing to land reads "Finished … ago".
+
+**Palette.** A query of three or more words is offered first as "Start “…” as a task in {project}", which opens New task with those words. "Spawn agent in …" opens New task too.
+
+**Titles and names.** Repo is titled **Lanes**; Approvals is titled **Access**, with one line and **Requests** in place of Inbox. Page titles are 28px in today's heading face. Counter tiles take `attention` (accent number) instead of the global `data-on` fill. | §4.2, §4.3, §4.5, §5 | ADR-0027 |

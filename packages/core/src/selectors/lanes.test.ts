@@ -194,12 +194,12 @@ describe('navLanes (ADR-0027 §1)', () => {
     expect(navLanesLabel(4)).toBe('4 lanes');
   });
 
-  it('treats a done session whose worktree is missing as ready to land', () => {
+  it('a done session with nothing to land (its worktree gone) is finished', () => {
     const m = withSessions({
       [ids.session.claude]: { ...done, worktreeId: 'wt_missing' } as Partial<Session>,
     });
-    expect(
-      navLanes(m, ids.project.acmeShop, DEMO_NOW).find((l) => l.sessionId === ids.session.claude)?.status,
-    ).toBe('ready');
+    const lane = navLanes(m, ids.project.acmeShop, DEMO_NOW).find((l) => l.sessionId === ids.session.claude);
+    expect(lane?.status).toBe('finished');
+    expect(lane?.statusLabel).toBe('Finished 5m ago');
   });
 });

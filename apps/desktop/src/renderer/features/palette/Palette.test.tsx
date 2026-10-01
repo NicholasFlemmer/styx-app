@@ -75,14 +75,23 @@ describe('Palette', () => {
     expect(ui.screen).toBe('workspace');
   });
 
-  it('spawn row opens the spawn modal; Mod+Enter on an agent pops it out', () => {
+  it('the spawn row opens New task in the project (ADR-0027 §1)', () => {
     const id = useUiStore.getState().pushOverlay({ kind: 'palette' });
     render(<Palette id={id} />);
     const input = screen.getByRole('combobox');
-    fireEvent.change(input, { target: { value: copy.palette.actions.spawn.replace('{project}', 'acme') } });
+    fireEvent.change(input, { target: { value: 'spawn agent' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    const top = useUiStore.getState().overlays[0];
-    expect(top?.kind === 'modal' && top.modal === 'spawn').toBe(true);
+    expect(useUiStore.getState().newTask).toMatchObject({ text: '' });
+    expect(useUiStore.getState().screen).toBe('workspace');
+  });
+
+  it('a sentence is offered first as a task, and Enter opens New task with those words', () => {
+    const id = useUiStore.getState().pushOverlay({ kind: 'palette' });
+    render(<Palette id={id} />);
+    const input = screen.getByRole('combobox');
+    fireEvent.change(input, { target: { value: 'add tests for the promo banner' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(useUiStore.getState().newTask).toMatchObject({ text: 'add tests for the promo banner' });
   });
 
   it('publish row opens the publish modal for the branch the project is on', () => {

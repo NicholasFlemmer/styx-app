@@ -21,6 +21,9 @@ export const copy = {
       grant: 'Grant {agent} → {target}',
       spawn: 'Spawn agent in {project}',
       spawnMeta: '{agent} ▾',
+      /** ADR-0027: whatever was typed, started as a task in the current project. */
+      newTask: 'Start “{text}” as a task in {project}',
+      newTaskMeta: 'New task',
       newProject: 'New project…',
       newProjectMeta: 'empty · template · agent',
       /** Owner additions (not in §10, spec tone): existing repos reachable from the palette too. */
@@ -99,13 +102,24 @@ export const copy = {
   },
 
   board: {
-    columns: { needsYou: 'Needs you', working: 'Working', done: 'Done' },
+    /** ADR-0027: Done splits into what waits to land and what has. */
+    columns: { needsYou: 'Your turn', working: 'Working', ready: 'Ready to land', landed: 'Landed' },
+    sub: {
+      needsYou: 'Agents waiting on you',
+      working: 'Nothing needed from you',
+      ready: 'Read it, then land it or send it back',
+      landed: 'On main',
+    },
+    title: 'Agents',
+    thisProject: 'This project only',
+    allProjects: 'All projects',
     /** Which sessions the board shows (owner layout #87): the app rail's tile = every project; the project nav = one. */
     scope: { all: 'All projects', project: '{project}' },
     empty: {
       needsYou: 'Nothing waiting on you.',
       working: 'No agents running. Spawn one below, or ask in the palette.',
-      done: 'Finished sessions land here for 7 days.',
+      ready: 'Finished work waits here until it lands.',
+      landed: 'Landed work stays here for 7 days.',
     },
     actions: {
       open: 'Open',
@@ -759,7 +773,10 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   },
 
   approvals: {
-    tabs: { inbox: 'Inbox', inboxCount: 'Inbox · {n}', policies: 'Policies', auditLog: 'Audit log' },
+    /** ADR-0027: the place is Access, what agents may touch. */
+    title: 'Access',
+    lead: 'Every request an agent makes to a deploy target or server, across projects.',
+    tabs: { inbox: 'Requests', inboxCount: 'Requests · {n}', policies: 'Policies', auditLog: 'Audit log' },
     review: 'Review',
     deny: 'Deny',
     footer: 'auto-approved today: {n} ({detail})',
@@ -1196,7 +1213,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   },
 
   repo: {
-    title: 'Worktrees',
+    /** ADR-0027: named for what it holds. */
+    title: 'Lanes',
     remoteLine: '{remote} · {branch} ↑{ahead} ↓{behind}',
     fetch: 'Fetch',
     addWorktree: '+ Worktree',
@@ -1515,6 +1533,23 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   },
 
   home: {
+    /** The head of All projects (ADR-0027): a greeting, then what is going on in one line. */
+    greeting: { morning: 'Good morning', afternoon: 'Good afternoon', evening: 'Good evening' },
+    greetingNamed: '{greeting}, {name}',
+    title: 'All projects',
+    summary: {
+      needsOne: '1 thing needs you.',
+      needs: '{n} things need you.',
+      nothingNeeds: 'Nothing needs you.',
+      workingOne: '1 agent is working.',
+      working: '{n} agents are working.',
+      quiet: 'No agents are working.',
+    },
+    readyToLand: 'Ready to land',
+    newTask: 'New task',
+    nothingRunning: 'Nothing running.',
+    startTask: 'Start a task',
+    moreLanes: '+{n} more',
     columns: {
       project: 'Project',
       path: 'Path',
@@ -1529,7 +1564,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       openFolder: '+ Open folder',
       cloneUrl: '+ Clone URL',
     },
-    activity: 'Activity',
+    activity: 'What happened',
   },
 
   /** Rail "+" menu (owner addition, not in §10): the three ways a project enters Styx. */
@@ -2000,6 +2035,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
         paused: 'Paused',
         ready: 'Ready to land',
         landed: 'Landed {age} ago',
+        finished: 'Finished {age} ago',
       },
     },
   },

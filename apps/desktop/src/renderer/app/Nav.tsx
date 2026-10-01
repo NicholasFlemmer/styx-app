@@ -98,7 +98,13 @@ export function Nav() {
               agent={lane.agent}
               task={lane.task}
               status={lane.statusLabel}
-              tone={lane.status === 'your-turn' ? 'yours' : lane.status === 'landed' ? 'quiet' : 'normal'}
+              tone={
+                lane.status === 'your-turn'
+                  ? 'yours'
+                  : lane.status === 'landed' || lane.status === 'finished'
+                    ? 'quiet'
+                    : 'normal'
+              }
               inv={inWorkspace && lane.sessionId === activeSessionId}
               onClick={() => {
                 if (projectId !== null) openSession(projectId, lane.sessionId);

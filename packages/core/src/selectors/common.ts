@@ -6,6 +6,16 @@ import type { PendingAsk, Session } from '../model/session';
 import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
 
+/**
+ * A finished lane with something to land (ADR-0027): done, on its own branch (not main), with changes that have
+ * not merged. The one rule the nav, Home's counter and the board's Ready to land column share.
+ */
+export const isReadyToLand = (model: ReadModel, s: Session): boolean => {
+  if (s.state !== 'done' || s.purpose) return false;
+  const w = model.worktrees.byId[s.worktreeId];
+  return w !== undefined && w.mergedAt === null && !w.isMain && w.changes.files > 0;
+};
+
 /** Sessions that have not been archived (Done keeps them 7 days). */
 export const liveSessions = (model: ReadModel): Session[] =>
   rows(model.sessions).filter((s) => s.archivedAt === null);

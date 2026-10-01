@@ -3,12 +3,19 @@ import { isLive } from '../machines/grant';
 import type { Grant } from '../model/grant';
 import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
-import { liveSessions } from './common';
+import { isReadyToLand, liveSessions } from './common';
 import { padCount } from './format';
 import { targetDerivedState } from './target-state';
 
 export const needsYouCount = (model: ReadModel): number =>
   liveSessions(model).filter((s) => s.state === 'needs-you').length;
+
+/**
+ * Lanes ready to land (ADR-0027): finished chat sessions whose worktree still has changes and has not merged. The
+ * Home counter that replaced "Projects".
+ */
+export const readyToLandCount = (model: ReadModel): number =>
+  liveSessions(model).filter((s) => isReadyToLand(model, s)).length;
 
 /** Agents working: excludes idle, needs-you, paused and done. */
 export const workingCount = (model: ReadModel): number =>

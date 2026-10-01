@@ -672,7 +672,7 @@ test('sim: agents-approvals', async () => {
       async () => {
         await goApprovals('inbox');
         const tab = await page().locator('[data-approvals-tab="inbox"]').innerText();
-        must(/Inbox · 3/.test(tab), `inbox tab reads "${tab}"`);
+        must(/Requests · 3/.test(tab), `inbox tab reads "${tab}"`);
         const row = page().locator(`[data-grant-id="${IDS.grant.supabaseCodex}"]`);
         const text = await row.innerText();
         for (const s of [
@@ -757,7 +757,7 @@ test('sim: agents-approvals', async () => {
       async () => {
         await goApprovals('inbox');
         const tab = await page().locator('[data-approvals-tab="inbox"]').innerText();
-        must(/Inbox · 2/.test(tab), `inbox tab reads "${tab}"`);
+        must(/Requests · 2/.test(tab), `inbox tab reads "${tab}"`);
         must((await inboxCorner()) === 2, `rail corner ${await inboxCorner()}`);
         await page().locator('[data-approvals-tab="audit"]').click();
         const rows = page().locator('[data-approvals-panel="audit"] [data-audit-id]');
@@ -833,7 +833,7 @@ test('sim: agents-approvals', async () => {
         5000,
       );
       must(
-        /Inbox · 1/.test(await page().locator('[data-approvals-tab="inbox"]').innerText()),
+        /Requests · 1/.test(await page().locator('[data-approvals-tab="inbox"]').innerText()),
         'inbox tab not at 1',
       );
       const g = (await snap()).grants.byId[IDS.grant.awsClaude];

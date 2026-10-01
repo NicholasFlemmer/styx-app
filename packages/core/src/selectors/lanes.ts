@@ -6,6 +6,7 @@ import type { Session } from '../model/session';
 import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
 import { formatAge } from './format';
+import { isReadyToLand } from './common';
 
 /**
  * Lanes that know about each other (owner addition, ADR-0025): what one lane is doing, said in a line, for the
@@ -87,7 +88,7 @@ export const activeLanes = (
 };
 
 /** Whose move a lane is, for the project nav (ADR-0027 §1), in the order the nav lists them. */
-export type NavLaneStatus = 'your-turn' | 'working' | 'idle' | 'paused' | 'ready' | 'landed';
+export type NavLaneStatus = 'your-turn' | 'working' | 'idle' | 'paused' | 'ready' | 'landed' | 'finished';
 const NAV_RANK: Record<NavLaneStatus, number> = {
   'your-turn': 0,
   working: 1,
@@ -95,6 +96,7 @@ const NAV_RANK: Record<NavLaneStatus, number> = {
   paused: 3,
   ready: 4,
   landed: 5,
+  finished: 5,
 };
 
 export interface NavLane {
@@ -107,7 +109,7 @@ export interface NavLane {
   statusLabel: string;
 }
 
-const navStatusOf = (s: Session, w: Worktree | undefined): NavLaneStatus => {
+const navStatusOf = (model: ReadModel, s: Session, w: Worktree | undefined): NavLaneStatus => {
   switch (s.state) {
     case 'needs-you':
       return 'your-turn';
@@ -118,7 +120,9 @@ const navStatusOf = (s: Session, w: Worktree | undefined): NavLaneStatus => {
     case 'paused':
       return 'paused';
     case 'done':
-      return w !== undefined && w.mergedAt !== null ? 'landed' : 'ready';
+      // One rule with Home's counter and the board (`isReadyToLand`); a lane with nothing to land is finished.
+      if (isReadyToLand(model, s)) return 'ready';
+      return w !== undefined && w.mergedAt !== null ? 'landed' : 'finished';
   }
 };
 
@@ -132,10 +136,12 @@ export const navLanes = (model: ReadModel, projectId: ProjectId, now: number): N
   for (const s of rows(model.sessions)) {
     if (s.projectId !== projectId || s.archivedAt !== null || s.purpose) continue;
     const w = model.worktrees.byId[s.worktreeId];
-    const status = navStatusOf(s, w);
+    const status = navStatusOf(model, s, w);
     const task = taskOf(s);
     const at = s.lastActivityAt ?? s.startedAt;
-    const age = formatAge(status === 'landed' ? (w?.mergedAt ?? at) : at, now);
+    // Landed counts from the merge, finished from the session's end, everything else from its last activity.
+    const since = status === 'landed' ? (w?.mergedAt ?? at) : status === 'finished' ? (s.endedAt ?? at) : at;
+    const age = formatAge(since, now);
     out.push({
       lane: {
         sessionId: s.id,

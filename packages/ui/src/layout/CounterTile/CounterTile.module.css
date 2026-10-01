@@ -12,6 +12,10 @@
   .numeral {
     display: block;
   }
+  /* Attention (ADR-0027 §6): the number turns accent-as-text; the tile itself stays quiet. */
+  .tile[data-attention='true'] .numeral {
+    color: var(--act);
+  }
   .label {
     margin-top: 10px;
     font-family: var(--font-ui);

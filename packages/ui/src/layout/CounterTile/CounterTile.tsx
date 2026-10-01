@@ -10,11 +10,13 @@ export interface CounterTileProps extends HTMLAttributes<HTMLDivElement> {
   pad?: number;
   inv?: boolean;
   on?: boolean;
+  /** Attention (ADR-0027 §6): the number turns accent-as-text and the tile stays quiet. */
+  attention?: boolean;
 }
 
 /** Home counter: Numeral L + t-label, `22px 20px 18px`, hairline right. */
 export const CounterTile = forwardRef<HTMLDivElement, CounterTileProps>(function CounterTile(
-  { value, label, live, pad = 2, inv, on, className, ...rest },
+  { value, label, live, pad = 2, inv, on, attention, className, ...rest },
   ref,
 ) {
   const cls = [s['tile'], className].filter(Boolean).join(' ');
@@ -26,10 +28,13 @@ export const CounterTile = forwardRef<HTMLDivElement, CounterTileProps>(function
       aria-atomic={live ? true : undefined}
       data-inv={inv ? 'true' : undefined}
       data-on={on ? 'true' : undefined}
+      data-attention={attention ? 'true' : undefined}
       {...rest}
     >
       <Numeral size="L" value={value} pad={pad} className={s['numeral']} />
-      <div className={s['label']} data-muted="true">{label}</div>
+      <div className={s['label']} data-muted="true">
+        {label}
+      </div>
     </div>
   );
 });

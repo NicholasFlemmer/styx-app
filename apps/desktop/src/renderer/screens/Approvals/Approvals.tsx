@@ -71,6 +71,10 @@ export function Approvals() {
   return (
     <div className={s['screen']}>
       <div className={s['main']}>
+        <header className={s['pagehead']}>
+          <h2 className={s['title']}>{copy.approvals.title}</h2>
+          <p className={s['lead']}>{copy.approvals.lead}</p>
+        </header>
         <TabRow variant="approvals" aria-label={copy.nav.approvals}>
           {tabs.map((t) => (
             <Tab

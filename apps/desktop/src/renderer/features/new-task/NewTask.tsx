@@ -64,7 +64,9 @@ export function NewTask({ projectId, initialText = '' }: NewTaskProps) {
     model: useId(),
     effort: useId(),
   };
-  const lanes = navLanes(model, projectId, now).filter((l) => l.status !== 'landed');
+  const lanes = navLanes(model, projectId, now).filter(
+    (l) => l.status !== 'landed' && l.status !== 'finished',
+  );
   const agentName = copy.agentProducts[form.agent];
 
   useEffect(() => {

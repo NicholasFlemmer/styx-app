@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { boardColumns, copy, fixtures, type ProjectId } from '@styx/core';
+import { boardColumns, copy, fixtures, upsertRows, type ProjectId } from '@styx/core';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { keys } from '../../keys';
@@ -25,6 +25,7 @@ describe('Agents board', () => {
       platform: 'darwin',
       projectId: acme,
       projectSession: {},
+      boardScope: 'all',
     });
   });
   afterEach(() => {
@@ -32,30 +33,35 @@ describe('Agents board', () => {
     Object.assign(window, { styx: undefined });
   });
 
-  it('renders the three columns from boardColumns with zero-padded counts and per-state CTAs', () => {
+  it('renders the four columns from boardColumns with their counts, one line each, and per-state CTAs', () => {
     render(<Agents />);
     const expected = boardColumns(useReadModel.getState().model, fixtures.DEMO_NOW);
     for (const col of expected) {
       const region = column(col.label);
-      expect(region.getByText(col.label)).toBeTruthy();
-      expect(region.getByText(col.count)).toBeTruthy();
+      expect(region.getByRole('heading', { level: 3 }).textContent).toBe(`${col.label}${col.items.length}`);
+      expect(region.getByText(col.sub)).toBeTruthy();
       for (const card of col.items) {
         expect(region.getByText(`${card.project} · ${card.branch}`)).toBeTruthy();
         expect(region.getByText(card.note)).toBeTruthy();
       }
       expect(
-        region.getAllByRole('button', { name: /^(Open|Review grant|Review plan|Reopen)$/ }),
+        region.queryAllByRole('button', { name: /^(Open|Review grant|Review plan|Reopen)$/ }),
       ).toHaveLength(col.items.length);
       // Deny only on needs-you cards; Archive only on done cards.
       expect(region.queryAllByRole('button', { name: copy.board.actions.deny })).toHaveLength(
         col.key === 'needs-you' ? col.items.length : 0,
       );
       expect(region.queryAllByRole('button', { name: copy.board.actions.archive })).toHaveLength(
-        col.key === 'done' ? col.items.length : 0,
+        col.key === 'ready' || col.key === 'landed' ? col.items.length : 0,
+      );
+      // Ready to land opens the lane's Changes page (ADR-0027 §3).
+      expect(region.queryAllByRole('button', { name: copy.chat.instruments.changes })).toHaveLength(
+        col.key === 'ready' ? col.items.length : 0,
       );
     }
-    expect(screen.getByText(copy.board.columns.needsYou).getAttribute('data-on')).toBe('true');
-    expect(screen.getByText(copy.board.columns.working).getAttribute('data-on')).toBeNull();
+    const count = (label: string) => column(label).getByRole('heading', { level: 3 }).querySelector('span');
+    expect(count(copy.board.columns.needsYou)?.getAttribute('data-on')).toBe('true');
+    expect(count(copy.board.columns.working)?.getAttribute('data-on')).toBeNull();
     expect(screen.getByRole('button', { name: copy.board.actions.spawn })).toBeTruthy();
   });
 
@@ -145,7 +151,7 @@ describe('Agents board', () => {
   it('Archive sends session.archive and stays on the board', () => {
     render(<Agents />);
     fireEvent.click(
-      column(copy.board.columns.done).getAllByRole('button', {
+      column(copy.board.columns.landed).getAllByRole('button', {
         name: copy.board.actions.archive,
       })[0] as HTMLElement,
     );
@@ -156,7 +162,7 @@ describe('Agents board', () => {
   it('Reopen sends session.reopen, then opens the session in its project once main has it back', async () => {
     render(<Agents />);
     fireEvent.click(
-      column(copy.board.columns.done).getAllByRole('button', {
+      column(copy.board.columns.landed).getAllByRole('button', {
         name: copy.board.actions.reopen,
       })[0] as HTMLElement,
     );
@@ -172,13 +178,39 @@ describe('Agents board', () => {
     } as never);
     render(<Agents />);
     fireEvent.click(
-      column(copy.board.columns.done).getAllByRole('button', {
+      column(copy.board.columns.landed).getAllByRole('button', {
         name: copy.board.actions.reopen,
       })[0] as HTMLElement,
     );
     await waitFor(() => expect(commandMock).toHaveBeenCalledTimes(1));
     await Promise.resolve();
     expect(useUiStore.getState().screen).toBe('agents');
+  });
+
+  it('Changes on a ready card opens the lane on its Changes page; the scope switch narrows to this project', () => {
+    // A finished lane on its own branch with unmerged changes: Claude's fix/checkout, marked done.
+    const m = fixtures.demoReadModel();
+    const s = m.sessions.byId[fixtures.ids.session.claude];
+    if (s === undefined) throw new Error('fixture');
+    useReadModel.getState().replaceModel(
+      {
+        ...m,
+        sessions: upsertRows(m.sessions, [
+          { ...s, state: 'done', endedAt: fixtures.DEMO_NOW, pid: null, exitCode: 0 },
+        ]),
+      },
+      'connected',
+    );
+    render(<Agents />);
+    const ready = column(copy.board.columns.ready);
+    fireEvent.click(ready.getAllByRole('button', { name: copy.chat.instruments.changes })[0] as HTMLElement);
+    expect(useUiStore.getState().screen).toBe('workspace');
+    expect(useUiStore.getState().paneSizes['workspace-mode']).toBe(2);
+    useUiStore.setState({ screen: 'agents', boardScope: 'all' });
+    cleanup();
+    render(<Agents />);
+    fireEvent.click(document.querySelector('[data-board-scope]') as HTMLElement);
+    expect(useUiStore.getState().boardScope).toBe('project');
   });
 
   it('+ Spawn agent opens the spawn modal for the current project', () => {
@@ -244,8 +276,10 @@ describe('Agents board', () => {
     render(<Agents />);
     expect(screen.getByText(copy.board.empty.needsYou)).toBeTruthy();
     expect(screen.getByText(copy.board.empty.working)).toBeTruthy();
-    expect(screen.getByText(copy.board.empty.done)).toBeTruthy();
-    expect(screen.getAllByText('00')).toHaveLength(3);
+    expect(screen.getByText(copy.board.empty.ready)).toBeTruthy();
+    expect(screen.getByText(copy.board.empty.landed)).toBeTruthy();
+    expect(document.querySelectorAll('h3 span')).toHaveLength(4);
+    for (const n of document.querySelectorAll('h3 span')) expect(n.textContent).toBe('0');
     expect(screen.getByRole('button', { name: copy.board.actions.spawn })).toBeTruthy();
   });
 });
