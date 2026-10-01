@@ -44,7 +44,7 @@
     container-name: column;
   }
   /* A narrow centre (the window's minimum with the file tree open): the instruments tighten so all four fit. */
-  @container column (max-width: 520px) {
+  @container column (max-width: 400px) {
     .tabs > [role='tab'] {
       padding-left: 9px;
       padding-right: 9px;
