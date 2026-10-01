@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Styx next: the workspace, in continual use</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+:root {
+  --page:#181916; --bg:#0d0e0c; --s1:#121411; --s2:#1c1e1a; --ln:#2d302a; --tx:#e9ebe3; --mu:#858a81;
+  --ac:#d6ff3d; --acx:#0d0e0c; --act:#d6ff3d; --add:rgba(214,255,61,.13); --term:#080908; --termtx:#c9cdc2;
+  --p-bg:#f7f8f3; --p-s2:#e1e3db; --p-ln:#b3b7ab; --p-tx:#14160f; --p-mu:#5d6259; --p-act:#6e8f00;
+  --ui: 'Archivo', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--page); color: var(--tx); font: 400 14px/1.5 var(--ui); padding: 64px 0 120px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+
+.intro, .note, .compare { width: 1280px; margin: 0 auto; }
+.intro h1 { font: 700 48px/1.04 var(--ui); font-stretch: 125%; letter-spacing: -.01em; max-width: 20ch; }
+.intro p { margin-top: 18px; max-width: 66ch; color: var(--mu); font-size: 17px; }
+.intro p strong { color: var(--tx); font-weight: 600; }
+.note { margin-top: 72px; margin-bottom: 22px; }
+.note h2 { font: 700 26px/1.1 var(--ui); font-stretch: 112%; }
+.note p { margin-top: 8px; max-width: 74ch; color: var(--mu); font-size: 15px; }
+
+/* ---------- window, matching today's workspace grid ---------- */
+.win { width: 1280px; height: 800px; margin: 0 auto; background: var(--bg); border: 1px solid var(--ln); display: grid; grid-template-rows: 38px 1fr 26px; overflow: hidden; position: relative; }
+.title { display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.lights { display: flex; gap: 8px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); }
+.mark { font: 700 13px/1 var(--ui); letter-spacing: .2em; margin-left: 8px; }
+.pick { border: 1px solid var(--ln); padding: 6px 10px; font-weight: 600; }
+.branch { font: 400 12px var(--mono); color: var(--mu); }
+.search { margin-left: auto; width: 280px; border: 1px solid var(--ln); padding: 6px 10px; color: var(--mu); }
+.needs { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.needs i { width: 8px; height: 8px; background: var(--ac); }
+.body { display: grid; grid-template-columns: 56px 168px 1fr 420px; min-height: 0; }
+.status { display: flex; gap: 22px; align-items: center; padding: 0 14px; border-top: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+
+.rail { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 10px; }
+.rail span { width: 36px; height: 36px; border: 1px solid var(--ln); display: grid; place-items: center; font: 700 12px var(--ui); }
+.rail span[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.nav { border-right: 1px solid var(--ln); background: var(--s1); padding-top: 14px; display: flex; flex-direction: column; }
+.nav .h { padding: 0 14px 8px; font-size: 12px; color: var(--mu); }
+.nav a { display: flex; justify-content: space-between; padding: 8px 14px; border-top: 1px solid var(--ln); font-size: 14px; }
+.nav a:last-of-type { border-bottom: 1px solid var(--ln); }
+.nav a[data-inv] { background: var(--tx); color: var(--bg); }
+.nav a .c { color: var(--mu); font-size: 12px; }
+.nav a .c[data-on] { background: var(--ac); color: var(--acx); padding: 0 5px; }
+.nav .foot { margin-top: auto; padding: 12px 14px; font-size: 12px; color: var(--mu); border-top: 1px solid var(--ln); }
+
+/* centre: preview / changes / files, with the terminal kept underneath */
+.centre { display: grid; grid-template-rows: 38px 1fr 120px; min-width: 0; border-right: 1px solid var(--ln); }
+.ctabs { display: flex; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.ctabs span { padding: 0 16px; display: flex; align-items: center; gap: 8px; border-right: 1px solid var(--ln); color: var(--mu); }
+.ctabs span[data-inv] { background: var(--tx); color: var(--bg); }
+.ctabs .n { font-size: 11px; padding: 0 4px; border: 1px solid currentColor; }
+.ctabs .r { margin-left: auto; border-right: 0; border-left: 1px solid var(--ln); }
+.stage { background: var(--s1); padding: 22px; display: grid; grid-template-rows: auto 1fr; gap: 12px; min-height: 0; }
+.url { display: flex; justify-content: space-between; font: 400 12px var(--mono); color: var(--mu); }
+.url b { color: var(--tx); font-weight: 400; }
+.term { background: var(--term); color: var(--termtx); font: 400 12px/1.7 var(--mono); padding: 10px 14px; border-top: 1px solid var(--ln); }
+.term .h { font: 400 12px var(--ui); color: var(--mu); margin-bottom: 4px; }
+
+/* the customer's app, not Styx-styled */
+.acme { background: #fff; color: #1f2430; font-family: system-ui, -apple-system, sans-serif; border-radius: 10px; overflow: hidden; align-self: start; }
+.acme.dark { background: #1b1f2a; color: #e8ebf2; }
+.acme .top { display: flex; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #2c3242; font-weight: 700; font-size: 13px; }
+.acme .top i { font-style: normal; font-weight: 500; font-size: 12px; color: #7b8294; }
+.acme .b { padding: 16px; }
+.acme h5 { font-size: 17px; margin-bottom: 10px; }
+.acme .set { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid #2c3242; font-size: 13px; }
+.acme .set small { display: block; color: #7b8294; font-size: 12px; margin-top: 2px; }
+.tog { width: 34px; height: 20px; border-radius: 10px; background: #5b6cff; position: relative; flex: none; }
+.tog::after { content: ''; position: absolute; top: 2px; left: 16px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+.tog.off { background: #3a4152; } .tog.off::after { left: 2px; }
+.acme .new { outline: 2px dashed var(--ac); outline-offset: 3px; }
+
+/* chat: a running conversation, turns as receipts */
+.chat { display: grid; grid-template-rows: 38px auto 1fr auto; min-height: 0; background: var(--bg); }
+.stabs { display: flex; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.stabs span { padding: 0 14px; display: flex; align-items: center; gap: 7px; border-right: 1px solid var(--ln); color: var(--mu); }
+.stabs span[data-inv] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.stabs i { width: 8px; height: 8px; background: var(--mu); }
+.stabs i.on { background: var(--ac); }
+.stabs .plus { margin-left: auto; border-right: 0; border-left: 1px solid var(--ln); }
+.lane { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.lane .t { color: var(--mu); }
+.lane .t b { color: var(--tx); font-weight: 600; }
+.lane button { margin-left: auto; padding: 6px 12px; border: 1px solid var(--tx); font-weight: 600; font-size: 13px; }
+.feed { overflow: hidden; padding: 14px 16px 0; display: flex; flex-direction: column; gap: 10px; }
+.receipt { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 9px 12px; background: var(--s1); border: 1px solid var(--ln); font-size: 13px; }
+.receipt .w { font-weight: 600; }
+.receipt .k { color: var(--mu); font-size: 12px; }
+.receipt .s { grid-column: 1 / -1; color: var(--mu); font-size: 12px; }
+.you { align-self: flex-end; max-width: 85%; background: var(--s2); padding: 9px 12px; font-size: 14px; }
+.paper { background: var(--p-bg); color: var(--p-tx); padding: 14px 16px 12px; }
+.paper .top { display: flex; justify-content: space-between; font-size: 12px; color: var(--p-mu); }
+.paper .top .ok { color: var(--p-act); font-weight: 600; }
+.paper h4 { font: 700 17px/1.2 var(--ui); font-stretch: 112%; margin-top: 6px; }
+.paper p { font-size: 13px; margin-top: 6px; line-height: 1.45; }
+.paper .files { margin-top: 8px; font: 400 12px/1.7 var(--mono); }
+.paper .files div { display: flex; justify-content: space-between; border-top: 1px solid var(--p-ln); }
+.paper .files b { color: var(--p-act); font-weight: 500; }
+.paper .acts { display: flex; gap: 6px; margin-top: 10px; }
+.paper .acts button { padding: 6px 10px; border: 1px solid var(--p-ln); font-size: 12px; }
+.paper .acts .kept { margin-left: auto; align-self: center; font-size: 12px; color: var(--p-mu); }
+.paper .acts .k1 { background: var(--p-tx); color: var(--p-bg); border-color: var(--p-tx); font-weight: 700; }
+.live { border: 1px solid var(--ln); padding: 11px 12px; }
+.live .hd { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.live .hd i { width: 8px; height: 8px; background: var(--ac); }
+.live .hd span { margin-left: auto; color: var(--mu); font-weight: 400; font-size: 12px; }
+.live ol { list-style: none; margin-top: 8px; font-size: 13px; }
+.live li { display: flex; gap: 8px; padding: 3px 0; color: var(--mu); }
+.live li::before { content: ''; width: 9px; height: 9px; margin-top: 5px; flex: none; border: 1.5px solid var(--ln); }
+.live li.d { color: var(--tx); } .live li.d::before { background: var(--ac); border-color: var(--ac); }
+.live li.n { color: var(--tx); } .live li.n::before { border-color: var(--ac); }
+.compose { padding: 12px 16px 14px; border-top: 1px solid var(--ln); }
+.compose .box { border: 1px solid var(--ln); padding: 10px 12px; color: var(--mu); min-height: 58px; font-size: 14px; }
+.compose .row { display: flex; gap: 14px; margin-top: 8px; font-size: 12px; color: var(--mu); }
+.compose .row .send { margin-left: auto; color: var(--tx); }
+
+/* annotations */
+.pin { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: var(--tx); color: var(--bg); font: 700 11px/20px var(--ui); text-align: center; z-index: 2; }
+
+.compare { margin-top: 28px; display: grid; grid-template-columns: 22px 1fr 1fr; gap: 0 16px; font-size: 15px; }
+.compare > div { padding: 12px 0; border-top: 1px solid var(--ln); }
+.compare .k { font: 700 11px/22px var(--ui); background: var(--tx); color: var(--bg); border-radius: 50%; text-align: center; height: 22px; margin-top: 12px; border: 0; padding: 0; }
+.compare .h { color: var(--mu); font-size: 13px; padding-bottom: 6px; border-top: 0; }
+.compare .now { color: var(--mu); }
+</style>
+</head>
+<body>
+
+<header class="intro">
+  <h1>Same workspace, used all day.</h1>
+  <p>This keeps today’s layout: rail, project nav, a big centre pane, terminal underneath, chat on the right. What changes is <strong>what each part shows</strong>. A conversation with an agent is a run of turns, and every turn that changed something ends in a small result on paper. The lane collects those results until you land it. Old turns fold into one-line receipts, so a session that has run all day still reads at a glance.</p>
+</header>
+
+<section class="note">
+  <h2>Hour three of a session with Claude</h2>
+  <p>Three earlier turns are receipts at the top. The last finished turn is open as a paper result. A fourth is running now, as plain steps. The centre shows the app running from the lane, with the newest change outlined; Changes and Files are the next tabs over, and the editor works exactly as it does today.</p>
+</section>
+
+<div class="win" role="img" aria-label="Mockup: workspace in continual use">
+  <div class="title">
+    <span class="lights"><i></i><i></i><i></i></span>
+    <span class="mark">STYX</span>
+    <span class="pick">acme-shop ▾</span>
+    <span class="branch">agent/claude-3</span>
+    <span class="search">Switch, ask an agent, deploy…  ⌘K</span>
+    <span class="needs"><i></i>1 needs you</span>
+  </div>
+  <div class="body">
+    <nav class="rail"><span data-on>AS</span><span>BL</span><span>IN</span><span>CX</span><span>+</span></nav>
+    <nav class="nav">
+      <div class="h">acme-shop</div>
+      <a>All projects <span class="c">5</span></a>
+      <a data-inv>Workspace</a>
+      <a>Agents <span class="c" data-on>1</span></a>
+      <a>Lanes <span class="c">4</span></a>
+      <a>Access <span class="c">2</span></a>
+      <a>Settings</a>
+      <div class="foot">~/code/acme-shop<br>2 grants active</div>
+    </nav>
+
+    <section class="centre">
+      <div class="ctabs">
+        <span data-inv>Preview</span>
+        <span>Changes <b class="n">7</b></span>
+        <span>Files</span>
+        <span>Settings.tsx</span>
+        <span class="r">Open in Cursor</span>
+      </div>
+      <div class="stage">
+        <div class="url"><span><b>localhost:3000/settings</b>  from this lane</span><span>Updated 12 s ago</span></div>
+        <div class="acme dark">
+          <div class="top">Acme Shop<i>Account</i></div>
+          <div class="b">
+            <h5>Settings</h5>
+            <div class="set"><div>Email updates<small>Orders and offers</small></div><span class="tog"></span></div>
+            <div class="set"><div>Dark mode<small>Easier on the eyes at night</small></div><span class="tog"></span></div>
+            <div class="set new"><div>Match my system<small>Follows your Mac’s light or dark setting</small></div><span class="tog off"></span></div>
+            <div class="set"><div>Currency</div><span>EUR</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="term">
+        <div class="h">Terminal, agent/claude-3</div>
+        $ pnpm test settings<br>
+        ✓ 51 passed (2.1 s)<br>
+        $ <span style="background:var(--termtx)">&nbsp;</span>
+      </div>
+    </section>
+
+    <aside class="chat">
+      <div class="stabs">
+        <span data-inv><i class="on"></i>Claude</span>
+        <span><i class="on"></i>Codex</span>
+        <span><i></i>Gemini</span>
+        <span class="plus">+</span>
+      </div>
+      <div class="lane">
+        <span class="t"><b>This lane</b>  3 changes kept, 7 files, tests pass</span>
+        <button>Land on main</button>
+      </div>
+      <div class="feed">
+        <div class="receipt"><span class="w">Added a dark-mode switch to Settings</span><span class="k">Kept, 09:12</span></div>
+        <div class="receipt"><span class="w">Saved the choice so it survives a reload</span><span class="k">Kept, 09:31</span></div>
+        <div class="you">Can it follow the Mac’s own setting too?</div>
+        <div class="paper">
+          <div class="top"><span class="ok">Done in 4 min</span><span>3 files, 2 new tests</span></div>
+          <h4>“Match my system” is a third option, and the default</h4>
+          <p>New visitors get whatever their computer uses. Anyone who already picked light or dark keeps their choice.</p>
+                    <div class="acts"><button>Show changes</button><button>Undo this turn</button><span class="kept">Kept when you carry on</span></div>
+        </div>
+        <div class="you">Nice. Now do the checkout page too.</div>
+        <div class="live">
+          <div class="hd"><i></i>Working <span>1 min 10 s</span></div>
+          <ol><li class="d">Found where checkout sets its own colours</li><li class="n">Moving checkout onto the shared palette</li><li>Run the tests</li></ol>
+        </div>
+      </div>
+      <div class="compose">
+        <div class="box">Tell Claude more, or queue the next thing…</div>
+        <div class="row"><span>@file</span><span>/command</span><span>Opus 5.5</span><span class="send">Send ⏎</span></div>
+      </div>
+    </aside>
+  </div>
+  <div class="status"><span>agent/claude-3</span><span>Vercel preview open, 41 min</span><span>Supabase locked</span><span style="margin-left:auto">51 tests pass</span></div>
+
+  <span class="pin" style="left:296px; top:47px">1</span>
+  <span class="pin" style="left:848px; top:93px">2</span>
+  <span class="pin" style="left:848px; top:155px">3</span>
+  <span class="pin" style="left:848px; top:330px">4</span>
+  <span class="pin" style="left:848px; top:560px">5</span>
+</div>
+
+<section class="note">
+  <h2>What changes from today</h2>
+</section>
+<div class="compare">
+  <div class="h"></div><div class="h">Today</div><div class="h">Next</div>
+  <span class="k">1</span><div class="now">The centre opens on a code file with agent hunks highlighted.</div><div>The centre opens on Preview: the app running from the lane. Changes (a readable diff of the lane) and Files are tabs beside it, and the editor with hunks is unchanged.</div>
+  <span class="k">2</span><div class="now">The lane’s state is spread across the Repo screen and the status bar.</div><div>One line on top of the chat says what the lane holds so far, with Land on main right there. You land when the lane is ready, not after every turn.</div>
+  <span class="k">3</span><div class="now">Every turn stays in the transcript at full length; a long session is a long scroll.</div><div>Turns you kept fold into one-line receipts. Click one to open its result again.</div>
+  <span class="k">4</span><div class="now">Results arrive as a file list and a question in plain chat bubbles.</div><div>A turn that changed something ends on paper: what it did, and Show changes or Undo this turn. Carrying on keeps it, so all-day use costs no extra clicks; anything can still be undone until you land. Accept all / Review / Reject under the editor become these.</div>
+  <span class="k">5</span><div class="now">A running turn streams tool calls.</div><div>A running turn shows three or four plain steps. The raw tool calls are a click away, and the terminal stays where it is.</div>
+  <span class="k"></span><div class="now">Uppercase tracked labels everywhere, 13 px body.</div><div>Sentence case, 14 px body, wide Archivo for result headlines. Same colours, same square shapes, same layout grid.</div>
+</div>
+
+</body>
+</html>
