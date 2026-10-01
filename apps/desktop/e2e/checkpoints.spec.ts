@@ -174,16 +174,16 @@ test('a turn keeps the design window page before and after; Review shows Before 
     test.info().annotations.push({ type: 'capturePage', description: JSON.stringify({ shown, hidden }) });
     expect(shown?.empty).toBe(false);
 
-    // Spawn Codex from the chat pane; the first turn is plain so it settles without a checkpoint row.
+    // Start Codex from New task (ADR-0027 §1); the first turn is plain so it settles without a checkpoint.
     await page.evaluate(() => (window as unknown as StyxWindow).styx.command('detect.clis', {}));
     const chat = page.locator('[data-chat-pane]');
     await page.locator('[data-nav-new-task]').click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog.locator('[data-spawn-modal]')).toBeVisible();
-    await dialog.locator('[data-agent="codex"]').click();
-    await dialog.getByLabel('First message').fill('hi');
-    await dialog.getByRole('button', { name: /^Spawn/ }).click();
-    await expect(dialog).toHaveCount(0);
+    const task = page.locator('[data-new-task]');
+    await expect(task).toBeVisible();
+    await task.locator('[role="radio"][data-agent="codex"]').click();
+    await task.locator('[data-new-task-text]').fill('hi');
+    await task.locator('[data-new-task-start]').click();
+    await expect(task).toHaveCount(0, { timeout: 20_000 });
     const decision = chat.locator('[data-kind="decision"]');
     await expect(decision).toBeVisible({ timeout: 20_000 });
     await decision.getByRole('button', { name: 'Allow' }).click();

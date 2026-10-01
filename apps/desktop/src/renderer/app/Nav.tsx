@@ -114,8 +114,8 @@ export function Nav() {
             />
           </div>
         ))}
-        {lanes.length === 0 ? <p className={s['navEmpty']}>{copy.lanes.nav.empty}</p> : null}
       </div>
+      {lanes.length === 0 ? <p className={s['navEmpty']}>{copy.lanes.nav.empty}</p> : null}
       <button
         type="button"
         className={s['navNewTask']}

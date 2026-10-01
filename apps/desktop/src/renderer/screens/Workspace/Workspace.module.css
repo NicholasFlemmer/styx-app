@@ -13,8 +13,13 @@
     align-items: stretch;
     border-bottom: 1px solid var(--ln);
     background: var(--s1);
-    /* At the window's minimum width the strip never spills under the chat: the tabs give way first. */
-    overflow: hidden;
+    /* At the window's minimum width the strip never spills under the chat; `clip` only trims sideways, so the
+       Deploy menu still drops below the strip. */
+    overflow-x: clip;
+    overflow-y: visible;
+    /* Above the editor below it, so the Deploy menu that hangs off the strip is not covered. */
+    position: relative;
+    z-index: 2;
   }
   /* The tabs are their own tablist (a tablist may only own tabs); the publish and deploy buttons are siblings that hug the right edge. */
   /* The instruments are the strip's navigation: they keep their width; Publish and Deploy give way first. */
@@ -28,7 +33,6 @@
     margin-left: auto;
     min-width: 0;
     flex-shrink: 1;
-    overflow: hidden;
   }
   .modes > [data-publish-button] + [data-deploy-button] {
     margin-left: 0;
