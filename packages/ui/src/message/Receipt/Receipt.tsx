@@ -15,7 +15,15 @@ export interface ReceiptProps extends Omit<ButtonHTMLAttributes<HTMLButtonElemen
  * A finished turn folded to one line (ADR-0027 §3), so a session that has run all day still reads at a glance.
  * A button: opening it shows the turn again, under it, with the receipt in lime as the turn's head.
  */
-export function Receipt({ title, meta, state, open = false, className, type = 'button', ...rest }: ReceiptProps) {
+export function Receipt({
+  title,
+  meta,
+  state,
+  open = false,
+  className,
+  type = 'button',
+  ...rest
+}: ReceiptProps) {
   return (
     <button
       type={type}

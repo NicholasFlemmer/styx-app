@@ -577,6 +577,33 @@ describe('SessionService CLI-outdated (model needs a newer CLI)', () => {
   });
 });
 
+describe('a lane is named by its task', () => {
+  it('a lane started without a first message takes the first thing sent as its task, once', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo, ''));
+    expect(a.sessions.get(session.id)?.firstMessage).toBeNull();
+    stream.effect(session.id, { type: 'note', note: 'Reading checkout.ts' });
+    await a.sessions.sendMessage(session.id, 'Make the header sticky');
+    expect(a.sessions.get(session.id)?.firstMessage).toBe('Make the header sticky');
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    await a.sessions.sendMessage(session.id, 'And on mobile');
+    expect(a.sessions.get(session.id)?.firstMessage).toBe('Make the header sticky');
+  });
+
+  it('backfills lanes from before: the first thing said, not the latest status', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo, ''));
+    a.transcript.user(session.id, 'Ship the pricing page');
+    a.repos.sessions.upsert({
+      ...a.sessions.get(session.id)!,
+      firstMessage: null,
+      note: 'The build is packaging',
+    });
+    a.sessions.backfillTasks();
+    expect(a.sessions.get(session.id)?.firstMessage).toBe('Ship the pricing page');
+  });
+});
+
 describe('SessionService relaunch + re-detect', () => {
   it('sendMessage relaunches the CLI when its process is gone (nothing replayed), then delivers the message', async () => {
     const { app: a } = app();

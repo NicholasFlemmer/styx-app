@@ -14,6 +14,7 @@ import {
 import { Tab } from '@styx/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChatPane } from '../../features/chat/ChatPane';
+import { TasksBoard } from '../../features/tasks-board/TasksBoard';
 import { ChangesPage } from '../../features/changes/ChangesPage';
 import { NewTask } from '../../features/new-task/NewTask';
 import { FilesPane } from '../../features/editor/FilesPane';
@@ -51,10 +52,20 @@ import s from './Workspace.module.css';
 /** Which instrument the centre shows (ADR-0027 §2); persisted alongside the pane sizes. */
 const WORKSPACE_MODE_KEY = 'workspace-mode';
 /** The instruments on a lane, and how each is stored in `paneSizes` (0 and 1 kept from Code / Design). */
-type Instrument = 'code' | 'design' | 'changes' | 'terminal';
-const INSTRUMENT_CODE: Record<Instrument, number> = { code: 0, design: 1, changes: 2, terminal: 3 };
+type Instrument = 'tasks' | 'code' | 'design' | 'changes' | 'terminal';
+const INSTRUMENT_CODE: Record<Instrument, number> = { code: 0, design: 1, changes: 2, terminal: 3, tasks: 4 };
 const instrumentOf = (n: number | undefined, fallback: Instrument): Instrument =>
-  n === 0 ? 'code' : n === 1 ? 'design' : n === 2 ? 'changes' : n === 3 ? 'terminal' : fallback;
+  n === 0
+    ? 'code'
+    : n === 1
+      ? 'design'
+      : n === 2
+        ? 'changes'
+        : n === 3
+          ? 'terminal'
+          : n === 4
+            ? 'tasks'
+            : fallback;
 /** git needs a moment after a turn ends before its marks are final; one re-read, not one per delta. */
 const TREE_REFRESH_DEBOUNCE_MS = 400;
 
@@ -245,9 +256,9 @@ export function Workspace() {
   const devCommand =
     projectId === null ? null : (model.settings.project[projectId]?.devCommand.value ?? null);
   // The instrument lives in the ui store's pane sizes so it survives a screen switch like the other pane prefs.
-  // Until the person picks one, a project that knows how to run its app opens on Preview, any other on Code.
+  // Until the person picks one, a project that knows how to run its app opens on Preview, any other on Tasks (#138).
   const modePref = useUi((u) => u.paneSizes[WORKSPACE_MODE_KEY]);
-  const mode = instrumentOf(modePref, devUrl !== null || devCommand !== null ? 'design' : 'code');
+  const mode = instrumentOf(modePref, devUrl !== null || devCommand !== null ? 'design' : 'tasks');
   const setMode = (next: Instrument) => {
     setPaneSize(WORKSPACE_MODE_KEY, INSTRUMENT_CODE[next]);
     void command('ui.persist', { paneSizes: { [WORKSPACE_MODE_KEY]: INSTRUMENT_CODE[next] } });
@@ -305,6 +316,13 @@ export function Workspace() {
           >
             <Tab
               variant="approvals"
+              label={copy.chat.instruments.tasks}
+              inv={mode === 'tasks'}
+              onClick={() => setMode('tasks')}
+              data-workspace-mode="tasks"
+            />
+            <Tab
+              variant="approvals"
               label={copy.chat.instruments.preview}
               inv={mode === 'design'}
               onClick={() => setMode('design')}
@@ -336,7 +354,9 @@ export function Workspace() {
           <PublishButton projectId={projectId} />
           <DeployButton projectId={projectId} />
         </div>
-        {mode === 'design' ? (
+        {mode === 'tasks' ? (
+          <TasksBoard projectId={projectId} activeSessionId={activeSessionId} />
+        ) : mode === 'design' ? (
           <DesignPane
             projectId={projectId}
             worktreeId={worktreeId}

@@ -146,7 +146,10 @@ describe('statusBarLane (keep lanes current, ADR-0023)', () => {
     const lane = fixtures.ids.worktree.fixCheckout;
     const behind: ReadModel = {
       ...m,
-      worktrees: { ...m.worktrees, byId: { ...m.worktrees.byId, [lane]: { ...m.worktrees.byId[lane]!, behindBase: 3 } } },
+      worktrees: {
+        ...m.worktrees,
+        byId: { ...m.worktrees.byId, [lane]: { ...m.worktrees.byId[lane]!, behindBase: 3 } },
+      },
     };
     expect(statusBarLane(behind, acme, lane)).toEqual(['↓3 main']);
     expect(statusBarLane(m, acme, lane)).toEqual([]); // current
