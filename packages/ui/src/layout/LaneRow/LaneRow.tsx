@@ -33,6 +33,7 @@ export const LaneRow = forwardRef<HTMLButtonElement, LaneRowProps>(function Lane
       aria-current={inv ? 'page' : undefined}
       data-inv={inv ? 'true' : undefined}
       data-tone={tone}
+      title={task}
       {...rest}
     >
       <AgentDot agent={agent} className={s['dot']} />

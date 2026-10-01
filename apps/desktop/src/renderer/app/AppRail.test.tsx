@@ -56,7 +56,8 @@ describe('rail + project nav (ADR-0027 §1, §5)', () => {
       expect(screen.queryByRole('button', { name })).toBeNull();
     const settings = tile(copy.appRail.settings.title);
     fireEvent.click(settings);
-    expect(useUiStore.getState().screen).toBe('settings');
+    // The app's settings, not the project's Targets the store last held.
+    expect(useUiStore.getState()).toMatchObject({ screen: 'settings', settingsSection: 'app:general' });
     expect(settings.getAttribute('aria-current')).toBe('page');
   });
 

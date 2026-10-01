@@ -616,6 +616,8 @@ export const commands = {
   /** Re-opens the verification page for the flow in progress, for a browser that never opened. */
   'account.openVerification': { input: z.object({}), output: ok },
   'session.archive': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
+  /** "Show earlier messages": main sends a page more of the session's transcript (only the latest rows ship by default). */
+  'session.loadEarlier': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   /**
    * Brings a finished (not archived) session back (Done card → Reopen; owner addition #97): the row returns to `idle`
    * with its transcript, worktree and settings, and its CLI is relaunched with the earlier conversation resumed where

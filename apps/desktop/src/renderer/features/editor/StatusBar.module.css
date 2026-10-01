@@ -70,4 +70,21 @@
     outline: 1px solid var(--tx);
     outline-offset: 2px;
   }
+  /* A narrow centre (the window's minimum with the files open): the targets trim before the branch, the chip keeps its glyph. */
+  @container column (max-width: 400px) {
+    .bar {
+      gap: 10px;
+    }
+    .bar > span:not(:first-child) {
+      flex-shrink: 8;
+    }
+    .words {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
 }

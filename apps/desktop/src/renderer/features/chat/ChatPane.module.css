@@ -302,8 +302,18 @@
   .link:hover {
     color: var(--tx);
   }
-  .foldTurn {
-    align-self: flex-start;
+  .earlierToggle {
+    margin-left: auto;
+    padding: 2px 8px;
+    border: 1px solid var(--ln);
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .earlierToggle:hover {
+    background: var(--s2);
   }
   /* No lane yet: the pane offers a new task instead of a header. */
   .noLane {

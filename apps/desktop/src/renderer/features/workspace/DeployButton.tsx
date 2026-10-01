@@ -125,6 +125,7 @@ export function DeployButton({ projectId }: DeployButtonProps) {
         className={s['button'] ?? ''}
         aria-haspopup={state.kind === 'menu' ? 'menu' : undefined}
         aria-expanded={state.kind === 'menu' ? menuOpen : undefined}
+        title={label}
         onClick={onClick}
         onKeyDown={(e) => {
           if (state.kind === 'menu' && e.key === 'ArrowDown' && !menuOpen) {
@@ -140,7 +141,7 @@ export function DeployButton({ projectId }: DeployButtonProps) {
             ▲
           </span>
         )}
-        {label}
+        <span data-strip-label="true">{label}</span>
         {state.kind === 'menu' ? <Icon name="chevron" size={10} /> : null}
       </Button>
       {menuOpen && state.kind === 'menu' ? (

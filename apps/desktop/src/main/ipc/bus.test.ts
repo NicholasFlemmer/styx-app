@@ -22,6 +22,7 @@ const bus = () => {
       trackAgentEdits: false,
       usageReports: true,
       tourDone: true,
+      tourVersion: 2,
     },
   }));
   b.register('project.select', ({ projectId }) => {

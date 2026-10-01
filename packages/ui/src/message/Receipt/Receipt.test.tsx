@@ -14,4 +14,11 @@ describe('Receipt', () => {
     await userEvent.keyboard('{Enter}');
     expect(onClick).toHaveBeenCalledTimes(2);
   });
+
+  it('open, it heads the turn: expanded and marked open', () => {
+    render(<Receipt title="Add dark mode" meta="Kept 09:12" state="kept" open />);
+    const btn = screen.getByRole('button', { name: /Add dark mode/ });
+    expect(btn).toHaveAttribute('aria-expanded', 'true');
+    expect(btn).toHaveAttribute('data-open', 'true');
+  });
 });

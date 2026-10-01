@@ -44,7 +44,16 @@ export type LaneItem =
       state: 'kept' | 'undone' | 'answered';
     }
   | { id: string; kind: 'earlier'; label: string; folded: boolean }
-  | { id: string; kind: 'fold'; turnId: string };
+  | {
+      /** An earlier turn opened from its receipt: the receipt heads it (open) and its rows sit under it. */
+      id: string;
+      kind: 'turn';
+      turnId: string;
+      title: string;
+      meta: string;
+      state: 'kept' | 'undone' | 'answered';
+      items: LaneItem[];
+    };
 
 export interface LaneContext {
   /** The session's checkpoints, for each turn's duration and screenshots. */
@@ -53,9 +62,9 @@ export interface LaneContext {
   atOf: (messageId: string) => number | null;
   /** The agent is mid-turn: the last turn's last run of steps is live. */
   live: boolean;
-  /** Turns opened from their receipt, by the id of the message that started them. */
+  /** Turns flipped from their receipt, by the id of the message that started them (opened, or folded under Show them). */
   expanded: ReadonlySet<string>;
-  /** "Show them": every earlier turn open. */
+  /** "Show them": every earlier turn open unless flipped. */
   showAll: boolean;
   /** Wall-clock time for receipts ("09:12"). */
   clock: (ms: number) => string;
@@ -148,7 +157,10 @@ const turnBody = (turn: Turn, ctx: LaneContext, live: boolean, latest: boolean):
   return out;
 };
 
-const receiptOf = (turn: Turn & { user: NonNullable<Turn['user']> }, ctx: LaneContext): LaneItem => {
+const receiptOf = (
+  turn: Turn & { user: NonNullable<Turn['user']> },
+  ctx: LaneContext,
+): Extract<LaneItem, { kind: 'receipt' }> => {
   const checkpoint = turn.rest.find((i): i is CheckpointItem => i.kind === 'checkpoint') ?? null;
   const c = checkpoint === null ? undefined : ctx.checkpoints.find((x) => x.id === checkpoint.checkpointId);
   const lastRow = turn.rest.at(-1);
@@ -193,12 +205,23 @@ export const laneItems = (items: readonly TranscriptItem[], ctx: LaneContext): L
       folded: !ctx.showAll,
     });
   turns.forEach((turn, i) => {
-    if (foldable(turn, i) && !ctx.showAll && !ctx.expanded.has(turn.user.id)) {
-      out.push(receiptOf(turn, ctx));
+    if (foldable(turn, i)) {
+      const receipt = receiptOf(turn, ctx);
+      if (ctx.showAll === ctx.expanded.has(turn.user.id)) {
+        out.push(receipt);
+        return;
+      }
+      out.push({
+        id: `turn:${turn.user.id}`,
+        kind: 'turn',
+        turnId: receipt.turnId,
+        title: receipt.title,
+        meta: receipt.meta,
+        state: receipt.state,
+        items: [turn.user, ...turnBody(turn, ctx, false, false)],
+      });
       return;
     }
-    if (foldable(turn, i) && !ctx.showAll)
-      out.push({ id: `fold:${turn.user.id}`, kind: 'fold', turnId: turn.user.id });
     if (turn.user !== null) out.push(turn.user);
     out.push(...turnBody(turn, ctx, ctx.live && i === lastIndex, i >= firstOpen));
   });

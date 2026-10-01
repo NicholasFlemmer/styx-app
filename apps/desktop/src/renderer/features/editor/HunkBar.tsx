@@ -20,7 +20,7 @@ export interface HunkBarProps {
 export function HunkBar({ label, onReview, onRevertAll, onMarkReviewed }: HunkBarProps) {
   return (
     <div className={s['bar']} data-hunk-bar="true">
-      <Label as="span" className={s['label']}>
+      <Label as="span" className={s['label']} title={label}>
         {label}
       </Label>
       <Button variant="primary" onClick={onReview}>

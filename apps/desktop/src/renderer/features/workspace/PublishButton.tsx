@@ -37,7 +37,7 @@ export function PublishButton({ projectId }: PublishButtonProps) {
         <span className={s['glyph']} aria-hidden="true">
           ↑
         </span>
-        {copy.publish.run}
+        <span data-strip-label="true">{copy.publish.run}</span>
       </Button>
     </div>
   );

@@ -5,6 +5,7 @@ export * from './Composer';
 export * from './WorkingLine';
 export * from './Markdown';
 export * from './TurnResult';
+export * from './OpenTurn';
 export * from './Receipt';
 export * from './StepList';
 export * from './LaneHeader';

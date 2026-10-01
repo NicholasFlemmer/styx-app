@@ -154,13 +154,23 @@ describe('laneItems (ADR-0027 §3 / §4)', () => {
     });
   });
 
-  it('opens one turn from its receipt with a fold handle, or every turn with Show them', () => {
+  it('opens one turn from its receipt as a group under it, or every turn with Show them', () => {
     const items = [user('u1', 'First'), agent('a1', 'One.'), user('u2', 'Second'), agent('a2', 'Two.')];
     const one = laneItems(items, ctx({ expanded: new Set(['u1']) }));
-    expect(kinds(one)).toEqual(['earlier', 'fold', 'user', 'agent', 'user', 'agent']);
+    expect(kinds(one)).toEqual(['earlier', 'turn', 'user', 'agent']);
+    expect(one[1]).toMatchObject({ turnId: 'u1', title: 'First', state: 'answered' });
+    const group = one[1] as Extract<LaneItem, { kind: 'turn' }>;
+    expect(kinds(group.items)).toEqual(['user', 'agent']);
     const all = laneItems(items, ctx({ showAll: true }));
-    expect(kinds(all)).toEqual(['earlier', 'user', 'agent', 'user', 'agent']);
+    expect(kinds(all)).toEqual(['earlier', 'turn', 'user', 'agent']);
     expect(all[0]).toMatchObject({ label: '1 earlier turn', folded: false });
+    // Under Show them a receipt click folds just that turn again.
+    expect(kinds(laneItems(items, ctx({ showAll: true, expanded: new Set(['u1']) })))).toEqual([
+      'earlier',
+      'receipt',
+      'user',
+      'agent',
+    ]);
   });
 
   it('never folds a turn that is still asking the person something, and a receipt has a title and a time', () => {

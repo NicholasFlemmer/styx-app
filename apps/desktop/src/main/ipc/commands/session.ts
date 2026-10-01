@@ -104,18 +104,19 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
     const resolved = sessions.resolveAsk(ask.id, resolution);
     if (resolution.kind === 'decision') {
       const msg = repos.transcripts
-        .last(ask.sessionId, 200)
+        .last(ask.sessionId, app.publisher.transcriptWindow(ask.sessionId))
         .find((m) => m.askId === ask.id && m.payload.kind === 'decision');
       if (msg && msg.payload.kind === 'decision') {
         repos.transcripts.upsert({ ...msg, payload: { ...msg.payload, chosen: resolution.chosen } });
-        app.publisher.emit({
-          op: 'transcript.replace',
-          sessionId: ask.sessionId,
-          messages: repos.transcripts.last(ask.sessionId, 200),
-        });
+        app.publisher.transcriptReplace(ask.sessionId);
       }
     }
     app.broker.resolveAsk(resolved, resolution);
+    return {};
+  });
+
+  bus.register('session.loadEarlier', ({ sessionId }) => {
+    app.publisher.transcriptEarlier(sessionId);
     return {};
   });
 

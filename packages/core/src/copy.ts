@@ -187,6 +187,8 @@ export const copy = {
       earlierOne: '1 earlier turn',
       showAll: 'Show them',
       hideAll: 'Fold them',
+      /** Above a long thread whose start main has not sent yet. */
+      olderMessages: 'Show earlier messages',
     },
     /** The workspace centre's instruments on the lane (ADR-0027 §2). */
     instruments: {
