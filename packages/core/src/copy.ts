@@ -981,8 +981,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   },
 
   connect: {
-    title: 'Connect target · {step}',
-    stepPick: 'choose provider',
+    title: 'Connect a target: {step}',
+    stepPick: 'pick a provider',
     methods: { cli: 'Provider CLI', oauth: 'OAuth', key: 'IAM / key', ssh: 'SSH' },
     /** Primary path: reuse the login the provider's CLI already holds; keys stay under Advanced. */
     cli: {
@@ -1199,7 +1199,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     ],
   },
   spawn: {
-    title: 'Spawn agent · {project}',
+    title: 'Start an agent in {project}',
     worktree: 'Worktree',
     worktreeDefault: 'New from main',
     /** Plain-folder projects (no git): the only worktree option; `New from main` is disabled. */
@@ -1804,8 +1804,32 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     menu: { help: 'Help', tour: 'Show Walkthrough', feedback: 'Send Feedback…', site: 'Visit heystyx.com' },
     steps: {
       rail: {
-        title: 'Every project, one window',
-        body: 'Your projects live down this rail. Click one to open it, or + to add another.',
+        title: 'Your places and your projects',
+        body: 'Down this side: All projects, Agents, Access, Tasks and Usage, then each of your projects, then Settings at the foot.',
+      },
+      lanes: {
+        title: 'Your work, by whose turn it is',
+        body: 'Every task in this project is listed here by what it is for. “Your turn” means an agent is waiting on you, and it is always at the top.',
+      },
+      newTask: {
+        title: 'Start a task',
+        body: 'Say what you want done and press Start. Each task runs in its own copy of the repo, so main is safe until you land it.',
+      },
+      lane: {
+        title: 'One task, one lane',
+        body: 'The agent, its branch, and what the lane holds so far. When it is ready, Land puts it on main.',
+      },
+      chat: {
+        title: 'Talk to it, see what it did',
+        body: 'Ask, steer, drop in files. Its work reads as plain steps, and each finished turn comes back as a card you can open or undo. Carrying on keeps it.',
+      },
+      instruments: {
+        title: 'Look at the work four ways',
+        body: 'Preview runs your app, Changes reads the lane as a page, Code is the full editor, Terminal is the lane’s shell.',
+      },
+      changes: {
+        title: 'Sign it off',
+        body: 'Changes shows what the agent did, turn by turn, with each diff. Undo any turn, ask for changes, or land it.',
       },
       needs: {
         title: 'What’s waiting on you',
@@ -1813,47 +1837,19 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       },
       palette: {
         title: 'Everything is one keystroke away',
-        body: 'Press {chord} to switch projects, start an agent, deploy or approve, from anywhere.',
+        body: 'Press {chord} to switch projects, deploy or approve. Type a sentence and it starts as a task.',
       },
-      spawn: {
-        title: 'Start a task',
-        body: 'Say what you want done and pick Claude Code, Codex, Gemini or Cursor. Each one works in its own copy of the repo, on its own branch, so agents never trip over each other or you.',
+      board: {
+        title: 'Everything going on',
+        body: 'Every agent across your projects: what needs you, what is working, what is ready to land and what has landed.',
       },
-      tabs: {
-        title: 'Your work, by whose move it is',
-        body: 'Every task in this project is listed here, with what it is for. “Your turn” means an agent is waiting on you.',
-      },
-      composer: {
-        title: 'Talk to it here',
-        body: 'Tell the agent what to do, drop in files or screenshots, and answer it when it asks. Messages queue while it works.',
-      },
-      editor: {
-        title: 'Your code, one tab away',
-        body: 'Changes reads what the agent did as a page you can sign off. Code is the full editor, with every agent edit marked; open any file in your own editor with one key.',
-      },
-      land: {
-        title: 'Land it, or publish it',
-        body: 'Land merges the agent’s branch into main once your checks pass. Publish commits, pushes and opens a pull request instead.',
+      access: {
+        title: 'Agents ask before production',
+        body: 'When an agent wants to deploy or touch a database, the request lands here. Allow it for a set time, with Touch ID for anything live. Every request is logged.',
       },
       deploy: {
         title: 'Ship it',
         body: 'Deploy to Vercel, Google Cloud, AWS and more, from here. Anything live asks for your approval first.',
-      },
-      design: {
-        title: 'See it running',
-        body: 'Preview runs your project locally and shows it beside the chat, so you can see what the agent built.',
-      },
-      repo: {
-        title: 'Every lane, one table',
-        body: 'Each agent’s branch, its changes and whether it’s ready to land, across the whole project.',
-      },
-      approvals: {
-        title: 'Agents ask before production',
-        body: 'When an agent wants to deploy or touch a database, the request lands here. Approve it for a set time, with Touch ID for anything live. Every request is logged.',
-      },
-      targets: {
-        title: 'Connect where you ship',
-        body: 'Add Vercel, AWS, Google Cloud, Supabase, GitHub or a server. Styx uses the logins you already have and keeps the keys in your Mac’s Keychain.',
       },
       feedback: {
         title: 'Tell me what’s broken',
@@ -1861,7 +1857,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       },
       done: {
         title: 'You’re set',
-        body: 'Open a project and press + to start your first agent. You can replay this walkthrough any time from {chord}.',
+        body: 'Start a task and watch it come back. You can replay this walkthrough any time from {chord}.',
       },
     },
   },

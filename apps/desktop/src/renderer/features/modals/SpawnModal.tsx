@@ -128,7 +128,7 @@ export function SpawnModal({ id, projectId }: SpawnModalProps) {
         data-plain-folder={choices.plainFolder ? 'true' : undefined}
       >
         <div className={s['bleed']}>
-          <div className={s['tiles']} role="radiogroup" aria-label={copy.spawn.title.split(' ·')[0]}>
+          <div className={s['tiles']} role="radiogroup" aria-label={copy.newTask.agent}>
             {SPAWN_AGENTS.map((a) => (
               <button
                 key={a}

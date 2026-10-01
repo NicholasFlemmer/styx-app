@@ -297,7 +297,12 @@ export function Workspace() {
           Terminal. Publish and Deploy stay on the strip; Land is in the lane header.
         */}
         <div className={s['modes']}>
-          <div className={s['tabs']} role="tablist" aria-label={copy.chat.instruments.label}>
+          <div
+            className={s['tabs']}
+            role="tablist"
+            aria-label={copy.chat.instruments.label}
+            data-instruments="true"
+          >
             <Tab
               variant="approvals"
               label={copy.chat.instruments.preview}

@@ -1,6 +1,6 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { PNG } from 'pngjs';
 import { launchStyx } from './launch';
 import { comparePng, type Rect } from './visual/compare';
@@ -118,7 +118,7 @@ test('⤢ opens a pop-out window with the compact chat; Mod+Shift+O docks it', a
 });
 
 for (const theme of ['dark', 'light'] as const) {
-  test(`pop-out window matches the prototype crop · ${theme} · mac`, async () => {
+  test(`pop-out window matches its reference · ${theme} · mac`, async () => {
     const file = `popout-${theme}-mac.png`;
     const { app, page } = await launchStyx({
       screen: 'workspace',
@@ -139,10 +139,16 @@ for (const theme of ['dark', 'light'] as const) {
       await popout.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 
       const actualPath = test.info().outputPath(file);
-      const baselinePath = test.info().outputPath(`baseline-crop-${file}`);
       const diffPath = test.info().outputPath(file.replace(/\.png$/, '-diff.png'));
       await popout.screenshot({ path: actualPath, scale: 'css', animations: 'disabled', caret: 'hide' });
-      cropBaseline(file, baselinePath);
+      // ADR-0027: the app's own reference when there is one, else the prototype crop (kept as history).
+      const appRef = join(__dirname, 'visual', '__baseline__', 'app', file);
+      if (process.env['STYX_VISUAL_UPDATE'] === '1') {
+        mkdirSync(dirname(appRef), { recursive: true });
+        copyFileSync(actualPath, appRef);
+      }
+      const baselinePath = existsSync(appRef) ? appRef : test.info().outputPath(`baseline-crop-${file}`);
+      if (!existsSync(appRef)) cropBaseline(file, baselinePath);
 
       // Full-window ratio (reported): the prototype's pop-out shows an abridged conversation ("Plan: … Proceeding.")
       // that the demo fixture does not contain, so the transcript body can never match pixel for pixel.
