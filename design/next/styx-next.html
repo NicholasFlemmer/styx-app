@@ -26,12 +26,12 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 /* ---------- the document around the artboards ---------- */
 .intro, .note { width: 1280px; margin: 0 auto; }
-.intro h1 { font: 700 56px/1.02 var(--ui); font-stretch: 125%; letter-spacing: -.01em; max-width: 16ch; }
+.intro h1 { font: 700 56px/1.02 var(--ui); letter-spacing: -.01em; max-width: 16ch; }
 .intro p { margin-top: 20px; max-width: 62ch; color: var(--mu); font-size: 17px; }
 .intro p strong { color: var(--tx); font-weight: 600; }
 .note { display: grid; grid-template-columns: 56px 1fr; gap: 0 20px; margin-top: 96px; margin-bottom: 24px; }
-.note .n { font: 700 40px/1 var(--ui); font-stretch: 125%; color: var(--ac); }
-.note h2 { font: 700 26px/1.1 var(--ui); font-stretch: 112%; }
+.note .n { font: 700 40px/1 var(--ui); color: var(--ac); }
+.note h2 { font: 700 26px/1.1 var(--ui); }
 .note p { grid-column: 2; margin-top: 8px; max-width: 70ch; color: var(--mu); }
 
 /* ---------- window chrome ---------- */
@@ -49,7 +49,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 /* ---------- 1. Ask ---------- */
 .ask { padding: 56px 120px 0; display: grid; grid-template-rows: auto auto auto 1fr; }
-.ask h3 { font: 700 46px/1.05 var(--ui); font-stretch: 125%; letter-spacing: -.01em; }
+.ask h3 { font: 700 46px/1.05 var(--ui); letter-spacing: -.01em; }
 .ask h3 span { color: var(--mu); }
 .composer { margin-top: 28px; border: 1px solid var(--tx); background: var(--s1); }
 .composer .text { padding: 20px 22px 8px; font-size: 19px; min-height: 104px; color: var(--tx); }
@@ -70,7 +70,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .recent { align-self: end; padding-bottom: 28px; display: flex; gap: 18px; align-items: center; }
 .recent .lbl { font-size: 13px; color: var(--mu); width: 110px; }
 .sheet-thumb { width: 220px; height: 64px; background: var(--p-bg); color: var(--p-tx); padding: 10px 12px; font-size: 12px; line-height: 1.3; position: relative; }
-.sheet-thumb b { display: block; font: 700 13px/1.2 var(--ui); font-stretch: 110%; }
+.sheet-thumb b { display: block; font: 700 13px/1.2 var(--ui); }
 .sheet-thumb em { position: absolute; bottom: 8px; left: 12px; font-style: normal; color: var(--p-mu); font-size: 11px; }
 .sheet-thumb.landed::after { content: 'Landed'; position: absolute; right: 8px; bottom: 8px; font-size: 11px; color: var(--p-act); font-weight: 600; }
 
@@ -78,7 +78,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .work { display: grid; grid-template-columns: 1fr 560px; min-height: 0; }
 .work .left { padding: 40px 48px 0 56px; display: grid; grid-template-rows: auto 1fr auto; min-height: 0; }
 .asked { font-size: 13px; color: var(--mu); }
-.work h3 { font: 700 30px/1.12 var(--ui); font-stretch: 118%; margin-top: 6px; max-width: 22ch; }
+.work h3 { font: 700 30px/1.12 var(--ui); margin-top: 6px; max-width: 22ch; }
 .meta { display: flex; gap: 16px; margin-top: 14px; font-size: 13px; color: var(--mu); }
 .meta .live { color: var(--tx); display: inline-flex; align-items: center; gap: 7px; }
 .meta .live i { width: 8px; height: 8px; background: var(--ac); animation: blink 1.4s steps(2, start) infinite; }
@@ -129,7 +129,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .paper .ready { display: flex; gap: 14px; align-items: center; font-size: 14px; color: var(--p-mu); }
 .paper .ready .ok { color: var(--p-act); font-weight: 600; display: inline-flex; align-items: center; gap: 7px; }
 .paper .ready .ok i { width: 10px; height: 10px; background: var(--p-act); }
-.paper h3 { font: 700 32px/1.08 var(--ui); font-stretch: 125%; letter-spacing: -.01em; margin-top: 12px; max-width: 28ch; }
+.paper h3 { font: 700 32px/1.08 var(--ui); letter-spacing: -.01em; margin-top: 12px; max-width: 28ch; }
 .paper .sum { margin-top: 12px; font-size: 16px; line-height: 1.55; max-width: 60ch; }
 .paper .sum + .sum { margin-top: 10px; }
 .ba { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--p-ln); }
@@ -159,8 +159,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .today { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; }
 .col { border-right: 1px solid var(--ln); padding: 26px 22px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 .col:last-child { border-right: 0; }
-.col h3 { font: 700 22px/1 var(--ui); font-stretch: 118%; display: flex; align-items: baseline; gap: 10px; }
-.col h3 .c { font-size: 14px; font-weight: 600; color: var(--mu); font-stretch: 100%; }
+.col h3 { font: 700 22px/1 var(--ui); display: flex; align-items: baseline; gap: 10px; }
+.col h3 .c { font-size: 14px; font-weight: 600; color: var(--mu); }
 .col h3 .c[data-on] { background: var(--ac); color: var(--acx); padding: 2px 6px; }
 .col .sub { font-size: 13px; color: var(--mu); margin-top: -6px; }
 .card { border: 1px solid var(--ln); background: var(--s1); padding: 16px; }
@@ -181,13 +181,27 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .mini .acme { transform: scale(.5); transform-origin: top left; width: 200%; }
 .paper-card { background: var(--p-bg); color: var(--p-tx); padding: 16px; }
 .paper-card .who { color: var(--p-mu); }
-.paper-card .what { font: 700 17px/1.2 var(--ui); font-stretch: 112%; margin-top: 8px; }
+.paper-card .what { font: 700 17px/1.2 var(--ui); margin-top: 8px; }
 .paper-card .line { font-size: 13px; color: var(--p-mu); margin-top: 6px; }
 .paper-card .acts { display: flex; gap: 8px; margin-top: 12px; }
 .paper-card .acts button { padding: 7px 12px; border: 1px solid var(--p-ln); font-size: 13px; color: var(--p-tx); }
 .paper-card .acts .yes { background: var(--p-tx); color: var(--p-bg); border-color: var(--p-tx); font-weight: 700; }
 
 @media (prefers-reduced-motion: reduce) { .meta .live i { animation: none; } }
+
+/* Headings use today's type scale (owner, 1 Oct): Archivo at normal width, weight 600. Page titles 18 px,
+   headlines 28 px at -0.02em, sheet titles 22 px, drawer titles 20 px, card titles at body size, counters 56 px. */
+.pagehead h3, .np .mh h3 { font: 600 18px/1.2 var(--ui); letter-spacing: 0; }
+.newt h3, .hello h3, .onbody h3, .page h3, .paper h3, .ask h3, .work h3, .intro h1, .doc h1 { font: 600 28px/1.15 var(--ui); letter-spacing: -0.02em; }
+.sheet .sh h3 { font: 600 22px/1.2 var(--ui); }
+.drawer h3, .upd h3 { font: 600 20px/1.25 var(--ui); }
+.lanehead h3, .bcol h4, .col h3, .note h2, .pol h4, .nav .ph b, .part { font-weight: 600; letter-spacing: 0; }
+.lanehead h3 { font-size: 16px; } .bcol h4, .col h3 { font-size: 15px; } .nav .ph b { font-size: 14px; }
+.card-p h4, .paper-card .what, .bc .t, .ask h4, .toast h4, .sheet-thumb b, .paper-card .what, .card .what { font: 600 14px/1.3 var(--ui); }
+.attn .num { font: 600 56px/1 var(--ui); }
+.page h3, .paper h3 { max-width: 40ch; }
+.newt h3, .ask h3 { max-width: none; }
+.note .n { font-weight: 600; }
 </style>
 </head>
 <body>

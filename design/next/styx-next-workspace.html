@@ -20,11 +20,11 @@ body { background: var(--page); color: var(--tx); font: 400 14px/1.5 var(--ui); 
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 
 .intro, .note, .compare { width: 1280px; margin: 0 auto; }
-.intro h1 { font: 700 48px/1.04 var(--ui); font-stretch: 125%; letter-spacing: -.01em; max-width: 20ch; }
+.intro h1 { font: 700 48px/1.04 var(--ui); letter-spacing: -.01em; max-width: 20ch; }
 .intro p { margin-top: 18px; max-width: 66ch; color: var(--mu); font-size: 17px; }
 .intro p strong { color: var(--tx); font-weight: 600; }
 .note { margin-top: 72px; margin-bottom: 22px; }
-.note h2 { font: 700 26px/1.1 var(--ui); font-stretch: 112%; }
+.note h2 { font: 700 26px/1.1 var(--ui); }
 .note p { margin-top: 8px; max-width: 74ch; color: var(--mu); font-size: 15px; }
 
 /* ---------- window, matching today's workspace grid ---------- */
@@ -101,7 +101,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .paper { background: var(--p-bg); color: var(--p-tx); padding: 14px 16px 12px; }
 .paper .top { display: flex; justify-content: space-between; font-size: 12px; color: var(--p-mu); }
 .paper .top .ok { color: var(--p-act); font-weight: 600; }
-.paper h4 { font: 700 17px/1.2 var(--ui); font-stretch: 112%; margin-top: 6px; }
+.paper h4 { font: 700 17px/1.2 var(--ui); margin-top: 6px; }
 .paper p { font-size: 13px; margin-top: 6px; line-height: 1.45; }
 .paper .files { margin-top: 8px; font: 400 12px/1.7 var(--mono); }
 .paper .files div { display: flex; justify-content: space-between; border-top: 1px solid var(--p-ln); }
@@ -132,6 +132,18 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .compare .k { font: 700 11px/22px var(--ui); background: var(--tx); color: var(--bg); border-radius: 50%; text-align: center; height: 22px; margin-top: 12px; border: 0; padding: 0; }
 .compare .h { color: var(--mu); font-size: 13px; padding-bottom: 6px; border-top: 0; }
 .compare .now { color: var(--mu); }
+
+/* Headings use today's type scale (owner, 1 Oct): Archivo at normal width, weight 600. Page titles 18 px,
+   headlines 28 px at -0.02em, sheet titles 22 px, drawer titles 20 px, card titles at body size, counters 56 px. */
+.pagehead h3, .np .mh h3 { font: 600 18px/1.2 var(--ui); letter-spacing: 0; }
+.newt h3, .hello h3, .onbody h3, .page h3, .paper h3, .ask h3, .work h3, .intro h1, .doc h1 { font: 600 28px/1.15 var(--ui); letter-spacing: -0.02em; }
+.sheet .sh h3 { font: 600 22px/1.2 var(--ui); }
+.drawer h3, .upd h3 { font: 600 20px/1.25 var(--ui); }
+.lanehead h3, .bcol h4, .col h3, .note h2, .pol h4, .nav .ph b, .part { font-weight: 600; letter-spacing: 0; }
+.lanehead h3 { font-size: 16px; } .bcol h4, .col h3 { font-size: 15px; } .nav .ph b { font-size: 14px; }
+.card-p h4, .paper-card .what, .bc .t, .ask h4, .toast h4, .sheet-thumb b, .paper-card .what, .card .what { font: 600 14px/1.3 var(--ui); }
+.attn .num { font: 600 56px/1 var(--ui); }
+.note .n { font-weight: 600; }
 </style>
 </head>
 <body>
