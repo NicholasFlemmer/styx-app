@@ -9,21 +9,12 @@ import {
   type IdeInstall,
   type ReadModel,
 } from '@styx/core';
-import {
-  Button,
-  Checkbox,
-  Label,
-  Numeral,
-  StatusDot,
-  Table,
-  TableCell,
-  TableRow,
-  TABLE_COLUMNS,
-  Tag,
-} from '@styx/ui';
+import { Button, Checkbox, Label, StatusDot, Table, TableCell, TableRow, TABLE_COLUMNS, Tag } from '@styx/ui';
 import { useEffect, useState } from 'react';
 import { PROVIDERS, cliMethodLabel } from '../../features/modals/modals';
 import { command } from '../../state/commands';
+import { useReadModel } from '../../state/read-model';
+import { railProjects } from '../../app/Rail';
 import { useCopyPlatform, useModel, useNow, useUi } from '../../state/hooks';
 import type { OnboardingStep } from '../../state/ui-store';
 import { harnessReposEnabled, harnessScannedRepos } from './harness-repos';
@@ -43,6 +34,7 @@ export function Onboarding() {
   const step = useUi((u) => u.onboardingStep);
   const setStep = useUi((u) => u.setOnboardingStep);
   const setScreen = useUi((u) => u.setScreen);
+  const openNewTask = useUi((u) => u.openNewTask);
   const pushOverlay = useUi((u) => u.pushOverlay);
   const projectId = useUi((u) => u.projectId);
   const platform = useCopyPlatform();
@@ -87,9 +79,15 @@ export function Onboarding() {
     };
   }, [step, repos, imports.recents, imports.agents]);
 
+  /**
+   * Done (or skipped): with a project to work in, straight to New task in it, so the first thing Styx shows is a box
+   * asking what an agent should do (ADR-0027 §1); with none, All projects.
+   */
   const finish = async () => {
     await command('onboarding.complete', {});
-    setScreen('home');
+    const first = railProjects(useReadModel.getState().model)[0];
+    if (first !== undefined) openNewTask(first.id);
+    else setScreen('home');
   };
 
   const next = async () => {
@@ -161,244 +159,258 @@ export function Onboarding() {
 
   return (
     <div className={s['root']} data-onboarding-step={step}>
-      <ol className={s['strip']} aria-label={copy.onboarding.stepsLabel}>
-        {STEPS.map((st) => (
-          <li
-            key={st.n}
-            className={s['stepCell']}
-            data-inv={st.n === step ? 'true' : undefined}
-            aria-current={st.n === step ? 'step' : undefined}
-          >
-            <Numeral value={st.n} size="M" />
-            <Label strong>{st.label}</Label>
-          </li>
-        ))}
-      </ol>
-
-      {step === 1 ? (
-        <section className={s['body']} aria-labelledby="ob-headline">
-          <h1 id="ob-headline" className={s['headline']}>
-            {copy.onboarding.editor.headline}
-          </h1>
-          <p className={s['lead']}>{copy.onboarding.editor.body}</p>
-          <div className={s['tableFrame']}>
-            <Table
-              columns={TABLE_COLUMNS.onboardingIde}
-              rowPad="10px 14px"
-              gap="14px"
-              aria-label={copy.onboarding.steps.editor}
+      <aside className={s['side']}>
+        <ol className={s['strip']} aria-label={copy.onboarding.stepsLabel}>
+          {STEPS.map((st) => (
+            <li
+              key={st.n}
+              className={s['stepCell']}
+              data-state={st.n < step ? 'done' : st.n === step ? 'now' : 'next'}
+              aria-current={st.n === step ? 'step' : undefined}
             >
-              {ides.map((i) => {
-                const chosen = ide?.id === i.id;
-                return (
-                  <TableRow key={i.id} data-ide-id={i.id} onActivate={() => setChosenIde(i.id)}>
+              <span className={s['marker']} aria-hidden="true">
+                {st.n < step ? '✓' : st.n}
+              </span>
+              <span className={s['stepTitle']}>{st.title}</span>
+              <span className={s['stepWhy']}>{st.why}</span>
+            </li>
+          ))}
+        </ol>
+        <p className={s['then']}>{copy.onboarding.then}</p>
+      </aside>
+      <div className={s['column']}>
+        {step === 1 ? (
+          <section className={s['body']} aria-labelledby="ob-headline">
+            <h1 id="ob-headline" className={s['headline']}>
+              {copy.onboarding.editor.headline}
+            </h1>
+            <p className={s['lead']}>{copy.onboarding.editor.body}</p>
+            <div className={s['tableFrame']}>
+              <Table
+                columns={TABLE_COLUMNS.onboardingIde}
+                rowPad="10px 14px"
+                gap="14px"
+                aria-label={copy.onboarding.steps.editor}
+              >
+                {ides.map((i) => {
+                  const chosen = ide?.id === i.id;
+                  return (
+                    <TableRow key={i.id} data-ide-id={i.id} onActivate={() => setChosenIde(i.id)}>
+                      <TableCell>
+                        <Checkbox
+                          tone="accent"
+                          checked={chosen}
+                          aria-label={i.product}
+                          onChange={() => setChosenIde(i.id)}
+                        />
+                      </TableCell>
+                      <TableCell strong>{i.product}</TableCell>
+                      <TableCell mono muted>
+                        {ideVersionLabel(i)}
+                      </TableCell>
+                      <TableCell mono muted>
+                        {ideImportsLabel(i)}
+                      </TableCell>
+                      <TableCell align="end">
+                        <Tag size="md" inv={chosen}>
+                          {chosen ? copy.onboarding.editor.roleFallback : copy.onboarding.editor.roleDetected}
+                        </Tag>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </Table>
+            </div>
+            <div className={s['toggles']}>
+              <Checkbox
+                checked={imports.keybindings}
+                onChange={(v) => setImports({ ...imports, keybindings: v })}
+                label={copy.onboarding.editor.importKeybindings}
+              />
+              <Checkbox
+                checked={imports.theme}
+                onChange={(v) => setImports({ ...imports, theme: v })}
+                label={copy.onboarding.editor.importTheme}
+              />
+              <Checkbox
+                checked={imports.recents}
+                onChange={(v) => setImports({ ...imports, recents: v })}
+                label={copy.onboarding.editor.importRecents}
+              />
+              <Checkbox
+                checked={imports.agents}
+                onChange={(v) => setImports({ ...imports, agents: v })}
+                label={copy.onboarding.editor.importAgentDirs}
+              />
+              <Checkbox
+                checked={imports.installOpenIn}
+                onChange={(v) => setImports({ ...imports, installOpenIn: v })}
+                label={copy.onboarding.editor.installOpenIn}
+              />
+            </div>
+          </section>
+        ) : null}
+
+        {step === 2 ? (
+          <section className={s['body']} aria-labelledby="ob-headline">
+            <h1 id="ob-headline" className={s['headline']}>
+              {fill(copy.onboarding.projects.headline, { n: repos?.length ?? 0 })}
+            </h1>
+            <p className={s['lead']}>
+              {fill(copy.onboarding.projects.body, { ide: ide?.product ?? copy.general.none })}
+            </p>
+            <div className={s['tableFrame']}>
+              <Table
+                columns={TABLE_COLUMNS.onboardingRepos}
+                rowPad="10px 14px"
+                gap="14px"
+                className={s['mono']}
+                aria-label={copy.onboarding.steps.projects}
+              >
+                {(repos ?? []).map((r) => (
+                  <TableRow key={r.path} data-repo-path={r.path} data-repo-source={r.source}>
                     <TableCell>
                       <Checkbox
                         tone="accent"
-                        checked={chosen}
-                        aria-label={i.product}
-                        onChange={() => setChosenIde(i.id)}
+                        checked={checked.has(r.path)}
+                        aria-label={r.path}
+                        onChange={(v) => toggleRepo(r.path, v)}
                       />
                     </TableCell>
-                    <TableCell strong>{i.product}</TableCell>
-                    <TableCell mono muted>
-                      {ideVersionLabel(i)}
-                    </TableCell>
-                    <TableCell mono muted>
-                      {ideImportsLabel(i)}
-                    </TableCell>
-                    <TableCell align="end">
-                      <Tag size="md" inv={chosen}>
-                        {chosen ? copy.onboarding.editor.roleFallback : copy.onboarding.editor.roleDetected}
-                      </Tag>
+                    <TableCell className={s['monoCell']}>{r.path}</TableCell>
+                    <TableCell muted className={s['monoCell']}>
+                      {rowMeta(r, now)}
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </Table>
-          </div>
-          <div className={s['toggles']}>
-            <Checkbox
-              checked={imports.keybindings}
-              onChange={(v) => setImports({ ...imports, keybindings: v })}
-              label={copy.onboarding.editor.importKeybindings}
-            />
-            <Checkbox
-              checked={imports.theme}
-              onChange={(v) => setImports({ ...imports, theme: v })}
-              label={copy.onboarding.editor.importTheme}
-            />
-            <Checkbox
-              checked={imports.recents}
-              onChange={(v) => setImports({ ...imports, recents: v })}
-              label={copy.onboarding.editor.importRecents}
-            />
-            <Checkbox
-              checked={imports.agents}
-              onChange={(v) => setImports({ ...imports, agents: v })}
-              label={copy.onboarding.editor.importAgentDirs}
-            />
-            <Checkbox
-              checked={imports.installOpenIn}
-              onChange={(v) => setImports({ ...imports, installOpenIn: v })}
-              label={copy.onboarding.editor.installOpenIn}
-            />
-          </div>
-        </section>
-      ) : null}
-
-      {step === 2 ? (
-        <section className={s['body']} aria-labelledby="ob-headline">
-          <h1 id="ob-headline" className={s['headline']}>
-            {fill(copy.onboarding.projects.headline, { n: repos?.length ?? 0 })}
-          </h1>
-          <p className={s['lead']}>
-            {fill(copy.onboarding.projects.body, { ide: ide?.product ?? copy.general.none })}
-          </p>
-          <div className={s['tableFrame']}>
-            <Table
-              columns={TABLE_COLUMNS.onboardingRepos}
-              rowPad="10px 14px"
-              gap="14px"
-              className={s['mono']}
-              aria-label={copy.onboarding.steps.projects}
-            >
-              {(repos ?? []).map((r) => (
-                <TableRow key={r.path} data-repo-path={r.path} data-repo-source={r.source}>
-                  <TableCell>
-                    <Checkbox
-                      tone="accent"
-                      checked={checked.has(r.path)}
-                      aria-label={r.path}
-                      onChange={(v) => toggleRepo(r.path, v)}
-                    />
-                  </TableCell>
-                  <TableCell className={s['monoCell']}>{r.path}</TableCell>
-                  <TableCell muted className={s['monoCell']}>
-                    {rowMeta(r, now)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </Table>
-            {/* One §10 string, three actions. Inline spans (not <button>s) keep the row a single shaped text run, so it
+                ))}
+              </Table>
+              {/* One §10 string, three actions. Inline spans (not <button>s) keep the row a single shaped text run, so it
                 renders pixel-identical to the prototype's one button; role/tabIndex/keys make each segment a button. */}
-            <div className={s['addRow']} data-onboarding-add-row="true">
-              <AddRowAction onActivate={() => pushOverlay({ kind: 'modal', modal: 'new-project' })}>
-                {copy.onboarding.projects.addRowNew}
-              </AddRowAction>
-              {copy.onboarding.projects.addRowSep}
-              <AddRowAction onActivate={() => void addFolder()}>
-                {copy.onboarding.projects.addRowFolder}
-              </AddRowAction>
-              {copy.onboarding.projects.addRowSep}
-              <AddRowAction
-                onActivate={() => pushOverlay({ kind: 'modal', modal: 'new-project', mode: 'clone' })}
-              >
-                {copy.onboarding.projects.addRowClone}
-              </AddRowAction>
+              <div className={s['addRow']} data-onboarding-add-row="true">
+                <AddRowAction onActivate={() => pushOverlay({ kind: 'modal', modal: 'new-project' })}>
+                  {copy.onboarding.projects.addRowNew}
+                </AddRowAction>
+                {copy.onboarding.projects.addRowSep}
+                <AddRowAction onActivate={() => void addFolder()}>
+                  {copy.onboarding.projects.addRowFolder}
+                </AddRowAction>
+                {copy.onboarding.projects.addRowSep}
+                <AddRowAction
+                  onActivate={() => pushOverlay({ kind: 'modal', modal: 'new-project', mode: 'clone' })}
+                >
+                  {copy.onboarding.projects.addRowClone}
+                </AddRowAction>
+              </div>
             </div>
-          </div>
-        </section>
-      ) : null}
+          </section>
+        ) : null}
 
-      {step === 3 ? (
-        <section className={s['body']} aria-labelledby="ob-headline">
-          <h1 id="ob-headline" className={s['headline']}>
-            {copy.onboarding.agents.headline}
-          </h1>
-          <p className={s['lead']}>{copy.onboarding.agents.body}</p>
-          <div className={s['tableFrame']}>
-            <Table
-              columns={TABLE_COLUMNS.onboardingClis}
-              rowPad="10px 14px"
-              gap="14px"
-              aria-label={copy.onboarding.steps.agents}
-            >
-              {clis.map((c) => {
-                const auth = cliAuthLabel(c);
-                // "Sign in →" / "Install →" open the Connect agent modal (owner addition); connected rows stay text.
-                const connectable =
-                  auth === copy.onboarding.agents.signIn || auth === copy.onboarding.agents.install;
-                return (
-                  <TableRow key={c.agent} data-agent={c.agent}>
-                    <TableCell strong>{copy.agentProducts[c.agent]}</TableCell>
-                    <TableCell mono muted>
-                      {cliLocationLabel(c)}
-                    </TableCell>
-                    <TableCell mono>
-                      {connectable ? (
-                        <button
-                          type="button"
-                          className={s['action']}
-                          data-agent-connect={c.agent}
-                          aria-label={`${auth} · ${copy.agentProducts[c.agent]}`}
-                          onClick={() =>
-                            pushOverlay({ kind: 'modal', modal: 'connect-agent', agent: c.agent })
-                          }
-                        >
-                          {auth}
-                        </button>
-                      ) : (
-                        auth
-                      )}
-                    </TableCell>
-                    <TableCell align="end">
-                      <StatusDot
-                        tone="hollow"
-                        on={!c.found}
-                        {...(c.found ? {} : { label: copy.onboarding.agents.notFound })}
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </Table>
-          </div>
-        </section>
-      ) : null}
-
-      {step === 4 ? (
-        <section className={s['body']} aria-labelledby="ob-headline">
-          <h1 id="ob-headline" className={s['headline']}>
-            {copy.onboarding.targets.headline}
-          </h1>
-          <p className={s['lead']}>
-            {fill(copy.onboarding.targets.body, { keychainName: words.keychainName })}
-          </p>
-          <div className={s['providers']}>
-            {PROVIDERS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                className={s['provider']}
-                data-provider={p}
-                onClick={() => pushOverlay({ kind: 'modal', modal: 'connect', projectId, provider: p })}
+        {step === 3 ? (
+          <section className={s['body']} aria-labelledby="ob-headline">
+            <h1 id="ob-headline" className={s['headline']}>
+              {copy.onboarding.agents.headline}
+            </h1>
+            <p className={s['lead']}>{copy.onboarding.agents.body}</p>
+            <div className={s['tableFrame']}>
+              <Table
+                columns={TABLE_COLUMNS.onboardingClis}
+                rowPad="10px 14px"
+                gap="14px"
+                aria-label={copy.onboarding.steps.agents}
               >
-                <span className={s['providerName']}>{copy.providers[p]}</span>
-                <Label>{fill(copy.onboarding.targets.tile, { method: cliMethodLabel(p) })}</Label>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
+                {clis.map((c) => {
+                  const auth = cliAuthLabel(c);
+                  // "Sign in →" / "Install →" open the Connect agent modal (owner addition); connected rows stay text.
+                  const connectable =
+                    auth === copy.onboarding.agents.signIn || auth === copy.onboarding.agents.install;
+                  return (
+                    <TableRow key={c.agent} data-agent={c.agent}>
+                      <TableCell strong>{copy.agentProducts[c.agent]}</TableCell>
+                      <TableCell mono muted>
+                        {cliLocationLabel(c)}
+                      </TableCell>
+                      <TableCell mono>
+                        {connectable ? (
+                          // The fix is a button, not a note (ADR-0027): this is where new people stall.
+                          <Button
+                            size="compact"
+                            variant="accent"
+                            data-agent-connect={c.agent}
+                            aria-label={`${auth} · ${copy.agentProducts[c.agent]}`}
+                            onClick={() =>
+                              pushOverlay({ kind: 'modal', modal: 'connect-agent', agent: c.agent })
+                            }
+                          >
+                            {auth}
+                          </Button>
+                        ) : (
+                          auth
+                        )}
+                      </TableCell>
+                      <TableCell align="end">
+                        <StatusDot
+                          tone="hollow"
+                          on={!c.found}
+                          {...(c.found ? {} : { label: copy.onboarding.agents.notFound })}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </Table>
+            </div>
+          </section>
+        ) : null}
 
-      <div className={s['footer']}>
-        <Button size="footer" variant="ghost" className={s['back']} onClick={back} aria-disabled={step === 1}>
-          {copy.onboarding.footer.back}
-        </Button>
-        <span className={s['spacer']} />
-        <Button size="footer" variant="ghost" className={s['skip']} onClick={() => void finish()}>
-          {copy.onboarding.footer.skip}
-        </Button>
-        <Button
-          size="footer"
-          variant="primary"
-          className={s['next']}
-          disabled={busy}
-          onClick={() => void next()}
-        >
-          {step < 4 ? copy.onboarding.footer.continue : copy.onboarding.footer.finish}
-        </Button>
+        {step === 4 ? (
+          <section className={s['body']} aria-labelledby="ob-headline">
+            <h1 id="ob-headline" className={s['headline']}>
+              {copy.onboarding.targets.headline}
+            </h1>
+            <p className={s['lead']}>
+              {fill(copy.onboarding.targets.body, { keychainName: words.keychainName })}
+            </p>
+            <div className={s['providers']}>
+              {PROVIDERS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  className={s['provider']}
+                  data-provider={p}
+                  onClick={() => pushOverlay({ kind: 'modal', modal: 'connect', projectId, provider: p })}
+                >
+                  <span className={s['providerName']}>{copy.providers[p]}</span>
+                  <Label>{fill(copy.onboarding.targets.tile, { method: cliMethodLabel(p) })}</Label>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <div className={s['footer']}>
+          <Button
+            size="footer"
+            variant="ghost"
+            className={s['back']}
+            onClick={back}
+            aria-disabled={step === 1}
+          >
+            {copy.onboarding.footer.back}
+          </Button>
+          <span className={s['spacer']} />
+          <Button size="footer" variant="ghost" className={s['skip']} onClick={() => void finish()}>
+            {copy.onboarding.footer.skip}
+          </Button>
+          <Button
+            size="footer"
+            variant="primary"
+            className={s['next']}
+            disabled={busy}
+            onClick={() => void next()}
+          >
+            {step < 4 ? copy.onboarding.footer.continue : copy.onboarding.footer.finish}
+          </Button>
+        </div>
       </div>
     </div>
   );

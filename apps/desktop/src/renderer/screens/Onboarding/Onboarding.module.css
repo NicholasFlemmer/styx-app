@@ -1,45 +1,102 @@
 @layer screens {
   /* Prototype: absolute below the titlebar, --bg, column. The outlet already spans the body with rail/nav hidden. */
+  /* ADR-0027: the steps down the side, each with why it matters; the step itself on the right. */
   .root {
     flex: 1;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 300px 1fr;
     min-width: 0;
     min-height: 0;
     background: var(--bg);
     color: var(--tx);
   }
-  /* Step strip: 4 cells, numeral + strong label on the baseline, 16px 20px, hairline right; current inverted. */
+  .side {
+    display: flex;
+    flex-direction: column;
+    padding: 32px 28px;
+    border-right: 1px solid var(--ln);
+    background: var(--s1);
+    min-height: 0;
+  }
   .strip {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    border-bottom: 1px solid var(--ln);
     margin: 0;
     padding: 0;
     list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
   .stepCell {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    column-gap: 10px;
+    row-gap: 2px;
+    padding: 10px 0;
+  }
+  .marker {
+    grid-row: 1 / span 2;
+    width: 20px;
+    height: 20px;
+    border: 1.5px solid var(--ln);
+    color: var(--mu);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 17px;
+    text-align: center;
+  }
+  .stepCell[data-state='done'] .marker {
+    background: var(--tx);
+    border-color: var(--tx);
+    color: var(--bg);
+  }
+  .stepCell[data-state='now'] .marker {
+    background: var(--ac);
+    border-color: var(--ac);
+    color: var(--acx);
+  }
+  .stepTitle {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .stepCell[data-state='next'] .stepTitle {
+    color: var(--mu);
+    font-weight: 500;
+  }
+  .stepWhy {
+    grid-column: 2;
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .then {
+    margin: auto 0 0;
+    font-size: 12px;
+    color: var(--mu);
+    line-height: 1.5;
+  }
+  .column {
     display: flex;
-    align-items: baseline;
-    gap: 12px;
-    padding: 16px 20px;
-    border-right: 1px solid var(--ln);
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
   }
   .body {
     flex: 1;
     min-height: 0;
-    padding: 32px 40px;
+    padding: 40px 56px;
     display: flex;
     flex-direction: column;
     gap: 18px;
     max-width: 900px;
     overflow-y: auto;
   }
+  /* ADR-0027 §6: today's heading face at the mockup's size. */
   .headline {
     margin: 0;
-    font-size: 28px;
+    font-size: 40px;
     font-weight: 600;
     letter-spacing: -0.02em;
+    line-height: 1.05;
+    max-width: 20ch;
   }
   .lead {
     margin: 0;

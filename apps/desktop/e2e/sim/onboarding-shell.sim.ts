@@ -75,10 +75,10 @@ test('sim: onboarding-shell', async () => {
       },
     );
     await sim.step(
-      'Finish lands on Home; a reload does not show onboarding again (flag persisted)',
+      'Finish lands on New task in the first project (or Home with none); a reload does not show onboarding again',
       async () => {
         await page().getByRole('button', { name: copy.onboarding.footer.finish }).click();
-        await page().waitForSelector('[data-screen-ready="home"]', { timeout: 20_000 });
+        await page().waitForSelector('[data-new-task], [data-screen-ready="home"]', { timeout: 20_000 });
         await page().reload();
         await page().waitForSelector('[data-screen-ready]', { timeout: 20_000 });
         const step = await page().locator('[data-onboarding-step]').count();

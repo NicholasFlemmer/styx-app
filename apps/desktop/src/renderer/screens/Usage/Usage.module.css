@@ -1,4 +1,12 @@
 @layer screens {
+  .agentCell {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .fill[data-hot='true'] {
+    background: var(--ac);
+  }
   .screen {
     flex: 1;
     display: flex;

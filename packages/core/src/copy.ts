@@ -923,6 +923,20 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
 
   onboarding: {
     steps: { editor: 'Editor', projects: 'Projects', agents: 'Agents', targets: 'Targets' },
+    /** ADR-0027: each step says in one line why it matters; the side list says what comes after. */
+    stepTitles: {
+      editor: 'Your editor',
+      projects: 'Your projects',
+      agents: 'Your agents',
+      targets: 'Where you deploy',
+    },
+    stepWhy: {
+      editor: 'Where “Open in” goes, and your keybindings',
+      projects: 'The repos agents can work in',
+      agents: 'Which ones Styx can run for you',
+      targets: 'Optional, you can skip it',
+    },
+    then: 'Next: pick a project and give an agent its first task. Most take a few minutes.',
     /** Accessible name of the step strip (spec §9); not a §10 string. */
     stepsLabel: 'Steps',
     editor: {

@@ -8,7 +8,7 @@ import {
   type CliInstall,
   type ReadModel,
 } from '@styx/core';
-import { Label, StatusDot, Table, TableCell, TableRow, TABLE_COLUMNS } from '@styx/ui';
+import { Label, StatusDot, Table, TableCell, TableRow, TABLE_COLUMNS, Button } from '@styx/ui';
 import { useState, type ReactNode } from 'react';
 import { command } from '../../state/commands';
 import { useModel, useUi } from '../../state/hooks';
@@ -130,14 +130,26 @@ export function AgentsPane({ children }: { children?: ReactNode }) {
                         {a.verify}
                       </button>
                     ) : null}
-                    <button
-                      type="button"
-                      className={s['action']}
-                      aria-label={`${connectLabel} · ${name}`}
-                      onClick={() => connect(cli.agent)}
-                    >
-                      {connectLabel}
-                    </button>
+                    {ready ? (
+                      <button
+                        type="button"
+                        className={s['action']}
+                        aria-label={`${connectLabel} · ${name}`}
+                        onClick={() => connect(cli.agent)}
+                      >
+                        {connectLabel}
+                      </button>
+                    ) : (
+                      // Not ready to run: the fix is the one accent move on the row (ADR-0027).
+                      <Button
+                        size="compact"
+                        variant="accent"
+                        aria-label={`${connectLabel} · ${name}`}
+                        onClick={() => connect(cli.agent)}
+                      >
+                        {connectLabel}
+                      </Button>
+                    )}
                   </>
                 )}
               </TableCell>
