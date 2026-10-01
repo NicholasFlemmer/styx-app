@@ -183,6 +183,9 @@ const SIGNED_OUT =
  * The account has run out for now (#129): a usage or rate limit, a spent quota or credit balance. Not "overloaded":
  * that is the provider's side and passes on its own.
  */
+/** How long after Stop an error from the CLI is taken to be the stop itself. */
+const STOPPED_ERROR_MS = 10_000;
+
 const OUT_OF_LIMIT =
   /(usage limit|rate.?limit|quota|credit balance|too many requests|\b429\b|hit your (usage )?limit|limit reached)/i;
 
@@ -368,6 +371,8 @@ export class SessionService {
   private readonly turnFailed = new Set<string>();
   /** Sessions already counted as `agent.worked`. */
   private readonly worked = new Set<string>();
+  /** When the user last pressed Stop, per session: the CLI's "interrupted" error that follows is not a problem. */
+  private readonly interruptedAt = new Map<string, number>();
   /** Live broker tokens by session, for scrubbing the terminal view; dropped when the process exits. */
   private readonly liveTokens = new Map<string, string>();
   /** Asks opened from a CLI hook (`permission_prompt` / `agent_needs_input`), cancelled once the agent moves on. */
@@ -940,6 +945,7 @@ export class SessionService {
    */
   interrupt(sessionId: string): void {
     const s = this.require(sessionId);
+    this.interruptedAt.set(s.id, Date.now());
     // Stop returns what was waiting for the next turn to the composer: nothing held goes out behind a stop.
     this.returnQueue(s);
     if (this.deps.stream.has(s.id)) {
@@ -1587,11 +1593,17 @@ export class SessionService {
         return;
       case 'error': {
         const outdated = parseCliOutdated(effect.message);
-        this.turnFailed.add(s.id);
-        if (outdated !== null) this.noteProblem(s.id, 'outdated');
-        else if (SIGNED_OUT.test(effect.message)) this.noteProblem(s.id, 'sign-in');
-        else if (OUT_OF_LIMIT.test(effect.message)) this.noteProblem(s.id, 'limit');
-        else if (!this.turnDone.has(s.id)) this.noteProblem(s.id, 'error');
+        // Not problems (#129), though still shown: an error the agent carries on past by itself, and the error a
+        // CLI reports for a turn the user stopped.
+        const stopped = Date.now() - (this.interruptedAt.get(s.id) ?? 0) < STOPPED_ERROR_MS;
+        const counted = effect.carriesOn !== true && !stopped;
+        if (counted) {
+          this.turnFailed.add(s.id);
+          if (outdated !== null) this.noteProblem(s.id, 'outdated');
+          else if (SIGNED_OUT.test(effect.message)) this.noteProblem(s.id, 'sign-in');
+          else if (OUT_OF_LIMIT.test(effect.message)) this.noteProblem(s.id, 'limit');
+          else if (!this.turnDone.has(s.id)) this.noteProblem(s.id, 'error');
+        }
         if (outdated !== null) this.raiseOutdatedBanner(s, effect.message, outdated);
         else this.deps.transcript.system(s.id, redact(`error: ${effect.message}`));
         if (s.purpose && s.state !== 'done') {

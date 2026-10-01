@@ -813,6 +813,20 @@ describe('an agent that got going (#127)', () => {
     ]);
   });
 
+  it('a retry the CLI makes by itself, and the error after the user pressed Stop, are not problems (#129)', async () => {
+    const { app: a } = app();
+    const record = vi.spyOn(a.usageReports, 'record');
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, {
+      type: 'error',
+      message: 'stream disconnected (Codex will retry)',
+      carriesOn: true,
+    });
+    a.sessions.interrupt(session.id);
+    stream.effect(session.id, { type: 'error', message: 'error_during_execution' });
+    expect(record.mock.calls.map((c) => c[0]).filter((n) => n.startsWith('agent.failed'))).toEqual([]);
+  });
+
   it('a first message in the spawn dialog counts as a message sent; an empty one does not', async () => {
     const { app: a } = app();
     const record = vi.spyOn(a.usageReports, 'record');

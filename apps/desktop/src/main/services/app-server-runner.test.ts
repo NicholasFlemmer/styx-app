@@ -1165,8 +1165,12 @@ describe('AppServerRunner: items, usage, rate limits, errors', () => {
     const resets = rateLimitNote({ usedPercent: 85.4, windowDurationMins: 300, resetsAt: 1789561758 });
     expect(resets).toMatch(/^Codex 5 h window 85% used · resets \d\d:\d\d$/);
     expect(kinds().slice(before)).toEqual([
-      { type: 'error', message: 'rate limited (Codex will retry)' },
-      { type: 'error', message: 'styx MCP server failed to start: env: : No such file or directory' },
+      { type: 'error', message: 'rate limited (Codex will retry)', carriesOn: true },
+      {
+        type: 'error',
+        message: 'styx MCP server failed to start: env: : No such file or directory',
+        carriesOn: true,
+      },
       // The whole report goes to the Usage page (resets in ms); the chat only gets the >80% note.
       {
         type: 'limits',

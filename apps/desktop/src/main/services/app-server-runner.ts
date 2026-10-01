@@ -817,7 +817,11 @@ export class AppServerRunner extends EventEmitter<StreamEvents> implements Strea
         const message = p.data.willRetry
           ? fill(copy.codexRunner.willRetry, { message: p.data.error.message })
           : p.data.error.message;
-        this.emit('effect', id, { type: 'error', message });
+        this.emit(
+          'effect',
+          id,
+          p.data.willRetry ? { type: 'error', message, carriesOn: true } : { type: 'error', message },
+        );
         this.emit('effect', id, { type: 'render', text: crlf(`! ${firstLine(message)}`) });
         return;
       }
@@ -827,7 +831,7 @@ export class AppServerRunner extends EventEmitter<StreamEvents> implements Strea
         const error = p.data.error ?? (p.data.status === 'failed' ? p.data.status : null);
         if (error === null) return;
         const message = fill(copy.codexRunner.mcpStartupFailed, { error });
-        this.emit('effect', id, { type: 'error', message });
+        this.emit('effect', id, { type: 'error', message, carriesOn: true });
         this.emit('effect', id, { type: 'render', text: crlf(`! ${message}`) });
         return;
       }

@@ -74,7 +74,11 @@ export type StreamEffect =
       input: Record<string, unknown>;
     }
   | { type: 'render'; text: string }
-  | { type: 'error'; message: string };
+  /**
+   * `carriesOn`: shown, but the agent goes on by itself (Codex retrying, or starting without Styx's MCP server),
+   * so it is not counted as the agent failing.
+   */
+  | { type: 'error'; message: string; carriesOn?: boolean };
 
 export type StreamBlockKind = 'text' | 'thinking';
 
