@@ -142,7 +142,8 @@ for (const theme of ['dark', 'light'] as const) {
       const diffPath = test.info().outputPath(file.replace(/\.png$/, '-diff.png'));
       await popout.screenshot({ path: actualPath, scale: 'css', animations: 'disabled', caret: 'hide' });
       // ADR-0027: the app's own reference when there is one, else the prototype crop (kept as history).
-      const appRef = join(__dirname, 'visual', '__baseline__', 'app', file);
+      // Its own name: the visual suite's `popout` state is the main window, a different picture.
+      const appRef = join(__dirname, 'visual', '__baseline__', 'app', `window-${file}`);
       if (process.env['STYX_VISUAL_UPDATE'] === '1') {
         mkdirSync(dirname(appRef), { recursive: true });
         copyFileSync(actualPath, appRef);
