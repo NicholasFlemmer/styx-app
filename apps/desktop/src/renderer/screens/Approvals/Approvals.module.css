@@ -156,10 +156,8 @@
     gap: var(--sp-3);
     opacity: 0;
     font-family: var(--font-ui);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: var(--mu);
   }
   .policyAction {

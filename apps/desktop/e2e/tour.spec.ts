@@ -70,7 +70,8 @@ test('walkthrough opens any time: from Help › Show Walkthrough, and from Setti
   await expect(page.locator('[data-screen-ready="settings"]')).toBeVisible();
 
   // Settings › General › Walkthrough › Show the walkthrough.
-  await page.click('[data-app-rail-item="app:general"]');
+  await page.click('[data-app-rail-item="settings"]');
+  await page.click('[data-settings-nav-item="app:general"]');
   await page.locator('[data-settings-row="tour"] select').selectOption('show');
   await expect(tour).toHaveAttribute('data-tour-ready', 'true');
   await page.keyboard.press('Escape');

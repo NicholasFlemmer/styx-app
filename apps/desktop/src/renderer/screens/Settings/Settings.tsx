@@ -12,6 +12,7 @@ import {
   Button,
   Label,
   LabelValueRow,
+  NavItem,
   Select,
   Table,
   TableCell,
@@ -36,7 +37,14 @@ import {
   sectionRows,
   type SettingsRow,
 } from './rows';
-import { isProjectSection, resolveSection, SECTION_LABEL, type SettingsSection } from './sections';
+import {
+  APP_SECTIONS,
+  PROJECT_SECTIONS,
+  isProjectSection,
+  resolveSection,
+  SECTION_LABEL,
+  type SettingsSection,
+} from './sections';
 import s from './Settings.module.css';
 
 const identity = (m: ReadModel): ReadModel => m;
@@ -48,13 +56,14 @@ const POLICY_OPTIONS = (['ask-mfa', 'ask', 'always'] as const).map((value) => ({
 const isPolicy = (v: string): v is TargetPolicy => v in copy.targets.policy;
 
 /**
- * Settings (spec §4.6, owner layout #85 / #88): one section at a time — header, then the Targets table or the
- * label/value rows. The section nav is gone: App sections are tiles on the app rail, project options are rows in
- * the project nav, so nothing here is an extra click.
+ * Settings (spec §4.6, ADR-0027 §5): a nav of every section, "This project" first and "App" after, then one
+ * section at a time: header, then the Targets table or the label/value rows. The project's own options are also
+ * rows in the project nav; the app sections used to be rail tiles and now live only here.
  */
 export function Settings() {
   const projectId = useUi((u) => u.projectId);
   const rawSection = useUi((u) => u.settingsSection);
+  const setSettingsSection = useUi((u) => u.setSettingsSection);
   const model = useModel(identity);
 
   const section = resolveSection(rawSection);
@@ -65,6 +74,30 @@ export function Settings() {
 
   return (
     <div className={s['screen']} data-settings-section={section}>
+      <nav className={s['snav']} aria-label={copy.settings.groups.label} data-settings-nav="true">
+        <div className={s['snavGroup']}>{fill(copy.settings.groups.project, { project: projectName })}</div>
+        {PROJECT_SECTIONS.map((id) => (
+          <NavItem
+            key={id}
+            dense
+            label={SECTION_LABEL[id]}
+            inv={section === id}
+            onClick={() => setSettingsSection(id)}
+            data-settings-nav-item={id}
+          />
+        ))}
+        <div className={s['snavGroup']}>{copy.settings.groups.app}</div>
+        {APP_SECTIONS.map((id) => (
+          <NavItem
+            key={id}
+            dense
+            label={SECTION_LABEL[id]}
+            inv={section === id}
+            onClick={() => setSettingsSection(id)}
+            data-settings-nav-item={id}
+          />
+        ))}
+      </nav>
       <section className={s['main']} aria-labelledby="settings-title">
         <header className={s['header']}>
           <h2 id="settings-title" className={s['title']}>

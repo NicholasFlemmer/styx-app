@@ -25,10 +25,8 @@
     border-bottom: 1px solid var(--ln);
   }
   .heading {
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: var(--mu);
     line-height: 1;
   }
@@ -76,10 +74,8 @@
     font-size: 12.5px;
   }
   .rowLabel {
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: var(--mu);
     /* Prototype label spans carry no line-height: `normal` keeps the cap height 1px under the row's top padding. */
     line-height: normal;

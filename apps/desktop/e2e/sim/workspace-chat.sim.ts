@@ -479,7 +479,7 @@ test('sim: workspace-chat', async () => {
       'the terminal strip opens a shell in the editor lane; a typed command prints and pwd is the lane',
       async () => {
         const term = page().locator('[data-terminal]');
-        await expect(term).toContainText(`TERMINAL · ${lane.branch}`, { timeout: 5000 });
+        await expect(term).toContainText(`Terminal, ${lane.branch}`, { timeout: 5000 });
         // A prompt means the pty is up; xterm needs focus before keys reach it.
         await page()
           .locator('[data-terminal] .xterm-helper-textarea, [data-terminal] .xterm')

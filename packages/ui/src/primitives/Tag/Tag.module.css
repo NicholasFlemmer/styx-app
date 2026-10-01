@@ -3,10 +3,8 @@
     /* inline like the prototype's spans: padding/border must not enlarge the parent line box */
     display: inline;
     font-family: var(--font-ui);
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     white-space: nowrap;
     padding: 1px 5px;
     border: 1px solid var(--ln);

@@ -1,16 +1,13 @@
 @layer base {
+  /* ADR-0027 §6: labels are sentence case at meta size, not 10px uppercase tracked. */
   .t-label {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 500;
     color: var(--mu);
   }
   .t-label-strong {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 600;
   }
   .t-mono {
     font-family: var(--font-mono);
@@ -23,7 +20,7 @@
     color: var(--mu);
   }
   .t-body {
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.5;
   }
   .t-code {

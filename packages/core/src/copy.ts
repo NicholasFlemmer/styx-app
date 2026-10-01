@@ -75,9 +75,11 @@ export const copy = {
     label: 'App',
     home: { title: 'All projects' },
     agents: { title: 'All agents' },
-    approvals: { title: 'Approvals' },
+    approvals: { title: 'Access' },
     tasks: { title: 'Tasks' },
     usage: { title: 'Usage' },
+    /** The one Settings tile at the foot of the rail (ADR-0027 §5). */
+    settings: { title: 'Settings' },
     /** The App settings sections, in the order of the Settings nav. */
     sections: {
       'app:general': 'General settings',
@@ -1072,7 +1074,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       summary: '+{added} −{removed} · {files} {filesWord}',
       waitingOnGrant: 'waiting on grant',
       merged: 'merged {when}',
-      conflict: 'CONFLICT · {file} vs {against}',
+      conflict: 'Conflict in {file} with {against}',
       /** Appended to a lane's changes when the base branch has moved on (owner addition, ADR-0023). */
       behind: '↓{n} {base}',
       /** ADR-0025 phase B: the lane while an agent finishes the base merge, and after. */
@@ -1253,7 +1255,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       commandPlaceholderAndroid: 'npx expo run:android',
     },
     openIn: 'Open in {ide}',
-    terminal: 'TERMINAL · {branch}',
+    terminal: 'Terminal, {branch}',
     editorStatus: 'Monaco · {eol} · {lang}',
     /** Editor readout appended to the prototype's status text (owner addition, discrepancies #58; not in §10). */
     editorCursor: 'Ln {line}, Col {col}',
@@ -1264,7 +1266,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   },
 
   settings: {
-    groups: { app: 'App', project: 'Project · {project}' },
+    groups: { app: 'App', project: 'This project, {project}', label: 'Settings sections' },
     app: {
       general: 'General',
       editor: 'Editor',
@@ -1842,6 +1844,26 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     line: '{agent} on {branch} · {files} files · {task}',
     noTask: 'no task yet',
     noFiles: 'no files yet',
+    /** The project nav's work list (ADR-0027 §1): each lane by its task and whose move it is. */
+    nav: {
+      label: 'Work in this project',
+      work: 'Work',
+      count: '{n} lanes',
+      countOne: '1 lane',
+      newTask: 'New task',
+      project: 'Project',
+      lanesAndBranches: 'Lanes and branches',
+      untitled: '{agent}, no task yet',
+      empty: 'Nothing running yet.',
+      status: {
+        'your-turn': 'Your turn',
+        working: 'Working, {age}',
+        idle: 'Waiting for you',
+        paused: 'Paused',
+        ready: 'Ready to land',
+        landed: 'Landed {age} ago',
+      },
+    },
   },
   /** Messages held back while the agent is mid-turn. */
   queue: {

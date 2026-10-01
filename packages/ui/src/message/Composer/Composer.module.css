@@ -36,10 +36,8 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: var(--mu);
     line-height: 1;
   }
@@ -102,10 +100,8 @@
     height: 22px;
     padding: 0 6px 0 8px;
     border: 1px solid var(--ln);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: var(--tx);
     line-height: normal;
   }
@@ -155,10 +151,8 @@
     padding: 8px 12px;
     border: 1px dashed var(--tx);
     background: var(--bg);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: var(--tx);
   }
 

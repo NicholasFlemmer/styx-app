@@ -127,10 +127,8 @@
     flex: none;
     padding: 0 12px;
     border-left: 1px solid var(--ln);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: var(--mu);
   }
   .arcadeButton:hover {
@@ -168,10 +166,8 @@
     padding: 0 12px 0 0;
     border: 0;
     background: transparent;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     line-height: normal;
     color: var(--mu);
   }

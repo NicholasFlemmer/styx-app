@@ -2,6 +2,8 @@ import {
   activeGrants,
   copy,
   fill,
+  navLanes,
+  navLanesLabel,
   projectBranchOrNull,
   projectNameOf,
   projectOf,
@@ -9,7 +11,7 @@ import {
   sessionsInProject,
   type ReadModel,
 } from '@styx/core';
-import { NavItem, type IconName } from '@styx/ui';
+import { LaneRow, NavItem, type IconName } from '@styx/ui';
 import { useCallback } from 'react';
 import { useModel, useNow, useSessionId, useUi } from '../state/hooks';
 import { startDebtAudit } from '../features/audit';
@@ -19,7 +21,6 @@ import {
   resolveSection,
   type ProjectSection,
 } from '../screens/Settings/sections';
-import type { Screen } from '../state/ui-store';
 import s from './Shell.module.css';
 
 /** The icon each project option wears. */
@@ -29,24 +30,19 @@ const PROJECT_SECTION_ICON: Record<ProjectSection, IconName> = {
   'project:env': 'env',
 };
 
-interface NavRow {
-  screen: Screen;
-  icon: IconName;
-  label: string;
-  meta: string | null;
-}
-
 /**
- * Project nav (spec §3, owner layout #85): everything here belongs to the selected project. The head is the
- * project's details (name, branch), the rows its places (Workspace, Agents, Repo) and its options (Targets, Agent
- * defaults, Env — rows, not a Settings tab), then its own action (Tech debt audit), and the footer its path and
- * active grants. App-level places (All
- * projects, Approvals, Tasks, App settings) live on the app rail to the left of the project switcher.
+ * Project nav (ADR-0027 §1): the work first, then the project's tools. The head is the project (a button back to
+ * its workspace) and its branch. "Work" lists every lane by its task and whose move it is, most urgent first,
+ * with New task under it. "Project" holds what used to be the whole nav: Lanes and branches (the Repo screen),
+ * the project's Agents board, Targets, Agent defaults, Env and secrets, and the Tech debt audit. The footer keeps
+ * the path and the open grants.
  */
 export function Nav() {
   const projectId = useUi((u) => u.projectId);
   const screen = useUi((u) => u.screen);
   const setScreen = useUi((u) => u.setScreen);
+  const openSession = useUi((u) => u.openSession);
+  const pushOverlay = useUi((u) => u.pushOverlay);
   const settingsSection = useUi((u) => u.settingsSection);
   const setSettingsSection = useUi((u) => u.setSettingsSection);
   const boardScope = useUi((u) => u.boardScope);
@@ -58,6 +54,7 @@ export function Nav() {
   const project = projectId === null ? null : projectOf(model, projectId);
   const projectName = projectId === null ? copy.general.none : projectNameOf(model, projectId);
   const branch = projectId === null ? null : projectBranchOrNull(model, projectId, activeSessionId);
+  const lanes = projectId === null ? [] : navLanes(model, projectId, now);
   const agents =
     projectId === null ? 0 : sessionsInProject(model, projectId).filter((x) => x.state !== 'done').length;
   const worktrees =
@@ -66,43 +63,85 @@ export function Nav() {
       : rows(model.worktrees).filter((w) => w.projectId === projectId && w.archivedAt === null).length;
   const grants = activeGrants(model, now).length;
   const section = resolveSection(settingsSection);
-
-  const items: NavRow[] = [
-    { screen: 'workspace', icon: 'workspace', label: copy.nav.workspace, meta: null },
-    { screen: 'agents', icon: 'agents', label: copy.nav.agents, meta: String(agents) },
-    {
-      screen: 'repo',
-      icon: 'repo',
-      label: copy.nav.repo,
-      meta: fill(copy.nav.worktreesMeta, { n: worktrees }),
-    },
-  ];
+  const inWorkspace = screen === 'workspace';
 
   return (
     <nav className={s['nav']} aria-label="Sections" data-nav="true">
-      <div className={['t-label', s['navHead']].join(' ')}>{projectName}</div>
-      {branch !== null && branch !== '' ? (
-        <div className={s['navBranch']} data-nav-branch="true">
-          <span className="visually-hidden">{copy.appRail.branch} </span>
-          {branch}
-        </div>
-      ) : null}
-      {items.map((it) => (
-        <NavItem
-          key={it.screen}
-          icon={it.icon}
-          label={it.label}
-          meta={it.meta}
-          inv={screen === it.screen && (it.screen !== 'agents' || boardScope === 'project')}
-          onClick={() => {
-            // The project's agents, not everyone's (the app rail's Agents tile shows all).
-            if (it.screen === 'agents') setBoardScope('project');
-            setScreen(it.screen);
-          }}
-          data-nav-item={it.screen}
-        />
-      ))}
-      {/* The project's options are rows here, not a tab (owner request #88): Targets · Agent defaults · Env. */}
+      <button
+        type="button"
+        className={s['navProject']}
+        disabled={projectId === null}
+        aria-current={inWorkspace && lanes.length === 0 ? 'page' : undefined}
+        onClick={() => setScreen('workspace')}
+        data-nav-item="workspace"
+      >
+        <span className={s['navHead']}>{projectName}</span>
+        {branch !== null && branch !== '' ? (
+          <span className={s['navBranch']} data-nav-branch="true">
+            <span className="visually-hidden">{copy.appRail.branch} </span>
+            {branch}
+          </span>
+        ) : null}
+      </button>
+
+      <div className={s['navGroup']} data-nav-group="work">
+        <span>{copy.lanes.nav.work}</span>
+        <span>{lanes.length === 0 ? '' : navLanesLabel(lanes.length)}</span>
+      </div>
+      <div className={s['navLanes']} role="list" aria-label={copy.lanes.nav.label}>
+        {lanes.map((lane) => (
+          <div role="listitem" key={lane.sessionId}>
+            <LaneRow
+              agent={lane.agent}
+              task={lane.task}
+              status={lane.statusLabel}
+              tone={lane.status === 'your-turn' ? 'yours' : lane.status === 'landed' ? 'quiet' : 'normal'}
+              inv={inWorkspace && lane.sessionId === activeSessionId}
+              onClick={() => {
+                if (projectId !== null) openSession(projectId, lane.sessionId);
+              }}
+              data-nav-lane={lane.sessionId}
+              data-lane-status={lane.status}
+            />
+          </div>
+        ))}
+        {lanes.length === 0 ? <p className={s['navEmpty']}>{copy.lanes.nav.empty}</p> : null}
+      </div>
+      <button
+        type="button"
+        className={s['navNewTask']}
+        disabled={projectId === null}
+        onClick={() => {
+          if (projectId !== null) pushOverlay({ kind: 'modal', modal: 'spawn', projectId });
+        }}
+        data-nav-new-task="true"
+      >
+        + {copy.lanes.nav.newTask}
+      </button>
+
+      <div className={s['navGroup']} data-nav-group="project">
+        <span>{copy.lanes.nav.project}</span>
+      </div>
+      <NavItem
+        icon="repo"
+        label={copy.lanes.nav.lanesAndBranches}
+        meta={String(worktrees)}
+        inv={screen === 'repo'}
+        onClick={() => setScreen('repo')}
+        data-nav-item="repo"
+      />
+      <NavItem
+        icon="agents"
+        label={copy.nav.agents}
+        meta={String(agents)}
+        inv={screen === 'agents' && boardScope === 'project'}
+        onClick={() => {
+          // The project's agents, not everyone's (the rail's Agents place shows all).
+          setBoardScope('project');
+          setScreen('agents');
+        }}
+        data-nav-item="agents"
+      />
       {PROJECT_SECTIONS.map((id) => (
         <NavItem
           key={id}

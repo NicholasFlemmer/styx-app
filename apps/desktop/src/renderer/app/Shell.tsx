@@ -3,15 +3,15 @@ import { useUpdatePrompt } from '../features/modals/UpdateModal';
 import { Tour, useFirstRunTour } from '../features/tour/Tour';
 import { AppTitlebar } from '../features/titlebar/AppTitlebar';
 import { useUi } from '../state/hooks';
-import { AppRail } from './AppRail';
+import { AppRail, RailSettings } from './AppRail';
 import { Nav } from './Nav';
 import { Rail } from './Rail';
 import { ScreenOutlet } from './ScreenOutlet';
 import s from './Shell.module.css';
 
 /**
- * Main-window layout (spec §3, owner layout #85): titlebar 38 / banners / body = app rail 56 · project rail 56 ·
- * project nav 168 · content. Onboarding hides all three.
+ * Main-window layout (ADR-0027 §5): titlebar 38 / banners / body = one rail column 56 (the app's places, the
+ * project tiles, Settings) · project nav 216 · content. Onboarding hides both.
  */
 export function Shell() {
   const screen = useUi((u) => u.screen);
@@ -25,8 +25,14 @@ export function Shell() {
       <AppTitlebar />
       <BannerStack />
       <div className={s['body']}>
-        {chromeHidden ? null : <AppRail />}
-        {chromeHidden ? null : <Rail />}
+        {chromeHidden ? null : (
+          <div className={s['rails']} data-rails="true">
+            <AppRail />
+            <div className={s['railsDivider']} role="presentation" />
+            <Rail />
+            <RailSettings />
+          </div>
+        )}
         {chromeHidden ? null : <Nav />}
         <ScreenOutlet />
       </div>

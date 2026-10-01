@@ -36,7 +36,7 @@ export interface TerminalPaneProps {
 }
 
 /**
- * Terminal pane (spec §4.1: 130px, drag-resizable, collapsible): `TERMINAL · {branch}` label, one xterm per
+ * Terminal pane (spec §4.1: 130px, drag-resizable, collapsible): `Terminal, {branch}` label, one xterm per
  * session kept alive across tab switches, 6px drag handle on the top edge, double-click collapses.
  */
 export function TerminalPane({

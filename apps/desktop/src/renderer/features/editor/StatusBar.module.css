@@ -8,10 +8,8 @@
     align-items: center;
     gap: 16px;
     padding: 0 12px;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: var(--mu);
     overflow: hidden;
     white-space: nowrap;

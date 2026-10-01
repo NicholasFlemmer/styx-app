@@ -15,7 +15,8 @@ test('signed in: the pane shows the account, and an unreachable API never breaks
     theme: 'dark',
     env: { STYX_E2E: '0', STYX_API: OFFLINE_API },
   });
-  await page.click('[data-app-rail-item="app:account"]');
+  await page.click('[data-app-rail-item="settings"]');
+  await page.click('[data-settings-nav-item="app:account"]');
   const pane = page.locator('[data-account="signed-in"]');
   await expect(pane).toBeVisible();
   await expect(pane).toContainText('Nic Flemmer');
@@ -43,7 +44,8 @@ test('signed out: the pane points at the dialog, and a sign-in that cannot reach
     theme: 'dark',
     env: { STYX_E2E: '0', STYX_API: OFFLINE_API },
   });
-  await page.click('[data-app-rail-item="app:account"]');
+  await page.click('[data-app-rail-item="settings"]');
+  await page.click('[data-settings-nav-item="app:account"]');
   const pane = page.locator('[data-account="signed-out"]');
   await expect(pane).toBeVisible();
 

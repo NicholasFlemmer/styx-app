@@ -171,10 +171,8 @@
     background: transparent;
     color: var(--mu);
     font-family: var(--font-ui);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     cursor: pointer;
   }
   .link::after {
@@ -207,10 +205,8 @@
   .terminalLabel {
     flex: none;
     font-family: var(--font-ui);
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: var(--mu);
     margin-bottom: 4px;
     user-select: none;
@@ -243,10 +239,8 @@
     color: var(--tx);
   }
   .disclosureLabel {
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
   }
   .chevronOpen {
     transform: rotate(180deg);

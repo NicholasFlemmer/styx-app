@@ -1,0 +1,24 @@
+@layer components {
+  .dot {
+    display: inline-block;
+    flex: none;
+    width: 8px;
+    height: 8px;
+    background: var(--agent-shell);
+  }
+  .dot[data-agent='claude'] {
+    background: var(--agent-claude);
+  }
+  .dot[data-agent='codex'] {
+    background: var(--agent-codex);
+  }
+  .dot[data-agent='gemini'] {
+    background: var(--agent-gemini);
+  }
+  .dot[data-agent='cursor'] {
+    background: var(--agent-cursor);
+  }
+  .dot[data-agent='shell'] {
+    background: var(--agent-shell);
+  }
+}
