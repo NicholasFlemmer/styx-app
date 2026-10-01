@@ -19,6 +19,7 @@ import {
 import {
   branchOf,
   byRecentActivity,
+  activeLaneOf,
   projectBranch,
   projectNameOf,
   projectSettingsOfOrDefault,
@@ -386,12 +387,21 @@ describe('common', () => {
       '—',
     );
   });
-  it('the active chat tab wins: its lane is what the workspace, nav and Publish show; a tab of another project or a done one falls back', () => {
+  it('the lane on screen wins, finished ones included (ADR-0027 §1); another project’s falls back to the default', () => {
     expect(projectBranch(model, ids.project.acmeShop, ids.session.codex)).toBe('test/flaky');
     expect(projectBranch(model, ids.project.acmeShop, ids.session.gemini)).toBe('main');
-    // blog's session is not acme-shop's: the default tab rule applies.
+    // blog's session is not acme-shop's: the default lane rule applies.
     expect(projectBranch(model, ids.project.acmeShop, ids.session.blog)).toBe('fix/checkout');
-    expect(projectBranch(model, ids.project.acmeShop, ids.session.cursor)).toBe('fix/checkout');
+    // The done Cursor lane, picked from the nav, is what the workspace shows.
+    expect(projectBranch(model, ids.project.acmeShop, ids.session.cursor)).toBe('feat/promo');
+  });
+  it('activeLaneOf: the picked session of this project, done or not; else the first live one; else none', () => {
+    expect(activeLaneOf(model, ids.project.acmeShop, ids.session.cursor)).toBe(ids.session.cursor);
+    expect(activeLaneOf(model, ids.project.acmeShop, ids.session.codex)).toBe(ids.session.codex);
+    const fallback = activeLaneOf(model, ids.project.acmeShop, ids.session.blog);
+    expect(fallback).toBe(activeLaneOf(model, ids.project.acmeShop, null));
+    expect(model.sessions.byId[fallback ?? '']?.projectId).toBe(ids.project.acmeShop);
+    expect(activeLaneOf(model, idFrom<'ProjectId'>('nope') as ProjectId, null)).toBeNull();
   });
   it('plain folder (repo.defaultBranch null, main worktree on no branch): not git, branch — / null', () => {
     const repo = model.repos.byId[ids.repo.sideApi];

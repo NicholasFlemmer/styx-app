@@ -3,7 +3,7 @@ import {
   copy,
   projectWorktreeOf,
   rows,
-  sessionTabs,
+  activeLaneOf,
   type AgentChange,
   type ProjectId,
   type ReadModel,
@@ -99,8 +99,8 @@ export function Workspace() {
   const now = useNow();
   const column = useRef<HTMLDivElement>(null);
 
-  // The chat's active tab (falls back to the first tab when no session was picked yet).
-  const activeSessionId = projectId === null ? null : sessionTabs(model, projectId, sessionId).activeId;
+  // The lane on screen: the one picked in the nav, finished or not (ADR-0027 §1); else the first live one.
+  const activeSessionId = projectId === null ? null : activeLaneOf(model, projectId, sessionId);
   const worktree = projectId === null ? null : editorWorktree(model, projectId, activeSessionId);
   const worktreeId = worktree?.id ?? null;
   // Tracking off (the default): no bands, no hunk bar — main sends no hunks either, but a stale row must not show.

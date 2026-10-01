@@ -14,7 +14,8 @@ test('Skills pane lists the fixture skills, searches, reads a catalogue skill an
   const { app, page, userData } = await launchStyx({ screen: 'settings', theme: 'dark', chrome: 'mac' });
   try {
     await page.waitForSelector('[data-screen-ready="settings"]', { timeout: 10_000 });
-    await page.click('[data-app-rail-item=\"app:skills\"]');
+    await page.click('[data-app-rail-item="settings"]');
+    await page.click('[data-settings-nav-item="app:skills"]');
     const pane = page.locator('[data-skills-pane]');
     await expect(pane).toBeVisible();
 

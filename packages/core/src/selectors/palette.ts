@@ -6,6 +6,7 @@ import { isDeployActive } from '../model/run';
 import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
 import {
+  activeLaneOf,
   agentLabel,
   headAskOf,
   liveSessions,
@@ -17,7 +18,6 @@ import {
 } from './common-settings';
 import { formatCountdown } from './format';
 import { fuzzyBest } from './fuzzy';
-import { sessionTabs } from './tabs';
 import { targetDerivedState } from './target-state';
 
 export type PaletteScope = 'all' | 'actions' | 'agents' | 'projects';
@@ -245,7 +245,7 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
   // Snake in the chat pane (any tab on screen but one waiting on the person: that ask comes first). The tab is
   // resolved the way the chat pane resolves it (the first tab until one is picked), not from the raw selection —
   // before the first click the pane already shows a tab, and the palette must agree with it.
-  const onScreen = projectId === null ? null : sessionTabs(model, projectId, ui.sessionId ?? null).activeId;
+  const onScreen = projectId === null ? null : activeLaneOf(model, projectId, ui.sessionId ?? null);
   const tab = onScreen === null ? undefined : model.sessions.byId[onScreen];
   if (projectId !== null && tab !== undefined && tab.state !== 'needs-you')
     items.push({

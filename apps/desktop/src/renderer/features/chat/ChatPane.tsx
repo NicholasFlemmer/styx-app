@@ -1,13 +1,18 @@
 import {
-  chatMeta,
+  activeLaneOf,
+  AGENT_LABEL,
   composerPlaceholder,
   copy,
   deliveryWhileWorking,
   fill,
   headAskOf,
   isMidTurn,
+  laneSummary,
+  laneSummaryLabel,
   modelCatalogueFor,
-  sessionTabs,
+  usageLabel,
+  branchOf,
+  taskOf,
   type CommandInput,
   type ModelInfo,
   type ProjectId,
@@ -20,15 +25,17 @@ import {
   Button,
   Composer,
   Icon,
+  LaneHeader,
   Markdown,
   Message,
+  Receipt,
   Select,
-  StatusDot,
-  Tab,
-  TabRow,
+  StepList,
   Transcript,
+  TurnResult,
   WorkingLine,
   QuestionSet,
+  type TurnResultLabels,
 } from '@styx/ui';
 import {
   useCallback,
@@ -41,7 +48,6 @@ import {
 } from 'react';
 import { sizes } from '@styx/tokens';
 import { env } from '../../state/bridge';
-import { useFloatingMenu } from '../../state/use-floating-menu';
 import { command } from '../../state/commands';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
 import s from './ChatPane.module.css';
@@ -71,6 +77,9 @@ import { CheckpointRow } from './CheckpointRow';
 import { mentionItems as toMentionItems, slashItems } from './slash-commands';
 import { thinkingLabel, elapsedLabel, workingLine } from './stream-state';
 import { inlineSegments, transcriptItems, type TranscriptItem } from './transcript-items';
+import { laneItems, type LaneItem } from './lane-turns';
+import { LandButton } from '../workspace/LandButton';
+import { screenUrl } from '../../screens/Diff/CheckpointDiff';
 import { ArcadeHeldStrip, ArcadePanel, openArcade, quitArcade } from '../arcade/ArcadePanel';
 
 const omitKey = <T,>(all: Record<string, T>, key: string): Record<string, T> => {
@@ -87,6 +96,22 @@ export interface ChatPaneProps {
 }
 
 const MODEL_LABEL = copy.chat.composer.model.replace(/\s*▾$/, '');
+
+const TURN_LABELS: TurnResultLabels = {
+  showChanges: copy.chat.turn.showChanges,
+  undo: copy.chat.turn.undo,
+  undoAsk: copy.chat.turn.undoAsk,
+  undoConfirm: copy.chat.turn.undoConfirm,
+  undoCancel: copy.chat.turn.undoCancel,
+  kept: copy.chat.turn.kept,
+  undone: copy.chat.turn.undone,
+  busy: copy.chat.turn.busy,
+  before: copy.chat.turn.before,
+  after: copy.chat.turn.after,
+};
+const STEP_LABELS = { showTools: copy.chat.steps.showTools, hideTools: copy.chat.steps.hideTools };
+const clock = (ms: number): string =>
+  new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
 /**
  * Live session controls in the composer hint row (owner addition, discrepancies #54 / #83): Permissions / Model
@@ -229,12 +254,9 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const model = useModel(useCallback((m: ReadModel) => m, []));
   const activeSessionId = useSessionId();
   const sessionId = pinnedId ?? activeSessionId;
-  const setSession = useUi((u) => u.setSession);
   const pushOverlay = useUi((u) => u.pushOverlay);
   const setScreen = useUi((u) => u.setScreen);
   const setDiffCheckpoint = useUi((u) => u.setDiffCheckpoint);
-  const [menuOpen, setMenuOpen] = useState(false);
-  useFloatingMenu(menuOpen); // the +N sessions menu floats over the pane and, with it, the design window
   /**
    * Attachments waiting to go with the next message (images read to base64, `@`-mentioned worktree files), per
    * session: what was attached in one tab must not ride along in another.
@@ -243,11 +265,20 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const [mentionPaths, setMentionPaths] = useState<readonly string[]>([]);
   const [slashQuery, setSlashQuery] = useState('');
   const mentionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const menu = useRef<HTMLDivElement>(null);
-  const overflowTab = useRef<HTMLButtonElement>(null);
+  /** Folded turns opened from their receipt, step lists opened, raw tool rows shown (ADR-0027 §3 / §4). */
+  const [expandedTurns, setExpandedTurns] = useState<ReadonlySet<string>>(() => new Set());
+  const [showAllTurns, setShowAllTurns] = useState(false);
+  const [openSteps, setOpenSteps] = useState<ReadonlySet<string>>(() => new Set());
+  const [toolsShown, setToolsShown] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleIn = (set: ReadonlySet<string>, id: string): ReadonlySet<string> => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  };
 
-  const tabs = useMemo(() => sessionTabs(model, projectId, sessionId), [model, projectId, sessionId]);
-  const activeId: SessionId | null = tabs.activeId;
+  // The lane on screen: the one picked in the nav, finished or not (ADR-0027 §1).
+  const activeId: SessionId | null = activeLaneOf(model, projectId, sessionId);
   const pending: Pending[] = activeId === null ? [] : (pendingBySession[activeId] ?? []);
   const setPending = useCallback(
     (update: Pending[] | ((prev: Pending[]) => Pending[])) => {
@@ -271,7 +302,6 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const workingActive = activeId !== null && env().e2e !== true && workingLine(model, activeId, 0) !== null;
   const now = useNow(workingActive ? 1000 : undefined);
   const working = workingActive && activeId !== null ? workingLine(model, activeId, now) : null;
-  const meta = activeId === null ? '' : chatMeta(model, activeId, now);
   const items = useMemo(() => (activeId === null ? [] : transcriptItems(model, activeId)), [model, activeId]);
   const popped = activeId !== null && model.popouts.includes(activeId);
   // Snake in this pane (discrepancy row 110): the board takes the transcript's place while it plays; held (the
@@ -285,6 +315,22 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const placeholder = activeId === null ? '' : composerPlaceholder(model, activeId);
   const session = activeId === null ? null : (model.sessions.byId[activeId] ?? null);
   const agent = session?.agent ?? null;
+  const transcripts = activeId === null ? undefined : model.transcripts[activeId];
+  const checkpoints = activeId === null ? undefined : model.checkpoints[activeId];
+  const live = session !== null && (session.state === 'working' || session.state === 'needs-you');
+  const lane = useMemo(() => {
+    const at = new Map((transcripts ?? []).map((m) => [m.id as string, m.createdAt]));
+    return laneItems(items, {
+      checkpoints: checkpoints ?? [],
+      atOf: (id) => at.get(id) ?? null,
+      live,
+      expanded: expandedTurns,
+      showAll: showAllTurns,
+      clock,
+      screenUrl,
+    });
+  }, [items, transcripts, checkpoints, live, expandedTurns, showAllTurns]);
+  const summary = activeId === null ? null : laneSummary(model, activeId);
   const arcadeBlocked = session?.state === 'needs-you';
   const clis = model.discovery.clis;
   const catalogue = useMemo(
@@ -328,48 +374,9 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
     void command('session.unqueue', { sessionId: m.sessionId, messageId: m.id });
   };
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = (e: MouseEvent) => {
-      if (menu.current !== null && !menu.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [menuOpen]);
-
-  // Menu keyboard (spec §9): first item takes focus on open; ↑ / ↓ move; Esc closes and refocuses the ▾ tab.
-  useEffect(() => {
-    if (!menuOpen) return;
-    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-  }, [menuOpen]);
-  const closeMenu = (refocus: boolean) => {
-    setMenuOpen(false);
-    if (refocus) overflowTab.current?.focus();
-  };
-  const onMenuKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      closeMenu(true);
-      return;
-    }
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-    e.preventDefault();
-    const items = Array.from(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
-    if (items.length === 0) return;
-    const i = items.indexOf(document.activeElement as HTMLElement);
-    const next = e.key === 'ArrowDown' ? (i + 1) % items.length : (i - 1 + items.length) % items.length;
-    items[next]?.focus();
-  };
-
-  /** ✕ on a tab: ends the session if it is still running and archives it, so the tab goes away either way. */
+  /** Close in the lane header: ends the session if it is still running and archives it. */
   const closeSession = (id: SessionId) => {
     void command('session.close', { sessionId: id });
-  };
-
-  const pick = (id: SessionId) => {
-    setSession(projectId, id);
-    closeMenu(true);
   };
 
   const review = (item: Extract<TranscriptItem, { kind: 'accessRequest' }>) => {
@@ -652,6 +659,81 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
     }
   };
 
+  /** The lane's rows (ADR-0027 §3 / §4): steps, results on paper, receipts, then everything else as before. */
+  const renderLaneItem = (item: LaneItem) => {
+    switch (item.kind) {
+      case 'earlier':
+        return (
+          <div key={item.id} className={s['earlier']} data-turns-earlier="true">
+            <span>{item.label}</span>
+            <button type="button" className={s['link']} onClick={() => setShowAllTurns((v) => !v)}>
+              {item.folded ? copy.chat.turn.showAll : copy.chat.turn.hideAll}
+            </button>
+          </div>
+        );
+      case 'receipt':
+        return (
+          <Receipt
+            key={item.id}
+            title={item.title}
+            meta={item.meta}
+            state={item.state}
+            onClick={() => setExpandedTurns((set) => toggleIn(set, item.turnId))}
+            data-turn-receipt={item.turnId}
+          />
+        );
+      case 'fold':
+        return (
+          <button
+            key={item.id}
+            type="button"
+            className={[s['link'], s['foldTurn']].join(' ')}
+            aria-expanded="true"
+            onClick={() => setExpandedTurns((set) => toggleIn(set, item.turnId))}
+          >
+            {copy.chat.turn.hideAll}
+          </button>
+        );
+      case 'steps':
+        return (
+          <StepList
+            key={item.id}
+            steps={item.steps}
+            summary={item.summary}
+            live={item.live}
+            // The latest turn's steps start listed, older ones folded; a click flips either (ADR-0027 §4).
+            open={item.latest !== openSteps.has(item.id)}
+            onToggle={() => setOpenSteps((set) => toggleIn(set, item.id))}
+            showTools={toolsShown.has(item.id)}
+            onToggleTools={() => setToolsShown((set) => toggleIn(set, item.id))}
+            tools={<>{item.tools.map(renderItem)}</>}
+            labels={STEP_LABELS}
+            compact={compact}
+          />
+        );
+      case 'result':
+        return (
+          <TurnResult
+            key={item.id}
+            done={item.done}
+            change={item.change}
+            before={item.before}
+            after={item.after}
+            undone={item.undone}
+            busy={live}
+            labels={TURN_LABELS}
+            onShowChanges={() => reviewCheckpoint(item.checkpointId)}
+            onUndo={() => revertCheckpoint(item.checkpointId)}
+            compact={compact}
+          >
+            {item.text === null ? undefined : <AgentBody text={item.text} />}
+          </TurnResult>
+        );
+      default:
+        return renderItem(item);
+    }
+  };
+
   return (
     <section
       className={[s['pane'], compact ? s['compact'] : undefined].filter(Boolean).join(' ')}
@@ -676,104 +758,72 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           data-chat-resize="true"
         />
       )}
-      {!compact && (
-        <div className={s['tabsRow']} data-session-tabs="true">
-          <TabRow aria-label="Sessions" className={s['tabs']}>
-            {tabs.visible.map((t) => (
-              <Tab
-                key={t.sessionId}
-                label={t.label}
-                dot={t.dot}
-                badge={t.needs}
-                inv={t.active}
-                onClick={() => pick(t.sessionId)}
-                onClose={() => closeSession(t.sessionId)}
-                closeLabel={copy.chat.closeSessionNamed(t.label)}
-                data-session-tab={t.sessionId}
-              />
-            ))}
-            {tabs.overflow.length > 0 && (
-              <div ref={menu} className={s['overflow']}>
-                <Tab
-                  ref={overflowTab}
-                  overflow
-                  label={`+${tabs.overflow.length}`}
-                  aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                  onClick={() => setMenuOpen((v) => !v)}
-                  data-session-overflow="true"
-                />
-                {menuOpen && (
-                  <div role="menu" aria-label="Sessions" className={s['menu']} onKeyDown={onMenuKeyDown}>
-                    {tabs.overflow.map((t) => (
-                      <button
-                        key={t.sessionId}
-                        type="button"
-                        role="menuitem"
-                        className={s['menuItem']}
-                        onClick={() => pick(t.sessionId)}
-                        data-session-menu-item={t.sessionId}
-                      >
-                        <StatusDot tone={t.dot} size={7} />
-                        {t.label}
-                        {t.needs && <span className={s['badge']}>!</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </TabRow>
-          <button
-            type="button"
-            className={s['plus']}
-            data-spawn-agent="true"
-            aria-label={copy.board.actions.spawn.replace(/^\+\s*/, '')}
-            onClick={() => pushOverlay({ kind: 'modal', modal: 'spawn', projectId })}
-          >
-            +
-          </button>
-          <span className={s['spacer']} />
-          <button
-            type="button"
-            className={s['popout']}
-            title="Pop out chat"
-            aria-label="Pop out chat"
-            disabled={activeId === null}
-            onClick={() => {
-              if (activeId !== null) void command('window.popout', { sessionId: activeId });
-            }}
-          >
-            <Icon name="popout" size={12} />
-          </button>
-        </div>
+      {!compact && session !== null && (
+        <LaneHeader
+          agent={session.agent}
+          agentName={AGENT_LABEL[session.agent]}
+          branch={branchOf(model, session)}
+          meta={[session.state === 'needs-you' ? copy.chat.waitingOnYou : null, usageLabel(session)]
+            .filter((x): x is string => x !== null)
+            .join(' · ')}
+          task={taskOf(session) || fill(copy.lanes.nav.untitled, { agent: AGENT_LABEL[session.agent] })}
+          summary={summary === null ? '' : laneSummaryLabel(summary)}
+          action={<LandButton projectId={projectId} placement="lane" />}
+          tools={
+            <>
+              {arcadeButton && (
+                <button
+                  type="button"
+                  className={s['arcadeButton']}
+                  aria-pressed={arcadeHere}
+                  data-inv={arcadeHere ? 'true' : undefined}
+                  disabled={arcadeBlocked && !arcadeHere}
+                  title={
+                    arcadeBlocked && !arcadeHere
+                      ? fill(copy.arcade.openBlocked, { agent: copy.agents[session.agent] })
+                      : copy.arcade.openTitle
+                  }
+                  onClick={(e) => {
+                    if (arcadeHere) quitArcade();
+                    else openArcade(projectId, e.currentTarget);
+                  }}
+                  data-arcade-open={arcadeHere ? 'open' : 'closed'}
+                >
+                  {copy.arcade.open}
+                </button>
+              )}
+              <button
+                type="button"
+                className={s['popout']}
+                title="Pop out chat"
+                aria-label="Pop out chat"
+                onClick={() => void command('window.popout', { sessionId: session.id })}
+              >
+                <Icon name="popout" size={12} />
+              </button>
+              <button
+                type="button"
+                className={s['popout']}
+                title={copy.chat.lane.close}
+                aria-label={copy.chat.closeSessionNamed(AGENT_LABEL[session.agent])}
+                onClick={() => closeSession(session.id)}
+                data-lane-close="true"
+              >
+                ✕
+              </button>
+            </>
+          }
+        />
       )}
-      {!compact && (
-        <div className={s['metaRow']}>
-          <div className={s['meta']} data-chat-meta="true">
-            {meta}
-          </div>
-          {arcadeButton && (
-            <button
-              type="button"
-              className={s['arcadeButton']}
-              aria-pressed={arcadeHere}
-              data-inv={arcadeHere ? 'true' : undefined}
-              disabled={arcadeBlocked && !arcadeHere}
-              title={
-                arcadeBlocked && !arcadeHere && session !== null
-                  ? fill(copy.arcade.openBlocked, { agent: copy.agents[session.agent] })
-                  : copy.arcade.openTitle
-              }
-              onClick={(e) => {
-                if (arcadeHere) quitArcade();
-                else openArcade(projectId, e.currentTarget);
-              }}
-              data-arcade-open={arcadeHere ? 'open' : 'closed'}
-            >
-              {copy.arcade.open}
-            </button>
-          )}
+      {!compact && session === null && (
+        <div className={s['noLane']} data-chat-empty="true">
+          <Button
+            variant="secondary"
+            onClick={() => pushOverlay({ kind: 'modal', modal: 'spawn', projectId })}
+            data-spawn-agent="true"
+          >
+            + {copy.lanes.nav.newTask}
+          </Button>
         </div>
       )}
       {arcadeHere && arcadeHeld && <ArcadeHeldStrip projectId={projectId} sessionId={activeId} />}
@@ -806,7 +856,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
         </div>
       ) : (
         <Transcript compact={compact}>
-          {items.map(renderItem)}
+          {lane.map(renderLaneItem)}
           {working !== null && (
             <WorkingLine
               label={working.label}

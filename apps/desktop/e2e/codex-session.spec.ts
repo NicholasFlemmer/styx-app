@@ -49,21 +49,24 @@ test('a Codex session runs through the app-server: pong, an approval ask, tokens
     const decision = chat.locator('[data-kind="decision"]');
     await expect(decision).toBeVisible({ timeout: 20_000 });
     await expect(decision).toContainText('Bash: echo hi');
-    await expect(chat.locator('[data-chat-meta]')).toContainText('waiting on you');
+    await expect(chat.locator('[data-lane-meta]')).toContainText('waiting on you');
     await decision.getByRole('button', { name: 'Allow' }).click();
 
     // Allowed: the command runs, its row settles, the turn ends with token usage on the meta line.
-    await expect(chat.locator('[data-kind="tool"][data-status="ok"]')).toBeVisible({ timeout: 20_000 });
-    const tool = chat.locator('[data-kind="tool"]');
-    await expect(tool).toContainText('Bash');
-    await expect(tool).toContainText('echo hi');
-    // The result detail is the command's output tail.
-    await expect(tool).toContainText('hi');
-    await expect(chat.locator('[data-chat-meta]')).toContainText('tokens', { timeout: 20_000 });
-    await expect(chat.locator('[data-chat-meta]')).not.toContainText('waiting on you');
+    // In plain words first (ADR-0027 §4); the raw row, with its output tail, is one click away.
+    const tool = chat.locator('[data-kind="steps"] li[data-status="ok"]');
+    await expect(tool).toBeVisible({ timeout: 20_000 });
+    await expect(tool).toContainText('Ran echo hi');
+    await chat.getByRole('button', { name: 'Show the tool calls' }).last().click();
+    const raw = chat.locator('[data-kind="tool"][data-status="ok"]');
+    await expect(raw).toContainText('Bash');
+    await expect(raw).toContainText('echo hi');
+    await expect(chat.locator('[data-lane-meta]')).toContainText('tokens', { timeout: 20_000 });
+    await expect(chat.locator('[data-lane-meta]')).not.toContainText('waiting on you');
 
     // Settings › Agents: Verify goes through the app-server and shows `email · plan`.
-    await page.click('[data-app-rail-item=\"app:agents\"]');
+    await page.click('[data-app-rail-item="settings"]');
+    await page.click('[data-settings-nav-item="app:agents"]');
     const row = page.locator('[data-agent-row="codex"]');
     await expect(row).toBeVisible();
     await row.getByRole('button', { name: /^Verify · Codex/ }).click();

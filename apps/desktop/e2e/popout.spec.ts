@@ -80,7 +80,7 @@ test('⤢ opens a pop-out window with the compact chat; Mod+Shift+O docks it', a
     const chat = popout.locator('[data-chat-compact="true"]');
     await expect(chat).toBeVisible();
     await expect(popout.getByRole('tab')).toHaveCount(0);
-    await expect(popout.locator('[data-chat-meta]')).toHaveCount(0);
+    await expect(popout.locator('[data-lane-meta]')).toHaveCount(0);
     await expect(popout.getByText('Add input validation to checkout and cover it with tests.')).toBeVisible();
     const composer = popout.getByPlaceholder('Message Claude…');
     await expect(composer).toBeEnabled();
@@ -111,7 +111,7 @@ test('⤢ opens a pop-out window with the compact chat; Mod+Shift+O docks it', a
     expect(app.windows()).toHaveLength(1);
     await expect(pane.getByText('Popped out')).toHaveCount(0);
     await expect(page.getByPlaceholder('Message Claude…')).toBeEnabled();
-    await expect(page.getByRole('tab', { name: /^Claude/ })).toBeVisible();
+    await expect(page.locator('[data-lane-header]')).toContainText('Claude');
   } finally {
     await app.close();
   }

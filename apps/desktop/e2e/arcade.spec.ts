@@ -11,7 +11,7 @@ test('palette → Play while you wait → board, keys, pause on blur, Esc back',
   const { app, page } = await launchStyx({ screen: 'workspace', fixture: 'demo', theme: 'dark' });
   await page.waitForSelector('[data-chat-pane]', { timeout: 10_000 });
   // The row exists only for the tab the person is on, and the fixture's first tab (Claude) is working.
-  await page.click('[data-session-tab]:first-child');
+  await page.click('[data-nav-lane] >> nth=0');
   const composer = page.locator('[data-keyscope="composer"] textarea');
   await composer.focus();
 
@@ -66,7 +66,7 @@ test('palette → Play while you wait → board, keys, pause on blur, Esc back',
 test("the game is the pane's: another tab keeps it; a tab that needs you holds it and takes the row away", async () => {
   const { app, page } = await launchStyx({ screen: 'workspace', fixture: 'demo', theme: 'dark' });
   await page.waitForSelector('[data-chat-pane]', { timeout: 10_000 });
-  await page.click('[data-session-tab]:first-child');
+  await page.click('[data-nav-lane] >> nth=0');
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K');
   await page.getByRole('combobox').fill('snake');
   await page.keyboard.press('Enter');
@@ -76,7 +76,7 @@ test("the game is the pane's: another tab keeps it; a tab that needs you holds i
   await expect(board).toHaveAttribute('data-arcade-phase', 'playing');
 
   // Gemini's tab (idle): the board stays (paused, since the click took focus off it) and plays on.
-  await page.click('[data-session-tab]:nth-child(3)');
+  await page.click('[data-nav-lane] >> nth=2');
   await expect(board).toBeVisible();
   await expect(board).toHaveAttribute('data-arcade-phase', 'paused');
   await page.locator('[data-arcade-frame]').click();
@@ -85,7 +85,7 @@ test("the game is the pane's: another tab keeps it; a tab that needs you holds i
 
   // Codex's tab needs you: the game is held under a strip, the transcript with the ask is back, and the
   // palette no longer offers the game on this tab.
-  await page.click('[data-session-tab]:nth-child(2)');
+  await page.click('[data-nav-lane] >> nth=1');
   await expect(board).toHaveCount(0);
   await expect(page.locator('[data-chat-pane] [role="log"]')).toHaveCount(1);
   await expect(page.locator('[data-arcade-held]')).toHaveAttribute('data-arcade-held', 'waiting');
@@ -96,7 +96,7 @@ test("the game is the pane's: another tab keeps it; a tab that needs you holds i
   await page.keyboard.press('Escape');
 
   // Back on Claude's (working): Resume, then the countdown, then the snake moves again.
-  await page.click('[data-session-tab]:first-child');
+  await page.click('[data-nav-lane] >> nth=0');
   await expect(page.locator('[data-arcade-held]')).toHaveAttribute('data-arcade-held', 'resumable');
   await page.click('[data-arcade-resume]');
   await expect(board).toBeVisible();

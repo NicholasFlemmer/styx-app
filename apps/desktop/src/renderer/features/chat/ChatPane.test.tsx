@@ -3,6 +3,7 @@ import {
   copy,
   fill,
   fixtures,
+  taskOf,
   upsertRows,
   type AskQuestion,
   type ModelInfo,
@@ -252,15 +253,16 @@ describe('ChatPane', () => {
     Object.assign(window, { styx: undefined });
   });
 
-  it('renders the project tabs with the first session current and the meta line', () => {
+  it('heads the pane with the lane: agent, branch, task and what it holds (ADR-0027 §1)', () => {
     render(<ChatPane projectId={acme} />);
-    const tabs = screen.getAllByRole('tab');
-    // Each tab carries its ✕ marker (shown on hover / when current).
-    expect(tabs.map((t) => t.textContent)).toEqual(['Claude✕', 'Codex!✕', 'Gemini✕']);
-    expect(tabs[0]?.getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByText('claude · fix/checkout · 14m')).toBeTruthy();
+    const s = fixtures.demoReadModel().sessions.byId[claude];
+    const header = document.querySelector('[data-lane-header]') as HTMLElement;
+    expect(header.textContent).toContain('Claude');
+    expect(header.textContent).toContain('fix/checkout');
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(s === undefined ? '' : taskOf(s));
+    expect(header.querySelector('[data-lane-summary]')?.textContent).not.toBe('');
     expect(screen.getByPlaceholderText('Message Claude…')).toBeTruthy();
-    expect(screen.queryByRole('tab', { name: /^\+/ })).toBeNull();
+    expect(screen.queryByRole('tab')).toBeNull();
   });
 
   it('the chat pane has a resize handle: ← / → step its width and persist it', () => {
@@ -310,56 +312,24 @@ describe('ChatPane', () => {
     );
   });
 
-  it('✕ on a session tab closes that chat', () => {
+  it('✕ in the lane header closes that chat', () => {
     render(<ChatPane projectId={acme} />);
-    const tab = document.querySelector(`[data-session-tab="${fixtures.ids.session.claude}"]`) as HTMLElement;
-    fireEvent.click(tab.querySelector('[data-tab-close]') as HTMLElement);
+    fireEvent.click(document.querySelector('[data-lane-close]') as HTMLElement);
     expect(commands.filter((c) => c.name === 'session.close')).toEqual([
       { name: 'session.close', input: { sessionId: fixtures.ids.session.claude } },
     ]);
-    // Delete on the focused tab closes it too (the ✕ is not focusable: a tablist owns only tabs).
-    commands.length = 0;
-    fireEvent.keyDown(tab, { key: 'Delete' });
-    expect(commands.filter((c) => c.name === 'session.close')).toHaveLength(1);
   });
 
-  it('folds sessions beyond three into the ▾ tab; picking one switches the session', () => {
-    const model = fixtures.demoReadModel();
-    const base = model.sessions.byId[fixtures.ids.session.gemini];
-    if (base === undefined) throw new Error('fixture');
-    const extra: Session[] = [1, 2].map((n) => ({
-      ...base,
-      id: `extra-${n}` as SessionId,
-      startedAt: base.startedAt + n,
-    }));
-    useReadModel
-      .getState()
-      .replaceModel({ ...model, sessions: upsertRows(model.sessions, extra) }, 'connected');
+  it('a finished lane picked in the nav stays on screen (ADR-0027 §1)', () => {
+    useUiStore.getState().setSession(acme, fixtures.ids.session.cursor as SessionId);
     render(<ChatPane projectId={acme} />);
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
-      'Claude✕',
-      'Codex!✕',
-      'Gemini✕',
-      '+2',
-    ]);
-    fireEvent.click(screen.getByRole('tab', { name: '+2' }));
-    const items = screen.getAllByRole('menuitem');
-    expect(items).toHaveLength(2);
-    fireEvent.click(items[1] as HTMLElement);
-    expect(useUiStore.getState().projectSession[acme]).toBe('extra-2');
-    // The picked overflow session takes slot 3.
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
-      'Claude✕',
-      'Codex!✕',
-      'Gemini✕',
-      '+2',
-    ]);
+    expect(document.querySelector('[data-lane-header]')?.textContent).toContain('Cursor');
   });
 
   it('routes the access-request card: Review request opens the sheet, Deny sends grant.deny', async () => {
     useUiStore.getState().setSession(acme, codex);
     render(<ChatPane projectId={acme} />);
-    expect(screen.getByText('codex · test/flaky · 3m · waiting on you')).toBeTruthy();
+    expect(document.querySelector('[data-lane-meta]')?.textContent).toBe('waiting on you');
     fireEvent.click(screen.getByRole('button', { name: 'Review request' }));
     const sheet = useUiStore.getState().overlays.find((o) => o.kind === 'sheet');
     expect(sheet?.kind === 'sheet' && sheet.askId).toBe(fixtures.ids.ask.codexGrant);
@@ -447,7 +417,7 @@ describe('ChatPane', () => {
     const model = fixtures.demoReadModel();
     const s = model.sessions.byId[claude];
     if (s === undefined) throw new Error('fixture');
-    // A done session is no tab: the pane falls back to the first live one (Codex, idle here), which has no controls.
+    // A done lane picked in the nav stays on screen (ADR-0027 §1): nothing to configure, nothing to stop.
     useReadModel.getState().replaceModel(
       {
         ...model,
@@ -460,9 +430,10 @@ describe('ChatPane', () => {
     );
     useUiStore.getState().setSession(acme, claude);
     render(<ChatPane projectId={acme} />);
+    expect(document.querySelector('[data-lane-header]')?.textContent).toContain('Claude');
     expect(screen.queryByRole('combobox', { name: 'Permissions' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Stop · esc' })).toBeNull();
-    expect(screen.getByRole('button', { name: copy.chat.controls.markDone })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: copy.chat.controls.markDone })).toBeNull();
   });
 
   it('Mark done sends session.markDone, and a finished session offers nothing (discrepancy #111)', () => {
@@ -519,7 +490,7 @@ describe('ChatPane', () => {
     useReadModel.getState().replaceModel(codexLive(), 'connected');
     useUiStore.getState().setSession(acme, codex);
     render(<ChatPane projectId={acme} />);
-    expect(screen.getByText('codex · test/flaky · 3m · 14.6k tokens · 1 turn')).toBeTruthy();
+    expect(document.querySelector('[data-lane-meta]')?.textContent).toBe('14.6k tokens · 1 turn');
     const mode = screen.getByRole('combobox', { name: 'Permissions' }) as HTMLSelectElement;
     expect(mode.title).toBe(copy.session.permissionModeHintsByAgent.codex.default);
     const modelSel = screen.getByRole('combobox', { name: 'Model' }) as HTMLSelectElement;
@@ -709,6 +680,10 @@ describe('ChatPane', () => {
       'connected',
     );
     const { container } = render(<ChatPane projectId={acme} />);
+    // Plain words first (ADR-0027 §4): the working turn lists its step; the raw row is one click away.
+    expect(screen.getByText('Ran pnpm test')).toBeTruthy();
+    expect(container.querySelector('[data-kind="tool"]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: copy.chat.steps.showTools }));
     const row = container.querySelector('[data-kind="tool"]');
     expect(row?.getAttribute('data-status')).toBe('ok');
     expect(row?.textContent).toBe('✓Bashpnpm test');
@@ -836,10 +811,15 @@ describe('ChatPane', () => {
     expect(screen.getByRole('status').className).toMatch(/compact/);
   });
 
-  it('+ opens the spawn modal and ⤢ pops the chat out', async () => {
-    render(<ChatPane projectId={acme} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Spawn agent' }));
+  it('with no lane the pane offers a new task; with one, ⤢ pops the chat out', async () => {
+    const empty = fixtures.demoReadModel();
+    useReadModel.getState().replaceModel({ ...empty, sessions: { byId: {}, ids: [] } }, 'connected');
+    const { unmount } = render(<ChatPane projectId={acme} />);
+    fireEvent.click(screen.getByRole('button', { name: `+ ${copy.lanes.nav.newTask}` }));
     expect(useUiStore.getState().overlays.some((o) => o.kind === 'modal')).toBe(true);
+    unmount();
+    useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
+    render(<ChatPane projectId={acme} />);
     fireEvent.click(screen.getByRole('button', { name: 'Pop out chat' }));
     await flush();
     expect(commands).toEqual([{ name: 'window.popout', input: { sessionId: claude } }]);
@@ -977,17 +957,17 @@ describe('ChatPane queue (messages sent mid-turn)', () => {
     expect(useUiStore.getState().drafts[claude]).toBeUndefined();
   });
 
-  it('the composer draft belongs to its session: switching tabs shows each tab its own text, and a remount (another screen) brings it back', () => {
+  it('the composer draft belongs to its session: switching lanes shows each its own text, and a remount (another screen) brings it back', () => {
     const { unmount } = render(<ChatPane projectId={acme} />);
     const box = () => screen.getByRole('textbox', { name: /^Message/ }) as HTMLTextAreaElement;
     fireEvent.change(box(), { target: { value: 'for claude' } });
     expect(useUiStore.getState().composerText[claude]).toBe('for claude');
-    // Codex's tab: an empty composer, its own text.
-    fireEvent.click(screen.getByRole('tab', { name: /Codex/ }));
+    // Codex's lane (picked in the nav): an empty composer, its own text.
+    act(() => useUiStore.getState().setSession(acme, codex));
     expect(box().value).toBe('');
     fireEvent.change(box(), { target: { value: 'for codex' } });
     // Back to Claude: the first draft is still there, untouched.
-    fireEvent.click(screen.getByRole('tab', { name: /Claude/ }));
+    act(() => useUiStore.getState().setSession(acme, claude));
     expect(box().value).toBe('for claude');
     // Leaving the workspace (Settings, say) unmounts the pane; coming back restores the draft from the store.
     unmount();

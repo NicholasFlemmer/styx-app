@@ -3,7 +3,7 @@ import {
   fill,
   headAskOf,
   joinScopes,
-  sessionTabs,
+  navLanes,
   type Grant,
   type ReadModel,
   type SessionId,
@@ -33,11 +33,10 @@ export const pendingGrantOfActiveSession = (): Grant | null => {
 const focusAgent = (n: number): boolean => {
   const ui = useUiStore.getState();
   if (ui.projectId === null) return false;
-  const tabs = sessionTabs(model(), ui.projectId, selectSessionId(ui));
-  const all = [...tabs.visible, ...tabs.overflow];
-  const tab = all[n - 1];
-  if (tab === undefined) return false;
-  ui.setSession(ui.projectId, tab.sessionId);
+  // Mod+1…4 follow the lanes as the nav lists them (ADR-0027 §1).
+  const lane = navLanes(model(), ui.projectId, Date.now())[n - 1];
+  if (lane === undefined) return false;
+  ui.setSession(ui.projectId, lane.sessionId);
   return true;
 };
 

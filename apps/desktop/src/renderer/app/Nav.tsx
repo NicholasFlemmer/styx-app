@@ -88,7 +88,7 @@ export function Nav() {
         <span>{copy.lanes.nav.work}</span>
         <span>{lanes.length === 0 ? '' : navLanesLabel(lanes.length)}</span>
       </div>
-      <div className={s['navLanes']} role="list" aria-label={copy.lanes.nav.label}>
+      <div className={s['navLanes']} role="list" aria-label={copy.lanes.nav.label} data-nav-lanes="true">
         {lanes.map((lane) => (
           <div role="listitem" key={lane.sessionId}>
             <LaneRow

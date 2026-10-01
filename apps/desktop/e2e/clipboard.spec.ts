@@ -33,7 +33,7 @@ test.describe('chat clipboard', () => {
 
     // Tabs, rail and titlebar must stay unselectable: dragging across them should never highlight.
     const chrome = await page.evaluate(() => {
-      const tab = document.querySelector('[data-session-tab]');
+      const tab = document.querySelector('[data-nav-lane]');
       const rail = document.querySelector('[data-project-id]');
       return {
         tab: tab ? getComputedStyle(tab).userSelect : 'missing',

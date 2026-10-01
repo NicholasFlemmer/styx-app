@@ -13,6 +13,11 @@ import s from './LandButton.module.css';
 
 export interface LandButtonProps {
   projectId: ProjectId;
+  /**
+   * `toolbar` (default): the workspace mode strip. `lane`: the lane header over the chat (ADR-0027 §1), which
+   * marks itself differently so the walkthrough and tests can tell the two apart.
+   */
+  placement?: 'toolbar' | 'lane';
 }
 
 /**
@@ -21,7 +26,7 @@ export interface LandButtonProps {
  * to do this"). Same lane as the editor column and the titlebar branch, same modal the Repo row opens. Secondary,
  * like Publish — accent stays reserved for Grant (§8) and the primary for Deploy.
  */
-export function LandButton({ projectId }: LandButtonProps) {
+export function LandButton({ projectId, placement = 'toolbar' }: LandButtonProps) {
   const sessionId = useSessionId();
   const lane = useModel(
     useCallback(
@@ -39,7 +44,10 @@ export function LandButton({ projectId }: LandButtonProps) {
   const pushOverlay = useUi((u) => u.pushOverlay);
   if (lane === null) return null;
   return (
-    <div className={s['wrap']} data-land-button="true">
+    <div
+      className={placement === 'lane' ? s['inLane'] : s['wrap']}
+      {...(placement === 'lane' ? { 'data-lane-land': 'true' } : { 'data-land-button': 'true' })}
+    >
       <Button
         size="compact"
         variant="secondary"

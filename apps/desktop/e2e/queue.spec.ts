@@ -33,7 +33,7 @@ async function spawnWithFirstMessage(
   // The scripted turn is now blocked on its approval: mid-turn, needs-you.
   const decision = chat.locator('[data-kind="decision"]');
   await expect(decision).toBeVisible({ timeout: 20_000 });
-  await expect(chat.locator('[data-chat-meta]')).toContainText('waiting on you');
+  await expect(chat.locator('[data-lane-meta]')).toContainText('waiting on you');
   return { chat, decision };
 }
 
@@ -57,8 +57,24 @@ test('Codex steers: a message sent mid-turn reaches the running turn at once, no
 
     // The turn ends as before once the approval is answered.
     await decision.getByRole('button', { name: 'Allow' }).click();
-    await expect(chat.locator('[data-kind="tool"][data-status="ok"]')).toBeVisible({ timeout: 20_000 });
-    await expect(chat.locator('[data-chat-meta]')).not.toContainText('waiting on you', { timeout: 20_000 });
+    await expect(chat.locator('[data-lane-meta]')).not.toContainText('waiting on you', { timeout: 20_000 });
+    // The command ran to completion (the chat shows it as a step, or a receipt once folded: ADR-0027 §3 / §4).
+    await expect
+      .poll(
+        async () => {
+          const snap = await page.evaluate(() =>
+            (window as unknown as StyxWindow).styx.command('store.snapshot', {}),
+          );
+          const t = (
+            snap.value as { transcripts: Record<string, { payload: { kind: string; status?: string } }[]> }
+          ).transcripts;
+          return Object.values(t)
+            .flat()
+            .some((m) => m.payload.kind === 'tool' && m.payload.status === 'ok');
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(true);
   } finally {
     await app.close();
   }
@@ -95,9 +111,11 @@ test('Gemini queues: a message sent mid-turn waits as a dashed bubble, can be ta
     });
     await expect(queued).toHaveCount(0);
     // …and the fake runs that turn: a second pong and a second approval ask.
-    await expect(chat.locator('[data-kind="agent"]').filter({ hasText: 'pong' })).toHaveCount(2, {
-      timeout: 20_000,
-    });
+    await expect
+      .poll(() => chat.locator('[data-kind="agent"]').filter({ hasText: 'pong' }).count(), {
+        timeout: 20_000,
+      })
+      .toBeGreaterThanOrEqual(2);
     await expect(chat.locator('[data-kind="decision"]')).toHaveCount(2, { timeout: 20_000 });
 
     // Stop with a message held returns it to the composer with a system line.

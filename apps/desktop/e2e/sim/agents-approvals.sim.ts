@@ -310,11 +310,11 @@ test('sim: agents-approvals', async () => {
       await card(IDS.session.claude).getByRole('button', { name: 'Open' }).click();
       await ready('workspace');
       await page().locator('[data-chat-pane]').waitFor({ timeout: 5000 });
-      const tab = page().locator(`[data-session-tab="${IDS.session.claude}"]`);
+      const tab = page().locator(`[data-nav-lane="${IDS.session.claude}"]`);
       await tab.waitFor({ timeout: 5000 });
       const selected =
         (await tab.getAttribute('data-inv')) === 'true' ||
-        (await tab.getAttribute('aria-selected')) === 'true';
+        (await tab.getAttribute('aria-current')) === 'page';
       must(selected, 'the Claude tab is not the selected session tab');
       await goBoardAll();
     });
@@ -1338,7 +1338,7 @@ test('sim: agents-approvals', async () => {
         const blog = dock!.locator(`[data-dock-card="${IDS.session.blog}"]`);
         await blog.click();
         await ready('workspace');
-        const tab = page().locator(`[data-session-tab="${IDS.session.blog}"]`);
+        const tab = page().locator(`[data-nav-lane="${IDS.session.blog}"]`);
         await tab.waitFor({ timeout: 5000 });
         await sim.command('window.agentDock', { open: false });
         return `${labels.length} cards (${needsCards} needs-you) · ${[...projects].join(', ')} · header "${text.split('\n')[0] ?? ''}"`;

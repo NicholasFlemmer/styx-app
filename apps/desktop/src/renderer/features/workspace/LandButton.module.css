@@ -5,6 +5,11 @@
     align-items: center;
     padding-left: 8px;
   }
+  /* In the lane header over the chat: no strip padding (ADR-0027 §1). */
+  .inLane {
+    display: flex;
+    align-items: center;
+  }
   .button {
     display: inline-flex;
     align-items: center;

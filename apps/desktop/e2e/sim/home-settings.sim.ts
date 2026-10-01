@@ -1204,7 +1204,7 @@ test('sim: home-settings', async () => {
         const chat = page().locator('[data-chat-pane]');
         await chat.locator('[data-kind="decision"]').getByRole('button', { name: 'Allow' }).click();
         await chat.locator('[data-kind="tool"][data-status="ok"]').waitFor({ timeout: 20_000 });
-        await chat.locator('[data-chat-meta]').filter({ hasText: 'tokens' }).waitFor({ timeout: 20_000 });
+        await chat.locator('[data-lane-meta]').filter({ hasText: 'tokens' }).waitFor({ timeout: 20_000 });
         await sim.shot('sim-agent-turn-done');
       },
     );
@@ -1322,10 +1322,10 @@ test('sim: home-settings', async () => {
       async () => {
         await page().click(PROJECT_TILE('acme-shop'));
         await ready('workspace');
-        const codexTab = page().locator(`[data-session-tab="${ids.session.codex}"]`);
+        const codexTab = page().locator(`[data-nav-lane="${ids.session.codex}"]`);
         await codexTab.click();
         await sleep(200);
-        if ((await codexTab.getAttribute('aria-selected')) !== 'true')
+        if ((await codexTab.getAttribute('aria-current')) !== 'page')
           throw new Error('could not pick the Codex tab');
         await page().click(PROJECT_TILE('blog-v2'));
         await sleep(200);
@@ -1345,8 +1345,8 @@ test('sim: home-settings', async () => {
         if ((await currentScreen()) !== 'workspace') await page().click('[data-nav-item="workspace"]');
         await ready('workspace');
         const selected = await page()
-          .locator('[data-session-tab][aria-selected="true"]')
-          .getAttribute('data-session-tab');
+          .locator('[data-nav-lane][aria-current="page"]')
+          .getAttribute('data-nav-lane');
         if (selected !== ids.session.codex)
           notes.push(`acme-shop reopened on tab ${selected ?? 'none'} (was Codex)`);
         await sim.shot('after-relaunch');

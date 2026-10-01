@@ -145,13 +145,13 @@ test('sim: onboarding-shell', async () => {
         await page().waitForSelector('[data-screen-ready="home"]', { timeout: 10_000 });
         await page().locator('[data-project-id]').first().click();
         await page().waitForSelector('[data-screen-ready="workspace"]', { timeout: 10_000 });
-        const tabs = page().locator('[data-session-tab]');
-        const n = await tabs.count();
-        if (n < 2) return `only ${n} session tabs; skipped focus-agent`;
+        const lanes = page().locator('[data-nav-lane]');
+        const n = await lanes.count();
+        if (n < 2) return `only ${n} lanes; skipped focus-agent`;
         await page().keyboard.press('Meta+2');
-        const second = tabs.nth(1);
-        if ((await second.getAttribute('aria-selected')) !== 'true')
-          throw new Error('Mod+2 did not select the second tab');
+        const second = lanes.nth(1);
+        if ((await second.getAttribute('aria-current')) !== 'page')
+          throw new Error('Mod+2 did not open the second lane');
       },
     );
 
