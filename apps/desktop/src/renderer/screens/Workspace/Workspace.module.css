@@ -46,6 +46,10 @@
   /* A middling centre (1280 with the files open): Publish and Deploy keep their glyphs and drop their words (still
      their accessible names, and the button's title), so nothing is drawn over anything. */
   @container column (max-width: 540px) {
+    .tabs > [role='tab'] {
+      padding-left: 11px;
+      padding-right: 11px;
+    }
     .modes [data-strip-label] {
       position: absolute;
       width: 1px;
@@ -57,8 +61,8 @@
   }
   @container column (max-width: 400px) {
     .tabs > [role='tab'] {
-      padding-left: 9px;
-      padding-right: 9px;
+      padding-left: 6px;
+      padding-right: 6px;
       font-size: 12px;
     }
     /* No room for them here: Publish and Deploy stay one keystroke away in the palette. */

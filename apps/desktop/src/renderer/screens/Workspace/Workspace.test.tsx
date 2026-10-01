@@ -82,6 +82,8 @@ describe('Workspace screen', () => {
       projectId: side,
       projectSession: {},
       editorFile: null,
+      // Code, the instrument these tests drive (the default for a project without a dev server is Tasks).
+      paneSizes: { 'workspace-mode': 0 },
     });
   });
   afterEach(() => {
@@ -106,19 +108,24 @@ describe('Workspace screen', () => {
     expect(document.querySelector('[data-workspace]')?.getAttribute('data-workspace')).toBe('main');
   });
 
-  it('four instruments on the lane (ADR-0027 §2): Code shows the files and editor, Changes the page, Terminal fills, Preview the design window; the pick persists', async () => {
+  it('five instruments on the lane (ADR-0027 §2, #138): Tasks the other lanes, Code the files and editor, Changes the page, Terminal fills, Preview the design window; the pick persists', async () => {
     useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
     useUiStore.setState({ projectId: acme, paneSizes: {} });
     render(<Workspace />);
     const tabs = within(screen.getByRole('tablist', { name: copy.chat.instruments.label }));
     expect(tabs.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      copy.chat.instruments.tasks,
       copy.chat.instruments.preview,
       copy.chat.instruments.changes,
       copy.chat.instruments.code,
       copy.chat.instruments.terminal,
     ]);
-    // No dev server known for acme-shop in the demo: Code first.
-    expect(document.querySelector('[data-instrument]')?.getAttribute('data-instrument')).toBe('code');
+    // No dev server known for acme-shop in the demo: Tasks first, the project's other lanes side by side.
+    expect(document.querySelector('[data-instrument]')?.getAttribute('data-instrument')).toBe('tasks');
+    expect(document.querySelector('[data-tasks-board]')).not.toBeNull();
+    expect(screen.queryByRole('tree')).toBeNull();
+    fireEvent.click(tabs.getByRole('tab', { name: copy.chat.instruments.code }));
+    expect(useUiStore.getState().paneSizes['workspace-mode']).toBe(0);
     await waitFor(() => expect(screen.getByTestId('monaco')).toBeTruthy());
     expect(screen.getByRole('tree')).toBeTruthy();
 

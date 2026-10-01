@@ -193,10 +193,27 @@ export const copy = {
     /** The workspace centre's instruments on the lane (ADR-0027 §2). */
     instruments: {
       label: 'Lane view',
+      tasks: 'Tasks',
       preview: 'Preview',
       changes: 'Changes',
       code: 'Code',
       terminal: 'Terminal',
+    },
+    /** The Tasks instrument: the project's other lanes side by side, each a small chat (#138). */
+    tasks: {
+      label: 'Lanes in this project',
+      openInChat: 'Open in chat',
+      openInChatNamed: 'Open {task} in the chat',
+      alongside: {
+        title: 'Start another lane alongside',
+        body: 'Its own branch, so it never steps on the others. It shows here as it goes.',
+        first: 'Start a lane',
+        firstBody: 'One agent on its own branch. Start a few and they work here side by side.',
+        placeholder: 'What should it do?',
+        label: 'Task for the new lane',
+        agent: 'Agent',
+        start: 'Start',
+      },
     },
     /** The Changes instrument: the lane as a page you sign off (ADR-0027 §3). */
     changes: {
@@ -1826,8 +1843,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
         body: 'Ask, steer, drop in files. Its work reads as plain steps, and each finished turn comes back as a card you can open or undo. Carrying on keeps it.',
       },
       instruments: {
-        title: 'Look at the work four ways',
-        body: 'Preview runs your app, Changes reads the lane as a page, Code is the full editor, Terminal is the lane’s shell.',
+        title: 'Look at the work five ways',
+        body: 'Tasks shows your other lanes side by side, each one answerable where it stands. Preview runs your app, Changes reads the lane as a page, Code is the full editor, Terminal is the lane’s shell.',
       },
       changes: {
         title: 'Sign it off',

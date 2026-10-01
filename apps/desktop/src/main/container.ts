@@ -363,6 +363,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     laneLedger: ledger,
     runtime,
   });
+  sessions.backfillTasks();
   const grants = new GrantService({
     repos,
     audit,

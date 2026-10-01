@@ -785,6 +785,9 @@ export class SessionService {
           kind: 'user',
           ...(prepared.meta.length > 0 ? { attachments: prepared.meta } : {}),
         });
+    // A lane started without a first message takes the first thing said as its task (it is what the lane is named
+    // by); otherwise the lane's title fell back to the agent's status line.
+    if (!fromStyx && s.firstMessage === null && body !== '') this.setTask(s.id, shown);
     // The workspace as it is before this turn is the turn's baseline (checkpoints, ADR-0020).
     this.hooks?.turnStarted?.(s.id, userRow.id);
     if (!this.isRunning(s.id) && s.state !== 'paused') {
@@ -2116,6 +2119,24 @@ export class SessionService {
       this.hooks?.sessionFinished?.(next.id);
     }
     return next;
+  }
+
+  private setTask(sessionId: string, task: string): void {
+    const s = this.require(sessionId);
+    this.deps.repos.sessions.upsert({ ...s, firstMessage: task });
+    this.deps.publisher.upsert('sessions', [s.id]);
+  }
+
+  /**
+   * Lanes from before a first message was recorded on send: each takes the first thing the person said, so it is
+   * named by its task rather than its latest status. Run once at startup; a session with nothing said keeps null.
+   */
+  backfillTasks(): void {
+    for (const s of this.deps.repos.sessions.all()) {
+      if (s.firstMessage !== null) continue;
+      const first = this.deps.repos.transcripts.firstUserBody(s.id);
+      if (first !== null) this.deps.repos.sessions.upsert({ ...s, firstMessage: first });
+    }
   }
 
   setNote(sessionId: string, rawNote: string | null): void {
