@@ -19,7 +19,16 @@ export interface OpenTurnProps extends Omit<HTMLAttributes<HTMLDivElement>, 'tit
  * An earlier turn opened from its receipt (ADR-0027 §3): the receipt, in lime, heads it and a lime rule runs down
  * its rows, so where the opened turn starts and ends reads at a glance.
  */
-export function OpenTurn({ title, meta, state, onFold, headProps, children, className, ...rest }: OpenTurnProps) {
+export function OpenTurn({
+  title,
+  meta,
+  state,
+  onFold,
+  headProps,
+  children,
+  className,
+  ...rest
+}: OpenTurnProps) {
   return (
     <div className={[s['turn'], className].filter(Boolean).join(' ')} {...rest}>
       <Receipt title={title} meta={meta} state={state} open onClick={onFold} {...headProps} />

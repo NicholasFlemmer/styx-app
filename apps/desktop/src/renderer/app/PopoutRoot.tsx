@@ -34,7 +34,10 @@ export function PopoutRoot() {
     () => new KeyRegistry({ platform, overlayOpen: () => useUiStore.getState().overlays.length > 0 }),
     [],
   );
-  useEffect(() => (sessionId === null ? undefined : keys.registerAll(popoutBindings(sessionId))), [keys, sessionId]);
+  useEffect(
+    () => (sessionId === null ? undefined : keys.registerAll(popoutBindings(sessionId))),
+    [keys, sessionId],
+  );
   useEffect(() => keys.install(window), [keys]);
 
   const connection = useReadModel((st) => st.connection);
