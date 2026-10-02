@@ -29,7 +29,8 @@ export const rawPickSchema = z.object({
 export type RawPick = z.infer<typeof rawPickSchema>;
 
 const short = (e: PickedElement): string => {
-  const name = e.id !== '' ? `${e.tag}#${e.id}` : e.classes[0] !== undefined ? `${e.tag}.${e.classes[0]}` : e.tag;
+  const name =
+    e.id !== '' ? `${e.tag}#${e.id}` : e.classes[0] !== undefined ? `${e.tag}.${e.classes[0]}` : e.tag;
   const text = e.text.trim().replace(/\s+/g, ' ');
   return `${e.component !== '' ? `${e.component} › ` : ''}${name}${text !== '' ? ` “${text.slice(0, 40)}”` : ''}`;
 };

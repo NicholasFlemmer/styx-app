@@ -640,13 +640,17 @@ export const checksInLoginShell =
     env['PATH'] = await loginPath();
     const r =
       platform === 'win32'
-        ? await execa('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
-            cwd,
-            env,
-            reject: false,
-            timeout: CHECKS_TIMEOUT_MS,
-            windowsHide: true,
-          })
+        ? await execa(
+            'powershell.exe',
+            ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command],
+            {
+              cwd,
+              env,
+              reject: false,
+              timeout: CHECKS_TIMEOUT_MS,
+              windowsHide: true,
+            },
+          )
         : await execa(shell(), ['-ilc', command], { cwd, env, reject: false, timeout: CHECKS_TIMEOUT_MS });
     const output = `${String(r.stdout ?? '')}\n${String(r.stderr ?? '')}`.trim();
     return {

@@ -547,7 +547,8 @@ export class RunService {
     const shell = this.deps.shell();
     if (this.deps.platform === 'win32') {
       if (/wsl(\.exe)?$/i.test(shell)) return { file: shell, args: ['-e', 'sh', '-lc', command] };
-      return { file: shell, args: ['-NoLogo', '-Command', command] };
+      // Process-scoped Bypass: npm/pnpm/yarn's .ps1 shims are blocked by Windows' default policy otherwise.
+      return { file: shell, args: ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-Command', command] };
     }
     return { file: shell, args: ['-lc', command] };
   }

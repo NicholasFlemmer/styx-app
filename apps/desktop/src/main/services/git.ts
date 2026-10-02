@@ -536,7 +536,8 @@ export class GitService {
   ): Promise<boolean> {
     const safe = [
       '-c',
-      'core.hooksPath=/dev/null',
+      // A folder that never holds hooks (`/dev/null` would be `C:\dev\null` on Windows).
+      `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`,
       '-c',
       'core.fsmonitor=false',
       '-c',

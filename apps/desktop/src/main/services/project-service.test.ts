@@ -782,6 +782,8 @@ describe('project.create with createGithubRepo', () => {
     expect(remoteUrlOf('acme/shop')).toBe('https://github.com/acme/shop.git');
     expect(remoteUrlOf(' git@github.com:acme/shop.git ')).toBe('git@github.com:acme/shop.git');
     expect(remoteUrlOf('https://gitlab.com/acme/shop')).toBe('https://gitlab.com/acme/shop');
+    expect(remoteUrlOf('C:\\code\\shop.git')).toBe('C:\\code\\shop.git');
+    expect(remoteUrlOf('D:/repos/x')).toBe('D:/repos/x');
     expect(remoteUrlOf('acme shop')).toBeNull();
     expect(githubHtmlUrl('https://github.com/acme/shop.git')).toBe('https://github.com/acme/shop');
     expect(githubHtmlUrl('git@github.com:acme/shop.git')).toBe('https://github.com/acme/shop');

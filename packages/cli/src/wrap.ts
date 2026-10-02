@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import crossSpawn from 'cross-spawn';
 import { BrokerClient } from '@styx/broker';
 import { resolveRealBinary } from './path-resolve';
 
@@ -25,7 +26,11 @@ export async function wrap(tool: string, argv: string[], io: WrapIo): Promise<nu
     try {
       client = BrokerClient.fromEnv('shim', io.env);
       await client.connect();
-      const auth = await client.call('exec_authorize', { tool, argv, cwd: process.cwd() }, { timeoutMs: 600_000 });
+      const auth = await client.call(
+        'exec_authorize',
+        { tool, argv, cwd: process.cwd() },
+        { timeoutMs: 600_000 },
+      );
       extraEnv = auth.env;
       useId = auth.useId;
     } catch (e) {
@@ -34,8 +39,11 @@ export async function wrap(tool: string, argv: string[], io: WrapIo): Promise<nu
       return 77; // EX_NOPERM
     }
   }
+  // On Windows the real tool is often a `.cmd` shim (vercel, supabase, gcloud), which Node only starts through cmd.exe:
+  // cross-spawn does that with every argument escaped.
+  const start = io.spawn ?? (process.platform === 'win32' ? (crossSpawn as unknown as typeof spawn) : spawn);
   const code = await new Promise<number>((resolve) => {
-    const child = (io.spawn ?? spawn)(real, argv, { stdio: 'inherit', env: { ...io.env, ...extraEnv } });
+    const child = start(real, argv, { stdio: 'inherit', env: { ...io.env, ...extraEnv } });
     child.on('exit', (c, sig) => resolve(c ?? (sig ? 128 : 1)));
     child.on('error', (err) => {
       io.stderr(`styx: failed to start ${real}: ${err.message}\n`);

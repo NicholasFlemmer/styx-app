@@ -1,4 +1,4 @@
-import { spawn as spawnChild } from 'node:child_process';
+import { killTree, spawnCli } from './spawn-cli';
 import { EventEmitter } from 'node:events';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -253,7 +253,7 @@ export type AppServerSpawn = (
   },
 ) => AppServerProcess;
 
-const defaultSpawn: AppServerSpawn = (command, args, options) => spawnChild(command, [...args], options);
+const defaultSpawn: AppServerSpawn = (command, args, options) => spawnCli(command, [...args], options);
 
 // --- Runner ------------------------------------------------------------------
 
@@ -1094,7 +1094,7 @@ export class AppServerRunner extends EventEmitter<StreamEvents> implements Strea
       } catch {
         // stdin already closed
       }
-      entry.proc.kill();
+      killTree(entry.proc);
       return;
     }
     this.entries.delete(id);

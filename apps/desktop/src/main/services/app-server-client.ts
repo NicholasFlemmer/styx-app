@@ -1,4 +1,4 @@
-import { spawn as spawnChild } from 'node:child_process';
+import { killTree, spawnCli } from './spawn-cli';
 import type { Readable, Writable } from 'node:stream';
 import { copy, effortSchema, fill, type AgentLimits, type Effort, type ModelInfo } from '@styx/core';
 import { z } from 'zod';
@@ -300,9 +300,9 @@ export async function withCodexAppServer<T>(
   for (const [k, v] of Object.entries(opts.env ?? process.env))
     if (v !== undefined && k !== 'ELECTRON_RUN_AS_NODE') env[k] = v;
   env['NO_COLOR'] = '1';
-  let proc: ReturnType<typeof spawnChild>;
+  let proc: ReturnType<typeof spawnCli>;
   try {
-    proc = spawnChild(bin, ['app-server'], { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    proc = spawnCli(bin, ['app-server'], { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   } catch {
     return null;
   }
@@ -327,7 +327,7 @@ export async function withCodexAppServer<T>(
     client.close('verification finished');
     try {
       proc.stdin?.end();
-      proc.kill();
+      killTree(proc);
     } catch {
       // already gone
     }
