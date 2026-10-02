@@ -83,6 +83,7 @@ import { laneItems, type LaneItem } from './lane-turns';
 import { LandButton } from '../workspace/LandButton';
 import { screenUrl } from '../../screens/Diff/CheckpointDiff';
 import { ArcadeHeldStrip, ArcadePanel, openArcade, quitArcade } from '../arcade/ArcadePanel';
+import { AgentProblemRow } from './AgentProblemRow';
 
 const omitKey = <T,>(all: Record<string, T>, key: string): Record<string, T> => {
   const { [key]: _dropped, ...rest } = all;
@@ -306,6 +307,14 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const now = useNow(workingActive ? 1000 : undefined);
   const working = workingActive && activeId !== null ? workingLine(model, activeId, now) : null;
   const items = useMemo(() => (activeId === null ? [] : transcriptItems(model, activeId)), [model, activeId]);
+  // What "Send it to … instead" starts a new task with: the last thing the person asked.
+  const lastUserText = useMemo(() => {
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i];
+      if (it?.kind === 'user') return it.text;
+    }
+    return '';
+  }, [items]);
   const popped = activeId !== null && model.popouts.includes(activeId);
   // Snake in this pane (discrepancy row 110): the board takes the transcript's place while it plays; held (the
   // tab on screen needs the person), it folds to a strip over the transcript so the ask is what the pane shows.
@@ -549,6 +558,17 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
         );
       case 'system':
         return <Message key={item.id} kind="system" text={item.text} compact={compact} />;
+      case 'agent-problem':
+        return (
+          <AgentProblemRow
+            key={item.id}
+            agent={item.agent}
+            problem={item.problem}
+            text={item.text}
+            projectId={projectId}
+            retryText={lastUserText}
+          />
+        );
       case 'checkpoint':
         return (
           <CheckpointRow

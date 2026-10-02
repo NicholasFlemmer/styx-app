@@ -19,6 +19,7 @@ import { command } from '../../state/commands';
 import { useModel, useUi } from '../../state/hooks';
 import s from './ConnectAgentModal.module.css';
 import { LoginTerminal } from './LoginTerminal';
+import { AgentSetupCard } from '../agent-setup/AgentSetupCard';
 
 export interface ConnectAgentModalProps {
   id: string;
@@ -67,6 +68,8 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
   const [login, setLogin] = useState<Run | null>(null);
   const [install, setInstall] = useState<Run | null>(null);
   const [pathText, setPathText] = useState('');
+  // "I'll do it myself": the install command, binary picker and path field, folded under the setup card.
+  const [manual, setManual] = useState(false);
   const [showWhere, setShowWhere] = useState(false);
   const [busy, setBusy] = useState(false);
   const heading = useRef<HTMLDivElement>(null);
@@ -233,14 +236,18 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
   return (
     <Modal
       width={560}
-      title={fill(c.title, { agent: product })}
+      title={
+        agent === 'shell'
+          ? fill(c.title, { agent: product })
+          : fill(copy.agentSetup.actions.setUp, { name: copy.agentSetup.names[agent] })
+      }
       onClose={close}
       escapeEnabled={false}
       bodyPad="20px 16px"
       initialFocus={heading}
       footer={
         <>
-          {!shell && installed ? (
+          {!shell && installed && manual ? (
             <Button
               size="footer"
               variant="secondary"
@@ -260,9 +267,28 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
       <div ref={heading} tabIndex={-1} className={s['heading']}>
         {fill(c.heading, { agent: product })}
       </div>
-      {shell ? (
+      {agent === 'shell' ? (
         <div className={s['body']}>{c.shell}</div>
       ) : (
+        <>
+          {/* One button from nothing to a working agent (owner request); the manual tools fold away below it. */}
+          <AgentSetupCard
+            agent={agent}
+            extra={
+              <button
+                type="button"
+                className={s['link']}
+                aria-expanded={manual}
+                onClick={() => setManual((m) => !m)}
+                data-agent-manual="true"
+              >
+                {copy.agentSetup.actions.diy}
+              </button>
+            }
+          />
+        </>
+      )}
+      {!shell && manual ? (
         <>
           <div className={s['body']}>{fill(c.body, { cli: cliName })}</div>
           <div className={s['status']} data-cli-installed={installed ? 'true' : 'false'}>
@@ -382,7 +408,7 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
             </>
           ) : null}
         </>
-      )}
+      ) : null}
     </Modal>
   );
 }

@@ -823,6 +823,38 @@ describe('why an agent did not get going (#125)', () => {
     ]);
   });
 
+  it('signed out or out of usage mid-task: a plain row with the fix, not the CLI text; signing in sends the message again', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'session', event: 'quiet' }); // the first turn is over
+    await a.sessions.sendMessage(session.id, 'Add a test for the empty cart.');
+    const sentBefore = stream.sent.length;
+    stream.effect(session.id, { type: 'error', message: 'Invalid API key · Please run /login' });
+    const rows = a.repos.transcripts.last(session.id);
+    expect(rows.at(-1)).toMatchObject({
+      body: 'Claude is signed out.',
+      payload: { kind: 'system', problem: { agent: 'claude', kind: 'signed-out' } },
+    });
+    expect(rows.some((m) => m.body.includes('Invalid API key'))).toBe(false);
+    // Another agent signing in changes nothing here; Claude signing in sends the same words once, no new bubble.
+    await a.sessions.resumeAfterSignIn('codex');
+    expect(stream.sent.length).toBe(sentBefore);
+    const users = () => a.repos.transcripts.last(session.id).filter((m) => m.payload.kind === 'user').length;
+    const before = users();
+    await a.sessions.resumeAfterSignIn('claude');
+    expect(stream.sent.at(-1)?.text).toContain('Add a test for the empty cart.');
+    expect(users()).toBe(before);
+    expect(a.repos.transcripts.last(session.id).at(-1)?.body).toBe(copy.agentSetup.chat.back);
+    await a.sessions.resumeAfterSignIn('claude');
+    expect(stream.sent.length).toBe(sentBefore + 1);
+    // Out of usage: the row says so, and nothing is owed for later.
+    stream.effect(session.id, { type: 'error', message: 'You have hit your usage limit' });
+    expect(a.repos.transcripts.last(session.id).at(-1)?.payload).toEqual({
+      kind: 'system',
+      problem: { agent: 'claude', kind: 'limit' },
+    });
+  });
+
   it('a CLI that exits with an error straight after launch counts as exited; a clean exit does not', async () => {
     const { app: a } = app();
     const record = vi.spyOn(a.usageReports, 'record');

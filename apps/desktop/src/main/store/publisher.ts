@@ -3,6 +3,7 @@ import {
   SIGNED_OUT,
   type AccountState,
   type UpdateState,
+  type AgentSetup,
   type ActivityRow,
   type AgentChange,
   type AppSettings,
@@ -50,6 +51,7 @@ export interface SnapshotExtras {
   account: () => AccountState;
   /** Updates in place (#119), owned by UpdateService in memory. */
   update?: () => UpdateState;
+  agentSetup?: () => AgentSetup[];
 }
 
 /** The single `styx:evt` channel carries every main → renderer event as `{ name, payload }`. */
@@ -250,6 +252,10 @@ export class Publisher {
     this.emit({ op: 'update.set', update });
   }
 
+  agentSetupSet(setup: AgentSetup): void {
+    this.emit({ op: 'agentSetup.set', setup });
+  }
+
   // --- snapshot ------------------------------------------------------------
 
   snapshot(): ReadModelSnapshot {
@@ -265,6 +271,7 @@ export class Publisher {
         limits: this.extras.limits,
         account: this.extras.account,
         ...(this.extras.update !== undefined ? { update: this.extras.update } : {}),
+        ...(this.extras.agentSetup !== undefined ? { agentSetup: this.extras.agentSetup } : {}),
       },
       this.seqNo,
     );

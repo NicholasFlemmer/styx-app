@@ -1,0 +1,35 @@
+@layer screens {
+  /* design/next/styx-next-agent-setup.html frame 4: an accent-bordered note with the fix, in the transcript. */
+  .row {
+    border: 1px solid var(--ac);
+    padding: var(--sp-3) 14px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    font-size: 13.5px;
+  }
+  .row b {
+    font-weight: 600;
+  }
+  .body {
+    color: var(--mu);
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    flex-wrap: wrap;
+  }
+  .link {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--mu);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .link:hover {
+    color: var(--tx);
+  }
+}

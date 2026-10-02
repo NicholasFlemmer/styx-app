@@ -30,6 +30,8 @@ export interface ProjectionDeps {
   deploys?: () => ReadModelSnapshot['deploys'];
   /** Latest rate limits per agent (UsageService); absent in tests. */
   limits?: () => ReadModelSnapshot['limits'];
+  /** Agent setup runs (AgentSetupService); absent in tests. */
+  agentSetup?: () => ReadModelSnapshot['agentSetup'];
   /** The Styx account (AccountService, ADR-0026); absent in tests, where nobody is signed in. */
   account?: () => ReadModelSnapshot['account'];
   /** Updates in place (UpdateService, #119); absent in tests. */
@@ -91,6 +93,7 @@ export function buildSnapshot(deps: ProjectionDeps, seq: number): ReadModelSnaps
     limits: deps.limits?.() ?? {},
     account: deps.account?.() ?? SIGNED_OUT,
     update: deps.update?.() ?? UPDATE_OFF,
+    agentSetup: deps.agentSetup?.() ?? [],
     deploys: deps.deploys?.() ?? [],
   };
 }

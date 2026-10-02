@@ -41,7 +41,10 @@ export const cliSourceSchema = z.enum([
   'well-known',
   'vscode-extension',
   'cursor-extension',
+  'windsurf-extension',
   'desktop-app',
+  /** Installed by Styx's own setup into its tools folder (Gemini on a private Node.js). */
+  'styx',
   'manual',
 ]);
 export type CliSource = z.infer<typeof cliSourceSchema>;

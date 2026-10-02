@@ -14,6 +14,7 @@ import type { AgentLimits } from './model/usage';
 import type { AccountState } from './model/account';
 import { SIGNED_OUT } from './model/account';
 import { UPDATE_OFF, type UpdateState } from './model/update';
+import type { AgentSetup, SetupAgent } from './model/agent-setup';
 import type { AppSettings, EffectiveProjectSettings } from './model/settings';
 import type { Target } from './model/target';
 
@@ -127,6 +128,8 @@ export interface ReadModel extends ReadModelTables {
   account: AccountState;
   /** Updates in place (#119): the running version and whether a newer one is on its way or ready. */
   update: UpdateState;
+  /** Agent setup runs (prepare → install → sign in → test), by agent; absent until one is started. */
+  agentSetup: Readonly<Partial<Record<SetupAgent, AgentSetup>>>;
 }
 
 export const TABLE_NAMES: readonly TableName[] = [
@@ -167,6 +170,7 @@ export const emptyReadModel = (app: AppSettings): ReadModel => ({
   queues: {},
   account: SIGNED_OUT,
   update: UPDATE_OFF,
+  agentSetup: {},
   limits: {},
 });
 

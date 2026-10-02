@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { deltaSchema, effectiveProjectSettingsSchema } from '../deltas';
 import { accountProviderSchema, accountStateSchema } from '../model/account';
 import { UPDATE_OFF, updateStateSchema } from '../model/update';
+import { agentSetupSchema, setupAgentSchema } from '../model/agent-setup';
 import { RENDERER_USAGE_EVENTS } from '../model/usage-report';
 import { activityRowSchema } from '../model/activity';
 import { auditEntrySchema } from '../model/audit';
@@ -153,6 +154,7 @@ const readModelSnapshotSchema = z.object({
   account: accountStateSchema,
   /** Updates in place (#119). */
   update: updateStateSchema.default(UPDATE_OFF),
+  agentSetup: z.array(agentSetupSchema).default([]),
 });
 export type ReadModelSnapshot = z.infer<typeof readModelSnapshotSchema>;
 
@@ -328,6 +330,26 @@ export const commands = {
   'agent.install': {
     input: z.object({ agent: agentSchema }),
     output: z.object({ terminalId: z.string().min(1), command: z.string().min(1) }),
+  },
+
+  // --- agent setup (owner request: one button from nothing to a working agent) ---
+  /**
+   * Runs the whole chain for one agent, out of sight: prepare (Node.js for Gemini, git on Windows) → install →
+   * sign in (the CLI's browser flow) → one tiny test message. Steps already done are skipped. Progress is the
+   * `agentSetup.set` delta; the command returns once the run has started. `update` reinstalls the CLI first (an
+   * out-of-date one).
+   */
+  'agent.setUp': {
+    input: z.object({ agent: setupAgentSchema, update: z.boolean().default(false) }),
+    output: ok,
+  },
+  'agent.setUpCancel': { input: z.object({ agent: setupAgentSchema }), output: ok },
+  /** "See plans": the vendor's pricing page (a fixed URL per agent; nothing from the renderer is opened). */
+  'agent.setUpPlans': { input: z.object({ agent: setupAgentSchema }), output: ok },
+  /** The code the browser shows when it cannot reach the CLI's local callback; typed into the hidden sign-in. */
+  'agent.setUpCode': {
+    input: z.object({ agent: setupAgentSchema, code: z.string().trim().min(1).max(512) }),
+    output: ok,
   },
 
   // --- git (owner request: never a requirement to start, one click to install) ---

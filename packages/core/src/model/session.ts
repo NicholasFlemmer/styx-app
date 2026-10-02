@@ -291,7 +291,15 @@ export const messagePayloadSchema = z.discriminatedUnion('kind', [
     /** False on the sender's own copy of the row (its outbox echo). */
     inbound: z.boolean(),
   }),
-  z.object({ kind: z.literal('system') }),
+  z.object({
+    kind: z.literal('system'),
+    /**
+     * A problem with the agent's account the chat can fix (owner request): signed out, or out of usage for now. The
+     * row shows a plain sentence and the buttons (Sign in, or another ready agent) instead of the CLI's error text.
+     * A `system` row rather than a kind of its own, so the transcript table's CHECK needs no migration.
+     */
+    problem: z.object({ agent: agentSchema, kind: z.enum(['signed-out', 'limit']) }).optional(),
+  }),
   /** A thinking block from the stream: streamed live, then collapsed to "Thought for Ns" (body = the thinking text). */
   z.object({
     kind: z.literal('thinking'),

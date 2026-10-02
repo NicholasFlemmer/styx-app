@@ -40,8 +40,11 @@ export const runBannerAction = (action: BannerAction): void => {
       return;
     }
     case 'install-guide':
-      ui.setSettingsSection('app:agents');
-      ui.setScreen('settings');
+      // The agent's setup card: one place for every Set up / Install guide (owner request).
+      if (action.agent === 'shell') {
+        ui.setSettingsSection('app:agents');
+        ui.setScreen('settings');
+      } else ui.pushOverlay({ kind: 'modal', modal: 'connect-agent', agent: action.agent });
       return;
     case 'resolve':
       // ADR-0025 phase B: the banner's Resolve asks the lane's agent to finish the merge, and shows the lane.

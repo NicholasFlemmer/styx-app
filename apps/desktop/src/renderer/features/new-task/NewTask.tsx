@@ -1,4 +1,4 @@
-import { copy, fill, navLanes, platformCopy, projectNameOf, type ProjectId } from '@styx/core';
+import { copy, fill, isAgentReady, navLanes, platformCopy, projectNameOf, type ProjectId } from '@styx/core';
 import { AgentDot, Button, Checkbox, Field, Input, Select, StatusDot, Textarea } from '@styx/ui';
 import { useEffect, useId, useRef, type KeyboardEvent } from 'react';
 import { useCopyPlatform, useNow, useUi } from '../../state/hooks';
@@ -30,7 +30,6 @@ export interface NewTaskProps {
 export function NewTask({ projectId, initialText = '' }: NewTaskProps) {
   const openNewTask = useUi((u) => u.openNewTask);
   const openSession = useUi((u) => u.openSession);
-  const pushOverlay = useUi((u) => u.pushOverlay);
   const platform = useUi((u) => u.platform);
   const words = platformCopy(useCopyPlatform());
   const now = useNow();
@@ -47,8 +46,6 @@ export function NewTask({ projectId, initialText = '' }: NewTaskProps) {
     notConnected,
     valid,
     spawn,
-    locateError,
-    locateBinary,
     installGuide,
     worktrees,
     choices,
@@ -151,7 +148,13 @@ export function NewTask({ projectId, initialText = '' }: NewTaskProps) {
                 <AgentDot agent={a} />
                 {copy.agentProducts[a]}
               </span>
-              <span className={s['agentVer']}>{cliVersionLabel(cliOf(model, a))}</span>
+              <span className={s['agentVer']}>
+                {a === 'shell' || isAgentReady(model, a)
+                  ? cliVersionLabel(cliOf(model, a))
+                  : cliOf(model, a)?.found === true
+                    ? copy.agentSetup.state.signedOut
+                    : copy.agentSetup.state.notSetUp}
+              </span>
             </button>
           ))}
         </div>
@@ -164,20 +167,12 @@ export function NewTask({ projectId, initialText = '' }: NewTaskProps) {
                 ? fill(copy.errors.spawnCliMissing, { cli: agentName })
                 : fill(copy.errors.spawnNotConnected, { cli: agentName })}
             </span>
-            {missing ? (
-              <>
-                <Button onClick={installGuide}>{copy.errors.cliMissing.cta}</Button>
-                <Button onClick={() => void locateBinary()}>{copy.errors.locateBinary}</Button>
-              </>
-            ) : null}
-            <Button onClick={() => pushOverlay({ kind: 'modal', modal: 'connect-agent', agent: form.agent })}>
-              {copy.errors.fixConnection}
-            </Button>
-          </div>
-        ) : null}
-        {missing && locateError !== null ? (
-          <div className={s['error']} role="alert">
-            <span className={s['errorText']}>{locateError}</span>
+            {/* One way in: the agent's setup card installs, signs in and tests (owner request). */}
+            {form.agent === 'shell' ? null : (
+              <Button variant="accent" onClick={installGuide} data-new-task-set-up={form.agent}>
+                {fill(copy.agentSetup.actions.setUp, { name: copy.agentSetup.names[form.agent] })}
+              </Button>
+            )}
           </div>
         ) : null}
 

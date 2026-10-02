@@ -389,6 +389,11 @@ export class SessionService {
   private readonly problemsNoted = new Set<string>();
   /** Sessions whose current turn reported an error (#129): that turn ending is not the agent having worked. */
   private readonly turnFailed = new Set<string>();
+  /**
+   * The message a signed-out agent could not answer, by session (owner request): sent again, without a second
+   * bubble, once agent setup has that agent signed in again (`resumeAfterSignIn`).
+   */
+  private readonly owedAfterSignIn = new Map<string, string>();
   /** Sessions already counted as `agent.worked`. */
   private readonly worked = new Set<string>();
   /** When the user last pressed Stop, per session: the CLI's "interrupted" error that follows is not a problem. */
@@ -1122,6 +1127,34 @@ export class SessionService {
    * Text, then Enter as a second write a beat later: a TUI that receives both in one read treats the burst as a
    * paste and turns the Enter into a newline (Codex's composer did exactly that), so nothing was ever submitted.
    */
+  /** What the person last said in a session (the turn a signed-out agent could not answer). */
+  private lastUserBody(sessionId: string): string | null {
+    const rows = this.deps.repos.transcripts.last(sessionId, 50);
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const m = rows[i];
+      if (m?.payload.kind === 'user' && m.body !== '') return m.body;
+    }
+    return null;
+  }
+
+  /**
+   * Agent setup signed `agent` in again: every message a session of it could not answer while signed out goes out
+   * now, relaunching the CLI where it exited, under a line saying so (no second user bubble).
+   */
+  async resumeAfterSignIn(agent: Agent): Promise<void> {
+    for (const [sessionId, body] of [...this.owedAfterSignIn]) {
+      const s = this.get(sessionId);
+      if (s === null || s.agent !== agent) continue;
+      this.owedAfterSignIn.delete(sessionId);
+      if (s.state === 'done' || s.archivedAt !== null) continue;
+      this.deps.transcript.system(s.id, copy.agentSetup.chat.back);
+      if (!this.isRunning(s.id) && s.state !== 'paused' && !(await this.relaunch(s))) continue;
+      if (this.deps.stream.has(s.id)) this.deps.stream.send(s.id, this.withNotes(s.id, body), []);
+      else if (this.deps.pty.has(s.id)) this.typeIntoPty(s.id, body);
+      this.applyEvent(s.id, { type: 'activity' });
+    }
+  }
+
   private typeIntoPty(sessionId: string, text: string): void {
     this.deps.pty.write(sessionId, text);
     setTimeout(() => this.deps.pty.write(sessionId, '\r'), 120).unref?.();
@@ -1698,8 +1731,26 @@ export class SessionService {
           else if (OUT_OF_LIMIT.test(effect.message)) this.noteProblem(s.id, 'limit');
           else if (!this.turnDone.has(s.id)) this.noteProblem(s.id, 'error');
         }
+        const account =
+          !counted || outdated !== null || s.agent === 'shell'
+            ? null
+            : SIGNED_OUT.test(effect.message)
+              ? 'signed-out'
+              : OUT_OF_LIMIT.test(effect.message)
+                ? 'limit'
+                : null;
         if (outdated !== null) this.raiseOutdatedBanner(s, effect.message, outdated);
-        else this.deps.transcript.system(s.id, redact(`error: ${effect.message}`));
+        else if (account !== null && s.agent !== 'shell') {
+          // The account, not the work: one plain sentence with the fix (Sign in, or another agent), not the CLI's text.
+          const name = copy.agentSetup.names[s.agent];
+          this.deps.transcript.append(
+            s.id,
+            fill(account === 'signed-out' ? copy.agentSetup.chat.signedOut : copy.agentSetup.chat.limit, { name }),
+            { kind: 'system', problem: { agent: s.agent, kind: account } },
+          );
+          const owed = account === 'signed-out' ? this.lastUserBody(s.id) : null;
+          if (owed !== null) this.owedAfterSignIn.set(s.id, owed);
+        } else this.deps.transcript.system(s.id, redact(`error: ${effect.message}`));
         if (s.purpose && s.state !== 'done') {
           this.setNote(s.id, effect.message);
           this.applyEvent(s.id, { type: 'finish', exitCode: 1 });
