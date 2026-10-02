@@ -3,6 +3,7 @@ import {
   copy,
   modelCatalogueFor,
   projectSettingsOfOrDefault,
+  startingAgent,
   type Agent,
   type ProjectId,
   type ReadModel,
@@ -41,11 +42,12 @@ const selectModel = (m: ReadModel) => m;
  */
 export function useSpawnForm(projectId: ProjectId, initialMessage = '') {
   const model = useModel(selectModel);
-  const setScreen = useUi((u) => u.setScreen);
-  const setOnboardingStep = useUi((u) => u.setOnboardingStep);
+  const pushOverlay = useUi((u) => u.pushOverlay);
   const [form, setForm] = useState<SpawnForm>(() => {
-    const agent = projectSettingsOfOrDefault(model, projectId).defaultAgent;
-    return {
+    // Starts with an agent that works (owner request): the project's default when it is ready, else one that is.
+    const preferred = projectSettingsOfOrDefault(model, projectId).defaultAgent;
+    const agent = startingAgent(model, preferred);
+    const base: SpawnForm = {
       agent,
       worktree: worktreeChoices(model, projectId).initial,
       branch: autoBranchFor(model, projectId, agent),
@@ -53,6 +55,9 @@ export function useSpawnForm(projectId: ProjectId, initialMessage = '') {
       toggles: defaultToggles(model, projectId),
       ...defaultSessionSettings(model, projectId),
     };
+    return agent === preferred
+      ? base
+      : reconcileSessionSettings(agent, base, modelCatalogueFor(model, agent));
   });
   const [branchTouched, setBranchTouched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -114,10 +119,10 @@ export function useSpawnForm(projectId: ProjectId, initialMessage = '') {
     const set = await command('detect.setBinary', { agent: form.agent, path: r.value.path });
     setLocateError(set.ok ? null : set.error.message);
   };
-  /** Onboarding's Agents step, where a missing CLI is installed. */
+  /** The agent's setup card (one place for every Set up / Install guide; owner request). */
   const installGuide = () => {
-    setOnboardingStep(3);
-    setScreen('onboarding');
+    if (form.agent === 'shell') return;
+    pushOverlay({ kind: 'modal', modal: 'connect-agent', agent: form.agent });
   };
 
   return {

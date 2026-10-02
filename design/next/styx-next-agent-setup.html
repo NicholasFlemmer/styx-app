@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Styx next: get your coding agent running</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+:root {
+  --page:#181916; --bg:#0d0e0c; --s1:#121411; --s2:#1c1e1a; --ln:#2d302a; --tx:#e9ebe3; --mu:#858a81;
+  --ac:#d6ff3d; --acx:#0d0e0c; --act:#d6ff3d; --add:rgba(214,255,61,.13); --term:#080908; --termtx:#c9cdc2;
+  --claude:#e8916a; --codex:#8fb3ff; --gemini:#b79bff; --cursor:#e9ebe3;
+  --ui: 'Archivo', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--page); color: var(--tx); font: 400 14px/1.5 var(--ui); padding: 64px 0 120px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.mu { color: var(--mu); }
+
+.intro, .note { width: 1280px; margin: 0 auto; }
+.intro h1 { font: 600 48px/1.04 var(--ui); letter-spacing: -.01em; max-width: 20ch; }
+.intro p { margin-top: 18px; max-width: 70ch; color: var(--mu); font-size: 17px; }
+.intro p strong { color: var(--tx); font-weight: 600; }
+.cases { margin-top: 32px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 32px; }
+.cases div { border-top: 1px solid var(--ln); padding-top: 14px; }
+.cases b { display: block; font: 600 17px/1.2 var(--ui); }
+.cases span { display: block; margin-top: 6px; color: var(--mu); font-size: 14px; }
+.note { margin-top: 80px; margin-bottom: 22px; }
+.note h2 { font: 600 26px/1.1 var(--ui); letter-spacing: -0.02em; }
+.note p { margin-top: 8px; max-width: 78ch; color: var(--mu); font-size: 15px; }
+.note p strong { color: var(--tx); font-weight: 600; }
+
+/* ---------- window ---------- */
+.win { width: 1280px; height: 760px; margin: 0 auto; background: var(--bg); border: 1px solid var(--ln); display: grid; grid-template-rows: 38px 1fr; overflow: hidden; position: relative; }
+.win.short { height: 520px; }
+.title { display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid var(--ln); font-size: 13px; background: var(--s1); }
+.lights { display: flex; gap: 8px; width: 60px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); }
+.word { font: 600 12px/1 var(--ui); letter-spacing: .24em; }
+
+/* onboarding layout: step column + body */
+.ob { display: grid; grid-template-columns: 260px 1fr; min-height: 0; }
+.steps { border-right: 1px solid var(--ln); padding: 32px 24px; display: flex; flex-direction: column; gap: 18px; }
+.step { display: grid; grid-template-columns: 22px 1fr; gap: 10px; }
+.step i { width: 22px; height: 22px; border: 1px solid var(--ln); font: 600 11px/20px var(--ui); text-align: center; font-style: normal; color: var(--mu); }
+.step.done i { background: var(--s2); color: var(--tx); }
+.step.now i { background: var(--tx); color: var(--bg); border-color: var(--tx); }
+.step b { font-weight: 600; display: block; }
+.step span { color: var(--mu); font-size: 12.5px; }
+.body { padding: 40px 48px; display: flex; flex-direction: column; min-height: 0; }
+.body h3 { font: 600 40px/1.05 var(--ui); letter-spacing: -.01em; }
+.body .lead { margin-top: 10px; color: var(--mu); font-size: 16px; max-width: 64ch; }
+
+/* plan cards */
+.plans { margin-top: 28px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.plan { border: 1px solid var(--ln); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; min-height: 196px; }
+.plan[data-state="ready"] { border-color: var(--tx); }
+.plan[data-state="working"] { border-color: var(--ac); }
+.plan .head { display: flex; align-items: center; gap: 10px; }
+.sq { width: 10px; height: 10px; flex: none; }
+.plan .name { font: 600 19px/1.1 var(--ui); }
+.plan .who { color: var(--mu); font-size: 13px; }
+.plan .state { margin-left: auto; font-size: 12px; color: var(--mu); display: flex; align-items: center; gap: 6px; }
+.plan .state i { width: 8px; height: 8px; border: 1px solid var(--mu); }
+.plan[data-state="ready"] .state { color: var(--tx); }
+.plan[data-state="ready"] .state i { background: var(--tx); border-color: var(--tx); }
+.plan[data-state="working"] .state { color: var(--act); }
+.plan[data-state="working"] .state i { background: var(--ac); border-color: var(--ac); }
+.plan .what { color: var(--mu); font-size: 14px; }
+.plan .what strong { color: var(--tx); font-weight: 600; }
+.plan .row { margin-top: auto; display: flex; align-items: center; gap: 14px; }
+.btn { border: 1px solid var(--ln); padding: 8px 14px; font-weight: 600; font-size: 13px; }
+.btn.go { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.btn.inv { background: var(--tx); color: var(--bg); border-color: var(--tx); }
+.link { color: var(--mu); font-size: 13px; text-decoration: underline; }
+
+/* checklist */
+.checks { display: flex; flex-direction: column; gap: 8px; }
+.check { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: baseline; font-size: 14px; }
+.check i { font-style: normal; font-family: var(--mono); font-size: 12px; color: var(--mu); }
+.check.ok i { color: var(--tx); }
+.check.now i { color: var(--act); }
+.check .t { color: var(--mu); }
+.check.ok .t, .check.now .t { color: var(--tx); }
+.check .m { font-size: 12px; color: var(--mu); }
+.browser { margin-top: 4px; border: 1px solid var(--ac); padding: 12px 14px; display: flex; gap: 14px; align-items: center; }
+.browser b { font-weight: 600; }
+.details { margin-top: 6px; background: var(--term); border: 1px solid var(--ln); padding: 10px 12px; font: 400 11.5px/1.6 var(--mono); color: var(--termtx); }
+
+.foot { margin-top: auto; padding-top: 22px; display: flex; align-items: center; gap: 16px; border-top: 1px solid var(--ln); }
+.foot .sp { margin-left: auto; }
+
+/* workspace bits for frame 4 */
+.ws { display: grid; grid-template-columns: 1fr 420px; min-height: 0; }
+.ed { border-right: 1px solid var(--ln); padding: 20px; font: 400 12.5px/1.75 var(--mono); color: var(--mu); }
+.chat { display: flex; flex-direction: column; min-height: 0; }
+.tabs { display: flex; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.tabs span { padding: 8px 14px; border-right: 1px solid var(--ln); display: flex; gap: 8px; align-items: center; }
+.tabs span.on { background: var(--tx); color: var(--bg); }
+.msgs { padding: 16px; display: flex; flex-direction: column; gap: 12px; font-size: 13.5px; flex: 1; }
+.you { align-self: flex-end; background: var(--s2); padding: 8px 12px; max-width: 80%; }
+.fix { border: 1px solid var(--ac); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.fix b { font-weight: 600; }
+.fix .row { display: flex; gap: 10px; align-items: center; }
+.composer { border-top: 1px solid var(--ln); padding: 12px 16px; color: var(--mu); display: flex; justify-content: space-between; font-size: 13px; }
+
+/* new task frame */
+.nt { padding: 48px 120px; display: flex; flex-direction: column; gap: 18px; }
+.nt h3 { font: 600 30px/1.1 var(--ui); }
+.box { border: 1px solid var(--tx); padding: 14px 16px; min-height: 90px; color: var(--mu); font-size: 15px; }
+.agents { display: flex; gap: 8px; flex-wrap: wrap; }
+.agent { border: 1px solid var(--ln); padding: 8px 12px; display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.agent.on { background: var(--tx); color: var(--bg); border-color: var(--tx); }
+.agent.off { color: var(--mu); border-style: dashed; }
+
+.qs { width: 1280px; margin: 80px auto 0; border-top: 1px solid var(--tx); padding-top: 18px; }
+.qs h2 { font: 600 32px/1 var(--ui); letter-spacing: -0.02em; }
+.qs ol { margin-top: 18px; padding-left: 22px; display: flex; flex-direction: column; gap: 12px; max-width: 90ch; }
+.qs li { font-size: 15px; }
+.qs li span { color: var(--mu); }
+</style>
+</head>
+<body>
+
+<section class="intro">
+  <h1>Get your coding agent running, without the terminal.</h1>
+  <p>Today you install in one dialog, sign in through the agent's own terminal screens, and nothing checks the plan actually works. Here <strong>you pick the AI plan you already pay for, press one button, and Styx does the rest:</strong> installs what's missing (including what it depends on, like Node or git), opens your browser to sign in, and sends one tiny test message so you know it works before your first task.</p>
+  <div class="cases">
+    <div><b>Nothing installed</b><span>No editor, no agent. One button per plan installs it and signs you in. You never see a terminal unless you ask to.</span></div>
+    <div><b>An editor, but no agent</b><span>Same as nothing installed. If your editor already has the Claude or Codex extension, Styx uses the copy inside it instead.</span></div>
+    <div><b>Already on the machine</b><span>Found in the terminal, an install folder or an editor extension, then checked with a real test. If it's signed out, the button just says Sign in.</span></div>
+  </div>
+</section>
+
+<!-- ====================== 1. pick your plan ====================== -->
+<section class="note">
+  <h2>1 · Onboarding: "Which AI do you use?"</h2>
+  <p>Replaces today's "Detected agent CLIs" table. One card per plan, named by what people pay for, not the CLI's name. Each card shows where it stands in plain words and has <strong>one</strong> button. Here Claude was found inside VS Code and already works; Codex isn't installed; Gemini needs Node first, and Styx says it will install that too.</p>
+</section>
+<div class="win" role="img" aria-label="Mockup: choose your AI plan">
+  <div class="title"><span class="lights"><i></i><i></i><i></i></span><span class="word">STYX</span><span class="mu">Set up</span></div>
+  <div class="ob">
+    <div class="steps">
+      <div class="step done"><i>✓</i><div><b>Your editor</b><span>VS Code · keybindings and theme imported</span></div></div>
+      <div class="step done"><i>✓</i><div><b>Your projects</b><span>3 projects added</span></div></div>
+      <div class="step now"><i>3</i><div><b>Your AI</b><span>The agent that does the work</span></div></div>
+      <div class="step"><i>4</i><div><b>Deploys</b><span>Optional</span></div></div>
+    </div>
+    <div class="body">
+      <h3>Which AI do you use?</h3>
+      <p class="lead">Pick the plan you already pay for. Styx installs it, signs you in in your browser, and checks it works. You can add more later.</p>
+      <div class="plans">
+        <div class="plan" data-state="ready">
+          <div class="head"><span class="sq" style="background:var(--claude)"></span><span class="name">Claude</span><span class="who">Pro or Max</span><span class="state"><i></i>Ready</span></div>
+          <div class="checks">
+            <div class="check ok"><i>✓</i><span class="t">Found in VS Code's Claude extension</span><span class="m mono">2.1.211</span></div>
+            <div class="check ok"><i>✓</i><span class="t">Signed in as nic@acme.dev · Max</span></div>
+            <div class="check ok"><i>✓</i><span class="t">Tested: it answered in 2.1s</span></div>
+          </div>
+          <div class="row"><span class="link">Use a different account</span></div>
+        </div>
+        <div class="plan" data-state="idle">
+          <div class="head"><span class="sq" style="background:var(--codex)"></span><span class="name">ChatGPT</span><span class="who">Plus, Pro or Team · Codex</span><span class="state"><i></i>Not set up</span></div>
+          <p class="what">Not on this computer yet. Takes about a minute.</p>
+          <div class="row"><button class="btn go">Set up ChatGPT</button><span class="link">I'll do it myself</span></div>
+        </div>
+        <div class="plan" data-state="idle">
+          <div class="head"><span class="sq" style="background:var(--gemini)"></span><span class="name">Gemini</span><span class="who">Google account</span><span class="state"><i></i>Not set up</span></div>
+          <p class="what">Not on this computer yet. <strong>Needs Node.js, which Styx installs first.</strong> About two minutes.</p>
+          <div class="row"><button class="btn">Set up Gemini</button><span class="link">I'll do it myself</span></div>
+        </div>
+        <div class="plan" data-state="idle">
+          <div class="head"><span class="sq" style="background:var(--cursor)"></span><span class="name">Cursor</span><span class="who">Cursor plan</span><span class="state"><i></i>Not set up</span></div>
+          <p class="what">Your Cursor editor is installed, but its agent for the terminal isn't. Takes about a minute.</p>
+          <div class="row"><button class="btn">Set up Cursor</button><span class="link">I'll do it myself</span></div>
+        </div>
+      </div>
+      <div class="foot"><span class="mu">Claude is ready. That's enough to start.</span><span class="sp"></span><button class="btn">Back</button><button class="btn inv">Continue</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== 2. setting up ====================== -->
+<section class="note">
+  <h2>2 · One button, three steps, shown as they happen</h2>
+  <p>"Set up ChatGPT" runs the whole chain on its card: <strong>install → sign in → test</strong>. The install runs out of sight (the terminal is under "Show details" for when something goes wrong). Sign-in opens the browser on the right page and waits; the card says exactly what to do there. Nothing to type, no Enter to press in a terminal.</p>
+</section>
+<div class="win" role="img" aria-label="Mockup: setting up ChatGPT">
+  <div class="title"><span class="lights"><i></i><i></i><i></i></span><span class="word">STYX</span><span class="mu">Set up</span></div>
+  <div class="ob">
+    <div class="steps">
+      <div class="step done"><i>✓</i><div><b>Your editor</b><span>VS Code</span></div></div>
+      <div class="step done"><i>✓</i><div><b>Your projects</b><span>3 projects added</span></div></div>
+      <div class="step now"><i>3</i><div><b>Your AI</b><span>The agent that does the work</span></div></div>
+      <div class="step"><i>4</i><div><b>Deploys</b><span>Optional</span></div></div>
+    </div>
+    <div class="body">
+      <h3>Which AI do you use?</h3>
+      <p class="lead">Pick the plan you already pay for. Styx installs it, signs you in in your browser, and checks it works.</p>
+      <div class="plans">
+        <div class="plan" data-state="working" style="grid-column: span 2; min-height: 0;">
+          <div class="head"><span class="sq" style="background:var(--codex)"></span><span class="name">ChatGPT</span><span class="who">Plus, Pro or Team · Codex</span><span class="state"><i></i>Signing in</span></div>
+          <div class="checks">
+            <div class="check ok"><i>✓</i><span class="t">Installed Codex</span><span class="m mono">0.46.0 · 38s</span></div>
+            <div class="check now"><i>●</i><span class="t">Sign in with your ChatGPT account</span><span class="m">waiting for your browser</span></div>
+            <div class="browser"><div><b>Your browser opened chatgpt.com.</b> <span class="mu">Sign in, press Continue, then come back here. This card moves on by itself.</span></div><span class="sp" style="margin-left:auto"></span><span class="link">Didn't open? Copy the link</span></div>
+            <div class="check"><i>○</i><span class="t">Send a test message</span></div>
+          </div>
+          <div class="row"><span class="link">Show details</span><span class="link">Cancel</span></div>
+        </div>
+        <div class="plan" data-state="ready">
+          <div class="head"><span class="sq" style="background:var(--claude)"></span><span class="name">Claude</span><span class="who">Pro or Max</span><span class="state"><i></i>Ready</span></div>
+          <div class="checks">
+            <div class="check ok"><i>✓</i><span class="t">Signed in as nic@acme.dev · Max</span></div>
+            <div class="check ok"><i>✓</i><span class="t">Tested: it answered in 2.1s</span></div>
+          </div>
+        </div>
+        <div class="plan" data-state="idle">
+          <div class="head"><span class="sq" style="background:var(--gemini)"></span><span class="name">Gemini</span><span class="who">Google account</span><span class="state"><i></i>Not set up</span></div>
+          <p class="what">Needs Node.js, which Styx installs first.</p>
+          <div class="row"><button class="btn">Set up Gemini</button></div>
+        </div>
+      </div>
+      <div class="foot"><span class="mu">You can continue; ChatGPT finishes in the background.</span><span class="sp"></span><button class="btn">Back</button><button class="btn inv">Continue</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== 3. when it goes wrong at setup ====================== -->
+<section class="note">
+  <h2>3 · When a step fails, say what happened and offer the one fix</h2>
+  <p>No raw exit codes, no "Not signed in" for a tool that just crashed. Each failure has a plain sentence and one button. The installer's output is one click away for anyone who wants it.</p>
+</section>
+<div class="win short" role="img" aria-label="Mockup: failure states">
+  <div class="title"><span class="lights"><i></i><i></i><i></i></span><span class="word">STYX</span><span class="mu">Set up · examples of what a card says when something goes wrong</span></div>
+  <div style="padding: 28px 48px;">
+    <div class="plans" style="margin-top:0; grid-template-columns: repeat(3, 1fr);">
+      <div class="plan" data-state="idle">
+        <div class="head"><span class="sq" style="background:var(--claude)"></span><span class="name">Claude</span><span class="state"><i></i>Needs a plan</span></div>
+        <p class="what">You're signed in as sam@gmail.com, but <strong>that account doesn't include Claude Code.</strong> It needs Pro or Max.</p>
+        <div class="row"><button class="btn go">See plans</button><span class="link">Use a different account</span></div>
+      </div>
+      <div class="plan" data-state="idle">
+        <div class="head"><span class="sq" style="background:var(--gemini)"></span><span class="name">Gemini</span><span class="state"><i></i>Stopped</span></div>
+        <p class="what"><strong>Node.js didn't install</strong>: Windows needs your permission and the prompt was closed.</p>
+        <div class="row"><button class="btn go">Try again</button><span class="link">Show details</span></div>
+      </div>
+      <div class="plan" data-state="idle">
+        <div class="head"><span class="sq" style="background:var(--codex)"></span><span class="name">ChatGPT</span><span class="state"><i></i>Out of date</span></div>
+        <p class="what">The Codex on this computer is <strong>too old to sign in</strong> from here (0.12). Updating takes a few seconds.</p>
+        <div class="row"><button class="btn go">Update Codex</button><span class="link">Show details</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== 4. later, mid-task ====================== -->
+<section class="note">
+  <h2>4 · Later, mid-task: the same fixes, in the chat</h2>
+  <p>Today a signed-out agent or an empty plan shows up as a raw <span class="mono">error:</span> line. Instead the chat says it plainly with the button that fixes it, and offers another agent you've set up so the work isn't stuck.</p>
+</section>
+<div class="win short" role="img" aria-label="Mockup: sign-in fix in chat">
+  <div class="title"><span class="lights"><i></i><i></i><i></i></span><span class="word">STYX</span><span class="mu">acme-shop</span></div>
+  <div class="ws">
+    <div class="ed">src/checkout.ts<br><br>export async function checkout(cart: Cart) {<br>&nbsp;&nbsp;const total = sum(cart.items);<br>&nbsp;&nbsp;…</div>
+    <div class="chat">
+      <div class="tabs"><span class="on"><i class="sq" style="background:var(--claude)"></i>Claude · fix/checkout</span></div>
+      <div class="msgs">
+        <div class="you">Add a test for the empty cart.</div>
+        <div class="fix">
+          <b>Claude is signed out.</b>
+          <span class="mu">Your login on this computer expired. Sign in again and this message goes out as soon as you're back.</span>
+          <div class="row"><button class="btn go">Sign in to Claude</button><span class="link">Send it to ChatGPT instead</span></div>
+        </div>
+        <div class="fix" style="border-color: var(--ln)">
+          <b>Your Claude plan has run out until 4:00 pm.</b>
+          <div class="row"><button class="btn">Send it to ChatGPT instead</button><span class="link">Wait</span></div>
+        </div>
+      </div>
+      <div class="composer"><span>Message Claude…</span><span class="mono">⏎ send</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== 5. new task defaults ====================== -->
+<section class="note">
+  <h2>5 · New task starts with an agent that works</h2>
+  <p>Today New task always defaults to Claude, even when Claude isn't set up. It should start with one that's ready; agents that aren't set up stay visible with a one-word way in.</p>
+</section>
+<div class="win short" role="img" aria-label="Mockup: new task agent picker">
+  <div class="title"><span class="lights"><i></i><i></i><i></i></span><span class="word">STYX</span><span class="mu">acme-shop · New task</span></div>
+  <div class="nt">
+    <h3>What should the agent do?</h3>
+    <div class="box">Add a test for the empty cart…</div>
+    <div class="agents">
+      <span class="agent on"><i class="sq" style="background:var(--codex)"></i>ChatGPT · ready</span>
+      <span class="agent"><i class="sq" style="background:var(--claude)"></i>Claude · ready</span>
+      <span class="agent off"><i class="sq" style="background:var(--gemini)"></i>Gemini · Set up</span>
+      <span class="agent off"><i class="sq" style="background:var(--cursor)"></i>Cursor · Set up</span>
+    </div>
+  </div>
+</div>
+
+<section class="qs">
+  <h2>Decisions for you</h2>
+  <ol>
+    <li>Prerequisites: install Node (for Gemini) and git silently as part of "Set up", or ask first? <span>Proposed: do it, and say so on the card ("Needs Node.js, which Styx installs first"). Windows will still show its own permission prompt.</span></li>
+    <li>The test message uses a tiny bit of your plan (one short reply). OK to send it automatically after sign-in? <span>Proposed: yes; it's the only way to know the plan works before a real task.</span></li>
+    <li>Must one AI be ready before Continue? <span>Proposed: no, but the footer nudges ("Set up one to start a task") and New task sends you back here.</span></li>
+    <li>Settings › Agents and the New task "Set up" chip open this same card, so there's one place to fix things. <span>Proposed: yes; replaces today's three different "Install guide" destinations.</span></li>
+  </ol>
+</section>
+
+</body>
+</html>

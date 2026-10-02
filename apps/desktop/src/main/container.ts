@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { execa } from 'execa';
 import { APP_ID, DEVICE_NAME, copy, fill, type AppSettings } from '@styx/core';
 import type { Clock } from './clock';
 import type { Db } from './db/open';
@@ -13,6 +14,10 @@ import { GitHubAdapter } from './providers/github';
 import { BrokerHost } from './broker/host';
 import { ActivityService } from './services/activity-service';
 import { AgentService } from './services/agent-service';
+import { GitSetupService } from './services/git-setup-service';
+import { AgentSetupService } from './services/agent-setup-service';
+import { onePathKey } from './services/spawn-cli';
+import { NodeToolService } from './services/node-tool-service';
 import { CliWatchService } from './services/cli-watch-service';
 import { AuditService } from './services/audit-service';
 import { CheckpointService, screenshotSourceFor } from './services/checkpoint-service';
@@ -170,7 +175,10 @@ export interface ContainerOptions {
   windows: WindowsPort;
   preview?: PreviewPort;
   /** A picture of part of a renderer window (a selection on the Design canvas, #140); absent in tests. */
-  captureWindow?: (senderId: number, rect: { x: number; y: number; width: number; height: number }) => Promise<Buffer | null>;
+  captureWindow?: (
+    senderId: number,
+    rect: { x: number; y: number; width: number; height: number },
+  ) => Promise<Buffer | null>;
   /** The simulator / emulator mirror's OS hooks; faked in tests (`NO_DEVICE_HOOKS`). */
   deviceHooks?: DeviceHooks;
   /** Device tooling runner (`xcrun simctl`, `adb`) and lookup; faked in tests. */
@@ -251,6 +259,8 @@ export interface Container {
   deploys: DeployService;
   skills: SkillsService;
   agents: AgentService;
+  gitSetup: GitSetupService;
+  agentSetup: AgentSetupService;
   runs: RunService;
   /** The simulator / emulator mirrored in the design window (owner request). */
   devices: DeviceService;
@@ -285,7 +295,10 @@ export interface Container {
   windows: WindowsPort;
   preview: PreviewPort;
   design: DesignService;
-  captureWindow: (senderId: number, rect: { x: number; y: number; width: number; height: number }) => Promise<Buffer | null>;
+  captureWindow: (
+    senderId: number,
+    rect: { x: number; y: number; width: number; height: number },
+  ) => Promise<Buffer | null>;
   dialogs: DialogsPort;
   runtime: Runtime;
   openExternal: (url: string) => Promise<void>;
@@ -310,9 +323,13 @@ export function buildContainer(opts: ContainerOptions): Container {
     isRegistered: (id) => publisher.isRegistered(id),
     allowedOrigins: runtime.rendererOrigins,
   });
-  const gitRunner = new ExecaGitRunner();
-  const git = new GitService(gitRunner);
   const pty = opts.pty ?? new PtyService(runtime.platform);
+  // git is looked up where a terminal would find it, so one installed while Styx runs is found without a restart.
+  const gitRunner = new ExecaGitRunner({
+    loginPath: (o) => pty.resolveLoginPath(o),
+    platform: runtime.platform,
+  });
+  const git = new GitService(gitRunner);
   // One door, several protocols (docs/research/agent-parity.md): Claude's NDJSON now; the Codex app-server and
   // ACP backends register here as they land.
   const stream =
@@ -322,18 +339,27 @@ export function buildContainer(opts: ContainerOptions): Container {
       .register(['app-server'], new AppServerRunner())
       .register(['acp'], new AcpRunner());
   const ptyLog = new PtyLog(`${runtime.userData}/logs/pty`);
+  // A private Node.js agent setup downloads for Gemini (never the person's own); on the agents' PATH once there.
+  const nodeTool = new NodeToolService({
+    toolsDir: join(runtime.userData, 'tools'),
+    platform: runtime.platform,
+    arch: process.arch,
+    fetch: opts.fetch ?? fetch,
+  });
+  if (nodeTool.installed()) pty.addPathDirs([nodeTool.binDir, nodeTool.npmBinDir]);
   // Detection sees what the terminal sees (#98): the login shell's PATH and `command -v` answers, re-asked at most
   // every 10 s when a re-detect runs. Fixture and test containers (`redetectClis: false`) keep the process PATH so
   // their rows stay deterministic.
   const redetect = opts.redetectClis ?? true;
   const detect =
     opts.detect ??
-    new DetectService(
-      defaultDetectDeps(
+    new DetectService({
+      ...defaultDetectDeps(
         process.env['PATH'] ?? '',
         redetect ? () => pty.resolveLoginEnv({ maxAgeMs: 10_000 }) : undefined,
       ),
-    );
+      styxDirs: () => (nodeTool.installed() ? [nodeTool.npmBinDir] : []),
+    });
   const ideImport =
     opts.ideImport ?? new IdeImportService({ platform: runtime.platform, home: homedir(), env: process.env });
   const cli =
@@ -540,6 +566,51 @@ export function buildContainer(opts: ContainerOptions): Container {
     refreshClis: () => sessions.refreshClis(),
     activity,
   });
+  const gitSetup = new GitSetupService({
+    git,
+    terminals,
+    pty,
+    publisher,
+    activity,
+    openExternal: opts.openExternal,
+    loginPath: () => pty.resolveLoginPath(),
+    shell: () => pty.defaultShell(),
+    platform: runtime.platform,
+    home: homedir(),
+  });
+  const agentSetup = new AgentSetupService({
+    repos,
+    publisher,
+    clock,
+    agents,
+    refreshClis: () => sessions.refreshClis(),
+    terminals,
+    pty,
+    node: nodeTool,
+    git,
+    gitSetup,
+    exec: async (bin, args, o) => {
+      const PATH = await pty.resolveLoginPath();
+      const r = await execa(bin, args, {
+        cwd: o.cwd,
+        timeout: o.timeoutMs,
+        reject: false,
+        stdin: 'ignore',
+        windowsHide: true,
+        env: onePathKey({ ...process.env, PATH }, runtime.platform),
+      });
+      return {
+        stdout: String(r.stdout ?? ''),
+        stderr: String(r.stderr ?? ''),
+        exitCode: r.exitCode ?? -1,
+        timedOut: r.timedOut === true,
+      };
+    },
+    openExternal: opts.openExternal,
+    loginPath: () => pty.resolveLoginPath(),
+    platform: runtime.platform,
+    home: homedir(),
+  });
   // An install in a terminal shows up within a second: the folders each detection scanned are watched (#98).
   const cliWatch = new CliWatchService({ onChange: () => sessions.refreshClis() });
   detect.onSearched = (dirs) => cliWatch.update(dirs);
@@ -629,7 +700,10 @@ export function buildContainer(opts: ContainerOptions): Container {
     limits: () => usage.all(),
     account: () => account.current(),
     update: () => updates.current(),
+    agentSetup: () => agentSetup.all(),
   });
+  // A sign-in from the chat's "Sign in" sends the message the agent could not answer.
+  agentSetup.onReady((agent) => void sessions.resumeAfterSignIn(agent));
   const refresh = new RefreshScheduler({
     repos,
     clock,
@@ -958,6 +1032,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     deploys,
     skills,
     agents,
+    gitSetup,
+    agentSetup,
     runs,
     devices,
     screens,

@@ -16,9 +16,16 @@ export const isReadyToLand = (model: ReadModel, s: Session): boolean => {
   return w !== undefined && w.mergedAt === null && !w.isMain && w.changes.files > 0;
 };
 
-/** Sessions that have not been archived (Done keeps them 7 days). */
+/**
+ * False while the session's project is removed: its threads are kept, out of sight, until the folder is added
+ * again (owner request).
+ */
+export const inLiveProject = (model: ReadModel, s: Pick<Session, 'projectId'>): boolean =>
+  model.projects.byId[s.projectId]?.removedAt === null;
+
+/** Sessions that have not been archived (Done keeps them 7 days), in projects on the rail. */
 export const liveSessions = (model: ReadModel): Session[] =>
-  rows(model.sessions).filter((s) => s.archivedAt === null);
+  rows(model.sessions).filter((s) => s.archivedAt === null && inLiveProject(model, s));
 
 export const sessionsInProject = (model: ReadModel, projectId: ProjectId): Session[] =>
   liveSessions(model).filter((s) => s.projectId === projectId && !s.purpose);

@@ -1412,6 +1412,7 @@ export const fixtureReadModel = (f: DemoFixture): ReadModel => ({
   limits: f.limits,
   account: f.account,
   update: UPDATE_OFF,
+  agentSetup: {},
 });
 
 export const demoReadModel = (): ReadModel => fixtureReadModel(demoFixture());

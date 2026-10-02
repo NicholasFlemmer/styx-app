@@ -93,12 +93,16 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
     }
     if (input.openInIde) openInFallbackIde(project.path);
     app.usageReports.record('project.added');
-    return { projectId: project.id, sessionId, githubError: project.githubError };
+    return { projectId: project.id, sessionId, githubError: project.githubError, gitError: project.gitError };
   });
 
   bus.register('project.templates', () => projects.templates());
 
   bus.register('project.remove', async ({ projectId, deleteFiles }) => {
+    // Nothing keeps running or holding access for a project that is off the rail: agents stop (their threads stay,
+    // and come back if the folder is added again) and every grant on its targets is closed.
+    for (const s of repos.sessions.byProject(projectId)) if (s.state !== 'done') app.sessions.stop(s.id);
+    for (const t of repos.targets.byProject(projectId)) app.grants.cancelTargetGrants(t.id);
     const { sessionIds } = await projects.remove(projectId, deleteFiles);
     for (const id of sessionIds) app.pty.kill(id);
     return {};

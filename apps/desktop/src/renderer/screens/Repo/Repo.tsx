@@ -27,6 +27,7 @@ import {
   type Lane,
 } from './repo-data';
 import s from './Repo.module.css';
+import { GitSetupNote } from '../../features/git/GitSetupNote';
 
 const identity = (m: ReadModel) => m;
 const EMPTY_DIFF: UnifiedDiff = { files: [] };
@@ -171,6 +172,9 @@ export function Repo() {
             </Button>
           }
         />
+        <div className={s['gitNote']}>
+          <GitSetupNote text={copy.gitSetup.missingForInit} />
+        </div>
       </div>
     );
   }

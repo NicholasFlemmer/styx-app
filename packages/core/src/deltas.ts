@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { accountStateSchema } from './model/account';
 import { updateStateSchema } from './model/update';
+import { agentSetupSchema } from './model/agent-setup';
 import { activityRowSchema } from './model/activity';
 import { auditEntrySchema } from './model/audit';
 import { sessionIdSchema } from './model/common';
@@ -115,6 +116,8 @@ export const deltaSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('account.set'), account: accountStateSchema }),
   /** The whole update state; main owns it (UpdateService) and re-sends it on every change (#119). */
   z.object({ op: z.literal('update.set'), update: updateStateSchema }),
+  /** One agent's setup run, whole; main re-sends it on every change (AgentSetupService). */
+  z.object({ op: z.literal('agentSetup.set'), setup: agentSetupSchema }),
   z.object({
     op: z.literal('checkpoints.replace'),
     sessionId: sessionIdSchema,
@@ -218,6 +221,8 @@ export const applyDelta = (model: ReadModel, delta: Delta): ReadModel => {
       return { ...model, account: delta.account };
     case 'update.set':
       return { ...model, update: delta.update };
+    case 'agentSetup.set':
+      return { ...model, agentSetup: { ...model.agentSetup, [delta.setup.agent]: delta.setup } };
     case 'deploys.set':
       return { ...model, deploys: { ...model.deploys, [delta.deploy.deployId]: delta.deploy } };
   }

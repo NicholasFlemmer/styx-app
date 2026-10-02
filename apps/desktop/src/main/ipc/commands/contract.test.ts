@@ -1,8 +1,8 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { COMMAND_NAMES, commandResultSchema, commands, fixtures } from '@styx/core';
-import { describe, expect, it } from 'vitest';
+import { COMMAND_NAMES, accountStateSchema, commandResultSchema, commands, fixtures } from '@styx/core';
+import { describe, expect, it, vi } from 'vitest';
 import { makeTestApp } from '../../test-support';
 
 describe('command contract', () => {
@@ -398,5 +398,67 @@ describe('command contract', () => {
       });
       expect(opened).toEqual(['https://example.com/docs?x=1']);
     });
+  });
+});
+
+describe('project.remove keeps the threads; adding the folder again brings them back', () => {
+  it('hides the project, stops its agents, closes its grants; re-adding restores the same project and sessions', async () => {
+    const { app, sender } = makeTestApp();
+    const projectId = fixtures.ids.project.acmeShop;
+    const fixture = app.repos.projects.get(projectId);
+    if (!fixture) throw new Error('fixture');
+    // A real folder, as every added project has.
+    const project = { ...fixture, path: mkdtempSync(join(tmpdir(), 'styx-readd-')) };
+    app.repos.projects.upsert(project);
+    const sessions = app.repos.sessions.byProject(projectId);
+    const messages = app.repos.transcripts.nextSeq(fixtures.ids.session.claude);
+    expect(sessions.length).toBeGreaterThan(0);
+    expect(messages).toBeGreaterThan(0);
+
+    const removed = await app.bus.dispatch(sender, 'project.remove', { projectId, deleteFiles: false });
+    if (!removed.ok) throw new Error(removed.error.message);
+    expect(app.repos.projects.get(projectId)?.removedAt).not.toBeNull();
+    // Nothing is left running or holding access, and nothing was deleted.
+    for (const s of app.repos.sessions.byProject(projectId))
+      expect(['idle', 'done', 'paused']).toContain(s.state);
+    for (const t of app.repos.targets.byProject(projectId))
+      for (const g of app.repos.grants.byTarget(t.id)) expect(['active', 'requested']).not.toContain(g.state);
+    expect(app.repos.sessions.byProject(projectId)).toHaveLength(sessions.length);
+    // The rail closes the gap.
+    const live = app.repos.projects.all().filter((p) => p.removedAt === null);
+    expect(live.map((p) => p.railOrder)).toEqual(live.map((_, i) => i));
+
+    // Restoring counts as adding against the free plan's one project, so removing can't be used to get around it.
+    const refused = await app.bus.dispatch(sender, 'project.add', { path: project.path });
+    expect(refused.ok).toBe(false);
+    expect(app.repos.projects.get(projectId)?.removedAt).not.toBeNull();
+    vi.spyOn(app.account, 'current').mockReturnValue(
+      accountStateSchema.parse({
+        kind: 'signed-in',
+        account: { id: 'acct_1', email: 'nic@acme.dev', provider: 'github' },
+        signedInAt: 0,
+      }),
+    );
+    const added = await app.bus.dispatch(sender, 'project.add', { path: project.path });
+    if (!added.ok) throw new Error(added.error.message);
+    expect(added.value.projectId).toBe(projectId);
+    expect(app.repos.projects.get(projectId)?.removedAt).toBeNull();
+    expect(app.repos.projects.get(projectId)?.railOrder).toBe(live.length);
+    expect(
+      app.repos.sessions
+        .byProject(projectId)
+        .map((s) => s.id)
+        .sort(),
+    ).toEqual(sessions.map((s) => s.id).sort());
+    expect(app.repos.transcripts.nextSeq(fixtures.ids.session.claude)).toBe(messages);
+  });
+
+  it('deleting the files as well is a hard delete, and refuses a folder outside the home before touching anything', async () => {
+    const { app, sender } = makeTestApp();
+    const projectId = fixtures.ids.project.acmeShop;
+    const refused = await app.bus.dispatch(sender, 'project.remove', { projectId, deleteFiles: true });
+    expect(refused.ok).toBe(false);
+    expect(app.repos.projects.get(projectId)).not.toBeNull();
+    expect(app.repos.sessions.byProject(projectId).length).toBeGreaterThan(0);
   });
 });

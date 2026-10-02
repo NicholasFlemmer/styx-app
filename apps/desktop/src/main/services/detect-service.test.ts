@@ -220,6 +220,57 @@ describe('DetectService', () => {
     });
   });
 
+  describe('agents that came with an editor (owner request: no second install)', () => {
+    it.skipIf(darwinPathOnWin)(
+      "Codex inside OpenAI's extension, in VS Code Insiders and Windsurf too; Styx's own tools folder as source styx",
+      async () => {
+        const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+        const insiders = join(
+          home,
+          '.vscode-insiders',
+          'extensions',
+          'openai.chatgpt-0.4.1-darwin-arm64',
+          'bin',
+          'macos-aarch64',
+        );
+        const windsurf = join(
+          home,
+          '.windsurf',
+          'extensions',
+          'anthropic.claude-code-2.1.300-darwin-arm64',
+          'resources',
+          'native-binary',
+        );
+        const styx = join(home, 'styx-tools', 'npm', 'bin');
+        for (const d of [insiders, windsurf, styx]) mkdirSync(d, { recursive: true });
+        const versions = new Map<string, string>();
+        const deps: DetectDeps = {
+          platform: 'darwin',
+          home,
+          pathEnv: '',
+          env: { SHELL: '/bin/sh' },
+          applicationsDir: join(home, 'Applications'),
+          styxDirs: () => [styx],
+          exec: async (b, args) =>
+            args[0] === '--version'
+              ? { stdout: versions.get(b) ?? '', exitCode: 0 }
+              : { stdout: '', exitCode: 0 },
+        };
+        const codex = bin(insiders, 'codex');
+        versions.set(codex, 'codex-cli 0.46.0');
+        const claude = bin(windsurf, 'claude');
+        versions.set(claude, '2.1.300 (Claude Code)');
+        const gemini = bin(styx, 'gemini');
+        versions.set(gemini, '0.9.0');
+        const clis = await new DetectService(deps).detectClis();
+        const of = (a: string) => clis.find((c) => c.agent === a);
+        expect(of('codex')).toMatchObject({ found: true, binary: codex, source: 'vscode-extension' });
+        expect(of('claude')).toMatchObject({ found: true, binary: claude, source: 'windsurf-extension' });
+        expect(of('gemini')).toMatchObject({ found: true, binary: gemini, source: 'styx' });
+      },
+    );
+  });
+
   describe('claude candidates', () => {
     /** A fake machine: two PATH dirs, a VS Code extension bundle and a Cursor one; versions come from the fake exec. */
     function machine() {

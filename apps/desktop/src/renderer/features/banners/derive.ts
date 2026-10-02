@@ -1,4 +1,4 @@
-import { copy, fill, formatAge, rows, type EventPayload, type ReadModel } from '@styx/core';
+import { copy, fill, formatAge, inLiveProject, rows, type EventPayload, type ReadModel } from '@styx/core';
 
 export type BannerAction = EventPayload<'banner.set'>['action'];
 
@@ -32,10 +32,12 @@ export const deriveBanners = (model: ReadModel, now: number): BannerRow[] => {
   const missing = new Map<string, number>();
   for (const s of rows(model.sessions)) {
     if (s.archivedAt !== null || s.state !== 'paused' || s.pausedReason !== 'cli-missing') continue;
+    if (!inLiveProject(model, s)) continue;
     missing.set(s.agent, (missing.get(s.agent) ?? 0) + 1);
   }
   for (const s of rows(model.sessions)) {
     if (s.archivedAt !== null || s.state !== 'paused' || s.pausedReason !== 'cli-missing') continue;
+    if (!inLiveProject(model, s)) continue;
     const key = `cli-missing:${s.agent}`;
     if (out.some((b) => b.key === key)) continue;
     const n = missing.get(s.agent) ?? 1;

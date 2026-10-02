@@ -217,4 +217,15 @@
     position: absolute;
     inset: -9px -6px;
   }
+  /* Step 3: one card per AI plan, two across; a running card spans both (design frame 2). */
+  .plans {
+    margin-top: 28px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .plansFoot {
+    margin-top: 18px;
+    color: var(--mu);
+  }
 }

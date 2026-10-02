@@ -45,10 +45,12 @@ export const cliAuthLabel = (cli: Pick<CliInstall, 'found' | 'authState'>): stri
 /** Onboarding step 3 version cell: "claude 2.4.1", "not found on PATH". */
 export const cliVersionLabel = (cli: Pick<CliInstall, 'agent' | 'found' | 'version' | 'binary'>): string => {
   if (!cli.found) return copy.onboarding.agents.notFound;
+  // Windows paths split on `\` too, so "C:\Users\…\claude.exe" reads "claude", not the whole path.
   const base = cli.binary
-    ?.split('/')
+    ?.split(/[\\/]/)
     .filter((seg) => seg.length > 0)
-    .pop();
+    .pop()
+    ?.replace(/\.(exe|cmd|bat)$/i, '');
   const name = base === undefined ? cli.agent : base;
   return cli.version === null ? name : `${name} ${cli.version}`;
 };

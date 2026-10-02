@@ -1,7 +1,7 @@
 import {
-  cliAuthLabel,
-  cliLocationLabel,
+  agentSetupFoot,
   copy,
+  SETUP_AGENTS,
   fill,
   ideImportsLabel,
   ideVersionLabel,
@@ -9,7 +9,7 @@ import {
   type IdeInstall,
   type ReadModel,
 } from '@styx/core';
-import { Button, Checkbox, Label, StatusDot, Table, TableCell, TableRow, TABLE_COLUMNS, Tag } from '@styx/ui';
+import { Button, Checkbox, Label, Table, TableCell, TableRow, TABLE_COLUMNS, Tag } from '@styx/ui';
 import { useEffect, useState } from 'react';
 import { PROVIDERS, cliMethodLabel } from '../../features/modals/modals';
 import { command } from '../../state/commands';
@@ -20,9 +20,11 @@ import type { OnboardingStep } from '../../state/ui-store';
 import { harnessReposEnabled, harnessScannedRepos } from './harness-repos';
 import s from './Onboarding.module.css';
 import { DEFAULT_IDE_IMPORTS, STEPS, rowMeta, type IdeImports, type RepoRow } from './onboarding-rows';
+import { GitSetupNote } from '../../features/git/GitSetupNote';
+import { AgentSetupCard } from '../../features/agent-setup/AgentSetupCard';
 
 const selectIdes = (m: ReadModel) => m.discovery.ides;
-const selectClis = (m: ReadModel) => m.discovery.clis;
+const selectSetupFoot = (m: ReadModel) => agentSetupFoot(m);
 const selectFallback = (m: ReadModel) => m.settings.app.fallbackIde;
 
 /**
@@ -40,7 +42,7 @@ export function Onboarding() {
   const platform = useCopyPlatform();
   const now = useNow();
   const ides = useModel(selectIdes);
-  const clis = useModel(selectClis);
+  const setupFoot = useModel(selectSetupFoot);
   const fallbackKind = useModel(selectFallback);
   const words = platformCopy(platform);
 
@@ -302,63 +304,25 @@ export function Onboarding() {
                 </AddRowAction>
               </div>
             </div>
+            <GitSetupNote />
           </section>
         ) : null}
 
         {step === 3 ? (
           <section className={s['body']} aria-labelledby="ob-headline">
             <h1 id="ob-headline" className={s['headline']}>
-              {copy.onboarding.agents.headline}
+              {copy.agentSetup.headline}
             </h1>
-            <p className={s['lead']}>{copy.onboarding.agents.body}</p>
-            <div className={s['tableFrame']}>
-              <Table
-                columns={TABLE_COLUMNS.onboardingClis}
-                rowPad="10px 14px"
-                gap="14px"
-                aria-label={copy.onboarding.steps.agents}
-              >
-                {clis.map((c) => {
-                  const auth = cliAuthLabel(c);
-                  // "Sign in →" / "Install →" open the Connect agent modal (owner addition); connected rows stay text.
-                  const connectable =
-                    auth === copy.onboarding.agents.signIn || auth === copy.onboarding.agents.install;
-                  return (
-                    <TableRow key={c.agent} data-agent={c.agent}>
-                      <TableCell strong>{copy.agentProducts[c.agent]}</TableCell>
-                      <TableCell mono muted>
-                        {cliLocationLabel(c)}
-                      </TableCell>
-                      <TableCell mono>
-                        {connectable ? (
-                          // The fix is a button, not a note (ADR-0027): this is where new people stall.
-                          <Button
-                            size="compact"
-                            variant="accent"
-                            data-agent-connect={c.agent}
-                            aria-label={`${auth} · ${copy.agentProducts[c.agent]}`}
-                            onClick={() =>
-                              pushOverlay({ kind: 'modal', modal: 'connect-agent', agent: c.agent })
-                            }
-                          >
-                            {auth}
-                          </Button>
-                        ) : (
-                          auth
-                        )}
-                      </TableCell>
-                      <TableCell align="end">
-                        <StatusDot
-                          tone="hollow"
-                          on={!c.found}
-                          {...(c.found ? {} : { label: copy.onboarding.agents.notFound })}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </Table>
+            <p className={s['lead']}>{copy.agentSetup.lead}</p>
+            {/* One card per AI plan, one button each (owner request, design/next/styx-next-agent-setup.html). */}
+            <div className={s['plans']} data-onboarding-plans="true">
+              {SETUP_AGENTS.map((a) => (
+                <AgentSetupCard key={a} agent={a} wide />
+              ))}
             </div>
+            <p className={s['plansFoot']} data-onboarding-plans-foot="true">
+              {setupFoot}
+            </p>
           </section>
         ) : null}
 

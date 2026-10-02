@@ -823,6 +823,38 @@ describe('why an agent did not get going (#125)', () => {
     ]);
   });
 
+  it('signed out or out of usage mid-task: a plain row with the fix, not the CLI text; signing in sends the message again', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'session', event: 'quiet' }); // the first turn is over
+    await a.sessions.sendMessage(session.id, 'Add a test for the empty cart.');
+    const sentBefore = stream.sent.length;
+    stream.effect(session.id, { type: 'error', message: 'Invalid API key · Please run /login' });
+    const rows = a.repos.transcripts.last(session.id);
+    expect(rows.at(-1)).toMatchObject({
+      body: 'Claude is signed out.',
+      payload: { kind: 'system', problem: { agent: 'claude', kind: 'signed-out' } },
+    });
+    expect(rows.some((m) => m.body.includes('Invalid API key'))).toBe(false);
+    // Another agent signing in changes nothing here; Claude signing in sends the same words once, no new bubble.
+    await a.sessions.resumeAfterSignIn('codex');
+    expect(stream.sent.length).toBe(sentBefore);
+    const users = () => a.repos.transcripts.last(session.id).filter((m) => m.payload.kind === 'user').length;
+    const before = users();
+    await a.sessions.resumeAfterSignIn('claude');
+    expect(stream.sent.at(-1)?.text).toContain('Add a test for the empty cart.');
+    expect(users()).toBe(before);
+    expect(a.repos.transcripts.last(session.id).at(-1)?.body).toBe(copy.agentSetup.chat.back);
+    await a.sessions.resumeAfterSignIn('claude');
+    expect(stream.sent.length).toBe(sentBefore + 1);
+    // Out of usage: the row says so, and nothing is owed for later.
+    stream.effect(session.id, { type: 'error', message: 'You have hit your usage limit' });
+    expect(a.repos.transcripts.last(session.id).at(-1)?.payload).toEqual({
+      kind: 'system',
+      problem: { agent: 'claude', kind: 'limit' },
+    });
+  });
+
   it('a CLI that exits with an error straight after launch counts as exited; a clean exit does not', async () => {
     const { app: a } = app();
     const record = vi.spyOn(a.usageReports, 'record');
@@ -1284,19 +1316,21 @@ describe('SessionService Claude Code parity (stream)', () => {
     });
     expect(a.repos.projects.get(ids.project.acmeShop)?.lastActivityAt).toBe(DEMO_NOW + 5_000);
 
-    // Once archived it stays archived; a session whose CLI never reported an id says it starts over.
+    // An archived chat (Close chat, the 7 days) comes back too, out of the archive (owner request); a session whose
+    // CLI never reported an id says it starts over.
     await a.bus.dispatch(sender, 'session.stop', { sessionId: session.id });
     await a.bus.dispatch(sender, 'session.markDone', { sessionId: session.id });
     a.sessions.archive(session.id);
     expect(await a.bus.dispatch(sender, 'session.reopen', { sessionId: session.id })).toMatchObject({
-      ok: false,
-      error: { code: 'invalid-transition' },
+      ok: true,
     });
+    expect(a.sessions.get(session.id)).toMatchObject({ state: 'idle', archivedAt: null });
+    expect(flag(stream.spawned[2]!.args, '--resume')).toBe('cli-sess-3');
     const fresh = await a.sessions.spawn(spawnInput('claude', ids.worktree.testFlaky, ''));
     a.sessions.stop(fresh.session.id);
     a.sessions.markDone(fresh.session.id);
     await a.sessions.reopen(fresh.session.id);
-    expect(stream.spawned[3]!.args).not.toContain('--resume');
+    expect(stream.spawned[4]!.args).not.toContain('--resume');
     expect(systemLines(a, fresh.session.id)).toEqual([
       'reopened — Claude starts a new conversation; the messages above are kept',
     ]);
@@ -2707,16 +2741,29 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     expect(row?.body).toBe('review');
   });
 
-  it('a finished session refuses a message; an empty one is invalid (unchanged by the queue)', async () => {
+  it('a terminal Claude keeps the conversation its hooks report, so Reopen resumes it', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    a.repos.sessions.upsert({ ...a.sessions.get(session.id)!, cliSessionId: null });
+    a.sessions.onHook(session.id, 'claude', 'SessionStart', { session_id: 'pty-conv-1' });
+    expect(a.sessions.get(session.id)?.cliSessionId).toBe('pty-conv-1');
+    a.sessions.onHook(session.id, 'claude', 'PreToolUse', { session_id: '' });
+    expect(a.sessions.get(session.id)?.cliSessionId).toBe('pty-conv-1');
+  });
+
+  it('a message to a finished session reopens it and goes out; an empty one is invalid (unchanged by the queue)', async () => {
     const { app: a } = app();
     const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
     await expect(a.sessions.sendMessage(session.id, '')).rejects.toMatchObject({ code: 'invalid-input' });
-    // Stop alone leaves the session open for another message (it relaunches the CLI); only a session the
-    // person marked done refuses one (discrepancy #111).
     a.sessions.stop(session.id);
     a.sessions.markDone(session.id);
-    await expect(a.sessions.sendMessage(session.id, 'late')).rejects.toMatchObject({
-      code: 'invalid-transition',
-    });
+    a.sessions.archive(session.id);
+    // Writing to it picks the thread up again (owner request): out of the archive, relaunched, message delivered.
+    await a.sessions.sendMessage(session.id, 'late');
+    expect(a.sessions.get(session.id)).toMatchObject({ archivedAt: null });
+    expect(a.sessions.get(session.id)?.state).not.toBe('done');
+    expect(a.repos.transcripts.last(session.id).map((m) => m.body)).toContain('late');
+    expect(stream.spawned).toHaveLength(2);
+    expect(stream.sent.at(-1)?.text).toContain('late');
   });
 });

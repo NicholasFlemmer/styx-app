@@ -28,6 +28,7 @@ import {
   type NewProjectForm,
   type StartFrom,
 } from './modals';
+import { GitSetupNote } from '../git/GitSetupNote';
 import s from './NewProjectModal.module.css';
 
 export interface NewProjectModalProps {
@@ -215,6 +216,7 @@ function CloneModal({ id }: { id: string }) {
             />
           </div>
         ) : null}
+        <GitSetupNote text={copy.gitSetup.cloneNeedsGit} />
         {status !== null ? (
           <div className={s['note']} role="status" data-clone-status="true">
             {status}
@@ -293,6 +295,17 @@ function CreateModal({ id }: { id: string }) {
       return;
     }
     close();
+    // Made without git (missing, or it failed): the project works as a plain folder; said once, with the way on.
+    const gitError = r.value.gitError ?? null;
+    if (gitError !== null)
+      pushOverlay({
+        kind: 'toast',
+        toast: {
+          kind: 'error',
+          code: copy.newProject.gitFailed,
+          message: fill(copy.newProject.gitFailedDetail, { error: gitError }),
+        },
+      });
     // The project is there; only its GitHub repo is not. Said once, with where to do it from.
     if (r.value.githubError !== null)
       pushOverlay({
@@ -452,11 +465,13 @@ function CreateModal({ id }: { id: string }) {
               onChange={(v) => setForm({ ...form, createGithubRepo: v })}
               label={copy.newProject.createGithubRepo}
             />
-          ) : (
+          ) : projectId !== null ? (
+            // GitHub is optional, and a target belongs to a project: with none yet (onboarding) there is nothing
+            // to connect it to, so the link waits for the first project rather than opening a dead dialog.
             <button type="button" className={s['link']} onClick={connectGithub}>
               {copy.newProject.connectGithub}
             </button>
-          )}
+          ) : null}
           {projectId !== null ? (
             <Checkbox
               checked={form.copyTargets}
@@ -473,6 +488,7 @@ function CreateModal({ id }: { id: string }) {
           ) : null}
         </div>
 
+        {form.gitInit ? <GitSetupNote /> : null}
         {github !== undefined && form.createGithubRepo ? (
           <div className={s['note']}>{githubNote(github, form.name.trim())}</div>
         ) : null}

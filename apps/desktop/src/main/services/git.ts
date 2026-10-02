@@ -3,6 +3,7 @@ import type { Dirent } from 'node:fs';
 import { realpathSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { logger } from './logger';
+import { onePathKey } from './spawn-cli';
 
 export interface GitStatus {
   branch: string;
@@ -58,21 +59,71 @@ export interface GitRunner {
   ): Promise<{ stdout: string; stderr: string; exitCode: number }>;
 }
 
+/** Thrown (and returned as exit 127 when not rejecting) when there is no git to run; the message names it. */
+export const GIT_MISSING = 'git is not installed';
+export const isGitMissing = (message: string): boolean => message.startsWith(GIT_MISSING);
+/** macOS ships a /usr/bin/git stub that only offers to install the Command Line Tools: that is no git either. */
+const MAC_STUB = /xcrun: error: invalid active developer path|no developer tools were found/i;
+
+export interface ExecaGitRunnerOptions {
+  gitBin?: string;
+  /**
+   * The PATH a terminal would see (the login shell's; on Windows the machine + user `Path` from the registry).
+   * Without it git is looked up on the PATH Styx started with, so a git installed while Styx runs is never found.
+   */
+  loginPath?: (opts: { maxAgeMs?: number }) => Promise<string>;
+  platform?: NodeJS.Platform;
+}
+
 export class ExecaGitRunner implements GitRunner {
-  constructor(private readonly gitBin = 'git') {}
+  constructor(private readonly opts: ExecaGitRunnerOptions = {}) {}
+
   async run(args: string[], cwd: string, opts: GitRunOptions = {}) {
+    const first = await this.attempt(args, cwd, opts, undefined);
+    if (first !== 'missing') return first;
+    // Not found: ask the shell / registry again (git may have just been installed) and try once more.
+    const again = this.opts.loginPath ? await this.attempt(args, cwd, opts, 0) : 'missing';
+    if (again !== 'missing') return again;
+    if (opts.reject === false) return { stdout: '', stderr: GIT_MISSING, exitCode: 127 };
+    throw new Error(`${GIT_MISSING} (git ${args.join(' ')})`);
+  }
+
+  private async attempt(
+    args: string[],
+    cwd: string,
+    opts: GitRunOptions,
+    maxAgeMs: number | undefined,
+  ): Promise<{ stdout: string; stderr: string; exitCode: number } | 'missing'> {
+    const path = this.opts.loginPath
+      ? await this.opts.loginPath(maxAgeMs === undefined ? {} : { maxAgeMs }).catch(() => undefined)
+      : undefined;
+    const env = onePathKey(
+      {
+        ...process.env,
+        ...(path !== undefined && path !== '' ? { PATH: path } : {}),
+        GIT_TERMINAL_PROMPT: '0',
+        LC_ALL: 'C',
+        ...(opts.env ?? {}),
+      },
+      this.opts.platform ?? process.platform,
+    );
     const options: ExecaOptions = {
       cwd,
       reject: opts.reject ?? true,
       stripFinalNewline: false,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', ...(opts.env ?? {}) },
+      env,
       ...(opts.input !== undefined ? { input: opts.input } : {}),
     };
     try {
-      const r = await execa(this.gitBin, args, options);
+      const r = await execa(this.opts.gitBin ?? 'git', args, options);
+      // With `reject: false` a git that could not be started comes back without an exit code: never a success.
+      if (r.exitCode === undefined && (r as { code?: string }).code === 'ENOENT') return 'missing';
+      if (r.exitCode !== 0 && MAC_STUB.test(String(r.stderr ?? ''))) return 'missing';
       return { stdout: String(r.stdout ?? ''), stderr: String(r.stderr ?? ''), exitCode: r.exitCode ?? 0 };
     } catch (e) {
-      const err = e as { stderr?: string; exitCode?: number; message: string };
+      const err = e as { stderr?: string; exitCode?: number; code?: string; message: string };
+      if (err.code === 'ENOENT' && err.exitCode === undefined) return 'missing';
+      if (MAC_STUB.test(err.stderr ?? '')) return 'missing';
       throw new Error(`git ${args.join(' ')} failed (${err.exitCode ?? '?'}): ${err.stderr || err.message}`);
     }
   }
@@ -113,6 +164,13 @@ export class GitService {
   private identityArgs(): string[] {
     const { name, email } = this.identity();
     return ['-c', `user.name=${name}`, '-c', `user.email=${email}`];
+  }
+
+  /** Whether there is a git to run, and which; never throws. */
+  async available(): Promise<{ installed: boolean; version: string | null }> {
+    const r = await this.git.run(['--version'], process.cwd(), { reject: false });
+    if (r.exitCode !== 0) return { installed: false, version: null };
+    return { installed: true, version: r.stdout.replace(/^git version\s*/, '').trim() };
   }
 
   async version(): Promise<string> {

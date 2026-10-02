@@ -4,6 +4,7 @@ import { join, sep } from 'node:path';
 import { fixtures, type ProjectFileV1, copy } from '@styx/core';
 import { describe, expect, it } from 'vitest';
 import { makeTestApp } from '../test-support';
+import { ExecaGitRunner, GitService } from './git';
 import type { RecentFolder } from './ide-import-service';
 import {
   HOME_DEPTH,
@@ -1144,5 +1145,58 @@ describe('project settings file', () => {
     await t.app.projects.setSettings(acme, { devCommand: 'pnpm dev' });
     expect(t.app.repos.projects.settings(acme).devCommand).toBe('pnpm dev');
     expect(existsSync(join(process.cwd(), '~'))).toBe(false);
+  });
+});
+
+describe('New project never fails for want of git (owner request)', () => {
+  const service = (t: ReturnType<typeof makeTestApp>, home: string, git = t.app.git) =>
+    new ProjectService({
+      repos: t.app.repos,
+      publisher: t.app.publisher,
+      clock: t.clock,
+      git,
+      platform: 'darwin',
+      home,
+      templatesDir: null,
+      activity: t.app.activity,
+    });
+  const noGit = () => new GitService(new ExecaGitRunner({ gitBin: 'styx-no-such-git' }));
+  const input = (home: string, over: Partial<Parameters<ProjectService['create']>[0]> = {}) => ({
+    name: 'fresh',
+    location: home,
+    gitInit: true,
+    template: null,
+    copyTargetsFrom: null,
+    ...over,
+  });
+
+  it('without git it is made as a plain folder and says why; a retry of the same folder is not refused', async () => {
+    const t = makeTestApp({ fixture: 'empty' });
+    const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+    const made = await service(t, home, noGit()).create(input(home, { createGithubRepo: true }));
+    expect(made.gitError).toBe(copy.newProject.gitMissing);
+    expect(made.githubError).toBe(copy.newProject.githubNeedsGit);
+    expect(existsSync(join(home, 'fresh', 'README.md'))).toBe(true);
+    expect(existsSync(join(home, 'fresh', '.git'))).toBe(false);
+    expect(t.app.repos.repos.byProject(made.id)?.defaultBranch).toBeNull();
+    // A folder holding only the README an earlier failed attempt left is reused, not refused as "not empty".
+    const t2 = makeTestApp({ fixture: 'empty' });
+    const again = await service(t2, home).create(input(home));
+    expect(again.gitError).toBeNull();
+    expect(existsSync(join(home, 'fresh', '.git'))).toBe(true);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('git init unticked means no git, even when git is installed', async () => {
+    const t = makeTestApp({ fixture: 'empty' });
+    const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+    const made = await service(t, home).create(input(home, { gitInit: false }));
+    expect(made.gitError).toBeNull();
+    expect(existsSync(join(home, 'fresh', '.git'))).toBe(false);
+    // Anything else in the folder is still refused.
+    writeFileSync(join(home, 'fresh', 'notes.md'), 'mine\n');
+    const t2 = makeTestApp({ fixture: 'empty' });
+    await expect(service(t2, home).create(input(home))).rejects.toThrow(/exists and is not empty/);
+    rmSync(home, { recursive: true, force: true });
   });
 });

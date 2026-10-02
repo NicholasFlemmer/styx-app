@@ -1,0 +1,30 @@
+@layer screens {
+  /* The modal's hairline note (NewProjectModal .note): text, then Install git and the command it runs. */
+  .note {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    border: 1px solid var(--ln);
+    padding: var(--sp-2) 10px;
+    color: var(--mu);
+    margin: 0;
+  }
+  .text {
+    margin: 0;
+    line-height: 1.5;
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    min-width: 0;
+  }
+  .command {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+}

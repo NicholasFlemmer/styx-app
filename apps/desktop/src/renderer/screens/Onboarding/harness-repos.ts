@@ -16,7 +16,12 @@ export const harnessScannedRepos = (now: number): ScannedRepo[] => [
   { ...repo('~/Downloads/tmp-fork', null, null, now - 2 * YEAR), suggested: false },
 ];
 
-const repo = (path: string, remote: string | null, branch: string | null, lastModifiedAt: number): ScannedRepo => ({
+const repo = (
+  path: string,
+  remote: string | null,
+  branch: string | null,
+  lastModifiedAt: number,
+): ScannedRepo => ({
   path,
   remote,
   branch,

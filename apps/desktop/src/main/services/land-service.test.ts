@@ -483,6 +483,17 @@ describe('LandService (ADR-0025 phase C)', { timeout: 30_000 }, () => {
     // The second lane is the base's HEAD now: it stays, with Undo.
     expect(t.app.repos.worktrees.get(testFlaky)).toMatchObject({ archivedAt: null });
     expect(await sh(['show', 'HEAD:e.ts'], repo)).toBe('e');
+    // Reopening the agent brings its lane back where it was, caught up with main (owner request): the thread goes on.
+    await t.app.sessions.reopen(claude);
+    expect(existsSync(wt1)).toBe(true);
+    expect(t.app.repos.worktrees.get(fixCheckout)).toMatchObject({
+      archivedAt: null,
+      mergedAt: null,
+      landing: null,
+      changes: { added: 0, removed: 0, files: 0 },
+    });
+    expect(await sh(['rev-parse', 'fix/checkout'], repo)).toBe(await sh(['rev-parse', 'main'], repo));
+    expect(t.app.repos.sessions.get(claude)?.state).not.toBe('done');
   });
 
   it('autoLand: a refusal is one line in the chat, never a crash', async () => {

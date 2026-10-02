@@ -40,6 +40,10 @@ export const copy = {
       publish: 'Publish {project} · {branch}',
       publishMeta: 'commit · push · pull request',
       switchProject: 'Switch to {project}',
+      /** Owner request: a finished chat stays findable and picks up where it left off. Shown while searching. */
+      reopenChat: 'Reopen “{task}” · {agent} · {project}',
+      reopenChatUntitled: 'Reopen {agent} · {project}',
+      reopenChatMeta: 'finished · {t}',
     },
     meta: {
       needsYou: 'needs you',
@@ -1077,13 +1081,13 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     stepTitles: {
       editor: 'Your editor',
       projects: 'Your projects',
-      agents: 'Your agents',
+      agents: 'Your AI',
       targets: 'Where you deploy',
     },
     stepWhy: {
       editor: 'Where “Open in” goes, and your keybindings',
       projects: 'The repos agents can work in',
-      agents: 'Which ones Styx can run for you',
+      agents: 'The agent that does the work',
       targets: 'Optional, you can skip it',
     },
     then: 'Next: pick a project and give an agent its first task. Most take a few minutes.',
@@ -1194,11 +1198,137 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     back: 'Back',
   },
 
+  /**
+   * Agent setup (owner request, design/next/styx-next-agent-setup.html): one card per AI plan, named by what
+   * people pay for, with one button that installs, signs in and tests. Plain words; no CLI names up front.
+   */
+  agentSetup: {
+    headline: 'Which AI do you use?',
+    lead: 'Pick the plan you already pay for. Styx installs it, signs you in in your browser, and checks it works. You can add more later.',
+    names: { claude: 'Claude', codex: 'ChatGPT', gemini: 'Gemini', cursor: 'Cursor' },
+    plans: {
+      claude: 'Pro or Max',
+      codex: 'Plus, Pro or Team · Codex',
+      gemini: 'Google account',
+      cursor: 'Cursor plan',
+    },
+    /** Where the browser goes to sign in, for "{site} opened in your browser". */
+    sites: { claude: 'claude.ai', codex: 'chatgpt.com', gemini: 'Google', cursor: 'cursor.com' },
+    /** Whose account the sign-in is for. */
+    accounts: { claude: 'Claude', codex: 'ChatGPT', gemini: 'Google', cursor: 'Cursor' },
+    state: {
+      ready: 'Ready',
+      notSetUp: 'Not set up',
+      signedOut: 'Signed out',
+      steps: { prepare: 'Getting ready', install: 'Installing', signin: 'Signing in', test: 'Testing' },
+      problems: {
+        'prepare-failed': 'Stopped',
+        'install-failed': 'Stopped',
+        signin: 'Not signed in',
+        'needs-plan': 'Needs a plan',
+        limit: 'Out of usage',
+        'out-of-date': 'Out of date',
+        'test-failed': 'Stopped',
+      },
+    },
+    what: {
+      notInstalled: 'Not on this computer yet. Takes about a minute.',
+      notInstalledGemini:
+        'Not on this computer yet. Needs Node.js, which Styx sets up first if it’s missing. About two minutes.',
+      signedOut: 'On this computer, but not signed in.',
+    },
+    checks: {
+      found: 'On this computer · {where}',
+      prepare: 'Set up {what}',
+      install: 'Install {product}',
+      installed: 'Installed {product}',
+      installedMeta: '{version} · {s}s',
+      signin: 'Sign in with your {account} account',
+      signedInAs: 'Signed in as {account}',
+      signedIn: 'Signed in',
+      test: 'Send a test message',
+      tested: 'Tested: it answered in {s}s',
+      waitingBrowser: 'waiting for your browser',
+    },
+    browser: {
+      opened: '{site} opened in your browser.',
+      then: 'Sign in, approve, then come back here. This card moves on by itself.',
+      copyLink: 'Didn’t open? Copy the link',
+      copied: 'Link copied',
+      codeLabel: 'Your browser shows a code? Paste it here',
+      codeSend: 'Send code',
+    },
+    actions: {
+      setUp: 'Set up {name}',
+      signIn: 'Sign in to {name}',
+      update: 'Update {product}',
+      retry: 'Try again',
+      seePlans: 'See plans',
+      cancel: 'Cancel',
+      details: 'Show details',
+      hideDetails: 'Hide details',
+      diy: 'I’ll do it myself',
+      otherAccount: 'Use a different account',
+    },
+    /** In the chat, when an agent's account stops it mid-task. */
+    chat: {
+      signedOut: '{name} is signed out.',
+      signedOutBody: 'Your login on this computer expired. Sign in again and this message goes out as soon as you’re back.',
+      limit: 'Your {name} plan is out of usage for now.',
+      limitBody: 'It works again when your limit resets.',
+      signIn: 'Sign in to {name}',
+      elsewhere: 'Send it to {name} instead',
+      back: 'Signed in again. Sending your message.',
+    },
+    foot: {
+      ready: '{name} is ready. That’s enough to start.',
+      working: '{name} finishes in the background; you can continue.',
+      none: 'Set up one to start a task. You can also do it later from Settings › Agents.',
+    },
+    /** One plain sentence per failure (main fills `message`; never CLI output). */
+    problems: {
+      prepareNode: 'Node.js didn’t download. Check your internet connection and try again.',
+      prepareGit: 'Git didn’t install, so Claude will use PowerShell for commands. Everything else works.',
+      install: '{product} didn’t install. Show details has what the installer said.',
+      notFoundAfterInstall: 'The installer finished, but {product} isn’t where Styx can find it.',
+      signinTimeout: 'The sign-in didn’t finish. Try again, and approve it in your browser.',
+      signinFailed: 'The sign-in didn’t finish. Show details has what {product} said.',
+      needsPlan: 'You’re signed in, but this account doesn’t include {product}. It needs {plan}.',
+      limit: 'Your plan is out of usage for now. It works again when your limit resets.',
+      outOfDate: 'The {product} on this computer is too old to use from here. Updating takes a few seconds.',
+      test: '{product} didn’t answer the test message. Show details has what it said.',
+      signedOutAtTest: 'Signed in, but {product} says it isn’t. Sign in again.',
+    },
+  },
+
+  /** Owner request: git is never a requirement to start, and getting it is one click. */
+  gitSetup: {
+    name: 'Git',
+    missing:
+      'Git isn’t installed. You can start without it: agents work in the project folder. With git, each agent gets its own copy and you can land its work.',
+    missingShort: 'Git isn’t installed',
+    install: 'Install git',
+    download: 'Download git',
+    runs: 'Runs {command}',
+    installing: 'Installing git… Approve the system prompt if one appears.',
+    ready: 'Git is ready.',
+    failed: 'The installer stopped (code {code}). Download git instead.',
+    missingForInit:
+      'Git isn’t installed yet, so this folder can’t be initialised. Install it here; no restart needed.',
+    cloneNeedsGit: 'Cloning needs git, which isn’t installed yet. Install it here; no restart needed.',
+  },
+
   newProject: {
     title: 'New project',
     /** The project was made; only its GitHub repo was not (toast heading + line). */
     githubFailed: 'GitHub repo not created',
     githubFailedDetail: '{error}. The project is here; Repo › Connect to GitHub makes the repo later.',
+    /** Owner request: git is never a requirement to start. */
+    gitMissing: 'Git isn’t installed on this computer',
+    githubNeedsGit: 'a GitHub repo needs git, which isn’t set up for this project yet',
+    gitFailed: 'Made without git',
+    gitFailedDetail:
+      '{error}. The project works as it is; agents work in its folder. Install git, then Repo › Initialise git gives each agent its own copy.',
     name: 'Name',
     location: 'Location',
     browse: 'Browse',
@@ -1677,7 +1807,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     'well-known': 'install folder',
     'vscode-extension': 'VS Code extension',
     'cursor-extension': 'Cursor extension',
+    'windsurf-extension': 'Windsurf extension',
     'desktop-app': 'Claude app',
+    styx: 'set up by Styx',
     manual: 'located manually',
   },
   agentProducts: {

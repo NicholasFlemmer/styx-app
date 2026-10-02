@@ -102,6 +102,8 @@ export interface DetectDeps {
   programFilesDir?: string;
   /** Where editor launchers land when they are not on PATH (Homebrew, /usr/local). `defaultDeps` fills it; tests leave it empty. */
   launcherDirs?: readonly string[];
+  /** Styx's own tool folders (what agent setup installed, e.g. Gemini on a private Node.js); scanned as source `styx`. */
+  styxDirs?: () => readonly string[];
 }
 
 const DEFAULT_LAUNCHER_DIRS: readonly string[] = ['/usr/local/bin', '/opt/homebrew/bin'];
@@ -114,12 +116,21 @@ const CLIS: { agent: AgentKind; label: string; bins: string[] }[] = [
   { agent: 'shell', label: 'Shell', bins: [] },
 ];
 
-/** IDE extension bundles that ship their own Claude Code binary (`resources/native-binary/claude`). */
-const CLAUDE_EXTENSION_BUNDLES: { dir: string[]; source: CliSource }[] = [
+/**
+ * Editor extension folders that may hold an agent's own binary: Anthropic's Claude Code extension
+ * (`resources/native-binary/claude`) and OpenAI's (`bin/<platform>/codex`). Owner request: an agent that came with
+ * your editor is used as it is, not installed a second time.
+ */
+const EXTENSION_ROOTS: { dir: string[]; source: CliSource }[] = [
   { dir: ['.vscode', 'extensions'], source: 'vscode-extension' },
+  { dir: ['.vscode-insiders', 'extensions'], source: 'vscode-extension' },
   { dir: ['.cursor', 'extensions'], source: 'cursor-extension' },
+  { dir: ['.windsurf', 'extensions'], source: 'windsurf-extension' },
 ];
-const CLAUDE_EXTENSION_PREFIX = 'anthropic.claude-code-';
+const EXTENSION_PREFIXES: Partial<Record<Exclude<AgentKind, 'shell'>, string>> = {
+  claude: 'anthropic.claude-code-',
+  codex: 'openai.chatgpt-',
+};
 const BUNDLE_SEARCH_DEPTH = 4;
 
 /** What each CLI's `--version` output names itself; a pick whose output names a different agent is refused. */
@@ -156,7 +167,9 @@ const SOURCE_RANK: Record<CliSource, number> = {
   'well-known': 3,
   'vscode-extension': 4,
   'cursor-extension': 5,
-  'desktop-app': 6,
+  'windsurf-extension': 6,
+  'desktop-app': 7,
+  styx: 8,
 };
 
 export function defaultDeps(
@@ -533,19 +546,25 @@ export class DetectService {
     if (space.wellKnown.length > 0)
       for (const b of bins)
         for (const p of findAllOnPath(b, space.wellKnown.join(sep), this.deps.platform)) add(p, 'well-known');
-    if (agent === 'claude') {
-      const names = exeNames('claude', this.deps.platform);
-      for (const bundle of CLAUDE_EXTENSION_BUNDLES) {
+    for (const dir of this.deps.styxDirs?.() ?? [])
+      for (const b of bins) for (const p of findAllOnPath(b, dir, this.deps.platform)) add(p, 'styx');
+    const prefix = EXTENSION_PREFIXES[agent];
+    if (prefix !== undefined) {
+      const names = bins.flatMap((b) => exeNames(b, this.deps.platform));
+      for (const bundle of EXTENSION_ROOTS) {
         const root = join(this.deps.home, ...bundle.dir);
         let dirs: string[];
         try {
-          dirs = readdirSync(root).filter((d) => d.startsWith(CLAUDE_EXTENSION_PREFIX));
+          dirs = readdirSync(root).filter((d) => d.startsWith(prefix));
         } catch {
           continue;
         }
         for (const d of dirs.sort())
           for (const p of findExecutables(join(root, d), names, BUNDLE_SEARCH_DEPTH)) add(p, bundle.source);
       }
+    }
+    if (agent === 'claude') {
+      const names = exeNames('claude', this.deps.platform);
       if (this.deps.platform === 'darwin') {
         const app = join(this.deps.applicationsDir ?? '/Applications', 'Claude.app');
         if (existsSync(app))

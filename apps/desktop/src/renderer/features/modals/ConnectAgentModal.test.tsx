@@ -67,6 +67,12 @@ const withCli = (agent: CliInstall['agent'], patch: Partial<CliInstall>): ReadMo
 const seed = (model: ReadModel = fixtures.demoReadModel()) =>
   act(() => useReadModel.getState().replaceModel(model, 'connected'));
 
+/** The dialog opens on the setup card; the manual tools these tests drive sit under "I'll do it myself". */
+const openManual = (agent: 'claude' | 'codex' | 'gemini' | 'cursor') => {
+  render(<ConnectAgentModal id="modal-1" agent={agent} />);
+  fireEvent.click(screen.getByRole('button', { name: copy.agentSetup.actions.diy }));
+};
+
 const identity = () => document.querySelector('[data-agent-identity]');
 
 describe('ConnectAgentModal', () => {
@@ -105,8 +111,10 @@ describe('ConnectAgentModal', () => {
   });
 
   it('opens on the heading, verifies the CLI, and shows where it lives and that it is not signed in', async () => {
-    render(<ConnectAgentModal id="modal-1" agent="gemini" />);
-    expect(screen.getByRole('dialog').textContent).toContain('Connect agent · Gemini CLI');
+    openManual('gemini');
+    // The dialog is the agent's setup card first (owner request): titled by the plan, the card on top.
+    expect(screen.getByRole('dialog').textContent).toContain('Set up Gemini');
+    expect(document.querySelector('[data-agent-setup="gemini"]')).not.toBeNull();
     expect(screen.getByText('Connect Gemini CLI')).toBeTruthy();
     expect(document.activeElement?.textContent).toBe('Connect Gemini CLI');
     expect(screen.getByText(/Sign-in happens in gemini's own flow/)).toBeTruthy();
@@ -123,13 +131,13 @@ describe('ConnectAgentModal', () => {
   });
 
   it('a connected CLI reads Signed in as <account>; an unverified one reads Not verified yet', async () => {
-    render(<ConnectAgentModal id="modal-1" agent="claude" />);
+    openManual('claude');
     await waitFor(() => expect(identity()?.getAttribute('data-agent-identity')).toBe('connected'));
     expect(identity()?.textContent).toBe('Signed in as nic@acme.dev');
     expect(identity()?.querySelector('[data-tone]')?.getAttribute('data-on')).toBeNull();
     expect(screen.getByRole('button', { name: 'Sign in with claude…' })).toBeTruthy();
     cleanup();
-    render(<ConnectAgentModal id="modal-1" agent="cursor" />);
+    openManual('cursor');
     await waitFor(() => expect(identity()?.getAttribute('data-agent-identity')).toBe('unverified'));
     expect(identity()?.textContent).toBe(copy.agentsPage.connect.unverified);
     expect(screen.getByRole('button', { name: 'Sign in with cursor-agent…' })).toBeTruthy();
@@ -143,7 +151,7 @@ describe('ConnectAgentModal', () => {
       });
       return { ok: true as const, value: { cli: fixtures.demoClis()[0] } };
     });
-    render(<ConnectAgentModal id="modal-1" agent="gemini" />);
+    openManual('gemini');
     await waitFor(() => expect(identity()?.textContent).toBe('Checking gemini…'));
     expect(
       (screen.getByRole('button', { name: copy.agentsPage.connect.verify }) as HTMLButtonElement).disabled,
@@ -164,7 +172,7 @@ describe('ConnectAgentModal', () => {
   });
 
   it('Sign in runs agent.login, mounts the inline terminal, follows the exit and the re-verified row', async () => {
-    render(<ConnectAgentModal id="modal-1" agent="gemini" />);
+    openManual('gemini');
     await waitFor(() => expect(calls('agent.verify')).toHaveLength(1));
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with gemini…' }));
     await waitFor(() => expect(calls('agent.login')).toEqual([['agent.login', { agent: 'gemini' }]]));
@@ -201,7 +209,7 @@ describe('ConnectAgentModal', () => {
 
   it('a missing CLI offers Install guide and Locate binary (→ detect.setBinary, then a verify), no sign-in', async () => {
     seed(fixtures.errorReadModel());
-    render(<ConnectAgentModal id="modal-1" agent="codex" />);
+    openManual('codex');
     const status = document.querySelector('[data-cli-installed]');
     expect(status?.getAttribute('data-cli-installed')).toBe('false');
     expect(status?.textContent).toContain('codex is not installed.');
@@ -230,7 +238,7 @@ describe('ConnectAgentModal', () => {
 
   it('Install runs agent.install in the inline terminal; a clean exit re-verifies (main re-detected first) (#98)', async () => {
     seed(fixtures.errorReadModel());
-    render(<ConnectAgentModal id="modal-1" agent="codex" />);
+    openManual('codex');
     await waitFor(() => expect(calls('agent.verify')).toHaveLength(1));
     const install = screen.getByRole('button', { name: 'Install codex…' });
     expect(install.getAttribute('title')).toBe('Runs curl -fsSL https://chatgpt.com/codex/install.sh | sh');
@@ -277,7 +285,7 @@ describe('ConnectAgentModal', () => {
         : c,
     );
     seed({ ...m, discovery: { ...m.discovery, clis } });
-    render(<ConnectAgentModal id="modal-1" agent="codex" />);
+    openManual('codex');
     await waitFor(() => expect(calls('agent.verify')).toHaveLength(1));
     expect(
       screen.getByText('Looked in 2 folders: your shell PATH and the usual install locations.'),
@@ -309,7 +317,7 @@ describe('ConnectAgentModal', () => {
 
   it('a refused Locate binary pick says why and remembers nothing; a retry that works clears it', async () => {
     seed(fixtures.errorReadModel());
-    render(<ConnectAgentModal id="modal-1" agent="codex" />);
+    openManual('codex');
     await waitFor(() => expect(calls('agent.verify')).toHaveLength(1));
     pickedPath = '/Users/me/.codex/config.toml';
     setBinaryError =
@@ -326,7 +334,7 @@ describe('ConnectAgentModal', () => {
 
   it('a refused path in the field says why under it and keeps the text for a second try', async () => {
     seed(fixtures.errorReadModel());
-    render(<ConnectAgentModal id="modal-1" agent="codex" />);
+    openManual('codex');
     await waitFor(() => expect(calls('agent.verify')).toHaveLength(1));
     setBinaryError = '/bin/ls did not run as Codex (no version reported). Pick the Codex executable itself.';
     const field = screen.getByLabelText(copy.agentsPage.connect.pathField) as HTMLInputElement;
@@ -347,7 +355,7 @@ describe('ConnectAgentModal', () => {
         },
       }),
     );
-    render(<ConnectAgentModal id="modal-1" agent="gemini" />);
+    openManual('gemini');
     await waitFor(() => expect(calls('agent.verify')).toHaveLength(1));
     fireEvent.click(screen.getByRole('button', { name: copy.agentsPage.actions.forget }));
     await waitFor(() =>

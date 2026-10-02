@@ -32,6 +32,7 @@ const snapshotOf = (seq: number): ReadModelSnapshot => {
     limits: {},
     account: f.account,
     update: UPDATE_OFF,
+    agentSetup: [],
   };
 };
 

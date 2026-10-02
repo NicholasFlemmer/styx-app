@@ -220,13 +220,23 @@ export class AgentService {
    * On exit the CLIs are re-detected (the new binary is found in its install folder before any PATH edit takes
    * effect), the row is re-verified, and only then does `agent.install` report `exited`.
    */
-  async install(agent: Agent): Promise<{ terminalId: string; command: string }> {
+  async install(
+    agent: Agent,
+    opts: {
+      recipe?: InstallRecipe;
+      reinstall?: boolean;
+      /** Called once the installer has exited and the CLIs were re-detected and the row re-verified. */
+      onDone?: (exitCode: number) => void;
+    } = {},
+  ): Promise<{ terminalId: string; command: string }> {
     if (agent === 'shell') fail('invalid-input', copy.agentsPage.connect.shell);
     const product = copy.agentProducts[agent];
     const row = this.deps.repos.discovery.cli(agent);
-    if (row !== null && row.found && row.binary !== null)
+    // `reinstall`: agent setup's "Update" runs the vendor's installer again over an out-of-date copy.
+    if (opts.reinstall !== true && row !== null && row.found && row.binary !== null)
       fail('invalid-transition', `${product} is already installed (${row.binary})`);
-    const recipe = await this.pickRecipe(agent);
+    // A recipe chosen by agent setup (Gemini through Styx's private npm), else the platform's first that applies.
+    const recipe = opts.recipe ?? (await this.pickRecipe(agent));
     if (recipe === null) fail('not-found', fill(copy.agentsPage.connect.installNone, { cli: product }));
     const spawn =
       recipe.shell === 'powershell'
@@ -246,9 +256,10 @@ export class AgentService {
         .catch((e: Error) =>
           logger.warn('agent: re-detect after install failed', { agent, error: e.message }),
         )
-        .finally(() =>
-          publisher.sendEvent('agent.install', { terminalId, agent, status: 'exited', exitCode }),
-        );
+        .finally(() => {
+          publisher.sendEvent('agent.install', { terminalId, agent, status: 'exited', exitCode });
+          opts.onDone?.(exitCode);
+        });
     };
     pty.on('exit', onExit);
     logger.info('agent: install started', { agent, command: recipe.command, terminalId });

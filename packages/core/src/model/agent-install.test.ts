@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { INSTALL_PLATFORMS, installRecipes } from './agent-install';
+import { GIT_DOWNLOAD_URL, INSTALL_PLATFORMS, gitInstallRecipes, installRecipes } from './agent-install';
 
 const CONNECTABLE = ['claude', 'codex', 'gemini', 'cursor'] as const;
 
@@ -25,5 +25,24 @@ describe('installRecipes (#98)', () => {
     for (const p of INSTALL_PLATFORMS)
       for (const a of CONNECTABLE)
         for (const r of installRecipes(a, p)) expect(r.shell).toBe(p === 'win32' ? 'powershell' : 'sh');
+  });
+});
+
+describe('gitInstallRecipes (owner request: git in one click)', () => {
+  it("the OS's own route: Apple's installer, winget's Git for Windows, the distro's package manager", () => {
+    expect(gitInstallRecipes('darwin')).toEqual([
+      { command: 'xcode-select --install', shell: 'sh', requires: null },
+    ]);
+    expect(gitInstallRecipes('win32')).toEqual([
+      {
+        command:
+          'winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements',
+        shell: 'powershell',
+        requires: 'winget',
+      },
+    ]);
+    expect(gitInstallRecipes('linux').map((r) => r.requires)).toEqual(['apt-get', 'dnf']);
+    expect(gitInstallRecipes('freebsd')).toEqual([]);
+    expect(GIT_DOWNLOAD_URL).toBe('https://git-scm.com/downloads');
   });
 });

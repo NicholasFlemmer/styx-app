@@ -1,6 +1,7 @@
 import {
   AGENT_LABEL,
   copy,
+  type Agent,
   type Attachment,
   type AskAnswer,
   type AskId,
@@ -94,6 +95,8 @@ export type TranscriptItem =
       inbound: boolean;
     }
   | { id: string; kind: 'system'; text: string }
+  /** The agent's account stopped it (signed out, out of usage): a sentence and the fix, not the CLI's error. */
+  | { id: string; kind: 'agent-problem'; text: string; agent: Agent; problem: 'signed-out' | 'limit' }
   | {
       /** A settled turn with changes (ADR-0020): sits after the turn's last row, before the next user message. */
       id: string;
@@ -187,7 +190,15 @@ export const transcriptItems = (model: ReadModel, sessionId: SessionId): Transcr
         out.push({ id: m.id, kind: 'thinking', text: m.body, status: p.status, durationMs: p.durationMs });
         break;
       case 'system':
-        out.push({ id: m.id, kind: 'system', text: m.body });
+        if (p.problem !== undefined)
+          out.push({
+            id: m.id,
+            kind: 'agent-problem',
+            text: m.body,
+            agent: p.problem.agent,
+            problem: p.problem.kind,
+          });
+        else out.push({ id: m.id, kind: 'system', text: m.body });
         break;
       case 'peer':
         out.push({

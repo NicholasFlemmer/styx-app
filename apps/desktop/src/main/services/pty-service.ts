@@ -88,6 +88,8 @@ export class PtyService extends EventEmitter<PtyEvents> {
   private readonly ptys = new Map<string, IPty>();
   private mod: PtyModule | null = null;
   private loginEnv: LoginEnv | null = null;
+  /** Styx's own tool folders (a private Node.js and what its npm installed), appended after the person's PATH. */
+  private extraDirs: string[] = [];
   private loginInflight: Promise<LoginEnv> | null = null;
 
   constructor(readonly platform: NodeJS.Platform = process.platform) {
@@ -124,7 +126,7 @@ export class PtyService extends EventEmitter<PtyEvents> {
 
   private async queryLoginEnv(): Promise<LoginEnv> {
     const processPath = process.env['PATH'] ?? '';
-    const fallback: LoginEnv = { path: processPath, which: {}, resolvedAt: Date.now() };
+    const fallback: LoginEnv = { path: this.withExtra(processPath), which: {}, resolvedAt: Date.now() };
     try {
       const r =
         this.platform === 'win32'
@@ -140,11 +142,27 @@ export class PtyService extends EventEmitter<PtyEvents> {
             });
       const parsed = parseLoginEnv(String(r.stdout ?? ''), this.platform);
       const path = parsed.path === '' ? processPath : mergePaths(parsed.path, processPath, this.platform);
-      this.loginEnv = { path, which: parsed.which, resolvedAt: Date.now() };
+      this.loginEnv = { path: this.withExtra(path), which: parsed.which, resolvedAt: Date.now() };
     } catch {
       this.loginEnv = fallback;
     }
     return this.loginEnv;
+  }
+
+  /**
+   * Adds folders to the end of the PATH agents, terminals and detection see (Styx's private Node.js for Gemini).
+   * Last, so the person's own tools always win; the cached login environment is refreshed to include them.
+   */
+  addPathDirs(dirs: readonly string[]): void {
+    const fresh = dirs.filter((d) => !this.extraDirs.includes(d));
+    if (fresh.length === 0) return;
+    this.extraDirs = [...this.extraDirs, ...fresh];
+    if (this.loginEnv !== null) this.loginEnv = { ...this.loginEnv, path: this.withExtra(this.loginEnv.path) };
+  }
+
+  private withExtra(path: string): string {
+    const sep = this.platform === 'win32' ? ';' : ':';
+    return this.extraDirs.length === 0 ? path : mergePaths(path, this.extraDirs.join(sep), this.platform);
   }
 
   defaultShell(): string {

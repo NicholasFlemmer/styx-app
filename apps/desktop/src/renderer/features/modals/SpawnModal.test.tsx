@@ -146,10 +146,14 @@ describe('SpawnModal', () => {
     await waitFor(() => expect(calls('detect.setBinary')).toHaveLength(1));
     expect(calls('detect.setBinary')[0]?.[1]).toEqual({ agent: 'codex', path: '/opt/homebrew/bin/codex' });
     expect(screen.getByRole('button', { name: 'Spawn · ⌘⏎' }).hasAttribute('disabled')).toBe(true);
+    // Install guide opens Codex's setup card (one place for every Set up; owner request), not onboarding.
     fireEvent.click(within(alert).getByRole('button', { name: copy.errors.cliMissing.cta }));
-    expect(useUiStore.getState().screen).toBe('onboarding');
-    expect(useUiStore.getState().onboardingStep).toBe(3);
-    expect(useUiStore.getState().overlays).toHaveLength(0);
+    expect(useUiStore.getState().screen).not.toBe('onboarding');
+    expect(useUiStore.getState().overlays.at(-1)).toMatchObject({
+      kind: 'modal',
+      modal: 'connect-agent',
+      agent: 'codex',
+    });
   });
 
   it('a signed-out CLI warns without blocking; Fix connection swaps in the Connect agent modal that returns here', () => {

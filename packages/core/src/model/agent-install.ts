@@ -69,3 +69,26 @@ export const installRecipes = (agent: Agent, platform: string): InstallRecipe[] 
 };
 
 export const INSTALL_PLATFORMS: readonly InstallPlatform[] = [...POSIX, 'win32'];
+
+/**
+ * Git, which Styx does not need to start but does need to give each agent its own copy of the code (owner request:
+ * "make it super easy to install"). The OS's own route, run as-is: on macOS Apple's Command Line Tools installer
+ * (a system dialog with one button), on Windows winget's official Git for Windows package, on Linux the distro's
+ * package manager. Where none applies the renderer offers `GIT_DOWNLOAD_URL`.
+ */
+const GIT_RECIPES: Record<InstallPlatform, InstallRecipe[]> = {
+  darwin: [sh('xcode-select --install')],
+  win32: [
+    ps(
+      'winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements',
+      'winget',
+    ),
+  ],
+  linux: [sh('sudo apt-get install -y git', 'apt-get'), sh('sudo dnf install -y git', 'dnf')],
+};
+
+export const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
+
+/** The install commands Styx may run for git on a platform, best first; [] for an unknown OS. */
+export const gitInstallRecipes = (platform: string): InstallRecipe[] =>
+  isInstallPlatform(platform) ? GIT_RECIPES[platform] : [];

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execa } from 'execa';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { GitService, isTokenRefusal, worktreeLocation } from './git';
+import { ExecaGitRunner, GitService, isGitMissing, isTokenRefusal, worktreeLocation } from './git';
 
 const git = new GitService();
 let repo: string;
@@ -318,4 +318,51 @@ describe('push with a grant token', () => {
     expect(isTokenRefusal('The requested URL returned error: 403')).toBe(true);
     expect(isTokenRefusal('remote: not found')).toBe(false);
   });
+});
+
+describe('a machine without git (owner request: git is never a requirement to start)', () => {
+  const missing = () => new GitService(new ExecaGitRunner({ gitBin: 'styx-no-such-git' }));
+
+  it('reports it plainly: available() says so, a rejecting call names it, a non-rejecting one is never a success', async () => {
+    const git = missing();
+    expect(await git.available()).toEqual({ installed: false, version: null });
+    await expect(git.version()).rejects.toThrow(/^git is not installed/);
+    expect(isGitMissing('git is not installed (git init)')).toBe(true);
+    // `isRepo` and friends run with reject:false: a missing git must not read as "yes".
+    expect(await git.isRepo(tmpdir())).toBe(false);
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'finds a git installed while Styx runs: the login PATH is asked again before giving up',
+    async () => {
+      const bin = mkdtempSync(join(tmpdir(), 'styx-fake-git-'));
+      writeFileSync(join(bin, 'git'), '#!/bin/sh\necho "git version 9.9.9"\n', { mode: 0o755 });
+      const asked: (number | undefined)[] = [];
+      const git = new GitService(
+        new ExecaGitRunner({
+          loginPath: async (o) => {
+            asked.push(o.maxAgeMs);
+            return o.maxAgeMs === 0 ? bin : '/styx/nowhere';
+          },
+        }),
+      );
+      expect(await git.available()).toEqual({ installed: true, version: '9.9.9' });
+      expect(asked).toEqual([undefined, 0]);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    "macOS's /usr/bin/git stub (no Command Line Tools) counts as no git",
+    async () => {
+      const bin = mkdtempSync(join(tmpdir(), 'styx-stub-git-'));
+      writeFileSync(
+        join(bin, 'git'),
+        '#!/bin/sh\necho "xcrun: error: invalid active developer path (/Library/Developer/CommandLineTools)" >&2\nexit 1\n',
+        { mode: 0o755 },
+      );
+      const git = new GitService(new ExecaGitRunner({ loginPath: async () => bin }));
+      expect(await git.available()).toEqual({ installed: false, version: null });
+      await expect(git.init(bin)).rejects.toThrow(/^git is not installed/);
+    },
+  );
 });

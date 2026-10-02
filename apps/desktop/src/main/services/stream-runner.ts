@@ -696,8 +696,17 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
       killed: false,
     };
     this.entries.set(opts.id, entry);
+    // A relaunch (Reopen, a message after a restart) carries the CLI's earlier chat: an argv runner resumes it from
+    // the first turn instead of waiting to be told an id it already had.
+    if (opts.session?.resumeSessionId) entry.parser.chatId = opts.session.resumeSessionId;
+    const resume =
+      opts.input.kind === 'argv' && opts.input.resumeFlag !== null && entry.parser.chatId !== null
+        ? [opts.input.resumeFlag, entry.parser.chatId]
+        : [];
     const args =
-      opts.input.kind === 'argv' && opts.firstMessage ? [...opts.args, opts.firstMessage] : opts.args;
+      opts.input.kind === 'argv' && opts.firstMessage
+        ? [...opts.args, ...resume, opts.firstMessage]
+        : opts.args;
     const pid = await this.start(entry, args);
     if (opts.input.kind === 'stdin' && opts.firstMessage) this.send(opts.id, opts.firstMessage);
     return { pid };

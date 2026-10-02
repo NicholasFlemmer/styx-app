@@ -9,6 +9,7 @@ export * from './activity';
 export * from './hunk';
 export * from './discovery';
 export * from './agent-install';
+export * from './agent-setup';
 export * from './notification';
 export * from './settings';
 export * from './design';

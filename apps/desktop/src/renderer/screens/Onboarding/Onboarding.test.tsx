@@ -316,41 +316,40 @@ describe('Onboarding', () => {
     ]);
   });
 
-  it('Agents: rows show version, auth state and an accent dot only for missing CLIs; Continue just advances', async () => {
+  it('Your AI: one card per plan with where it stands and one button; Set up starts the run; Continue just advances', async () => {
     useReadModel.getState().replaceModel(fixtures.errorReadModel(), 'connected');
     useUiStore.setState({ onboardingStep: 3 });
     render(<Onboarding />);
-    expect(screen.getByRole('heading').textContent).toBe(copy.onboarding.agents.headline);
-    const rows = screen.getByRole('table').querySelectorAll('[data-agent]');
-    expect(
-      [...rows].map((r) =>
-        within(r as HTMLElement)
-          .getAllByRole('cell')
-          .map((c) => c.textContent),
-      ),
-    ).toEqual([
-      ['Claude Code', 'claude 2.4.1', 'signed in', ''],
-      ['Codex', 'not found on PATH', 'Install →', ''],
-      ['Gemini CLI', 'gemini 1.2.0', 'Sign in →', ''],
-      ['Cursor agent', 'cursor-agent 0.5.2', 'signed in', ''],
-      ['Shell', 'zsh 5.9', '—', ''],
+    expect(screen.getByRole('heading').textContent).toBe(copy.agentSetup.headline);
+    const cards = [...document.querySelectorAll('[data-agent-setup]')] as HTMLElement[];
+    expect(cards.map((c) => [c.getAttribute('data-agent-setup'), c.getAttribute('data-state')])).toEqual([
+      ['claude', 'ready'],
+      ['codex', 'not-installed'],
+      ['gemini', 'signed-out'],
+      ['cursor', 'ready'],
     ]);
-    const dots = [...rows].map((r) => r.querySelector('[data-tone="hollow"]')?.getAttribute('data-on'));
-    expect(dots).toEqual([null, 'true', null, null, null]);
-    // "Sign in →" / "Install →" are real buttons (owner addition): they open the Connect agent modal for that CLI.
-    expect(
-      [...rows].map((r) => r.querySelector('[data-agent-connect]')?.getAttribute('data-agent-connect')),
-    ).toEqual([undefined, 'codex', 'gemini', undefined, undefined]);
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in → · Gemini CLI' }));
-    expect(useUiStore.getState().overlays).toMatchObject([
-      { kind: 'modal', modal: 'connect-agent', agent: 'gemini' },
+    expect(cards.map((c) => c.querySelector('[data-agent-badge]')?.textContent)).toEqual([
+      'Ready',
+      'Not set up',
+      'Signed out',
+      'Ready',
     ]);
-    fireEvent.click(screen.getByRole('button', { name: 'Install → · Codex' }));
-    expect(useUiStore.getState().overlays).toMatchObject([
-      { kind: 'modal', modal: 'connect-agent', agent: 'codex' },
+    // One button per card that is not ready; ready cards have none.
+    expect(cards.map((c) => c.querySelector('[data-agent-action]')?.textContent ?? null)).toEqual([
+      null,
+      'Set up ChatGPT',
+      'Sign in to Gemini',
+      null,
     ]);
-    expect(useUiStore.getState().overlays).toHaveLength(1);
-    useUiStore.setState({ overlays: [] });
+    expect(document.querySelector('[data-onboarding-plans-foot]')?.textContent).toBe(
+      'Claude is ready. That’s enough to start.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Set up ChatGPT' }));
+    await waitFor(() =>
+      expect(commandMock.mock.calls.filter((c) => c[0] === 'agent.setUp').map((c) => c[1])).toEqual([
+        { agent: 'codex', update: false },
+      ]),
+    );
     const before = commandMock.mock.calls.length;
     fireEvent.click(screen.getByRole('button', { name: copy.onboarding.footer.continue }));
     await waitFor(() => expect(useUiStore.getState().onboardingStep).toBe(4));
