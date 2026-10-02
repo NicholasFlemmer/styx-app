@@ -21,6 +21,13 @@ describe('Message', () => {
     expect(kinds).toEqual(['user', 'agent', 'system', 'fileList']);
   });
 
+  it('a message that points at something shows what, above its text', () => {
+    render(<Message kind="user" text="Make it sticky" pointer="Checkout › Pay button" />);
+    const chip = document.querySelector('[data-message-pointer]');
+    expect(chip?.textContent).toBe('Checkout › Pay button');
+    expect(chip?.parentElement?.textContent).toBe('Checkout › Pay buttonMake it sticky');
+  });
+
   it('file list shows +added in accent and −removed', () => {
     render(
       <Message

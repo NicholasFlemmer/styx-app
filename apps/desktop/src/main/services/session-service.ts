@@ -30,6 +30,8 @@ import {
   type Runner,
   type Session,
   type SessionPurpose,
+  type TaskKind,
+  type Pointer,
   type SessionEffect,
   type SessionEvent,
   type SessionId,
@@ -55,6 +57,7 @@ import type { Publisher } from '../store/publisher';
 import { toCliInstall, versionSatisfies, type DetectService } from './detect-service';
 import type { GitService } from './git';
 import { worktreeLocation } from './git';
+import { ensureDesignTokens } from './design-service';
 import { isPolicyFile } from './hunk-service';
 import { logger, redact } from './logger';
 import {
@@ -132,6 +135,8 @@ export interface SessionHooks {
    * an error before finishing a turn, or exited with an error within its first seconds. Once per session and reason.
    */
   agentProblem?: (sessionId: SessionId, problem: AgentProblem) => void;
+  /** An agent finished its first turn in this session (#127): it was asked for something and did it. Once. */
+  agentWorked?: (sessionId: SessionId) => void;
 }
 
 export interface SpawnInput {
@@ -146,7 +151,24 @@ export interface SpawnInput {
   /** Background task identity; the matching run/deploy purpose gates `remember_command`. */
   purpose?: SessionPurpose | null;
   taskTargetId?: Session['taskTargetId'];
+  /** Design or build (#140); null = build. */
+  kind?: TaskKind | null;
+  /** A build task started from a design task (#140). */
+  designSessionId?: SessionId | undefined;
 }
+
+/** What a message points at (#140): the chip's label for the row, the detail for the agent. */
+export interface MessagePointer {
+  source: Pointer['source'];
+  label: string;
+  detail: string;
+}
+
+/** The pointer's detail under the message, for the agent. */
+const pointerText = (p: MessagePointer): string =>
+  `${fill(copy.agentPrompt.pointer, {
+    source: p.source === 'design' ? copy.agentPrompt.pointerDesign : copy.agentPrompt.pointerPreview,
+  })}\n${p.detail}`;
 
 export const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 
@@ -175,7 +197,17 @@ const isInside = (root: string, p: string): boolean => {
 const EARLY_EXIT_MS = 30_000;
 /** What agent CLIs say when they are signed out ("please run /login", "invalid api key", "not authenticated"…). */
 const SIGNED_OUT =
-  /(\/login|log ?in again|not (signed|logged) in|sign in (first|to)|unauthori[sz]ed|not authenticated|authentication (failed|required)|invalid api key|api key (is )?(missing|invalid)|\b401\b)/i;
+  /(\/login|log ?in again|(oauth )?token (has )?expired|not (signed|logged) in|sign in (first|to)|unauthori[sz]ed|not authenticated|authentication (failed|required)|invalid api key|api key (is )?(missing|invalid)|\b401\b)/i;
+
+/**
+ * The account has run out for now (#129): a usage or rate limit, a spent quota or credit balance. Not "overloaded":
+ * that is the provider's side and passes on its own.
+ */
+/** How long after Stop an error from the CLI is taken to be the stop itself. */
+const STOPPED_ERROR_MS = 10_000;
+
+const OUT_OF_LIMIT =
+  /(usage limit|rate.?limit|quota|credit balance|too many requests|\b429\b|hit your (usage )?limit|limit reached)/i;
 
 const EDIT_TOOL = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
 const PERMISSION_OPTIONS = ['Allow', 'Deny'] as const;
@@ -355,6 +387,12 @@ export class SessionService {
   private readonly turnDone = new Set<string>();
   /** `<session>|<problem>` already reported, so a retry loop counts once. */
   private readonly problemsNoted = new Set<string>();
+  /** Sessions whose current turn reported an error (#129): that turn ending is not the agent having worked. */
+  private readonly turnFailed = new Set<string>();
+  /** Sessions already counted as `agent.worked`. */
+  private readonly worked = new Set<string>();
+  /** When the user last pressed Stop, per session: the CLI's "interrupted" error that follows is not a problem. */
+  private readonly interruptedAt = new Map<string, number>();
   /** Live broker tokens by session, for scrubbing the terminal view; dropped when the process exits. */
   private readonly liveTokens = new Map<string, string>();
   /** Asks opened from a CLI hook (`permission_prompt` / `agent_needs_input`), cancelled once the agent moves on. */
@@ -445,6 +483,13 @@ export class SessionService {
     const { repos, clock } = this.deps;
     const project =
       repos.projects.get(input.projectId) ?? fail('not-found', `project ${input.projectId} not found`);
+    // A build task links only to a live design task of the same project (#140): its pointers and design changes
+    // travel along that link.
+    if (input.designSessionId !== undefined) {
+      const d = repos.sessions.get(input.designSessionId);
+      if (d === null || d.kind !== 'design' || d.projectId !== project.id || d.archivedAt !== null)
+        fail('invalid-input', 'not a design task of this project');
+    }
     const repo =
       repos.repos.byProject(project.id) ?? fail('not-found', `project ${project.name} has no repo`);
     const settings = projectSettingsFor(repos, project.id);
@@ -502,6 +547,8 @@ export class SessionService {
       agent: input.agent,
       ...(input.purpose ? { purpose: input.purpose } : {}),
       ...(input.taskTargetId ? { taskTargetId: input.taskTargetId } : {}),
+      ...(input.kind ? { kind: input.kind } : {}),
+      ...(input.designSessionId ? { designSessionId: input.designSessionId } : {}),
       runner: runnerFor(input.agent, repos.discovery.cli(input.agent)),
       model: input.model,
       permissionMode: input.permissionMode ?? 'default',
@@ -546,6 +593,8 @@ export class SessionService {
     this.deps.publisher.upsert('sessions', [session.id]);
     this.deps.publisher.upsert('worktrees', [worktree.id]);
     this.deps.publisher.upsert('projects', [project.id]);
+    // A design task's tokens exist before its first turn, so screens can link them and Type and colour has values.
+    if (session.kind === 'design') ensureDesignTokens(worktree.path);
     if (input.firstMessage) this.deps.transcript.user(session.id, input.firstMessage);
     this.deps.activity.append({
       who: AGENT_LABEL[session.agent],
@@ -614,6 +663,10 @@ export class SessionService {
     // the session starts blank), together with anything Styx owed the agent while it was not working.
     if (PREAMBLE_AGENTS.includes(session.agent))
       this.notes.set(session.id, [agentPreamble(lane), ...(this.notes.get(session.id) ?? [])]);
+    // A design task learns where screens go and how they are drawn (#140), once, ahead of its first turn.
+    if (session.kind === 'design' && session.lastActivityAt === null) {
+      this.notes.set(session.id, [copy.agentPrompt.design, ...(this.notes.get(session.id) ?? [])]);
+    }
     const outgoing = firstMessage === null ? null : this.withNotes(session.id, firstMessage);
     const ctx: AgentLaunchContext = {
       agent: session.agent,
@@ -726,7 +779,7 @@ export class SessionService {
     sessionId: string,
     body: string,
     attachments: readonly AttachmentInput[] = [],
-    opts: { now?: boolean; from?: 'user' | 'styx' } = {},
+    opts: { now?: boolean; from?: 'user' | 'styx'; pointer?: MessagePointer } = {},
   ): Promise<void> {
     const s = this.require(sessionId);
     if (s.state === 'done') fail('invalid-transition', 'session has finished');
@@ -751,7 +804,11 @@ export class SessionService {
     if (queued && this.queuesNow(this.require(s.id))) {
       // Paths, not contents (the typed text is scrubbed like any transcript row: the row is persisted and mirrored
       // to the renderer). Nothing attached is dropped: images and files wait on disk with the message.
-      this.enqueue(s, redact(shown), prepared.held);
+      this.enqueue(
+        s,
+        redact(opts.pointer === undefined ? shown : `${shown}\n\n${pointerText(opts.pointer)}`),
+        prepared.held,
+      );
       return;
     }
     if (queued)
@@ -766,14 +823,21 @@ export class SessionService {
       : this.deps.transcript.append(s.id, shown, {
           kind: 'user',
           ...(prepared.meta.length > 0 ? { attachments: prepared.meta } : {}),
+          ...(opts.pointer !== undefined
+            ? { pointer: { source: opts.pointer.source, label: opts.pointer.label } }
+            : {}),
         });
+    // A lane started without a first message takes the first thing said as its task (it is what the lane is named
+    // by); otherwise the lane's title fell back to the agent's status line.
+    if (!fromStyx && s.firstMessage === null && body !== '') this.setTask(s.id, shown);
     // The workspace as it is before this turn is the turn's baseline (checkpoints, ADR-0020).
     this.hooks?.turnStarted?.(s.id, userRow.id);
     if (!this.isRunning(s.id) && s.state !== 'paused') {
       const ok = await this.relaunch(s);
       if (!ok) return;
     }
-    const text = this.withNotes(s.id, composeTurn(body, prepared));
+    const said = opts.pointer === undefined ? body : `${body}\n\n${pointerText(opts.pointer)}`;
+    const text = this.withNotes(s.id, composeTurn(said, prepared));
     if (this.deps.stream.has(s.id)) {
       this.deps.stream.send(s.id, text, prepared.images);
       this.render(s.id, `> ${shown}\r\n`); // the terminal (and its log) never sees file contents
@@ -927,6 +991,7 @@ export class SessionService {
    */
   interrupt(sessionId: string): void {
     const s = this.require(sessionId);
+    this.interruptedAt.set(s.id, Date.now());
     // Stop returns what was waiting for the next turn to the composer: nothing held goes out behind a stop.
     this.returnQueue(s);
     if (this.deps.stream.has(s.id)) {
@@ -1557,6 +1622,11 @@ export class SessionService {
           return;
         }
         if (effect.event === 'quiet' && next?.state === 'idle') {
+          // #129: only a turn that ended without an error is the agent having done something.
+          if (!this.turnFailed.delete(s.id) && !this.worked.has(s.id)) {
+            this.worked.add(s.id);
+            this.hooks?.agentWorked?.(s.id);
+          }
           this.turnDone.add(s.id);
           this.hooks?.turnSettled?.(s.id);
           // Whatever order Claude's Stop hook and its `result` arrive in, the queue drains here and only here.
@@ -1569,9 +1639,17 @@ export class SessionService {
         return;
       case 'error': {
         const outdated = parseCliOutdated(effect.message);
-        if (outdated !== null) this.noteProblem(s.id, 'outdated');
-        else if (SIGNED_OUT.test(effect.message)) this.noteProblem(s.id, 'sign-in');
-        else if (!this.turnDone.has(s.id)) this.noteProblem(s.id, 'error');
+        // Not problems (#129), though still shown: an error the agent carries on past by itself, and the error a
+        // CLI reports for a turn the user stopped.
+        const stopped = Date.now() - (this.interruptedAt.get(s.id) ?? 0) < STOPPED_ERROR_MS;
+        const counted = effect.carriesOn !== true && !stopped;
+        if (counted) {
+          this.turnFailed.add(s.id);
+          if (outdated !== null) this.noteProblem(s.id, 'outdated');
+          else if (SIGNED_OUT.test(effect.message)) this.noteProblem(s.id, 'sign-in');
+          else if (OUT_OF_LIMIT.test(effect.message)) this.noteProblem(s.id, 'limit');
+          else if (!this.turnDone.has(s.id)) this.noteProblem(s.id, 'error');
+        }
         if (outdated !== null) this.raiseOutdatedBanner(s, effect.message, outdated);
         else this.deps.transcript.system(s.id, redact(`error: ${effect.message}`));
         if (s.purpose && s.state !== 'done') {
@@ -2084,6 +2162,24 @@ export class SessionService {
       this.hooks?.sessionFinished?.(next.id);
     }
     return next;
+  }
+
+  private setTask(sessionId: string, task: string): void {
+    const s = this.require(sessionId);
+    this.deps.repos.sessions.upsert({ ...s, firstMessage: task });
+    this.deps.publisher.upsert('sessions', [s.id]);
+  }
+
+  /**
+   * Lanes from before a first message was recorded on send: each takes the first thing the person said, so it is
+   * named by its task rather than its latest status. Run once at startup; a session with nothing said keeps null.
+   */
+  backfillTasks(): void {
+    for (const s of this.deps.repos.sessions.all()) {
+      if (s.firstMessage !== null) continue;
+      const first = this.deps.repos.transcripts.firstUserBody(s.id);
+      if (first !== null) this.deps.repos.sessions.upsert({ ...s, firstMessage: first });
+    }
   }
 
   setNote(sessionId: string, rawNote: string | null): void {

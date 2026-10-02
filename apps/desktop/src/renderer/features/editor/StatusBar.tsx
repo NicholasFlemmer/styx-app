@@ -14,6 +14,18 @@ export interface StatusBarProps {
   support?: { label: string; title: string; onOpen: () => void };
 }
 
+/** A label led by a glyph ("☕ Buy us a coffee") keeps the glyph when a narrow bar drops the words. */
+const supportParts = (label: string) => {
+  const space = label.indexOf(' ');
+  const glyph = space > 0 ? label.slice(0, space) : '';
+  if (glyph === '' || /[\p{L}\p{N}]/u.test(glyph)) return label;
+  return (
+    <>
+      {glyph} <span className={s['words']}>{label.slice(space + 1)}</span>
+    </>
+  );
+};
+
 /** Editor status bar (26px, `--s1`): branch · targets in play · spacer · engine/eol/language · support. */
 export function StatusBar({ branch, targets, editor, extras = [], feedback, support }: StatusBarProps) {
   return (
@@ -46,7 +58,7 @@ export function StatusBar({ branch, targets, editor, extras = [], feedback, supp
           onClick={support.onOpen}
           data-status-support="true"
         >
-          {support.label}
+          {supportParts(support.label)}
         </button>
       )}
     </div>

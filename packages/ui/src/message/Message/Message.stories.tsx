@@ -26,6 +26,13 @@ type Story = StoryObj<MessageProps>;
 
 const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)', fontSize: 12 };
 
+export const UserPointing: Story = {
+  args: {
+    kind: 'user',
+    text: 'Make it sticky at the bottom on phone, and show the card logos under it.',
+    pointer: 'Checkout › Pay button',
+  },
+};
 export const User: Story = {
   args: { kind: 'user', text: 'Add input validation to checkout and cover it with tests.' },
 };

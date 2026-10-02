@@ -33,7 +33,7 @@ test.describe('chat clipboard', () => {
 
     // Tabs, rail and titlebar must stay unselectable: dragging across them should never highlight.
     const chrome = await page.evaluate(() => {
-      const tab = document.querySelector('[data-session-tab]');
+      const tab = document.querySelector('[data-nav-lane]');
       const rail = document.querySelector('[data-project-id]');
       return {
         tab: tab ? getComputedStyle(tab).userSelect : 'missing',
@@ -48,7 +48,7 @@ test.describe('chat clipboard', () => {
     await composer.click();
     await composer.fill('');
     await page.evaluate(() => navigator.clipboard.writeText('styx-paste-probe'));
-    await composer.press('Meta+V');
+    await composer.press('ControlOrMeta+V');
     await expect(composer).toHaveValue('styx-paste-probe');
 
     await app.close();

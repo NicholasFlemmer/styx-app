@@ -13,6 +13,12 @@ import s from './LandButton.module.css';
 
 export interface LandButtonProps {
   projectId: ProjectId;
+  /**
+   * `toolbar` (default): the workspace mode strip. `lane`: the lane header over the chat (ADR-0027 §1). `page`: the
+   * Changes page's decision bar, where landing is the move (accent). Each marks itself differently so the
+   * walkthrough and tests can tell them apart.
+   */
+  placement?: 'toolbar' | 'lane' | 'page';
 }
 
 /**
@@ -21,7 +27,7 @@ export interface LandButtonProps {
  * to do this"). Same lane as the editor column and the titlebar branch, same modal the Repo row opens. Secondary,
  * like Publish — accent stays reserved for Grant (§8) and the primary for Deploy.
  */
-export function LandButton({ projectId }: LandButtonProps) {
+export function LandButton({ projectId, placement = 'toolbar' }: LandButtonProps) {
   const sessionId = useSessionId();
   const lane = useModel(
     useCallback(
@@ -39,10 +45,17 @@ export function LandButton({ projectId }: LandButtonProps) {
   const pushOverlay = useUi((u) => u.pushOverlay);
   if (lane === null) return null;
   return (
-    <div className={s['wrap']} data-land-button="true">
+    <div
+      className={placement === 'toolbar' ? s['wrap'] : s['inLane']}
+      {...(placement === 'lane'
+        ? { 'data-lane-land': 'true' }
+        : placement === 'page'
+          ? { 'data-changes-land': 'true' }
+          : { 'data-land-button': 'true' })}
+    >
       <Button
-        size="compact"
-        variant="secondary"
+        size={placement === 'page' ? 'regular' : 'compact'}
+        variant={placement === 'page' ? 'accent' : 'secondary'}
         className={s['button'] ?? ''}
         onClick={() => pushOverlay({ kind: 'modal', modal: 'land', worktreeId: lane.worktreeId })}
         title={`${lane.label} · ${lane.branch ?? ''}`.trim()}

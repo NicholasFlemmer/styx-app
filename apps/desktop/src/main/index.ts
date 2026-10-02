@@ -156,6 +156,11 @@ app.on('open-url', (e, url) => {
   e.preventDefault();
   void handleUrl(url);
 });
+// Windows and Linux hand a link that started Styx in argv (macOS sends `open-url`); handled once the app is up.
+if (process.platform !== 'darwin') {
+  const coldUrl = process.argv.find((a) => a.startsWith('styx://'));
+  if (coldUrl) pendingUrl = coldUrl;
+}
 app.on('second-instance', (_e, argv) => {
   const url = argv.find((a) => a.startsWith('styx://'));
   if (url) void handleUrl(url);
@@ -288,12 +293,15 @@ async function boot(): Promise<void> {
   // Packaged: `resources/**` is asarUnpack'd (electron-builder.yml) so the CLI and templates are real files the shims,
   // MCP server and `fs.cp` can reach: <Resources>/app.asar.unpacked/resources/…, never <Resources>/cli (that path was
   // wrong until 2026-09-07 and every shim exec'd a missing file).
+  // Unpackaged (dev, e2e), from the bundle's own place (apps/desktop/out/main): `app.getAppPath()` is the script's
+  // folder when Electron is started on a file (Playwright on Windows), which put the CLI under apps/desktop/packages.
+  const desktopDir = resolve(__dirname, '..', '..');
   const resourcesDir = app.isPackaged
     ? join(app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked'), 'resources')
-    : resolve(app.getAppPath(), 'resources');
+    : resolve(desktopDir, 'resources');
   const cliPath = app.isPackaged
     ? join(resourcesDir, 'cli', 'styx.js')
-    : resolve(app.getAppPath(), '../../packages/cli/dist/styx.js');
+    : resolve(desktopDir, '..', '..', 'packages', 'cli', 'dist', 'styx.js');
   if (!existsSync(cliPath)) logger.error('styx cli not found: agent shims and MCP will fail', { cliPath });
   else logger.info('runtime paths', { cliPath, resourcesDir });
   const endpoint = brokerEndpoint({
@@ -426,6 +434,13 @@ async function boot(): Promise<void> {
       mainWindow: () => windowService.mainWindow() ?? null,
       onStatus: (status) => container?.publisher.sendEvent('preview.status', status),
     }),
+    // A selection on the Design canvas, as a picture for the agent (#140): only ever the asking window's own pixels.
+    captureWindow: async (senderId, rect) => {
+      const wc = webContents.fromId(senderId);
+      if (wc === undefined || wc.isDestroyed()) return null;
+      const image = await wc.capturePage(rect);
+      return image.isEmpty() ? null : image.toPNG();
+    },
     deviceHooks: {
       windowSources: async () =>
         (await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 } })).map(
@@ -555,7 +570,14 @@ function realUpdater(fixture: string | null): Updater | null {
   if (!app.isPackaged || fixture !== null || env['STYX_E2E'] === '1') return null;
   if (!isMac && platform !== 'win32') return null;
   const override = env['STYX_UPDATE_URL'];
-  if (override === undefined && !existsSync(join(process.resourcesPath, 'app-update.yml'))) return null;
+  const feedFile = join(process.resourcesPath, 'app-update.yml');
+  if (override === undefined && !existsSync(feedFile)) return null;
+  // Windows checks an update's signature only against the publisher named in app-update.yml, which a build has only
+  // when it was signed (WIN_CSC_LINK). An unsigned Windows build never updates itself in place.
+  if (platform === 'win32') {
+    const named = existsSync(feedFile) && /^publisherName:/m.test(readFileSync(feedFile, 'utf8'));
+    if (!named) return null;
+  }
   const updater = autoUpdater;
   updater.logger = {
     info: (m: unknown) => logger.info('updater', { message: String(m) }),

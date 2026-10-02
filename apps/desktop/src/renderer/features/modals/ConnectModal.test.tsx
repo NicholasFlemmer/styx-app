@@ -121,7 +121,7 @@ describe('ConnectModal', () => {
 
   it('opens on the provider grid with method labels and no footer', () => {
     render(<ConnectModal id="modal-1" projectId={acme} />);
-    expect(screen.getByRole('dialog').textContent).toContain('Connect target · choose provider');
+    expect(screen.getByRole('dialog').textContent).toContain('Connect a target: pick a provider');
     const tiles = screen.getByRole('group', { name: copy.connect.stepPick }).querySelectorAll('button');
     expect([...tiles].map((t) => t.textContent)).toEqual([
       'VercelOAuth',
@@ -140,7 +140,7 @@ describe('ConnectModal', () => {
       render(<ConnectModal id="modal-1" projectId={acme} />);
       fireEvent.click(screen.getByRole('button', { name: /^GCP/ }));
       const dialog = screen.getByRole('dialog');
-      expect(dialog.textContent).toContain('Connect target · gcloud CLI');
+      expect(dialog.textContent).toContain('Connect a target: gcloud CLI');
       expect(screen.getByText('Connect with gcloud')).toBeTruthy();
       expect(screen.getByText(fill(copy.connect.cli.body, 'gcloud'))).toBeTruthy();
       await waitFor(() => expect(screen.getByText('gcloud 512.0.0')).toBeTruthy());
@@ -255,8 +255,11 @@ describe('ConnectModal', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Sign in with gcloud…' }));
       await waitFor(() => expect(document.querySelector('[data-login-terminal]')).not.toBeNull());
       emit('connect.cliLogin', { terminalId: 'pty-login-1', provider: 'gcp', status: 'exited', exitCode: 1 });
-      await waitFor(() =>
-        expect(screen.getByRole('status').textContent).toBe('gcloud auth login exited with code 1.'),
+      // The exit lands through a re-fetch of the CLI status; a loaded machine (the full suite on Windows) needs longer
+      // than waitFor's 1s default.
+      await waitFor(
+        () => expect(screen.getByRole('status').textContent).toBe('gcloud auth login exited with code 1.'),
+        { timeout: 5_000 },
       );
       expect(document.querySelector('[data-login-terminal]')?.textContent).toContain('exited with code 1');
       expect(calls('target.connect.cliStatus')).toHaveLength(2);
@@ -299,7 +302,7 @@ describe('ConnectModal', () => {
       expect(disclosure.getAttribute('aria-expanded')).toBe('false');
       fireEvent.click(disclosure);
       expect(disclosure.getAttribute('aria-expanded')).toBe('true');
-      expect(screen.getByRole('dialog').textContent).toContain('Connect target · IAM / key');
+      expect(screen.getByRole('dialog').textContent).toContain('Connect a target: IAM / key');
       expect(screen.getByLabelText(copy.connect.key.accessKey)).toBeTruthy();
       expect(screen.getByRole('button', { name: 'Save to Keychain' })).toBeTruthy();
       expect(screen.queryByRole('button', { name: copy.connect.cli.connect })).toBeNull();
@@ -308,7 +311,7 @@ describe('ConnectModal', () => {
       fireEvent.change(screen.getByLabelText(copy.connect.key.accessKey), { target: { value: 'AKIA-AWS' } });
 
       fireEvent.click(screen.getByRole('button', { name: copy.connect.back }));
-      expect(screen.getByRole('dialog').textContent).toContain('Connect target · choose provider');
+      expect(screen.getByRole('dialog').textContent).toContain('Connect a target: pick a provider');
       // What was typed for AWS does not follow the person into GCP's form.
       fireEvent.click(screen.getByRole('button', { name: /^GCP/ }));
       expandAdvanced();
@@ -316,7 +319,7 @@ describe('ConnectModal', () => {
       fireEvent.click(screen.getByRole('button', { name: copy.connect.back }));
       fireEvent.click(screen.getByRole('button', { name: /^Vercel/ }));
       expandAdvanced();
-      expect(screen.getByRole('dialog').textContent).toContain('Connect target · OAuth');
+      expect(screen.getByRole('dialog').textContent).toContain('Connect a target: OAuth');
       expect(screen.getByText(copy.connect.oauth.waiting)).toBeTruthy();
       expect(screen.getByRole('button', { name: copy.connect.oauth.open })).toBeTruthy();
     });
@@ -326,7 +329,7 @@ describe('ConnectModal', () => {
     render(<ConnectModal id="modal-1" projectId={acme} />);
     fireEvent.click(screen.getByRole('button', { name: /^AWS/ }));
     expandAdvanced();
-    expect(screen.getByRole('dialog').textContent).toContain('Connect target · IAM / key');
+    expect(screen.getByRole('dialog').textContent).toContain('Connect a target: IAM / key');
     const save = screen.getByRole('button', { name: 'Save to Keychain' });
     const test = screen.getByRole('button', { name: copy.connect.key.test });
     expect(save.hasAttribute('disabled')).toBe(true);
@@ -381,7 +384,7 @@ describe('ConnectModal', () => {
 
   it('ssh step: Browse picks the key file via main; Save sends target.connect.saveSsh named after the host', async () => {
     render(<ConnectModal id="modal-1" projectId={acme} provider="ssh" />);
-    expect(screen.getByRole('dialog').textContent).toContain('Connect target · SSH');
+    expect(screen.getByRole('dialog').textContent).toContain('Connect a target: SSH');
     const browse = screen.getByRole('button', { name: copy.connect.ssh.browse });
     expect(browse.hasAttribute('disabled')).toBe(false);
     fireEvent.click(browse);

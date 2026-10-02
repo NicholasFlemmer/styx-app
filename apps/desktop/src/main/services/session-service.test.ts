@@ -577,6 +577,74 @@ describe('SessionService CLI-outdated (model needs a newer CLI)', () => {
   });
 });
 
+describe('a lane is named by its task', () => {
+  it('a lane started without a first message takes the first thing sent as its task, once', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo, ''));
+    expect(a.sessions.get(session.id)?.firstMessage).toBeNull();
+    stream.effect(session.id, { type: 'note', note: 'Reading checkout.ts' });
+    await a.sessions.sendMessage(session.id, 'Make the header sticky');
+    expect(a.sessions.get(session.id)?.firstMessage).toBe('Make the header sticky');
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    await a.sessions.sendMessage(session.id, 'And on mobile');
+    expect(a.sessions.get(session.id)?.firstMessage).toBe('Make the header sticky');
+  });
+
+  it('backfills lanes from before: the first thing said, not the latest status', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo, ''));
+    a.transcript.user(session.id, 'Ship the pricing page');
+    a.repos.sessions.upsert({
+      ...a.sessions.get(session.id)!,
+      firstMessage: null,
+      note: 'The build is packaging',
+    });
+    a.sessions.backfillTasks();
+    expect(a.sessions.get(session.id)?.firstMessage).toBe('Ship the pricing page');
+  });
+});
+
+describe('design and build tasks (#140)', () => {
+  it('a design task stores its kind and gets the design brief ahead of its first turn', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn({
+      ...spawnInput('claude', ids.worktree.featPromo, 'A checkout'),
+      kind: 'design',
+    });
+    expect(a.sessions.get(session.id)?.kind).toBe('design');
+    expect(stream.spawned.at(-1)?.firstMessage).toContain('.styx/designs/<screen>/<size>.html');
+    expect(stream.spawned.at(-1)?.firstMessage).toContain('A checkout');
+  });
+
+  it('a build task links only to a design task of the same project', async () => {
+    const { app: a } = app();
+    const { session: build } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo, 'x'));
+    await expect(
+      a.sessions.spawn({
+        ...spawnInput('claude', ids.worktree.featPromo, 'y'),
+        kind: 'build',
+        designSessionId: build.id,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('a message pointing at something keeps a chip on the row and gives the agent the detail', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo, ''));
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    await a.sessions.sendMessage(session.id, 'Make it sticky', [], {
+      pointer: { source: 'design', label: 'Checkout › Pay button', detail: 'Screen: checkout/desktop.html' },
+    });
+    const row = a.repos.transcripts.last(session.id).at(-1);
+    expect(row?.body).toBe('Make it sticky');
+    expect(row?.payload).toMatchObject({
+      kind: 'user',
+      pointer: { source: 'design', label: 'Checkout › Pay button' },
+    });
+    expect(stream.sent.at(-1)?.text).toContain('Screen: checkout/desktop.html');
+  });
+});
+
 describe('SessionService relaunch + re-detect', () => {
   it('sendMessage relaunches the CLI when its process is gone (nothing replayed), then delivers the message', async () => {
     const { app: a } = app();
@@ -770,6 +838,73 @@ describe('why an agent did not get going (#125)', () => {
     expect(record.mock.calls.map((c) => c[0]).filter((n) => n.startsWith('agent.failed'))).toEqual([
       'agent.failed.exited',
     ]);
+  });
+});
+
+describe('an agent that got going (#127)', () => {
+  it('counts agent.worked once per session, on its first finished turn, however the work was asked for', async () => {
+    const { app: a } = app();
+    const record = vi.spyOn(a.usageReports, 'record');
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    expect(record.mock.calls.map((c) => c[0])).not.toContain('agent.worked');
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    stream.effect(session.id, { type: 'session', event: 'activity' });
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    expect(record.mock.calls.map((c) => c[0]).filter((n) => n === 'agent.worked')).toEqual(['agent.worked']);
+  });
+
+  it('a turn that ended in an error is not work (#129); the next clean one is', async () => {
+    const { app: a } = app();
+    const record = vi.spyOn(a.usageReports, 'record');
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, { type: 'error', message: 'Something odd happened' });
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    expect(record.mock.calls.map((c) => c[0])).not.toContain('agent.worked');
+    stream.effect(session.id, { type: 'session', event: 'activity' });
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    expect(record.mock.calls.map((c) => c[0]).filter((n) => n === 'agent.worked')).toEqual(['agent.worked']);
+  });
+
+  it('names a spent limit or quota as limit, and an expired token as sign-in (#129)', async () => {
+    const { app: a } = app();
+    const record = vi.spyOn(a.usageReports, 'record');
+    const one = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(one.session.id, { type: 'error', message: 'Claude AI usage limit reached|1790000000' });
+    const two = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
+    stream.effect(two.session.id, {
+      type: 'error',
+      message: 'OAuth token has expired. Please obtain a new token',
+    });
+    expect(record.mock.calls.map((c) => c[0]).filter((n) => n.startsWith('agent.failed'))).toEqual([
+      'agent.failed.limit',
+      'agent.failed.sign-in',
+    ]);
+  });
+
+  it('a retry the CLI makes by itself, and the error after the user pressed Stop, are not problems (#129)', async () => {
+    const { app: a } = app();
+    const record = vi.spyOn(a.usageReports, 'record');
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo));
+    stream.effect(session.id, {
+      type: 'error',
+      message: 'stream disconnected (Codex will retry)',
+      carriesOn: true,
+    });
+    a.sessions.interrupt(session.id);
+    stream.effect(session.id, { type: 'error', message: 'error_during_execution' });
+    expect(record.mock.calls.map((c) => c[0]).filter((n) => n.startsWith('agent.failed'))).toEqual([]);
+  });
+
+  it('a first message in the spawn dialog counts as a message sent; an empty one does not', async () => {
+    const { app: a } = app();
+    const record = vi.spyOn(a.usageReports, 'record');
+    await a.bus.dispatch(sender, 'session.spawn', {
+      ...spawnInput('claude', ids.worktree.featPromo),
+      firstMessage: '  ',
+    });
+    expect(record.mock.calls.map((c) => c[0])).toEqual(['agent.spawned']);
+    await a.bus.dispatch(sender, 'session.spawn', spawnInput('codex', ids.worktree.testFlaky));
+    expect(record.mock.calls.map((c) => c[0]).slice(1)).toEqual(['agent.spawned', 'message.sent']);
   });
 });
 

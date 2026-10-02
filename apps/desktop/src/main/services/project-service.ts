@@ -233,6 +233,8 @@ export const remoteUrlOf = (raw: string): string | null => {
   if (/^(https?|ssh|git|file):\/\/\S+$/i.test(text)) return text;
   if (/^[\w.-]+@[\w.-]+:\S+$/.test(text)) return text;
   if (text.startsWith('/')) return text;
+  // A local repo on Windows (`C:\code\shop.git`, `D:/repos/x`).
+  if (/^[A-Za-z]:[\\/]\S+$/.test(text)) return text;
   return null;
 };
 

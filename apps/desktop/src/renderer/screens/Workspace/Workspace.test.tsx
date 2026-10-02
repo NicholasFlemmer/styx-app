@@ -15,21 +15,27 @@ vi.mock('../../features/editor/MonacoEditor', () => ({
   WORD_WRAP_KEY: 'editor.wordWrap',
   applyWordWrap: () => undefined,
 }));
+vi.mock('../../features/preview', () => ({
+  DesignPane: () => <div data-testid="design-pane" />,
+}));
 vi.mock('../../features/terminal/TerminalPane', () => ({
   TerminalPane: ({
     sessionId,
     worktreeId,
     branch,
+    fill,
   }: {
     sessionId: string | null;
     worktreeId: string;
     branch: string;
+    fill?: boolean;
   }) => (
     <div
       data-testid="terminal"
       data-session={sessionId ?? ''}
       data-worktree={worktreeId}
       data-branch={branch}
+      data-fill={fill === true ? 'true' : 'false'}
     />
   ),
 }));
@@ -76,6 +82,8 @@ describe('Workspace screen', () => {
       projectId: side,
       projectSession: {},
       editorFile: null,
+      // Code, the instrument these tests drive (the default for a project without a dev server is Tasks).
+      paneSizes: { 'workspace-mode': 0 },
     });
   });
   afterEach(() => {
@@ -98,6 +106,63 @@ describe('Workspace screen', () => {
     const bar = document.querySelector('[data-status-bar]');
     expect(bar?.textContent?.startsWith('main')).toBe(true);
     expect(document.querySelector('[data-workspace]')?.getAttribute('data-workspace')).toBe('main');
+  });
+
+  it('six instruments on the lane (ADR-0027 §2, #138, #140): Tasks the other lanes, Code the files and editor, Changes the page, Terminal fills, Preview the design window; the pick persists', async () => {
+    useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
+    useUiStore.setState({ projectId: acme, paneSizes: {} });
+    render(<Workspace />);
+    const tabs = within(screen.getByRole('tablist', { name: copy.chat.instruments.label }));
+    expect(tabs.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      copy.chat.instruments.tasks,
+      copy.chat.instruments.canvas,
+      copy.chat.instruments.preview,
+      copy.chat.instruments.changes,
+      copy.chat.instruments.code,
+      copy.chat.instruments.terminal,
+    ]);
+    // No dev server known for acme-shop in the demo: Tasks first, the project's other lanes side by side.
+    expect(document.querySelector('[data-instrument]')?.getAttribute('data-instrument')).toBe('tasks');
+    expect(document.querySelector('[data-tasks-board]')).not.toBeNull();
+    expect(screen.queryByRole('tree')).toBeNull();
+    fireEvent.click(tabs.getByRole('tab', { name: copy.chat.instruments.code }));
+    expect(useUiStore.getState().paneSizes['workspace-mode']).toBe(0);
+    await waitFor(() => expect(screen.getByTestId('monaco')).toBeTruthy());
+    expect(screen.getByRole('tree')).toBeTruthy();
+
+    fireEvent.click(tabs.getByRole('tab', { name: copy.chat.instruments.changes }));
+    expect(document.querySelector('[data-changes-page]')).not.toBeNull();
+    expect(screen.queryByTestId('monaco')).toBeNull();
+    expect(screen.queryByRole('tree')).toBeNull();
+    expect(useUiStore.getState().paneSizes['workspace-mode']).toBe(2);
+    expect(commandMock).toHaveBeenCalledWith('ui.persist', { paneSizes: { 'workspace-mode': 2 } });
+
+    fireEvent.click(tabs.getByRole('tab', { name: copy.chat.instruments.terminal }));
+    expect(screen.getByTestId('terminal').getAttribute('data-fill')).toBe('true');
+    fireEvent.click(tabs.getByRole('tab', { name: copy.chat.instruments.code }));
+    expect(screen.getByTestId('terminal').getAttribute('data-fill')).toBe('false');
+  });
+
+  it('a project that knows how to run its app opens on Preview until the person picks', () => {
+    const m = fixtures.demoReadModel();
+    const settings = m.settings.project[acme];
+    if (settings === undefined) throw new Error('fixture');
+    useReadModel.getState().replaceModel(
+      {
+        ...m,
+        settings: {
+          ...m.settings,
+          project: {
+            ...m.settings.project,
+            [acme]: { ...settings, devUrl: { ...settings.devUrl, value: 'http://localhost:3000' } },
+          },
+        },
+      },
+      'connected',
+    );
+    useUiStore.setState({ projectId: acme, paneSizes: {} });
+    render(<Workspace />);
+    expect(document.querySelector('[data-instrument]')?.getAttribute('data-instrument')).toBe('design');
   });
 
   it('the status bar ends with Support Styx, which opens the Buy Me a Coffee page in the browser (#120)', async () => {

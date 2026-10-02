@@ -274,7 +274,12 @@ describe('detectPlatforms', () => {
       commands: ['./gradlew installDebug'],
     },
   ];
-  it.each(table)('$name', async ({ files, platforms, commands }) => {
+  // `|` cannot appear in a Windows file name, so the shell-characters row needs a POSIX file system.
+  const rows =
+    process.platform === 'win32'
+      ? table.filter((r) => !Object.keys(r.files).some((f) => f.includes('|')))
+      : table;
+  it.each(rows)('$name', async ({ files, platforms, commands }) => {
     const out = await detectPlatforms(tmp(files));
     expect(out.platforms).toEqual(platforms);
     expect(out.suggestions.map((s) => s.command)).toEqual(commands);
@@ -359,7 +364,11 @@ describe('RunService', () => {
     expect(spawned).toMatchObject({
       id: r.terminalId,
       shell: '/bin/zsh',
-      args: ['-lc', 'pnpm dev'],
+      // The login shell's `-lc` on POSIX; PowerShell with a process-scoped Bypass on Windows.
+      args:
+        process.platform === 'win32'
+          ? ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-Command', 'pnpm dev']
+          : ['-lc', 'pnpm dev'],
       cwd: dir,
     });
     // The shim env user terminals get rides along (the dev server may shell out to `styx`).
@@ -657,7 +666,10 @@ describe('RunService', () => {
       platform: 'win32',
     });
     await ps.start(acme, 'npm run dev');
-    expect(calls.at(-1)).toEqual({ file: 'powershell.exe', args: ['-NoLogo', '-Command', 'npm run dev'] });
+    expect(calls.at(-1)).toEqual({
+      file: 'powershell.exe',
+      args: ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-Command', 'npm run dev'],
+    });
     const wsl = new RunService({
       ...(fake as unknown as ConstructorParameters<typeof RunService>[0]),
       shell: () => 'wsl.exe',

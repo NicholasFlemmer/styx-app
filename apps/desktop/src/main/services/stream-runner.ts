@@ -1,4 +1,5 @@
-import { spawn as spawnChild, type ChildProcess } from 'node:child_process';
+import type { ChildProcess, spawn as spawnChild } from 'node:child_process';
+import { killTree, spawnCli } from './spawn-cli';
 import { EventEmitter } from 'node:events';
 import { isAbsolute, relative, sep } from 'node:path';
 import {
@@ -74,7 +75,11 @@ export type StreamEffect =
       input: Record<string, unknown>;
     }
   | { type: 'render'; text: string }
-  | { type: 'error'; message: string };
+  /**
+   * `carriesOn`: shown, but the agent goes on by itself (Codex retrying, or starting without Styx's MCP server),
+   * so it is not counted as the agent failing.
+   */
+  | { type: 'error'; message: string; carriesOn?: boolean };
 
 export type StreamBlockKind = 'text' | 'thinking';
 
@@ -676,7 +681,7 @@ export type SpawnFn = typeof spawnChild;
 export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRunnerLike {
   private readonly entries = new Map<string, Entry>();
 
-  constructor(private readonly spawnFn: SpawnFn = spawnChild) {
+  constructor(private readonly spawnFn: SpawnFn = spawnCli) {
     super();
   }
 
@@ -733,7 +738,9 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
           reject(err);
         }
       });
-      proc.once('close', (code) => this.onClose(entry, proc, code));
+      // A stop we asked for ends with no exit code, as a signal does on macOS: Windows' taskkill /F leaves 1, which
+      // would read as the agent failing.
+      proc.once('close', (code) => this.onClose(entry, proc, entry.killed ? null : code));
     });
   }
 
@@ -864,7 +871,7 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
     entry.killed = true;
     if (entry.proc) {
       entry.proc.stdin?.end();
-      entry.proc.kill();
+      killTree(entry.proc);
       return;
     }
     this.entries.delete(id);

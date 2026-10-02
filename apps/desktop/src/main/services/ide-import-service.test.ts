@@ -27,6 +27,8 @@ import {
 
 const FIX = join(__dirname, '__fixtures__');
 const read = (p: string) => readFileSync(join(FIX, p), 'utf8');
+/** The fakes below speak POSIX paths; the service builds them with `join`, which uses `\\` on a Windows host. */
+const n = (p: string) => p.replace(/\\/g, '/');
 
 describe('VS Code / Cursor readers', () => {
   it('maps file URIs to paths per platform and drops remote URIs', () => {
@@ -169,7 +171,9 @@ describe('JetBrains / Neovim readers', () => {
 
   it('resolves a file to its enclosing repo root', () => {
     const exists = (p: string) => p === '/Users/me/code/acme-shop/.git';
-    expect(repoRootOf('/Users/me/code/acme-shop/src/index.ts', exists)).toBe('/Users/me/code/acme-shop');
+    expect(repoRootOf('/Users/me/code/acme-shop/src/index.ts', (p) => exists(n(p)))).toBe(
+      '/Users/me/code/acme-shop',
+    );
     expect(repoRootOf('/tmp/loose.txt', exists)).toBeNull();
   });
 });
@@ -195,10 +199,10 @@ describe('IdeImportService', () => {
       platform: 'darwin',
       home: '/Users/me',
       env: {},
-      exists: (p) => existing.has(p),
-      readFile: (p) => read(p.replace('/cfg/', 'vscode/')),
-      listDir: (p) => (p === storage ? ['bbb', 'aaa', 'ccc', 'ddd', 'ext-dev'] : []),
-      mtimeMs: (p) => mtimes[p] ?? null,
+      exists: (p) => existing.has(n(p)),
+      readFile: (p) => read(n(p).replace('/cfg/', 'vscode/')),
+      listDir: (p) => (n(p) === storage ? ['bbb', 'aaa', 'ccc', 'ddd', 'ext-dev'] : []),
+      mtimeMs: (p) => mtimes[n(p)] ?? null,
       readVscdb: () => {
         throw new Error('state.vscdb must not be opened when it does not exist');
       },
@@ -234,12 +238,12 @@ describe('IdeImportService', () => {
       platform: 'darwin',
       home: '/Users/me',
       env: {},
-      exists: (p) => existing.has(p),
-      readFile: (p) => read(p.replace('/cfg/', 'vscode/')),
-      listDir: (p) => (p === storage ? ['aaa', 'ddd'] : p === '/cfg/User/profiles' ? ['p1'] : []),
-      mtimeMs: (p) => (p === `${storage}/aaa` ? 300 : p === `${storage}/ddd` ? 200 : null),
+      exists: (p) => existing.has(n(p)),
+      readFile: (p) => read(n(p).replace('/cfg/', 'vscode/')),
+      listDir: (p) => (n(p) === storage ? ['aaa', 'ddd'] : n(p) === '/cfg/User/profiles' ? ['p1'] : []),
+      mtimeMs: (p) => (n(p) === `${storage}/aaa` ? 300 : n(p) === `${storage}/ddd` ? 200 : null),
       readVscdb: (file) =>
-        file.includes('/profiles/')
+        n(file).includes('/profiles/')
           ? ['/Users/me/work/blog v2']
           : ['/Users/me/code/acme-shop', '/Users/me/missing'],
     });
@@ -267,7 +271,7 @@ describe('IdeImportService', () => {
       platform: 'darwin',
       home: '/Users/me',
       env: {},
-      exists: (p) => existing.has(p),
+      exists: (p) => existing.has(n(p)),
       readFile: (p) =>
         p.endsWith('keybindings.json')
           ? read('vscode/User/keybindings.json')
@@ -341,7 +345,9 @@ describe('Cursor / Windsurf / Zed', () => {
         ],
       }),
     );
-    const svc = new IdeImportService({ platform: 'darwin', home: m.home, env: {} });
+    // Real files: the stored file URIs decode per the host (a Windows host's temp dir is `C:\\…`).
+    const host = process.platform === 'win32' ? 'win32' : 'darwin';
+    const svc = new IdeImportService({ platform: host, home: m.home, env: {} });
     expect(
       svc.importFrom({ kind: 'windsurf', configDir }, { recents: true, keybindings: true, theme: true }),
     ).toEqual({
@@ -475,6 +481,11 @@ describe('installOpenIn', () => {
     expect(calls[1]).toBe(
       `reg add HKCU\\Software\\Classes\\Directory\\shell\\Styx\\command /ve /d "${bin}\\styx.cmd" "%V" /f`,
     );
-    expect(calls.at(-1)).toBe(`setx PATH C:\\Users\\me\\bin;${bin}`);
+    // The user PATH goes back through the registry as REG_EXPAND_SZ (setx would cut it at 1024 and flatten %VARS%).
+    expect(calls.at(-2)).toBe(
+      `reg add HKCU\\Environment /v Path /t REG_EXPAND_SZ /d C:\\Users\\me\\bin;${bin} /f`,
+    );
+    expect(calls.at(-1)).toBe('setx STYX_OPEN_IN 1');
+    expect(calls.some((c) => c.startsWith('setx PATH'))).toBe(false);
   });
 });

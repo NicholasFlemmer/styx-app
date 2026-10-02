@@ -6,10 +6,9 @@
     justify-content: center;
     gap: 6px;
     font-family: var(--font-ui);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    /* ADR-0027 §6: sentence-case actions at body-small size. */
+    font-size: 13px;
+    font-weight: 500;
     white-space: nowrap;
     border: 1px solid var(--ln);
     background: transparent;
@@ -19,23 +18,69 @@
     user-select: none;
   }
   /* spec §9: hit targets ≥ 28px even for 22px-tall compact buttons */
-  .button::after { content: ''; position: absolute; inset: -3px; }
+  .button::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+  }
 
-  .compact { padding: 5px 10px; }
-  .regular { padding: 6px 12px; }
-  .hunk { padding: 4px 10px; }
-  .footer { flex: 1; padding: 14px; min-height: 44px; font-size: 11px; font-weight: 700; border: 0; }
+  .compact {
+    padding: 5px 10px;
+  }
+  .regular {
+    padding: 6px 12px;
+  }
+  .hunk {
+    padding: 4px 10px;
+  }
+  .footer {
+    flex: 1;
+    padding: 14px;
+    min-height: 44px;
+    font-size: 14px;
+    font-weight: 600;
+    border: 0;
+  }
   /* Footer actions: 40/41px visible (prototype), 44px hit area (spec §9) via a 2px vertical bleed. */
-  .footer::after { inset: -2px 0; }
+  .footer::after {
+    inset: -2px 0;
+  }
 
-  .secondary:hover { background: var(--s2); }
-  .primary { border-color: var(--tx); background: var(--tx); color: var(--bg); }
-  .accent { border-color: var(--ac); background: var(--ac); color: var(--acx); }
-  .ghost { color: var(--mu); }
-  .ghost:hover { background: var(--s2); }
-  .footer.ghost { border: 0; }
-  .dashed { border-style: dashed; color: var(--mu); }
-  .dashed:hover { background: var(--s2); }
+  .secondary:hover {
+    background: var(--s2);
+  }
+  .primary {
+    border-color: var(--tx);
+    background: var(--tx);
+    color: var(--bg);
+    font-weight: 600;
+  }
+  .accent {
+    border-color: var(--ac);
+    background: var(--ac);
+    color: var(--acx);
+    font-weight: 700;
+  }
+  .ghost {
+    color: var(--mu);
+  }
+  .ghost:hover {
+    background: var(--s2);
+  }
+  .footer.ghost {
+    border: 0;
+  }
+  .dashed {
+    border-style: dashed;
+    color: var(--mu);
+  }
+  .dashed:hover {
+    background: var(--s2);
+  }
 
-  .button:disabled, .button[aria-disabled='true'] { opacity: 0.5; pointer-events: none; }
+  .button:disabled,
+  .button[aria-disabled='true'] {
+    opacity: 0.5;
+    pointer-events: none;
+  }
 }

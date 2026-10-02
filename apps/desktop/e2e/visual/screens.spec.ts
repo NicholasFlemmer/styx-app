@@ -1,8 +1,12 @@
 /**
- * Visual fidelity: the built app vs. baselines baked from the prototype (`pnpm visual:baseline`).
+ * Visual fidelity: the built app vs. its reference screenshots.
  *
- *   pnpm visual                          # compare every __baseline__/<state>-<theme>-<chrome>.png
- *   STYX_VISUAL_UPDATE=1 pnpm visual     # also copy actuals to __baseline__/app/ (prototype baselines are never touched)
+ * ADR-0027 moved the screens past the handoff prototype, so a state's reference is the app's own screenshot in
+ * `__baseline__/app/` when there is one (taken from a reviewed build), else the prototype baseline
+ * (`pnpm visual:baseline`). The prototype baselines are kept as history and never overwritten.
+ *
+ *   pnpm visual                          # compare every state against its reference
+ *   STYX_VISUAL_UPDATE=1 pnpm visual     # take the app's screenshots as the new references in __baseline__/app/
  *   pnpm visual:report                   # per-state diff ratios from the last run
  *
  * The renderer signals that a state is painted by setting `[data-screen-ready]` (value: the state name) on any element.
@@ -83,7 +87,7 @@ async function waitForReady(page: Page, timeout: number): Promise<boolean> {
 
 let appRendersScreens = false;
 
-test.describe('visual fidelity vs prototype', () => {
+test.describe('visual fidelity vs reference', () => {
   test.beforeAll(async () => {
     mkdirSync(RESULTS_DIR, { recursive: true });
     writeFileSync(join(RESULTS_ROOT, 'latest'), RUN_ID); // `pnpm visual:report` reads this run by default
@@ -147,9 +151,10 @@ test.describe('visual fidelity vs prototype', () => {
         const actualPath = join(RESULTS_DIR, b.file);
         await page.screenshot({ path: actualPath, scale: 'css', animations: 'disabled', caret: 'hide' });
 
+        const appRef = join(APP_BASELINE_DIR, b.file);
         const result: CompareResult = comparePng(
           actualPath,
-          join(BASELINE_DIR, b.file),
+          existsSync(appRef) ? appRef : join(BASELINE_DIR, b.file),
           join(RESULTS_DIR, b.file.replace(/\.png$/, '-diff.png')),
           {
             threshold: 0.1,

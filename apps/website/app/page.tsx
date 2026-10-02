@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import { Compat } from '@/components/Compat';
 import { StructuredData } from '@/components/StructuredData';
 import { Counters } from '@/components/Counters';
+import { DesignBuild } from '@/components/DesignBuild';
 import { DemoProvider } from '@/components/demo/DemoContext';
-import { ScreensStrip } from '@/components/ScreensStrip';
 import { Download } from '@/components/Download';
 import { Footer } from '@/components/Footer';
 import { GrantFlow } from '@/components/GrantFlow';
@@ -35,8 +35,8 @@ export default function Page() {
         <GrantFlow />
         <Compat />
         <Worktrees />
+        <DesignBuild />
         <Ship />
-        <ScreensStrip />
         <Invariants />
         <Keyboard />
         <Download />

@@ -168,24 +168,6 @@
   height: 32px;
   padding: 0 12px;
 }
-.field {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  padding: 0 8px;
-  border: 1px solid var(--ln);
-  background: var(--s1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.field[data-wide='true'] {
-  flex: none;
-  width: 100%;
-  font-family: var(--font-ui);
-}
 .chips {
   display: inline-flex;
   flex: none;
@@ -235,18 +217,6 @@
       opacity: 0.25;
     }
   }
-}
-
-/* See it running */
-.bar {
-  width: 100%;
-  display: flex;
-  gap: 6px;
-  overflow: hidden;
-}
-.bar .field {
-  flex: 0 1 auto;
-  min-width: 76px;
 }
 
 /* Keep talking */
@@ -383,72 +353,6 @@
 .box[data-inv='true'] {
   background: var(--tx);
   border-color: var(--tx);
-}
-
-/* Design */
-.strip {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--ln);
-}
-.field[data-grow='true'] {
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--mu);
-}
-.stage {
-  width: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
-  position: relative;
-  display: flex;
-  justify-content: center;
-  padding-block: 10px;
-  background: var(--s1);
-  border: 1px solid var(--ln);
-  overflow: hidden;
-}
-.phone {
-  width: 116px;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  overflow: hidden;
-  padding: 14px 12px;
-  background: var(--bg);
-  border: 1px solid var(--tx);
-}
-.phone i {
-  display: block;
-  height: 5px;
-  background: var(--s2);
-}
-.phone u {
-  display: block;
-  height: 36px;
-  background: var(--s2);
-}
-.phone u[data-small='true'] {
-  height: 24px;
-}
-.phone b {
-  display: block;
-  height: 16px;
-  margin-top: auto;
-  background: var(--tx);
-}
-.rotate {
-  position: absolute;
-  right: 10px;
-  bottom: 8px;
-  font: 600 10px / 1 var(--font-ui);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--mu);
 }
 
 /* GitHub */

@@ -15,6 +15,8 @@ import {
 import type { Repos } from '../db/repos';
 
 export const TRANSCRIPT_WINDOW = 200;
+/** How many more rows "Show earlier messages" brings in each time. */
+export const TRANSCRIPT_PAGE = 500;
 export const AUDIT_WINDOW = 500;
 export const ACTIVITY_WINDOW = 100;
 
@@ -32,6 +34,8 @@ export interface ProjectionDeps {
   account?: () => ReadModelSnapshot['account'];
   /** Updates in place (UpdateService, #119); absent in tests. */
   update?: () => ReadModelSnapshot['update'];
+  /** Rows of a session's transcript the renderer holds (grown by "Show earlier messages"); default TRANSCRIPT_WINDOW. */
+  transcriptWindow?: (sessionId: string) => number;
 }
 
 /** Effective per-project settings: builtin defaults ← app ← `.styx/project.json` overrides stored in `projects.settings_json`. */
@@ -43,7 +47,7 @@ export function buildSnapshot(deps: ProjectionDeps, seq: number): ReadModelSnaps
   const { repos } = deps;
   const transcripts: Record<string, TranscriptMessage[]> = {};
   for (const sid of repos.transcripts.sessionIds())
-    transcripts[sid] = repos.transcripts.last(sid, TRANSCRIPT_WINDOW);
+    transcripts[sid] = repos.transcripts.last(sid, deps.transcriptWindow?.(sid) ?? TRANSCRIPT_WINDOW);
   // Hunks ride along only while tracking is on: an installation with thousands of stale rows would otherwise ship
   // every patch in each snapshot for a feature that is off.
   const hunks: Record<string, AgentChange[]> = {};

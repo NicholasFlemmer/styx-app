@@ -33,6 +33,25 @@ export const envShareSchema = z.enum(['per-grant', 'always', 'never']);
 export type EnvShare = z.infer<typeof envShareSchema>;
 
 /** App-wide (per machine) settings; stored in `app_settings`. */
+/**
+ * The workspace's instruments (ADR-0027 §2, #138, #140), by their stored keys: `design` is Preview (the running app;
+ * the key predates the Design tab) and `canvas` is Design.
+ */
+export const INSTRUMENTS = ['tasks', 'canvas', 'design', 'changes', 'code', 'terminal'] as const;
+export const instrumentSchema = z.enum(INSTRUMENTS);
+export type Instrument = z.infer<typeof instrumentSchema>;
+
+/** A stored order made whole: unknown and repeated entries dropped, instruments it lacks appended in default order. */
+export const instrumentOrderOf = (order: readonly string[]): Instrument[] => {
+  const out: Instrument[] = [];
+  for (const k of order) {
+    const known = INSTRUMENTS.find((i) => i === k);
+    if (known !== undefined && !out.includes(known)) out.push(known);
+  }
+  for (const i of INSTRUMENTS) if (!out.includes(i)) out.push(i);
+  return out;
+};
+
 export const appSettingsSchema = z.object({
   theme: themePreferenceSchema,
   notify: notifyModeSchema,
@@ -58,6 +77,13 @@ export const appSettingsSchema = z.object({
   usageReports: z.boolean().default(true),
   /** The first-run walkthrough (owner request, #124) was finished or skipped; replayable from the palette. */
   tourDone: z.boolean().default(false),
+  /**
+   * Which walkthrough was seen (ADR-0027): a new layout gets a new walkthrough, offered once again to everyone
+   * who saw an older one. 0 for anyone who saw only the first.
+   */
+  tourVersion: z.number().int().nonnegative().default(0),
+  /** The workspace tabs in the person's order (#140); empty = the default order. Kept for every project. */
+  instrumentOrder: z.array(z.string()).max(12).default([]),
 });
 export type AppSettings = z.infer<typeof appSettingsSchema>;
 
@@ -75,7 +101,16 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   trackAgentEdits: false,
   usageReports: true,
   tourDone: false,
+  tourVersion: 0,
+  instrumentOrder: [],
 };
+
+/** The walkthrough for the current layout (ADR-0027: 2, organised around the lane). */
+export const TOUR_VERSION = 2;
+
+/** Whether this walkthrough has been finished or skipped; an older one does not count. */
+export const tourSeen = (app: Pick<AppSettings, 'tourDone' | 'tourVersion'>): boolean =>
+  app.tourDone && app.tourVersion >= TOUR_VERSION;
 
 /**
  * Per-project settings: the merge of builtin defaults, app-level defaults, and `.styx/project.json`.

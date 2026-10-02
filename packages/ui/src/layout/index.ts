@@ -7,3 +7,4 @@ export * from './Tab';
 export * from './NavItem';
 export * from './RailTile';
 export * from './DeviceFrame';
+export * from './LaneRow';

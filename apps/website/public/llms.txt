@@ -12,6 +12,9 @@ Styx is free to download for macOS on Apple silicon. Windows is coming. It is ma
 - It uses the agent subscriptions and logins you already have (Claude, ChatGPT/Codex, Gemini, Cursor). Styx does not resell model access.
 - Agents never hold your keys. When an agent wants to deploy or use a database or server (Vercel, AWS, Google Cloud, Supabase, GitHub, SSH), it asks. You approve it for a set time; anything that writes to production needs Touch ID. Access expires on its own.
 - Every request, approval, use and revoke goes into an append-only, hash-chained audit log on your Mac.
+- Every task is a card on the Tasks tab: its agent, branch, status, whether it needs you and what it changed. Tasks are marked Design or Build when they start.
+- Design tab: a design task draws screens first (wireframe or high fidelity, at desktop, tablet and phone size, in the project's type and colours) as plain HTML files in the repo. Select an element or drag over an area to change it by hand or tell the agent, with a picture. "Build it" hands the screens to a linked build task, which is told when the design changes.
+- Preview runs the app locally beside the chat. "Select to fix": click or drag over what is wrong in the running app and the agent gets the element, its place in the code when the page exposes it, and a picture.
 - It also runs projects locally, connects deploy targets, reviews agents' changes hunk by hunk, and can run a background tech-debt review of a repository.
 
 ## What it is not

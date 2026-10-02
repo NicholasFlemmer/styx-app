@@ -6,6 +6,7 @@ import { isDeployActive } from '../model/run';
 import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
 import {
+  activeLaneOf,
   agentLabel,
   headAskOf,
   liveSessions,
@@ -17,7 +18,6 @@ import {
 } from './common-settings';
 import { formatCountdown } from './format';
 import { fuzzyBest } from './fuzzy';
-import { sessionTabs } from './tabs';
 import { targetDerivedState } from './target-state';
 
 export type PaletteScope = 'all' | 'actions' | 'agents' | 'projects';
@@ -36,6 +36,8 @@ export type PaletteAction =
   | { kind: 'deploy'; projectId: ProjectId; targetId: TargetId }
   | { kind: 'review-ask'; sessionId: SessionId; askId: AskId }
   | { kind: 'spawn'; projectId: ProjectId }
+  /** ADR-0027: open New task in the project with the typed words as the task. */
+  | { kind: 'new-task'; projectId: ProjectId; text: string }
   | { kind: 'new-project' }
   /** Owner additions: the recents/scan list, an existing repo (folder picker) or a clone, like the rail menu. */
   | { kind: 'add-existing' }
@@ -245,7 +247,7 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
   // Snake in the chat pane (any tab on screen but one waiting on the person: that ask comes first). The tab is
   // resolved the way the chat pane resolves it (the first tab until one is picked), not from the raw selection —
   // before the first click the pane already shows a tab, and the palette must agree with it.
-  const onScreen = projectId === null ? null : sessionTabs(model, projectId, ui.sessionId ?? null).activeId;
+  const onScreen = projectId === null ? null : activeLaneOf(model, projectId, ui.sessionId ?? null);
   const tab = onScreen === null ? undefined : model.sessions.byId[onScreen];
   if (projectId !== null && tab !== undefined && tab.state !== 'needs-you')
     items.push({
@@ -297,6 +299,38 @@ const rank = (items: PaletteItem[], query: string): PaletteItem[] => {
  * Groups Actions / Agents / Projects, fuzzy on label + meta, first row flagged, empty groups dropped,
  * scope filtering (⇥). Lock state lives in each action's meta.
  */
+/** A query this long or longer may be a task in words rather than the name of a command. */
+const TASK_MIN_CHARS = 3;
+/** With this many words, it reads as a sentence: Start as a task comes first. */
+const TASK_SENTENCE_WORDS = 3;
+const TASK_LABEL_MAX = 60;
+
+/**
+ * "Start “…” as a task in acme-shop" (ADR-0027): what was typed, as New task in the current project. Offered first
+ * when the query reads as a sentence (three words or more); absent with no project, or for a word or two, which
+ * are commands.
+ */
+const taskItem = (
+  model: ReadModel,
+  ui: PaletteUi,
+  query: string,
+): { item: PaletteItem; lead: boolean } | null => {
+  const text = query.trim().replace(/\s+/g, ' ');
+  if (ui.projectId === null || text.length < TASK_MIN_CHARS) return null;
+  const shown = text.length > TASK_LABEL_MAX ? `${text.slice(0, TASK_LABEL_MAX - 1).trimEnd()}…` : text;
+  return {
+    item: {
+      id: 'new-task',
+      glyph: '+',
+      label: fill(copy.palette.actions.newTask, { text: shown, project: projectNameOf(model, ui.projectId) }),
+      meta: copy.palette.actions.newTaskMeta,
+      first: false,
+      action: { kind: 'new-task', projectId: ui.projectId, text },
+    },
+    lead: text.split(' ').length >= TASK_SENTENCE_WORDS,
+  };
+};
+
 export const paletteResults = (
   model: ReadModel,
   ui: PaletteUi,
@@ -309,10 +343,17 @@ export const paletteResults = (
     { key: 'agents', label: copy.palette.groups.agents, items: agentItems(model) },
     { key: 'projects', label: copy.palette.groups.projects, items: projectItems(model) },
   ];
-  let first = true;
-  return all
+  const task = taskItem(model, ui, query);
+  const ranked = all
     .filter((g) => scope === 'all' || g.key === scope)
-    .map((g) => ({ ...g, items: rank(g.items, query) }))
+    .map((g) => ({ ...g, items: rank(g.items, query) }));
+  // A sentence leads the list; a word or two is a command (or nothing).
+  const offer = task !== null && task.lead;
+  let first = true;
+  return ranked
+    .map((g) =>
+      g.key !== 'actions' || !offer || task === null ? g : { ...g, items: [task.item, ...g.items] },
+    )
     .filter((g) => g.items.length > 0)
     .map((g) => ({
       ...g,

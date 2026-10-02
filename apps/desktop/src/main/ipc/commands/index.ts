@@ -15,6 +15,7 @@ import { registerDeviceCommands } from './device';
 import { registerUsageCommands } from './usage';
 import { registerSkillsCommands } from './skills';
 import { registerPreviewCommands } from './preview';
+import { registerDesignCommands } from './design';
 import { registerRunCommands } from './run';
 import { registerSessionCommands } from './session';
 import { registerStoreCommands } from './store';
@@ -28,6 +29,7 @@ export function registerAllCommands(bus: CommandBus, app: Container): void {
   registerProjectCommands(bus, app);
   registerSessionCommands(bus, app);
   registerPreviewCommands(bus, app);
+  registerDesignCommands(bus, app);
   registerDeployCommands(bus, app);
   registerCheckpointCommands(bus, app);
   registerUsageCommands(bus, app);

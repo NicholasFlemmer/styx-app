@@ -19,7 +19,7 @@ export const site = {
     'The desktop app where your work converges: every repo you touch, the AI coding agents building in them, and every login they need to ship. Nothing crosses into production without you.',
   email: 'hello@heystyx.com',
   /** When the home page's words last changed (the sitemap's lastmod). Bump it with a copy change, not a deploy. */
-  updated: '29 September 2026',
+  updated: '2 October 2026',
   /** When the founder video on /story last changed (the sitemap's lastmod for it). */
   storyUpdated: '29 September 2026',
   /** When the 21-second demo on /demo last changed. */
@@ -49,8 +49,8 @@ export const sections = [
   { id: 'access', label: 'Approvals' },
   { id: 'agents', label: 'Works with' },
   { id: 'repo', label: 'Your code' },
+  { id: 'design', label: 'Design' },
   { id: 'ship', label: 'Shipping' },
-  { id: 'screens', label: 'Screens' },
   { id: 'security', label: 'Security' },
   { id: 'keyboard', label: 'Keyboard' },
   { id: 'download', label: 'Download' },

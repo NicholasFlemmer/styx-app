@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { connect as netConnect } from 'node:net';
 import { OpenSSHAgent, utils } from 'ssh2';
 import { describe, expect, it, vi } from 'vitest';
@@ -234,9 +234,12 @@ describe('SshAdapter', () => {
     const sshDir = join(home, '.ssh');
     mkdirSync(sshDir, { recursive: true });
     writeFileSync(join(sshDir, 'id_ed25519'), keys.private, { mode: 0o600 });
-    // os.homedir() reads $HOME on POSIX, which is also how the user's own shell would expand the path.
+    // os.homedir() reads $HOME on POSIX, which is also how the user's own shell would expand the path; on Windows it
+    // reads USERPROFILE instead.
     const prevHome = process.env['HOME'];
+    const prevProfile = process.env['USERPROFILE'];
     process.env['HOME'] = home;
+    process.env['USERPROFILE'] = home;
     try {
       expect(expandHome('~/.ssh/id_ed25519')).toBe(join(sshDir, 'id_ed25519'));
       expect(expandHome('$HOME/.ssh/id_ed25519')).toBe(join(sshDir, 'id_ed25519'));
@@ -253,6 +256,8 @@ describe('SshAdapter', () => {
     } finally {
       if (prevHome === undefined) delete process.env['HOME'];
       else process.env['HOME'] = prevHome;
+      if (prevProfile === undefined) delete process.env['USERPROFILE'];
+      else process.env['USERPROFILE'] = prevProfile;
     }
   });
 
@@ -308,7 +313,11 @@ describe('SshAdapter', () => {
   it('answers session-bind@openssh.com so identities still come back (OpenSSH >= 8.9)', async () => {
     const keys = utils.generateKeyPairSync('ed25519', { comment: 'styx-test' });
     const dir = mkdtempSync(join(tmpdir(), 'styx-bind-'));
-    const sock = join(dir, 'agent.sock');
+    // A Unix socket on POSIX; a named pipe on Windows (how SshAdapter serves the agent there).
+    const sock =
+      process.platform === 'win32'
+        ? `\\\\.\\pipe\\styx-test-agent-${basename(dir)}`
+        : join(dir, 'agent.sock');
     const agent = new StyxSshAgent(() => undefined);
     await agent.start(sock, keys.private);
     try {

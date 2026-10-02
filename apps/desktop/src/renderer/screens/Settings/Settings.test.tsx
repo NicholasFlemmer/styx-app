@@ -548,13 +548,31 @@ describe('<Settings />', () => {
     expect(screen.getByText('project · No project')).toBeTruthy();
   });
 
-  it('the section comes from the store (the app rail and the project nav own the navigation, #85 / #88); app sections carry the app scope', () => {
-    render(<Settings />);
-    // Nothing navigates inside Settings any more: no section rows, only the section itself.
-    expect(screen.queryByRole('button', { name: 'General' })).toBeNull();
-    expect(screen.queryByRole('button', { name: copy.settings.project.agentDefaults })).toBeNull();
+  it('app settings have their own nav; a project option shows without it (ADR-0027 §5)', () => {
+    const { unmount } = render(<Settings />);
+    // A project's option (opened from the project nav, which stays beside it): no settings nav of its own.
+    expect(screen.queryByRole('navigation', { name: copy.settings.groups.label })).toBeNull();
     expect(screen.getByRole('heading', { name: copy.settings.project.targets })).toBeTruthy();
-    act(() => useUiStore.getState().setSettingsSection('app:general'));
+    unmount();
+    act(() => useUiStore.getState().setSettingsSection('app:account'));
+    render(<Settings />);
+    const nav = screen.getByRole('navigation', { name: copy.settings.groups.label });
+    const items = Array.from(nav.querySelectorAll('[data-settings-nav-item]')).map((b) =>
+      b.getAttribute('data-settings-nav-item'),
+    );
+    expect(items).toEqual([
+      'app:general',
+      'app:account',
+      'app:editor',
+      'app:agents',
+      'app:skills',
+      'app:keychain',
+      'app:policies',
+      'app:shortcuts',
+    ]);
+    expect(nav.textContent).not.toContain('This project');
+    fireEvent.click(nav.querySelector('[data-settings-nav-item="app:general"]') as HTMLElement);
+    expect(useUiStore.getState().settingsSection).toBe('app:general');
     expect(screen.getByRole('heading', { name: 'General' })).toBeTruthy();
     expect(screen.getByText('app')).toBeTruthy();
 

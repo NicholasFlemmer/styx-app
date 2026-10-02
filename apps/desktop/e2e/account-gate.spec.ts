@@ -15,7 +15,8 @@ test('the Account pane manages an account; the dialog is where one is got', asyn
     theme: 'dark',
     env: { STYX_E2E: '0', STYX_API: OFFLINE_API },
   });
-  await page.click('[data-app-rail-item="app:account"]');
+  await page.click('[data-app-rail-item="settings"]');
+  await page.click('[data-settings-nav-item="app:account"]');
   const pane = page.locator('[data-account="signed-out"]');
   await expect(pane).toBeVisible();
   // The providers are not on the pane any more.

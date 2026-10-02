@@ -18,6 +18,30 @@
     white-space: pre-wrap;
   }
   /* Attachment chips inside the user bubble: inverted against the bubble (--bg on --tx → --tx on --bg), mono 11px. */
+  /* What the message points at (#140): a lime-edged chip on its own line above the text. */
+  .pointer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+    max-width: 100%;
+    margin-bottom: 6px;
+    padding: 2px 7px;
+    border: 1px solid var(--ac);
+    background: var(--bg);
+    color: var(--tx);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pointer::before {
+    content: '';
+    flex: none;
+    width: 7px;
+    height: 7px;
+    background: var(--ac);
+  }
   .attachments {
     display: flex;
     flex-wrap: wrap;
@@ -131,10 +155,8 @@
     align-items: center;
     gap: 8px;
     min-height: 16px;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: var(--mu);
   }
   .thinkingLabel {
@@ -145,10 +167,8 @@
     border: 0;
     min-height: 0;
     line-height: normal;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
   }
   .thinkingBody {
     padding-left: 10px;
@@ -167,10 +187,8 @@
     padding: 6px 10px;
     background: var(--ac);
     color: var(--acx);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
   }
   .requestBody {
     padding: 10px;

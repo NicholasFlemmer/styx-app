@@ -24,10 +24,8 @@
     background: transparent;
     color: var(--mu);
     font-family: var(--font-ui);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     cursor: pointer;
     white-space: nowrap;
   }

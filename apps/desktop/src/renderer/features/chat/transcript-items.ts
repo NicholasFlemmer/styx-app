@@ -14,7 +14,14 @@ import {
 import { hunkMatchesFile, hunkBody } from '../editor/hunk-decorations';
 
 export type TranscriptItem =
-  | { id: string; kind: 'user'; text: string; attachments: readonly Attachment[] }
+  | {
+      id: string;
+      kind: 'user';
+      text: string;
+      attachments: readonly Attachment[];
+      /** What the message points at (#140): the chip's label. */
+      pointer?: string;
+    }
   | {
       id: string;
       kind: 'agent';
@@ -146,7 +153,13 @@ export const transcriptItems = (model: ReadModel, sessionId: SessionId): Transcr
     }
     switch (p.kind) {
       case 'user':
-        out.push({ id: m.id, kind: 'user', text: m.body, attachments: p.attachments ?? [] });
+        out.push({
+          id: m.id,
+          kind: 'user',
+          text: m.body,
+          attachments: p.attachments ?? [],
+          ...(p.pointer !== undefined ? { pointer: p.pointer.label } : {}),
+        });
         turnRow = checkpoints.get(m.id) ?? null;
         break;
       case 'agent': {

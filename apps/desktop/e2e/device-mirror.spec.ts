@@ -24,6 +24,9 @@ const seedExpoApp = (userData: string) => {
   writeFileSync(join(repo, 'app.json'), JSON.stringify({ expo: { name: 'acme-shop', slug: 'acme-shop' } }));
 };
 
+// iOS simulators (xcrun simctl) exist only on macOS.
+test.skip(process.platform === 'win32', 'the iOS simulator runs only on a Mac');
+
 test('a device run boots the simulator, mirrors it into the design window by screenshots, and Stop ends it', async () => {
   const simDir = mkdtempSync(join(tmpdir(), 'styx-fake-sim-'));
   const { app, page, userData } = await launchStyx({

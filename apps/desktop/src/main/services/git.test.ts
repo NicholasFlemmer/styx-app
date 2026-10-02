@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execa } from 'execa';
@@ -133,6 +133,119 @@ describe('GitService', () => {
     await expect(isolated.commit(repo, 'nothing staged', { asUser: true })).rejects.toThrow(
       /git commit failed/,
     );
+  });
+});
+
+describe('a machine where git has no name or email', () => {
+  it('a merge commit is made as Styx instead of failing (as every other commit-making path already did)', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'styx-noident-'));
+    const r = join(root, 'r');
+    mkdirSync(r);
+    await git.init(r);
+    writeFileSync(join(r, 'a.txt'), 'a');
+    await sh(['add', '.'], r);
+    await sh(['commit', '-q', '-m', 'init'], r);
+    await sh(['checkout', '-q', '-b', 'side'], r);
+    writeFileSync(join(r, 'b.txt'), 'b');
+    await sh(['add', '.'], r);
+    await sh(['commit', '-q', '-m', 'side'], r);
+    await sh(['checkout', '-q', 'main'], r);
+    writeFileSync(join(r, 'c.txt'), 'c');
+    await sh(['add', '.'], r);
+    await sh(['commit', '-q', '-m', 'main'], r);
+    // No global or system config, and git may not guess one from the host name.
+    const empty = join(root, 'empty.gitconfig');
+    writeFileSync(empty, '');
+    await sh(['config', 'user.useConfigOnly', 'true'], r);
+    const saved = { g: process.env['GIT_CONFIG_GLOBAL'], s: process.env['GIT_CONFIG_NOSYSTEM'] };
+    process.env['GIT_CONFIG_GLOBAL'] = empty;
+    process.env['GIT_CONFIG_NOSYSTEM'] = '1';
+    try {
+      const m = await git.merge(r, 'side');
+      expect(m.ok).toBe(true);
+    } finally {
+      if (saved.g === undefined) delete process.env['GIT_CONFIG_GLOBAL'];
+      else process.env['GIT_CONFIG_GLOBAL'] = saved.g;
+      if (saved.s === undefined) delete process.env['GIT_CONFIG_NOSYSTEM'];
+      else process.env['GIT_CONFIG_NOSYSTEM'] = saved.s;
+    }
+    const { stdout } = await execa('git', ['log', '-1', '--format=%an %P'], { cwd: r });
+    expect(stdout.split(' ')[0]).toBe('Styx');
+    expect(stdout.split(' ').length).toBe(3); // a merge: two parents
+  });
+
+  it('undoing a merge reverts it as Styx in one go, never half-applied (revert changes the tree before it asks for an author)', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'styx-noident-rev-'));
+    const r = join(root, 'r');
+    mkdirSync(r);
+    await git.init(r);
+    writeFileSync(join(r, 'a.txt'), 'a');
+    await sh(['add', '.'], r);
+    await sh(['commit', '-q', '-m', 'init'], r);
+    await sh(['checkout', '-q', '-b', 'side'], r);
+    writeFileSync(join(r, 'b.txt'), 'b');
+    await sh(['add', '.'], r);
+    await sh(['commit', '-q', '-m', 'side'], r);
+    await sh(['checkout', '-q', 'main'], r);
+    await sh(['merge', '-q', '--no-ff', '-m', 'land side', 'side'], r);
+    const landed = (await execa('git', ['rev-parse', 'HEAD'], { cwd: r })).stdout.trim();
+    const empty = join(root, 'empty.gitconfig');
+    writeFileSync(empty, '');
+    await sh(['config', 'user.useConfigOnly', 'true'], r);
+    const saved = { g: process.env['GIT_CONFIG_GLOBAL'], s: process.env['GIT_CONFIG_NOSYSTEM'] };
+    process.env['GIT_CONFIG_GLOBAL'] = empty;
+    process.env['GIT_CONFIG_NOSYSTEM'] = '1';
+    try {
+      expect((await git.revertMerge(r, landed)).ok).toBe(true);
+      expect((await git.status(r)).clean).toBe(true);
+    } finally {
+      if (saved.g === undefined) delete process.env['GIT_CONFIG_GLOBAL'];
+      else process.env['GIT_CONFIG_GLOBAL'] = saved.g;
+      if (saved.s === undefined) delete process.env['GIT_CONFIG_NOSYSTEM'];
+      else process.env['GIT_CONFIG_NOSYSTEM'] = saved.s;
+    }
+    const { stdout } = await execa('git', ['log', '-1', '--format=%an'], { cwd: r });
+    expect(stdout.trim()).toBe('Styx');
+  });
+});
+
+describe('commitOwnedPaths (ADR-0028)', () => {
+  it('commits only the given paths, with the agent’s hooks off, and refuses a worktree pointed at another git dir', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'styx-owned-'));
+    const project = join(root, 'p');
+    mkdirSync(project);
+    await git.init(project);
+    writeFileSync(join(project, 'a.txt'), 'a');
+    await sh(['add', '.'], project);
+    await sh(['commit', '-q', '-m', 'init'], project);
+    const wt = join(root, 'wt');
+    await git.worktreeAdd(project, { branch: 'agent/claude-1', base: 'main', path: wt });
+    // A hook the agent planted: it would leave a marker if it ran.
+    const hooks = join(root, 'hooks');
+    mkdirSync(hooks);
+    // `/` separators so Git for Windows' sh could also leave the marker if the hook ran.
+    const marker = join(root, 'hook-ran').replace(/\\/g, '/');
+    writeFileSync(join(hooks, 'pre-commit'), `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
+    await sh(['config', 'core.hooksPath', hooks], project);
+    mkdirSync(join(wt, '.styx', 'designs'), { recursive: true });
+    writeFileSync(join(wt, '.styx', 'designs', 'tokens.json'), '{}');
+    writeFileSync(join(wt, 'other.txt'), 'not ours');
+    expect(await git.commitOwnedPaths(wt, project, ['.styx/designs'], 'Design: tokens')).toBe(true);
+    expect(existsSync(join(root, 'hook-ran'))).toBe(false);
+    const { stdout } = await execa('git', ['show', '--name-only', '--format=%s', 'HEAD'], { cwd: wt });
+    expect(stdout).toContain('Design: tokens');
+    expect(stdout).toContain('.styx/designs/tokens.json');
+    expect(stdout).not.toContain('other.txt');
+    expect(await git.commitOwnedPaths(wt, project, ['.styx/designs'], 'again')).toBe(false);
+    // A worktree whose .git points at a git dir of its own making is not the project's.
+    const rogue = join(root, 'rogue');
+    mkdirSync(rogue);
+    await git.init(rogue);
+    // Unlinked first: Git for Windows marks a worktree's `.git` file hidden, and Windows refuses to open a hidden
+    // file for overwrite (EPERM).
+    rmSync(join(wt, '.git'));
+    writeFileSync(join(wt, '.git'), `gitdir: ${join(rogue, '.git')}\n`);
+    await expect(git.commitOwnedPaths(wt, project, ['.styx/designs'], 'x')).rejects.toThrow();
   });
 });
 

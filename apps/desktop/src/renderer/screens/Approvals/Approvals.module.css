@@ -16,6 +16,27 @@
     min-height: 0;
     border-right: 1px solid var(--ln);
   }
+  /* ADR-0027: the page title (today's heading face, page-title size) and one line. */
+  .pagehead {
+    flex: none;
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+    padding: 20px 20px 14px;
+    border-bottom: 1px solid var(--ln);
+  }
+  .title {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .lead {
+    margin: 0 0 2px;
+    font-size: 13px;
+    color: var(--mu);
+  }
   .pane {
     flex: 1;
     min-height: 0;
@@ -156,10 +177,8 @@
     gap: var(--sp-3);
     opacity: 0;
     font-family: var(--font-ui);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: var(--mu);
   }
   .policyAction {

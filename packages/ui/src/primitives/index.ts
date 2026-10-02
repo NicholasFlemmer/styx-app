@@ -10,3 +10,4 @@ export * from './Textarea';
 export * from './Field';
 export * from './Select';
 export * from './ChipGroup';
+export * from './AgentDot';

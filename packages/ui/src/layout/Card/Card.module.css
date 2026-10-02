@@ -18,6 +18,9 @@
     gap: 8px;
   }
   .agent {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
     font-weight: 600;
   }
   .age {
@@ -34,8 +37,23 @@
     font-size: 13px;
     line-height: 1.4;
   }
-  .done .note {
+  .done .note,
+  .landed .note {
     color: var(--mu);
+  }
+  /* Ready to land (ADR-0027 §3): on paper, with the colours re-scoped so the buttons read on it. */
+  .ready {
+    --bg: var(--paper);
+    --s2: var(--paper-s2);
+    --ln: var(--paper-ln);
+    --tx: var(--paper-tx);
+    --mu: var(--paper-mu);
+    background: var(--paper);
+    color: var(--paper-tx);
+    border-bottom-color: var(--paper-ln);
+  }
+  .landed {
+    opacity: 0.6;
   }
   .actions {
     display: flex;

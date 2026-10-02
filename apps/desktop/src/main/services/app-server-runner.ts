@@ -1,4 +1,4 @@
-import { spawn as spawnChild } from 'node:child_process';
+import { killTree, spawnCli } from './spawn-cli';
 import { EventEmitter } from 'node:events';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -253,7 +253,7 @@ export type AppServerSpawn = (
   },
 ) => AppServerProcess;
 
-const defaultSpawn: AppServerSpawn = (command, args, options) => spawnChild(command, [...args], options);
+const defaultSpawn: AppServerSpawn = (command, args, options) => spawnCli(command, [...args], options);
 
 // --- Runner ------------------------------------------------------------------
 
@@ -393,7 +393,9 @@ export class AppServerRunner extends EventEmitter<StreamEvents> implements Strea
           reject(err);
         }
       });
-      proc.once('close', (code) => this.onClose(entry, proc, code));
+      // A stop we asked for ends with no exit code, as a signal does on macOS: Windows' taskkill /F leaves 1, which
+      // would read as the agent failing.
+      proc.once('close', (code) => this.onClose(entry, proc, entry.killed ? null : code));
     });
   }
 
@@ -817,7 +819,11 @@ export class AppServerRunner extends EventEmitter<StreamEvents> implements Strea
         const message = p.data.willRetry
           ? fill(copy.codexRunner.willRetry, { message: p.data.error.message })
           : p.data.error.message;
-        this.emit('effect', id, { type: 'error', message });
+        this.emit(
+          'effect',
+          id,
+          p.data.willRetry ? { type: 'error', message, carriesOn: true } : { type: 'error', message },
+        );
         this.emit('effect', id, { type: 'render', text: crlf(`! ${firstLine(message)}`) });
         return;
       }
@@ -827,7 +833,7 @@ export class AppServerRunner extends EventEmitter<StreamEvents> implements Strea
         const error = p.data.error ?? (p.data.status === 'failed' ? p.data.status : null);
         if (error === null) return;
         const message = fill(copy.codexRunner.mcpStartupFailed, { error });
-        this.emit('effect', id, { type: 'error', message });
+        this.emit('effect', id, { type: 'error', message, carriesOn: true });
         this.emit('effect', id, { type: 'render', text: crlf(`! ${message}`) });
         return;
       }
@@ -1090,7 +1096,7 @@ export class AppServerRunner extends EventEmitter<StreamEvents> implements Strea
       } catch {
         // stdin already closed
       }
-      entry.proc.kill();
+      killTree(entry.proc);
       return;
     }
     this.entries.delete(id);

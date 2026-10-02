@@ -23,6 +23,7 @@ export class TranscriptsRepo {
   private readonly getStmt;
   private readonly patchStmt;
   private readonly sessionIdsStmt;
+  private readonly firstUserStmt;
 
   constructor(db: Db) {
     this.upsertStmt = db.prepare(
@@ -38,6 +39,9 @@ export class TranscriptsRepo {
     this.getStmt = db.prepare(`SELECT ${COLS} FROM transcript_messages WHERE id = ?`);
     this.patchStmt = db.prepare('UPDATE transcript_messages SET body = ? WHERE id = ?');
     this.sessionIdsStmt = db.prepare('SELECT DISTINCT session_id FROM transcript_messages');
+    this.firstUserStmt = db.prepare(
+      "SELECT body FROM transcript_messages WHERE session_id = ? AND kind = 'user' AND body != '' ORDER BY seq ASC LIMIT 1",
+    );
   }
 
   upsert(m: TranscriptMessage): void {
@@ -69,6 +73,12 @@ export class TranscriptsRepo {
 
   patchBody(id: string, body: string): void {
     this.patchStmt.run(body, id);
+  }
+
+  /** The first thing the person said in a session, or null when they have said nothing yet. */
+  firstUserBody(sessionId: string): string | null {
+    const r = this.firstUserStmt.get(sessionId) as { body: string } | undefined;
+    return r?.body ?? null;
   }
 
   sessionIds(): string[] {

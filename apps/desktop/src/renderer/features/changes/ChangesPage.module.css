@@ -1,0 +1,159 @@
+@layer components {
+  .wrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--s2);
+  }
+  /* Paper (ADR-0027 §3): the light theme's surfaces in both themes; variables re-scoped for what renders inside. */
+  .page {
+    --bg: var(--paper);
+    --s1: var(--paper-s2);
+    --s2: var(--paper-s2);
+    --ln: var(--paper-ln);
+    --tx: var(--paper-tx);
+    --mu: var(--paper-mu);
+    --act: var(--paper-act);
+    --add: var(--paper-add);
+    --del: var(--paper-del);
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    width: min(820px, calc(100% - 40px));
+    margin: 20px auto 0;
+    padding: 28px 40px 40px;
+    background: var(--paper);
+    color: var(--paper-tx);
+  }
+  .ready {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    font-size: 13px;
+    color: var(--paper-mu);
+  }
+  .state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    color: var(--paper-tx);
+  }
+  .state i {
+    width: 9px;
+    height: 9px;
+    background: var(--paper-mu);
+  }
+  .state[data-state='ready'] {
+    color: var(--paper-act);
+  }
+  .state[data-state='ready'] i {
+    background: var(--paper-act);
+  }
+  .headline {
+    margin: 10px 0 0;
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    max-width: 36ch;
+  }
+  .sum {
+    margin-top: 12px;
+    font-size: 15px;
+    line-height: 1.55;
+    max-width: 64ch;
+  }
+  .sub {
+    margin: 24px 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--paper-mu);
+  }
+  .turn {
+    border: 1px solid var(--paper-ln);
+    margin-top: -1px;
+  }
+  .turnHead {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    font-size: 14px;
+  }
+  .turnTitle {
+    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .turnChange {
+    flex: none;
+    font-size: 12px;
+    color: var(--paper-mu);
+  }
+  .turnActs {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+  }
+  .turn[data-undone='true'] .turnTitle {
+    text-decoration: line-through;
+    color: var(--paper-mu);
+  }
+  .undone {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--paper-mu);
+  }
+  .ask {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px 10px;
+    font-size: 13px;
+  }
+  .diff {
+    border-top: 1px solid var(--paper-ln);
+    background: var(--paper);
+  }
+  .file {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 12px;
+    background: var(--paper-s2);
+    color: var(--paper-mu);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .muted,
+  .looseBody {
+    margin: 0;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--paper-mu);
+  }
+  .empty {
+    margin-top: 24px;
+    padding: 16px;
+    border: 1px dashed var(--paper-ln);
+    font-size: 14px;
+  }
+  .empty p {
+    margin: 4px 0 0;
+    color: var(--paper-mu);
+  }
+  .decide {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--tx);
+    background: var(--bg);
+  }
+}

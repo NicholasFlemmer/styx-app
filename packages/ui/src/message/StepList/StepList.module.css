@@ -1,0 +1,76 @@
+@layer components {
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 2px 0;
+  }
+  .summary,
+  .raw {
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--mu);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .summary {
+    text-decoration: none;
+  }
+  .summary::before {
+    content: '▸ ';
+  }
+  .summary[aria-expanded='true']::before {
+    content: '▾ ';
+  }
+  .summary:hover,
+  .raw:hover {
+    color: var(--tx);
+  }
+  .list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .list li {
+    display: flex;
+    gap: 8px;
+    color: var(--tx);
+    overflow-wrap: anywhere;
+  }
+  .list li::before {
+    content: '';
+    flex: none;
+    width: 9px;
+    height: 9px;
+    margin-top: 5px;
+    background: var(--ac);
+    border: 1.5px solid var(--ac);
+  }
+  .list li[data-status='running']::before {
+    background: transparent;
+  }
+  .list li[data-status='error']::before {
+    background: var(--del);
+    border-color: var(--mu);
+  }
+  .list li[data-status='error'] {
+    color: var(--mu);
+  }
+  .tools {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .compact .list {
+    font-size: 12px;
+  }
+}

@@ -44,18 +44,27 @@ export const usageEventSchema = z.enum([
   'agent.failed.outdated',
   'agent.failed.error',
   'agent.failed.exited',
+  /** The agent's account hit a usage or rate limit, or ran out of quota or credit (#129). */
+  'agent.failed.limit',
   /** A window's page crashed; one of the app's helper processes (graphics, network) crashed; the previous run
    * ended without quitting (a crash, a force quit, or the Mac losing power), noticed at the next launch. */
   'app.crashed.window',
   'app.crashed.helper',
   'app.ended-unexpectedly',
+  /** An agent finished its first piece of work in a session (#127), however it was asked: the composer, the
+   * spawn dialog's first message, or typing straight into the agent's terminal. Once per session. */
+  'agent.worked',
 ]);
 export type UsageEvent = z.infer<typeof usageEventSchema>;
 export const USAGE_EVENTS: readonly UsageEvent[] = usageEventSchema.options;
 
 /** The events the renderer may note itself (the walkthrough lives there); everything else is recorded by main. */
-export const RENDERER_USAGE_EVENTS = ['tour.shown', 'tour.finished', 'tour.skipped'] as const satisfies readonly UsageEvent[];
-export type AgentProblem = 'cli-missing' | 'launch' | 'sign-in' | 'outdated' | 'error' | 'exited';
+export const RENDERER_USAGE_EVENTS = [
+  'tour.shown',
+  'tour.finished',
+  'tour.skipped',
+] as const satisfies readonly UsageEvent[];
+export type AgentProblem = 'cli-missing' | 'launch' | 'sign-in' | 'outdated' | 'error' | 'exited' | 'limit';
 
 /**
  * One name, when it happened, and how many times — the whole vocabulary. `count` exists so a burst collapses

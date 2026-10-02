@@ -79,6 +79,10 @@ export const sessions = sqliteTable(
     /** 0012: set when Styx spawned the session for a job of its own (`learn-run` / `learn-deploy`). */
     purpose: text('purpose', { enum: ['learn-run', 'learn-deploy', 'debt-audit', 'merge'] }),
     taskTargetId: text('task_target_id'),
+    /** 0021: design or build (#140); null = build. */
+    kind: text('kind', { enum: ['design', 'build'] }),
+    /** 0021: the design task a build task builds. */
+    designSessionId: text('design_session_id'),
     pid: integer('pid'),
     exitCode: integer('exit_code'),
     startedAt: integer('started_at').notNull(),

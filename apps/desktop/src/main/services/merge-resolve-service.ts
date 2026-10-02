@@ -24,6 +24,7 @@ import type { GitService } from './git';
 import { logger } from './logger';
 import type { SessionService } from './session-service';
 import type { TranscriptService } from './transcript-service';
+import { onePathKey } from './spawn-cli';
 
 export interface ChecksResult {
   exitCode: number;
@@ -638,16 +639,28 @@ export const checksInLoginShell =
     for (const [k, v] of Object.entries(process.env))
       if (v !== undefined && !STRIPPED_ENV.has(k) && k !== 'ELECTRON_RUN_AS_NODE') env[k] = v;
     env['PATH'] = await loginPath();
+    const one = onePathKey(env);
     const r =
       platform === 'win32'
-        ? await execa('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
+        ? await execa(
+            'powershell.exe',
+            ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command],
+            {
+              cwd,
+              env: one,
+              extendEnv: false,
+              reject: false,
+              timeout: CHECKS_TIMEOUT_MS,
+              windowsHide: true,
+            },
+          )
+        : await execa(shell(), ['-ilc', command], {
             cwd,
-            env,
+            env: one,
+            extendEnv: false,
             reject: false,
             timeout: CHECKS_TIMEOUT_MS,
-            windowsHide: true,
-          })
-        : await execa(shell(), ['-ilc', command], { cwd, env, reject: false, timeout: CHECKS_TIMEOUT_MS });
+          });
     const output = `${String(r.stdout ?? '')}\n${String(r.stderr ?? '')}`.trim();
     return {
       exitCode: r.exitCode ?? 1,

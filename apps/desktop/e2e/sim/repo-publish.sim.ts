@@ -987,7 +987,7 @@ test('sim: repo-publish', async () => {
 
     await sim.step("the Workspace status bar shows the same ↓N main for the editor's lane", async () => {
       await page().locator('[data-nav-item="workspace"]').click();
-      await page().locator(`[data-session-tab="${claudeId}"]`).click();
+      await page().locator(`[data-nav-lane="${claudeId}"]`).click();
       const bar = page().locator('[data-status-bar]');
       const t = await until(async () => {
         const s = await text(bar);

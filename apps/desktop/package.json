@@ -1,13 +1,13 @@
 {
   "name": "@styx/desktop",
   "productName": "Styx",
-  "version": "0.2.9",
+  "version": "0.4.2",
   "private": true,
   "description": "Styx — project, agent and repo switcher",
   "main": "./out/main/index.js",
   "author": "Styx",
   "scripts": {
-    "dev": "env -u ELECTRON_RUN_AS_NODE electron-vite dev",
+    "dev": "node scripts/dev.mjs",
     "build": "pnpm run build:cli && electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
@@ -25,8 +25,9 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "visual:report": "node --experimental-strip-types e2e/visual/report.ts",
-    "build:cli": "pnpm -F @styx/cli build && mkdir -p resources/cli && cp ../../packages/cli/dist/styx.js resources/cli/styx.js",
+    "build:cli": "pnpm -F @styx/cli build && node scripts/copy-cli.mjs",
     "package:mac:dir": "pnpm run build && electron-builder --mac --dir",
+    "package:win:dir": "pnpm run build && electron-builder --win --dir",
     "package:smoke": "node --experimental-strip-types e2e/run.ts --project e2e --grep packaged"
   },
   "dependencies": {
@@ -36,6 +37,7 @@
     "@tanstack/react-virtual": "^3.14.10",
     "better-sqlite3": "^13.0.3",
     "chokidar": "^5.0.0",
+    "cross-spawn": "^7.0.6",
     "drizzle-orm": "^0.45.2",
     "electron-log": "^5.4.4",
     "electron-updater": "^6.8.9",
@@ -57,6 +59,7 @@
     "@styx/tokens": "workspace:*",
     "@styx/ui": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/cross-spawn": "^6.0.6",
     "@types/pngjs": "6.0.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

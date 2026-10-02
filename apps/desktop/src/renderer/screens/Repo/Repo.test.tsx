@@ -216,7 +216,7 @@ describe('Repo screen', () => {
     useReadModel.getState().replaceModel(fixtures.errorReadModel(), 'connected');
     render(<Repo />);
     const row = within(rowOf('fix/checkout'));
-    expect(row.getByText('CONFLICT · checkout.ts vs main')).toBeTruthy();
+    expect(row.getByText('Conflict in checkout.ts with main')).toBeTruthy();
     fireEvent.click(row.getByRole('button', { name: 'Resolve' }));
     expect(commandMock).toHaveBeenCalledWith('worktree.resolve', {
       worktreeId: fixtures.ids.worktree.fixCheckout,

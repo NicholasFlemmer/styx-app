@@ -76,7 +76,7 @@ test('renders the dev server, emulates a device, and leaves the screen for overl
       return b && child?.getVisible() ? b.width * b.height : -1;
     });
   expect(await bounds()).toBeGreaterThan(0);
-  await page.keyboard.press('Meta+K');
+  await page.keyboard.press('ControlOrMeta+K');
   await expect.poll(bounds, { timeout: 5000 }).toBe(-1);
 
   await app.close();

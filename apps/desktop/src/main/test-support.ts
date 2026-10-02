@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { brokerEndpoint } from '@styx/broker';
 import { fixtures } from '@styx/core';
 import { ManualClock } from './clock';
 import { buildContainer, type Container, type WindowsPort } from './container';
@@ -113,7 +114,11 @@ export function makeTestApp(opts: TestAppOptions = {}): TestApp {
       shimDir: join(userData, 'bin'),
       cliPath: join(userData, 'styx.js'),
       exePath: process.execPath,
-      brokerEndpoint: join(userData, 'broker.sock'),
+      // A Unix socket on POSIX; Windows has no AF_UNIX listen in a temp dir, so a named pipe unique to userData.
+      brokerEndpoint:
+        process.platform === 'win32'
+          ? brokerEndpoint({ platform: 'win32', uid: 0, username: 'test', userData })
+          : join(userData, 'broker.sock'),
       resourcesDir: join(userData, 'resources'),
       rendererOrigins: ['file://'],
     },

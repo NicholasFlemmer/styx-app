@@ -100,8 +100,7 @@ export const styxBin = (ctx: Pick<AgentLaunchContext, 'shimDir' | 'platform'>): 
 export const styxMcpServer = (
   ctx: AgentLaunchContext,
 ): { command: string; args: string[]; env: Record<string, string> } => ({
-  command: styxBin(ctx),
-  args: ['mcp'],
+  ...mcpCommand(ctx),
   env: {
     STYX_SESSION_ID: ctx.env['STYX_SESSION_ID'] ?? '',
     STYX_BROKER: ctx.env['STYX_BROKER'] ?? '',
@@ -110,10 +109,19 @@ export const styxMcpServer = (
 });
 
 /** Same entry without an env block: the CLI spawns MCP servers with its own (session) environment. */
-export const styxMcpServerInherit = (ctx: AgentLaunchContext): { command: string; args: string[] } => ({
-  command: styxBin(ctx),
-  args: ['mcp'],
-});
+export const styxMcpServerInherit = (ctx: AgentLaunchContext): { command: string; args: string[] } =>
+  mcpCommand(ctx);
+
+/**
+ * How an agent starts `styx mcp`. On Windows the shim is a `.cmd`, which a plain spawn (most MCP clients) refuses to
+ * start: it goes through `cmd.exe /d /c` (no `/s`, so a quoted path with spaces survives).
+ */
+const mcpCommand = (
+  ctx: Pick<AgentLaunchContext, 'shimDir' | 'platform'>,
+): { command: string; args: string[] } =>
+  ctx.platform === 'win32'
+    ? { command: 'cmd.exe', args: ['/d', '/c', styxBin(ctx), 'mcp'] }
+    : { command: styxBin(ctx), args: ['mcp'] };
 
 /** Merges the styx server into an existing MCP config file; `restore()` puts the file back (or removes it). */
 export async function writeWorktreeMcpConfig(

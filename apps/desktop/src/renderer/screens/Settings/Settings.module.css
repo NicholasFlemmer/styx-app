@@ -5,6 +5,22 @@
     min-width: 0;
     min-height: 0;
   }
+  /* Every section, This project then App (ADR-0027 §5). */
+  .snav {
+    width: var(--w-settings-nav);
+    flex: none;
+    border-right: 1px solid var(--ln);
+    padding: 8px 0 16px;
+    overflow-y: auto;
+  }
+  .snavGroup {
+    padding: 14px 16px 6px;
+    font-size: 12px;
+    color: var(--mu);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .main {
     flex: 1;
     display: flex;
@@ -21,10 +37,12 @@
     padding: 16px 20px;
     border-bottom: 1px solid var(--ln);
   }
+  /* Page titles at the ADR-0027 §6 size, today's heading face. */
   .title {
     margin: 0;
-    font-size: 18px;
+    font-size: 28px;
     font-weight: 600;
+    letter-spacing: -0.02em;
   }
   /* Where a project section is kept, at the header's right (the inner nav's footer used to say this). */
   .file {

@@ -59,10 +59,8 @@
   .approvals {
     padding: 12px 18px;
     font-family: var(--font-ui);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
   }
   .approvals:hover {
     background: var(--s2);

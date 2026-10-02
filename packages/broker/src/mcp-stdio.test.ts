@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BrokerClient } from './client';
 import { createStyxMcpServer } from './mcp-stdio';
@@ -14,7 +14,9 @@ afterEach(async () => server?.close());
 
 describe('styx MCP server', () => {
   it('exposes the ten tools and proxies calls to the broker', async () => {
-    const path = join(mkdtempSync(join(tmpdir(), 'styx-mcp-')), 'b.sock');
+    // A Unix socket on POSIX; a uniquely named pipe on Windows (no AF_UNIX listen in TEMP).
+    const dir = mkdtempSync(join(tmpdir(), 'styx-mcp-'));
+    const path = process.platform === 'win32' ? `\\\\.\\pipe\\${basename(dir)}` : join(dir, 'b.sock');
     server = new BrokerServer({
       authenticate: async () => ({
         sessionId: 's1',

@@ -18,7 +18,6 @@
     color: var(--tx);
     font-family: var(--font-ui);
     font-weight: 600;
-    text-transform: uppercase;
     white-space: nowrap;
     cursor: pointer;
     border-radius: 0;

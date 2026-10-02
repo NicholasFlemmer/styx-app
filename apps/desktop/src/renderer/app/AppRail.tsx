@@ -1,36 +1,21 @@
 import { backgroundTasks, copy, fill, inboxRows } from '@styx/core';
-import { RailTile, type IconName } from '@styx/ui';
+import { RailTile } from '@styx/ui';
 import { useCallback } from 'react';
 import { openTask } from '../features/tasks/task-launch';
 import { findOverlay } from '../overlays/stack';
-import { APP_SECTIONS, resolveSection, type AppSection } from '../screens/Settings/sections';
+import { DEFAULT_APP_SECTION, isProjectSection, resolveSection } from '../screens/Settings/sections';
 import { useModel, useNow, useUi } from '../state/hooks';
 import s from './Shell.module.css';
 
-/** The icon each App settings section wears on the rail. */
-const SECTION_ICON: Record<AppSection, IconName> = {
-  'app:general': 'general',
-  'app:account': 'account',
-  'app:editor': 'editor',
-  'app:agents': 'connections',
-  'app:skills': 'skills',
-  'app:keychain': 'keychain',
-  'app:policies': 'policies',
-  'app:shortcuts': 'shortcuts',
-};
-
 /**
- * The global rail (owner layout, discrepancies #85 / #87): what belongs to the app rather than to a project, to
- * the left of the project switcher. Icon tiles, top to bottom: All projects, All agents (every project's
- * sessions), Approvals (corner + count while the inbox has rows), Tasks (corner + count while one needs you), a
- * divider, then every App settings section as its own tile so nothing hides behind a menu. The project nav keeps
- * only the project's own places, so the two never mix.
+ * The app's places (ADR-0027 §5), at the top of the single rail column: All projects, All agents (every
+ * project's sessions), Access (corner + count while the inbox has rows), Tasks (corner + count while one needs
+ * you) and Usage. The project tiles follow, then Settings at the foot (`RailSettings`); the eight app settings
+ * sections that used to have tiles here live in the Settings screen's own nav.
  */
 export function AppRail() {
   const screen = useUi((u) => u.screen);
   const setScreen = useUi((u) => u.setScreen);
-  const settingsSection = useUi((u) => u.settingsSection);
-  const setSettingsSection = useUi((u) => u.setSettingsSection);
   const setBoardScope = useUi((u) => u.setBoardScope);
   const boardScope = useUi((u) => u.boardScope);
   const now = useNow();
@@ -39,11 +24,6 @@ export function AppRail() {
     useCallback((m) => backgroundTasks(m).filter((t) => t.state === 'needs-you').length, []),
   );
   const taskOpen = useUi((u) => findOverlay(u.overlays, 'task') !== null);
-  const section = resolveSection(settingsSection);
-  const openSection = (id: AppSection) => {
-    setSettingsSection(id);
-    setScreen('settings');
-  };
   return (
     <nav className={s['appRail']} aria-label={copy.appRail.label} data-app-rail="true">
       <RailTile
@@ -93,18 +73,31 @@ export function AppRail() {
         onClick={() => setScreen('usage')}
         data-app-rail-item="usage"
       />
-      <div className={s['appRailDivider']} role="presentation" />
-      {APP_SECTIONS.map((id) => (
-        <RailTile
-          key={id}
-          icon={SECTION_ICON[id]}
-          title={copy.appRail.sections[id]}
-          active={screen === 'settings' && section === id}
-          current="page"
-          onClick={() => openSection(id)}
-          data-app-rail-item={id}
-        />
-      ))}
     </nav>
+  );
+}
+
+/** Settings at the foot of the rail (ADR-0027 §5): the app's settings, apart from any project. */
+export function RailSettings() {
+  const screen = useUi((u) => u.screen);
+  const setScreen = useUi((u) => u.setScreen);
+  const section = resolveSection(useUi((u) => u.settingsSection));
+  const setSettingsSection = useUi((u) => u.setSettingsSection);
+  const appSettings = screen === 'settings' && !isProjectSection(section);
+  return (
+    <div className={s['railFoot']}>
+      <RailTile
+        icon="general"
+        title={copy.appRail.settings.title}
+        active={appSettings}
+        current="page"
+        onClick={() => {
+          // The app's settings, not a project's: those live in the project nav.
+          if (isProjectSection(section)) setSettingsSection(DEFAULT_APP_SECTION);
+          setScreen('settings');
+        }}
+        data-app-rail-item="settings"
+      />
+    </div>
   );
 }

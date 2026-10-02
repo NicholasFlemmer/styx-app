@@ -170,6 +170,7 @@ const getEntry = (worktreeId: WorktreeId, screenReader: boolean): EditorEntry =>
     path: null,
   };
   editor.onDidScrollChange(() => positionLabels(entry));
+  editor.onDidLayoutChange(() => positionLabels(entry));
   editors.set(worktreeId, entry);
   void document.fonts.ready.then(() => monaco.editor.remeasureFonts());
   return entry;
@@ -253,10 +254,23 @@ const toDecorations = (
       },
     }));
 
+/** Gap kept between a line's code and its label; closer than this the label steps aside instead of covering code. */
+const LABEL_CLEARANCE = 12;
+
 const positionLabels = (entry: EditorEntry): void => {
-  const scrollTop = entry.editor.getScrollTop();
+  const { editor } = entry;
+  const scrollTop = editor.getScrollTop();
+  const scrollLeft = editor.getScrollLeft();
+  const model = editor.getModel();
+  const layout = editor.getLayoutInfo();
   for (const l of entry.labels) {
-    l.node.style.top = `${entry.editor.getTopForLineNumber(l.line) - scrollTop}px`;
+    l.node.style.top = `${editor.getTopForLineNumber(l.line) - scrollTop}px`;
+    if (model === null || l.line > model.getLineCount()) continue;
+    // A line that runs under the label (a narrow editor) hides it: never text drawn over code.
+    const textRight =
+      layout.contentLeft + editor.getOffsetForColumn(l.line, model.getLineMaxColumn(l.line)) - scrollLeft;
+    const labelLeft = layout.width - layout.verticalScrollbarWidth - 12 - l.node.offsetWidth;
+    l.node.style.visibility = textRight + LABEL_CLEARANCE > labelLeft ? 'hidden' : 'visible';
   }
 };
 

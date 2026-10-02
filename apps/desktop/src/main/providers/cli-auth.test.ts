@@ -98,7 +98,9 @@ describe('cli-auth parsers', () => {
   });
 
   it('locates the vercel and supabase CLI stores per platform', () => {
-    expect(vercelAuthPaths({ platform: 'darwin', home: '/Users/nic', env: {} })[0]).toBe(
+    // POSIX layouts compared with `/` separators: `join` follows the host, so a Windows host builds them with `\\`.
+    const slash = (p: string | undefined) => p?.replace(/\\/g, '/');
+    expect(slash(vercelAuthPaths({ platform: 'darwin', home: '/Users/nic', env: {} })[0])).toBe(
       '/Users/nic/Library/Application Support/com.vercel.cli/auth.json',
     );
     // `join` follows the host; on a real Windows host this is `…\\Roaming\\vercel\\auth.json`.
@@ -109,10 +111,10 @@ describe('cli-auth parsers', () => {
         env: { APPDATA: 'C:\\Users\\nic\\AppData\\Roaming' },
       })[0],
     ).toMatch(/^C:\\Users\\nic\\AppData\\Roaming[\\/]vercel[\\/]auth\.json$/);
-    expect(vercelAuthPaths({ platform: 'linux', home: '/home/nic', env: {} })[0]).toBe(
+    expect(slash(vercelAuthPaths({ platform: 'linux', home: '/home/nic', env: {} })[0])).toBe(
       '/home/nic/.local/share/com.vercel.cli/auth.json',
     );
-    expect(supabaseTokenPath({ home: '/Users/nic' })).toBe('/Users/nic/.supabase/access-token');
+    expect(slash(supabaseTokenPath({ home: '/Users/nic' }))).toBe('/Users/nic/.supabase/access-token');
   });
 
   it('cli vault entries carry an account and never a secret; refs end in :cli', async () => {

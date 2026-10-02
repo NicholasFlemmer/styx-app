@@ -18,10 +18,8 @@
     padding: 6px 12px;
     background: var(--ac);
     color: var(--acx);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
   }
   .body {
     padding: 12px;
@@ -50,10 +48,8 @@
     border-right: 1px solid var(--ln);
     background: transparent;
     color: var(--mu);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     /* UA buttons centre their label; the reset makes text-align inherit, so restore it (prototype). */
     text-align: center;
     cursor: pointer;

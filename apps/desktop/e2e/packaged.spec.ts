@@ -5,11 +5,22 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DEMO_NOW } from './launch';
 
-/** Boots the packaged app (release/mac-arm64/Styx.app) when it exists — `pnpm package:mac -- --dir` then `pnpm e2e -- --grep packaged`. */
-const EXE = resolve(__dirname, '../release/mac-arm64/Styx.app/Contents/MacOS/Styx');
+/**
+ * Boots the packaged app when it exists: `pnpm package:mac:dir` (release/mac-arm64/Styx.app) or `pnpm package:win:dir`
+ * (release/win-unpacked/Styx.exe), then `pnpm package:smoke`.
+ */
+const WIN = process.platform === 'win32';
+const EXE = WIN
+  ? resolve(__dirname, '../release/win-unpacked/Styx.exe')
+  : resolve(__dirname, `../release/mac-${process.arch}/Styx.app/Contents/MacOS/Styx`);
+/** Where electron-builder puts `resources/` next to the binary. */
+const RESOURCES = WIN ? resolve(EXE, '../resources') : resolve(EXE, '../../Resources');
 
 test.describe('packaged app', () => {
-  test.skip(process.platform !== 'darwin' || !existsSync(EXE), 'no packaged macOS build in release/');
+  test.skip(
+    (process.platform !== 'darwin' && !WIN) || !existsSync(EXE),
+    'no packaged build for this platform in release/',
+  );
 
   test('boots to a ready screen with the demo fixture', async () => {
     const env: Record<string, string> = {};
@@ -35,7 +46,7 @@ test.describe('packaged app', () => {
     await expect(page.getByText('02 needs you')).toBeVisible();
     // The agent shims and `styx mcp` exec `<exe> <cliPath>` as Node: the CLI must be a real (asar-unpacked) file that
     // loads under the packaged binary. Regression guard for the 2026-09-07 wrong-path bug.
-    const resources = resolve(EXE, '../../Resources/app.asar.unpacked/resources');
+    const resources = join(RESOURCES, 'app.asar.unpacked', 'resources');
     const cliPath = join(resources, 'cli', 'styx.js');
     let help = '';
     try {

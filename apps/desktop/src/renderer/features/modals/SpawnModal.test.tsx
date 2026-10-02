@@ -74,7 +74,7 @@ describe('SpawnModal', () => {
 
   it('renders the header, five agent tiles with versions, and the project default agent chosen', () => {
     render(<SpawnModal id="modal-1" projectId={acme} />);
-    expect(screen.getByRole('dialog').textContent).toContain('Spawn agent · acme-shop');
+    expect(screen.getByRole('dialog').textContent).toContain('Start an agent in acme-shop');
     const tiles = screen.getAllByRole('radio', { name: /Claude Code|Codex|Gemini CLI|Cursor agent|Shell/ });
     expect(tiles.map((t) => t.textContent)).toEqual([
       'Claude Codeclaude 2.4.1',
@@ -212,6 +212,7 @@ describe('SpawnModal', () => {
       model: null,
       permissionMode: 'default',
       effort: null,
+      kind: null,
     });
     const ui = useUiStore.getState();
     expect(ui.screen).toBe('workspace');

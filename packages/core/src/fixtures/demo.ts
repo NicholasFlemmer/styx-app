@@ -335,6 +335,7 @@ export const demoSessions = (): Session[] => [
     'working',
     'Rewriting README for the CLI',
     ago(31 * MIN),
+    { firstMessage: 'Rewrite the README for the CLI.' },
   ),
   session(
     ids.session.shell,
@@ -344,6 +345,7 @@ export const demoSessions = (): Session[] => [
     'working',
     'npm run build',
     ago(1 * HOUR),
+    { firstMessage: 'npm run build' },
   ),
   session(
     ids.session.cursor,
@@ -354,6 +356,7 @@ export const demoSessions = (): Session[] => [
     'PR #212 opened, merged yesterday',
     ago(1 * DAY),
     {
+      firstMessage: 'Add the promo banner to the home page.',
       startedAt: ago(2 * DAY),
     },
   ),
@@ -366,6 +369,7 @@ export const demoSessions = (): Session[] => [
     '2 commits pushed',
     ago(2 * DAY),
     {
+      firstMessage: 'Add rate limits to the public API.',
       startedAt: ago(2 * DAY + HOUR),
     },
   ),
@@ -1253,6 +1257,7 @@ export const demoFixture = (): DemoFixture => ({
     onboardingDone: true,
     // A seeded, set-up machine: the first-run walkthrough has been seen (#124).
     tourDone: true,
+    tourVersion: 2,
     trackAgentEdits: true,
   },
   projectSettings: { [ids.project.acmeShop]: acmeProjectSettings() },

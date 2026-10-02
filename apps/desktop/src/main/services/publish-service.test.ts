@@ -469,12 +469,15 @@ describe('PublishService.publish', () => {
       'main',
       '--title',
       'Add cart validation',
-      '--body',
-      '## Summary\n- validate.ts',
+      '--body-file',
+      '-',
       '--draft',
     ]);
+    // The body goes on stdin: no argument with a line break (cmd.exe cannot carry one to a gh.cmd on Windows).
+    expect(create?.opts.input).toBe('## Summary\n- validate.ts');
+    expect(create?.args.some((a) => a.includes('\n'))).toBe(false);
     for (const c of [view, create]) {
-      expect(c?.file).toMatch(/\/bin\/gh$/);
+      expect(c?.file).toMatch(/[\\/]bin[\\/]gh$/);
       expect(c?.opts.env).toMatchObject({ GH_TOKEN: 'ghp_grant', GH_PROMPT_DISABLED: '1', NO_COLOR: '1' });
       expect(c?.args.join(' ')).not.toContain('ghp_grant');
     }
@@ -499,7 +502,7 @@ describe('PublishService.publish', () => {
       ['gh pr view fix/checkout --json number,url,state,isDraft', 'read'],
       // The PR body is collateral of `redactArgv` (`--body` values never persist).
       [
-        'gh pr create --head fix/checkout --base main --title Add cart validation --body [redacted] --draft',
+        'gh pr create --head fix/checkout --base main --title Add cart validation --body-file - --draft',
         'write',
       ],
     ]);

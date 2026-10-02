@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { copy, fixtures, homeActivity, homeProjectRows } from '@styx/core';
+import { copy, fixtures, homeActivity, homeGreeting, homeProjectRows } from '@styx/core';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
@@ -29,61 +29,74 @@ describe('Home', () => {
     Object.assign(window, { styx: undefined });
   });
 
-  it('renders the four zero-padded counters in spec order', () => {
+  it('heads with a greeting and one line, then the four counters: needs you (accent), working, ready to land, grants', () => {
     render(<Home />);
+    const m = useReadModel.getState().model;
+    const name = m.account.kind === 'signed-in' ? m.account.account.name : null;
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(
+      homeGreeting(new Date(fixtures.DEMO_NOW).getHours(), name),
+    );
+    expect(screen.getByText('2 things need you. 3 agents are working.')).toBeTruthy();
     const labels = [
       copy.counters.needsYou,
       copy.counters.agentsWorking,
+      copy.home.readyToLand,
       copy.counters.grantsActive,
-      copy.counters.projects,
     ];
-    const values = labels.map((l) => screen.getByText(l).previousElementSibling?.textContent);
-    expect(values).toEqual(['02', '03', '02', '05']);
+    const counters = within(document.querySelector('[data-home-counters]') as HTMLElement);
+    const values = labels.map((l) => counters.getByText(l).previousElementSibling?.textContent);
+    expect(values).toEqual(['02', '03', '00', '02']);
+    expect(counters.getByText(copy.counters.needsYou).parentElement?.getAttribute('data-attention')).toBe(
+      'true',
+    );
     // The titlebar counter is the one needs-you live region; the tile must not announce a second time.
-    expect(screen.getByText(copy.counters.needsYou).parentElement?.getAttribute('aria-live')).toBeNull();
+    expect(counters.getByText(copy.counters.needsYou).parentElement?.getAttribute('aria-live')).toBeNull();
   });
 
-  it('renders one row per project with the core selector strings and the needs-you dot', () => {
+  it('one row per project with its lanes, most urgent first; a project with nothing running offers a task', () => {
     render(<Home />);
     const expected = homeProjectRows(useReadModel.getState().model, fixtures.DEMO_NOW);
-    const table = screen.getByRole('table');
-    const rows = within(table)
-      .getAllByRole('row')
-      .filter((r) => r.hasAttribute('data-project-id'));
+    const rows = Array.from(document.querySelectorAll('[data-project-id]'));
     expect(rows).toHaveLength(expected.length);
     rows.forEach((row, i) => {
       const e = expected[i];
       if (e === undefined) throw new Error('row mismatch');
-      const cells = within(row)
-        .getAllByRole('cell')
-        .map((c) => c.textContent);
-      expect(cells).toEqual([e.name, e.path, e.branch, e.agents, e.targets, e.last]);
+      expect(row.textContent).toContain(e.name);
+      expect(row.querySelectorAll('[data-home-lane]').length).toBe(Math.min(3, e.lanes.length));
       const dot = row.querySelector('[data-tone="hollow"]');
       expect(dot?.getAttribute('data-on')).toBe(e.needs ? 'true' : null);
     });
-    expect(expected[0]?.agents).toBe('Claude, Codex, Gemini');
-    expect(expected[0]?.last).toBe('2m');
+    const acme = document.querySelector(
+      `[data-project-id="${fixtures.ids.project.acmeShop}"]`,
+    ) as HTMLElement;
+    expect(acme.querySelector('[data-home-lane]')?.getAttribute('data-status')).toBe('your-turn');
+    const idle = rows.find((r) => r.querySelectorAll('[data-home-lane]').length === 0) as
+      HTMLElement | undefined;
+    if (idle !== undefined) {
+      fireEvent.click(within(idle).getByRole('button', { name: copy.home.startTask }));
+      expect(useUiStore.getState().newTask?.projectId).toBe(idle.getAttribute('data-project-id'));
+    }
   });
 
-  it('row click selects the project, tells main, and opens Workspace', () => {
+  it('the project opens its workspace (and tells main); a lane chip opens that lane', () => {
     render(<Home />);
     const acme = fixtures.ids.project.acmeShop;
-    const row = screen.getByRole('table').querySelector(`[data-project-id="${acme}"]`);
-    if (row === null) throw new Error('no acme row');
-    fireEvent.click(row);
-    const ui = useUiStore.getState();
-    expect(ui.projectId).toBe(acme);
-    expect(ui.screen).toBe('workspace');
+    const row = document.querySelector(`[data-project-id="${acme}"]`) as HTMLElement;
+    fireEvent.click(within(row).getAllByRole('button')[0] as HTMLElement);
+    expect(useUiStore.getState()).toMatchObject({ projectId: acme, screen: 'workspace' });
     expect(commandMock).toHaveBeenCalledWith('project.select', { projectId: acme });
+    useUiStore.setState({ screen: 'home' });
+    const chip = row.querySelector('[data-home-lane]') as HTMLElement;
+    fireEvent.click(chip);
+    expect(useUiStore.getState().projectSession[acme]).toBe(chip.getAttribute('data-home-lane'));
+    expect(useUiStore.getState().screen).toBe('workspace');
   });
 
-  it('Enter on a focused row activates it too', () => {
+  it('New task in the head opens New task for the current project', () => {
+    useUiStore.setState({ projectId: fixtures.ids.project.blogV2 });
     render(<Home />);
-    const blog = fixtures.ids.project.blogV2;
-    const row = screen.getByRole('table').querySelector(`[data-project-id="${blog}"]`);
-    if (row === null) throw new Error('no blog row');
-    fireEvent.keyDown(row, { key: 'Enter' });
-    expect(useUiStore.getState().projectId).toBe(blog);
+    fireEvent.click(document.querySelector('[data-home-new-task]') as HTMLElement);
+    expect(useUiStore.getState().newTask).toEqual({ projectId: fixtures.ids.project.blogV2, text: '' });
   });
 
   it('+ New project and + Clone URL push the new-project modal', () => {
@@ -102,7 +115,7 @@ describe('Home', () => {
     expect(commandMock).not.toHaveBeenCalledWith('project.add', expect.anything());
   });
 
-  it('renders the activity feed newest first in mono, with the prototype line', () => {
+  it('renders what happened newest first, with the prototype line', () => {
     render(<Home />);
     const feed = screen.getByRole('list', { name: copy.home.activity });
     const items = within(feed).getAllByRole('listitem');
@@ -116,12 +129,12 @@ describe('Home', () => {
       useReadModel.getState().replaceModel(fixtures.emptyReadModel(), 'connected');
     });
 
-    it('shows the empty state with verbatim copy, keeps header, add row and Activity label', () => {
+    it('shows the empty state with verbatim copy, keeps the add row and the activity heading', () => {
       render(<Home />);
       expect(screen.getByText(copy.empty.projects.headline)).toBeTruthy();
       expect(screen.getByText(copy.empty.projects.bodyPrototype)).toBeTruthy();
-      expect(screen.getByRole('columnheader', { name: copy.home.columns.project })).toBeTruthy();
-      expect(screen.getByRole('table').querySelectorAll('[data-project-id]')).toHaveLength(0);
+      expect(document.querySelectorAll('[data-project-id]')).toHaveLength(0);
+      expect(document.querySelector('[data-home-new-task]')).toBeNull();
       expect(screen.getByRole('button', { name: copy.home.addRow.newProject })).toBeTruthy();
       expect(screen.getByText(copy.home.activity)).toBeTruthy();
       expect(
@@ -140,7 +153,7 @@ describe('Home', () => {
 
     it('counters read 00 except grants', () => {
       render(<Home />);
-      expect(screen.getByText(copy.counters.projects).previousElementSibling?.textContent).toBe('00');
+      expect(screen.getByText(copy.home.readyToLand).previousElementSibling?.textContent).toBe('00');
       expect(screen.getByText(copy.counters.needsYou).previousElementSibling?.textContent).toBe('00');
     });
   });

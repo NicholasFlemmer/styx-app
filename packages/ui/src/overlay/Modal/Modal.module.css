@@ -19,18 +19,17 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
-    /* Prototype row = 12px + the 14px ✕ button's normal line box (~17px) + 12px = 41px content, +1px border-bottom (border-box). */
+    padding: 16px 18px 14px;
     min-height: 42px;
     border-bottom: 1px solid var(--ln);
   }
+  /* ADR-0027 §6: a dialog's title is a heading in today's face, not a muted label. */
   .title {
-    font-size: 10px;
+    font-size: 20px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--mu);
-    line-height: 1;
+    letter-spacing: -0.01em;
+    color: var(--tx);
+    line-height: 1.15;
   }
   /* 14px glyph, 28px hit target (spec §9) without changing the 12px row padding. */
   .close {

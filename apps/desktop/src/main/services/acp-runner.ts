@@ -1,4 +1,5 @@
-import { spawn as spawnChild, type ChildProcess } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
+import { killTree, spawnCli } from './spawn-cli';
 import { EventEmitter } from 'node:events';
 import { z } from 'zod';
 import {
@@ -393,7 +394,7 @@ export class AcpRunner extends EventEmitter<StreamEvents> implements StreamRunne
   private readonly entries = new Map<string, Entry>();
 
   constructor(
-    private readonly spawnFn: SpawnFn = spawnChild,
+    private readonly spawnFn: SpawnFn = spawnCli,
     private readonly clientVersion: string = '0.0.0',
   ) {
     super();
@@ -474,7 +475,9 @@ export class AcpRunner extends EventEmitter<StreamEvents> implements StreamRunne
           reject(err);
         }
       });
-      proc.once('close', (code) => this.onClose(entry, proc, code));
+      // A stop we asked for ends with no exit code, as a signal does on macOS: Windows' taskkill /F leaves 1, which
+      // would read as the agent failing.
+      proc.once('close', (code) => this.onClose(entry, proc, entry.killed ? null : code));
     });
   }
 
@@ -1179,7 +1182,7 @@ export class AcpRunner extends EventEmitter<StreamEvents> implements StreamRunne
     entry.killed = true;
     if (entry.proc) {
       entry.proc.stdin?.end();
-      entry.proc.kill();
+      killTree(entry.proc);
       return;
     }
     this.entries.delete(id);

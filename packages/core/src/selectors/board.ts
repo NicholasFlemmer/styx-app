@@ -1,16 +1,19 @@
 import type { AskId, ProjectId, SessionId } from '../ids';
 import { copy } from '../copy';
+import type { Agent } from '../model/common';
 import type { AskKind, Session, SessionState } from '../model/session';
 import type { ReadModel } from '../read-model';
-import { agentLabel, branchOf, headAskOf, liveSessions, projectNameOf } from './common';
+import { agentLabel, branchOf, headAskOf, isReadyToLand, liveSessions, projectNameOf } from './common';
 import { formatAge, padCount } from './format';
 
-export type BoardColumnKey = 'needs-you' | 'working' | 'done';
+export type BoardColumnKey = 'needs-you' | 'working' | 'ready' | 'landed';
 
 export interface BoardCard {
   sessionId: SessionId;
   projectId: ProjectId;
   agent: string;
+  /** Which agent, for its colour square (ADR-0027 §7). */
+  agentKind: Agent;
   age: string;
   project: string;
   branch: string;
@@ -26,6 +29,8 @@ export interface BoardCard {
 export interface BoardColumn {
   key: BoardColumnKey;
   label: string;
+  /** One line under the label: what the column asks of the person. */
+  sub: string;
   /** Accent-filled header (Needs you). */
   hot: boolean;
   /** Shows the dashed "+ Spawn agent" affordance (Working). */
@@ -53,6 +58,7 @@ export const boardCard = (model: ReadModel, session: Session, now: number): Boar
     sessionId: session.id,
     projectId: session.projectId,
     agent: agentLabel(session),
+    agentKind: session.agent,
     age: formatAge(session.lastActivityAt, now),
     project: projectNameOf(model, session.projectId),
     branch: branchOf(model, session),
@@ -69,11 +75,19 @@ export const boardCard = (model: ReadModel, session: Session, now: number): Boar
 const COLUMN_STATES: Record<BoardColumnKey, readonly SessionState[]> = {
   'needs-you': ['needs-you'],
   working: ['working', 'idle', 'paused'],
-  done: ['done'],
+  ready: ['done'],
+  landed: ['done'],
 };
 
 /**
- * Needs you | Working (includes idle and paused) | Done; counts zero-padded; empty copy from spec §10.
+ * A finished session is ready to land while its lane has unmerged changes (ADR-0027, `isReadyToLand`); otherwise
+ * it is landed, or finished on main with nothing to land, which the Landed column ("On main") holds too.
+ */
+const landed = (model: ReadModel, s: Session): boolean => !isReadyToLand(model, s);
+
+/**
+ * Your turn | Working (includes idle and paused) | Ready to land | Landed (ADR-0027: Done splits on whether the
+ * lane merged); counts zero-padded; empty copy from spec §10.
  * Cards keep read-model (spawn) order, as the prototype does — no recency sort (visual baseline, ADR-0012).
  */
 export const boardColumns = (
@@ -88,16 +102,19 @@ export const boardColumns = (
   const column = (
     key: BoardColumnKey,
     label: string,
+    sub: string,
     hot: boolean,
     spawn: boolean,
     emptyText: string,
   ): BoardColumn => {
     const items = sessions
       .filter((s) => COLUMN_STATES[key].includes(s.state))
+      .filter((s) => (key === 'ready' ? !landed(model, s) : key === 'landed' ? landed(model, s) : true))
       .map((s) => boardCard(model, s, now));
     return {
       key,
       label,
+      sub,
       hot,
       spawn,
       count: padCount(items.length),
@@ -107,8 +124,23 @@ export const boardColumns = (
     };
   };
   return [
-    column('needs-you', copy.board.columns.needsYou, true, false, copy.board.empty.needsYou),
-    column('working', copy.board.columns.working, false, true, copy.board.empty.working),
-    column('done', copy.board.columns.done, false, false, copy.board.empty.done),
+    column(
+      'needs-you',
+      copy.board.columns.needsYou,
+      copy.board.sub.needsYou,
+      true,
+      false,
+      copy.board.empty.needsYou,
+    ),
+    column(
+      'working',
+      copy.board.columns.working,
+      copy.board.sub.working,
+      false,
+      true,
+      copy.board.empty.working,
+    ),
+    column('ready', copy.board.columns.ready, copy.board.sub.ready, false, false, copy.board.empty.ready),
+    column('landed', copy.board.columns.landed, copy.board.sub.landed, false, false, copy.board.empty.landed),
   ];
 };

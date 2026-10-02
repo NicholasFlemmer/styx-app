@@ -25,7 +25,9 @@ export class FeedbackService {
   /** Sends one message. Unlike usage counts this is something the person is waiting on, so failures are said. */
   async send(message: string, email: string | null, diagnostics = false): Promise<void> {
     const token = await this.deps.token().catch(() => null);
-    const log = diagnostics ? await (this.deps.diagnostics?.() ?? Promise.resolve(null)).catch(() => null) : null;
+    const log = diagnostics
+      ? await (this.deps.diagnostics?.() ?? Promise.resolve(null)).catch(() => null)
+      : null;
     let r: Response;
     try {
       r = await this.deps.fetch(`${this.deps.apiBase().replace(/\/+$/, '')}/v1/feedback`, {

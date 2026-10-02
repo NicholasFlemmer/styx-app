@@ -8,34 +8,176 @@
     min-height: 0;
     overflow-y: auto;
   }
-  .table {
+  /* The head (ADR-0027): greeting at the page-title size in today's heading face, then one line. */
+  .hello {
     flex: none;
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    padding: 24px 24px 18px;
+    border-bottom: 1px solid var(--ln);
   }
-  /* Project cell: dot + name at the prototype's 10px gap (shared cell gap is 8px). */
-  .name {
-    gap: 10px;
+  .title {
+    margin: 0;
+    font-size: 34px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
   }
-  /* Add row: padding 14px 20px, hairline, dashed regular buttons 10 apart. */
+  .summary {
+    margin: 6px 0 0;
+    font-size: 15px;
+    color: var(--mu);
+  }
+  .helloActs {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+  }
+  /* Projects, one row each: who and where · the work as lanes · targets and last activity. */
+  .projects {
+    flex: none;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .project {
+    display: grid;
+    grid-template-columns: minmax(180px, 220px) 1fr minmax(120px, 170px);
+    gap: 20px;
+    align-items: center;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--ln);
+  }
+  .projectOpen {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--tx);
+    text-align: left;
+    cursor: pointer;
+    min-width: 0;
+  }
+  .projectOpen:hover .projectName {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .projectName {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .projectPath {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--mu);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .work {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 4px 8px;
+    border: 1px solid var(--ln);
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .chip:hover {
+    background: var(--s2);
+  }
+  .chip[data-status='your-turn'] {
+    border-color: var(--ac);
+  }
+  .chip[data-status='ready'] {
+    background: var(--paper);
+    border-color: var(--paper);
+    color: var(--paper-tx);
+  }
+  .chipTask {
+    min-width: 0;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chipStatus {
+    flex: none;
+    color: var(--mu);
+  }
+  .chip[data-status='ready'] .chipStatus {
+    color: var(--paper-mu);
+  }
+  .chipYours {
+    flex: none;
+    font-style: normal;
+    font-weight: 600;
+    font-size: 11px;
+    padding: 0 4px;
+    background: var(--ac);
+    color: var(--acx);
+  }
+  .more,
+  .idle {
+    align-self: center;
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .startTask {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--tx);
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    font-size: 12px;
+    color: var(--mu);
+    text-align: right;
+  }
+  /* Add row: hairline, dashed regular buttons 10 apart. */
   .addRow {
     flex: none;
     display: flex;
     gap: 10px;
-    padding: 14px 20px;
+    padding: 14px 24px;
     border-bottom: 1px solid var(--ln);
   }
   .activityHead {
     flex: none;
-    padding: 12px 20px 6px;
+    padding: 14px 24px 6px;
   }
-  /* Feed: mono 12 / 1.9, muted, newest first; the screen keeps its height and clips overflow. */
+  /* What happened: body text (ADR-0027 §6), newest first; the screen keeps its height and clips overflow. */
   .feed {
     flex: 1;
     min-height: 0;
     overflow: hidden;
-    padding: 0 20px;
+    padding: 0 24px;
     margin: 0;
-    font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.9;
     color: var(--mu);
     list-style: none;

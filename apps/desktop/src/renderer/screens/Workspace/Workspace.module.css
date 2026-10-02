@@ -13,15 +13,22 @@
     align-items: stretch;
     border-bottom: 1px solid var(--ln);
     background: var(--s1);
+    /* At the window's minimum width the strip never spills under the chat; `clip` only trims sideways, so the
+       Deploy menu still drops below the strip. */
+    overflow-x: clip;
+    overflow-y: visible;
   }
   /* The tabs are their own tablist (a tablist may only own tabs); the publish and deploy buttons are siblings that hug the right edge. */
+  /* The instruments are the strip's navigation: they keep their width; Publish and Deploy give way first. */
   .tabs {
     display: flex;
     align-items: stretch;
+    flex: none;
   }
   .modes > [data-publish-button],
   .modes > [data-deploy-button] {
     margin-left: auto;
+    flex: none;
   }
   .modes > [data-publish-button] + [data-deploy-button] {
     margin-left: 0;
@@ -32,8 +39,81 @@
     flex-direction: column;
     min-width: 0;
     min-height: 0;
+    container-type: inline-size;
+    container-name: column;
+  }
+  /* A narrow centre (the window's minimum with the file tree open): the instruments tighten so all four fit. */
+  /* A middling centre (1280 with the files open): Publish and Deploy keep their glyphs and drop their words (still
+     their accessible names, and the button's title), so nothing is drawn over anything. */
+  @container column (max-width: 540px) {
+    .tabs > [role='tab'] {
+      padding-left: 11px;
+      padding-right: 11px;
+    }
+    .modes [data-strip-label] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+  @container column (max-width: 400px) {
+    .tabs > [role='tab'] {
+      padding-left: 6px;
+      padding-right: 6px;
+      font-size: 12px;
+    }
+    /* No room for them here: Publish and Deploy stay one keystroke away in the palette. */
+    .modes > [data-publish-button],
+    .modes > [data-deploy-button] {
+      display: none;
+    }
   }
   .empty {
     padding: 14px 16px;
+  }
+}
+@layer screens {
+  /* Tabs in the person's order (#140): the dragged tab dims, a lime bar shows where it will land. */
+  .tabDragging {
+    opacity: 0.5;
+  }
+  .tabGapBefore {
+    border-left: 3px solid var(--ac);
+  }
+  .tabGapAfter {
+    border-right: 3px solid var(--ac);
+  }
+  .tabMenu {
+    position: fixed;
+    z-index: 30;
+    min-width: 170px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--tx);
+    background: var(--bg);
+  }
+  .tabMenuItem {
+    padding: 7px 12px;
+    border: 0;
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .tabMenuItem:hover,
+  .tabMenuItem:focus-visible {
+    background: var(--tx);
+    color: var(--bg);
+    outline: none;
+  }
+  .tabMenuItem:disabled {
+    color: var(--mu);
+    cursor: default;
+    background: transparent;
   }
 }

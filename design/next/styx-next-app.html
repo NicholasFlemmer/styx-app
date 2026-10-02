@@ -1,0 +1,1246 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Styx next: every screen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+:root {
+  /* Styx tokens, verbatim */
+  --page:#181916; --bg:#0d0e0c; --s1:#121411; --s2:#1c1e1a; --ln:#2d302a; --tx:#e9ebe3; --mu:#858a81;
+  --ac:#d6ff3d; --acx:#0d0e0c; --act:#d6ff3d; --add:rgba(214,255,61,.13); --term:#080908; --termtx:#c9cdc2; --dim:rgba(0,0,0,.6);
+  /* Paper: the light theme's surfaces, for work that has come back */
+  --p-bg:#f7f8f3; --p-s2:#e1e3db; --p-ln:#b3b7ab; --p-tx:#14160f; --p-mu:#5d6259; --p-act:#6e8f00; --p-add:rgba(150,200,0,.2);
+  --del:rgba(255,110,80,.14); --p-del:rgba(200,70,40,.13);
+  /* New: one colour per agent, used only as a small square */
+  --claude:#e8916a; --codex:#8fb3ff; --gemini:#b79bff; --cursor:#e9ebe3; --shell:#858a81;
+  --ui: 'Archivo', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--page); color: var(--tx); font: 400 14px/1.5 var(--ui); padding: 56px 0 140px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.mu { color: var(--mu); }
+
+/* ================= the document ================= */
+.doc { width: 1280px; margin: 0 auto; }
+.doc h1 { font: 600 54px/1.02 var(--ui); letter-spacing: -0.02em; letter-spacing: -.01em; max-width: 17ch; }
+.doc .lede { margin-top: 18px; max-width: 64ch; color: var(--mu); font-size: 18px; line-height: 1.5; }
+.doc .lede strong { color: var(--tx); font-weight: 600; }
+.rules { margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 32px; }
+.rules div { padding: 16px 0; border-top: 1px solid var(--ln); }
+.rules b { display: block; font: 600 17px/1.2 var(--ui); letter-spacing: 0; }
+.rules span { display: block; margin-top: 6px; color: var(--mu); font-size: 14px; max-width: 40ch; }
+.index { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 6px; }
+.index a { color: var(--tx); text-decoration: none; padding: 6px 10px; border: 1px solid var(--ln); font-size: 13px; }
+.index a:hover { background: var(--tx); color: var(--bg); }
+.part { margin-top: 104px; padding-top: 18px; border-top: 1px solid var(--tx); font: 600 32px/1 var(--ui); letter-spacing: -0.02em; }
+.note { width: 1280px; margin: 72px auto 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
+.note h2 { font: 600 24px/1.12 var(--ui); letter-spacing: -0.02em; grid-column: 1; }
+.note .was { grid-column: 2; grid-row: 1 / span 2; color: var(--mu); font-size: 13px; border-left: 1px solid var(--ln); padding-left: 20px; }
+.note .was b { display: block; color: var(--tx); font-weight: 600; margin-bottom: 4px; }
+.note p { grid-column: 1; margin-top: 8px; color: var(--mu); font-size: 15px; max-width: 60ch; }
+.note + .note { margin-top: 24px; }
+
+/* ================= window frame ================= */
+.win { width: 1280px; height: 800px; margin: 0 auto; background: var(--bg); border: 1px solid var(--ln); display: grid; grid-template-rows: 38px 1fr 26px; overflow: hidden; position: relative; }
+.win.bare { grid-template-rows: 38px 1fr; }
+.title { display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid var(--ln); background: var(--s1); font-size: 13px; }
+.lights { display: flex; gap: 8px; width: 60px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); }
+.word { font: 600 12px/1 var(--ui); letter-spacing: 0; letter-spacing: .24em; }
+.crumb { display: flex; gap: 8px; align-items: center; color: var(--mu); }
+.crumb b { color: var(--tx); font-weight: 600; }
+.search { margin-left: auto; width: 320px; border: 1px solid var(--ln); padding: 5px 10px; color: var(--mu); display: flex; justify-content: space-between; }
+.search kbd { font: 500 11px var(--mono); }
+.count { display: flex; align-items: center; gap: 6px; }
+.count i { width: 8px; height: 8px; background: var(--ac); }
+.count i.off { background: none; border: 1px solid var(--tx); }
+.me { width: 24px; height: 24px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); font: 600 10px/22px var(--ui); text-align: center; }
+.frame { display: grid; grid-template-columns: 56px 216px 1fr; min-height: 0; }
+.frame.wide { grid-template-columns: 56px 1fr; }
+.status { display: flex; gap: 20px; align-items: center; padding: 0 14px; border-top: 1px solid var(--ln); background: var(--s1); font-size: 12px; color: var(--mu); }
+.status .sp { margin-left: auto; }
+.status .tx { color: var(--tx); }
+.status .coffee { background: var(--ac); color: var(--acx); font-weight: 700; padding: 3px 9px; margin-right: -14px; height: 26px; display: flex; align-items: center; }
+
+/* rail: places on top, projects below, settings at the foot */
+.rail { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; }
+.rail .ic { width: 36px; height: 36px; display: grid; place-items: center; color: var(--mu); position: relative; }
+.rail .ic svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.rail .ic[data-inv] { background: var(--tx); color: var(--bg); }
+.rail .ic b { position: absolute; top: 2px; right: 2px; width: 7px; height: 7px; background: var(--ac); }
+.rail hr { width: 24px; border: 0; border-top: 1px solid var(--ln); margin: 4px 0; }
+.rail .pj { width: 36px; height: 36px; border: 1px solid var(--ln); display: grid; place-items: center; font: 700 11px var(--ui); position: relative; }
+.rail .pj[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.rail .pj b { position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; background: var(--ac); border: 2px solid var(--s1); }
+.rail .pj.add { border-style: dashed; color: var(--mu); }
+.rail .foot { margin-top: auto; }
+
+/* project nav: the work first, then the project's tools */
+.nav { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.nav .ph { padding: 14px 14px 10px; }
+.nav .ph b { display: block; font: 600 16px/1.2 var(--ui); letter-spacing: 0; }
+.nav .ph span { font: 400 11px var(--mono); color: var(--mu); }
+.nav .grp { padding: 14px 14px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.lanes { display: flex; flex-direction: column; }
+.ln { display: grid; grid-template-columns: 10px 1fr auto; gap: 2px 8px; padding: 8px 14px; border-top: 1px solid var(--ln); }
+.ln:last-child { border-bottom: 1px solid var(--ln); }
+.ln .d { width: 8px; height: 8px; margin-top: 6px; }
+.ln .t { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.ln .s { grid-column: 2 / -1; font-size: 12px; color: var(--mu); }
+.ln .s.you { color: var(--acx); background: var(--ac); justify-self: start; padding: 0 5px; font-weight: 600; }
+.ln[data-inv] { background: var(--tx); color: var(--bg); }
+.ln[data-inv] .s { color: #5d6259; }
+.ln.old { opacity: .55; }
+.newtask { margin: 10px 14px 0; padding: 8px 10px; border: 1px dashed var(--ln); color: var(--mu); font-size: 13px; }
+.tools { display: flex; flex-direction: column; margin-top: 4px; }
+.tools a { display: flex; justify-content: space-between; padding: 7px 14px; font-size: 13px; border-top: 1px solid var(--ln); }
+.tools a:last-child { border-bottom: 1px solid var(--ln); }
+.tools a span { color: var(--mu); font-size: 12px; }
+.tools a[data-inv] { background: var(--tx); color: var(--bg); }
+.nav .nf { margin-top: auto; padding: 10px 14px; border-top: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+.nav .nf .mono { font-size: 11px; }
+
+/* shared bits */
+.dot { display: inline-block; width: 8px; height: 8px; flex: none; }
+.c-claude { background: var(--claude); } .c-codex { background: var(--codex); } .c-gemini { background: var(--gemini); } .c-cursor { background: var(--cursor); } .c-shell { background: var(--shell); }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--ln); font-size: 13px; white-space: nowrap; }
+.btn.pri { background: var(--ac); color: var(--acx); border-color: var(--ac); font-weight: 700; }
+.btn.inv { background: var(--tx); color: var(--bg); border-color: var(--tx); font-weight: 600; }
+.btn.line { border-color: var(--tx); font-weight: 600; }
+.btn.sm { padding: 4px 9px; font-size: 12px; }
+.btn kbd { font: 500 10px var(--mono); opacity: .7; }
+.tag { display: inline-block; padding: 1px 6px; font-size: 11px; font-weight: 600; border: 1px solid var(--ln); color: var(--mu); }
+.tag.prod { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.pagehead { display: flex; align-items: flex-end; gap: 16px; padding: 22px 28px 16px; border-bottom: 1px solid var(--ln); }
+.pagehead h3 { font: 600 28px/1 var(--ui); letter-spacing: -0.02em; }
+.pagehead p { color: var(--mu); font-size: 13px; padding-bottom: 2px; }
+.pagehead .r { margin-left: auto; display: flex; gap: 8px; }
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--ln); padding: 0 28px; }
+.tabs span { padding: 10px 14px; font-size: 13px; color: var(--mu); display: flex; gap: 6px; align-items: center; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs span[data-inv] { color: var(--tx); border-bottom-color: var(--tx); font-weight: 600; }
+.tabs .n { font-size: 11px; padding: 0 5px; background: var(--ac); color: var(--acx); font-weight: 700; }
+.tabs .n.q { background: none; color: var(--mu); border: 1px solid var(--ln); font-weight: 500; }
+.scrim { position: absolute; inset: 38px 0 0 0; background: var(--dim); z-index: 5; }
+.modal { position: absolute; z-index: 6; background: var(--bg); border: 1px solid var(--tx); }
+
+/* the customer's app (Acme Shop) inside previews and results */
+.acme { background: #fff; color: #1f2430; font-family: system-ui, -apple-system, sans-serif; border-radius: 10px; overflow: hidden; }
+.acme.dark { background: #1b1f2a; color: #e8ebf2; }
+.acme .top { display: flex; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e7e9ef; font-weight: 700; font-size: 13px; }
+.acme.dark .top { border-color: #2c3242; }
+.acme .top i { font-style: normal; font-weight: 500; font-size: 12px; color: #7b8294; }
+.acme .b { padding: 14px 16px; }
+.acme h5 { font-size: 17px; margin-bottom: 8px; }
+.acme .set { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eef0f4; font-size: 13px; }
+.acme.dark .set { border-color: #2c3242; }
+.acme .set small { display: block; color: #7b8294; font-size: 12px; margin-top: 1px; }
+.tog { width: 34px; height: 20px; border-radius: 10px; background: #5b6cff; position: relative; flex: none; }
+.tog::after { content: ''; position: absolute; top: 2px; left: 16px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+.tog.off { background: #c9ced9; } .acme.dark .tog.off { background: #3a4152; } .tog.off::after { left: 2px; }
+.acme .new { outline: 2px dashed var(--ac); outline-offset: 3px; }
+
+/* ================= workspace ================= */
+.ws { display: grid; grid-template-columns: 1fr 400px; min-height: 0; }
+.stagecol { display: grid; grid-template-rows: 40px 1fr auto; min-width: 0; border-right: 1px solid var(--ln); min-height: 0; }
+.itabs { display: flex; align-items: stretch; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.itabs > span { padding: 0 14px; display: flex; align-items: center; gap: 7px; color: var(--mu); border-right: 1px solid var(--ln); }
+.itabs > span[data-inv] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.itabs .n { font-size: 11px; padding: 0 4px; border: 1px solid currentColor; }
+.itabs .acts { margin-left: auto; display: flex; gap: 6px; align-items: center; padding: 0 8px; border: 0; }
+.itabs .acts .btn { padding: 5px 10px; font-size: 12px; }
+.stage { background: var(--s1); padding: 18px 22px; display: grid; grid-template-rows: auto 1fr; gap: 10px; min-height: 0; overflow: hidden; }
+.urlbar { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--mu); }
+.urlbar .u { font: 400 12px var(--mono); color: var(--tx); border: 1px solid var(--ln); padding: 4px 8px; background: var(--bg); }
+.urlbar .seg { margin-left: auto; display: flex; border: 1px solid var(--ln); }
+.urlbar .seg span { padding: 3px 9px; } .urlbar .seg span[data-inv] { background: var(--tx); color: var(--bg); }
+.term { background: var(--term); color: var(--termtx); font: 400 12px/1.65 var(--mono); padding: 8px 14px 10px; border-top: 1px solid var(--ln); height: 112px; }
+.term .h { font: 400 12px var(--ui); color: var(--mu); display: flex; justify-content: space-between; margin-bottom: 2px; }
+.term .ok { color: var(--act); }
+
+.chat { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; background: var(--bg); }
+.lanehead { padding: 14px 16px 12px; border-bottom: 1px solid var(--ln); }
+.lanehead .who { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--mu); }
+.lanehead .who .mono { color: var(--mu); }
+.lanehead .who .x { margin-left: auto; display: flex; gap: 10px; }
+.lanehead h3 { font: 600 19px/1.2 var(--ui); letter-spacing: 0; margin-top: 6px; }
+.lanehead .sum { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--mu); }
+.lanehead .sum .btn { margin-left: auto; }
+.feed { overflow: hidden; padding: 14px 16px 0; display: flex; flex-direction: column; gap: 10px; }
+.rcpt { display: flex; justify-content: space-between; gap: 10px; padding: 8px 12px; background: var(--s1); border: 1px solid var(--ln); font-size: 13px; }
+.rcpt b { font-weight: 600; }
+.rcpt span { color: var(--mu); font-size: 12px; white-space: nowrap; }
+.umsg { align-self: flex-end; max-width: 85%; background: var(--s2); padding: 8px 12px; font-size: 14px; }
+.card-p { background: var(--p-bg); color: var(--p-tx); padding: 13px 15px 11px; }
+.card-p .top { display: flex; justify-content: space-between; font-size: 12px; color: var(--p-mu); }
+.card-p .top .ok { color: var(--p-act); font-weight: 600; }
+.card-p h4 { font: 600 16px/1.22 var(--ui); letter-spacing: 0; margin-top: 5px; }
+.card-p p { font-size: 13px; margin-top: 5px; line-height: 1.45; }
+.card-p .acts { display: flex; gap: 6px; margin-top: 10px; align-items: center; }
+.card-p .acts .btn { border-color: var(--p-ln); padding: 5px 10px; font-size: 12px; }
+.card-p .acts .k { margin-left: auto; font-size: 12px; color: var(--p-mu); }
+.live { border: 1px solid var(--ln); padding: 10px 12px; }
+.live .hd { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.live .hd i { width: 8px; height: 8px; background: var(--ac); }
+.live .hd span { margin-left: auto; color: var(--mu); font-weight: 400; font-size: 12px; }
+.live ol { list-style: none; margin-top: 7px; font-size: 13px; }
+.live li { display: flex; gap: 8px; padding: 2px 0; color: var(--mu); }
+.live li::before { content: ''; width: 9px; height: 9px; margin-top: 5px; flex: none; border: 1.5px solid var(--ln); }
+.live li.d { color: var(--tx); } .live li.d::before { background: var(--ac); border-color: var(--ac); }
+.live li.n { color: var(--tx); } .live li.n::before { border-color: var(--ac); }
+.live .raw { margin-top: 6px; font-size: 12px; color: var(--mu); text-decoration: underline; text-underline-offset: 3px; }
+.ask { border: 1px solid var(--ac); padding: 12px; }
+.ask .hd { font-size: 12px; color: var(--mu); display: flex; gap: 8px; align-items: center; }
+.ask .hd i { width: 8px; height: 8px; background: var(--ac); }
+.ask h4 { font: 600 16px/1.25 var(--ui); letter-spacing: 0; margin-top: 6px; }
+.ask p { font-size: 13px; color: var(--mu); margin-top: 4px; }
+.ask .acts { display: flex; gap: 6px; margin-top: 10px; }
+.compose { padding: 10px 16px 12px; border-top: 1px solid var(--ln); }
+.compose .box { border: 1px solid var(--ln); padding: 9px 12px; color: var(--mu); min-height: 54px; font-size: 14px; }
+.compose .row { display: flex; gap: 14px; margin-top: 7px; font-size: 12px; color: var(--mu); }
+.compose .row .send { margin-left: auto; color: var(--tx); }
+
+/* code instrument: today's editor, kept */
+.code { display: grid; grid-template-columns: 200px 1fr; min-height: 0; background: var(--bg); }
+.files { border-right: 1px solid var(--ln); padding: 10px 0; font: 400 12px/1.9 var(--mono); }
+.files .h { font: 400 12px var(--ui); color: var(--mu); padding: 0 12px 4px; }
+.files div { padding: 0 12px; display: flex; justify-content: space-between; }
+.files div.in { padding-left: 24px; }
+.files div[data-inv] { background: var(--tx); color: var(--bg); }
+.files .m { color: var(--act); }
+.files div[data-inv] .m { color: var(--p-act); }
+.editor { display: grid; grid-template-rows: 32px 1fr auto; min-width: 0; }
+.etabs { display: flex; border-bottom: 1px solid var(--ln); font: 400 12px var(--mono); }
+.etabs span { padding: 0 14px; display: flex; align-items: center; border-right: 1px solid var(--ln); color: var(--mu); }
+.etabs span[data-inv] { color: var(--tx); background: var(--s1); }
+.etabs .open { margin-left: auto; font: 400 12px var(--ui); border-left: 1px solid var(--ln); border-right: 0; }
+.src { font: 400 12.5px/1.75 var(--mono); padding: 10px 0; overflow: hidden; }
+.src div { display: grid; grid-template-columns: 44px 1fr; white-space: pre; }
+.src div span:first-child { color: var(--mu); text-align: right; padding-right: 14px; }
+.src .a { background: var(--add); }
+.src .k { color: #c6a8ff; } .src .s { color: #d6ff3d; } .src .c { color: var(--mu); }
+.hunknote { display: grid; grid-template-columns: 44px 1fr; margin: 4px 0; }
+.hunknote > div { grid-column: 2; margin-right: 18px; padding: 8px 12px; background: var(--p-bg); color: var(--p-tx); font: 400 13px/1.4 var(--ui); display: flex; gap: 12px; align-items: center; white-space: normal; }
+.hunknote b { font-weight: 600; }
+.hunknote .r { margin-left: auto; display: flex; gap: 6px; }
+.hunknote .r span { padding: 3px 8px; border: 1px solid var(--p-ln); font-size: 12px; }
+.hunkbar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--ln); font-size: 13px; color: var(--mu); }
+.hunkbar .r { margin-left: auto; display: flex; gap: 6px; }
+
+/* access sheet */
+.sheet { position: absolute; top: 38px; right: 0; bottom: 26px; width: 400px; background: var(--bg); border-left: 1px solid var(--tx); z-index: 4; display: grid; grid-template-rows: auto 1fr auto; }
+.sheet .sh { padding: 16px 18px 14px; border-bottom: 1px solid var(--ln); }
+.sheet .sh .who { font-size: 12px; color: var(--mu); display: flex; gap: 8px; align-items: center; }
+.sheet .sh h3 { font: 600 22px/1.15 var(--ui); letter-spacing: -0.02em; margin-top: 8px; }
+.sheet .sb { padding: 16px 18px; display: flex; flex-direction: column; gap: 16px; }
+.sheet .why { font-size: 14px; line-height: 1.5; padding: 12px 14px; background: var(--s1); border-left: 2px solid var(--ac); }
+.sheet .lbl { font-size: 12px; color: var(--mu); margin-bottom: 6px; }
+.opt { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border: 1px solid var(--ln); margin-top: -1px; font-size: 14px; }
+.opt small { display: block; font-size: 12px; color: var(--mu); }
+.ck { width: 14px; height: 14px; border: 1.5px solid var(--mu); flex: none; display: inline-block; }
+.ck.on { background: var(--tx); border-color: var(--tx); }
+.seg4 { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--ln); }
+.seg4 span { padding: 8px 0; text-align: center; font-size: 13px; border-right: 1px solid var(--ln); }
+.seg4 span:last-child { border-right: 0; }
+.seg4 span[data-on] { background: var(--ac); color: var(--acx); font-weight: 700; }
+.sheet .fine { font-size: 12px; color: var(--mu); line-height: 1.5; }
+.sheet .sf { display: grid; grid-template-columns: 1fr 1.6fr; border-top: 1px solid var(--ln); }
+.sheet .sf button { padding: 16px; text-align: center; font-size: 14px; }
+.sheet .sf .pri { background: var(--ac); color: var(--acx); font-weight: 700; }
+
+/* new task */
+.newt { padding: 30px 40px 0; display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+.newt h3 { font: 600 38px/1.05 var(--ui); letter-spacing: -0.02em; }
+.newt h3 span { color: var(--mu); }
+.composer { margin-top: 22px; border: 1px solid var(--tx); background: var(--s1); }
+.composer .text { padding: 16px 18px 6px; font-size: 17px; min-height: 84px; }
+.composer .text .caret { display: inline-block; width: 2px; height: 20px; background: var(--ac); vertical-align: -4px; }
+.composer .row { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 18px; border-top: 1px solid var(--ln); font-size: 13px; color: var(--mu); }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid var(--ln); color: var(--tx); font-size: 13px; }
+.composer .row .btn.pri { margin-left: auto; padding: 9px 20px; }
+.more { border: 1px solid var(--ln); border-top: 0; display: grid; grid-template-columns: repeat(4, 1fr); }
+.more > div { padding: 12px 16px; border-right: 1px solid var(--ln); }
+.more > div:last-child { border-right: 0; }
+.more .l { font-size: 12px; color: var(--mu); }
+.more .v { font-size: 14px; margin-top: 3px; display: flex; justify-content: space-between; }
+.more .v .mono { font-size: 12px; }
+.agents5 { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--ln); border-top: 0; }
+.agents5 div { padding: 9px 11px; border-right: 1px solid var(--ln); font-size: 13px; }
+.agents5 div:last-child { border-right: 0; }
+.agents5 div small { display: block; font: 400 11px var(--mono); color: var(--mu); margin-top: 2px; }
+.agents5 div[data-inv] { background: var(--tx); color: var(--bg); }
+.agents5 div[data-inv] small { color: #5d6259; }
+.agents5 div.miss { color: var(--mu); }
+.starters { margin-top: 26px; }
+.starters h4 { font-size: 13px; color: var(--mu); font-weight: 500; margin-bottom: 8px; }
+.starter { display: grid; grid-template-columns: 1fr 220px 100px; align-items: center; padding: 11px 0; border-top: 1px solid var(--ln); }
+.starter:last-child { border-bottom: 1px solid var(--ln); }
+.starter .t { font-size: 15px; font-weight: 500; }
+.starter .t small { display: block; font-size: 12px; color: var(--mu); font-weight: 400; }
+.starter .m { color: var(--mu); font-size: 12px; }
+.starter .btn { justify-self: end; }
+.runs { padding: 22px; display: flex; flex-direction: column; gap: 12px; background: var(--s1); border-left: 1px solid var(--ln); }
+.runs h4 { font-size: 13px; color: var(--mu); font-weight: 500; }
+.lane-mini { border: 1px solid var(--ln); padding: 10px 12px; background: var(--bg); font-size: 13px; }
+.lane-mini b { display: block; font-weight: 600; margin-top: 3px; }
+.lane-mini small { color: var(--mu); font-size: 12px; }
+
+/* paper page: changes / review */
+.paperwrap { background: #22241f; display: grid; place-items: start center; padding-top: 22px; min-height: 0; overflow: hidden; position: relative; }
+.page { width: 820px; background: var(--p-bg); color: var(--p-tx); padding: 30px 46px 120px; }
+.page .ready { display: flex; gap: 12px; font-size: 13px; color: var(--p-mu); align-items: center; }
+.page .ready .ok { color: var(--p-act); font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
+.page .ready .ok i { width: 9px; height: 9px; background: var(--p-act); }
+.page h3 { font: 600 30px/1.08 var(--ui); letter-spacing: -0.02em; margin-top: 10px; max-width: 36ch; }
+.page .sum { margin-top: 10px; font-size: 15px; line-height: 1.55; max-width: 64ch; }
+.page h5 { font: 600 13px var(--ui); color: var(--p-mu); margin: 22px 0 8px; display: flex; justify-content: space-between; }
+.turn { border: 1px solid var(--p-ln); margin-top: -1px; }
+.turn .th { display: flex; gap: 10px; align-items: center; padding: 10px 14px; font-size: 14px; }
+.turn .th b { font-weight: 600; }
+.turn .th .r { margin-left: auto; display: flex; gap: 6px; }
+.turn .th .r span { padding: 3px 8px; border: 1px solid var(--p-ln); font-size: 12px; }
+.turn .th .st { font-size: 12px; color: var(--p-mu); }
+.diff { font: 400 12px/1.7 var(--mono); border-top: 1px solid var(--p-ln); background: #fff; }
+.diff .f { padding: 4px 14px; background: var(--p-s2); color: var(--p-mu); display: flex; justify-content: space-between; }
+.diff div.l { padding: 0 14px; white-space: pre; }
+.diff .a { background: var(--p-add); }
+.diff .x { background: var(--p-del); }
+.decide { position: absolute; left: 0; right: 0; bottom: 0; height: 72px; display: flex; align-items: center; gap: 10px; padding: 0 calc((100% - 820px) / 2 + 46px); background: var(--bg); border-top: 1px solid var(--tx); }
+.decide .r { margin-left: auto; font-size: 12px; color: var(--mu); display: flex; gap: 14px; }
+.decide kbd { font: 500 10px var(--mono); border: 1px solid var(--ln); padding: 1px 4px; margin-left: 4px; }
+
+/* home */
+.home { padding: 0; overflow: hidden; }
+.hello { padding: 26px 28px 20px; display: flex; align-items: flex-end; border-bottom: 1px solid var(--ln); }
+.hello h3 { font: 600 34px/1.05 var(--ui); letter-spacing: -0.02em; }
+.hello p { color: var(--mu); margin-top: 6px; font-size: 15px; }
+.hello .r { margin-left: auto; display: flex; gap: 8px; }
+.attn { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--ln); }
+.attn > div { padding: 14px 28px 16px; border-right: 1px solid var(--ln); }
+.attn > div:last-child { border-right: 0; }
+.attn .num { font: 600 40px/1 var(--ui); font-variant-numeric: tabular-nums; }
+.attn .num.on { color: var(--act); }
+.attn .lab { font-size: 13px; color: var(--mu); margin-top: 4px; }
+.projs { display: flex; flex-direction: column; }
+.proj { display: grid; grid-template-columns: 220px 1fr 160px; gap: 20px; padding: 14px 28px; border-bottom: 1px solid var(--ln); align-items: center; }
+.proj .n { font: 600 17px/1.2 var(--ui); letter-spacing: 0; display: flex; gap: 8px; align-items: center; }
+.proj .n small { display: block; }
+.proj .p { font: 400 11px var(--mono); color: var(--mu); margin-top: 3px; }
+.proj .work { display: flex; gap: 6px; flex-wrap: wrap; }
+.wk { display: inline-flex; gap: 6px; align-items: center; padding: 4px 8px; border: 1px solid var(--ln); font-size: 12px; }
+.wk.you { border-color: var(--ac); }
+.wk.you em { font-style: normal; background: var(--ac); color: var(--acx); padding: 0 4px; font-weight: 600; font-size: 11px; }
+.wk.rd { background: var(--p-bg); color: var(--p-tx); border-color: var(--p-bg); }
+.proj .meta { font-size: 12px; color: var(--mu); text-align: right; }
+.addrow { display: flex; gap: 8px; padding: 14px 28px; border-bottom: 1px solid var(--ln); }
+.addrow .btn { border-style: dashed; color: var(--mu); }
+.feedline { padding: 14px 28px; }
+.feedline h4 { font-size: 13px; color: var(--mu); font-weight: 500; margin-bottom: 8px; }
+.feedline div { display: grid; grid-template-columns: 50px 1fr; padding: 4px 0; font-size: 13px; }
+.feedline div span:first-child { color: var(--mu); font-variant-numeric: tabular-nums; }
+
+/* agents board */
+.board { display: grid; grid-template-columns: repeat(4, 1fr); min-height: 0; }
+.bcol { border-right: 1px solid var(--ln); padding: 18px 16px; display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: hidden; }
+.bcol:last-child { border-right: 0; }
+.bcol h4 { font: 600 18px/1 var(--ui); letter-spacing: 0; display: flex; gap: 8px; align-items: baseline; }
+.bcol h4 .c { font-size: 13px; color: var(--mu); font-weight: 600; }
+.bcol h4 .c[data-on] { background: var(--ac); color: var(--acx); padding: 1px 6px; }
+.bcol .sub { font-size: 12px; color: var(--mu); margin-top: -4px; }
+.bc { border: 1px solid var(--ln); background: var(--s1); padding: 12px; }
+.bc .w { display: flex; gap: 7px; align-items: center; font-size: 12px; color: var(--mu); }
+.bc .w .r { margin-left: auto; }
+.bc .t { font-size: 14px; font-weight: 600; margin-top: 6px; line-height: 1.3; }
+.bc .q { font-size: 13px; color: var(--mu); margin-top: 4px; }
+.bc .acts { display: flex; gap: 6px; margin-top: 10px; }
+.bc.you { border-color: var(--ac); }
+.bc .bar { height: 3px; background: var(--s2); margin-top: 10px; position: relative; }
+.bc .bar i { position: absolute; inset: 0 auto 0 0; background: var(--tx); }
+.bc .mini { margin-top: 10px; height: 64px; overflow: hidden; border-radius: 6px; }
+.bc .mini .acme { transform: scale(.5); transform-origin: top left; width: 200%; }
+.bc.paper { background: var(--p-bg); color: var(--p-tx); border-color: var(--p-bg); }
+.bc.paper .w, .bc.paper .q { color: var(--p-mu); }
+.bc.paper .btn { border-color: var(--p-ln); }
+.bc.paper .btn.inv { background: var(--p-tx); color: var(--p-bg); border-color: var(--p-tx); }
+.bc.landed { opacity: .6; }
+
+/* lanes (repo) */
+.ltable { display: flex; flex-direction: column; }
+.lrow { display: grid; grid-template-columns: 1.6fr 1fr 1fr 120px 210px; gap: 16px; align-items: center; padding: 12px 28px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.lrow.h { font-size: 12px; color: var(--mu); padding-top: 10px; padding-bottom: 8px; }
+.lrow .t b { display: block; font-size: 14px; font-weight: 600; }
+.lrow .t .mono { color: var(--mu); font-size: 11px; }
+.lrow .acts { display: flex; gap: 6px; justify-content: flex-end; }
+.lrow[data-inv] { background: var(--s2); }
+.spark { display: flex; gap: 2px; align-items: flex-end; height: 16px; }
+.spark i { width: 4px; background: var(--act); }
+.spark i.x { background: #c4593a; }
+.lane-detail { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid var(--ln); }
+.lane-detail > div { padding: 16px 28px; }
+.lane-detail > div + div { border-left: 1px solid var(--ln); }
+.lane-detail h5 { font-size: 13px; color: var(--mu); font-weight: 500; margin-bottom: 8px; }
+.tl { list-style: none; font-size: 13px; }
+.tl li { display: grid; grid-template-columns: 52px 1fr; padding: 4px 0; }
+.tl li span:first-child { color: var(--mu); font-variant-numeric: tabular-nums; }
+.lane-detail .mainline { font-size: 13px; line-height: 1.6; }
+
+/* access */
+.acc { display: grid; grid-template-columns: 1fr 380px; min-height: 0; }
+.inbox { display: flex; flex-direction: column; }
+.req { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; padding: 14px 28px; border-bottom: 1px solid var(--ln); }
+.req .s { font-size: 15px; } .req .s b { font-weight: 600; }
+.req .why { grid-column: 1; font-size: 13px; color: var(--mu); }
+.req .acts { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 6px; align-items: center; }
+.req.on { box-shadow: inset 2px 0 0 var(--ac); }
+.auto { padding: 12px 28px; font-size: 13px; color: var(--mu); }
+.pol { border-left: 1px solid var(--ln); display: flex; flex-direction: column; background: var(--s1); }
+.pol h4 { padding: 16px 18px 10px; font: 700 17px var(--ui); }
+.rule { display: grid; grid-template-columns: 34px 1fr; gap: 2px 10px; padding: 11px 18px; border-top: 1px solid var(--ln); font-size: 14px; }
+.sw { width: 30px; height: 18px; border: 1.5px solid var(--mu); position: relative; margin-top: 2px; }
+.sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; background: var(--mu); }
+.sw.on { border-color: var(--ac); background: var(--ac); } .sw.on::after { left: 14px; background: var(--acx); }
+.rule small { grid-column: 2; font-size: 12px; color: var(--mu); }
+.pol .pf { margin-top: auto; padding: 12px 18px; border-top: 1px solid var(--ln); display: flex; gap: 8px; }
+.audit { display: flex; flex-direction: column; }
+.arow { display: grid; grid-template-columns: 64px 1fr 140px; gap: 14px; padding: 9px 28px; border-bottom: 1px solid var(--ln); font-size: 13px; align-items: baseline; }
+.arow .t { color: var(--mu); font-variant-numeric: tabular-nums; }
+.arow .k { font-size: 12px; color: var(--mu); text-align: right; }
+.arow[data-inv] { background: var(--tx); color: var(--bg); }
+.arow[data-inv] .t, .arow[data-inv] .k { color: #5d6259; }
+.drawer { position: absolute; top: 38px; right: 0; bottom: 26px; width: 380px; background: var(--bg); border-left: 1px solid var(--tx); z-index: 4; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.drawer h3 { font: 600 21px/1.2 var(--ui); letter-spacing: 0; }
+.kv { display: grid; grid-template-columns: 110px 1fr; font-size: 13px; }
+.kv div { padding: 7px 0; border-top: 1px solid var(--ln); }
+.kv div:nth-child(odd) { color: var(--mu); }
+.chain { font: 400 11px/1.6 var(--mono); color: var(--mu); padding: 10px; background: var(--s1); word-break: break-all; }
+
+/* usage */
+.use { padding: 0 28px; overflow: hidden; }
+.use .grid2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 40px; margin-top: 18px; }
+.use h4 { font-size: 13px; color: var(--mu); font-weight: 500; margin-bottom: 8px; }
+.bars { display: flex; flex-direction: column; gap: 10px; }
+.brow { display: grid; grid-template-columns: 120px 1fr 90px; gap: 12px; align-items: center; font-size: 13px; }
+.brow .tr { height: 14px; background: var(--s2); position: relative; }
+.brow .tr i { position: absolute; inset: 0 auto 0 0; }
+.brow .v { text-align: right; color: var(--mu); font-variant-numeric: tabular-nums; }
+.limit { border: 1px solid var(--ln); padding: 12px 14px; margin-bottom: 10px; }
+.limit .h { display: flex; justify-content: space-between; font-size: 14px; }
+.limit .h span { color: var(--mu); font-size: 12px; }
+.limit .tr { height: 6px; background: var(--s2); margin-top: 8px; position: relative; }
+.limit .tr i { position: absolute; inset: 0 auto 0 0; background: var(--tx); }
+.limit .tr i.hot { background: var(--ac); }
+.week { display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; align-items: end; height: 120px; margin-top: 4px; }
+.week i { background: var(--s2); position: relative; }
+.week i.t { background: var(--tx); }
+.weeklab { display: flex; justify-content: space-between; font-size: 11px; color: var(--mu); margin-top: 6px; }
+
+/* settings */
+.set2 { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
+.snav { border-right: 1px solid var(--ln); padding: 16px 0; font-size: 13px; }
+.snav .g { padding: 10px 18px 6px; font-size: 12px; color: var(--mu); }
+.snav a { display: block; padding: 6px 18px; }
+.snav a[data-inv] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.sbody { overflow: hidden; }
+.trow { display: grid; grid-template-columns: 1.3fr 90px 1.2fr 1fr 150px; gap: 14px; align-items: center; padding: 12px 28px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.trow.h { font-size: 12px; color: var(--mu); padding: 10px 28px 8px; }
+.trow .n b { display: block; font-size: 14px; font-weight: 600; }
+.trow .n small { color: var(--mu); font-size: 12px; }
+.sel { border: 1px solid var(--ln); padding: 5px 9px; display: flex; justify-content: space-between; font-size: 13px; }
+.trow .acts { display: flex; gap: 6px; justify-content: flex-end; }
+.trow .st.open { color: var(--act); }
+.cli { display: grid; grid-template-columns: 34px 1fr 1.2fr 170px; gap: 14px; align-items: center; padding: 14px 28px; border-bottom: 1px solid var(--ln); }
+.cli .ico { width: 30px; height: 30px; display: grid; place-items: center; font: 700 12px var(--ui); color: var(--acx); }
+.cli .n b { display: block; font-size: 15px; font-weight: 600; }
+.cli .n small { font: 400 11px var(--mono); color: var(--mu); }
+.cli .state { font-size: 13px; }
+.cli .state small { display: block; color: var(--mu); font-size: 12px; }
+.cli .state .good { color: var(--act); }
+.cli .state .bad { color: #ffb86b; }
+.cli .acts { display: flex; justify-content: flex-end; }
+
+/* onboarding */
+.onb { display: grid; grid-template-columns: 300px 1fr; min-height: 0; }
+.steps-side { border-right: 1px solid var(--ln); padding: 32px 28px; display: flex; flex-direction: column; gap: 4px; background: var(--s1); }
+.steps-side .word { margin-bottom: 26px; }
+.stp { display: grid; grid-template-columns: 26px 1fr; gap: 2px 10px; padding: 10px 0; }
+.stp i { width: 20px; height: 20px; border: 1.5px solid var(--ln); font: 700 11px/17px var(--ui); font-style: normal; text-align: center; color: var(--mu); }
+.stp.done i { background: var(--tx); border-color: var(--tx); color: var(--bg); }
+.stp.now i { background: var(--ac); border-color: var(--ac); color: var(--acx); }
+.stp b { font-size: 15px; font-weight: 600; }
+.stp.next b { color: var(--mu); font-weight: 500; }
+.stp small { grid-column: 2; font-size: 12px; color: var(--mu); }
+.steps-side .fin { margin-top: auto; font-size: 12px; color: var(--mu); line-height: 1.5; }
+.onbody { padding: 44px 56px 0; display: flex; flex-direction: column; min-height: 0; }
+.onbody h3 { font: 600 40px/1.05 var(--ui); letter-spacing: -0.02em; max-width: 18ch; }
+.onbody .p { color: var(--mu); font-size: 16px; margin-top: 12px; max-width: 58ch; }
+.agentcards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 26px; }
+.ac { border: 1px solid var(--ln); padding: 14px 16px; display: grid; grid-template-columns: 30px 1fr auto; gap: 4px 12px; align-items: center; }
+.ac .ico { grid-row: 1 / span 2; width: 30px; height: 30px; display: grid; place-items: center; font: 700 12px var(--ui); color: var(--acx); }
+.ac b { font-size: 15px; font-weight: 600; }
+.ac small { grid-column: 2; font-size: 12px; color: var(--mu); }
+.ac .btn { grid-row: 1 / span 2; grid-column: 3; }
+.ac.ok { border-color: var(--tx); }
+.ac .good { color: var(--act); }
+.onfoot { margin-top: auto; display: flex; gap: 8px; padding: 18px 0 24px; border-top: 1px solid var(--ln); }
+.onfoot .btn.pri { margin-left: auto; padding: 10px 22px; }
+
+/* palette & modals */
+.palette { top: 90px; left: 280px; width: 720px; }
+.palette .in { padding: 16px 18px; font-size: 17px; border-bottom: 1px solid var(--ln); display: flex; gap: 10px; }
+.palette .in .caret { display: inline-block; width: 2px; height: 21px; background: var(--ac); vertical-align: -4px; }
+.palette .grp { padding: 10px 18px 4px; font-size: 12px; color: var(--mu); }
+.pi { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; padding: 8px 18px; font-size: 14px; align-items: center; }
+.pi .ic { color: var(--mu); font-size: 12px; text-align: center; }
+.pi .m { font-size: 12px; color: var(--mu); }
+.pi[data-inv] { background: var(--tx); color: var(--bg); }
+.pi[data-inv] .m, .pi[data-inv] .ic { color: #5d6259; }
+.palette .pf { display: flex; gap: 16px; padding: 9px 18px; border-top: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+.palette .pf .sp { margin-left: auto; }
+.np { top: 80px; left: 290px; width: 700px; }
+.np .mh { padding: 18px 22px 0; display: flex; }
+.np .mh h3 { font: 600 26px/1.1 var(--ui); letter-spacing: -0.02em; }
+.np .mh .x { margin-left: auto; color: var(--mu); }
+.np .mb { padding: 16px 22px; display: flex; flex-direction: column; gap: 14px; }
+.field .l { font-size: 12px; color: var(--mu); margin-bottom: 5px; }
+.field .v { border: 1px solid var(--ln); padding: 9px 12px; font-size: 15px; }
+.field .v.mono { font-size: 13px; }
+.how { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--ln); }
+.how > div { padding: 12px 14px; border-right: 1px solid var(--ln); }
+.how > div:last-child { border-right: 0; }
+.how b { font-size: 14px; font-weight: 600; display: block; }
+.how small { font-size: 12px; color: var(--mu); }
+.how > div[data-inv] { background: var(--tx); color: var(--bg); }
+.how > div[data-inv] small { color: #5d6259; }
+.brief { border: 1px solid var(--ln); padding: 10px 12px; font-size: 14px; min-height: 64px; }
+.checks { display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px; }
+.checks span { display: flex; gap: 7px; align-items: center; }
+.np .mf { display: flex; gap: 8px; padding: 14px 22px; border-top: 1px solid var(--ln); align-items: center; }
+.np .mf .fine { font-size: 12px; color: var(--mu); }
+.np .mf .btn.pri { margin-left: auto; padding: 9px 20px; }
+.conn { top: 90px; left: 330px; width: 620px; }
+.prov { display: grid; grid-template-columns: repeat(3, 1fr); }
+.prov > div { padding: 14px 16px; border-right: 1px solid var(--ln); border-bottom: 1px solid var(--ln); }
+.prov > div:nth-child(3n) { border-right: 0; }
+.prov b { font-size: 15px; display: block; }
+.prov small { font-size: 12px; color: var(--mu); }
+.prov > div[data-inv] { background: var(--tx); color: var(--bg); }
+.prov > div[data-inv] small { color: #5d6259; }
+.cform { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.cli-reuse { display: flex; gap: 12px; align-items: center; padding: 12px 14px; background: var(--s1); border-left: 2px solid var(--ac); font-size: 14px; }
+.cli-reuse .btn { margin-left: auto; }
+.envs { display: flex; gap: 6px; }
+.envs span { padding: 5px 10px; border: 1px solid var(--ln); font-size: 13px; }
+.envs span[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); font-weight: 600; }
+.toast { position: absolute; z-index: 7; right: 16px; bottom: 40px; width: 360px; background: var(--bg); border: 1px solid var(--tx); padding: 14px 16px; }
+.toast .hd { font-size: 12px; color: var(--mu); display: flex; gap: 8px; align-items: center; }
+.toast h4 { font: 600 16px/1.25 var(--ui); letter-spacing: 0; margin-top: 6px; }
+.toast p { font-size: 13px; color: var(--mu); margin-top: 3px; }
+.toast .acts { display: flex; gap: 6px; margin-top: 10px; }
+.upd { top: 210px; left: 430px; width: 420px; padding: 22px; }
+.upd h3 { font: 600 24px/1.1 var(--ui); letter-spacing: -0.02em; }
+.upd p { color: var(--mu); margin-top: 8px; font-size: 14px; }
+.upd ul { margin: 12px 0 0 18px; font-size: 14px; }
+.upd .acts { display: flex; gap: 8px; margin-top: 18px; }
+
+/* pins */
+.pin { position: absolute; z-index: 9; width: 20px; height: 20px; border-radius: 50%; background: var(--tx); color: var(--bg); font: 700 11px/20px var(--ui); text-align: center; }
+
+/* Headings (owner, 1 Oct): today's typeface, normal-width Archivo at 600 with -0.02em on large sizes, at the
+   mockup sizes. */
+</style>
+</head>
+<body>
+
+<section class="doc">
+  <h1>An IDE, organised around the work.</h1>
+  <p class="lede">IDEs are built around files: open one, edit it, run it. When agents do the typing, the thing you manage is a piece of work, which Styx already calls a lane: one task, its agent, its branch, the conversation, the changes, a preview, the checks and the access it was given. <strong>So the frame of Styx becomes the work, and the editor, terminal, files and diff become instruments on it.</strong> Nothing you have today goes away. Every screen below keeps its features; what changes is where they live and how they read.</p>
+  <div class="rules">
+    <div><b>The lane is the unit</b><span>The project nav lists the work in progress, by who has to move, instead of listing tools.</span></div>
+    <div><b>Instruments, not frames</b><span>Preview, Changes, Code and Terminal are tabs on the lane. The editor is exactly today’s editor.</span></div>
+    <div><b>Results come back on paper</b><span>Every finished piece of work is a readable page: what it did, before and after, the checks, one decision.</span></div>
+    <div><b>Plain words first, raw on demand</b><span>Steps you can read, then the tool calls, then the terminal. Each layer one click deeper.</span></div>
+    <div><b>Attention orders everything</b><span>Your turn, working, ready, landed. Lime only marks the move that is yours.</span></div>
+    <div><b>Calm, not terse</b><span>Sentence case, 14 px body, wide Archivo for headlines, monospace only for code and paths. Same colours, same square shapes.</span></div>
+  </div>
+  <nav class="index">
+    <a href="#ws-preview">Workspace: preview</a><a href="#ws-code">Workspace: code</a><a href="#ws-access">Access request</a><a href="#ws-new">New task</a><a href="#changes">Changes and review</a><a href="#home">All projects</a><a href="#agents">Agents</a><a href="#lanes">Lanes</a><a href="#access">Access inbox</a><a href="#audit">Audit log</a><a href="#usage">Usage</a><a href="#targets">Targets</a><a href="#connections">Agent connections</a><a href="#onboarding">Onboarding</a><a href="#palette">Palette</a><a href="#newproject">New project</a><a href="#connect">Connect target</a><a href="#notify">Notifications</a>
+  </nav>
+</section>
+
+<!-- ======================================================= WORKSPACE ======================================================= -->
+<h2 class="doc part">The workspace</h2>
+
+<section class="note" id="ws-preview">
+  <h2>A lane, mid-session</h2>
+  <p>The project nav lists the work, not the tools: each lane by its task, its agent and whose move it is. The centre opens on the lane’s running app. The chat is the lane’s conversation: kept turns fold into receipts, the last result is on paper, the current turn is plain steps. Land, Publish and Deploy stay in the toolbar where they are today.</p>
+  <div class="was"><b>Today</b>Project nav lists Workspace, Agents, Repo, Targets, Agent defaults, Env &amp; secrets, Tech debt audit. Those are still there, under Project. Code and Design tabs become Code and Preview; agent tabs on the chat become the lanes in the nav.</div>
+</section>
+<div class="win" data-place="project" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol">
+      <div class="itabs">
+        <span data-inv>Preview</span><span>Changes <b class="n">7</b></span><span>Code</span><span>Terminal</span>
+        <div class="acts"><span class="btn">Land</span><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div>
+      </div>
+      <div class="stage">
+        <div class="urlbar"><span class="u">localhost:3000/settings</span><span>running from this lane</span><span class="seg"><span data-inv>Desktop</span><span>Tablet</span><span>Phone</span></span></div>
+        <div class="acme dark" style="align-self:start">
+          <div class="top">Acme Shop<i>Account</i></div>
+          <div class="b"><h5>Settings</h5>
+            <div class="set"><div>Email updates<small>Orders and offers</small></div><span class="tog"></span></div>
+            <div class="set"><div>Dark mode<small>Easier on the eyes at night</small></div><span class="tog"></span></div>
+            <div class="set new"><div>Match my system<small>Follows your Mac’s light or dark setting</small></div><span class="tog off"></span></div>
+            <div class="set"><div>Currency</div><span>EUR</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="term"><div class="h"><span>Terminal, agent/claude-3</span><span>Hide</span></div>$ pnpm test settings<br><span class="ok">✓ 51 passed</span> (2.1 s)<br>$ ▌</div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-3</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Dark mode on Settings</h3>
+        <div class="sum"><span>3 changes kept, 7 files, tests pass</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed">
+        <div class="rcpt"><b>Added a dark-mode switch to Settings</b><span>Kept 09:12</span></div>
+        <div class="rcpt"><b>Saved the choice so it survives a reload</b><span>Kept 09:31</span></div>
+        <div class="umsg">Can it follow the Mac’s own setting too?</div>
+        <div class="card-p">
+          <div class="top"><span class="ok">Done in 4 min</span><span>3 files, 2 new tests</span></div>
+          <h4>“Match my system” is a third option, and the default</h4>
+          <p>New visitors get whatever their computer uses. Anyone who already picked light or dark keeps it.</p>
+          <div class="acts"><span class="btn">Show changes</span><span class="btn">Undo this turn</span><span class="k">Kept when you carry on</span></div>
+        </div>
+        <div class="umsg">Nice. Now do the checkout page too.</div>
+        <div class="live"><div class="hd"><i></i>Working<span>1 min 10 s</span></div>
+          <ol><li class="d">Found where checkout sets its own colours</li><li class="n">Moving checkout onto the shared palette</li><li>Run the tests</li></ol>
+          <div class="raw">Show the tool calls</div>
+        </div>
+      </div>
+      <div class="compose"><div class="box">Tell Claude more, or queue the next thing…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+
+<section class="note" id="ws-code">
+  <h2>Look closer: the code</h2>
+  <p>Today’s editor, file tree and changes list, untouched, one tab over. What is new: each agent hunk carries one line in plain words saying what it is for, with Keep and Revert right on it. The hunk bar still reviews, reverts or marks the whole set. Open in VS Code is where it always was.</p>
+  <div class="was"><b>Today</b>The workspace opens on this view. The hunk bar reads “3 hunks from Claude · 42 tests pass” with Review, Revert all, Mark reviewed. Those stay, written in sentence case.</div>
+</section>
+<div class="win" data-place="project" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr auto">
+      <div class="itabs">
+        <span>Preview</span><span>Changes <b class="n">7</b></span><span data-inv>Code</span><span>Terminal</span>
+        <div class="acts"><span class="btn">Land</span><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div>
+      </div>
+      <div class="code">
+        <div class="files">
+          <div class="h">Files</div>
+          <div>src/</div><div class="in">pages/</div><div class="in" style="padding-left:36px">Checkout.tsx <span class="m">●</span></div><div class="in" style="padding-left:36px" data-inv>Settings.tsx <span class="m">●</span></div><div class="in">styles/</div><div class="in" style="padding-left:36px">theme.css <span class="m">●</span></div><div class="in">lib/</div><div class="in" style="padding-left:36px">preferences.ts <span class="m">●</span></div><div>package.json</div><div>README.md</div>
+          <div class="h" style="margin-top:14px">Changed in this lane</div>
+          <div>theme.css <span class="m">+63</span></div><div>Settings.tsx <span class="m">+27</span></div><div>preferences.ts <span class="m">+16</span></div><div>theme.test.ts <span class="m">+30</span></div>
+          <div style="margin-top:14px"><span class="btn sm" style="font-family:var(--ui)">Open in VS Code</span></div>
+        </div>
+        <div class="editor">
+          <div class="etabs"><span data-inv>Settings.tsx</span><span>theme.css</span><span>preferences.ts</span></div>
+          <div class="src">
+            <div><span>12</span><span><i class="k">export function</i> Settings() {</span></div>
+            <div><span>13</span><span>  <i class="k">const</i> [email, setEmail] = usePref(<i class="s">'email'</i>)</span></div>
+            <div class="a"><span>14</span><span>  <i class="k">const</i> [theme, setTheme] = usePref(<i class="s">'theme'</i>, <i class="s">'system'</i>)</span></div>
+            <div class="hunknote"><div><b>Remembers the theme, defaulting to the system’s.</b><span class="r"><span>Keep</span><span>Revert</span></span></div></div>
+            <div><span>15</span><span>  <i class="k">return</i> (</span></div>
+            <div><span>16</span><span>    &lt;Page title=<i class="s">"Settings"</i>&gt;</span></div>
+            <div><span>17</span><span>      &lt;Toggle label=<i class="s">"Email updates"</i> on={email} /&gt;</span></div>
+            <div class="a"><span>18</span><span>      &lt;Choice label=<i class="s">"Appearance"</i> value={theme} onChange={setTheme}</span></div>
+            <div class="a"><span>19</span><span>        options={[<i class="s">'light'</i>, <i class="s">'dark'</i>, <i class="s">'system'</i>]} /&gt;</span></div>
+            <div class="hunknote"><div><b>The switch, now with “Match my system” as a third option.</b><span class="r"><span>Keep</span><span>Revert</span></span></div></div>
+            <div><span>20</span><span>      &lt;Select label=<i class="s">"Currency"</i> … /&gt;</span></div>
+            <div><span>21</span><span>    &lt;/Page&gt;</span></div>
+            <div><span>22</span><span>  )</span></div>
+            <div><span>23</span><span>}</span></div>
+          </div>
+          <div class="hunkbar"><span>2 changes from Claude, tests pass</span><span class="r"><span class="btn sm">Review all</span><span class="btn sm">Revert all</span><span class="btn sm">Mark reviewed</span></span></div>
+        </div>
+      </div>
+      <div class="term"><div class="h"><span>Terminal, agent/claude-3</span><span>Hide</span></div>$ pnpm test settings<br><span class="ok">✓ 51 passed</span> (2.1 s)<br>$ ▌</div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-3</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Dark mode on Settings</h3>
+        <div class="sum"><span>3 changes kept, 7 files, tests pass</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed">
+        <div class="rcpt"><b>Added a dark-mode switch to Settings</b><span>Kept 09:12</span></div>
+        <div class="rcpt"><b>Saved the choice so it survives a reload</b><span>Kept 09:31</span></div>
+        <div class="rcpt"><b>“Match my system” is a third option</b><span>Kept 09:48</span></div>
+        <div class="live"><div class="hd"><i></i>Working<span>1 min 10 s</span></div>
+          <ol><li class="d">Found where checkout sets its own colours</li><li class="n">Moving checkout onto the shared palette</li><li>Run the tests</li></ol>
+          <div class="raw">Show the tool calls</div>
+        </div>
+      </div>
+      <div class="compose"><div class="box">Tell Claude more, or queue the next thing…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+
+<section class="note" id="ws-access">
+  <h2>An agent asks for access</h2>
+  <p>The request reads as a sentence: who wants what, for which lane, and why, in the agent’s own words. Scope and duration are the same choices as today. The lane in the nav and the badge on the rail say it is your move; approving here resolves it everywhere, as now.</p>
+  <div class="was"><b>Today</b>“Access request” sheet with Supabase / prod db, scope checkboxes, Once / 1h / Session / Always, and “Grant 1h · Touch ID”. All kept; uppercase labels go.</div>
+</section>
+<div class="win" data-place="project" data-lane="codex" data-status="lane-codex">
+  <div class="ws">
+    <section class="stagecol">
+      <div class="itabs">
+        <span>Preview</span><span>Changes <b class="n">1</b></span><span data-inv>Code</span><span>Terminal</span>
+        <div class="acts"><span class="btn">Land</span><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div>
+      </div>
+      <div class="code">
+        <div class="files"><div class="h">Files</div><div>src/</div><div class="in">orders.ts</div><div class="in" data-inv>orders.test.ts <span class="m">●</span></div><div class="in">checkout.ts</div><div>db/</div><div class="in">migrations/</div><div class="in" style="padding-left:36px">0042_status.sql</div></div>
+        <div class="editor">
+          <div class="etabs"><span data-inv>orders.test.ts</span></div>
+          <div class="src">
+            <div><span>1</span><span><i class="k">import</i> { checkout } <i class="k">from</i> <i class="s">'./checkout'</i></span></div>
+            <div><span>2</span><span></span></div>
+            <div><span>3</span><span>test(<i class="s">'orders total'</i>, <i class="k">async</i> () =&gt; {</span></div>
+            <div><span>4</span><span>  <i class="k">const</i> r = <i class="k">await</i> checkout({ items: [{ price: 2 }, { price: 3 }] })</span></div>
+            <div><span>5</span><span>  expect(r.total).toBe(5)</span></div>
+            <div><span>6</span><span>  expect(r.status).toBe(<i class="s">'paid'</i>)</span></div>
+            <div><span>7</span><span>})</span></div>
+          </div>
+          <div class="hunkbar"><span>Waiting on you before it can run the migration</span></div>
+        </div>
+      </div>
+      <div class="term"><div class="h"><span>Terminal, agent/codex-1</span><span>Hide</span></div>$ npx vitest orders<br>✗ 1 failed: column orders.status does not exist<br>$ ▌</div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-codex"></span>Codex <span class="mono">agent/codex-1</span></div>
+        <h3>Fix the flaky orders test</h3>
+        <div class="sum"><span>Waiting on you</span></div>
+      </div>
+      <div class="feed"></div>
+      <div class="compose"></div>
+    </aside>
+  </div>
+  <div class="sheet">
+    <div class="sh"><div class="who"><span class="dot c-codex"></span>Codex, Fix the flaky orders test, 3 min ago</div><h3>Write access to the production database on Supabase</h3></div>
+    <div class="sb">
+      <div class="why">“To run migration 0042: read the schema, then add the orders.status column. The test suite depends on it.”</div>
+      <div><div class="lbl">What it may do</div>
+        <div class="opt"><div>Read the schema</div><span class="ck on"></span></div>
+        <div class="opt"><div>Write<small>Run the migration</small></div><span class="ck on"></span></div>
+        <div class="opt" style="color:var(--mu)"><div>Delete or drop tables</div><span class="ck"></span></div>
+      </div>
+      <div><div class="lbl">For how long</div><div class="seg4"><span>Once</span><span data-on>1 hour</span><span>This session</span><span>Always</span></div></div>
+      <div class="fine">Production writes need Touch ID. The token only works for this lane and ends after the hour, when the session ends, or when you revoke it. Everything it does is in the audit log.</div>
+    </div>
+    <div class="sf"><button>Deny</button><button class="pri">Allow for 1 hour with Touch ID</button></div>
+  </div>
+</div>
+
+<section class="note" id="ws-new">
+  <h2>Starting something new</h2>
+  <p>“New task” in the nav opens this in the centre, not a modal. One box and Start, with sensible defaults; everything the spawn dialog asks today is in the row beneath, already filled in. For a project with no lanes yet, this is the whole screen, with three first tasks picked from the repo.</p>
+  <div class="was"><b>Today</b>“Spawn agent” modal: agent tiles with versions, lanes active, worktree and branch, permissions, model, effort, first message, three checkboxes. All here, inline.</div>
+</section>
+<div class="win" data-place="project" data-lane="new" data-status="plain">
+  <div class="ws" style="grid-template-columns:1fr 280px">
+    <section class="newt">
+      <h3>What should an agent do<br><span>in acme-shop?</span></h3>
+      <div class="composer">
+        <div class="text">Add a “Recently viewed” row to the product page<span class="caret"></span></div>
+        <div class="row"><span>Works on its own copy, so main is safe until you land it.</span><span class="btn pri">Start <kbd>⌘⏎</kbd></span></div>
+      </div>
+      <div class="agents5"><div data-inv><span class="dot c-claude"></span> Claude Code<small>2.4.1, signed in</small></div><div><span class="dot c-codex"></span> Codex<small>0.9.3, signed in</small></div><div><span class="dot c-gemini"></span> Gemini CLI<small>1.2.0, signed in</small></div><div><span class="dot c-cursor"></span> Cursor agent<small>0.5.2</small></div><div class="miss"><span class="dot c-shell"></span> Shell<small>zsh 5.9</small></div></div>
+      <div class="more">
+        <div><div class="l">Where</div><div class="v">New lane from main</div></div>
+        <div><div class="l">Branch</div><div class="v"><span class="mono">agent/claude-4</span></div></div>
+        <div><div class="l">Permissions</div><div class="v">Ask each time ▾</div></div>
+        <div><div class="l">Model and effort</div><div class="v">Opus 5.5, default ▾</div></div>
+      </div>
+      <div class="more" style="grid-template-columns:repeat(3,1fr)">
+        <div><div class="v" style="margin:0;justify-content:flex-start;gap:8px"><span class="ck"></span>Apply edits without asking</div></div>
+        <div><div class="v" style="margin:0;justify-content:flex-start;gap:8px"><span class="ck on"></span>May ask for targets</div></div>
+        <div><div class="v" style="margin:0;justify-content:flex-start;gap:8px"><span class="ck on"></span>Tell me when it needs me</div></div>
+      </div>
+      <div class="starters">
+        <h4>Or one of these. Styx picked them from this repo.</h4>
+        <div class="starter"><div class="t">Explain how checkout works<small>A short tour of the code behind /checkout</small></div><div class="m">About 2 minutes, changes nothing</div><span class="btn sm">Start this</span></div>
+        <div class="starter"><div class="t">Fix the 2 failing tests in cart.test.ts<small>Failing since Tuesday</small></div><div class="m">About 4 minutes, 1 file</div><span class="btn sm">Start this</span></div>
+      </div>
+    </section>
+    <aside class="runs">
+      <h4>Already running in acme-shop</h4>
+      <div class="lane-mini"><small><span class="dot c-claude"></span> Claude, working</small><b>Dark mode on Settings</b><small>7 files, so it may overlap with anything touching Settings</small></div>
+      <div class="lane-mini"><small><span class="dot c-codex"></span> Codex, waiting on you</small><b>Fix the flaky orders test</b></div>
+      <div class="lane-mini"><small><span class="dot c-gemini"></span> Gemini, ready to read</small><b>Explain checkout</b></div>
+    </aside>
+  </div>
+</div>
+
+<section class="note" id="changes">
+  <h2>Changes: the lane as a page you sign off</h2>
+  <p>The Changes tab is the review. It opens as paper: what the lane did in plain words, before and after, then every turn with its own diff, each one revertable on its own. Checks and overlap with other lanes sit beside it. One decision bar at the bottom.</p>
+  <div class="was"><b>Today</b>The Review screen: files list, keys (r revert, j/k next/prev, ⌘⏎ done), each hunk with Applied and Revert, Revert all and Done. Same keys, same actions, grouped by turn.</div>
+</section>
+<div class="win" data-place="project" data-lane="claude" data-status="lane">
+  <div style="display:grid;grid-template-rows:40px 1fr;min-height:0">
+    <div class="itabs">
+      <span>Preview</span><span data-inv>Changes <b class="n">7</b></span><span>Code</span><span>Terminal</span>
+      <div class="acts"><span class="btn">Land</span><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div>
+    </div>
+    <div class="paperwrap">
+      <article class="page">
+        <div class="ready"><span class="ok"><i></i>Ready to land</span><span>Claude, 3 turns over 52 minutes</span><span>51 tests pass</span><span>No other lane touches these files</span></div>
+        <h3>Settings has a dark mode that follows the Mac, and checkout uses it too</h3>
+        <p class="sum">A switch on Settings with three choices: light, dark, or match the system, which is the default. The choice is saved in the browser. Checkout now uses the shared palette instead of its own colours.</p>
+        <h5><span>What it did, turn by turn</span><span>j / k to move, r to revert</span></h5>
+        <div class="turn"><div class="th"><b>Added a dark-mode switch to Settings</b><span class="st">theme.css, Settings.tsx</span><span class="r"><span>Revert</span></span></div></div>
+        <div class="turn"><div class="th"><b>Saved the choice so it survives a reload</b><span class="st">preferences.ts</span><span class="r"><span>Revert</span></span></div></div>
+        <div class="turn"><div class="th"><b>“Match my system” is a third option, and the default</b><span class="st">3 files, 2 new tests</span><span class="r"><span>Collapse</span><span>Revert</span></span></div>
+          <div class="diff">
+            <div class="f"><span>src/pages/Settings.tsx</span><span>+3 −1</span></div>
+            <div class="l"> 13   const [email, setEmail] = usePref('email')</div>
+            <div class="l x">-14   const [dark, setDark] = usePref('dark', false)</div>
+            <div class="l a">+14   const [theme, setTheme] = usePref('theme', 'system')</div>
+            <div class="l a">+18   &lt;Choice label="Appearance" value={theme} onChange={setTheme}</div>
+            <div class="l a">+19     options={['light', 'dark', 'system']} /&gt;</div>
+          </div>
+        </div>
+      </article>
+      <div class="decide"><span class="btn pri" style="padding:11px 22px">Land on main</span><span class="btn">Ask for changes</span><span class="btn">Discard the lane</span><span class="r"><span>Revert all<kbd>⇧R</kbd></span><span>Done<kbd>⌘⏎</kbd></span></span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= ACROSS PROJECTS ======================================================= -->
+<h2 class="doc part">Across projects</h2>
+
+<section class="note" id="home">
+  <h2>All projects</h2>
+  <p>Opens on what needs you, then every project with its work shown as lanes rather than agent names. A project row says what is going on in it, so you can tell at a glance where to go. Adding a project keeps all four routes.</p>
+  <div class="was"><b>Today</b>Four 56 px counters (needs you, agents working, grants active, projects), a table of project, path, branch, agents, targets, last activity, the add row, and an activity feed. All kept.</div>
+</section>
+<div class="win" data-place="home" data-status="plain">
+  <div class="home">
+    <div class="hello"><div><h3>Good morning, Nic</h3><p>Two things need you. Three agents are working.</p></div><div class="r"><span class="btn">Add a project ▾</span><span class="btn pri">New task</span></div></div>
+    <div class="attn"><div><div class="num on">02</div><div class="lab">Need you</div></div><div><div class="num">03</div><div class="lab">Agents working</div></div><div><div class="num">04</div><div class="lab">Ready to land</div></div><div><div class="num">02</div><div class="lab">Grants open</div></div></div>
+    <div class="projs">
+      <div class="proj"><div><div class="n"><span class="dot" style="background:var(--ac)"></span>acme-shop</div><div class="p">~/code/acme-shop, main</div></div>
+        <div class="work"><span class="wk you"><span class="dot c-codex"></span>Fix the flaky orders test <em>Your turn</em></span><span class="wk"><span class="dot c-claude"></span>Dark mode on Settings, working</span><span class="wk rd"><span class="dot c-gemini"></span>Explain checkout, ready</span></div>
+        <div class="meta">Vercel, Supabase, AWS, GitHub<br>2 min ago</div></div>
+      <div class="proj"><div><div class="n"><span class="dot" style="background:var(--ac)"></span>blog-v2</div><div class="p">~/code/blog-v2, feat/mdx</div></div>
+        <div class="work"><span class="wk you"><span class="dot c-claude"></span>MDX support, plan ready <em>Your turn</em></span></div>
+        <div class="meta">Vercel, GitHub<br>9 min ago</div></div>
+      <div class="proj"><div><div class="n"><span class="dot" style="border:1px solid var(--mu)"></span>infra-tools</div><div class="p">~/code/infra-tools, main</div></div>
+        <div class="work"><span class="wk"><span class="dot c-gemini"></span>Rewrite the README for the CLI, working</span></div>
+        <div class="meta">AWS, GCP<br>31 min ago</div></div>
+      <div class="proj"><div><div class="n"><span class="dot" style="border:1px solid var(--mu)"></span>client-x</div><div class="p">~/code/client-x, main</div></div>
+        <div class="work"><span class="wk rd"><span class="dot c-shell"></span>npm run build, finished</span></div>
+        <div class="meta">GCP, GitHub<br>1 hour ago</div></div>
+      <div class="proj"><div><div class="n"><span class="dot" style="border:1px solid var(--mu)"></span>side-api</div><div class="p">~/code/side-api, main</div></div>
+        <div class="work"><span class="mu" style="font-size:13px">Nothing running. <u>Start a task</u></span></div>
+        <div class="meta">Supabase<br>2 days ago</div></div>
+    </div>
+    <div class="addrow"><span class="btn">New project</span><span class="btn">Add from recent</span><span class="btn">Open folder</span><span class="btn">Clone a URL</span></div>
+    <div class="feedline"><h4>What happened</h4>
+      <div><span>2m</span><span><span class="dot c-claude"></span> Claude made the Settings switch follow the system in acme-shop, 51 tests pass</span></div>
+      <div><span>3m</span><span><span class="dot c-codex"></span> Codex asked to write to the Supabase production database in acme-shop</span></div>
+      <div><span>1h</span><span>Styx closed Gemini’s AWS access in infra-tools after an hour idle</span></div>
+    </div>
+  </div>
+</div>
+
+<section class="note" id="agents">
+  <h2>Agents: everything going on</h2>
+  <p>The board, with a fourth column so finished work is something you act on, not an archive. Questions are answered on the card. Working cards show their live preview. Ready work is paper. Landed fades and can be reopened or archived as today.</p>
+  <div class="was"><b>Today</b>Needs you / Working / Done columns with Review grant, Deny, Open, Mark done, Reopen, Archive, and Spawn agent. All kept; Done splits into Ready to land and Landed.</div>
+</section>
+<div class="win" data-place="agents" data-status="plain">
+  <div style="display:grid;grid-template-rows:auto 1fr;min-height:0">
+    <div class="pagehead"><h3>Agents</h3><p>All projects</p><div class="r"><span class="btn">This project only</span><span class="btn pri">New task</span></div></div>
+    <div class="board">
+      <section class="bcol"><h4>Your turn <span class="c" data-on>2</span></h4><p class="sub">Waiting on you</p>
+        <div class="bc you"><div class="w"><span class="dot c-codex"></span>Codex, acme-shop<span class="r">3m</span></div><div class="t">Wants write access to the Supabase production database</div><div class="q">To run migration 0042 for the orders test.</div><div class="acts"><span class="btn pri sm">Review</span><span class="btn sm">Deny</span></div></div>
+        <div class="bc you"><div class="w"><span class="dot c-claude"></span>Claude, blog-v2<span class="r">9m</span></div><div class="t">The MDX plan is ready: 4 files</div><div class="q">Wants your go-ahead before it starts.</div><div class="acts"><span class="btn pri sm">Read the plan</span><span class="btn sm">Not now</span></div></div>
+      </section>
+      <section class="bcol"><h4>Working <span class="c">3</span></h4><p class="sub">Nothing needed from you</p>
+        <div class="bc"><div class="w"><span class="dot c-claude"></span>Claude, acme-shop<span class="r">52m</span></div><div class="t">Dark mode on Settings</div><div class="bar"><i style="width:70%"></i></div><div class="q">Moving checkout onto the shared palette</div><div class="mini"><div class="acme dark"><div class="top">Acme Shop<i>Account</i></div><div class="b"><h5>Settings</h5><div class="set"><div>Match my system</div><span class="tog off"></span></div></div></div></div></div>
+        <div class="bc"><div class="w"><span class="dot c-gemini"></span>Gemini, infra-tools<span class="r">31m</span></div><div class="t">Rewrite the README for the CLI</div><div class="bar"><i style="width:40%"></i></div><div class="q">Checking each command still works</div></div>
+        <div class="bc"><div class="w"><span class="dot c-shell"></span>Shell, client-x<span class="r">1h</span></div><div class="t">npm run build</div><div class="q">Still running</div></div>
+      </section>
+      <section class="bcol"><h4>Ready to land <span class="c">2</span></h4><p class="sub">Read it, then land or send back</p>
+        <div class="bc paper"><div class="w"><span class="dot c-gemini"></span>Gemini, acme-shop<span class="r">12m</span></div><div class="t">How checkout works, explained</div><div class="q">A tour of 9 files. Changes nothing.</div><div class="acts"><span class="btn inv sm">Read it</span><span class="btn sm">Mark done</span></div></div>
+        <div class="bc paper"><div class="w"><span class="dot c-cursor"></span>Cursor, acme-shop<span class="r">1h</span></div><div class="t">Promo banner on the home page</div><div class="q">2 files, tests pass.</div><div class="acts"><span class="btn inv sm">Land it</span><span class="btn sm">Read it</span></div></div>
+      </section>
+      <section class="bcol"><h4>Landed <span class="c">2</span></h4><p class="sub">On main</p>
+        <div class="bc landed"><div class="w"><span class="dot c-cursor"></span>Cursor, acme-shop<span class="r">1d</span></div><div class="t">PR #212, merged yesterday</div><div class="acts"><span class="btn sm">Reopen</span><span class="btn sm">Archive</span></div></div>
+        <div class="bc landed"><div class="w"><span class="dot c-claude"></span>Claude, side-api<span class="r">2d</span></div><div class="t">2 commits pushed</div><div class="acts"><span class="btn sm">Reopen</span><span class="btn sm">Archive</span></div></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<section class="note" id="lanes">
+  <h2>Lanes: every branch and where it stands</h2>
+  <p>The Repo screen, named for what it holds. Each lane reads as its task first and its branch second, with how far it has drifted from main. The selected lane shows its story and what landing will do. The tech debt audit, fetch and new worktree stay in the header.</p>
+  <div class="was"><b>Today</b>“Worktrees” table: branch, owner, changes, PR, Commit &amp; push / Land / Diff / Open PR / Archive, then the selected lane’s raw diff. All kept; the diff is one click away in Changes.</div>
+</section>
+<div class="win" data-place="project" data-tool="lanes" data-status="plain">
+  <div style="display:grid;grid-template-rows:auto 1fr;min-height:0">
+    <div class="pagehead"><h3>Lanes</h3><p><span class="mono">github.com/acme/shop</span>, main is 2 behind origin</p><div class="r"><span class="btn">Tech debt audit</span><span class="btn">Fetch</span><span class="btn line">New lane</span></div></div>
+    <div style="overflow:hidden">
+      <div class="ltable">
+        <div class="lrow h"><span>Lane</span><span>Who</span><span>Changes</span><span>Pull request</span><span></span></div>
+        <div class="lrow"><span class="t"><b>main</b><span class="mono">2 behind origin</span></span><span>You</span><span class="mu">Clean</span><span class="mu">—</span><span class="acts"><span class="btn sm">Pull</span><span class="btn sm">Open</span></span></div>
+        <div class="lrow" data-inv><span class="t"><b>Dark mode on Settings</b><span class="mono">agent/claude-3</span></span><span><span class="dot c-claude"></span> Claude, working</span><span style="display:flex;gap:8px;align-items:center"><span class="spark"><i style="height:14px"></i><i style="height:9px"></i><i style="height:5px"></i><i class="x" style="height:3px"></i></span>7 files</span><span class="mono">#214 draft</span><span class="acts"><span class="btn sm">Commit &amp; push</span><span class="btn line sm">Land</span></span></div>
+        <div class="lrow"><span class="t"><b>Fix the flaky orders test</b><span class="mono">agent/codex-1</span></span><span><span class="dot c-codex"></span> Codex, your turn</span><span>1 file</span><span class="mu">—</span><span class="acts"><span class="btn sm">Open PR</span><span class="btn sm">Land</span></span></div>
+        <div class="lrow"><span class="t"><b>Explain checkout</b><span class="mono">agent/gemini-2</span></span><span><span class="dot c-gemini"></span> Gemini, ready</span><span class="mu">No changes</span><span class="mu">—</span><span class="acts"><span class="btn sm">Read it</span><span class="btn sm">Archive</span></span></div>
+        <div class="lrow"><span class="t"><b>Promo banner</b><span class="mono">feat/promo</span></span><span><span class="dot c-cursor"></span> Cursor, landed</span><span class="mu">Merged yesterday</span><span class="mono">#212 merged</span><span class="acts"><span class="btn sm">Archive</span></span></div>
+      </div>
+      <div class="lane-detail">
+        <div><h5>Dark mode on Settings, so far</h5>
+          <ol class="tl"><li><span>09:12</span><span>Added a dark-mode switch to Settings</span></li><li><span>09:31</span><span>Saved the choice so it survives a reload</span></li><li><span>09:48</span><span>“Match my system” is a third option, and the default</span></li><li><span>now</span><span>Moving checkout onto the shared palette</span></li></ol></div>
+        <div><h5>If you land it now</h5><p class="mainline">Main gets 3 commits touching 7 files. No other lane changes these files. Styx brings main in first and runs the project’s checks; if they fail, nothing lands and you see why.</p><div style="display:flex;gap:6px;margin-top:12px"><span class="btn line sm">Land on main</span><span class="btn sm">See the changes</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section class="note" id="access">
+  <h2>Access: what agents may touch</h2>
+  <p>The inbox reads as sentences, newest and riskiest first. Policies sit beside it as plain switches with how often each one fired. Auto-approved requests are counted, not hidden.</p>
+  <div class="was"><b>Today</b>Approvals with Inbox / Policies / Audit log tabs, prod and scope tags, Review / Deny, a policies pane with + Rule and Export JSON. All kept.</div>
+</section>
+<div class="win" data-place="access" data-status="plain">
+  <div style="display:grid;grid-template-rows:auto auto 1fr;min-height:0">
+    <div class="pagehead"><h3>Access</h3><p>Every agent’s request to a deploy target or server, across projects</p></div>
+    <div class="tabs"><span data-inv>Requests <b class="n">3</b></span><span>Open grants <b class="n q">2</b></span><span>Audit log</span></div>
+    <div class="acc">
+      <div class="inbox">
+        <div class="req on"><div class="s"><span class="dot c-codex"></span> <b>Codex</b> wants to <b>write</b> to <b>Supabase production</b> <span class="tag prod">Prod</span></div><div class="why">acme-shop, Fix the flaky orders test. “To run migration 0042.” 3 min ago</div><div class="acts"><span class="btn pri sm">Review</span><span class="btn sm">Deny</span></div></div>
+        <div class="req"><div class="s"><span class="dot c-claude"></span> <b>Claude</b> wants to <b>read</b> from <b>AWS acme-prod</b> <span class="tag prod">Prod</span></div><div class="why">infra-tools, Audit the ECS services. “To list the running services.” 9 min ago</div><div class="acts"><span class="btn sm">Review</span><span class="btn sm">Deny</span></div></div>
+        <div class="req"><div class="s"><span class="dot c-cursor"></span> <b>Cursor</b> wants to <b>deploy a preview</b> to <b>Vercel</b> <span class="tag">Preview</span></div><div class="why">blog-v2, MDX support. “Preview deploy for #88.” 14 min ago</div><div class="acts"><span class="btn sm">Review</span><span class="btn sm">Deny</span></div></div>
+        <div class="auto">12 requests were allowed by your policies today: preview deploys and GitHub reads. <u>See them</u></div>
+      </div>
+      <aside class="pol"><h4>Policies</h4>
+        <div class="rule"><span class="sw"></span><span>Allow reads on staging and preview without asking</span><small>Would have matched 12 today</small></div>
+        <div class="rule"><span class="sw on"></span><span>Always ask, with Touch ID, for production writes</span><small>Matched 2 today</small></div>
+        <div class="rule"><span class="sw on"></span><span>Close access after an hour idle</span><small>Closed 5 this week</small></div>
+        <div class="pf"><span class="btn sm">New rule</span><span class="btn sm">Export JSON</span></div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<section class="note" id="audit">
+  <h2>Audit log, with an entry open</h2>
+  <p>One line per event, written as what happened. Opening one shows who, which lane, which command triggered it, and the hash chain that proves nothing was edited. Revoking adds a line; nothing is ever removed.</p>
+  <div class="was"><b>Today</b>Audit log tab and the 380 px audit drawer with actor, session, worktree, command and chain. All kept.</div>
+</section>
+<div class="win" data-place="access" data-status="plain">
+  <div style="display:grid;grid-template-rows:auto auto 1fr;min-height:0">
+    <div class="pagehead"><h3>Access</h3><p>Every agent’s request to a deploy target or server, across projects</p></div>
+    <div class="tabs"><span>Requests <b class="n">3</b></span><span>Open grants <b class="n q">2</b></span><span data-inv>Audit log</span></div>
+    <div class="audit" style="padding-right:380px">
+      <div class="arow"><span class="t">09:43</span><span><span class="dot c-codex"></span> Codex asked to write to Supabase production</span><span class="k">acme-shop</span></div>
+      <div class="arow"><span class="t">09:31</span><span><span class="dot c-claude"></span> Claude used Vercel production: deployed acme-shop</span><span class="k">acme-shop</span></div>
+      <div class="arow" data-inv><span class="t">09:12</span><span>You let Claude deploy to Vercel production for 1 hour, with Touch ID</span><span class="k">acme-shop</span></div>
+      <div class="arow"><span class="t">08:40</span><span>Styx closed Gemini’s AWS access after an hour idle</span><span class="k">infra-tools</span></div>
+      <div class="arow"><span class="t">08:02</span><span>Policy allowed Cursor a Vercel preview deploy</span><span class="k">blog-v2</span></div>
+      <div class="arow"><span class="t">Yesterday</span><span>You denied Codex write access to GitHub settings</span><span class="k">acme-shop</span></div>
+      <div class="arow"><span class="t">Yesterday</span><span>You revoked Claude’s Supabase read</span><span class="k">side-api</span></div>
+    </div>
+  </div>
+  <aside class="drawer">
+    <div class="mu" style="font-size:12px">09:12, 12 March</div>
+    <h3>You let Claude deploy to Vercel production for 1 hour</h3>
+    <div class="kv"><div>Agent</div><div><span class="dot c-claude"></span> Claude</div><div>Lane</div><div>Dark mode on Settings<br><span class="mono mu">agent/claude-3</span></div><div>Project</div><div>acme-shop</div><div>Asked for</div><div>Deploy, production</div><div>Because</div><div>“Ship the fix behind the flag.”</div><div>Confirmed</div><div>Touch ID</div><div>Ends</div><div>10:12, or when the session ends</div></div>
+    <div><div class="mu" style="font-size:12px;margin-bottom:6px">Proof it was not edited</div><div class="chain">prev 7f3a…c21e → this 9b0d…44af, chain intact</div></div>
+    <div style="display:flex;gap:6px;margin-top:auto"><span class="btn line">Revoke now</span><span class="btn">Copy entry</span></div>
+  </aside>
+</div>
+
+<section class="note" id="usage">
+  <h2>Usage</h2>
+  <p>Shown, not tabulated: each agent’s limits as bars that turn lime when you are close, the last two weeks of turns, and spend by project. The numbers from today’s tables are a click away.</p>
+  <div class="was"><b>Today</b>By agent and by project tables of sessions, turns, tokens and cost, and a Limits section with Refresh. All kept.</div>
+</section>
+<div class="win" data-place="usage" data-status="plain">
+  <div style="display:grid;grid-template-rows:auto 1fr;min-height:0">
+    <div class="pagehead"><h3>Usage</h3><p>From the sessions Styx ran. Estimates, not your bill.</p><div class="r"><span class="btn">Show as tables</span><span class="btn">Refresh limits</span></div></div>
+    <div class="use">
+      <div class="grid2">
+        <div>
+          <h4>Turns, last 14 days</h4>
+          <div class="week">
+            <i style="height:20%"></i><i style="height:35%"></i><i style="height:30%"></i><i style="height:55%"></i><i style="height:48%"></i><i style="height:10%"></i><i style="height:8%"></i><i style="height:42%"></i><i style="height:60%"></i><i style="height:72%"></i><i style="height:58%"></i><i style="height:80%"></i><i style="height:15%"></i><i class="t" style="height:66%"></i>
+          </div>
+          <div class="weeklab"><span>27 Feb</span><span>Today, 214 turns</span></div>
+          <h4 style="margin-top:26px">By project, this week</h4>
+          <div class="bars">
+            <div class="brow"><span>acme-shop</span><span class="tr"><i style="width:78%;background:var(--tx)"></i></span><span class="v">$41.20</span></div>
+            <div class="brow"><span>blog-v2</span><span class="tr"><i style="width:30%;background:var(--tx)"></i></span><span class="v">$15.80</span></div>
+            <div class="brow"><span>infra-tools</span><span class="tr"><i style="width:22%;background:var(--tx)"></i></span><span class="v">$11.05</span></div>
+            <div class="brow"><span>side-api</span><span class="tr"><i style="width:4%;background:var(--tx)"></i></span><span class="v">$1.90</span></div>
+          </div>
+        </div>
+        <div>
+          <h4>Limits, as each agent reports them</h4>
+          <div class="limit"><div class="h"><b><span class="dot c-claude"></span> Claude Code</b><span>5-hour window, resets 13:00</span></div><div class="tr"><i class="hot" style="width:84%"></i></div><div class="mu" style="font-size:12px;margin-top:5px">84% used. Close: a long task now may stop partway.</div></div>
+          <div class="limit"><div class="h"><b><span class="dot c-claude"></span> Claude Code</b><span>Weekly, resets Monday</span></div><div class="tr"><i style="width:41%"></i></div></div>
+          <div class="limit"><div class="h"><b><span class="dot c-codex"></span> Codex</b><span>5-hour window, resets 11:20</span></div><div class="tr"><i style="width:22%"></i></div></div>
+          <div class="limit"><div class="h"><b><span class="dot c-gemini"></span> Gemini CLI</b><span>Daily requests</span></div><div class="tr"><i style="width:12%"></i></div></div>
+          <h4 style="margin-top:20px">By agent, this week</h4>
+          <div class="bars">
+            <div class="brow"><span><span class="dot c-claude"></span> Claude</span><span class="tr"><i style="width:70%;background:var(--claude)"></i></span><span class="v">412 turns</span></div>
+            <div class="brow"><span><span class="dot c-codex"></span> Codex</span><span class="tr"><i style="width:28%;background:var(--codex)"></i></span><span class="v">160 turns</span></div>
+            <div class="brow"><span><span class="dot c-gemini"></span> Gemini</span><span class="tr"><i style="width:14%;background:var(--gemini)"></i></span><span class="v">81 turns</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= SETTINGS ======================================================= -->
+<h2 class="doc part">Settings and setup</h2>
+
+<section class="note" id="targets">
+  <h2>Settings: one place, two groups</h2>
+  <p>Today every app settings section is its own icon on the rail. Here they collapse into one Settings place with its own nav, App and This project, so the rail holds places, not pages. Every section is still there. Targets reads the policy as a sentence and shows what is open now.</p>
+  <div class="was"><b>Today</b>Rail tiles for General, Account, Editor, Agent connections, Skills, Keychain &amp; secrets, Policies, Shortcuts; project nav for Targets, Agent defaults, Env &amp; secrets. All kept, in the settings nav.</div>
+</section>
+<div class="win" data-place="settings" data-status="plain">
+  <div class="set2">
+    <nav class="snav">
+      <div class="g">This project, acme-shop</div><a data-inv>Targets</a><a>Agent defaults</a><a>Env and secrets</a>
+      <div class="g" style="margin-top:10px">App</div><a>General</a><a>Account</a><a>Editor</a><a>Agent connections</a><a>Skills</a><a>Keychain and secrets</a><a>Access policies</a><a>Shortcuts</a>
+    </nav>
+    <div class="sbody">
+      <div class="pagehead"><h3>Targets</h3><p>Where agents in acme-shop can deploy or connect. Saved in <span class="mono">.styx/project.json</span>, secrets never.</p></div>
+      <div class="trow h"><span>Target</span><span>Kind</span><span>When an agent asks</span><span>Right now</span><span></span></div>
+      <div class="trow"><span class="n"><b>Vercel</b><small>acme-shop</small></span><span><span class="tag prod">Prod</span></span><span class="sel">Ask, with Touch ID ▾</span><span class="st open">Open to Claude, 58 min left</span><span class="acts"><span class="btn sm">Revoke</span><span class="btn sm">⋯</span></span></div>
+      <div class="trow"><span class="n"><b>Vercel</b><small>Previews</small></span><span><span class="tag">Preview</span></span><span class="sel">Always allow ▾</span><span class="mu">Allowed by policy</span><span class="acts"><span class="btn sm">⋯</span></span></div>
+      <div class="trow"><span class="n"><b>Supabase</b><small>prod db</small></span><span><span class="tag prod">Prod</span></span><span class="sel">Ask each time ▾</span><span class="mu">Locked, 1 request waiting</span><span class="acts"><span class="btn sm">⋯</span></span></div>
+      <div class="trow"><span class="n"><b>AWS</b><small>acme-prod</small></span><span><span class="tag prod">Prod</span></span><span class="sel">Ask, with Touch ID ▾</span><span class="mu">Locked</span><span class="acts"><span class="btn sm">⋯</span></span></div>
+      <div class="trow"><span class="n"><b>GitHub</b><small>acme/shop</small></span><span><span class="tag">Code</span></span><span class="sel">Always allow ▾</span><span class="mu">Allowed by policy</span><span class="acts"><span class="btn sm">⋯</span></span></div>
+      <div style="display:flex;gap:8px;padding:16px 28px"><span class="btn line">Connect a target</span><span class="btn">Deploy commands</span></div>
+    </div>
+  </div>
+</div>
+
+<section class="note" id="connections">
+  <h2>Agent connections</h2>
+  <p>Which agents this Mac has, whether each is signed in, and the one thing to do when it is not. This is where the launch data says people get stuck, so a problem names itself and offers the fix in one click.</p>
+  <div class="was"><b>Today</b>“Agent connections” on the rail: detected CLIs, versions, sign-in state and account. All kept; the fix becomes a button, not an instruction.</div>
+</section>
+<div class="win" data-place="settings" data-status="plain">
+  <div class="set2">
+    <nav class="snav">
+      <div class="g">This project, acme-shop</div><a>Targets</a><a>Agent defaults</a><a>Env and secrets</a>
+      <div class="g" style="margin-top:10px">App</div><a>General</a><a>Account</a><a>Editor</a><a data-inv>Agent connections</a><a>Skills</a><a>Keychain and secrets</a><a>Access policies</a><a>Shortcuts</a>
+    </nav>
+    <div class="sbody">
+      <div class="pagehead"><h3>Agent connections</h3><p>The coding agents on this Mac. Styx uses your own sign-in for each.</p><div class="r"><span class="btn">Check again</span></div></div>
+      <div class="cli"><span class="ico" style="background:var(--claude)">C</span><span class="n"><b>Claude Code</b><small>2.4.1, /opt/homebrew/bin/claude</small></span><span class="state"><span class="good">Signed in</span><small>nic@acme.dev, Max plan</small></span><span class="acts"><span class="btn sm">Sign out</span></span></div>
+      <div class="cli"><span class="ico" style="background:var(--codex)">X</span><span class="n"><b>Codex</b><small>0.9.3, ~/.local/bin/codex</small></span><span class="state"><span class="good">Signed in</span><small>ChatGPT Plus</small></span><span class="acts"><span class="btn sm">Sign out</span></span></div>
+      <div class="cli"><span class="ico" style="background:var(--gemini)">G</span><span class="n"><b>Gemini CLI</b><small>1.2.0, a newer version is out</small></span><span class="state"><span class="bad">Out of date</span><small>1.4.0 fixes the sign-in loop</small></span><span class="acts"><span class="btn pri sm">Update to 1.4.0</span></span></div>
+      <div class="cli"><span class="ico" style="background:var(--cursor)">Cu</span><span class="n"><b>Cursor agent</b><small>0.5.2</small></span><span class="state"><span class="bad">Not signed in</span><small>Agents can’t start until it is</small></span><span class="acts"><span class="btn pri sm">Sign in</span></span></div>
+      <div class="cli"><span class="ico" style="background:var(--s2);color:var(--mu)">$</span><span class="n"><b>Shell</b><small>zsh 5.9</small></span><span class="state"><span class="good">Ready</span></span><span class="acts"></span></div>
+      <div class="cli" style="opacity:.6"><span class="ico" style="background:var(--s2);color:var(--mu)">+</span><span class="n"><b>Not installed</b><small>OpenCode, Aider</small></span><span class="state mu" style="font-size:13px">Styx can install them for you</span><span class="acts"><span class="btn sm">Install</span></span></div>
+    </div>
+  </div>
+</div>
+
+<section class="note" id="onboarding">
+  <h2>Onboarding, ending in a first result</h2>
+  <p>The same four steps: editor, projects, agents, targets. Each says why it matters in one line, and agents that are not ready get fixed here, not later. Targets can be skipped. The last step drops you into a new task with starters, so the first thing Styx does is something useful.</p>
+  <div class="was"><b>Today</b>01 Editor, 02 Projects, 03 Agents, 04 Targets across the top, a table per step, Back / Skip / Continue. All kept.</div>
+</section>
+<div class="win bare" data-place="none">
+  <div class="onb">
+    <aside class="steps-side">
+      <span class="word">STYX</span>
+      <div class="stp done"><i>✓</i><b>Your editor</b><small>VS Code, for “Open in”</small></div>
+      <div class="stp done"><i>✓</i><b>Your projects</b><small>5 added from your recent folders</small></div>
+      <div class="stp now"><i>3</i><b>Your agents</b><small>Which ones Styx can run for you</small></div>
+      <div class="stp next"><i>4</i><b>Where you deploy</b><small>Optional, you can skip it</small></div>
+      <div class="fin">Next: pick a project and give an agent its first task. Most take a few minutes.</div>
+    </aside>
+    <section class="onbody">
+      <h3>Which agents should Styx run?</h3>
+      <p class="p">Styx runs the coding agents you already use, with your own sign-in. It found four on this Mac. Two need a moment before they can start.</p>
+      <div class="agentcards">
+        <div class="ac ok"><span class="ico" style="background:var(--claude)">C</span><b>Claude Code</b><small class="good">Ready, signed in as nic@acme.dev</small><span class="ck on"></span></div>
+        <div class="ac ok"><span class="ico" style="background:var(--codex)">X</span><b>Codex</b><small class="good">Ready, signed in</small><span class="ck on"></span></div>
+        <div class="ac"><span class="ico" style="background:var(--gemini)">G</span><b>Gemini CLI</b><small>Needs an update to 1.4.0</small><span class="btn pri sm">Update</span></div>
+        <div class="ac"><span class="ico" style="background:var(--cursor)">Cu</span><b>Cursor agent</b><small>Not signed in</small><span class="btn pri sm">Sign in</span></div>
+      </div>
+      <p class="p" style="font-size:14px;margin-top:18px">Don’t have one yet? <u>Install Claude Code</u>. Styx walks you through signing in.</p>
+      <div class="onfoot"><span class="btn">Back</span><span class="btn">Skip</span><span class="btn pri">Continue with 2 agents</span></div>
+    </section>
+  </div>
+</div>
+
+<!-- ======================================================= OVERLAYS ======================================================= -->
+<h2 class="doc part">Overlays</h2>
+
+<section class="note" id="palette">
+  <h2>Command palette</h2>
+  <p>Same groups, same reach, same keys. Typing a sentence that isn’t a command offers to start it as a task, so the palette is also the fastest way to give an agent work from anywhere.</p>
+  <div class="was"><b>Today</b>Actions / Agents / Projects with lock state in the meta column, Run, ⌘⏎ new window, scope with Tab. All kept.</div>
+</section>
+<div class="win" data-place="project" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol"><div class="itabs"><span data-inv>Preview</span><span>Changes</span><span>Code</span><span>Terminal</span></div><div class="stage"></div><div class="term"></div></section>
+    <aside class="chat"><div class="lanehead"><h3>Dark mode on Settings</h3></div><div class="feed"></div><div class="compose"></div></aside>
+  </div>
+  <div class="scrim"></div>
+  <div class="modal palette">
+    <div class="in">add tests for the promo banner<span class="caret"></span></div>
+    <div class="grp">Start as a task</div>
+    <div class="pi" data-inv><span class="ic">+</span><span>“Add tests for the promo banner” in acme-shop</span><span class="m">Claude, new lane ⏎</span></div>
+    <div class="grp">Actions</div>
+    <div class="pi"><span class="ic">▲</span><span>Deploy acme-shop to Vercel production</span><span class="m">Open, 58 min left</span></div>
+    <div class="pi"><span class="ic">▲</span><span>Deploy acme-shop to Supabase production</span><span class="m">Locked</span></div>
+    <div class="pi"><span class="ic">◆</span><span>Let Codex write to Supabase production</span><span class="m">Waiting on you</span></div>
+    <div class="pi"><span class="ic">↑</span><span>Publish Dark mode on Settings</span><span class="m">Commit, push, pull request</span></div>
+    <div class="grp">Lanes</div>
+    <div class="pi"><span class="ic"><span class="dot c-claude"></span></span><span>Promo banner, acme-shop</span><span class="m">Landed yesterday</span></div>
+    <div class="pi"><span class="ic"><span class="dot c-codex"></span></span><span>Fix the flaky orders test, acme-shop</span><span class="m">Your turn</span></div>
+    <div class="pf"><span>⏎ Run</span><span>⌘⏎ In a new window</span><span>⇥ Search one project</span><span class="sp">Esc</span></div>
+  </div>
+</div>
+
+<section class="note" id="newproject">
+  <h2>New project</h2>
+  <p>Same fields, in the order you think of them: what it is, where it lives, how to start. Letting an agent scaffold it is one of three equal choices, with the brief right there.</p>
+  <div class="was"><b>Today</b>Name, location, start from (empty, template, agent with a brief), git init, create GitHub repo, copy targets, open in IDE. All kept.</div>
+</section>
+<div class="win" data-place="home" data-status="plain">
+  <div class="home"></div>
+  <div class="scrim"></div>
+  <div class="modal np">
+    <div class="mh"><h3>New project</h3><span class="x">Esc</span></div>
+    <div class="mb">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="field"><div class="l">Name</div><div class="v">recipe-box</div></div><div class="field"><div class="l">Where</div><div class="v mono">~/code/recipe-box</div></div></div>
+      <div><div class="field"><div class="l">Start from</div></div><div class="how"><div><b>Empty folder</b><small>Just git and a README</small></div><div><b>A template</b><small>Node, Python, Go, Rust, static</small></div><div data-inv><b>Let an agent build it</b><small>From a short brief</small></div></div></div>
+      <div class="field"><div class="l">The brief</div><div class="brief">A small web app to save recipes from links, tag them, and plan the week’s meals. Next.js and SQLite. Keep it simple.</div></div>
+      <div class="checks"><span><span class="ck on"></span>Set up git</span><span><span class="ck on"></span>Create a private GitHub repo</span><span><span class="ck"></span>Copy targets from acme-shop</span><span><span class="ck"></span>Open in VS Code too</span></div>
+    </div>
+    <div class="mf"><span class="fine">Claude will plan first and ask before the first commit.</span><span class="btn">Cancel</span><span class="btn pri">Create and start</span></div>
+  </div>
+</div>
+
+<section class="note" id="connect">
+  <h2>Connect a target</h2>
+  <p>Pick a provider, and Styx first offers the login you already have on this Mac. Keys stay under Advanced. Environments are chips you tap, production marked.</p>
+  <div class="was"><b>Today</b>Provider grid (Vercel, AWS, GCP, Supabase, GitHub, SSH host) then OAuth, IAM key or SSH forms with environment chips. All kept.</div>
+</section>
+<div class="win" data-place="settings" data-status="plain">
+  <div class="set2"><nav class="snav"></nav><div class="sbody"></div></div>
+  <div class="scrim"></div>
+  <div class="modal conn">
+    <div class="np" style="position:static;width:auto"><div class="mh"><h3>Connect a target</h3><span class="x">Esc</span></div></div>
+    <div class="prov" style="margin-top:14px;border-top:1px solid var(--ln)">
+      <div data-inv><b>Vercel</b><small>Sign in with Vercel</small></div><div><b>AWS</b><small>Your AWS profile</small></div><div><b>Google Cloud</b><small>Your gcloud login</small></div>
+      <div><b>Supabase</b><small>Sign in with Supabase</small></div><div><b>GitHub</b><small>Your gh login</small></div><div><b>A server</b><small>Over SSH</small></div>
+    </div>
+    <div class="cform">
+      <div class="cli-reuse"><span>You’re already signed in to Vercel on this Mac as <b>nic@acme.dev</b>.</span><span class="btn pri sm">Use it</span></div>
+      <div><div class="field"><div class="l">Which project</div><div class="v">acme-shop ▾</div></div></div>
+      <div><div class="field"><div class="l">Environments agents may ask for</div></div><div class="envs"><span data-on>Production</span><span data-on>Preview</span><span>Development</span></div></div>
+      <div class="mu" style="font-size:12px">Advanced: paste a token instead. It goes straight to the keychain.</div>
+    </div>
+  </div>
+</div>
+
+<section class="note" id="notify">
+  <h2>Notifications, and an update</h2>
+  <p>When an agent needs you and you are elsewhere, the toast says what it wants in a sentence and can be answered on the spot. The update window comes up by itself, as it does now, and says what is new in plain words.</p>
+  <div class="was"><b>Today</b>An in-app toast with Review and Later, the dock badge, and the “Update available” window. All kept.</div>
+</section>
+<div class="win" data-place="home" data-status="plain">
+  <div class="home">
+    <div class="hello"><div><h3>Good morning, Nic</h3><p>Two things need you. Three agents are working.</p></div></div>
+  </div>
+  <div class="scrim" style="background:rgba(0,0,0,.45)"></div>
+  <div class="modal upd">
+    <h3>Styx 0.3.0 is ready</h3>
+    <p>It takes a few seconds and keeps your agents running.</p>
+    <ul><li>Results come back as pages you can read</li><li>Start a task from the palette</li><li>Fixes for Gemini sign-in</li></ul>
+    <div class="acts"><span class="btn pri">Restart and update</span><span class="btn">Later</span></div>
+  </div>
+  <div class="toast">
+    <div class="hd"><i class="dot" style="background:var(--ac)"></i>acme-shop, just now</div>
+    <h4>Codex wants write access to Supabase production</h4>
+    <p>“To run migration 0042 for the orders test.”</p>
+    <div class="acts"><span class="btn pri sm">Review</span><span class="btn sm">Later</span></div>
+  </div>
+</div>
+
+<script>
+/* The chrome every window shares: titlebar, rail, project nav, status bar. Built once here so each artboard only
+   holds its own content. */
+const ICON = {
+  home: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7"/><rect x="13" y="4" width="7" height="7"/><rect x="4" y="13" width="7" height="7"/><rect x="13" y="13" width="7" height="7"/></svg>',
+  agents: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>',
+  access: '<svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg>',
+  tasks: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/><path d="M10 9l5 3-5 3z"/></svg>',
+  usage: '<svg viewBox="0 0 24 24"><path d="M5 19V12M10 19V7M15 19v-5M20 19V4"/></svg>',
+  settings: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><rect x="14" y="5" width="4" height="4"/><rect x="8" y="15" width="4" height="4"/></svg>',
+};
+const LANES = [
+  { id: 'codex', c: 'codex', t: 'Fix the flaky orders test', s: 'Your turn', you: true },
+  { id: 'claude', c: 'claude', t: 'Dark mode on Settings', s: 'Working, 1 min' },
+  { id: 'gemini', c: 'gemini', t: 'Explain checkout', s: 'Ready to read' },
+  { id: 'cursor', c: 'cursor', t: 'Promo banner', s: 'Landed yesterday', old: true },
+];
+const TOOLS = [['lanes', 'Lanes and branches', '5'], ['targets', 'Targets', '5'], ['defaults', 'Agent defaults', ''], ['env', 'Env and secrets', ''], ['debt', 'Tech debt audit', '']];
+
+for (const win of document.querySelectorAll('.win')) {
+  const place = win.dataset.place;
+  const body = [...win.children];
+  const title = `<div class="title"><span class="lights"><i></i><i></i><i></i></span><span class="word">STYX</span>` +
+    (place === 'none' ? '' : `<span class="crumb"><b>acme-shop</b>${win.dataset.lane && win.dataset.lane !== 'new' ? '<span>/</span><span>' + (LANES.find((l) => l.id === win.dataset.lane)?.t ?? '') + '</span>' : ''}</span>`) +
+    `<span class="search">Ask an agent, switch, deploy…<kbd>⌘K</kbd></span><span class="count"><i></i>2 need you</span><span class="count"><i class="off"></i>2 locked</span><span class="me">N</span></div>`;
+  if (place === 'none') { win.insertAdjacentHTML('afterbegin', title); continue; }
+  const r = (k, label, badge) => `<span class="ic" title="${label}" ${place === k ? 'data-inv' : ''}>${ICON[k]}${badge ? '<b></b>' : ''}</span>`;
+  const rail = `<nav class="rail">${r('home', 'All projects')}${r('agents', 'Agents')}${r('access', 'Access', true)}${r('tasks', 'Background tasks')}${r('usage', 'Usage')}<hr>` +
+    `<span class="pj" data-on>AS</span><span class="pj">BL<b></b></span><span class="pj">IN</span><span class="pj">CX</span><span class="pj">SA</span><span class="pj add">+</span>` +
+    `<span class="foot">${r('settings', 'Settings')}</span></nav>`;
+  const showNav = place === 'project';
+  const lanes = LANES.map((l) => `<div class="ln ${l.old ? 'old' : ''}" ${win.dataset.lane === l.id ? 'data-inv' : ''}><span class="d dot c-${l.c}"></span><span class="t">${l.t}</span><span></span><span class="s ${l.you ? 'you' : ''}">${l.s}</span></div>`).join('');
+  const tools = TOOLS.map(([k, label, n]) => `<a ${win.dataset.tool === k ? 'data-inv' : ''}>${label}<span>${n}</span></a>`).join('');
+  const nav = showNav ? `<nav class="nav"><div class="ph"><b>acme-shop</b><span>~/code/acme-shop</span></div><div class="grp"><span>Work</span><span>4 lanes</span></div><div class="lanes">${lanes}</div>` +
+    `<div class="newtask" ${win.dataset.lane === 'new' ? 'style="border-style:solid;border-color:var(--tx);color:var(--tx)"' : ''}>+ New task</div><div class="grp" style="margin-top:8px"><span>Project</span></div><div class="tools">${tools}</div>` +
+    `<div class="nf">2 grants open<br><span class="mono">main, 2 behind</span></div></nav>` : '';
+  const frame = document.createElement('div');
+  frame.className = 'frame' + (showNav ? '' : ' wide');
+  frame.innerHTML = rail + nav;
+  const main = document.createElement('div');
+  main.style.minWidth = '0'; main.style.minHeight = '0'; main.style.display = 'grid';
+  const overlays = body.filter((el) => el.matches('.scrim, .modal, .sheet, .drawer, .toast, .pin'));
+  for (const el of body) if (!overlays.includes(el)) main.appendChild(el);
+  frame.appendChild(main);
+  const st = win.dataset.status;
+  const status = `<div class="status">${st && st.startsWith('lane') ? `<span class="tx mono">${st === 'lane-codex' ? 'agent/codex-1' : 'agent/claude-3'}</span><span>Vercel production open, 58 min</span><span>Supabase locked</span>` : '<span>All projects in sync</span>'}<span class="sp">Feedback</span><span class="coffee">☕ Buy us a coffee</span></div>`;
+  win.innerHTML = '';
+  win.insertAdjacentHTML('beforeend', title);
+  win.appendChild(frame);
+  win.insertAdjacentHTML('beforeend', status);
+  for (const el of overlays) win.appendChild(el);
+}
+</script>
+</body>
+</html>

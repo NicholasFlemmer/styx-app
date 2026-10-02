@@ -9,8 +9,11 @@ name: release
 on:
   push:
     tags: ['v*']
+  # A Windows installer on demand, without a tag (Actions › release › Run workflow): the win job only.
+  workflow_dispatch:
 jobs:
   mac:
+    if: github.event_name == 'push'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,8 +66,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: styx-win
-          path: apps/desktop/release/*.exe
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.exe.blockmap
+            apps/desktop/release/latest.yml
   publish:
+    if: github.event_name == 'push'
     needs: [mac, win]
     runs-on: ubuntu-latest
     permissions: { contents: write }

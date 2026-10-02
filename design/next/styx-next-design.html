@@ -1,0 +1,1162 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Styx next: every screen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+:root {
+  /* Styx tokens, verbatim */
+  --page:#181916; --bg:#0d0e0c; --s1:#121411; --s2:#1c1e1a; --ln:#2d302a; --tx:#e9ebe3; --mu:#858a81;
+  --ac:#d6ff3d; --acx:#0d0e0c; --act:#d6ff3d; --add:rgba(214,255,61,.13); --term:#080908; --termtx:#c9cdc2; --dim:rgba(0,0,0,.6);
+  /* Paper: the light theme's surfaces, for work that has come back */
+  --p-bg:#f7f8f3; --p-s2:#e1e3db; --p-ln:#b3b7ab; --p-tx:#14160f; --p-mu:#5d6259; --p-act:#6e8f00; --p-add:rgba(150,200,0,.2);
+  --del:rgba(255,110,80,.14); --p-del:rgba(200,70,40,.13);
+  /* New: one colour per agent, used only as a small square */
+  --claude:#e8916a; --codex:#8fb3ff; --gemini:#b79bff; --cursor:#e9ebe3; --shell:#858a81;
+  --ui: 'Archivo', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--page); color: var(--tx); font: 400 14px/1.5 var(--ui); padding: 56px 0 140px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.mu { color: var(--mu); }
+
+/* ================= the document ================= */
+.doc { width: 1280px; margin: 0 auto; }
+.doc h1 { font: 600 54px/1.02 var(--ui); letter-spacing: -0.02em; letter-spacing: -.01em; max-width: 17ch; }
+.doc .lede { margin-top: 18px; max-width: 64ch; color: var(--mu); font-size: 18px; line-height: 1.5; }
+.doc .lede strong { color: var(--tx); font-weight: 600; }
+.rules { margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 32px; }
+.rules div { padding: 16px 0; border-top: 1px solid var(--ln); }
+.rules b { display: block; font: 600 17px/1.2 var(--ui); letter-spacing: 0; }
+.rules span { display: block; margin-top: 6px; color: var(--mu); font-size: 14px; max-width: 40ch; }
+.index { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 6px; }
+.index a { color: var(--tx); text-decoration: none; padding: 6px 10px; border: 1px solid var(--ln); font-size: 13px; }
+.index a:hover { background: var(--tx); color: var(--bg); }
+.part { margin-top: 104px; padding-top: 18px; border-top: 1px solid var(--tx); font: 600 32px/1 var(--ui); letter-spacing: -0.02em; }
+.note { width: 1280px; margin: 72px auto 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
+.note h2 { font: 600 24px/1.12 var(--ui); letter-spacing: -0.02em; grid-column: 1; }
+.note .was { grid-column: 2; grid-row: 1 / span 2; color: var(--mu); font-size: 13px; border-left: 1px solid var(--ln); padding-left: 20px; }
+.note .was b { display: block; color: var(--tx); font-weight: 600; margin-bottom: 4px; }
+.note p { grid-column: 1; margin-top: 8px; color: var(--mu); font-size: 15px; max-width: 60ch; }
+.note + .note { margin-top: 24px; }
+
+/* ================= window frame ================= */
+.win { width: 1280px; height: 800px; margin: 0 auto; background: var(--bg); border: 1px solid var(--ln); display: grid; grid-template-rows: 38px 1fr 26px; overflow: hidden; position: relative; }
+.win.bare { grid-template-rows: 38px 1fr; }
+.title { display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid var(--ln); background: var(--s1); font-size: 13px; }
+.lights { display: flex; gap: 8px; width: 60px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); }
+.word { font: 600 12px/1 var(--ui); letter-spacing: 0; letter-spacing: .24em; }
+.crumb { display: flex; gap: 8px; align-items: center; color: var(--mu); }
+.crumb b { color: var(--tx); font-weight: 600; }
+.search { margin-left: auto; width: 320px; border: 1px solid var(--ln); padding: 5px 10px; color: var(--mu); display: flex; justify-content: space-between; }
+.search kbd { font: 500 11px var(--mono); }
+.count { display: flex; align-items: center; gap: 6px; }
+.count i { width: 8px; height: 8px; background: var(--ac); }
+.count i.off { background: none; border: 1px solid var(--tx); }
+.me { width: 24px; height: 24px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); font: 600 10px/22px var(--ui); text-align: center; }
+.frame { display: grid; grid-template-columns: 56px 216px 1fr; min-height: 0; }
+.frame.wide { grid-template-columns: 56px 1fr; }
+.status { display: flex; gap: 20px; align-items: center; padding: 0 14px; border-top: 1px solid var(--ln); background: var(--s1); font-size: 12px; color: var(--mu); }
+.status .sp { margin-left: auto; }
+.status .tx { color: var(--tx); }
+.status .coffee { background: var(--ac); color: var(--acx); font-weight: 700; padding: 3px 9px; margin-right: -14px; height: 26px; display: flex; align-items: center; }
+
+/* rail: places on top, projects below, settings at the foot */
+.rail { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; }
+.rail .ic { width: 36px; height: 36px; display: grid; place-items: center; color: var(--mu); position: relative; }
+.rail .ic svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.rail .ic[data-inv] { background: var(--tx); color: var(--bg); }
+.rail .ic b { position: absolute; top: 2px; right: 2px; width: 7px; height: 7px; background: var(--ac); }
+.rail hr { width: 24px; border: 0; border-top: 1px solid var(--ln); margin: 4px 0; }
+.rail .pj { width: 36px; height: 36px; border: 1px solid var(--ln); display: grid; place-items: center; font: 700 11px var(--ui); position: relative; }
+.rail .pj[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.rail .pj b { position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; background: var(--ac); border: 2px solid var(--s1); }
+.rail .pj.add { border-style: dashed; color: var(--mu); }
+.rail .foot { margin-top: auto; }
+
+/* project nav: the work first, then the project's tools */
+.nav { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.nav .ph { padding: 14px 14px 10px; }
+.nav .ph b { display: block; font: 600 16px/1.2 var(--ui); letter-spacing: 0; }
+.nav .ph span { font: 400 11px var(--mono); color: var(--mu); }
+.nav .grp { padding: 14px 14px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.lanes { display: flex; flex-direction: column; }
+.ln { display: grid; grid-template-columns: 10px 1fr auto; gap: 2px 8px; padding: 8px 14px; border-top: 1px solid var(--ln); }
+.ln:last-child { border-bottom: 1px solid var(--ln); }
+.ln .d { width: 8px; height: 8px; margin-top: 6px; }
+.ln .t { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.ln .s { grid-column: 2 / -1; font-size: 12px; color: var(--mu); }
+.ln .s.you { color: var(--acx); background: var(--ac); justify-self: start; padding: 0 5px; font-weight: 600; }
+.ln[data-inv] { background: var(--tx); color: var(--bg); }
+.ln[data-inv] .s { color: #5d6259; }
+.ln.old { opacity: .55; }
+.newtask { margin: 10px 14px 0; padding: 8px 10px; border: 1px dashed var(--ln); color: var(--mu); font-size: 13px; }
+.tools { display: flex; flex-direction: column; margin-top: 4px; }
+.tools a { display: flex; justify-content: space-between; padding: 7px 14px; font-size: 13px; border-top: 1px solid var(--ln); }
+.tools a:last-child { border-bottom: 1px solid var(--ln); }
+.tools a span { color: var(--mu); font-size: 12px; }
+.tools a[data-inv] { background: var(--tx); color: var(--bg); }
+.nav .nf { margin-top: auto; padding: 10px 14px; border-top: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+.nav .nf .mono { font-size: 11px; }
+
+/* shared bits */
+.dot { display: inline-block; width: 8px; height: 8px; flex: none; }
+.c-claude { background: var(--claude); } .c-codex { background: var(--codex); } .c-gemini { background: var(--gemini); } .c-cursor { background: var(--cursor); } .c-shell { background: var(--shell); }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--ln); font-size: 13px; white-space: nowrap; }
+.btn.pri { background: var(--ac); color: var(--acx); border-color: var(--ac); font-weight: 700; }
+.btn.inv { background: var(--tx); color: var(--bg); border-color: var(--tx); font-weight: 600; }
+.btn.line { border-color: var(--tx); font-weight: 600; }
+.btn.sm { padding: 4px 9px; font-size: 12px; }
+.btn kbd { font: 500 10px var(--mono); opacity: .7; }
+.tag { display: inline-block; padding: 1px 6px; font-size: 11px; font-weight: 600; border: 1px solid var(--ln); color: var(--mu); }
+.tag.prod { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.pagehead { display: flex; align-items: flex-end; gap: 16px; padding: 22px 28px 16px; border-bottom: 1px solid var(--ln); }
+.pagehead h3 { font: 600 28px/1 var(--ui); letter-spacing: -0.02em; }
+.pagehead p { color: var(--mu); font-size: 13px; padding-bottom: 2px; }
+.pagehead .r { margin-left: auto; display: flex; gap: 8px; }
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--ln); padding: 0 28px; }
+.tabs span { padding: 10px 14px; font-size: 13px; color: var(--mu); display: flex; gap: 6px; align-items: center; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs span[data-inv] { color: var(--tx); border-bottom-color: var(--tx); font-weight: 600; }
+.tabs .n { font-size: 11px; padding: 0 5px; background: var(--ac); color: var(--acx); font-weight: 700; }
+.tabs .n.q { background: none; color: var(--mu); border: 1px solid var(--ln); font-weight: 500; }
+.scrim { position: absolute; inset: 38px 0 0 0; background: var(--dim); z-index: 5; }
+.modal { position: absolute; z-index: 6; background: var(--bg); border: 1px solid var(--tx); }
+
+/* the customer's app (Acme Shop) inside previews and results */
+.acme { background: #fff; color: #1f2430; font-family: system-ui, -apple-system, sans-serif; border-radius: 10px; overflow: hidden; }
+.acme.dark { background: #1b1f2a; color: #e8ebf2; }
+.acme .top { display: flex; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e7e9ef; font-weight: 700; font-size: 13px; }
+.acme.dark .top { border-color: #2c3242; }
+.acme .top i { font-style: normal; font-weight: 500; font-size: 12px; color: #7b8294; }
+.acme .b { padding: 14px 16px; }
+.acme h5 { font-size: 17px; margin-bottom: 8px; }
+.acme .set { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eef0f4; font-size: 13px; }
+.acme.dark .set { border-color: #2c3242; }
+.acme .set small { display: block; color: #7b8294; font-size: 12px; margin-top: 1px; }
+.tog { width: 34px; height: 20px; border-radius: 10px; background: #5b6cff; position: relative; flex: none; }
+.tog::after { content: ''; position: absolute; top: 2px; left: 16px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+.tog.off { background: #c9ced9; } .acme.dark .tog.off { background: #3a4152; } .tog.off::after { left: 2px; }
+.acme .new { outline: 2px dashed var(--ac); outline-offset: 3px; }
+
+/* ================= workspace ================= */
+.ws { display: grid; grid-template-columns: 1fr 400px; min-height: 0; }
+.stagecol { display: grid; grid-template-rows: 40px 1fr auto; min-width: 0; border-right: 1px solid var(--ln); min-height: 0; }
+.itabs { display: flex; align-items: stretch; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.itabs > span { padding: 0 14px; display: flex; align-items: center; gap: 7px; color: var(--mu); border-right: 1px solid var(--ln); }
+.itabs > span[data-inv] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.itabs .n { font-size: 11px; padding: 0 4px; border: 1px solid currentColor; }
+.itabs .acts { margin-left: auto; display: flex; gap: 6px; align-items: center; padding: 0 8px; border: 0; }
+.itabs .acts .btn { padding: 5px 10px; font-size: 12px; }
+.stage { background: var(--s1); padding: 18px 22px; display: grid; grid-template-rows: auto 1fr; gap: 10px; min-height: 0; overflow: hidden; }
+.urlbar { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--mu); }
+.urlbar .u { font: 400 12px var(--mono); color: var(--tx); border: 1px solid var(--ln); padding: 4px 8px; background: var(--bg); }
+.urlbar .seg { margin-left: auto; display: flex; border: 1px solid var(--ln); }
+.urlbar .seg span { padding: 3px 9px; } .urlbar .seg span[data-inv] { background: var(--tx); color: var(--bg); }
+.term { background: var(--term); color: var(--termtx); font: 400 12px/1.65 var(--mono); padding: 8px 14px 10px; border-top: 1px solid var(--ln); height: 112px; }
+.term .h { font: 400 12px var(--ui); color: var(--mu); display: flex; justify-content: space-between; margin-bottom: 2px; }
+.term .ok { color: var(--act); }
+
+.chat { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; background: var(--bg); }
+.lanehead { padding: 14px 16px 12px; border-bottom: 1px solid var(--ln); }
+.lanehead .who { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--mu); }
+.lanehead .who .mono { color: var(--mu); }
+.lanehead .who .x { margin-left: auto; display: flex; gap: 10px; }
+.lanehead h3 { font: 600 19px/1.2 var(--ui); letter-spacing: 0; margin-top: 6px; }
+.lanehead .sum { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--mu); }
+.lanehead .sum .btn { margin-left: auto; }
+.feed { overflow: hidden; padding: 14px 16px 0; display: flex; flex-direction: column; gap: 10px; }
+.rcpt { display: flex; justify-content: space-between; gap: 10px; padding: 8px 12px; background: var(--s1); border: 1px solid var(--ln); font-size: 13px; }
+.rcpt b { font-weight: 600; }
+.rcpt span { color: var(--mu); font-size: 12px; white-space: nowrap; }
+.umsg { align-self: flex-end; max-width: 85%; background: var(--s2); padding: 8px 12px; font-size: 14px; }
+.card-p { background: var(--p-bg); color: var(--p-tx); padding: 13px 15px 11px; }
+.card-p .top { display: flex; justify-content: space-between; font-size: 12px; color: var(--p-mu); }
+.card-p .top .ok { color: var(--p-act); font-weight: 600; }
+.card-p h4 { font: 600 16px/1.22 var(--ui); letter-spacing: 0; margin-top: 5px; }
+.card-p p { font-size: 13px; margin-top: 5px; line-height: 1.45; }
+.card-p .acts { display: flex; gap: 6px; margin-top: 10px; align-items: center; }
+.card-p .acts .btn { border-color: var(--p-ln); padding: 5px 10px; font-size: 12px; }
+.card-p .acts .k { margin-left: auto; font-size: 12px; color: var(--p-mu); }
+.live { border: 1px solid var(--ln); padding: 10px 12px; }
+.live .hd { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.live .hd i { width: 8px; height: 8px; background: var(--ac); }
+.live .hd span { margin-left: auto; color: var(--mu); font-weight: 400; font-size: 12px; }
+.live ol { list-style: none; margin-top: 7px; font-size: 13px; }
+.live li { display: flex; gap: 8px; padding: 2px 0; color: var(--mu); }
+.live li::before { content: ''; width: 9px; height: 9px; margin-top: 5px; flex: none; border: 1.5px solid var(--ln); }
+.live li.d { color: var(--tx); } .live li.d::before { background: var(--ac); border-color: var(--ac); }
+.live li.n { color: var(--tx); } .live li.n::before { border-color: var(--ac); }
+.live .raw { margin-top: 6px; font-size: 12px; color: var(--mu); text-decoration: underline; text-underline-offset: 3px; }
+.ask { border: 1px solid var(--ac); padding: 12px; }
+.ask .hd { font-size: 12px; color: var(--mu); display: flex; gap: 8px; align-items: center; }
+.ask .hd i { width: 8px; height: 8px; background: var(--ac); }
+.ask h4 { font: 600 16px/1.25 var(--ui); letter-spacing: 0; margin-top: 6px; }
+.ask p { font-size: 13px; color: var(--mu); margin-top: 4px; }
+.ask .acts { display: flex; gap: 6px; margin-top: 10px; }
+.compose { padding: 10px 16px 12px; border-top: 1px solid var(--ln); }
+.compose .box { border: 1px solid var(--ln); padding: 9px 12px; color: var(--mu); min-height: 54px; font-size: 14px; }
+.compose .row { display: flex; gap: 14px; margin-top: 7px; font-size: 12px; color: var(--mu); }
+.compose .row .send { margin-left: auto; color: var(--tx); }
+
+/* code instrument: today's editor, kept */
+.code { display: grid; grid-template-columns: 200px 1fr; min-height: 0; background: var(--bg); }
+.files { border-right: 1px solid var(--ln); padding: 10px 0; font: 400 12px/1.9 var(--mono); }
+.files .h { font: 400 12px var(--ui); color: var(--mu); padding: 0 12px 4px; }
+.files div { padding: 0 12px; display: flex; justify-content: space-between; }
+.files div.in { padding-left: 24px; }
+.files div[data-inv] { background: var(--tx); color: var(--bg); }
+.files .m { color: var(--act); }
+.files div[data-inv] .m { color: var(--p-act); }
+.editor { display: grid; grid-template-rows: 32px 1fr auto; min-width: 0; }
+.etabs { display: flex; border-bottom: 1px solid var(--ln); font: 400 12px var(--mono); }
+.etabs span { padding: 0 14px; display: flex; align-items: center; border-right: 1px solid var(--ln); color: var(--mu); }
+.etabs span[data-inv] { color: var(--tx); background: var(--s1); }
+.etabs .open { margin-left: auto; font: 400 12px var(--ui); border-left: 1px solid var(--ln); border-right: 0; }
+.src { font: 400 12.5px/1.75 var(--mono); padding: 10px 0; overflow: hidden; }
+.src div { display: grid; grid-template-columns: 44px 1fr; white-space: pre; }
+.src div span:first-child { color: var(--mu); text-align: right; padding-right: 14px; }
+.src .a { background: var(--add); }
+.src .k { color: #c6a8ff; } .src .s { color: #d6ff3d; } .src .c { color: var(--mu); }
+.hunknote { display: grid; grid-template-columns: 44px 1fr; margin: 4px 0; }
+.hunknote > div { grid-column: 2; margin-right: 18px; padding: 8px 12px; background: var(--p-bg); color: var(--p-tx); font: 400 13px/1.4 var(--ui); display: flex; gap: 12px; align-items: center; white-space: normal; }
+.hunknote b { font-weight: 600; }
+.hunknote .r { margin-left: auto; display: flex; gap: 6px; }
+.hunknote .r span { padding: 3px 8px; border: 1px solid var(--p-ln); font-size: 12px; }
+.hunkbar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--ln); font-size: 13px; color: var(--mu); }
+.hunkbar .r { margin-left: auto; display: flex; gap: 6px; }
+
+/* access sheet */
+.sheet { position: absolute; top: 38px; right: 0; bottom: 26px; width: 400px; background: var(--bg); border-left: 1px solid var(--tx); z-index: 4; display: grid; grid-template-rows: auto 1fr auto; }
+.sheet .sh { padding: 16px 18px 14px; border-bottom: 1px solid var(--ln); }
+.sheet .sh .who { font-size: 12px; color: var(--mu); display: flex; gap: 8px; align-items: center; }
+.sheet .sh h3 { font: 600 22px/1.15 var(--ui); letter-spacing: -0.02em; margin-top: 8px; }
+.sheet .sb { padding: 16px 18px; display: flex; flex-direction: column; gap: 16px; }
+.sheet .why { font-size: 14px; line-height: 1.5; padding: 12px 14px; background: var(--s1); border-left: 2px solid var(--ac); }
+.sheet .lbl { font-size: 12px; color: var(--mu); margin-bottom: 6px; }
+.opt { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border: 1px solid var(--ln); margin-top: -1px; font-size: 14px; }
+.opt small { display: block; font-size: 12px; color: var(--mu); }
+.ck { width: 14px; height: 14px; border: 1.5px solid var(--mu); flex: none; display: inline-block; }
+.ck.on { background: var(--tx); border-color: var(--tx); }
+.seg4 { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--ln); }
+.seg4 span { padding: 8px 0; text-align: center; font-size: 13px; border-right: 1px solid var(--ln); }
+.seg4 span:last-child { border-right: 0; }
+.seg4 span[data-on] { background: var(--ac); color: var(--acx); font-weight: 700; }
+.sheet .fine { font-size: 12px; color: var(--mu); line-height: 1.5; }
+.sheet .sf { display: grid; grid-template-columns: 1fr 1.6fr; border-top: 1px solid var(--ln); }
+.sheet .sf button { padding: 16px; text-align: center; font-size: 14px; }
+.sheet .sf .pri { background: var(--ac); color: var(--acx); font-weight: 700; }
+
+/* new task */
+.newt { padding: 30px 40px 0; display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+.newt h3 { font: 600 38px/1.05 var(--ui); letter-spacing: -0.02em; }
+.newt h3 span { color: var(--mu); }
+.composer { margin-top: 22px; border: 1px solid var(--tx); background: var(--s1); }
+.composer .text { padding: 16px 18px 6px; font-size: 17px; min-height: 84px; }
+.composer .text .caret { display: inline-block; width: 2px; height: 20px; background: var(--ac); vertical-align: -4px; }
+.composer .row { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 18px; border-top: 1px solid var(--ln); font-size: 13px; color: var(--mu); }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid var(--ln); color: var(--tx); font-size: 13px; }
+.composer .row .btn.pri { margin-left: auto; padding: 9px 20px; }
+.more { border: 1px solid var(--ln); border-top: 0; display: grid; grid-template-columns: repeat(4, 1fr); }
+.more > div { padding: 12px 16px; border-right: 1px solid var(--ln); }
+.more > div:last-child { border-right: 0; }
+.more .l { font-size: 12px; color: var(--mu); }
+.more .v { font-size: 14px; margin-top: 3px; display: flex; justify-content: space-between; }
+.more .v .mono { font-size: 12px; }
+.agents5 { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--ln); border-top: 0; }
+.agents5 div { padding: 9px 11px; border-right: 1px solid var(--ln); font-size: 13px; }
+.agents5 div:last-child { border-right: 0; }
+.agents5 div small { display: block; font: 400 11px var(--mono); color: var(--mu); margin-top: 2px; }
+.agents5 div[data-inv] { background: var(--tx); color: var(--bg); }
+.agents5 div[data-inv] small { color: #5d6259; }
+.agents5 div.miss { color: var(--mu); }
+.starters { margin-top: 26px; }
+.starters h4 { font-size: 13px; color: var(--mu); font-weight: 500; margin-bottom: 8px; }
+.starter { display: grid; grid-template-columns: 1fr 220px 100px; align-items: center; padding: 11px 0; border-top: 1px solid var(--ln); }
+.starter:last-child { border-bottom: 1px solid var(--ln); }
+.starter .t { font-size: 15px; font-weight: 500; }
+.starter .t small { display: block; font-size: 12px; color: var(--mu); font-weight: 400; }
+.starter .m { color: var(--mu); font-size: 12px; }
+.starter .btn { justify-self: end; }
+.runs { padding: 22px; display: flex; flex-direction: column; gap: 12px; background: var(--s1); border-left: 1px solid var(--ln); }
+.runs h4 { font-size: 13px; color: var(--mu); font-weight: 500; }
+.lane-mini { border: 1px solid var(--ln); padding: 10px 12px; background: var(--bg); font-size: 13px; }
+.lane-mini b { display: block; font-weight: 600; margin-top: 3px; }
+.lane-mini small { color: var(--mu); font-size: 12px; }
+
+/* paper page: changes / review */
+.paperwrap { background: #22241f; display: grid; place-items: start center; padding-top: 22px; min-height: 0; overflow: hidden; position: relative; }
+.page { width: 820px; background: var(--p-bg); color: var(--p-tx); padding: 30px 46px 120px; }
+.page .ready { display: flex; gap: 12px; font-size: 13px; color: var(--p-mu); align-items: center; }
+.page .ready .ok { color: var(--p-act); font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
+.page .ready .ok i { width: 9px; height: 9px; background: var(--p-act); }
+.page h3 { font: 600 30px/1.08 var(--ui); letter-spacing: -0.02em; margin-top: 10px; max-width: 36ch; }
+.page .sum { margin-top: 10px; font-size: 15px; line-height: 1.55; max-width: 64ch; }
+.page h5 { font: 600 13px var(--ui); color: var(--p-mu); margin: 22px 0 8px; display: flex; justify-content: space-between; }
+.turn { border: 1px solid var(--p-ln); margin-top: -1px; }
+.turn .th { display: flex; gap: 10px; align-items: center; padding: 10px 14px; font-size: 14px; }
+.turn .th b { font-weight: 600; }
+.turn .th .r { margin-left: auto; display: flex; gap: 6px; }
+.turn .th .r span { padding: 3px 8px; border: 1px solid var(--p-ln); font-size: 12px; }
+.turn .th .st { font-size: 12px; color: var(--p-mu); }
+.diff { font: 400 12px/1.7 var(--mono); border-top: 1px solid var(--p-ln); background: #fff; }
+.diff .f { padding: 4px 14px; background: var(--p-s2); color: var(--p-mu); display: flex; justify-content: space-between; }
+.diff div.l { padding: 0 14px; white-space: pre; }
+.diff .a { background: var(--p-add); }
+.diff .x { background: var(--p-del); }
+.decide { position: absolute; left: 0; right: 0; bottom: 0; height: 72px; display: flex; align-items: center; gap: 10px; padding: 0 calc((100% - 820px) / 2 + 46px); background: var(--bg); border-top: 1px solid var(--tx); }
+.decide .r { margin-left: auto; font-size: 12px; color: var(--mu); display: flex; gap: 14px; }
+.decide kbd { font: 500 10px var(--mono); border: 1px solid var(--ln); padding: 1px 4px; margin-left: 4px; }
+
+/* home */
+.home { padding: 0; overflow: hidden; }
+.hello { padding: 26px 28px 20px; display: flex; align-items: flex-end; border-bottom: 1px solid var(--ln); }
+.hello h3 { font: 600 34px/1.05 var(--ui); letter-spacing: -0.02em; }
+.hello p { color: var(--mu); margin-top: 6px; font-size: 15px; }
+.hello .r { margin-left: auto; display: flex; gap: 8px; }
+.attn { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--ln); }
+.attn > div { padding: 14px 28px 16px; border-right: 1px solid var(--ln); }
+.attn > div:last-child { border-right: 0; }
+.attn .num { font: 600 40px/1 var(--ui); font-variant-numeric: tabular-nums; }
+.attn .num.on { color: var(--act); }
+.attn .lab { font-size: 13px; color: var(--mu); margin-top: 4px; }
+.projs { display: flex; flex-direction: column; }
+.proj { display: grid; grid-template-columns: 220px 1fr 160px; gap: 20px; padding: 14px 28px; border-bottom: 1px solid var(--ln); align-items: center; }
+.proj .n { font: 600 17px/1.2 var(--ui); letter-spacing: 0; display: flex; gap: 8px; align-items: center; }
+.proj .n small { display: block; }
+.proj .p { font: 400 11px var(--mono); color: var(--mu); margin-top: 3px; }
+.proj .work { display: flex; gap: 6px; flex-wrap: wrap; }
+.wk { display: inline-flex; gap: 6px; align-items: center; padding: 4px 8px; border: 1px solid var(--ln); font-size: 12px; }
+.wk.you { border-color: var(--ac); }
+.wk.you em { font-style: normal; background: var(--ac); color: var(--acx); padding: 0 4px; font-weight: 600; font-size: 11px; }
+.wk.rd { background: var(--p-bg); color: var(--p-tx); border-color: var(--p-bg); }
+.proj .meta { font-size: 12px; color: var(--mu); text-align: right; }
+.addrow { display: flex; gap: 8px; padding: 14px 28px; border-bottom: 1px solid var(--ln); }
+.addrow .btn { border-style: dashed; color: var(--mu); }
+.feedline { padding: 14px 28px; }
+.feedline h4 { font-size: 13px; color: var(--mu); font-weight: 500; margin-bottom: 8px; }
+.feedline div { display: grid; grid-template-columns: 50px 1fr; padding: 4px 0; font-size: 13px; }
+.feedline div span:first-child { color: var(--mu); font-variant-numeric: tabular-nums; }
+
+/* agents board */
+.board { display: grid; grid-template-columns: repeat(4, 1fr); min-height: 0; }
+.bcol { border-right: 1px solid var(--ln); padding: 18px 16px; display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: hidden; }
+.bcol:last-child { border-right: 0; }
+.bcol h4 { font: 600 18px/1 var(--ui); letter-spacing: 0; display: flex; gap: 8px; align-items: baseline; }
+.bcol h4 .c { font-size: 13px; color: var(--mu); font-weight: 600; }
+.bcol h4 .c[data-on] { background: var(--ac); color: var(--acx); padding: 1px 6px; }
+.bcol .sub { font-size: 12px; color: var(--mu); margin-top: -4px; }
+.bc { border: 1px solid var(--ln); background: var(--s1); padding: 12px; }
+.bc .w { display: flex; gap: 7px; align-items: center; font-size: 12px; color: var(--mu); }
+.bc .w .r { margin-left: auto; }
+.bc .t { font-size: 14px; font-weight: 600; margin-top: 6px; line-height: 1.3; }
+.bc .q { font-size: 13px; color: var(--mu); margin-top: 4px; }
+.bc .acts { display: flex; gap: 6px; margin-top: 10px; }
+.bc.you { border-color: var(--ac); }
+.bc .bar { height: 3px; background: var(--s2); margin-top: 10px; position: relative; }
+.bc .bar i { position: absolute; inset: 0 auto 0 0; background: var(--tx); }
+.bc .mini { margin-top: 10px; height: 64px; overflow: hidden; border-radius: 6px; }
+.bc .mini .acme { transform: scale(.5); transform-origin: top left; width: 200%; }
+.bc.paper { background: var(--p-bg); color: var(--p-tx); border-color: var(--p-bg); }
+.bc.paper .w, .bc.paper .q { color: var(--p-mu); }
+.bc.paper .btn { border-color: var(--p-ln); }
+.bc.paper .btn.inv { background: var(--p-tx); color: var(--p-bg); border-color: var(--p-tx); }
+.bc.landed { opacity: .6; }
+
+/* lanes (repo) */
+.ltable { display: flex; flex-direction: column; }
+.lrow { display: grid; grid-template-columns: 1.6fr 1fr 1fr 120px 210px; gap: 16px; align-items: center; padding: 12px 28px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.lrow.h { font-size: 12px; color: var(--mu); padding-top: 10px; padding-bottom: 8px; }
+.lrow .t b { display: block; font-size: 14px; font-weight: 600; }
+.lrow .t .mono { color: var(--mu); font-size: 11px; }
+.lrow .acts { display: flex; gap: 6px; justify-content: flex-end; }
+.lrow[data-inv] { background: var(--s2); }
+.spark { display: flex; gap: 2px; align-items: flex-end; height: 16px; }
+.spark i { width: 4px; background: var(--act); }
+.spark i.x { background: #c4593a; }
+.lane-detail { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid var(--ln); }
+.lane-detail > div { padding: 16px 28px; }
+.lane-detail > div + div { border-left: 1px solid var(--ln); }
+.lane-detail h5 { font-size: 13px; color: var(--mu); font-weight: 500; margin-bottom: 8px; }
+.tl { list-style: none; font-size: 13px; }
+.tl li { display: grid; grid-template-columns: 52px 1fr; padding: 4px 0; }
+.tl li span:first-child { color: var(--mu); font-variant-numeric: tabular-nums; }
+.lane-detail .mainline { font-size: 13px; line-height: 1.6; }
+
+/* access */
+.acc { display: grid; grid-template-columns: 1fr 380px; min-height: 0; }
+.inbox { display: flex; flex-direction: column; }
+.req { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; padding: 14px 28px; border-bottom: 1px solid var(--ln); }
+.req .s { font-size: 15px; } .req .s b { font-weight: 600; }
+.req .why { grid-column: 1; font-size: 13px; color: var(--mu); }
+.req .acts { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 6px; align-items: center; }
+.req.on { box-shadow: inset 2px 0 0 var(--ac); }
+.auto { padding: 12px 28px; font-size: 13px; color: var(--mu); }
+.pol { border-left: 1px solid var(--ln); display: flex; flex-direction: column; background: var(--s1); }
+.pol h4 { padding: 16px 18px 10px; font: 700 17px var(--ui); }
+.rule { display: grid; grid-template-columns: 34px 1fr; gap: 2px 10px; padding: 11px 18px; border-top: 1px solid var(--ln); font-size: 14px; }
+.sw { width: 30px; height: 18px; border: 1.5px solid var(--mu); position: relative; margin-top: 2px; }
+.sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; background: var(--mu); }
+.sw.on { border-color: var(--ac); background: var(--ac); } .sw.on::after { left: 14px; background: var(--acx); }
+.rule small { grid-column: 2; font-size: 12px; color: var(--mu); }
+.pol .pf { margin-top: auto; padding: 12px 18px; border-top: 1px solid var(--ln); display: flex; gap: 8px; }
+.audit { display: flex; flex-direction: column; }
+.arow { display: grid; grid-template-columns: 64px 1fr 140px; gap: 14px; padding: 9px 28px; border-bottom: 1px solid var(--ln); font-size: 13px; align-items: baseline; }
+.arow .t { color: var(--mu); font-variant-numeric: tabular-nums; }
+.arow .k { font-size: 12px; color: var(--mu); text-align: right; }
+.arow[data-inv] { background: var(--tx); color: var(--bg); }
+.arow[data-inv] .t, .arow[data-inv] .k { color: #5d6259; }
+.drawer { position: absolute; top: 38px; right: 0; bottom: 26px; width: 380px; background: var(--bg); border-left: 1px solid var(--tx); z-index: 4; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.drawer h3 { font: 600 21px/1.2 var(--ui); letter-spacing: 0; }
+.kv { display: grid; grid-template-columns: 110px 1fr; font-size: 13px; }
+.kv div { padding: 7px 0; border-top: 1px solid var(--ln); }
+.kv div:nth-child(odd) { color: var(--mu); }
+.chain { font: 400 11px/1.6 var(--mono); color: var(--mu); padding: 10px; background: var(--s1); word-break: break-all; }
+
+/* usage */
+.use { padding: 0 28px; overflow: hidden; }
+.use .grid2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 40px; margin-top: 18px; }
+.use h4 { font-size: 13px; color: var(--mu); font-weight: 500; margin-bottom: 8px; }
+.bars { display: flex; flex-direction: column; gap: 10px; }
+.brow { display: grid; grid-template-columns: 120px 1fr 90px; gap: 12px; align-items: center; font-size: 13px; }
+.brow .tr { height: 14px; background: var(--s2); position: relative; }
+.brow .tr i { position: absolute; inset: 0 auto 0 0; }
+.brow .v { text-align: right; color: var(--mu); font-variant-numeric: tabular-nums; }
+.limit { border: 1px solid var(--ln); padding: 12px 14px; margin-bottom: 10px; }
+.limit .h { display: flex; justify-content: space-between; font-size: 14px; }
+.limit .h span { color: var(--mu); font-size: 12px; }
+.limit .tr { height: 6px; background: var(--s2); margin-top: 8px; position: relative; }
+.limit .tr i { position: absolute; inset: 0 auto 0 0; background: var(--tx); }
+.limit .tr i.hot { background: var(--ac); }
+.week { display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; align-items: end; height: 120px; margin-top: 4px; }
+.week i { background: var(--s2); position: relative; }
+.week i.t { background: var(--tx); }
+.weeklab { display: flex; justify-content: space-between; font-size: 11px; color: var(--mu); margin-top: 6px; }
+
+/* settings */
+.set2 { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
+.snav { border-right: 1px solid var(--ln); padding: 16px 0; font-size: 13px; }
+.snav .g { padding: 10px 18px 6px; font-size: 12px; color: var(--mu); }
+.snav a { display: block; padding: 6px 18px; }
+.snav a[data-inv] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.sbody { overflow: hidden; }
+.trow { display: grid; grid-template-columns: 1.3fr 90px 1.2fr 1fr 150px; gap: 14px; align-items: center; padding: 12px 28px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.trow.h { font-size: 12px; color: var(--mu); padding: 10px 28px 8px; }
+.trow .n b { display: block; font-size: 14px; font-weight: 600; }
+.trow .n small { color: var(--mu); font-size: 12px; }
+.sel { border: 1px solid var(--ln); padding: 5px 9px; display: flex; justify-content: space-between; font-size: 13px; }
+.trow .acts { display: flex; gap: 6px; justify-content: flex-end; }
+.trow .st.open { color: var(--act); }
+.cli { display: grid; grid-template-columns: 34px 1fr 1.2fr 170px; gap: 14px; align-items: center; padding: 14px 28px; border-bottom: 1px solid var(--ln); }
+.cli .ico { width: 30px; height: 30px; display: grid; place-items: center; font: 700 12px var(--ui); color: var(--acx); }
+.cli .n b { display: block; font-size: 15px; font-weight: 600; }
+.cli .n small { font: 400 11px var(--mono); color: var(--mu); }
+.cli .state { font-size: 13px; }
+.cli .state small { display: block; color: var(--mu); font-size: 12px; }
+.cli .state .good { color: var(--act); }
+.cli .state .bad { color: #ffb86b; }
+.cli .acts { display: flex; justify-content: flex-end; }
+
+/* onboarding */
+.onb { display: grid; grid-template-columns: 300px 1fr; min-height: 0; }
+.steps-side { border-right: 1px solid var(--ln); padding: 32px 28px; display: flex; flex-direction: column; gap: 4px; background: var(--s1); }
+.steps-side .word { margin-bottom: 26px; }
+.stp { display: grid; grid-template-columns: 26px 1fr; gap: 2px 10px; padding: 10px 0; }
+.stp i { width: 20px; height: 20px; border: 1.5px solid var(--ln); font: 700 11px/17px var(--ui); font-style: normal; text-align: center; color: var(--mu); }
+.stp.done i { background: var(--tx); border-color: var(--tx); color: var(--bg); }
+.stp.now i { background: var(--ac); border-color: var(--ac); color: var(--acx); }
+.stp b { font-size: 15px; font-weight: 600; }
+.stp.next b { color: var(--mu); font-weight: 500; }
+.stp small { grid-column: 2; font-size: 12px; color: var(--mu); }
+.steps-side .fin { margin-top: auto; font-size: 12px; color: var(--mu); line-height: 1.5; }
+.onbody { padding: 44px 56px 0; display: flex; flex-direction: column; min-height: 0; }
+.onbody h3 { font: 600 40px/1.05 var(--ui); letter-spacing: -0.02em; max-width: 18ch; }
+.onbody .p { color: var(--mu); font-size: 16px; margin-top: 12px; max-width: 58ch; }
+.agentcards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 26px; }
+.ac { border: 1px solid var(--ln); padding: 14px 16px; display: grid; grid-template-columns: 30px 1fr auto; gap: 4px 12px; align-items: center; }
+.ac .ico { grid-row: 1 / span 2; width: 30px; height: 30px; display: grid; place-items: center; font: 700 12px var(--ui); color: var(--acx); }
+.ac b { font-size: 15px; font-weight: 600; }
+.ac small { grid-column: 2; font-size: 12px; color: var(--mu); }
+.ac .btn { grid-row: 1 / span 2; grid-column: 3; }
+.ac.ok { border-color: var(--tx); }
+.ac .good { color: var(--act); }
+.onfoot { margin-top: auto; display: flex; gap: 8px; padding: 18px 0 24px; border-top: 1px solid var(--ln); }
+.onfoot .btn.pri { margin-left: auto; padding: 10px 22px; }
+
+/* palette & modals */
+.palette { top: 90px; left: 280px; width: 720px; }
+.palette .in { padding: 16px 18px; font-size: 17px; border-bottom: 1px solid var(--ln); display: flex; gap: 10px; }
+.palette .in .caret { display: inline-block; width: 2px; height: 21px; background: var(--ac); vertical-align: -4px; }
+.palette .grp { padding: 10px 18px 4px; font-size: 12px; color: var(--mu); }
+.pi { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; padding: 8px 18px; font-size: 14px; align-items: center; }
+.pi .ic { color: var(--mu); font-size: 12px; text-align: center; }
+.pi .m { font-size: 12px; color: var(--mu); }
+.pi[data-inv] { background: var(--tx); color: var(--bg); }
+.pi[data-inv] .m, .pi[data-inv] .ic { color: #5d6259; }
+.palette .pf { display: flex; gap: 16px; padding: 9px 18px; border-top: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+.palette .pf .sp { margin-left: auto; }
+.np { top: 80px; left: 290px; width: 700px; }
+.np .mh { padding: 18px 22px 0; display: flex; }
+.np .mh h3 { font: 600 26px/1.1 var(--ui); letter-spacing: -0.02em; }
+.np .mh .x { margin-left: auto; color: var(--mu); }
+.np .mb { padding: 16px 22px; display: flex; flex-direction: column; gap: 14px; }
+.field .l { font-size: 12px; color: var(--mu); margin-bottom: 5px; }
+.field .v { border: 1px solid var(--ln); padding: 9px 12px; font-size: 15px; }
+.field .v.mono { font-size: 13px; }
+.how { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--ln); }
+.how > div { padding: 12px 14px; border-right: 1px solid var(--ln); }
+.how > div:last-child { border-right: 0; }
+.how b { font-size: 14px; font-weight: 600; display: block; }
+.how small { font-size: 12px; color: var(--mu); }
+.how > div[data-inv] { background: var(--tx); color: var(--bg); }
+.how > div[data-inv] small { color: #5d6259; }
+.brief { border: 1px solid var(--ln); padding: 10px 12px; font-size: 14px; min-height: 64px; }
+.checks { display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px; }
+.checks span { display: flex; gap: 7px; align-items: center; }
+.np .mf { display: flex; gap: 8px; padding: 14px 22px; border-top: 1px solid var(--ln); align-items: center; }
+.np .mf .fine { font-size: 12px; color: var(--mu); }
+.np .mf .btn.pri { margin-left: auto; padding: 9px 20px; }
+.conn { top: 90px; left: 330px; width: 620px; }
+.prov { display: grid; grid-template-columns: repeat(3, 1fr); }
+.prov > div { padding: 14px 16px; border-right: 1px solid var(--ln); border-bottom: 1px solid var(--ln); }
+.prov > div:nth-child(3n) { border-right: 0; }
+.prov b { font-size: 15px; display: block; }
+.prov small { font-size: 12px; color: var(--mu); }
+.prov > div[data-inv] { background: var(--tx); color: var(--bg); }
+.prov > div[data-inv] small { color: #5d6259; }
+.cform { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.cli-reuse { display: flex; gap: 12px; align-items: center; padding: 12px 14px; background: var(--s1); border-left: 2px solid var(--ac); font-size: 14px; }
+.cli-reuse .btn { margin-left: auto; }
+.envs { display: flex; gap: 6px; }
+.envs span { padding: 5px 10px; border: 1px solid var(--ln); font-size: 13px; }
+.envs span[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); font-weight: 600; }
+.toast { position: absolute; z-index: 7; right: 16px; bottom: 40px; width: 360px; background: var(--bg); border: 1px solid var(--tx); padding: 14px 16px; }
+.toast .hd { font-size: 12px; color: var(--mu); display: flex; gap: 8px; align-items: center; }
+.toast h4 { font: 600 16px/1.25 var(--ui); letter-spacing: 0; margin-top: 6px; }
+.toast p { font-size: 13px; color: var(--mu); margin-top: 3px; }
+.toast .acts { display: flex; gap: 6px; margin-top: 10px; }
+.upd { top: 210px; left: 430px; width: 420px; padding: 22px; }
+.upd h3 { font: 600 24px/1.1 var(--ui); letter-spacing: -0.02em; }
+.upd p { color: var(--mu); margin-top: 8px; font-size: 14px; }
+.upd ul { margin: 12px 0 0 18px; font-size: 14px; }
+.upd .acts { display: flex; gap: 8px; margin-top: 18px; }
+
+/* pins */
+.pin { position: absolute; z-index: 9; width: 20px; height: 20px; border-radius: 50%; background: var(--tx); color: var(--bg); font: 700 11px/20px var(--ui); text-align: center; }
+
+/* Headings (owner, 1 Oct): today's typeface, normal-width Archivo at 600 with -0.02em on large sizes, at the
+   mockup sizes. */
+
+/* ================= the Design instrument ================= */
+.dz { display: grid; grid-template-rows: 40px 1fr; min-height: 0; background: var(--s1); }
+.dbar { display: flex; align-items: center; gap: 8px; padding: 0 10px; border-bottom: 1px solid var(--ln); font-size: 12px; background: var(--bg); white-space: nowrap; }
+.dbar .grp { display: flex; border: 1px solid var(--ln); }
+.dbar .grp span { padding: 4px 9px; color: var(--mu); }
+.dbar .grp span[data-inv] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.dbar .tool { width: 28px; height: 26px; display: grid; place-items: center; border: 1px solid var(--ln); color: var(--mu); font-size: 13px; }
+.dbar .tool[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.dbar .sp { margin-left: auto; }
+.dbar .z { color: var(--mu); }
+.dmain { display: grid; grid-template-columns: 150px 1fr 236px; min-height: 0; }
+.dmain.noins { grid-template-columns: 150px 1fr; }
+.scr { border-right: 1px solid var(--ln); background: var(--bg); padding: 10px 0; font-size: 12.5px; overflow: hidden; }
+.scr .h { padding: 0 12px 6px; color: var(--mu); font-size: 12px; display: flex; justify-content: space-between; }
+.scr .it { padding: 6px 12px; display: flex; flex-direction: column; }
+.scr .it small { color: var(--mu); font-size: 11px; }
+.scr .it[data-inv] { background: var(--tx); color: var(--bg); } .scr .it[data-inv] small { color: #5d6259; }
+.scr .new { margin: 8px 12px 0; border: 1px dashed var(--ln); padding: 6px 8px; color: var(--mu); }
+.scr .ask { margin: 14px 12px 0; padding: 8px; border: 1px solid var(--ln); color: var(--mu); font-size: 12px; line-height: 1.4; }
+.scr .ask b { display: block; color: var(--tx); font-weight: 600; margin-bottom: 3px; }
+.canvas { position: relative; overflow: hidden; background: var(--s1); background-image: radial-gradient(var(--ln) 1px, transparent 1px); background-size: 16px 16px; }
+.brow { position: absolute; display: flex; gap: 26px; align-items: flex-start; }
+.ab { display: flex; flex-direction: column; gap: 6px; }
+.ab .lbl { font-size: 11px; color: var(--mu); display: flex; gap: 6px; }
+.ab .lbl b { color: var(--tx); font-weight: 600; }
+.fr { background: #fff; color: #1f2430; font-family: system-ui, -apple-system, sans-serif; overflow: visible; position: relative; }
+.ab.on .lbl b { color: var(--act); }
+.ac-top { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid #e7e9ef; font-size: 12px; font-weight: 700; }
+.ac-top i { font-style: normal; font-weight: 500; color: #7b8294; font-size: 11px; }
+.ac-b { padding: 12px 14px; font-size: 12px; }
+.ac-h { font-size: 18px; font-weight: 750; letter-spacing: -.01em; margin-bottom: 4px; color: #141a2b; }
+.ac-p { color: #6a7184; font-size: 11.5px; line-height: 1.4; }
+.ac-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #eef0f4; font-size: 11.5px; }
+.ac-btn { margin-top: 10px; background: #2f5bff; color: #fff; text-align: center; padding: 8px; border-radius: 8px; font-weight: 650; font-size: 12px; position: relative; }
+.ac-card { border: 1px solid #e7e9ef; border-radius: 10px; padding: 8px; margin-top: 8px; display: flex; gap: 8px; align-items: center; }
+.ac-img { width: 34px; height: 34px; border-radius: 6px; background: #dfe4ff; flex: none; }
+.ac-hero { height: 64px; border-radius: 10px; background: #eef1ff; margin: 6px 0 8px; }
+.wf .fr { background: #f4f4f1; color: #55574f; }
+.wf .ac-top { border-color: #d9d9d3; }
+.wf .ac-h { color: #55574f; font-weight: 600; }
+.wf .ac-p, .wf .ac-row { color: #8a8c84; border-color: #e3e3dd; }
+.wf .ac-btn { background: #c9cac3; color: #4a4c45; border-radius: 0; }
+.wf .ac-card { border-color: #d9d9d3; border-radius: 0; } .wf .ac-img, .wf .ac-hero { background: #dcdcd5; border-radius: 0; }
+.wf .bar { height: 7px; background: #dcdcd5; margin: 5px 0; }
+/* selection: the element itself is outlined, its name above it */
+.picked { outline: 2px solid var(--ac); outline-offset: 3px; position: relative; }
+.picked::before { content: attr(data-tag); position: absolute; top: -25px; left: -3px; background: var(--ac); color: var(--acx); font: 700 10px/1 var(--ui); padding: 4px 5px; white-space: nowrap; border-radius: 0; }
+.hov { outline: 1px dashed var(--ac); outline-offset: 2px; }
+.ins { border-left: 1px solid var(--ln); background: var(--bg); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.ins .sec { padding: 10px 12px; border-bottom: 1px solid var(--ln); }
+.ins .sec .t { font-size: 12px; color: var(--mu); margin-bottom: 7px; display: flex; justify-content: space-between; gap: 8px; }
+.ins .sec .t b { color: var(--tx); font-weight: 600; }
+.ins .f { display: grid; grid-template-columns: 60px 1fr; gap: 6px; align-items: center; font-size: 12px; margin-top: 5px; }
+.ins .f > span:first-child { color: var(--mu); }
+.ins .v { border: 1px solid var(--ln); padding: 4px 7px; font-size: 12px; display: flex; justify-content: space-between; gap: 6px; }
+.ins .swatches { display: flex; gap: 5px; flex-wrap: wrap; }
+.ins .swatches i { width: 24px; height: 24px; border: 1px solid var(--ln); display: block; }
+.ins .swatches i[data-on] { outline: 2px solid var(--ac); outline-offset: 1px; }
+.ins .ask2 { border: 1px solid var(--ac); padding: 8px; font-size: 12px; min-height: 58px; line-height: 1.4; }
+.ins .row2 { display: flex; gap: 6px; margin-top: 7px; }
+.ins .row2 .btn { flex: 1; justify-content: center; padding: 6px 8px; font-size: 12px; }
+.ins .scale div { display: flex; justify-content: space-between; align-items: baseline; padding: 3px 0; border-bottom: 1px solid var(--ln); }
+.ins .scale small { color: var(--mu); font-size: 11px; }
+.ins .foot { color: var(--mu); font-size: 12px; padding: 10px 12px; line-height: 1.45; }
+.chip { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--ac); padding: 2px 7px; font-size: 12px; margin-bottom: 6px; background: var(--bg); }
+.chip i { width: 7px; height: 7px; background: var(--ac); }
+.hand { position: absolute; z-index: 6; left: 50%; top: 70px; transform: translateX(-50%); width: 400px; background: var(--bg); border: 1px solid var(--tx); padding: 18px; }
+.hand h4 { font: 600 20px/1.2 var(--ui); letter-spacing: -.01em; }
+.hand p { color: var(--mu); font-size: 13px; margin-top: 6px; }
+.hand .hk { display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 8px 0; border-bottom: 1px solid var(--ln); }
+.hand .hk i { width: 13px; height: 13px; background: var(--ac); flex: none; }
+.hand .hk i.off { background: none; border: 1.5px solid var(--mu); }
+.hand .hk small { margin-left: auto; color: var(--mu); font-size: 12px; }
+.hand .note2 { margin-top: 12px; border: 1px solid var(--ln); padding: 8px; font-size: 12px; color: var(--mu); min-height: 46px; }
+.hand .acts { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+.dimmer { position: absolute; inset: 0; background: var(--dim); z-index: 5; }
+.pv { display: grid; grid-template-rows: auto 1fr; gap: 12px; padding: 14px 18px; min-height: 0; background: var(--s1); }
+.pickbar { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--mu); }
+.pickbar .u { font: 400 12px var(--mono); color: var(--tx); border: 1px solid var(--ln); padding: 4px 8px; background: var(--bg); }
+.pickbar .btn { padding: 4px 9px; font-size: 12px; }
+.pickbar .btn[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); font-weight: 700; }
+.pickbar .seg { margin-left: auto; display: flex; border: 1px solid var(--ln); }
+.pickbar .seg span { padding: 3px 9px; } .pickbar .seg span[data-inv] { background: var(--tx); color: var(--bg); }
+.pvwrap { position: relative; width: 430px; margin: 0 auto; }
+.pvwrap .fr { border-radius: 10px; height: 440px; }
+.fixcard { position: absolute; width: 280px; background: var(--bg); border: 1px solid var(--tx); padding: 10px; font-size: 12px; z-index: 3; }
+.fixcard .t { color: var(--mu); display: flex; justify-content: space-between; gap: 8px; }
+.fixcard .t b { color: var(--tx); }
+.fixcard .box { border: 1px solid var(--ac); padding: 7px; margin-top: 7px; min-height: 48px; line-height: 1.4; }
+.fixcard .row2 { display: flex; gap: 6px; margin-top: 7px; justify-content: flex-end; }
+.fixcard .row2 .btn { padding: 5px 9px; font-size: 12px; }
+.itabs > span.drag { outline: 1px solid var(--ac); outline-offset: -1px; color: var(--tx); transform: translate(-30px, 5px); background: var(--bg); }
+.itabs > span.gap { width: 3px; padding: 0; background: var(--ac); border: 0; }
+.itabs > span .grip { color: var(--mu); font-size: 10px; letter-spacing: -2px; }
+.tip { position: absolute; z-index: 4; background: var(--tx); color: var(--bg); font-size: 12px; padding: 7px 10px; max-width: 300px; line-height: 1.4; }
+.menu2 { position: absolute; z-index: 4; background: var(--bg); border: 1px solid var(--tx); font-size: 12.5px; min-width: 170px; }
+.menu2 div { padding: 7px 12px; display: flex; justify-content: space-between; gap: 14px; }
+.menu2 div small { color: var(--mu); font-family: var(--mono); font-size: 11px; }
+.menu2 div[data-inv] { background: var(--tx); color: var(--bg); }
+
+.area { position: absolute; border: 1.5px dashed var(--ac); background: rgba(214,255,61,.08); z-index: 2; }
+.area .tagx { position: absolute; top: -22px; left: -2px; background: var(--ac); color: var(--acx); font: 700 10px/1 var(--ui); padding: 4px 5px; white-space: nowrap; }
+.area .h { position: absolute; width: 7px; height: 7px; background: var(--ac); }
+.kind { font-size: 11px; font-weight: 700; padding: 1px 6px; border: 1px solid currentColor; }
+.kind.d { color: var(--act); }
+.kind.b { color: var(--tx); }
+.tcards { padding: 16px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; align-content: start; background: var(--bg); min-height: 0; }
+.tc { border: 1px solid var(--ln); background: var(--s1); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.tc .w { display: flex; align-items: center; gap: 8px; color: var(--mu); }
+.tc .w .r { margin-left: auto; }
+.tc h5 { font: 600 15px/1.3 var(--ui); }
+.tc .st { color: var(--mu); } .tc .st.you { align-self: flex-start; background: var(--ac); color: var(--acx); font-weight: 600; padding: 0 5px; }
+.tc ol { list-style: none; display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
+.tc li { display: flex; gap: 8px; color: var(--mu); }
+.tc li::before { content: ''; width: 8px; height: 8px; margin-top: 4px; flex: none; border: 1.5px solid var(--act); background: var(--act); }
+.tc li.n { color: var(--tx); } .tc li.n::before { background: transparent; }
+.tc .link { display: flex; gap: 6px; align-items: center; border-top: 1px solid var(--ln); padding-top: 7px; color: var(--mu); }
+.tc .link b { color: var(--tx); font-weight: 600; }
+.tc .link .arrow { color: var(--act); }
+.tc .sum { color: var(--mu); }
+.tc[data-here] { border-color: var(--tx); }
+.tc .msg { border-left: 2px solid var(--act); padding: 4px 8px; color: var(--tx); background: var(--bg); }
+.tc .msg small { display: block; color: var(--mu); }
+.choice { display: grid; grid-template-columns: 1fr 1fr; margin-top: 12px; border: 1px solid var(--ln); }
+.choice div { padding: 9px 10px; font-size: 12.5px; }
+.choice div + div { border-left: 1px solid var(--ln); }
+.choice div small { display: block; color: var(--mu); font-size: 11.5px; margin-top: 2px; line-height: 1.35; }
+.choice div[data-inv] { background: var(--tx); color: var(--bg); } .choice div[data-inv] small { color: #5d6259; }
+</style>
+</head><body>
+<section class="doc">
+  <h1>Design before you build, and point at what to fix</h1>
+  <p class="lede">A <strong>Design</strong> tab where your agent draws the screens first, as wireframes or high fidelity, at desktop and phone size, in your type and colours. Select anything to change it yourself or to tell the agent exactly what to fix, then hand the designs over to build. The same <strong>Select to fix</strong> works on the running app in Preview. And the tabs go in the order you choose.</p>
+  <div class="rules">
+    <div><b>Designs are files in the lane</b><span>Each screen is a page the agent writes in the lane’s branch, with the design’s tokens beside it (colours, type, corners). Kept with the work and landed with it.</span></div>
+    <div><b>Point, don’t describe</b><span>Selecting something hands the agent the screen, the element and a picture of it, in Design and in Preview. “Make this sticky” is enough.</span></div>
+    <div><b>Handover is one step</b><span>Pick the screens, add a note, start. The agent builds them with the design’s tokens and Preview opens beside the design.</span></div>
+  </div>
+</section>
+<section class="note" id="d1"><h2>1 · Every screen at once, in your type and colour</h2><p>The Design tab gives the canvas the room: the project nav steps aside (it is back on the other tabs, or with ⌘\). Screens on the left; every one on the canvas at each size. Aa opens Type and colour: colours, typefaces, the type scale, corners and spacing, applied to every screen at once and saved as the design’s tokens.</p><div class="was"><b>Today</b>There is no design step: the agent goes straight to code, and Preview only has something once the app runs.</div></section>
+<div class="win" data-place="design" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr;position:relative">
+      <div class="itabs"><span >Tasks</span><span data-inv>Design</span><span >Preview</span><span >Changes</span><span >Code</span><span >Terminal</span><div class="acts"><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div></div>
+      <div class="dz"><div class="dbar">
+  <span class="grp"><span >Wireframe</span><span >Hi-fi</span></span>
+  <span class="grp"><span data-inv>All sizes</span><span>Desktop</span><span>Tablet</span><span>Phone</span></span>
+  <span class="tool"  title="Select (V)">↖</span><span class="tool" title="Text (T)">T</span><span class="tool" data-on title="Type and colour">Aa</span>
+  <span class="sp z">72% ▾</span>
+  <span class="btn pri sm">Build it →</span>
+</div><div class="dmain "><div class="scr">
+  <div class="h"><span>Screens</span><span>5</span></div>
+  <div class="it" data-inv><span>Checkout</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Home</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Settings</span><small>Desktop</small></div>
+  <div class="new">+ Ask for a screen</div>
+  <div class="ask"><b>Design with Claude</b>Describe a screen or a change. Claude draws it here, in this lane, as files you keep.</div>
+</div><div class="canvas"><div class="brow" style="left:26px;top:30px">
+  <div class="ab "><div class="lbl"><b>Checkout</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Checkout</b> Phone</div><div class="fr" style="width:160px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div>
+<div class="brow" style="left:26px;top:370px">
+  <div class="ab"><div class="lbl"><b>Settings</b> Desktop</div><div class="fr" style="width:250px;height:200px"><div class="ac-top">Settings<i>Nic</i></div><div class="ac-b"><div class="ac-h">Settings</div><div class="ac-row"><span>Email updates</span><span>On</span></div><div class="ac-row"><span>Dark mode</span><span>Match system</span></div><div class="ac-row"><span>Currency</span><span>EUR</span></div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Phone</div><div class="fr" style="width:160px;height:200px;overflow:hidden"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div></div><div class="ins">
+  <div class="sec"><div class="t"><b>Type and colour</b><span>every screen</span></div>
+    <div class="swatches"><i style="background:#2F5BFF" data-on></i><i style="background:#141A2B"></i><i style="background:#6A7184"></i><i style="background:#EEF1FF"></i><i style="background:#FFFFFF"></i><i style="background:#16A34A"></i></div>
+    <div class="f"><span>Primary</span><span class="v">#2F5BFF<span>▾</span></span></div>
+  </div>
+  <div class="sec"><div class="t"><span>Typefaces</span></div>
+    <div class="f"><span>Headings</span><span class="v">Inter Display 750<span>▾</span></span></div>
+    <div class="f"><span>Body</span><span class="v">Inter 400<span>▾</span></span></div>
+  </div>
+  <div class="sec scale"><div class="t"><span>Type scale</span><span>× 1.25</span></div>
+    <div><span style="font-size:20px;font-weight:700">Display</span><small>28 / 34</small></div>
+    <div><span style="font-size:16px;font-weight:700">Heading</span><small>18 / 24</small></div>
+    <div><span style="font-size:13px">Body</span><small>14 / 20</small></div>
+    <div><span style="font-size:11px">Caption</span><small>12 / 16</small></div>
+  </div>
+  <div class="sec"><div class="f"><span>Corners</span><span class="v">8 px<span>▾</span></span></div><div class="f"><span>Spacing</span><span class="v">4 px base<span>▾</span></span></div></div>
+  <div class="foot">Applies to every screen at once. Saved as the design’s tokens, which the build uses.</div>
+</div></div></div>
+      
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-4</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Design the checkout before we build it</h3>
+        <div class="sum"><span>5 screens · high fidelity</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed"><div class="rcpt"><b>▸ Wireframes for checkout, home, settings</b><span>Kept 10:02</span></div><div class="umsg">Good. Now high fidelity in our brand: blue, rounded, friendly.</div><div class="card-p"><div class="top"><span class="ok">Done in 3 min</span><span>5 screens</span></div><h4>High-fidelity pass on all of them</h4><p>Blue #2F5BFF, 8px corners, system type. Pay is the one strong button on checkout.</p><div class="acts"><span class="btn">Show screens</span><span class="btn">Undo this turn</span></div></div></div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+<section class="note" id="d2"><h2>2 · Select to change it, or to tell the agent</h2><p>Select (V): hover outlines, a click picks. Change the text, fill, type or corners right there, or write what you want and Send to Claude. The message carries the element, so the chat shows exactly what you pointed at.</p><div class="was"><b>Today</b>You describe the thing in words (“the blue button near the bottom”) and hope.</div></section>
+<div class="win" data-place="design" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr;position:relative">
+      <div class="itabs"><span >Tasks</span><span data-inv>Design</span><span >Preview</span><span >Changes</span><span >Code</span><span >Terminal</span><div class="acts"><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div></div>
+      <div class="dz"><div class="dbar">
+  <span class="grp"><span >Wireframe</span><span data-inv>Hi-fi</span></span>
+  <span class="grp"><span data-inv>All sizes</span><span>Desktop</span><span>Tablet</span><span>Phone</span></span>
+  <span class="tool" data-on title="Select (V)">↖</span><span class="tool" title="Text (T)">T</span><span class="tool"  title="Type and colour">Aa</span>
+  <span class="sp z">72% ▾</span>
+  <span class="btn pri sm">Build it →</span>
+</div><div class="dmain "><div class="scr">
+  <div class="h"><span>Screens</span><span>5</span></div>
+  <div class="it" data-inv><span>Checkout</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Home</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Settings</span><small>Desktop</small></div>
+  <div class="new">+ Ask for a screen</div>
+  <div class="ask"><b>Design with Claude</b>Describe a screen or a change. Claude draws it here, in this lane, as files you keep.</div>
+</div><div class="canvas"><div class="brow" style="left:26px;top:30px">
+  <div class="ab on"><div class="lbl"><b>Checkout</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row hov"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn picked" data-tag="Pay button · 222 × 31">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Checkout</b> Phone</div><div class="fr" style="width:160px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div>
+<div class="brow" style="left:26px;top:370px">
+  <div class="ab"><div class="lbl"><b>Settings</b> Desktop</div><div class="fr" style="width:250px;height:200px"><div class="ac-top">Settings<i>Nic</i></div><div class="ac-b"><div class="ac-h">Settings</div><div class="ac-row"><span>Email updates</span><span>On</span></div><div class="ac-row"><span>Dark mode</span><span>Match system</span></div><div class="ac-row"><span>Currency</span><span>EUR</span></div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Phone</div><div class="fr" style="width:160px;height:200px;overflow:hidden"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div></div><div class="ins">
+  <div class="sec"><div class="t"><b>Pay button</b><span>Checkout · Desktop</span></div>
+    <div class="f"><span>Text</span><span class="v">Pay €70</span></div>
+    <div class="f"><span>Fill</span><span class="v"><span style="display:flex;gap:6px;align-items:center"><i style="width:12px;height:12px;background:#2F5BFF;display:block"></i>Primary</span><span>▾</span></span></div>
+    <div class="f"><span>Type</span><span class="v">Body · 600<span>▾</span></span></div>
+    <div class="f"><span>Corners</span><span class="v">8 px<span>▾</span></span></div>
+  </div>
+  <div class="sec"><div class="t"><b>Tell Claude</b><span>⌘⏎</span></div>
+    <div class="ask2">Make it sticky at the bottom on phone, and show the card logos under it.</div>
+    <div class="row2"><span class="btn pri">Send to Claude</span></div>
+  </div>
+  <div class="foot">Change it here and it changes now. Or tell Claude: it gets the screen, this element and a picture of it.</div>
+</div></div></div>
+      
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-4</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Design the checkout before we build it</h3>
+        <div class="sum"><span>5 screens · high fidelity</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed"><div class="rcpt"><b>▸ Wireframes for checkout, home, settings</b><span>Kept 10:02</span></div><div class="umsg">Good. Now high fidelity in our brand: blue, rounded, friendly.</div><div class="card-p"><div class="top"><span class="ok">Done in 3 min</span><span>5 screens</span></div><h4>High-fidelity pass on all of them</h4><p>Blue #2F5BFF, 8px corners, system type. Pay is the one strong button on checkout.</p><div class="acts"><span class="btn">Show screens</span><span class="btn">Undo this turn</span></div></div><div class="umsg"><span class="chip"><i></i>Checkout › Pay button</span><br>Make it sticky at the bottom on phone, and show the card logos under it.</div><div class="live"><div class="hd"><i></i>Working<span>12 s</span></div><ol><li class="d">Found the Pay button on Checkout</li><li class="n">Pinning it to the bottom on Phone</li></ol></div></div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+<section class="note" id="d3"><h2>3 · Wireframes first</h2><p>Wireframe shows structure before brand: agree what goes where, then ask Claude for the high-fidelity pass. Both fidelities are kept; the switch flips between them.</p><div class="was"><b>Today</b>No equivalent.</div></section>
+<div class="win" data-place="design" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr;position:relative">
+      <div class="itabs"><span >Tasks</span><span data-inv>Design</span><span >Preview</span><span >Changes</span><span >Code</span><span >Terminal</span><div class="acts"><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div></div>
+      <div class="dz"><div class="dbar">
+  <span class="grp"><span data-inv>Wireframe</span><span >Hi-fi</span></span>
+  <span class="grp"><span data-inv>All sizes</span><span>Desktop</span><span>Tablet</span><span>Phone</span></span>
+  <span class="tool"  title="Select (V)">↖</span><span class="tool" title="Text (T)">T</span><span class="tool"  title="Type and colour">Aa</span>
+  <span class="sp z">72% ▾</span>
+  <span class="btn pri sm">Build it →</span>
+</div><div class="dmain noins"><div class="scr">
+  <div class="h"><span>Screens</span><span>5</span></div>
+  <div class="it" data-inv><span>Checkout</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Home</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Settings</span><small>Desktop</small></div>
+  <div class="new">+ Ask for a screen</div>
+  <div class="ask"><b>Design with Claude</b>Describe a screen or a change. Claude draws it here, in this lane, as files you keep.</div>
+</div><div class="canvas"><div class="brow wf" style="left:26px;top:30px">
+  <div class="ab wf"><div class="lbl"><b>Checkout</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Checkout<i>▢</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="bar" style="width:70%"></div><div class="ac-row"><span>Item</span><span>€··</span></div><div class="ac-row"><span>Item</span><span>€··</span></div><div class="ac-row"><span>Total</span><span>€··</span></div><div class="ac-btn">Pay</div></div></div></div>
+  <div class="ab wf"><div class="lbl"><b>Checkout</b> Phone</div><div class="fr" style="width:160px;height:300px"><div class="ac-top">Checkout<i>▢</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="bar" style="width:70%"></div><div class="ac-row"><span>Item</span><span>€··</span></div><div class="ac-row"><span>Item</span><span>€··</span></div><div class="ac-row"><span>Total</span><span>€··</span></div><div class="ac-btn">Pay</div></div></div></div>
+  <div class="ab wf"><div class="lbl"><b>Home</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Logo<i>▢</i></div><div class="ac-b"><div class="ac-h">Headline</div><div class="bar" style="width:80%"></div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div class="bar" style="width:90px"></div></div><div class="ac-card"><span class="ac-img"></span><div class="bar" style="width:70px"></div></div></div></div></div>
+</div>
+<div class="brow wf" style="left:26px;top:370px">
+  <div class="ab wf"><div class="lbl"><b>Settings</b> Desktop</div><div class="fr" style="width:250px;height:200px"><div class="ac-top">Settings<i>▢</i></div><div class="ac-b"><div class="ac-h">Settings</div><div class="ac-row"><span>Toggle</span><span>▢</span></div><div class="ac-row"><span>Toggle</span><span>▢</span></div><div class="ac-row"><span>Select</span><span>▾</span></div></div></div></div>
+  <div class="ab wf"><div class="lbl"><b>Home</b> Phone</div><div class="fr" style="width:160px;height:200px;overflow:hidden"><div class="ac-top">Logo<i>▢</i></div><div class="ac-b"><div class="ac-h">Headline</div><div class="bar" style="width:80%"></div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div class="bar" style="width:90px"></div></div><div class="ac-card"><span class="ac-img"></span><div class="bar" style="width:70px"></div></div></div></div></div>
+</div></div></div></div>
+      
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-4</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Design the checkout before we build it</h3>
+        <div class="sum"><span>5 screens · high fidelity</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed"><div class="umsg">Design a checkout, a home page and settings. Wireframes first.</div><div class="live"><div class="hd"><i></i>Working<span>48 s</span></div><ol><li class="d">Drew Checkout, Desktop and Phone</li><li class="d">Drew Home, Desktop and Phone</li><li class="n">Drawing Settings</li></ol></div></div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+<section class="note" id="d4"><h2>4 · Hand over to build</h2><p>Pick the screens, add anything Claude should know, start. It builds them in this lane with the design’s tokens; Preview opens on the result so you can compare and select what is off.</p><div class="was"><b>Today</b>You would retype the design as a message.</div></section>
+<div class="win" data-place="design" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr;position:relative">
+      <div class="itabs"><span >Tasks</span><span data-inv>Design</span><span >Preview</span><span >Changes</span><span >Code</span><span >Terminal</span><div class="acts"><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div></div>
+      <div class="dz"><div class="dbar">
+  <span class="grp"><span >Wireframe</span><span data-inv>Hi-fi</span></span>
+  <span class="grp"><span data-inv>All sizes</span><span>Desktop</span><span>Tablet</span><span>Phone</span></span>
+  <span class="tool"  title="Select (V)">↖</span><span class="tool" title="Text (T)">T</span><span class="tool"  title="Type and colour">Aa</span>
+  <span class="sp z">72% ▾</span>
+  <span class="btn pri sm">Build it →</span>
+</div><div class="dmain noins"><div class="scr">
+  <div class="h"><span>Screens</span><span>5</span></div>
+  <div class="it" data-inv><span>Checkout</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Home</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Settings</span><small>Desktop</small></div>
+  <div class="new">+ Ask for a screen</div>
+  <div class="ask"><b>Design with Claude</b>Describe a screen or a change. Claude draws it here, in this lane, as files you keep.</div>
+</div><div class="canvas"><div class="brow" style="left:26px;top:30px">
+  <div class="ab "><div class="lbl"><b>Checkout</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Checkout</b> Phone</div><div class="fr" style="width:160px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div>
+<div class="brow" style="left:26px;top:370px">
+  <div class="ab"><div class="lbl"><b>Settings</b> Desktop</div><div class="fr" style="width:250px;height:200px"><div class="ac-top">Settings<i>Nic</i></div><div class="ac-b"><div class="ac-h">Settings</div><div class="ac-row"><span>Email updates</span><span>On</span></div><div class="ac-row"><span>Dark mode</span><span>Match system</span></div><div class="ac-row"><span>Currency</span><span>EUR</span></div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Phone</div><div class="fr" style="width:160px;height:200px;overflow:hidden"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div></div></div></div>
+      <div class="dimmer"></div><div class="hand"><h4>Build these designs</h4><p>Claude builds them into the app on agent/claude-4, with the design’s colours and type as the app’s tokens. Preview opens on the result beside the design.</p>
+<div style="margin-top:10px">
+<div class="hk"><i></i>Checkout<small>Desktop · Phone</small></div>
+<div class="hk"><i></i>Home<small>Desktop · Phone</small></div>
+<div class="hk"><i class="off"></i>Settings<small>Desktop</small></div>
+<div class="hk"><i></i>Type and colour<small>6 colours · 4 sizes</small></div>
+</div>
+<div class="note2">Anything Claude should know? e.g. “use our Button component”</div>
+<div class="acts"><span class="btn">Cancel</span><span class="btn pri">Start building</span></div></div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-4</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Design the checkout before we build it</h3>
+        <div class="sum"><span>5 screens · high fidelity</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed"><div class="rcpt"><b>▸ Wireframes for checkout, home, settings</b><span>Kept 10:02</span></div><div class="umsg">Good. Now high fidelity in our brand: blue, rounded, friendly.</div><div class="card-p"><div class="top"><span class="ok">Done in 3 min</span><span>5 screens</span></div><h4>High-fidelity pass on all of them</h4><p>Blue #2F5BFF, 8px corners, system type. Pay is the one strong button on checkout.</p><div class="acts"><span class="btn">Show screens</span><span class="btn">Undo this turn</span></div></div></div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+<section class="note" id="p1"><h2>5 · Select to fix, in the running app</h2><p>Preview gets the same Select. Click the broken thing in your app: Styx finds the element and, where it can, the source line. Your note goes to Claude with both and a picture.</p><div class="was"><b>Today</b>Telling the agent what is wrong with the running app means describing it in the chat.</div></section>
+<div class="win" data-place="project" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr auto">
+      <div class="itabs"><span >Tasks</span><span >Design</span><span data-inv>Preview</span><span >Changes</span><span >Code</span><span >Terminal</span><div class="acts"><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div></div>
+      <div class="pv">
+        <div class="pickbar"><span class="u">localhost:3000/checkout</span><span class="btn" data-on>↖ Select to fix</span><span class="seg"><span data-inv>Desktop</span><span>Tablet</span><span>Phone</span></span></div>
+        <div class="pvwrap">
+          <div class="fr"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn picked" data-tag="Pay button · 222 × 31">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div>
+          <div class="fixcard" style="left:150px;top:228px"><div class="t"><b>Fix this</b><span>src/checkout.tsx:48</span></div><div class="box">The total jumps when the page loads. And the button should say “Pay now”.</div><div class="row2"><span class="btn">Cancel</span><span class="btn pri">Send to Claude</span></div></div>
+        </div>
+      </div>
+      <div class="term"><div class="h"><span>Terminal, agent/claude-4</span><span>Hide</span></div>$ pnpm dev<br><span class="ok">ready</span> on http://localhost:3000<br>$ ▌</div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-4</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Build the checkout from the design</h3>
+        <div class="sum"><span>2 turns kept · 6 files changed</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed"><div class="rcpt"><b>▸ Built Checkout and Home from the design</b><span>Kept 10:41</span></div><div class="umsg"><span class="chip"><i></i>Preview › Pay button “Pay €70” · checkout.tsx:48</span><br>The total jumps when the page loads. And the button should say “Pay now”.</div><div class="live"><div class="hd"><i></i>Working<span>20 s</span></div><ol><li class="d">Read checkout.tsx</li><li class="n">Reserving room for the total while it loads</li><li>Rename the button</li></ol></div></div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+<section class="note" id="r1"><h2>6 · The tabs in your order</h2><p>Drag a tab to move it; the others make room. Or right-click for Move left / right / to front and Reset order (⌥⇧← → from the keyboard). The order is yours, kept for every project.</p><div class="was"><b>Today</b>Tasks · Preview · Changes · Code · Terminal, fixed.</div></section>
+<div class="win" data-place="design" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr;position:relative">
+      <div class="itabs"><span data-inv>Design</span><span>Preview</span><span class="gap"></span><span>Tasks</span><span>Changes</span><span class="drag"><span class="grip">⋮⋮</span> Code</span><span>Terminal</span><div class="acts"><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div></div>
+      <div class="dz"><div class="dbar">
+  <span class="grp"><span >Wireframe</span><span data-inv>Hi-fi</span></span>
+  <span class="grp"><span data-inv>All sizes</span><span>Desktop</span><span>Tablet</span><span>Phone</span></span>
+  <span class="tool"  title="Select (V)">↖</span><span class="tool" title="Text (T)">T</span><span class="tool"  title="Type and colour">Aa</span>
+  <span class="sp z">72% ▾</span>
+  <span class="btn pri sm">Build it →</span>
+</div><div class="dmain noins"><div class="scr">
+  <div class="h"><span>Screens</span><span>5</span></div>
+  <div class="it" data-inv><span>Checkout</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Home</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Settings</span><small>Desktop</small></div>
+  <div class="new">+ Ask for a screen</div>
+  <div class="ask"><b>Design with Claude</b>Describe a screen or a change. Claude draws it here, in this lane, as files you keep.</div>
+</div><div class="canvas"><div class="brow" style="left:26px;top:30px">
+  <div class="ab "><div class="lbl"><b>Checkout</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Checkout</b> Phone</div><div class="fr" style="width:160px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div>
+<div class="brow" style="left:26px;top:370px">
+  <div class="ab"><div class="lbl"><b>Settings</b> Desktop</div><div class="fr" style="width:250px;height:200px"><div class="ac-top">Settings<i>Nic</i></div><div class="ac-b"><div class="ac-h">Settings</div><div class="ac-row"><span>Email updates</span><span>On</span></div><div class="ac-row"><span>Dark mode</span><span>Match system</span></div><div class="ac-row"><span>Currency</span><span>EUR</span></div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Phone</div><div class="fr" style="width:160px;height:200px;overflow:hidden"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div></div></div></div>
+      <div class="tip" style="left:180px;top:48px">Drag a tab to where you want it. Your order is kept for every project.</div>
+      <div class="menu2" style="left:390px;top:110px"><div>Move left<small>⌥⇧←</small></div><div data-inv>Move right<small>⌥⇧→</small></div><div>Move to front</div><div style="border-top:1px solid var(--ln)">Reset order</div></div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-4</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Design the checkout before we build it</h3>
+        <div class="sum"><span>5 screens · high fidelity</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed"><div class="rcpt"><b>▸ Wireframes for checkout, home, settings</b><span>Kept 10:02</span></div><div class="umsg">Good. Now high fidelity in our brand: blue, rounded, friendly.</div><div class="card-p"><div class="top"><span class="ok">Done in 3 min</span><span>5 screens</span></div><h4>High-fidelity pass on all of them</h4><p>Blue #2F5BFF, 8px corners, system type. Pay is the one strong button on checkout.</p><div class="acts"><span class="btn">Show screens</span><span class="btn">Undo this turn</span></div></div></div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+
+<section class="doc" style="margin-top:96px"><h1 style="font-size:40px">Round 2: areas, and design and build tasks that talk</h1></section>
+<section class="note" id="a1"><h2>7 · Select an area, not just an element</h2><p>Drag on the canvas to draw a box: a whole section, part of one, or across several. The box shows what it holds; Claude gets the area, every element in it and a picture of it. A click still picks one element.</p><div class="was"><b>Today</b>You can only point at one element at a time.</div></section>
+<div class="win" data-place="design" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr;position:relative">
+      <div class="itabs"><span >Tasks</span><span data-inv>Design</span><span >Preview</span><span >Changes</span><span >Code</span><span >Terminal</span><div class="acts"><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div></div>
+      <div class="dz"><div class="dbar">
+  <span class="grp"><span >Wireframe</span><span data-inv>Hi-fi</span></span>
+  <span class="grp"><span data-inv>All sizes</span><span>Desktop</span><span>Tablet</span><span>Phone</span></span>
+  <span class="tool" data-on title="Select (V)">↖</span><span class="tool" title="Text (T)">T</span><span class="tool"  title="Type and colour">Aa</span>
+  <span class="sp z">72% ▾</span>
+  <span class="btn pri sm">Build it →</span>
+</div><div class="dmain"><div class="scr">
+  <div class="h"><span>Screens</span><span>5</span></div>
+  <div class="it" data-inv><span>Checkout</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Home</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Settings</span><small>Desktop</small></div>
+  <div class="new">+ Ask for a screen</div>
+  <div class="ask"><b>Design with Claude</b>Describe a screen or a change. Claude draws it here, in this lane, as files you keep.</div>
+</div><div class="canvas"><div class="brow" style="left:26px;top:30px">
+  <div class="ab "><div class="lbl"><b>Checkout</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Checkout</b> Phone</div><div class="fr" style="width:160px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div>
+<div class="brow" style="left:26px;top:370px">
+  <div class="ab"><div class="lbl"><b>Settings</b> Desktop</div><div class="fr" style="width:250px;height:200px"><div class="ac-top">Settings<i>Nic</i></div><div class="ac-b"><div class="ac-h">Settings</div><div class="ac-row"><span>Email updates</span><span>On</span></div><div class="ac-row"><span>Dark mode</span><span>Match system</span></div><div class="ac-row"><span>Currency</span><span>EUR</span></div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Phone</div><div class="fr" style="width:160px;height:200px;overflow:hidden"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div><div class="area" style="left:34px;top:203px;width:238px;height:112px"><span class="tagx">Area · 3 elements · 236 × 104</span><span class="h" style="right:-4px;bottom:-4px"></span><span class="h" style="left:-4px;top:-4px"></span></div></div><div class="ins">
+  <div class="sec"><div class="t"><b>Area</b><span>Checkout · Desktop</span></div>
+    <div class="f"><span>Size</span><span class="v">236 × 104</span></div>
+    <div class="f"><span>Holds</span><span class="v">Total row, Pay button, card logos</span></div>
+  </div>
+  <div class="sec"><div class="t"><b>Tell Claude</b><span>⌘⏎</span></div>
+    <div class="ask2">This whole block should sit in a card that stays on screen as you scroll.</div>
+    <div class="row2"><span class="btn pri">Send to Claude</span></div>
+  </div>
+  <div class="foot">Drag on the canvas to select an area: a section, part of one, or across several. Claude gets the area, everything in it and a picture of it. Click still picks one element.</div>
+</div></div></div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-4</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Design the checkout before we build it</h3>
+        <div class="sum"><span>5 screens · high fidelity</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed"><div class="rcpt"><b>▸ Wireframes for checkout, home, settings</b><span>Kept 10:02</span></div><div class="umsg">Good. Now high fidelity in our brand: blue, rounded, friendly.</div><div class="card-p"><div class="top"><span class="ok">Done in 3 min</span><span>5 screens</span></div><h4>High-fidelity pass on all of them</h4><p>Blue #2F5BFF, 8px corners, system type. Pay is the one strong button on checkout.</p><div class="acts"><span class="btn">Show screens</span><span class="btn">Undo this turn</span></div></div><div class="umsg"><span class="chip"><i></i>Checkout › Area: Total, Pay button, card logos</span><br>This whole block should sit in a card that stays on screen as you scroll.</div></div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+<section class="note" id="a2"><h2>8 · Areas in the running app too</h2><p>The same drag works in Preview. Styx maps the box to the elements under it and, where it can, the source lines that draw them.</p><div class="was"><b>Today</b>Describing a region of the running app in words.</div></section>
+<div class="win" data-place="project" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr auto">
+      <div class="itabs"><span >Tasks</span><span >Design</span><span data-inv>Preview</span><span >Changes</span><span >Code</span><span >Terminal</span><div class="acts"><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div></div>
+      <div class="pv">
+        <div class="pickbar"><span class="u">localhost:3000/checkout</span><span class="btn" data-on>↖ Select to fix</span><span class="seg"><span data-inv>Desktop</span><span>Tablet</span><span>Phone</span></span></div>
+        <div class="pvwrap">
+          <div class="fr"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div><div class="area" style="left:6px;top:96px;width:418px;height:118px"><span class="tagx">Area · 4 elements · 412 × 112</span></div>
+          <div class="fixcard" style="left:140px;top:226px"><div class="t"><b>Fix this area</b><span>checkout.tsx:31–58</span></div><div class="box">These rows and the button are cramped on phone. Give them the spacing from the design.</div><div class="row2"><span class="btn">Cancel</span><span class="btn pri">Send to Claude</span></div></div>
+        </div>
+      </div>
+      <div class="term"><div class="h"><span>Terminal, agent/claude-4</span><span>Hide</span></div>$ pnpm dev<br><span class="ok">ready</span> on http://localhost:3000<br>$ ▌</div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-4</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Build the checkout from the design</h3>
+        <div class="sum"><span>2 turns kept · 6 files changed</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed"><div class="rcpt"><b>▸ Built Checkout and Home from the design</b><span>Kept 10:41</span></div><div class="umsg"><span class="chip"><i></i>Preview › Area: 2 rows, Total, Pay button · checkout.tsx:31–58</span><br>These rows and the button are cramped on phone. Give them the spacing from the design.</div><div class="live"><div class="hd"><i></i>Working<span>20 s</span></div><ol><li class="d">Read checkout.tsx</li><li class="n">Reserving room for the total while it loads</li><li>Rename the button</li></ol></div></div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+<section class="note" id="t1"><h2>9 · Two kinds of task, linked</h2><p>A task is a Design task or a Build task, chosen when you start it. Build it on a design starts a build task branched from the design (so it has the files) and links the two: the design says who is building it, the build says which design it is from. Change the design afterwards and Styx tells the build task what changed, with the element; the build card shows the message arrive. A fix picked in Preview goes to the build task; mark it “a design problem” and it goes to the design task instead.</p><div class="was"><b>Today</b>Tasks are independent: one task’s agent can message another, but nothing links a design to its build.</div></section>
+<div class="win" data-place="project" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr">
+      <div class="itabs"><span data-inv>Tasks</span><span >Design</span><span >Preview</span><span >Changes</span><span >Code</span><span >Terminal</span><div class="acts"><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div></div>
+      <div class="tcards">
+        <div class="tc"><div class="w"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-4</span><span class="r kind d">Design</span></div><h5>Checkout flow</h5><span class="st">Waiting for you</span><ol><li>Drew Checkout, Desktop and Phone</li><li>High-fidelity pass on all screens</li></ol>
+          <div class="msg"><small>You changed the design · told the build task</small>Checkout › Pay button: sticky on phone, card logos under it</div>
+          <div class="link"><span class="arrow">→</span>Being built by <b>Build the checkout from the design</b></div></div>
+        <div class="tc" data-here><div class="w"><span class="dot c-codex"></span>Codex <span class="mono">agent/codex-2</span><span class="r kind b">Build</span></div><h5>Build the checkout from the design</h5><span class="st">Working, 4 min</span><ol><li>Built Checkout from the design</li><li class="n">Making the Pay button sticky on phone</li></ol>
+          <div class="link"><span class="arrow">←</span>From design <b>Checkout flow</b> · 5 screens</div></div>
+        <div class="tc"><div class="w"><span class="dot c-gemini"></span>Gemini <span class="mono">agent/gemini-1</span><span class="r kind b">Build</span></div><h5>Fix the flaky orders test</h5><span class="st you">Your turn</span><ol><li>Read orders.test.ts</li></ol><div class="sum">1 file changed</div></div>
+        <div class="tc" style="border-style:dashed"><h5>Start a task</h5><span class="st">Design it first, or build it.</span><div class="choice"><div data-inv>Design<small>Screens first, in wireframe or hi-fi</small></div><div>Build<small>Straight to code</small></div></div></div>
+      </div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-codex"></span>Codex <span class="mono">agent/codex-2</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Build the checkout from the design</h3>
+        <div class="sum"><span>From design: Checkout flow · 3 files changed</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed"><div class="umsg">Build Checkout and Home from the design “Checkout flow”. Use the design’s colours and type as tokens.</div><div class="card-p"><div class="top"><span class="ok">Done in 6 min</span><span>3 files</span></div><h4>Checkout built from the design</h4><p>Tokens from the design are in theme.css; Checkout matches the Desktop and Phone screens.</p><div class="acts"><span class="btn">Show changes</span><span class="btn">Undo this turn</span></div></div><div class="umsg" style="background:var(--bg);border:1px solid var(--act)"><span class="chip"><i></i>From the design task · Checkout › Pay button</span><br>The design changed: make the Pay button sticky at the bottom on phone and show the card logos under it.</div><div class="live"><div class="hd"><i></i>Working<span>40 s</span></div><ol><li class="n">Making the Pay button sticky on phone</li></ol></div></div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+<section class="note" id="t2"><h2>10 · Handover picks the task</h2><p>Build it asks where: a new build task (its own lane, branched from the design, any agent), or here (this task carries on and builds). Either way the build gets the screens and the design’s colours and type.</p><div class="was"><b>Today</b>—</div></section>
+<div class="win" data-place="design" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr;position:relative">
+      <div class="itabs"><span >Tasks</span><span data-inv>Design</span><span >Preview</span><span >Changes</span><span >Code</span><span >Terminal</span><div class="acts"><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div></div>
+      <div class="dz"><div class="dbar">
+  <span class="grp"><span >Wireframe</span><span data-inv>Hi-fi</span></span>
+  <span class="grp"><span data-inv>All sizes</span><span>Desktop</span><span>Tablet</span><span>Phone</span></span>
+  <span class="tool"  title="Select (V)">↖</span><span class="tool" title="Text (T)">T</span><span class="tool"  title="Type and colour">Aa</span>
+  <span class="sp z">72% ▾</span>
+  <span class="btn pri sm">Build it →</span>
+</div><div class="dmain noins"><div class="scr">
+  <div class="h"><span>Screens</span><span>5</span></div>
+  <div class="it" data-inv><span>Checkout</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Home</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Settings</span><small>Desktop</small></div>
+  <div class="new">+ Ask for a screen</div>
+  <div class="ask"><b>Design with Claude</b>Describe a screen or a change. Claude draws it here, in this lane, as files you keep.</div>
+</div><div class="canvas"><div class="brow" style="left:26px;top:30px">
+  <div class="ab "><div class="lbl"><b>Checkout</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Checkout</b> Phone</div><div class="fr" style="width:160px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div>
+<div class="brow" style="left:26px;top:370px">
+  <div class="ab"><div class="lbl"><b>Settings</b> Desktop</div><div class="fr" style="width:250px;height:200px"><div class="ac-top">Settings<i>Nic</i></div><div class="ac-b"><div class="ac-h">Settings</div><div class="ac-row"><span>Email updates</span><span>On</span></div><div class="ac-row"><span>Dark mode</span><span>Match system</span></div><div class="ac-row"><span>Currency</span><span>EUR</span></div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Phone</div><div class="fr" style="width:160px;height:200px;overflow:hidden"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div></div></div></div>
+      <div class="dimmer"></div><div class="hand"><h4>Build these designs</h4><p>The build gets the screens and the design’s colours and type. Change the design later and the build task is told what changed.</p><div class="choice"><div data-inv>New build task<small>Its own lane, branched from this design. Pick the agent.</small></div><div>Build here<small>This task carries on and builds it</small></div></div>
+<div style="margin-top:8px"><div class="hk" style="border-bottom:1px solid var(--ln)"><span style="color:var(--mu)">Agent</span><small style="color:var(--tx)"><span class="dot c-codex" style="margin-right:6px"></span>Codex ▾</small></div>
+<div class="hk"><i></i>Checkout<small>Desktop · Phone</small></div>
+<div class="hk"><i></i>Home<small>Desktop · Phone</small></div>
+<div class="hk"><i class="off"></i>Settings<small>Desktop</small></div>
+<div class="hk"><i></i>Type and colour<small>6 colours · 4 sizes</small></div>
+</div>
+<div class="note2">Anything Claude should know? e.g. “use our Button component”</div>
+<div class="acts"><span class="btn">Cancel</span><span class="btn pri">Start building</span></div></div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-4</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Design the checkout before we build it</h3>
+        <div class="sum"><span>5 screens · high fidelity</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed"><div class="rcpt"><b>▸ Wireframes for checkout, home, settings</b><span>Kept 10:02</span></div><div class="umsg">Good. Now high fidelity in our brand: blue, rounded, friendly.</div><div class="card-p"><div class="top"><span class="ok">Done in 3 min</span><span>5 screens</span></div><h4>High-fidelity pass on all of them</h4><p>Blue #2F5BFF, 8px corners, system type. Pay is the one strong button on checkout.</p><div class="acts"><span class="btn">Show screens</span><span class="btn">Undo this turn</span></div></div></div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+<script>
+/* The chrome every window shares: titlebar, rail, project nav, status bar. Built once here so each artboard only
+   holds its own content. */
+const ICON = {
+  home: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7"/><rect x="13" y="4" width="7" height="7"/><rect x="4" y="13" width="7" height="7"/><rect x="13" y="13" width="7" height="7"/></svg>',
+  agents: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>',
+  access: '<svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg>',
+  tasks: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/><path d="M10 9l5 3-5 3z"/></svg>',
+  usage: '<svg viewBox="0 0 24 24"><path d="M5 19V12M10 19V7M15 19v-5M20 19V4"/></svg>',
+  settings: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><rect x="14" y="5" width="4" height="4"/><rect x="8" y="15" width="4" height="4"/></svg>',
+};
+const LANES = [
+  { id: 'codex', c: 'codex', t: 'Fix the flaky orders test', s: 'Your turn', you: true },
+  { id: 'claude', c: 'claude', t: 'Dark mode on Settings', s: 'Working, 1 min' },
+  { id: 'gemini', c: 'gemini', t: 'Explain checkout', s: 'Ready to read' },
+  { id: 'cursor', c: 'cursor', t: 'Promo banner', s: 'Landed yesterday', old: true },
+];
+const TOOLS = [['lanes', 'Lanes and branches', '5'], ['targets', 'Targets', '5'], ['defaults', 'Agent defaults', ''], ['env', 'Env and secrets', ''], ['debt', 'Tech debt audit', '']];
+
+for (const win of document.querySelectorAll('.win')) {
+  const place = win.dataset.place;
+  const body = [...win.children];
+  const title = `<div class="title"><span class="lights"><i></i><i></i><i></i></span><span class="word">STYX</span>` +
+    (place === 'none' ? '' : `<span class="crumb"><b>acme-shop</b>${win.dataset.lane && win.dataset.lane !== 'new' ? '<span>/</span><span>' + (LANES.find((l) => l.id === win.dataset.lane)?.t ?? '') + '</span>' : ''}</span>`) +
+    `<span class="search">Ask an agent, switch, deploy…<kbd>⌘K</kbd></span><span class="count"><i></i>2 need you</span><span class="count"><i class="off"></i>2 locked</span><span class="me">N</span></div>`;
+  if (place === 'none') { win.insertAdjacentHTML('afterbegin', title); continue; }
+  const r = (k, label, badge) => `<span class="ic" title="${label}" ${place === k ? 'data-inv' : ''}>${ICON[k]}${badge ? '<b></b>' : ''}</span>`;
+  const rail = `<nav class="rail">${r('home', 'All projects')}${r('agents', 'Agents')}${r('access', 'Access', true)}${r('tasks', 'Background tasks')}${r('usage', 'Usage')}<hr>` +
+    `<span class="pj" data-on>AS</span><span class="pj">BL<b></b></span><span class="pj">IN</span><span class="pj">CX</span><span class="pj">SA</span><span class="pj add">+</span>` +
+    `<span class="foot">${r('settings', 'Settings')}</span></nav>`;
+  const showNav = place === 'project';
+  const lanes = LANES.map((l) => `<div class="ln ${l.old ? 'old' : ''}" ${win.dataset.lane === l.id ? 'data-inv' : ''}><span class="d dot c-${l.c}"></span><span class="t">${l.t}</span><span></span><span class="s ${l.you ? 'you' : ''}">${l.s}</span></div>`).join('');
+  const tools = TOOLS.map(([k, label, n]) => `<a ${win.dataset.tool === k ? 'data-inv' : ''}>${label}<span>${n}</span></a>`).join('');
+  const nav = showNav ? `<nav class="nav"><div class="ph"><b>acme-shop</b><span>~/code/acme-shop</span></div><div class="grp"><span>Work</span><span>4 lanes</span></div><div class="lanes">${lanes}</div>` +
+    `<div class="newtask" ${win.dataset.lane === 'new' ? 'style="border-style:solid;border-color:var(--tx);color:var(--tx)"' : ''}>+ New task</div><div class="grp" style="margin-top:8px"><span>Project</span></div><div class="tools">${tools}</div>` +
+    `<div class="nf">2 grants open<br><span class="mono">main, 2 behind</span></div></nav>` : '';
+  const frame = document.createElement('div');
+  frame.className = 'frame' + (showNav ? '' : ' wide');
+  frame.innerHTML = rail + nav;
+  const main = document.createElement('div');
+  main.style.minWidth = '0'; main.style.minHeight = '0'; main.style.display = 'grid';
+  const overlays = body.filter((el) => el.matches('.scrim, .modal, .sheet, .drawer, .toast, .pin'));
+  for (const el of body) if (!overlays.includes(el)) main.appendChild(el);
+  frame.appendChild(main);
+  const st = win.dataset.status;
+  const status = `<div class="status">${st && st.startsWith('lane') ? `<span class="tx mono">${st === 'lane-codex' ? 'agent/codex-1' : 'agent/claude-3'}</span><span>Vercel production open, 58 min</span><span>Supabase locked</span>` : '<span>All projects in sync</span>'}<span class="sp">Feedback</span><span class="coffee">☕ Buy us a coffee</span></div>`;
+  win.innerHTML = '';
+  win.insertAdjacentHTML('beforeend', title);
+  win.appendChild(frame);
+  win.insertAdjacentHTML('beforeend', status);
+  for (const el of overlays) win.appendChild(el);
+}
+</script>
+</body>
+</html>

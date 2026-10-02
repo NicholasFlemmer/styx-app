@@ -1,0 +1,92 @@
+@layer components {
+  /* Paper (ADR-0027 §3): the light theme's surfaces in both themes. The colour variables are re-scoped so what
+     renders inside (the agent's markdown, buttons) reads correctly on paper without its own styles. */
+  .card {
+    --bg: var(--paper);
+    --s1: var(--paper-s2);
+    --s2: var(--paper-s2);
+    --ln: var(--paper-ln);
+    --tx: var(--paper-tx);
+    --mu: var(--paper-mu);
+    --act: var(--paper-act);
+    --add: var(--paper-add);
+    background: var(--paper);
+    color: var(--paper-tx);
+    padding: 13px 15px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--paper-mu);
+  }
+  .done {
+    color: var(--paper-act);
+    font-weight: 600;
+  }
+  .body {
+    font-size: 14px;
+    line-height: 1.5;
+    max-height: 18em;
+    overflow: auto;
+  }
+  .shots {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--paper-ln);
+  }
+  .shot {
+    margin: 0;
+    padding: 8px;
+    background: var(--paper-s2);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .shot + .shot {
+    border-left: 1px solid var(--paper-ln);
+  }
+  .shot figcaption {
+    font-size: 12px;
+    color: var(--paper-mu);
+  }
+  .shot img {
+    width: 100%;
+    display: block;
+    border: 1px solid var(--paper-ln);
+  }
+  .acts {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .kept,
+  .undone {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--paper-mu);
+  }
+  .undone {
+    margin-left: 0;
+    font-weight: 600;
+  }
+  .ask {
+    font-size: 13px;
+    flex-basis: 100%;
+  }
+  .card[data-undone='true'] .body {
+    opacity: 0.6;
+  }
+  .compact {
+    padding: 10px 12px 9px;
+  }
+  .compact .body {
+    font-size: 13px;
+  }
+}

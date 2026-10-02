@@ -6,6 +6,16 @@ import type { PendingAsk, Session } from '../model/session';
 import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
 
+/**
+ * A finished lane with something to land (ADR-0027): done, on its own branch (not main), with changes that have
+ * not merged. The one rule the nav, Home's counter and the board's Ready to land column share.
+ */
+export const isReadyToLand = (model: ReadModel, s: Session): boolean => {
+  if (s.state !== 'done' || s.purpose) return false;
+  const w = model.worktrees.byId[s.worktreeId];
+  return w !== undefined && w.mergedAt === null && !w.isMain && w.changes.files > 0;
+};
+
 /** Sessions that have not been archived (Done keeps them 7 days). */
 export const liveSessions = (model: ReadModel): Session[] =>
   rows(model.sessions).filter((s) => s.archivedAt === null);
@@ -74,8 +84,8 @@ export const projectBranchOrNull = (
 
 /**
  * The worktree a project is "on" (what `projectBranch`, the editor column, Publish and Run locally read): the
- * active chat tab's worktree when one is given and it is a live session of this project, else the default (first,
- * non-done) session tab's, else main. The workspace mirrors what the person is looking at (discrepancy #103), so
+ * active lane's worktree when one is given and it is a session of this project that is not archived (finished
+ * lanes included, ADR-0027 §1), else the default (first, non-done) session's, else main. The workspace mirrors what the person is looking at (discrepancy #103), so
  * switching tabs switches files, terminal and status bar with it.
  */
 export const projectWorktreeOf = (
@@ -83,10 +93,10 @@ export const projectWorktreeOf = (
   projectId: ProjectId,
   activeSessionId: SessionId | null = null,
 ): Worktree | null => {
-  const live = sessionsInProject(model, projectId)
-    .filter((s) => s.state !== 'done')
-    .sort((a, b) => a.startedAt - b.startedAt);
-  const active = activeSessionId === null ? undefined : live.find((s) => s.id === activeSessionId);
+  const all = sessionsInProject(model, projectId);
+  const live = all.filter((s) => s.state !== 'done').sort((a, b) => a.startedAt - b.startedAt);
+  // A finished lane picked from the nav (ADR-0027 §1) is still the one on screen.
+  const active = activeSessionId === null ? undefined : all.find((s) => s.id === activeSessionId);
   const pick = active ?? live[0];
   if (pick !== undefined) return worktreeOf(model, pick) ?? null;
   return mainWorktreeOf(model, projectId);
@@ -108,3 +118,17 @@ export const liveProjectCount = (model: ReadModel): number =>
  */
 export const addingProjectNeedsAccount = (model: ReadModel): boolean =>
   model.account.kind !== 'signed-in' && liveProjectCount(model) >= FREE_PROJECTS;
+
+/**
+ * The lane on screen (ADR-0027 §1): the picked session when it is one of this project's that is not archived,
+ * finished or not, else the first live one (the old default tab), else none.
+ */
+export const activeLaneOf = (
+  model: ReadModel,
+  projectId: ProjectId,
+  sessionId: SessionId | null,
+): SessionId | null => {
+  const all = sessionsInProject(model, projectId);
+  if (sessionId !== null && all.some((s) => s.id === sessionId)) return sessionId;
+  return all.filter((s) => s.state !== 'done').sort((a, b) => a.startedAt - b.startedAt)[0]?.id ?? null;
+};

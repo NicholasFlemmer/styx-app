@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
+import { posix } from 'node:path';
 
 /**
  * Broker endpoint: short Unix socket path (sun_path limit) on POSIX, named pipe on Windows. The pipe name is
@@ -22,5 +22,6 @@ export function brokerEndpoint(opts: {
   // Per user-data dir, like the Windows pipe: a dev, packaged or e2e instance must never bind the same socket as
   // the app the user is running (each one used to unlink the other's `broker.sock` and take the path).
   const h = createHash('sha1').update(opts.userData).digest('hex').slice(0, 8);
-  return join(opts.tmpdir ?? '/tmp', `styx-${opts.uid}`, `broker-${h}.sock`);
+  // A POSIX path whatever OS computes it (a Unix socket is never a Windows path).
+  return posix.join(opts.tmpdir ?? '/tmp', `styx-${opts.uid}`, `broker-${h}.sock`);
 }

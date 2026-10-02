@@ -24,7 +24,7 @@ test('a Gemini session runs over ACP: pong, a permission ask, the allowed comman
       (window as unknown as StyxWindow).styx.command('detect.clis', {}),
     );
     const gemini = ((detected.value as { clis: CliInstall[] }).clis ?? []).find((c) => c.agent === 'gemini');
-    expect(gemini?.binary ?? '').toMatch(/e2e[/\\]fixtures[/\\]bin[/\\]gemini$/);
+    expect(gemini?.binary ?? '').toMatch(/e2e[/\\]fixtures[/\\]bin[/\\]gemini(\.cmd)?$/);
     expect(gemini?.capabilities['acp']).toBe(true);
     expect(gemini?.version).toBe('0.39.1');
 
@@ -53,19 +53,17 @@ test('a Gemini session runs over ACP: pong, a permission ask, the allowed comman
     const decision = chat.locator('[data-kind="decision"]');
     await expect(decision).toBeVisible({ timeout: 20_000 });
     await expect(decision).toContainText('Bash: echo pong');
-    await expect(chat.locator('[data-chat-meta]')).toContainText('waiting on you');
+    await expect(chat.locator('[data-lane-meta]')).toContainText('waiting on you');
     await decision.getByRole('button', { name: 'Allow' }).click();
 
-    // Allowed: the tool row settles, the agent's closing text lands, the turn is over.
-    await expect(chat.locator('[data-kind="tool"][data-status="ok"]')).toBeVisible({ timeout: 20_000 });
-    // Name and hint are separate spans; the result detail (`pong`) lands on the row.
-    const tool = chat.locator('[data-kind="tool"]');
-    await expect(tool).toContainText('Bash');
-    await expect(tool).toContainText('echo pong');
+    // Allowed: the step settles in plain words (ADR-0027 §4), the agent's closing text lands, the turn is over.
+    const tool = chat.locator('[data-kind="steps"] li[data-status="ok"]');
+    await expect(tool).toBeVisible({ timeout: 20_000 });
+    await expect(tool).toContainText('Ran echo pong');
     await expect(
       chat.locator('[data-kind="agent"]').filter({ hasText: 'the command printed pong' }),
     ).toBeVisible({ timeout: 20_000 });
-    await expect(chat.locator('[data-chat-meta]')).not.toContainText('waiting on you', { timeout: 20_000 });
+    await expect(chat.locator('[data-lane-meta]')).not.toContainText('waiting on you', { timeout: 20_000 });
     // The agent's slash commands (available_commands_update) reached the session.
     const snapshot = await page.evaluate(() =>
       (window as unknown as StyxWindow).styx.command('store.snapshot', {}),
@@ -101,9 +99,12 @@ test('a Gemini session runs over ACP: pong, a permission ask, the allowed comman
     await expect(chat.locator('[data-kind="user"]').filter({ hasText: 'again' })).toBeVisible({
       timeout: 20_000,
     });
-    await expect(chat.locator('[data-kind="tool"][data-status="ok"]')).toHaveCount(2, { timeout: 20_000 });
-    await expect(chat.locator('[data-kind="decision"]')).toHaveCount(1);
-    await expect(chat.locator('[data-chat-meta]')).not.toContainText('waiting on you');
+    // The first turn folds to a receipt once the second settles (ADR-0027 §3); the second's step is listed.
+    await expect(chat.locator('[data-kind="receipt"]')).toHaveCount(1, { timeout: 20_000 });
+    await expect(chat.locator('[data-kind="steps"] li[data-status="ok"]')).toHaveCount(1, {
+      timeout: 20_000,
+    });
+    await expect(chat.locator('[data-lane-meta]')).not.toContainText('waiting on you');
   } finally {
     await app.close();
   }

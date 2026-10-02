@@ -8,6 +8,8 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
   bus.register('session.spawn', async (input) => {
     const result = await sessions.start(input);
     app.usageReports.record('agent.spawned');
+    // #127: the spawn dialog's first message is a message sent, the same as one from the composer.
+    if (input.firstMessage.trim() !== '') app.usageReports.record('message.sent');
     return result;
   });
 
@@ -21,8 +23,18 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
     return {};
   });
 
-  bus.register('session.sendMessage', async ({ sessionId, body, attachments }) => {
-    await sessions.sendMessage(sessionId, body, attachments);
+  bus.register('session.sendMessage', async ({ sessionId, body, attachments, pointer }) => {
+    // A design problem seen in the build goes to the design task the build was started from (#140).
+    const target =
+      pointer?.toDesign === true ? (repos.sessions.get(sessionId)?.designSessionId ?? sessionId) : sessionId;
+    await sessions.sendMessage(
+      target,
+      body,
+      attachments,
+      pointer === undefined
+        ? {}
+        : { pointer: { source: pointer.source, label: pointer.label, detail: pointer.detail } },
+    );
     app.usageReports.record('message.sent');
     return {};
   });
@@ -102,18 +114,19 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
     const resolved = sessions.resolveAsk(ask.id, resolution);
     if (resolution.kind === 'decision') {
       const msg = repos.transcripts
-        .last(ask.sessionId, 200)
+        .last(ask.sessionId, app.publisher.transcriptWindow(ask.sessionId))
         .find((m) => m.askId === ask.id && m.payload.kind === 'decision');
       if (msg && msg.payload.kind === 'decision') {
         repos.transcripts.upsert({ ...msg, payload: { ...msg.payload, chosen: resolution.chosen } });
-        app.publisher.emit({
-          op: 'transcript.replace',
-          sessionId: ask.sessionId,
-          messages: repos.transcripts.last(ask.sessionId, 200),
-        });
+        app.publisher.transcriptReplace(ask.sessionId);
       }
     }
     app.broker.resolveAsk(resolved, resolution);
+    return {};
+  });
+
+  bus.register('session.loadEarlier', ({ sessionId }) => {
+    app.publisher.transcriptEarlier(sessionId);
     return {};
   });
 

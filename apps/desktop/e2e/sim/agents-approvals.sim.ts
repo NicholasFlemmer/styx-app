@@ -310,11 +310,11 @@ test('sim: agents-approvals', async () => {
       await card(IDS.session.claude).getByRole('button', { name: 'Open' }).click();
       await ready('workspace');
       await page().locator('[data-chat-pane]').waitFor({ timeout: 5000 });
-      const tab = page().locator(`[data-session-tab="${IDS.session.claude}"]`);
+      const tab = page().locator(`[data-nav-lane="${IDS.session.claude}"]`);
       await tab.waitFor({ timeout: 5000 });
       const selected =
         (await tab.getAttribute('data-inv')) === 'true' ||
-        (await tab.getAttribute('aria-selected')) === 'true';
+        (await tab.getAttribute('aria-current')) === 'page';
       must(selected, 'the Claude tab is not the selected session tab');
       await goBoardAll();
     });
@@ -672,7 +672,7 @@ test('sim: agents-approvals', async () => {
       async () => {
         await goApprovals('inbox');
         const tab = await page().locator('[data-approvals-tab="inbox"]').innerText();
-        must(/Inbox · 3/.test(tab), `inbox tab reads "${tab}"`);
+        must(/Requests · 3/.test(tab), `inbox tab reads "${tab}"`);
         const row = page().locator(`[data-grant-id="${IDS.grant.supabaseCodex}"]`);
         const text = await row.innerText();
         for (const s of [
@@ -757,7 +757,7 @@ test('sim: agents-approvals', async () => {
       async () => {
         await goApprovals('inbox');
         const tab = await page().locator('[data-approvals-tab="inbox"]').innerText();
-        must(/Inbox · 2/.test(tab), `inbox tab reads "${tab}"`);
+        must(/Requests · 2/.test(tab), `inbox tab reads "${tab}"`);
         must((await inboxCorner()) === 2, `rail corner ${await inboxCorner()}`);
         await page().locator('[data-approvals-tab="audit"]').click();
         const rows = page().locator('[data-approvals-panel="audit"] [data-audit-id]');
@@ -833,7 +833,7 @@ test('sim: agents-approvals', async () => {
         5000,
       );
       must(
-        /Inbox · 1/.test(await page().locator('[data-approvals-tab="inbox"]').innerText()),
+        /Requests · 1/.test(await page().locator('[data-approvals-tab="inbox"]').innerText()),
         'inbox tab not at 1',
       );
       const g = (await snap()).grants.byId[IDS.grant.awsClaude];
@@ -1338,7 +1338,7 @@ test('sim: agents-approvals', async () => {
         const blog = dock!.locator(`[data-dock-card="${IDS.session.blog}"]`);
         await blog.click();
         await ready('workspace');
-        const tab = page().locator(`[data-session-tab="${IDS.session.blog}"]`);
+        const tab = page().locator(`[data-nav-lane="${IDS.session.blog}"]`);
         await tab.waitFor({ timeout: 5000 });
         await sim.command('window.agentDock', { open: false });
         return `${labels.length} cards (${needsCards} needs-you) · ${[...projects].join(', ')} · header "${text.split('\n')[0] ?? ''}"`;

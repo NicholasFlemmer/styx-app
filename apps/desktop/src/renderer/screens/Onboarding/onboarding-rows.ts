@@ -1,11 +1,31 @@
 import { copy } from '@styx/core';
 import type { OnboardingStep } from '../../state/ui-store';
 
-export const STEPS: readonly { n: OnboardingStep; label: string }[] = [
-  { n: 1, label: copy.onboarding.steps.editor },
-  { n: 2, label: copy.onboarding.steps.projects },
-  { n: 3, label: copy.onboarding.steps.agents },
-  { n: 4, label: copy.onboarding.steps.targets },
+export const STEPS: readonly { n: OnboardingStep; label: string; title: string; why: string }[] = [
+  {
+    n: 1,
+    label: copy.onboarding.steps.editor,
+    title: copy.onboarding.stepTitles.editor,
+    why: copy.onboarding.stepWhy.editor,
+  },
+  {
+    n: 2,
+    label: copy.onboarding.steps.projects,
+    title: copy.onboarding.stepTitles.projects,
+    why: copy.onboarding.stepWhy.projects,
+  },
+  {
+    n: 3,
+    label: copy.onboarding.steps.agents,
+    title: copy.onboarding.stepTitles.agents,
+    why: copy.onboarding.stepWhy.agents,
+  },
+  {
+    n: 4,
+    label: copy.onboarding.steps.targets,
+    title: copy.onboarding.stepTitles.targets,
+    why: copy.onboarding.stepWhy.targets,
+  },
 ];
 
 export interface IdeImports {

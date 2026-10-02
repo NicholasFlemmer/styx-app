@@ -11,14 +11,14 @@ test('palette → Play while you wait → board, keys, pause on blur, Esc back',
   const { app, page } = await launchStyx({ screen: 'workspace', fixture: 'demo', theme: 'dark' });
   await page.waitForSelector('[data-chat-pane]', { timeout: 10_000 });
   // The row exists only for the tab the person is on, and the fixture's first tab (Claude) is working.
-  await page.click('[data-session-tab]:first-child');
-  const composer = page.locator('[data-keyscope="composer"] textarea');
+  await page.click('[data-nav-lane][data-lane-status="working"] >> nth=0');
+  const composer = page.locator('[data-chat-pane] [data-keyscope="composer"] textarea');
   await composer.focus();
 
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K');
-  const input = page.getByRole('combobox');
+  await page.keyboard.press(process.platform === 'darwin' ? 'ControlOrMeta+K' : 'Control+K');
+  const input = page.getByRole('dialog').getByRole('combobox');
   await input.fill('snake');
-  await expect(page.getByRole('option').first()).toContainText('Play while you wait');
+  await expect(page.getByRole('dialog').getByRole('option').first()).toContainText('Play while you wait');
   await page.keyboard.press('Enter');
 
   const board = page.locator('[data-arcade="snake"]');
@@ -66,9 +66,9 @@ test('palette → Play while you wait → board, keys, pause on blur, Esc back',
 test("the game is the pane's: another tab keeps it; a tab that needs you holds it and takes the row away", async () => {
   const { app, page } = await launchStyx({ screen: 'workspace', fixture: 'demo', theme: 'dark' });
   await page.waitForSelector('[data-chat-pane]', { timeout: 10_000 });
-  await page.click('[data-session-tab]:first-child');
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K');
-  await page.getByRole('combobox').fill('snake');
+  await page.click('[data-nav-lane][data-lane-status="working"] >> nth=0');
+  await page.keyboard.press(process.platform === 'darwin' ? 'ControlOrMeta+K' : 'Control+K');
+  await page.getByRole('dialog').getByRole('combobox').fill('snake');
   await page.keyboard.press('Enter');
   const board = page.locator('[data-arcade="snake"]');
   await expect(board).toBeVisible();
@@ -76,7 +76,7 @@ test("the game is the pane's: another tab keeps it; a tab that needs you holds i
   await expect(board).toHaveAttribute('data-arcade-phase', 'playing');
 
   // Gemini's tab (idle): the board stays (paused, since the click took focus off it) and plays on.
-  await page.click('[data-session-tab]:nth-child(3)');
+  await page.click('[data-nav-lane][data-lane-status="idle"] >> nth=0');
   await expect(board).toBeVisible();
   await expect(board).toHaveAttribute('data-arcade-phase', 'paused');
   await page.locator('[data-arcade-frame]').click();
@@ -85,18 +85,19 @@ test("the game is the pane's: another tab keeps it; a tab that needs you holds i
 
   // Codex's tab needs you: the game is held under a strip, the transcript with the ask is back, and the
   // palette no longer offers the game on this tab.
-  await page.click('[data-session-tab]:nth-child(2)');
+  await page.click('[data-nav-lane][data-lane-status="your-turn"] >> nth=0');
   await expect(board).toHaveCount(0);
   await expect(page.locator('[data-chat-pane] [role="log"]')).toHaveCount(1);
   await expect(page.locator('[data-arcade-held]')).toHaveAttribute('data-arcade-held', 'waiting');
   await expect(page.locator('[data-arcade-held]')).toContainText('Codex needs you');
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K');
-  await page.getByRole('combobox').fill('snake');
-  await expect(page.getByRole('option')).toHaveCount(0);
+  await page.keyboard.press(process.platform === 'darwin' ? 'ControlOrMeta+K' : 'Control+K');
+  await page.getByRole('dialog').getByRole('combobox').fill('snake');
+  // The game is not offered (a loose fuzzy match on another row, "Send feedback … makes Styx", may remain).
+  await expect(page.getByRole('option', { name: /Play while you wait/ })).toHaveCount(0);
   await page.keyboard.press('Escape');
 
   // Back on Claude's (working): Resume, then the countdown, then the snake moves again.
-  await page.click('[data-session-tab]:first-child');
+  await page.click('[data-nav-lane][data-lane-status="working"] >> nth=0');
   await expect(page.locator('[data-arcade-held]')).toHaveAttribute('data-arcade-held', 'resumable');
   await page.click('[data-arcade-resume]');
   await expect(board).toBeVisible();

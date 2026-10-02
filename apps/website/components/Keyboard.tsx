@@ -16,6 +16,9 @@ const rows: ReadonlyArray<readonly [chords: readonly string[], what: string]> = 
   [[s.diffNext, s.diffPrev], 'Next or previous change'],
   [[s.diffDone], 'Finish reviewing'],
   [[s.popoutChat], 'Pop a chat out into its own window'],
+  // Not in tokens.json (0.4, #140): the app's own keys for these.
+  [['V'], 'Select on a design or in Preview, to change it or tell the agent'],
+  [['Alt+Shift+←', 'Alt+Shift+→'], 'Move the current tab left or right'],
   [[s.toggleTheme], 'Switch light and dark. Works on this page too.'],
   [[s.close], 'Close whatever is open'],
 ];
