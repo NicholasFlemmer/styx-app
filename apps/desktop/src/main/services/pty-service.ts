@@ -88,6 +88,8 @@ export class PtyService extends EventEmitter<PtyEvents> {
   private readonly ptys = new Map<string, IPty>();
   private mod: PtyModule | null = null;
   private loginEnv: LoginEnv | null = null;
+  /** Windows ptys already told to die, until their exit arrives (see `kill`). */
+  private readonly dying = new Set<string>();
   /** Styx's own tool folders (a private Node.js and what its npm installed), appended after the person's PATH. */
   private extraDirs: string[] = [];
   private loginInflight: Promise<LoginEnv> | null = null;
@@ -157,7 +159,8 @@ export class PtyService extends EventEmitter<PtyEvents> {
     const fresh = dirs.filter((d) => !this.extraDirs.includes(d));
     if (fresh.length === 0) return;
     this.extraDirs = [...this.extraDirs, ...fresh];
-    if (this.loginEnv !== null) this.loginEnv = { ...this.loginEnv, path: this.withExtra(this.loginEnv.path) };
+    if (this.loginEnv !== null)
+      this.loginEnv = { ...this.loginEnv, path: this.withExtra(this.loginEnv.path) };
   }
 
   private withExtra(path: string): string {
@@ -202,6 +205,7 @@ export class PtyService extends EventEmitter<PtyEvents> {
     p.onData((d) => this.emit('data', opts.id, d));
     p.onExit(({ exitCode, signal }) => {
       this.ptys.delete(opts.id);
+      this.dying.delete(opts.id);
       this.emit('exit', opts.id, exitCode, signal);
     });
     return { pid: p.pid };
@@ -218,6 +222,12 @@ export class PtyService extends EventEmitter<PtyEvents> {
   kill(id: string, signal?: string): void {
     const p = this.ptys.get(id);
     if (!p) return;
+    // conpty: killing a pty a second time before its exit arrives corrupts the heap and takes the whole app down
+    // (0xC0000374, seen on Windows when agent setup's Cancel reached the sign-in terminal twice). Once is enough.
+    if (this.platform === 'win32') {
+      if (this.dying.has(id)) return;
+      this.dying.add(id);
+    }
     p.kill(signal);
   }
 

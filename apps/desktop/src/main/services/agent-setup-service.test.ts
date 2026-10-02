@@ -241,6 +241,20 @@ describe('AgentSetupService: one button from nothing to a working agent', () => 
     expect(slow.killed).toContain('term-1');
   });
 
+  it('an unexpected error is reported against the step it happened in, not as a failed install', async () => {
+    const r = rig();
+    const spawn = vi.fn(async () => {
+      throw new Error('spawn EACCES');
+    });
+    (r.svc as unknown as { deps: { terminals: { spawnCommand: unknown } } }).deps.terminals.spawnCommand =
+      spawn;
+    await r.svc.setUp('gemini');
+    expect(r.last('gemini')).toMatchObject({ status: 'failed', problem: 'signin' });
+    expect(r.last('gemini')?.message).toBe(
+      'The sign-in didn’t finish. Show details has what Gemini CLI said.',
+    );
+  });
+
   it('Update reinstalls over an out-of-date copy; See plans opens the vendor page', async () => {
     const r = rig({ answer: { stdout: '{"result":"ready","is_error":false}', exitCode: 0 } });
     await r.svc.setUp('claude', { update: true });
