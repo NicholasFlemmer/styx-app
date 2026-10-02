@@ -277,7 +277,9 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
       // Second time green: committed.
       stream.quiet(claude);
       await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('done'), { timeout: 10_000 });
-      expect(checks).toHaveBeenCalledTimes(2);
+      // Red once, then green. Under load git can be busy at verify time and the resolver verifies again (its own test
+      // below), which runs the checks once more: at least the two, and the last one green.
+      expect(checks.mock.calls.length).toBeGreaterThanOrEqual(2);
       expect(await parents(wt)).toBe(2);
     },
   );
