@@ -4,6 +4,8 @@ import {
   demoLoopMs,
   demoStepDescriptions,
   demoStepLabels,
+  stepDescription,
+  stepLabel,
   demoSteps,
   nextStep,
   reached,
@@ -24,6 +26,8 @@ describe('demo script', () => {
   it('has a label, a description and a duration for every step', () => {
     for (const step of demoSteps) {
       expect(demoStepLabels[step].length).toBeGreaterThan(0);
+      expect(stepLabel(step, 'win')).not.toContain('Touch ID');
+      expect(stepDescription(step, 'win')).not.toContain('Touch ID');
       expect(demoStepDescriptions[step].length).toBeGreaterThan(0);
       expect(demoDurations[step]).toBeGreaterThan(0);
     }

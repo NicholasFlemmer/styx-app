@@ -2,16 +2,25 @@ import { reached, waitingOnYou, type DemoStep } from '@/lib/demo-script';
 import type { Chrome } from './DemoContext';
 import styles from './WorkspaceMock.module.css';
 
-export const WORKSPACE_FULL = { w: 956, h: 560 } as const; // rail 56 + files 200 + editor 340 + chat 360
-export const WORKSPACE_COMPACT = { w: 360, h: 560 } as const; // chat pane only
+/** Rail 56 + project nav 200 + the lane's instrument 424 + chat 360, at the app's real type sizes. */
+export const WORKSPACE_FULL = { w: 1040, h: 600 } as const;
+export const WORKSPACE_COMPACT = { w: 360, h: 600 } as const; // chat pane only
 
 type Props = { step: DemoStep; compact: boolean; chrome: Chrome };
 
-/** The Styx workspace mid-grant. Pure: what shows depends only on the step. */
+const tabs = ['Tasks', 'Design', 'Preview', 'Changes', 'Code', 'Terminal'] as const;
+
+/**
+ * The Styx window mid-grant, drawn as the app is laid out since 0.4 (ADR-0027, #138–#140): lanes in the project nav,
+ * the lane's tabs, its Changes page, the chat with the request inline, and the access sheet over the chat. Pure: what
+ * shows depends only on the step.
+ */
 export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
   const sheetOpen = step === 'sheet' || step === 'mfa';
   const needsYou = waitingOnYou(step);
   const granted = reached(step, 'granted');
+  const logged = reached(step, 'logged');
+  const mfa = chrome === 'win' ? 'Windows Hello' : 'Touch ID';
 
   return (
     <div className={styles.app} data-compact={compact ? 'true' : undefined} data-chrome={chrome}>
@@ -25,10 +34,6 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
             </span>
           )}
           <span className={styles.wordmark}>STYX</span>
-          <span className={styles.projectChip}>
-            acme-shop <span className={styles.caret}>▾</span>
-          </span>
-          <span className={`${styles.branch} mono`}>test/flaky</span>
           <span className={styles.paletteField}>
             <span>Switch, spawn, deploy, grant…</span>
             <span className="mono">{chrome === 'win' ? 'Ctrl K' : '⌘K'}</span>
@@ -66,98 +71,92 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
               <span className={styles.tile}>SA</span>
               <span className={styles.tileAdd}>+</span>
             </div>
-            <div className={styles.files}>
-              <div className={styles.paneLabel}>Files</div>
-              <ul className={`${styles.tree} mono`}>
-                <li className={styles.dir}>supabase/</li>
-                <li className={styles.dir} data-depth="1">
-                  migrations/
-                </li>
-                <li data-depth="2" data-inv="true">
-                  0042_status.sql <span className="sq" data-on="true" />
-                </li>
-                <li data-depth="2">0041_carts.sql</li>
-                <li className={styles.dir}>src/</li>
-                <li data-depth="1">
-                  orders.ts <span className="sq" data-on="true" />
-                </li>
-                <li data-depth="1">checkout.ts</li>
-                <li className={styles.dir}>tests/</li>
-                <li data-depth="1">
-                  orders.test.ts <span className="sq" data-on="true" />
-                </li>
-              </ul>
-              <div className={styles.paneLabel}>Changes · 3</div>
-              <ul className={`${styles.changes} mono`}>
-                <li>
-                  <span className={styles.status}>A</span>0042_status.sql
-                </li>
-                <li>
-                  <span className={styles.status}>M</span>orders.ts
-                </li>
-                <li>
-                  <span className={styles.status}>M</span>orders.test.ts
-                </li>
-              </ul>
-              <div className={styles.filesFoot}>
-                <span className={styles.ghostBtn}>Open in VS Code</span>
+
+            <div className={styles.nav}>
+              <div className={styles.project}>
+                <strong>acme-shop</strong>
+                <span className="mono">test/flaky</span>
               </div>
+              <div className={styles.navHead}>
+                <span>Work</span>
+                <span>3 lanes</span>
+              </div>
+              <div className={styles.lane} data-inv="true">
+                <span className={styles.agentSq} data-agent="codex" />
+                <span className={styles.laneText}>
+                  <span className={styles.laneTitle}>Fix the flaky order test and make sure the schema…</span>
+                  {needsYou ? (
+                    <span className={styles.yourTurn}>Your turn</span>
+                  ) : (
+                    <span className={styles.laneMeta}>{logged ? 'Done, now' : 'Working, now'}</span>
+                  )}
+                </span>
+              </div>
+              <div className={styles.lane}>
+                <span className={styles.agentSq} data-agent="claude" />
+                <span className={styles.laneText}>
+                  <span className={styles.laneTitle}>Add input validation to checkout and cover it…</span>
+                  <span className={styles.laneMeta}>Working, 14m</span>
+                </span>
+              </div>
+              <div className={styles.lane}>
+                <span className={styles.agentSq} data-agent="gemini" />
+                <span className={styles.laneText}>
+                  <span className={styles.laneTitle}>Design the checkout: one Pay button</span>
+                  <span className={styles.laneMeta}>Design · 3 screens</span>
+                </span>
+              </div>
+              <div className={styles.newTask}>+ New task</div>
             </div>
+
             <div className={styles.center}>
-              <div className={styles.tabs}>
-                <span className={styles.tab} data-inv="true">
-                  0042_status.sql
-                </span>
-                <span className={styles.tab}>orders.ts</span>
-                <span className={styles.tab}>
-                  orders.test.ts <span className="tag">codex</span>
-                </span>
-              </div>
-              <ol className={`${styles.editor} mono`}>
-                <li>
-                  <span className={styles.ln}>1</span>-- 0042: order status
-                </li>
-                <li data-add="true">
-                  <span className={styles.ln}>2</span>alter table orders
-                  <span className={styles.hunkMeta}>codex · 1m</span>
-                </li>
-                <li data-add="true">
-                  <span className={styles.ln}>3</span>
-                  {'  '}add column status text
-                </li>
-                <li data-add="true">
-                  <span className={styles.ln}>4</span>
-                  {'  '}not null default &apos;open&apos;;
-                </li>
-                <li>
-                  <span className={styles.ln}>5</span>
-                </li>
-                <li data-add="true">
-                  <span className={styles.ln}>6</span>create index orders_status_idx
-                </li>
-                <li data-add="true">
-                  <span className={styles.ln}>7</span>
-                  {'  '}on orders (status);
-                </li>
-                <li>
-                  <span className={styles.ln}>8</span>
-                </li>
-                <li>
-                  <span className={styles.ln}>9</span>-- rollback: drop column status
-                </li>
-              </ol>
-              <div className={styles.hunkbar}>
-                <span className={`label ${styles.hunkLabel}`}>2 hunks · Codex</span>
-                <span className={styles.hunkActions}>
-                  <span className={styles.miniBtn} data-inv="true">
-                    Review
+              <div className={styles.modes}>
+                {tabs.map((t) => (
+                  <span key={t} className={styles.mode} data-inv={t === 'Changes' ? 'true' : undefined}>
+                    {t}
                   </span>
-                  <span className={styles.miniBtn}>Revert all</span>
-                  <span className={styles.miniBtn}>Mark reviewed</span>
+                ))}
+              </div>
+              <div className={styles.page}>
+                <div className={styles.paper}>
+                  <div className={styles.paperMeta}>
+                    <span className={styles.state}>
+                      <span className={styles.stateSq} data-on={needsYou ? 'true' : undefined} />
+                      {needsYou ? 'Waiting on you' : logged ? 'Ready to land' : 'Working'}
+                    </span>
+                    <span>Codex, 1 turn</span>
+                  </div>
+                  <div className={styles.paperTitle}>
+                    Fix the flaky order test and make sure the schema matches prod.
+                  </div>
+                  <p className={styles.paperBody}>
+                    The test fails because migration 0042 was never applied to prod. It adds orders.status
+                    with a default and an index.
+                  </p>
+                  <div className={styles.file}>
+                    <div className={`${styles.fileHead} mono`}>
+                      <span>supabase/migrations/0042_status.sql</span>
+                      <span className={styles.plus}>+5</span>
+                    </div>
+                    <ol className={`${styles.diff} mono`}>
+                      <li>-- 0042: order status</li>
+                      <li data-add="true">alter table orders</li>
+                      <li data-add="true">{'  '}add column status text</li>
+                      <li data-add="true">{'  '}not null default &apos;open&apos;;</li>
+                      <li data-add="true">create index orders_status_idx</li>
+                      <li data-add="true">{'  '}on orders (status);</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+              <div className={styles.actions}>
+                <span className={styles.miniBtn} data-on={logged ? 'true' : undefined}>
+                  ↓ Land
                 </span>
+                <span className={styles.miniBtn}>Ask for changes</span>
               </div>
               <div className={`${styles.terminal} mono`}>
-                <div className={styles.paneLabel}>Terminal · test/flaky</div>
+                <div className={styles.termLabel}>Terminal, test/flaky</div>
                 <div className={styles.termLines}>
                   <div>$ supabase db push --linked</div>
                   <div className={styles.termMuted}>styx: prod db needs a grant (write)</div>
@@ -174,75 +173,66 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
                       <span className={styles.cursor} />
                     </div>
                   )}
-                  {reached(step, 'logged') && (
-                    <div className={styles.termOk}>✓ pushed 1 migration (2.1s)</div>
-                  )}
-                  {reached(step, 'logged') && (
-                    <div>
-                      $<span className={styles.cursor} />
-                    </div>
-                  )}
+                  {logged && <div className={styles.termOk}>✓ pushed 1 migration (2.1s)</div>}
                 </div>
               </div>
               <div className={styles.statusbar}>
                 <span>test/flaky</span>
-                <span>{granted ? 'Supabase prod · open 60m' : 'Supabase · locked'}</span>
-                <span className={styles.statusRight}>LF · SQL</span>
+                <span>{granted ? 'Supabase prod · open 60m' : 'Supabase prod · locked'}</span>
               </div>
             </div>
           </>
         )}
+
         <div className={styles.chat}>
-          <div className={styles.tabs}>
-            <span className={styles.tab} data-inv="true">
-              Codex <span className={`${styles.tabBranch} mono`}>test/flaky</span>
-              <span
-                className="sq"
-                data-on={needsYou ? 'true' : undefined}
-                data-hollow={needsYou ? undefined : 'true'}
-              />
-            </span>
-            <span className={styles.tab}>
-              Claude <span className={`${styles.tabBranch} mono`}>fix/checkout</span>
-            </span>
+          <div className={styles.laneHead}>
+            <div className={styles.laneHeadTop}>
+              <span className={styles.agentSq} data-agent="codex" />
+              <span>Codex</span>
+              <span className="mono">test/flaky</span>
+              {needsYou && <span className={styles.waiting}>waiting on you</span>}
+            </div>
+            <div className={styles.laneHeadTitle}>
+              Fix the flaky order test and make sure the schema matches prod.
+            </div>
+            <div className={styles.laneHeadFoot}>
+              <span>1 file changed</span>
+              <span className={styles.miniBtn}>↓ Land</span>
+            </div>
           </div>
           <div className={styles.transcript}>
             <div className={styles.msgUser}>
-              Run migration 0042 on prod. The suite depends on the new orders.status column.
+              Fix the flaky order test and make sure the schema matches prod.
             </div>
             <div className={styles.msgAgent}>
-              <span className={styles.msgWho}>Codex</span>
-              Reading supabase/migrations/0042_orders_status.sql. It adds orders.status with a default and an
-              index. Pushing to the linked project.
+              The test fails because migration 0042 was never applied to prod. I need to read the prod schema
+              and apply it.
             </div>
-            <div className={`${styles.toolLine} mono`}>$ supabase db push --linked</div>
             {reached(step, 'ask') && (
               <div className={styles.request} data-on={needsYou ? 'true' : undefined}>
-                <div className={styles.requestHead}>
-                  <span className="sq" data-on={needsYou ? 'true' : undefined} />
-                  <span className="label">Access request · Supabase / prod db</span>
+                <div className={styles.requestHead}>Access request · Supabase prod</div>
+                <div className={styles.requestBody}>
+                  <p>Scope: read schema, write. No grant on file for this target.</p>
+                  {needsYou && (
+                    <div className={styles.requestActions}>
+                      <span className={styles.miniBtn} data-inv="true">
+                        Review request
+                      </span>
+                      <span className={styles.miniBtn}>Deny</span>
+                    </div>
+                  )}
+                  {granted && (
+                    <div className={`${styles.grantLine} mono`}>
+                      <span className="sq" data-on="true" />
+                      Granted · write · 1h · {mfa}
+                    </div>
+                  )}
                 </div>
-                <p>Scope: write. No grant on file for this target.</p>
-                {needsYou && (
-                  <div className={styles.requestActions}>
-                    <span className={styles.miniBtn} data-on="true">
-                      Review request
-                    </span>
-                    <span className={styles.miniBtn}>Deny</span>
-                  </div>
-                )}
               </div>
             )}
-            {granted && (
-              <div className={`${styles.grantLine} mono`}>
-                <span className="sq" data-on="true" />
-                grant: supabase prod db · write · expires in 1h
-              </div>
-            )}
-            {reached(step, 'logged') && (
+            {logged && (
               <div className={styles.msgAgent}>
-                <span className={styles.msgWho}>Codex</span>
-                Migration applied. 42 tests pass.
+                Migration applied to prod. The order test passes, 42 of 42.
               </div>
             )}
           </div>
@@ -262,16 +252,16 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
                   Supabase <span className={styles.slash}>/</span> prod db
                 </div>
                 <div className={styles.tags}>
-                  <span className="tag" data-on="true">
+                  <span className={styles.tag} data-inv="true">
                     prod
                   </span>
-                  <span className="tag">postgres</span>
+                  <span className={styles.tag}>Postgres</span>
                 </div>
                 <blockquote className={`${styles.quote} mono`}>
                   “to run migration 0042 — read schema, then apply. Test suite depends on the new
                   orders.status column.”
                 </blockquote>
-                <div className="label">Scope</div>
+                <div className={styles.sheetLabel}>Scope</div>
                 <ul className={styles.scopes}>
                   <li>
                     Read schema <span className={styles.check} data-on="true" />
@@ -283,17 +273,16 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
                     Delete / drop <span className={styles.check} />
                   </li>
                 </ul>
-                <div className="label">Duration</div>
+                <div className={styles.sheetLabel}>Duration</div>
                 <div className={styles.segments}>
                   <span>once</span>
-                  <span data-inv="true">1h</span>
+                  <span data-on="true">1h</span>
                   <span>session</span>
                   <span>always</span>
                 </div>
                 <p className={styles.note}>
-                  {chrome === 'win' ? 'Prod write requires Windows Hello.' : 'Prod write requires Touch ID.'}{' '}
-                  Token is scoped to this session and revoked on expiry or when the session ends. Logged to
-                  audit.
+                  Prod write requires {mfa}. Token is scoped to this session and revoked on expiry or when the
+                  session ends. Logged to audit.
                 </p>
               </div>
               <div className={styles.sheetFoot}>
@@ -302,12 +291,10 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
                   {step === 'mfa' ? (
                     <>
                       <span className={styles.blink} />
-                      {chrome === 'win' ? 'Windows Hello…' : 'Touch ID…'}
+                      {mfa}…
                     </>
-                  ) : chrome === 'win' ? (
-                    'Grant 1h · Windows Hello'
                   ) : (
-                    'Grant 1h · Touch ID'
+                    `Grant 1h · ${mfa}`
                   )}
                 </span>
               </div>
@@ -318,7 +305,7 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
       {step === 'logged' && (
         <div className={styles.toast}>
           <div>Granted Codex write on Supabase / prod db for 1h</div>
-          <div className={`${styles.toastMeta} mono`}>audit · granted write to Codex · 1h · grant sheet</div>
+          <div className={`${styles.toastMeta} mono`}>audit · granted write to Codex · 1h · {mfa}</div>
         </div>
       )}
     </div>
