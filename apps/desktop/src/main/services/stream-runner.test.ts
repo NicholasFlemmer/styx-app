@@ -971,6 +971,45 @@ describe('StreamRunner (child_process pipes)', () => {
     expect(await exited).toBeNull();
   });
 
+  it('argv input: a relaunch resumes the chat it was given from its first turn (Reopen, Cursor print mode)', async () => {
+    const runner = new StreamRunner();
+    const effects: StreamEffect[] = [];
+    runner.on('effect', (_id, e) => effects.push(e));
+    const script = `
+      const args = process.argv.slice(1);
+      const out = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
+      out({ type: 'assistant', message: { content: [{ type: 'text', text: 'argv:' + args.join('|') }] } });
+      out({ type: 'result', subtype: 'success', is_error: false, result: 'ok' });
+    `;
+    await runner.spawn({
+      id: 's5',
+      command: process.execPath,
+      args: ['-e', script, '--', '--print'],
+      cwd: process.cwd(),
+      env: {},
+      input: { kind: 'argv', resumeFlag: '--resume' },
+      worktreePath: WT,
+      firstMessage: 'again',
+      session: {
+        agent: 'cursor',
+        model: null,
+        effort: null,
+        permissionMode: 'default',
+        autoApproveEdits: false,
+        resumeSessionId: 'chat-old',
+        projectPath: WT,
+        mcp: { command: '/shims/styx', args: ['mcp'], env: {} },
+      },
+    });
+    const t0 = Date.now();
+    while (!effects.some((e) => e.type === 'transcript') && Date.now() - t0 < 5000)
+      await new Promise((r) => setTimeout(r, 10));
+    expect(effects.find((e) => e.type === 'transcript')).toMatchObject({
+      body: 'argv:--print|--resume|chat-old|again',
+    });
+    runner.kill('s5');
+  });
+
   it('argv input: a message sent while a turn runs is held and goes as the next turn once the process exits', async () => {
     const runner = new StreamRunner();
     const effects: StreamEffect[] = [];

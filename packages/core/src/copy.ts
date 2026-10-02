@@ -40,6 +40,10 @@ export const copy = {
       publish: 'Publish {project} · {branch}',
       publishMeta: 'commit · push · pull request',
       switchProject: 'Switch to {project}',
+      /** Owner request: a finished chat stays findable and picks up where it left off. Shown while searching. */
+      reopenChat: 'Reopen “{task}” · {agent} · {project}',
+      reopenChatUntitled: 'Reopen {agent} · {project}',
+      reopenChatMeta: 'finished · {t}',
     },
     meta: {
       needsYou: 'needs you',

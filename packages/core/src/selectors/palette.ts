@@ -9,6 +9,7 @@ import {
   activeLaneOf,
   agentLabel,
   headAskOf,
+  inLiveProject,
   liveSessions,
   projectBranch,
   projectHasGit,
@@ -16,7 +17,8 @@ import {
   projectSettingsOfOrDefault,
   projectWorktreeOf,
 } from './common-settings';
-import { formatCountdown } from './format';
+import { formatAge, formatCountdown } from './format';
+import { taskOf } from './lanes';
 import { fuzzyBest } from './fuzzy';
 import { targetDerivedState } from './target-state';
 
@@ -52,6 +54,8 @@ export type PaletteAction =
   /** Commit, push and PR in one step for the worktree the project is on (ADR-0021). */
   | { kind: 'publish'; projectId: ProjectId; worktreeId: WorktreeId }
   | { kind: 'open-session'; sessionId: SessionId }
+  /** A finished chat that is no longer on the nav (closed, or past the 7 days): reopened, then shown. */
+  | { kind: 'reopen-session'; sessionId: SessionId }
   /** Snake in the project's chat pane (owner addition, discrepancy row 110). */
   | { kind: 'arcade'; projectId: ProjectId }
   | { kind: 'switch-project'; projectId: ProjectId };
@@ -261,18 +265,45 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
   return items;
 };
 
-const agentItems = (model: ReadModel): PaletteItem[] =>
-  liveSessions(model)
+const agentItems = (model: ReadModel, query: string, now: number): PaletteItem[] => [
+  ...liveSessions(model)
     .filter((s) => !s.purpose)
     .filter((s) => s.state !== 'done')
-    .map((s) => ({
+    .map((s): PaletteItem => ({
       id: `session:${s.id}`,
       glyph: '●',
       label: `${agentLabel(s)} · ${projectNameOf(model, s.projectId)}`,
       meta: stateMeta(s.state),
       first: false,
       action: { kind: 'open-session', sessionId: s.id },
-    }));
+    })),
+  // Finished chats, archived ones included, while searching (an empty palette stays short): found by what they
+  // were asked, and reopened where they left off.
+  ...(query.trim() === '' ? [] : finishedChats(model, now)),
+];
+
+const finishedChats = (model: ReadModel, now: number): PaletteItem[] =>
+  rows(model.sessions)
+    .filter((s) => s.state === 'done' && !s.purpose && inLiveProject(model, s))
+    .sort((a, b) => (b.endedAt ?? b.startedAt) - (a.endedAt ?? a.startedAt))
+    .map((s) => {
+      const task = taskOf(s);
+      const vars = { task, agent: agentLabel(s), project: projectNameOf(model, s.projectId) };
+      return {
+        id: `finished:${s.id}`,
+        glyph: '●',
+        label: fill(
+          task === '' ? copy.palette.actions.reopenChatUntitled : copy.palette.actions.reopenChat,
+          vars,
+        ),
+        meta: fill(copy.palette.actions.reopenChatMeta, { t: formatAge(s.endedAt ?? s.startedAt, now) }),
+        first: false,
+        action:
+          s.archivedAt === null
+            ? { kind: 'open-session', sessionId: s.id }
+            : { kind: 'reopen-session', sessionId: s.id },
+      };
+    });
 
 const projectItems = (model: ReadModel): PaletteItem[] =>
   rows(model.projects)
@@ -340,7 +371,7 @@ export const paletteResults = (
 ): PaletteGroup[] => {
   const all: PaletteGroup[] = [
     { key: 'actions', label: copy.palette.groups.actions, items: actionItems(model, ui, now) },
-    { key: 'agents', label: copy.palette.groups.agents, items: agentItems(model) },
+    { key: 'agents', label: copy.palette.groups.agents, items: agentItems(model, query, now) },
     { key: 'projects', label: copy.palette.groups.projects, items: projectItems(model) },
   ];
   const task = taskItem(model, ui, query);

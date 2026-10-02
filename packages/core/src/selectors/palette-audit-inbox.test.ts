@@ -6,7 +6,8 @@ import type { AuditEntry } from '../model/audit';
 import type { Grant } from '../model/grant';
 import type { PendingAsk } from '../model/session';
 import type { ReadModel } from '../read-model';
-import { removeRows, rows, upsertRows } from '../read-model';
+import { removeRows, rows, tableFrom, upsertRows } from '../read-model';
+import { AGENT_LABEL } from '../model/common';
 import { auditDetailRows, auditRow, auditRows, auditWhat, canRevokeFromAudit } from './audit';
 import { headlineScope, inboxRows, inboxTabLabel, inboxTargetLabel, toastFor } from './inbox';
 import { DEPLOYABLE_PROVIDERS, flattenPalette, nextPaletteScope, paletteResults } from './palette';
@@ -345,7 +346,9 @@ describe('paletteResults', () => {
 
   it('fuzzy on label + meta, best first; the first visible row is flagged; empty groups dropped', () => {
     const results = paletteResults(model, ui, 'supa', 'all', NOW);
-    expect(results.map((g) => g.label)).toEqual(['Actions']);
+    // A finished chat whose task mentions it is found too, after the actions.
+    expect(results.map((g) => g.label)).toEqual(['Actions', 'Agents']);
+    expect(results[1]?.items.every((i) => i.label.startsWith('Reopen '))).toBe(true);
     expect(results[0]?.items.map((i) => [i.label, i.first])).toEqual([
       ['Grant Codex → Supabase prod', true],
       ['Deploy acme-shop → Supabase prod', false],
@@ -357,6 +360,29 @@ describe('paletteResults', () => {
     ]);
     expect(flat(model, 'blog')[0]).toBe('● Claude · blog-v2 · needs you');
     expect(paletteResults(model, ui, 'zzzz', 'all', NOW)).toEqual([]);
+  });
+
+  it('finished chats are found while searching, archived ones reopen first; an empty palette leaves them out', () => {
+    const done = rows(model.sessions).filter((s) => s.state === 'done' && !s.purpose);
+    expect(done.length).toBeGreaterThan(0);
+    const first = done[0];
+    if (!first) throw new Error('fixture');
+    const finished = (m: typeof model, q: string) =>
+      paletteResults(m, ui, q, 'agents', NOW)
+        .flatMap((g) => g.items)
+        .filter((i) => i.id.startsWith('finished:'));
+    expect(finished(model, '')).toEqual([]);
+    const archived = { ...first, archivedAt: NOW, firstMessage: null };
+    const m2 = {
+      ...model,
+      sessions: tableFrom([...rows(model.sessions).filter((s) => s.id !== first.id), archived]),
+    };
+    const hit = finished(m2, 'reopen').find((i) => i.id === `finished:${first.id}`);
+    expect(hit?.action).toEqual({ kind: 'reopen-session', sessionId: first.id });
+    expect(hit?.label.startsWith(`Reopen ${AGENT_LABEL[first.agent]} · `)).toBe(true);
+    const shown = finished(model, 'reopen').find((i) => i.id === `finished:${first.id}`);
+    expect(shown?.action).toEqual({ kind: 'open-session', sessionId: first.id });
+    expect(shown?.meta.startsWith('finished · ')).toBe(true);
   });
 
   it('scope filtering (⇥) and scope cycling', () => {

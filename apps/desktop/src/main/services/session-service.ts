@@ -781,9 +781,11 @@ export class SessionService {
     attachments: readonly AttachmentInput[] = [],
     opts: { now?: boolean; from?: 'user' | 'styx'; pointer?: MessagePointer } = {},
   ): Promise<void> {
-    const s = this.require(sessionId);
-    if (s.state === 'done') fail('invalid-transition', 'session has finished');
     if (body === '' && attachments.length === 0) fail('invalid-input', 'message is empty');
+    // Writing to a finished chat picks the thread up again (owner request): the session is reopened, and this
+    // message is what relaunches it below.
+    if (this.require(sessionId).state === 'done') await this.revive(sessionId);
+    const s = this.require(sessionId);
     // A Styx-authored turn (a merge to finish, ADR-0025) is never the human's words: it lands as a `system` row and
     // goes out now — the resolver only sends when the agent is idle or paused.
     const fromStyx = opts.from === 'styx';
@@ -1182,23 +1184,32 @@ export class SessionService {
   }
 
   /**
-   * Brings a finished session back (board Done card → Reopen; owner addition, docs/handoff-discrepancies #97 — §1
-   * has `done` as terminal). The row leaves `done` for `idle` with its transcript, worktree and settings intact, and
-   * the CLI is relaunched at once with its earlier conversation resumed where the runner can (Claude `--resume`,
-   * Codex `thread/resume`, ACP `session/load`); a CLI that never reported a conversation id starts a fresh one under
-   * the same transcript, and the chat says which. Archived sessions (retention, Close chat) have lost their logs and
-   * stay archived; background tasks are run again from their button instead.
+   * Brings a finished session back (board Done card → Reopen, or a message typed into its chat; owner addition,
+   * docs/handoff-discrepancies #97 — §1 has `done` as terminal). The row leaves `done` for `idle` with its
+   * transcript, worktree and settings intact, and the CLI is relaunched at once with its earlier conversation
+   * resumed where the runner can (Claude `--resume`, Codex `thread/resume`, ACP `session/load`); a CLI that never
+   * reported a conversation id starts a fresh one under the same transcript, and the chat says which. Background
+   * tasks are run again from their button instead.
    */
   async reopen(sessionId: string): Promise<void> {
+    await this.revive(sessionId);
+    await this.relaunch(this.require(sessionId));
+  }
+
+  /**
+   * `reopen` without the relaunch. An archived session (Close chat, the 7-day retention) comes back too: its
+   * transcript was kept. A lane tidied away after landing is checked out again at the same path (the CLI's own
+   * history is keyed by that folder), on its branch brought up to the base, so the agent carries on from the
+   * latest code.
+   */
+  private async revive(sessionId: string): Promise<Session> {
     const s = this.require(sessionId);
     if (s.state !== 'done') fail('invalid-transition', 'only a finished session can be reopened');
-    if (s.archivedAt !== null) fail('invalid-transition', 'an archived session cannot be reopened');
     if (s.purpose) fail('invalid-input', 'background tasks are run again from their button');
     const { repos, clock } = this.deps;
-    const worktree = repos.worktrees.get(s.worktreeId) ?? fail('not-found', 'worktree missing');
-    if (worktree.archivedAt !== null)
-      fail('not-found', `the ${worktree.branch ?? 'folder'} lane was removed; spawn a new agent instead`);
     const project = repos.projects.get(s.projectId) ?? fail('not-found', 'project missing');
+    let worktree = repos.worktrees.get(s.worktreeId) ?? fail('not-found', 'worktree missing');
+    if (worktree.archivedAt !== null) worktree = await this.restoreLane(worktree, project);
     const now = clock.now();
     repos.transaction(() => {
       // Takes the lane back unless a live session has since claimed it (the rule spawning into an existing lane uses).
@@ -1206,9 +1217,11 @@ export class SessionService {
       if (!worktree.isMain && (owner === null || owner.state === 'done'))
         repos.worktrees.upsert({ ...worktree, owner: { kind: 'session', sessionId: s.id } });
       repos.projects.upsert({ ...project, lastActivityAt: now }, repos.projects.settings(project.id));
+      if (s.archivedAt !== null) repos.sessions.upsert({ ...this.require(s.id), archivedAt: null });
     });
     this.deps.publisher.upsert('worktrees', [worktree.id]);
     this.deps.publisher.upsert('projects', [project.id]);
+    this.deps.publisher.upsert('sessions', [s.id]);
     this.applyEvent(s.id, { type: 'reopen' });
     this.deps.transcript.system(
       s.id,
@@ -1222,7 +1235,42 @@ export class SessionService {
       projectId: project.id,
       sessionId: s.id,
     });
-    await this.relaunch(this.require(s.id));
+    return this.require(s.id);
+  }
+
+  /** Checks an archived lane out again where it was: its branch (cut afresh if it was deleted), fast-forwarded to the base. */
+  private async restoreLane(worktree: Worktree, project: Project): Promise<Worktree> {
+    const { repos, git } = this.deps;
+    const branch = worktree.branch ?? fail('not-found', 'the lane has no branch to check out');
+    const base = repos.repos.byProject(project.id)?.defaultBranch ?? fail('git-error', 'no base branch');
+    if (!existsSync(worktree.path)) {
+      const branches = await git.branches(project.path);
+      await git.worktreeAdd(project.path, {
+        branch,
+        base,
+        path: worktree.path,
+        createBranch: !branches.includes(branch),
+      });
+    } else if ((await git.currentBranch(worktree.path)) !== branch)
+      // A checkout that outlived the archive is reused; anything else at that path is not Styx's to replace.
+      fail('fs-denied', `${worktree.path} is in the way of the lane`);
+    // Landed work is already in the base: catching up is a fast-forward, and a branch with work of its own keeps it.
+    if (await git.isAncestor(worktree.path, branch, base)) await git.mergeFfOnly(worktree.path, base);
+    const head = await git.headCommit(worktree.path);
+    const back: Worktree = {
+      ...worktree,
+      archivedAt: null,
+      mergedAt: null,
+      landing: null,
+      conflict: null,
+      resolution: null,
+      baseCommit: head,
+      headCommit: head,
+      changes: { added: 0, removed: 0, files: 0 },
+      behindBase: 0,
+    };
+    repos.worktrees.upsert(back);
+    return back;
   }
 
   /**
@@ -2001,6 +2049,13 @@ export class SessionService {
     if (!s) return;
     const p = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
     if (agent === 'claude') {
+      // A terminal (pty) Claude reports its conversation only through hooks: keeping it is what lets Reopen and a
+      // relaunch `--resume` the same thread instead of starting a new one. (Stream sessions get it from `init`.)
+      const conversation = p['session_id'];
+      if (typeof conversation === 'string' && conversation !== '' && conversation !== s.cliSessionId) {
+        this.deps.repos.sessions.upsert({ ...s, cliSessionId: conversation });
+        this.deps.publisher.upsert('sessions', [s.id]);
+      }
       switch (event) {
         case 'SessionStart':
         case 'UserPromptSubmit':

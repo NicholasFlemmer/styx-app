@@ -86,6 +86,14 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
       ui.openSession(session.projectId, session.id);
       return;
     }
+    case 'reopen-session': {
+      const session = model.sessions.byId[action.sessionId];
+      if (session === undefined) return;
+      void command('session.reopen', { sessionId: session.id }).then((r) => {
+        if (r.ok) ui.openSession(session.projectId, session.id);
+      });
+      return;
+    }
     case 'arcade':
       // Snake in the project's chat pane (discrepancy row 110); Esc / ✕ on the board hands focus back here.
       ui.setProject(action.projectId);
