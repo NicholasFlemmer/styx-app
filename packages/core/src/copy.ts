@@ -1198,11 +1198,34 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     back: 'Back',
   },
 
+  /** Owner request: git is never a requirement to start, and getting it is one click. */
+  gitSetup: {
+    name: 'Git',
+    missing:
+      'Git isn’t installed. You can start without it: agents work in the project folder. With git, each agent gets its own copy and you can land its work.',
+    missingShort: 'Git isn’t installed',
+    install: 'Install git',
+    download: 'Download git',
+    runs: 'Runs {command}',
+    installing: 'Installing git… Approve the system prompt if one appears.',
+    ready: 'Git is ready.',
+    failed: 'The installer stopped (code {code}). Download git instead.',
+    missingForInit:
+      'Git isn’t installed yet, so this folder can’t be initialised. Install it here; no restart needed.',
+    cloneNeedsGit: 'Cloning needs git, which isn’t installed yet. Install it here; no restart needed.',
+  },
+
   newProject: {
     title: 'New project',
     /** The project was made; only its GitHub repo was not (toast heading + line). */
     githubFailed: 'GitHub repo not created',
     githubFailedDetail: '{error}. The project is here; Repo › Connect to GitHub makes the repo later.',
+    /** Owner request: git is never a requirement to start. */
+    gitMissing: 'Git isn’t installed on this computer',
+    githubNeedsGit: 'a GitHub repo needs git, which isn’t set up for this project yet',
+    gitFailed: 'Made without git',
+    gitFailedDetail:
+      '{error}. The project works as it is; agents work in its folder. Install git, then Repo › Initialise git gives each agent its own copy.',
     name: 'Name',
     location: 'Location',
     browse: 'Browse',

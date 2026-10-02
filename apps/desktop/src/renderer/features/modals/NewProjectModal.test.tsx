@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { copy, fixtures } from '@styx/core';
+import { copy, fill, fixtures } from '@styx/core';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
@@ -18,6 +18,9 @@ const commandMock = vi.fn<(name: string, input?: unknown) => Promise<unknown>>(a
     );
   if (name === 'project.clone') return { ok: true as const, value: { projectId: 'project-cloned' } };
   if (name === 'dialog.pickFolder') return { ok: true as const, value: { path: picked } };
+  // Git is on this machine unless a test says otherwise (the install note stays out of the way).
+  if (name === 'git.status')
+    return { ok: true as const, value: { installed: true, version: '2.47.0', installCommand: null } };
   return { ok: true as const, value: {} };
 });
 const calls = (name: string) => commandMock.mock.calls.filter((c) => c[0] === name);
@@ -149,6 +152,31 @@ describe('NewProjectModal', () => {
         code: 'GitHub repo not created',
         message:
           'GitHub rejected the token (401). The project is here; Repo › Connect to GitHub makes the repo later.',
+      },
+    });
+  });
+
+  it('a project made without git (missing or failed) closes the modal and says how to get git later', async () => {
+    sessionId = null;
+    createResult = {
+      ok: true,
+      value: {
+        projectId: 'project-new',
+        sessionId: null,
+        githubError: null,
+        gitError: copy.newProject.gitMissing,
+      },
+    };
+    render(<NewProjectModal id="modal-1" />);
+    fireEvent.change(screen.getByLabelText('Name', { exact: true }), { target: { value: 'orders' } });
+    fireEvent.click(screen.getByRole('radio', { name: /^Empty folder/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Create/ }));
+    await waitFor(() => expect(useUiStore.getState().projectId).toBe('project-new'));
+    expect(useUiStore.getState().overlays.find((o) => o.kind === 'toast')).toMatchObject({
+      toast: {
+        kind: 'error',
+        code: copy.newProject.gitFailed,
+        message: fill(copy.newProject.gitFailedDetail, { error: copy.newProject.gitMissing }),
       },
     });
   });
@@ -285,7 +313,9 @@ describe('NewProjectModal', () => {
       commandMock.mockImplementation(async (name: string) =>
         name === 'project.clone'
           ? { ok: false as const, error: { code: 'git-error', message: 'repository not found' } }
-          : { ok: true as const, value: {} },
+          : name === 'git.status'
+            ? { ok: true as const, value: { installed: true, version: '2.47.0', installCommand: null } }
+            : { ok: true as const, value: {} },
       );
       render(<NewProjectModal id="modal-1" mode="clone" />);
       fireEvent.change(screen.getByLabelText(copy.newProject.clone.url), {

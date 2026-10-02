@@ -20,6 +20,7 @@ import type { OnboardingStep } from '../../state/ui-store';
 import { harnessReposEnabled, harnessScannedRepos } from './harness-repos';
 import s from './Onboarding.module.css';
 import { DEFAULT_IDE_IMPORTS, STEPS, rowMeta, type IdeImports, type RepoRow } from './onboarding-rows';
+import { GitSetupNote } from '../../features/git/GitSetupNote';
 
 const selectIdes = (m: ReadModel) => m.discovery.ides;
 const selectClis = (m: ReadModel) => m.discovery.clis;
@@ -302,6 +303,7 @@ export function Onboarding() {
                 </AddRowAction>
               </div>
             </div>
+            <GitSetupNote />
           </section>
         ) : null}
 

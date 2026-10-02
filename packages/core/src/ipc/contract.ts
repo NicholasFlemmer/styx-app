@@ -227,6 +227,8 @@ export const commands = {
       sessionId: sessionIdSchema.nullable(),
       /** The project was made but its GitHub repo was not (the reason); Repo › Connect to GitHub can do it later. */
       githubError: z.string().nullable().default(null),
+      /** The project was made as a plain folder because git was missing or failed (the reason; Repo › Initialise git later). */
+      gitError: z.string().nullable().default(null),
     }),
   },
   'project.remove': {
@@ -326,6 +328,27 @@ export const commands = {
   'agent.install': {
     input: z.object({ agent: agentSchema }),
     output: z.object({ terminalId: z.string().min(1), command: z.string().min(1) }),
+  },
+
+  // --- git (owner request: never a requirement to start, one click to install) ---
+  /** Whether git can be run (found where a terminal would look), and the command Install would run here. */
+  'git.status': {
+    input: z.object({}),
+    output: z.object({
+      installed: z.boolean(),
+      version: z.string().nullable(),
+      /** What Install runs on this machine; null when there is no installer to run and the download page opens. */
+      installCommand: z.string().nullable(),
+    }),
+  },
+  /**
+   * Installs git with the OS's own route (core `gitInstallRecipes`) in a terminal; `git.install` events report
+   * running/exited. With no recipe for this machine the download page opens instead and `terminalId` is null.
+   */
+  'git.install': {
+    /** `download`: open the download page instead of running anything (after an installer that stopped). */
+    input: z.object({ download: z.boolean().default(false) }),
+    output: z.object({ terminalId: z.string().nullable(), command: z.string().nullable() }),
   },
 
   // --- run locally (the design window's dev server) ---
@@ -446,7 +469,10 @@ export const commands = {
     output: ok,
   },
   /** Type and colour: writes tokens.json and tokens.css. */
-  'design.setTokens': { input: z.object({ worktreeId: worktreeIdSchema, tokens: designTokensSchema }), output: ok },
+  'design.setTokens': {
+    input: z.object({ worktreeId: worktreeIdSchema, tokens: designTokensSchema }),
+    output: ok,
+  },
   /** A picture of part of the calling window (a selection on the canvas), PNG base64. */
   'design.capture': {
     input: z.object({
@@ -1237,6 +1263,12 @@ export const events = {
   'agent.install': z.object({
     terminalId: z.string().min(1),
     agent: agentSchema,
+    status: z.enum(['running', 'exited']),
+    exitCode: z.number().int().nullable().optional(),
+  }),
+  /** Progress of a `git.install` terminal (`exitCode` on exit); the renderer asks `git.status` again after. */
+  'git.install': z.object({
+    terminalId: z.string().min(1),
     status: z.enum(['running', 'exited']),
     exitCode: z.number().int().nullable().optional(),
   }),

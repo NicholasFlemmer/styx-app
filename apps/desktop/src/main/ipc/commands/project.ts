@@ -93,7 +93,7 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
     }
     if (input.openInIde) openInFallbackIde(project.path);
     app.usageReports.record('project.added');
-    return { projectId: project.id, sessionId, githubError: project.githubError };
+    return { projectId: project.id, sessionId, githubError: project.githubError, gitError: project.gitError };
   });
 
   bus.register('project.templates', () => projects.templates());
