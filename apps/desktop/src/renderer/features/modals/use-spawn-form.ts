@@ -7,6 +7,7 @@ import {
   type ProjectId,
   type ReadModel,
   type SessionId,
+  type TaskKind,
 } from '@styx/core';
 import { useCallback, useState } from 'react';
 import { command } from '../../state/commands';
@@ -87,16 +88,16 @@ export function useSpawnForm(projectId: ProjectId, initialMessage = '') {
 
   /**
    * Starts the agent; resolves to the new session's id, or null when it did not start. `firstMessage` overrides the
-   * form's (a starter task starts with its own words in one click).
+   * form's (a starter task starts with its own words in one click); `kind` makes it a design or build task (#140).
    */
   const spawn = useCallback(
-    async (firstMessage?: string): Promise<SessionId | null> => {
+    async (firstMessage?: string, kind: TaskKind | null = null): Promise<SessionId | null> => {
       if (!spawnValid(model, form) || busy) return null;
       setBusy(true);
-      const r = await command(
-        'session.spawn',
-        spawnPayload(model, projectId, firstMessage === undefined ? form : { ...form, firstMessage }),
-      );
+      const r = await command('session.spawn', {
+        ...spawnPayload(model, projectId, firstMessage === undefined ? form : { ...form, firstMessage }),
+        kind,
+      });
       setBusy(false);
       return r.ok ? r.value.sessionId : null;
     },

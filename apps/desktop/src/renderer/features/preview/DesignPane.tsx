@@ -14,6 +14,7 @@ import {
   type DevicePlatform,
   type PreviewDevice,
   type ProjectId,
+  type SessionId,
   type WorktreeId,
 } from '@styx/core';
 import { Button, ChipGroup, DeviceFrame, Icon, Input, Select, StatusDot } from '@styx/ui';
@@ -38,6 +39,7 @@ import cm from '../modals/ConnectModal.module.css';
 import { deviceRowText, deviceScreen, fitScale } from './device-mirror';
 import { DeviceMirror } from './DeviceMirror';
 import { useDeviceMirror } from './use-device-mirror';
+import { FixStrip, usePreviewPick } from './PreviewFix';
 import s from './DesignPane.module.css';
 
 export interface DesignPaneProps {
@@ -58,6 +60,8 @@ export interface DesignPaneProps {
   devPlatform: DevPlatform | null;
   /** The remembered simulator by name (`project.settings.devDevice`); null = Styx picks one. */
   devDevice: string | null;
+  /** The lane in the chat: where Select to fix sends (#140). */
+  sessionId?: SessionId | null;
 }
 
 type Tooling = CommandOutput<'device.tooling'>;
@@ -136,8 +140,10 @@ export function DesignPane({
   device,
   devPlatform,
   devDevice,
+  sessionId = null,
 }: DesignPaneProps) {
   const hole = useRef<HTMLDivElement>(null);
+  const fix = usePreviewPick();
   const [preset, setPreset] = useState<PreviewDevice>('desktop');
   const [landscape, setLandscape] = useState(false);
   const overlays = useUi((u) => u.overlays);
@@ -553,7 +559,20 @@ export function DesignPane({
         >
           {copy.workspace.design.openExternal}
         </Button>
+        {/* Select to fix (#140): point at what is wrong in the running app and tell the agent. */}
+        <Button
+          size="compact"
+          variant="secondary"
+          on={fix.picking}
+          disabled={!visible || pending !== null}
+          title={copy.chat.pick.hint}
+          onClick={() => (fix.picking ? fix.stop() : void fix.start())}
+          data-preview-pick={fix.picking ? 'picking' : 'idle'}
+        >
+          ↖ {fix.picking ? copy.chat.pick.stop : copy.chat.pick.start}
+        </Button>
       </div>
+      {fix.pick !== null ? <FixStrip pick={fix.pick} sessionId={sessionId} onDone={fix.clear} /> : null}
       {/* Run locally has its own row: the URL bar is full at the window minimum, and a run is a separate act. */}
       <div
         className={s['runRow']}

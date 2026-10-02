@@ -212,6 +212,7 @@ describe('SpawnModal', () => {
       model: null,
       permissionMode: 'default',
       effort: null,
+      kind: null,
     });
     const ui = useUiStore.getState();
     expect(ui.screen).toBe('workspace');

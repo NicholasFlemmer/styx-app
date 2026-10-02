@@ -95,8 +95,6 @@ export interface ChatPaneProps {
   compact?: boolean;
   /** Pins the pane to one session (the pop-out window's); defaults to the project's active session. */
   sessionId?: SessionId;
-  /** A tile on the Tasks instrument: compact, and marked as a tile rather than the lane's chat. */
-  tile?: boolean;
 }
 
 const MODEL_LABEL = copy.chat.composer.model.replace(/\s*▾$/, '');
@@ -254,13 +252,7 @@ const CHAT_KEY_STEP = 16;
 
 export const clampChatWidth = (w: number): number => Math.max(CHAT_MIN, Math.min(CHAT_MAX, Math.round(w)));
 
-export function ChatPane({
-  projectId,
-  compact: compactProp = false,
-  sessionId: pinnedId,
-  tile = false,
-}: ChatPaneProps) {
-  const compact = compactProp || tile;
+export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: ChatPaneProps) {
   const model = useModel(useCallback((m: ReadModel) => m, []));
   const activeSessionId = useSessionId();
   const sessionId = pinnedId ?? activeSessionId;
@@ -532,6 +524,7 @@ export function ChatPane({
             kind="user"
             text={item.text}
             attachments={messageChips(item.attachments)}
+            {...(item.pointer !== undefined ? { pointer: item.pointer } : {})}
             compact={compact}
           />
         );
@@ -763,10 +756,9 @@ export function ChatPane({
       className={[s['pane'], compact ? s['compact'] : undefined].filter(Boolean).join(' ')}
       {...(compact || chatWidth === null ? {} : { style: { width: chatWidth } })}
       data-keyscope="chat"
-      data-chat-pane={tile ? undefined : 'true'}
-      data-chat-tile={tile ? sessionId : undefined}
+      data-chat-pane="true"
       data-chat-compact={compact ? 'true' : undefined}
-      aria-label={tile ? undefined : copy.nav.agents}
+      aria-label={copy.nav.agents}
     >
       {!compact && (
         <div

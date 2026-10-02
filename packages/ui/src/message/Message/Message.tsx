@@ -26,6 +26,8 @@ export type MessageKind =
       text: string;
       /** Images / files sent with the message (owner addition, discrepancy #57): small inverted mono chips. */
       attachments?: readonly MessageAttachment[];
+      /** What the message points at (#140), e.g. "Checkout › Pay button": a chip above the text. */
+      pointer?: string;
     }
   | {
       kind: 'agent';
@@ -156,6 +158,11 @@ export const Message = forwardRef<HTMLDivElement, MessageProps>(function Message
     case 'user':
       return (
         <div ref={ref} data-kind="user" className={cls(s['user'])}>
+          {props.pointer !== undefined && props.pointer !== '' ? (
+            <span className={s['pointer']} data-message-pointer="true" title={props.pointer}>
+              {props.pointer}
+            </span>
+          ) : null}
           {props.text}
           {props.attachments !== undefined && props.attachments.length > 0 && (
             <span className={s['attachments']} data-message-attachments="true">

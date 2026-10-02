@@ -18,14 +18,14 @@ import {
 } from './lanes';
 
 describe('taskOf', () => {
-  it('is the first non-empty line of the first message, cut at TASK_MAX; else the note; else empty', () => {
-    expect(taskOf({ firstMessage: '\n\n  Fix the checkout total  \nand more', note: 'ignored' })).toBe(
+  it('is the first non-empty line of the first message, cut at TASK_MAX; else empty, never the status note', () => {
+    expect(taskOf({ firstMessage: '\n\n  Fix the checkout total  \nand more' })).toBe(
       'Fix the checkout total',
     );
-    expect(taskOf({ firstMessage: null, note: 'Reading checkout.ts' })).toBe('Reading checkout.ts');
-    expect(taskOf({ firstMessage: '   ', note: null })).toBe('');
+    expect(taskOf({ firstMessage: null })).toBe('');
+    expect(taskOf({ firstMessage: '   ' })).toBe('');
     const long = 'x'.repeat(TASK_MAX + 20);
-    const cut = taskOf({ firstMessage: long, note: null });
+    const cut = taskOf({ firstMessage: long });
     expect(cut.length).toBe(TASK_MAX);
     expect(cut.endsWith('…')).toBe(true);
   });

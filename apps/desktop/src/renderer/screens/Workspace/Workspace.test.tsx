@@ -108,13 +108,14 @@ describe('Workspace screen', () => {
     expect(document.querySelector('[data-workspace]')?.getAttribute('data-workspace')).toBe('main');
   });
 
-  it('five instruments on the lane (ADR-0027 §2, #138): Tasks the other lanes, Code the files and editor, Changes the page, Terminal fills, Preview the design window; the pick persists', async () => {
+  it('six instruments on the lane (ADR-0027 §2, #138, #140): Tasks the other lanes, Code the files and editor, Changes the page, Terminal fills, Preview the design window; the pick persists', async () => {
     useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
     useUiStore.setState({ projectId: acme, paneSizes: {} });
     render(<Workspace />);
     const tabs = within(screen.getByRole('tablist', { name: copy.chat.instruments.label }));
     expect(tabs.getAllByRole('tab').map((t) => t.textContent)).toEqual([
       copy.chat.instruments.tasks,
+      copy.chat.instruments.canvas,
       copy.chat.instruments.preview,
       copy.chat.instruments.changes,
       copy.chat.instruments.code,

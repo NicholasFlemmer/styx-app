@@ -13,6 +13,14 @@ export function registerPreviewCommands(bus: CommandBus, app: Container): void {
     return {};
   });
 
+  bus.register('preview.pick', async ({ mode }) => {
+    if (mode === 'off') {
+      app.preview.cancelPick();
+      return { pick: null };
+    }
+    return { pick: await app.preview.pick() };
+  });
+
   bus.register('preview.openExternal', async ({ url }) => {
     await app.preview.openExternal(url);
     return {};

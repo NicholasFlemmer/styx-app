@@ -3,7 +3,8 @@ import { useUpdatePrompt } from '../features/modals/UpdateModal';
 import { Tour, useFirstRunTour } from '../features/tour/Tour';
 import { AppTitlebar } from '../features/titlebar/AppTitlebar';
 import { isProjectSection, resolveSection } from '../screens/Settings/sections';
-import { useUi } from '../state/hooks';
+import { useModel, useUi } from '../state/hooks';
+import { WORKSPACE_MODE_KEY, defaultInstrument, instrumentOf } from '../screens/Workspace/instruments';
 import { AppRail, RailSettings } from './AppRail';
 import { Nav } from './Nav';
 import { Rail } from './Rail';
@@ -20,6 +21,14 @@ export function Shell() {
   // App settings stand apart from the project: no project nav beside them (its own options open with it).
   const appSettings = useUi(
     (u) => u.screen === 'settings' && !isProjectSection(resolveSection(u.settingsSection)),
+  );
+  // The Design tab gives the canvas the room the project nav took (#140); the nav is back on every other tab.
+  const order = useModel((m) => m.settings.app.instrumentOrder);
+  const designing = useUi(
+    (u) =>
+      u.screen === 'workspace' &&
+      (u.newTask === null || u.newTask.projectId !== u.projectId) &&
+      instrumentOf(u.paneSizes[WORKSPACE_MODE_KEY], defaultInstrument(order, false)) === 'canvas',
   );
   // A downloaded update opens its dialog once per version (#119).
   useUpdatePrompt();
@@ -38,7 +47,7 @@ export function Shell() {
             <RailSettings />
           </div>
         )}
-        {chromeHidden || appSettings ? null : <Nav />}
+        {chromeHidden || appSettings || designing ? null : <Nav />}
         <ScreenOutlet />
       </div>
       <Tour />

@@ -33,15 +33,18 @@ export const landLabelOf = (
 /** A task line is one line, at most this long, so a pasted essay does not become the whole prompt. */
 export const TASK_MAX = 140;
 
-/** The lane's task: the first line of what the user asked, else the agent's latest `report_status` note. */
-export const taskOf = (session: Pick<Session, 'firstMessage' | 'note'>): string => {
+/**
+ * The lane's task: the first line of what the person asked (main records the first thing sent when a lane started
+ * without one). Empty when they have asked nothing yet; never the agent's status note, which is its latest reply and
+ * read as the lane's title (#138).
+ */
+export const taskOf = (session: Pick<Session, 'firstMessage'>): string => {
   const first =
     session.firstMessage
       ?.split('\n')
       .map((l) => l.trim())
       .find((l) => l !== '') ?? '';
-  const text = first !== '' ? first : (session.note ?? '').trim();
-  return text.length > TASK_MAX ? `${text.slice(0, TASK_MAX - 1).trimEnd()}…` : text;
+  return first.length > TASK_MAX ? `${first.slice(0, TASK_MAX - 1).trimEnd()}…` : first;
 };
 
 export interface ActiveLane {
@@ -240,4 +243,18 @@ export const isHotspot = (file: string, hotspots: readonly string[]): boolean =>
   const globs = hotspots.length === 0 ? DEFAULT_HOTSPOTS : hotspots;
   const path = file.replace(/\\/g, '/');
   return globs.some((g) => globToRegExp(g).test(path));
+};
+
+/** `agent/<name>-<n>` (spec §4.11): prefix from project settings, n = first free counter among existing branches. */
+export const autoBranch = (agent: Agent, prefix: string, existingBranches: readonly string[]): string => {
+  const name = copy.agentProducts[agent].toLowerCase().split(' ')[0] ?? agent;
+  const taken = new Set<number>();
+  const re = new RegExp(`^${prefix.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')}${name}-(\\d+)$`);
+  for (const b of existingBranches) {
+    const m = re.exec(b);
+    if (m?.[1] !== undefined) taken.add(Number(m[1]));
+  }
+  let n = 1;
+  while (taken.has(n)) n += 1;
+  return `${prefix}${name}-${n}`;
 };

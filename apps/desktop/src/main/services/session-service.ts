@@ -30,6 +30,8 @@ import {
   type Runner,
   type Session,
   type SessionPurpose,
+  type TaskKind,
+  type Pointer,
   type SessionEffect,
   type SessionEvent,
   type SessionId,
@@ -55,6 +57,7 @@ import type { Publisher } from '../store/publisher';
 import { toCliInstall, versionSatisfies, type DetectService } from './detect-service';
 import type { GitService } from './git';
 import { worktreeLocation } from './git';
+import { ensureDesignTokens } from './design-service';
 import { isPolicyFile } from './hunk-service';
 import { logger, redact } from './logger';
 import {
@@ -148,7 +151,24 @@ export interface SpawnInput {
   /** Background task identity; the matching run/deploy purpose gates `remember_command`. */
   purpose?: SessionPurpose | null;
   taskTargetId?: Session['taskTargetId'];
+  /** Design or build (#140); null = build. */
+  kind?: TaskKind | null;
+  /** A build task started from a design task (#140). */
+  designSessionId?: SessionId | undefined;
 }
+
+/** What a message points at (#140): the chip's label for the row, the detail for the agent. */
+export interface MessagePointer {
+  source: Pointer['source'];
+  label: string;
+  detail: string;
+}
+
+/** The pointer's detail under the message, for the agent. */
+const pointerText = (p: MessagePointer): string =>
+  `${fill(copy.agentPrompt.pointer, {
+    source: p.source === 'design' ? copy.agentPrompt.pointerDesign : copy.agentPrompt.pointerPreview,
+  })}\n${p.detail}`;
 
 export const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 
@@ -463,6 +483,13 @@ export class SessionService {
     const { repos, clock } = this.deps;
     const project =
       repos.projects.get(input.projectId) ?? fail('not-found', `project ${input.projectId} not found`);
+    // A build task links only to a live design task of the same project (#140): its pointers and design changes
+    // travel along that link.
+    if (input.designSessionId !== undefined) {
+      const d = repos.sessions.get(input.designSessionId);
+      if (d === null || d.kind !== 'design' || d.projectId !== project.id || d.archivedAt !== null)
+        fail('invalid-input', 'not a design task of this project');
+    }
     const repo =
       repos.repos.byProject(project.id) ?? fail('not-found', `project ${project.name} has no repo`);
     const settings = projectSettingsFor(repos, project.id);
@@ -520,6 +547,8 @@ export class SessionService {
       agent: input.agent,
       ...(input.purpose ? { purpose: input.purpose } : {}),
       ...(input.taskTargetId ? { taskTargetId: input.taskTargetId } : {}),
+      ...(input.kind ? { kind: input.kind } : {}),
+      ...(input.designSessionId ? { designSessionId: input.designSessionId } : {}),
       runner: runnerFor(input.agent, repos.discovery.cli(input.agent)),
       model: input.model,
       permissionMode: input.permissionMode ?? 'default',
@@ -564,6 +593,8 @@ export class SessionService {
     this.deps.publisher.upsert('sessions', [session.id]);
     this.deps.publisher.upsert('worktrees', [worktree.id]);
     this.deps.publisher.upsert('projects', [project.id]);
+    // A design task's tokens exist before its first turn, so screens can link them and Type and colour has values.
+    if (session.kind === 'design') ensureDesignTokens(worktree.path);
     if (input.firstMessage) this.deps.transcript.user(session.id, input.firstMessage);
     this.deps.activity.append({
       who: AGENT_LABEL[session.agent],
@@ -632,6 +663,10 @@ export class SessionService {
     // the session starts blank), together with anything Styx owed the agent while it was not working.
     if (PREAMBLE_AGENTS.includes(session.agent))
       this.notes.set(session.id, [agentPreamble(lane), ...(this.notes.get(session.id) ?? [])]);
+    // A design task learns where screens go and how they are drawn (#140), once, ahead of its first turn.
+    if (session.kind === 'design' && session.lastActivityAt === null) {
+      this.notes.set(session.id, [copy.agentPrompt.design, ...(this.notes.get(session.id) ?? [])]);
+    }
     const outgoing = firstMessage === null ? null : this.withNotes(session.id, firstMessage);
     const ctx: AgentLaunchContext = {
       agent: session.agent,
@@ -744,7 +779,7 @@ export class SessionService {
     sessionId: string,
     body: string,
     attachments: readonly AttachmentInput[] = [],
-    opts: { now?: boolean; from?: 'user' | 'styx' } = {},
+    opts: { now?: boolean; from?: 'user' | 'styx'; pointer?: MessagePointer } = {},
   ): Promise<void> {
     const s = this.require(sessionId);
     if (s.state === 'done') fail('invalid-transition', 'session has finished');
@@ -769,7 +804,11 @@ export class SessionService {
     if (queued && this.queuesNow(this.require(s.id))) {
       // Paths, not contents (the typed text is scrubbed like any transcript row: the row is persisted and mirrored
       // to the renderer). Nothing attached is dropped: images and files wait on disk with the message.
-      this.enqueue(s, redact(shown), prepared.held);
+      this.enqueue(
+        s,
+        redact(opts.pointer === undefined ? shown : `${shown}\n\n${pointerText(opts.pointer)}`),
+        prepared.held,
+      );
       return;
     }
     if (queued)
@@ -784,6 +823,9 @@ export class SessionService {
       : this.deps.transcript.append(s.id, shown, {
           kind: 'user',
           ...(prepared.meta.length > 0 ? { attachments: prepared.meta } : {}),
+          ...(opts.pointer !== undefined
+            ? { pointer: { source: opts.pointer.source, label: opts.pointer.label } }
+            : {}),
         });
     // A lane started without a first message takes the first thing said as its task (it is what the lane is named
     // by); otherwise the lane's title fell back to the agent's status line.
@@ -794,7 +836,8 @@ export class SessionService {
       const ok = await this.relaunch(s);
       if (!ok) return;
     }
-    const text = this.withNotes(s.id, composeTurn(body, prepared));
+    const said = opts.pointer === undefined ? body : `${body}\n\n${pointerText(opts.pointer)}`;
+    const text = this.withNotes(s.id, composeTurn(said, prepared));
     if (this.deps.stream.has(s.id)) {
       this.deps.stream.send(s.id, text, prepared.images);
       this.render(s.id, `> ${shown}\r\n`); // the terminal (and its log) never sees file contents

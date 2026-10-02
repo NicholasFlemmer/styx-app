@@ -1,47 +1,44 @@
 @layer screens {
-  /* Two columns of lanes, hairlines between; rows share the height until there are more than two, then scroll. */
+  /* Cards of every running task, as many across as fit; the board scrolls when they run long. */
   .board {
     flex: 1;
     min-height: 0;
+    padding: 16px;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-auto-rows: minmax(320px, 1fr);
-    gap: 1px;
-    background: var(--ln);
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    grid-auto-rows: min-content;
+    align-content: start;
+    gap: 12px;
     overflow-y: auto;
-    container-type: inline-size;
-  }
-  /* Only the "start another" tile: it takes the whole board. */
-  .board[data-count='1'] {
-    grid-template-columns: 1fr;
-  }
-  /* An odd count leaves a gap at the end of the last row: the "start another" tile takes the whole row. */
-  .board[data-odd='true'] > .add {
-    grid-column: 1 / -1;
-  }
-  @container (max-width: 560px) {
-    .board .tile {
-      grid-column: 1 / -1;
-    }
-  }
-  .tile {
     background: var(--bg);
+  }
+  .card {
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    gap: 6px;
     min-width: 0;
-    overflow: hidden;
-  }
-  .head {
-    flex: none;
-    padding: 10px 14px 9px;
-    border-bottom: 1px solid var(--ln);
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .tile[data-you='true'] .head {
+    padding: 12px 14px;
+    border: 1px solid var(--ln);
     background: var(--s1);
+    color: var(--tx);
+    font-family: var(--font-ui);
+    text-align: left;
+    cursor: pointer;
+  }
+  .card:hover {
+    border-color: var(--tx);
+  }
+  .card:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: 2px;
+  }
+  /* Its turn: the card says so before anything else. */
+  .card[data-you='true'] {
+    border-color: var(--act);
+  }
+  /* The task already in the chat. */
+  .card[data-here='true'] {
+    border-color: var(--tx);
   }
   .who {
     display: flex;
@@ -59,31 +56,24 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .open {
+  .here {
     margin-left: auto;
     flex: none;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--mu);
-    font-family: var(--font-ui);
-    font-size: 12px;
-    cursor: pointer;
-  }
-  .open:hover {
-    color: var(--tx);
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    padding: 1px 6px;
+    background: var(--tx);
+    color: var(--bg);
+    font-size: 11px;
+    font-weight: 700;
   }
   .task {
-    margin: 0;
     font-size: 15px;
     font-weight: 600;
-    line-height: 1.25;
-    color: var(--tx);
+    line-height: 1.3;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow-wrap: anywhere;
   }
   .status {
     align-self: flex-start;
@@ -96,36 +86,80 @@
     color: var(--acx);
     font-weight: 600;
   }
-  /* The lane's small chat (the pop-out pane) fills the rest of the tile. */
-  .chat {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-  }
-  .add {
-    justify-content: center;
-    align-items: center;
-  }
-  .addIn {
-    width: min(78%, 420px);
+  /* The latest steps, as the chat lists them: a square each, filled when done, outlined while running. */
+  .steps {
     display: flex;
     flex-direction: column;
+    gap: 2px;
+    margin-top: 2px;
+    font-size: 12.5px;
+  }
+  .step {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    color: var(--mu);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .step::before {
+    content: '';
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border: 1.5px solid var(--act);
+    background: var(--act);
+  }
+  .step[data-status='running'] {
+    color: var(--tx);
+  }
+  .step[data-status='running']::before {
+    background: transparent;
+  }
+  .step[data-status='error']::before {
+    border-color: var(--mu);
+    background: transparent;
+  }
+  .note {
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--tx);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .summary {
+    margin-top: 2px;
+    padding-top: 6px;
+    border-top: 1px solid var(--ln);
+    font-size: 12px;
+    color: var(--mu);
+  }
+  /* Start another: the same footprint as a card, dashed until it has words. */
+  .add {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 14px;
+    border: 1px dashed var(--ln);
+    min-width: 0;
   }
   .addTitle {
     margin: 0;
-    font-size: 18px;
+    font-size: 15px;
     font-weight: 600;
-    letter-spacing: -0.01em;
-    line-height: 1.2;
+    line-height: 1.3;
     color: var(--tx);
   }
   .addBody {
-    margin: 6px 0 0;
-    font-size: 13px;
+    margin: 4px 0 0;
+    font-size: 12px;
     color: var(--mu);
   }
   .addText {
-    margin-top: 12px;
+    margin-top: 10px;
   }
   .addRow {
     margin-top: 8px;
@@ -135,5 +169,79 @@
   }
   .addStart {
     margin-left: auto;
+  }
+  /* Design or build (#140): a small outlined word, lime-text for design. */
+  .kind {
+    flex: none;
+    padding: 0 5px;
+    border: 1px solid currentColor;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--tx);
+  }
+  .kind[data-kind='design'] {
+    color: var(--act);
+  }
+  .here {
+    margin-left: 0;
+  }
+  .who .kind {
+    margin-left: auto;
+  }
+  .link {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    font-size: 12px;
+    color: var(--mu);
+    min-width: 0;
+  }
+  .link > span:first-child {
+    color: var(--act);
+  }
+  .linkLabel {
+    flex: none;
+    white-space: nowrap;
+  }
+  .link b {
+    font-weight: 600;
+    color: var(--tx);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .kinds {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin-top: 10px;
+    border: 1px solid var(--ln);
+  }
+  .kindItem {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 9px;
+    border: 0;
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .kindItem + .kindItem {
+    border-left: 1px solid var(--ln);
+  }
+  .kindItem span {
+    font-size: 11.5px;
+    color: var(--mu);
+  }
+  .kindItem[data-inv='true'] {
+    background: var(--tx);
+    color: var(--bg);
+  }
+  .kindItem[data-inv='true'] span {
+    color: var(--bg);
+    opacity: 0.75;
   }
 }

@@ -604,6 +604,47 @@ describe('a lane is named by its task', () => {
   });
 });
 
+describe('design and build tasks (#140)', () => {
+  it('a design task stores its kind and gets the design brief ahead of its first turn', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn({
+      ...spawnInput('claude', ids.worktree.featPromo, 'A checkout'),
+      kind: 'design',
+    });
+    expect(a.sessions.get(session.id)?.kind).toBe('design');
+    expect(stream.spawned.at(-1)?.firstMessage).toContain('.styx/designs/<screen>/<size>.html');
+    expect(stream.spawned.at(-1)?.firstMessage).toContain('A checkout');
+  });
+
+  it('a build task links only to a design task of the same project', async () => {
+    const { app: a } = app();
+    const { session: build } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo, 'x'));
+    await expect(
+      a.sessions.spawn({
+        ...spawnInput('claude', ids.worktree.featPromo, 'y'),
+        kind: 'build',
+        designSessionId: build.id,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('a message pointing at something keeps a chip on the row and gives the agent the detail', async () => {
+    const { app: a } = app();
+    const { session } = await a.sessions.spawn(spawnInput('claude', ids.worktree.featPromo, ''));
+    stream.effect(session.id, { type: 'session', event: 'quiet' });
+    await a.sessions.sendMessage(session.id, 'Make it sticky', [], {
+      pointer: { source: 'design', label: 'Checkout › Pay button', detail: 'Screen: checkout/desktop.html' },
+    });
+    const row = a.repos.transcripts.last(session.id).at(-1);
+    expect(row?.body).toBe('Make it sticky');
+    expect(row?.payload).toMatchObject({
+      kind: 'user',
+      pointer: { source: 'design', label: 'Checkout › Pay button' },
+    });
+    expect(stream.sent.at(-1)?.text).toContain('Screen: checkout/desktop.html');
+  });
+});
+
 describe('SessionService relaunch + re-detect', () => {
   it('sendMessage relaunches the CLI when its process is gone (nothing replayed), then delivers the message', async () => {
     const { app: a } = app();

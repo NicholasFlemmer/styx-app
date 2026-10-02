@@ -1,5 +1,6 @@
 import { execa, type Options as ExecaOptions } from 'execa';
 import type { Dirent } from 'node:fs';
+import { realpathSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { logger } from './logger';
 
@@ -520,6 +521,45 @@ export class GitService {
         c.kind === 'untracked' ? '?' : c.kind === 'added' ? 'A' : c.kind === 'deleted' ? 'D' : 'M',
       );
     return m;
+  }
+
+  /**
+   * Styx's own unattended commit of files it wrote into an agent's worktree (the design folder, ADR-0028): with the
+   * agent's hooks, fsmonitor and signing off, and only when the worktree's git dir is the project's own (an agent can
+   * point its `.git` file elsewhere). True when there was something to commit.
+   */
+  async commitOwnedPaths(
+    worktreePath: string,
+    projectPath: string,
+    paths: string[],
+    message: string,
+  ): Promise<boolean> {
+    const safe = [
+      '-c',
+      'core.hooksPath=/dev/null',
+      '-c',
+      'core.fsmonitor=false',
+      '-c',
+      'commit.gpgSign=false',
+    ];
+    const commonDir = async (cwd: string) =>
+      realpathSync(
+        (
+          await this.git.run([...safe, 'rev-parse', '--path-format=absolute', '--git-common-dir'], cwd)
+        ).stdout.trim(),
+      );
+    if ((await commonDir(worktreePath)) !== (await commonDir(projectPath)))
+      throw new Error('the worktree’s git dir is not the project’s');
+    const status = await this.git.run(
+      [...safe, 'status', '--porcelain', '--untracked-files=all', '--', ...paths],
+      worktreePath,
+    );
+    if (status.stdout.trim() === '') return false;
+    await this.git.run([...safe, 'add', '--', ...paths], worktreePath);
+    const args = [...safe, 'commit', '-q', '--no-verify', '-m', message, '--', ...paths];
+    const r = await this.git.run(args, worktreePath, { reject: false });
+    if (r.exitCode !== 0) await this.git.run([...this.identityArgs(), ...args], worktreePath);
+    return true;
   }
 
   async add(path: string, files: string[]): Promise<void> {

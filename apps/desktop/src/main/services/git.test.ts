@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execa } from 'execa';
@@ -133,6 +133,41 @@ describe('GitService', () => {
     await expect(isolated.commit(repo, 'nothing staged', { asUser: true })).rejects.toThrow(
       /git commit failed/,
     );
+  });
+});
+
+describe('commitOwnedPaths (ADR-0028)', () => {
+  it('commits only the given paths, with the agent’s hooks off, and refuses a worktree pointed at another git dir', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'styx-owned-'));
+    const project = join(root, 'p');
+    mkdirSync(project);
+    await git.init(project);
+    writeFileSync(join(project, 'a.txt'), 'a');
+    await sh(['add', '.'], project);
+    await sh(['commit', '-q', '-m', 'init'], project);
+    const wt = join(root, 'wt');
+    await git.worktreeAdd(project, { branch: 'agent/claude-1', base: 'main', path: wt });
+    // A hook the agent planted: it would leave a marker if it ran.
+    const hooks = join(root, 'hooks');
+    mkdirSync(hooks);
+    writeFileSync(join(hooks, 'pre-commit'), `#!/bin/sh\ntouch ${join(root, 'hook-ran')}\n`, { mode: 0o755 });
+    await sh(['config', 'core.hooksPath', hooks], project);
+    mkdirSync(join(wt, '.styx', 'designs'), { recursive: true });
+    writeFileSync(join(wt, '.styx', 'designs', 'tokens.json'), '{}');
+    writeFileSync(join(wt, 'other.txt'), 'not ours');
+    expect(await git.commitOwnedPaths(wt, project, ['.styx/designs'], 'Design: tokens')).toBe(true);
+    expect(existsSync(join(root, 'hook-ran'))).toBe(false);
+    const { stdout } = await execa('git', ['show', '--name-only', '--format=%s', 'HEAD'], { cwd: wt });
+    expect(stdout).toContain('Design: tokens');
+    expect(stdout).toContain('.styx/designs/tokens.json');
+    expect(stdout).not.toContain('other.txt');
+    expect(await git.commitOwnedPaths(wt, project, ['.styx/designs'], 'again')).toBe(false);
+    // A worktree whose .git points at a git dir of its own making is not the project's.
+    const rogue = join(root, 'rogue');
+    mkdirSync(rogue);
+    await git.init(rogue);
+    writeFileSync(join(wt, '.git'), `gitdir: ${join(rogue, '.git')}\n`);
+    await expect(git.commitOwnedPaths(wt, project, ['.styx/designs'], 'x')).rejects.toThrow();
   });
 });
 
