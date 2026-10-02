@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import {
+  FRAME_CSP,
   PICKED_ATTR,
   buildSrcdoc,
   describeSelection,
@@ -28,6 +29,22 @@ describe('design-doc (#140)', () => {
     expect(src).not.toContain('tokens.css');
     expect(src).toContain('--color-primary:#2F5BFF');
     expect(buildSrcdoc('<p>bare</p>', 'x')).toContain('<body><p>bare</p></body>');
+  });
+
+  it('puts its own policy ahead of the agent’s markup and drops network hints', () => {
+    const src = buildSrcdoc(
+      '<!doctype html><html><head><link rel="dns-prefetch" href="//x.example"><link rel="preconnect" href="https://y"><meta http-equiv="refresh" content="0;url=file:///etc"></head><body><iframe src="file:///etc/hosts"></iframe></body></html>',
+      'css',
+    );
+    expect(
+      src.startsWith(`<!doctype html><meta http-equiv="Content-Security-Policy" content="${FRAME_CSP}">`),
+    ).toBe(true);
+    expect(src).not.toContain('dns-prefetch');
+    expect(src).not.toContain('preconnect');
+    expect(src).not.toContain('refresh');
+    const doc = parse(src);
+    expect(doc.head.firstElementChild?.getAttribute('http-equiv')).toBe('Content-Security-Policy');
+    expect(serializeForSave(doc)).not.toContain('Content-Security-Policy');
   });
 
   it('saves what the agent wrote plus the edit: the link back, Styx’s marks gone', () => {

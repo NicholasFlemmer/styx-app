@@ -1,4 +1,18 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fstatSync,
+  ftruncateSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  writeSync,
+} from 'node:fs';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import {
   DEFAULT_DESIGN_TOKENS,
@@ -24,17 +38,81 @@ import type { GitService } from './git';
 import { logger } from './logger';
 import type { SessionService } from './session-service';
 
+/**
+ * The design folder of a worktree, refusing links: the worktree is resolved for real, and neither `.styx` nor
+ * `.styx/designs` may be a symlink (an agent could otherwise point the folder anywhere). Null when it is not a place
+ * on disk (a fixture's `~/…` display path) or is linked away.
+ */
+const designDirOf = (worktreePath: string, create: boolean): string | null => {
+  if (!isAbsolute(worktreePath) || !existsSync(worktreePath)) return null;
+  const root = realpathSync(worktreePath);
+  let cur = root;
+  for (const part of DESIGN_DIR.split('/')) {
+    cur = join(cur, part);
+    if (!existsSync(cur) && !isLink(cur)) {
+      if (!create) return cur === join(root, DESIGN_DIR) ? cur : null;
+      mkdirSync(cur);
+    }
+    if (isLink(cur) || !lstatSync(cur).isDirectory()) return null;
+  }
+  return cur;
+};
+
+const isLink = (p: string): boolean => {
+  try {
+    return lstatSync(p).isSymbolicLink();
+  } catch {
+    return false;
+  }
+};
+
+/** Every part of `rel` below `dir` exists as itself, never as a link (or does not exist yet). */
+const noLinksBelow = (dir: string, rel: string): boolean => {
+  let cur = dir;
+  for (const part of rel.split('/')) {
+    cur = join(cur, part);
+    if (isLink(cur)) return false;
+  }
+  return true;
+};
+
+/**
+ * Writes a design file without following a link or writing through a hard link: opened `O_NOFOLLOW`, checked to be a
+ * plain file with one name, then truncated and written.
+ */
+const writeOwned = (abs: string, content: string): void => {
+  const fd = openSync(abs, constants.O_WRONLY | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0), 0o644);
+  try {
+    const st = fstatSync(fd);
+    if (!st.isFile() || st.nlink > 1) throw new Error('not a plain design file');
+    ftruncateSync(fd, 0);
+    writeSync(fd, content);
+  } finally {
+    closeSync(fd);
+  }
+};
+
+const readOwned = (abs: string): string => {
+  const fd = openSync(abs, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  try {
+    if (!fstatSync(fd).isFile()) throw new Error('not a plain design file');
+    return readFileSync(fd, 'utf8');
+  } finally {
+    closeSync(fd);
+  }
+};
+
 /** A design's tokens and their CSS, written when a design task starts so screens can link them from the first turn. */
 export const ensureDesignTokens = (worktreePath: string): void => {
-  // A display path (`~/code/…` in fixtures) is not a place on disk: never write relative to the working directory.
-  if (!isAbsolute(worktreePath)) return;
-  const dir = join(worktreePath, DESIGN_DIR);
   try {
-    mkdirSync(dir, { recursive: true });
+    const dir = designDirOf(worktreePath, true);
+    if (dir === null) return;
     const json = join(dir, 'tokens.json');
-    if (!existsSync(json)) writeFileSync(json, `${JSON.stringify(DEFAULT_DESIGN_TOKENS, null, 2)}\n`);
+    if (!existsSync(json) && !isLink(json))
+      writeOwned(json, `${JSON.stringify(DEFAULT_DESIGN_TOKENS, null, 2)}\n`);
     const css = join(dir, 'tokens.css');
-    if (!existsSync(css)) writeFileSync(css, tokensCss(readTokens(dir) ?? DEFAULT_DESIGN_TOKENS));
+    if (!existsSync(css) && !isLink(css))
+      writeOwned(css, tokensCss(readTokens(dir) ?? DEFAULT_DESIGN_TOKENS));
   } catch (e) {
     logger.warn('design: could not seed tokens', { error: (e as Error).message });
   }
@@ -42,14 +120,17 @@ export const ensureDesignTokens = (worktreePath: string): void => {
 
 const readTokens = (dir: string): DesignTokens | null => {
   try {
-    const parsed = designTokensSchema.safeParse(JSON.parse(readFileSync(join(dir, 'tokens.json'), 'utf8')));
+    const parsed = designTokensSchema.safeParse(JSON.parse(readOwned(join(dir, 'tokens.json'))));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
 };
 
-/** Screens are drawn without running anything: scripts and inline handlers never reach a design file. */
+/**
+ * Tidies a hand-edited screen: script elements and inline handlers out. Not a security boundary (an agent writes the
+ * files directly); no script in a design runs because the canvas draws screens in frames without `allow-scripts`.
+ */
 export const stripScripts = (html: string): string =>
   html
     .replace(/<script\b[\s\S]*?<\/script\s*>/gi, '')
@@ -58,7 +139,7 @@ export const stripScripts = (html: string): string =>
 
 export interface DesignDeps {
   repos: Repos;
-  git: Pick<GitService, 'add' | 'commit' | 'statusMap' | 'nextAgentBranch'>;
+  git: Pick<GitService, 'commitOwnedPaths' | 'nextAgentBranch'>;
   sessions: Pick<SessionService, 'start' | 'tell' | 'sendMessage'>;
   transcript: { system(sessionId: SessionId, body: string): unknown };
 }
@@ -77,21 +158,25 @@ export class DesignService {
     return this.deps.repos.worktrees.get(worktreeId) ?? fail('not-found', 'worktree not found');
   }
 
-  private dirOf(worktreeId: string): string {
-    return join(this.worktree(worktreeId).path, DESIGN_DIR);
+  /** The worktree's design folder for reading; null when there is none (or it is linked away). */
+  private dirOf(worktreeId: string, create = false): string | null {
+    return designDirOf(this.worktree(worktreeId).path, create);
   }
 
-  /** A screen's absolute path, refused unless it is a screen file inside the design folder. */
-  private screenPath(worktreeId: string, path: string): string {
+  /**
+   * A screen's absolute path, refused unless it is a screen file inside the design folder reached without a link (the
+   * screen's folder and the file itself included).
+   */
+  private screenPath(worktreeId: string, path: string, create = false): string {
     if (parseDesignPath(path) === null) fail('invalid-input', 'not a design screen');
-    const dir = this.dirOf(worktreeId);
+    const dir = this.dirOf(worktreeId, create) ?? fail('not-found', 'no design here');
     const abs = resolve(dir, path);
-    if (!abs.startsWith(dir + sep)) fail('invalid-input', 'outside the design');
+    if (!abs.startsWith(dir + sep) || !noLinksBelow(dir, path)) fail('invalid-input', 'outside the design');
     return abs;
   }
 
-  private files(dir: string): DesignFile[] {
-    if (!existsSync(dir)) return [];
+  private files(dir: string | null): DesignFile[] {
+    if (dir === null || !existsSync(dir)) return [];
     const out: DesignFile[] = [];
     for (const screen of readdirSync(dir, { withFileTypes: true })) {
       if (!screen.isDirectory()) continue;
@@ -108,31 +193,32 @@ export class DesignService {
 
   list(worktreeId: string): DesignList {
     const dir = this.dirOf(worktreeId);
-    return { worktreeId, screens: designScreens(this.files(dir)), tokens: readTokens(dir) };
+    return {
+      worktreeId,
+      screens: designScreens(this.files(dir)),
+      tokens: dir === null ? null : readTokens(dir),
+    };
   }
 
   read(worktreeId: string, path: string): { html: string; css: string } {
     const abs = this.screenPath(worktreeId, path);
     if (!existsSync(abs)) fail('not-found', 'screen not found');
+    // The canvas always gets the tokens as Styx would write them, never a file's own CSS.
     const dir = this.dirOf(worktreeId);
-    const cssFile = join(dir, 'tokens.css');
-    const css = existsSync(cssFile)
-      ? readFileSync(cssFile, 'utf8')
-      : tokensCss(readTokens(dir) ?? DEFAULT_DESIGN_TOKENS);
-    return { html: readFileSync(abs, 'utf8'), css };
+    const css = tokensCss((dir === null ? null : readTokens(dir)) ?? DEFAULT_DESIGN_TOKENS);
+    return { html: readOwned(abs), css };
   }
 
   write(worktreeId: string, path: string, html: string): void {
     const abs = this.screenPath(worktreeId, path);
-    writeFileSync(abs, stripScripts(html));
+    writeOwned(abs, stripScripts(html));
     void this.changed(worktreeId, [path]);
   }
 
   setTokens(worktreeId: string, tokens: DesignTokens): void {
-    const dir = this.dirOf(worktreeId);
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'tokens.json'), `${JSON.stringify(tokens, null, 2)}\n`);
-    writeFileSync(join(dir, 'tokens.css'), tokensCss(tokens));
+    const dir = this.dirOf(worktreeId, true) ?? fail('invalid-input', 'the design folder is linked away');
+    writeOwned(join(dir, 'tokens.json'), `${JSON.stringify(tokens, null, 2)}\n`);
+    writeOwned(join(dir, 'tokens.css'), tokensCss(tokens));
     void this.changed(worktreeId, ['tokens.json']);
   }
 
@@ -151,21 +237,18 @@ export class DesignService {
       .filter((s) => s.designSessionId === designId && s.state !== 'done' && s.archivedAt === null);
   }
 
-  /** Commits the design folder in the design task's worktree, so a build task can merge it; true when it did. */
-  private async commitDesign(worktreePath: string, message: string): Promise<boolean> {
-    const status = await this.deps.git.statusMap(worktreePath);
-    const changed = [...status.keys()].filter((p) => p.startsWith(`${DESIGN_DIR}/`));
-    if (changed.length === 0) return false;
-    await this.deps.git.add(worktreePath, [DESIGN_DIR]);
-    await this.deps.git.commit(worktreePath, message);
-    return true;
+  /** Commits the design folder in the design task's worktree (hooks off), so a build task can merge it. */
+  private async commitDesign(worktreeId: string, message: string): Promise<boolean> {
+    const wt = this.worktree(worktreeId);
+    const project = this.deps.repos.projects.get(wt.projectId) ?? fail('not-found', 'project not found');
+    return this.deps.git.commitOwnedPaths(wt.path, project.path, [DESIGN_DIR], message);
   }
 
   private snapshot(worktreeId: string): Map<string, number> {
     const dir = this.dirOf(worktreeId);
     const m = new Map(this.files(dir).map((f) => [f.path, f.mtime] as const));
-    const tokens = join(dir, 'tokens.json');
-    if (existsSync(tokens)) m.set('tokens.json', statSync(tokens).mtimeMs);
+    const tokens = dir === null ? null : join(dir, 'tokens.json');
+    if (tokens !== null && existsSync(tokens)) m.set('tokens.json', lstatSync(tokens).mtimeMs);
     return m;
   }
 
@@ -190,7 +273,7 @@ export class DesignService {
       .join(', ');
     const wt = this.worktree(worktreeId);
     try {
-      await this.commitDesign(wt.path, `Design: ${what}`);
+      await this.commitDesign(worktreeId, `Design: ${what}`);
     } catch (e) {
       logger.warn('design: commit failed', { error: (e as Error).message });
     }
@@ -232,7 +315,7 @@ export class DesignService {
       return design.id;
     }
     if (wt.branch === null) fail('invalid-input', 'the design is not on a branch');
-    await this.commitDesign(wt.path, `Design: ${names}`);
+    await this.commitDesign(design.worktreeId, `Design: ${names}`);
     const project = this.deps.repos.projects.get(design.projectId) ?? fail('not-found', 'project not found');
     const name = copy.agentProducts[input.agent].toLowerCase().split(' ')[0] ?? input.agent;
     const prefix = this.deps.repos.projects.settings(project.id).branchPrefix ?? 'agent/';

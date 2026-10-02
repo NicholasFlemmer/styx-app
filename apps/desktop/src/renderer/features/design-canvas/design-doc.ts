@@ -14,21 +14,42 @@ const UI_CSS = `[${HOVER_ATTR}]{outline:1.5px dashed #9fc21c !important;outline-
 [${PICKED_ATTR}]{outline:2px solid #d6ff3d !important;outline-offset:3px !important}
 html,body{cursor:default}`;
 
+/**
+ * The frame's own policy, ahead of anything the agent wrote: nothing loads from anywhere (no frames, no files, no
+ * network), only inline styles and data: images and fonts.
+ */
+export const FRAME_CSP =
+  "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; frame-src 'none'; form-action 'none'";
+
 /** The frame's document: scripts out, the tokens link replaced by the tokens themselves, the selection style in. */
 export const buildSrcdoc = (html: string, css: string): string => {
   const clean = html
     .replace(/<script\b[\s\S]*?<\/script\s*>/gi, '')
-    .replace(/<link\b[^>]*tokens\.css[^>]*>/gi, '');
+    .replace(/<link\b[^>]*tokens\.css[^>]*>/gi, '')
+    // Hints a policy does not cover (DNS prefetch, preconnect) could still reach the network: out.
+    .replace(/<link\b[^>]*rel\s*=\s*["']?[^"'>]*(prefetch|preconnect|preload|prerender)[^>]*>/gi, '')
+    .replace(/<meta\b[^>]*http-equiv[^>]*>/gi, '');
+  const policy = `<meta http-equiv="Content-Security-Policy" content="${FRAME_CSP}">`;
+  const doctype = /^\s*<!doctype[^>]*>/i.exec(clean)?.[0] ?? '';
+  return withPolicy(doctype, policy, clean.slice(doctype.length), css);
+};
+
+const withPolicy = (doctype: string, policy: string, rest: string, css: string): string => {
+  const clean = rest;
   const head = `<style ${TOKENS_STYLE}>${css}</style><style ${UI_STYLE}>${UI_CSS}</style>`;
-  if (/<head[^>]*>/i.test(clean)) return clean.replace(/<head([^>]*)>/i, `<head$1>${head}`);
-  if (/<html[^>]*>/i.test(clean)) return clean.replace(/<html([^>]*)>/i, `<html$1><head>${head}</head>`);
-  return `<!doctype html><html><head>${head}</head><body>${clean}</body></html>`;
+  // The policy goes first of all (the parser puts a leading <meta> in the head before any of the agent's markup).
+  if (/<head[^>]*>/i.test(clean))
+    return `${doctype}${policy}${clean.replace(/<head([^>]*)>/i, `<head$1>${head}`)}`;
+  if (/<html[^>]*>/i.test(clean))
+    return `${doctype}${policy}${clean.replace(/<html([^>]*)>/i, `<html$1><head>${head}</head>`)}`;
+  return `<!doctype html>${policy}<html><head>${head}</head><body>${clean}</body></html>`;
 };
 
 /** The file to save from an edited frame: the tokens link back, Styx's styles and outline marks gone. */
 export const serializeForSave = (doc: Document): string => {
   const copyDoc = doc.documentElement.cloneNode(true) as HTMLElement;
-  for (const el of copyDoc.querySelectorAll(`[${UI_STYLE}]`)) el.remove();
+  for (const el of copyDoc.querySelectorAll(`[${UI_STYLE}], meta[http-equiv="Content-Security-Policy"]`))
+    el.remove();
   const tokens = copyDoc.querySelector(`[${TOKENS_STYLE}]`);
   if (tokens !== null) {
     const link = doc.createElement('link');

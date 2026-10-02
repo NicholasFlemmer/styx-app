@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_DESIGN_TOKENS, DESIGN_DIR, fixtures, type Session } from '@styx/core';
@@ -9,18 +17,30 @@ import { DesignService, ensureDesignTokens, stripScripts } from './design-servic
 const design = (over: Partial<Session> = {}): Session => {
   const s = fixtures.demoSessions()[0];
   if (s === undefined) throw new Error('fixture');
-  return { ...s, id: 'design-1' as Session['id'], worktreeId: 'wt-d' as Session['worktreeId'], kind: 'design', ...over };
+  return {
+    ...s,
+    id: 'design-1' as Session['id'],
+    worktreeId: 'wt-d' as Session['worktreeId'],
+    kind: 'design',
+    ...over,
+  };
 };
 
 const setup = (sessions: Session[] = [design()]) => {
   const root = mkdtempSync(join(tmpdir(), 'styx-design-'));
   const dir = join(root, DESIGN_DIR);
   mkdirSync(join(dir, 'checkout'), { recursive: true });
-  writeFileSync(join(dir, 'checkout', 'desktop.html'), '<html><body><button id="pay">Pay</button></body></html>');
+  writeFileSync(
+    join(dir, 'checkout', 'desktop.html'),
+    '<html><body><button id="pay">Pay</button></body></html>',
+  );
   writeFileSync(join(dir, 'checkout', 'phone.wire.html'), '<html></html>');
   writeFileSync(join(dir, 'notes.md'), 'not a screen');
   const repos = {
-    worktrees: { get: (id: string) => (id === 'wt-d' ? { id, path: root, branch: 'agent/claude-4' } : null) },
+    worktrees: {
+      get: (id: string) =>
+        id === 'wt-d' ? { id, projectId: 'p', path: root, branch: 'agent/claude-4' } : null,
+    },
     sessions: {
       all: () => sessions,
       get: (id: string) => sessions.find((s) => s.id === id) ?? null,
@@ -31,9 +51,7 @@ const setup = (sessions: Session[] = [design()]) => {
     },
   } as unknown as Repos;
   const git = {
-    add: vi.fn(async () => undefined),
-    commit: vi.fn(async () => undefined),
-    statusMap: vi.fn(async () => new Map([[`${DESIGN_DIR}/checkout/desktop.html`, 'M' as const]])),
+    commitOwnedPaths: vi.fn(async () => true),
     nextAgentBranch: vi.fn(async () => 'agent/codex-2'),
   };
   const sessionsPort = {
@@ -67,10 +85,44 @@ describe('DesignService (#140)', () => {
 
   it('writes hand edits without scripts or inline handlers', () => {
     const { svc, dir } = setup();
-    svc.write('wt-d', 'checkout/desktop.html', '<button onclick="x()">Pay now</button><script>alert(1)</script>');
+    svc.write(
+      'wt-d',
+      'checkout/desktop.html',
+      '<button onclick="x()">Pay now</button><script>alert(1)</script>',
+    );
     const html = readFileSync(join(dir, 'checkout', 'desktop.html'), 'utf8');
     expect(html).toBe('<button>Pay now</button>');
     expect(stripScripts('<img src=x onerror=alert(1)>')).toBe('<img src=x>');
+  });
+
+  it('never reads or writes through a link: a linked screen, screen folder or design folder is refused', () => {
+    const { svc, dir, root } = setup();
+    const outside = mkdtempSync(join(tmpdir(), 'styx-outside-'));
+    const target = join(outside, 'victim.txt');
+    writeFileSync(target, 'precious');
+    symlinkSync(target, join(dir, 'checkout', 'phone.html'));
+    expect(() => svc.write('wt-d', 'checkout/phone.html', '<p>x</p>')).toThrow();
+    expect(() => svc.read('wt-d', 'checkout/phone.html')).toThrow();
+    symlinkSync(outside, join(dir, 'linked'));
+    expect(() => svc.write('wt-d', 'linked/desktop.html', '<p>x</p>')).toThrow();
+    // A hard link is a second name for someone else's file: refused too.
+    linkSync(target, join(dir, 'checkout', 'tablet.html'));
+    expect(() => svc.write('wt-d', 'checkout/tablet.html', '<p>x</p>')).toThrow();
+    expect(readFileSync(target, 'utf8')).toBe('precious');
+    // The design folder itself linked away: tokens are not written there.
+    const other = mkdtempSync(join(tmpdir(), 'styx-linked-design-'));
+    const r2 = mkdtempSync(join(tmpdir(), 'styx-root2-'));
+    mkdirSync(join(r2, '.styx'));
+    symlinkSync(other, join(r2, DESIGN_DIR));
+    ensureDesignTokens(r2);
+    expect(existsSync(join(other, 'tokens.json'))).toBe(false);
+    // A dangling tokens link is not created through.
+    const r3 = mkdtempSync(join(tmpdir(), 'styx-root3-'));
+    mkdirSync(join(r3, DESIGN_DIR), { recursive: true });
+    symlinkSync(join(outside, 'planted.css'), join(r3, DESIGN_DIR, 'tokens.css'));
+    ensureDesignTokens(r3);
+    expect(existsSync(join(outside, 'planted.css'))).toBe(false);
+    expect(root).toBeTruthy();
   });
 
   it('Type and colour writes tokens.json and tokens.css', () => {
@@ -101,7 +153,12 @@ describe('DesignService (#140)', () => {
       note: 'use our Button',
     });
     expect(id).toBe('build-1');
-    expect(git.commit).toHaveBeenCalled();
+    expect(git.commitOwnedPaths).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      [DESIGN_DIR],
+      expect.stringContaining('Checkout'),
+    );
     expect(sessionsPort.start).toHaveBeenCalledWith(
       expect.objectContaining({
         agent: 'codex',
@@ -120,14 +177,26 @@ describe('DesignService (#140)', () => {
   it('Build here sends the handover to the design task itself', async () => {
     const { svc, sessionsPort } = setup();
     expect(
-      await svc.handover({ sessionId: 'design-1', mode: 'here', agent: 'claude', screens: ['checkout'], tokens: false, note: '' }),
+      await svc.handover({
+        sessionId: 'design-1',
+        mode: 'here',
+        agent: 'claude',
+        screens: ['checkout'],
+        tokens: false,
+        note: '',
+      }),
     ).toBe('design-1');
     expect(sessionsPort.sendMessage).toHaveBeenCalledWith('design-1', expect.stringContaining('Checkout'));
     expect(sessionsPort.start).not.toHaveBeenCalled();
   });
 
   it('a changed design tells the build tasks built from it, and nobody when none are', async () => {
-    const build = design({ id: 'build-1' as Session['id'], kind: 'build', designSessionId: 'design-1' as Session['id'], worktreeId: 'wt-b' as Session['worktreeId'] });
+    const build = design({
+      id: 'build-1' as Session['id'],
+      kind: 'build',
+      designSessionId: 'design-1' as Session['id'],
+      worktreeId: 'wt-b' as Session['worktreeId'],
+    });
     const { svc, sessionsPort, transcript } = setup([design(), build]);
     await svc.changed('wt-d', ['checkout/desktop.html']);
     expect(sessionsPort.tell).toHaveBeenCalledWith('build-1', expect.stringContaining('Checkout'));

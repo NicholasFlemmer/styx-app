@@ -34,3 +34,14 @@
 - Design screens are plain HTML any agent can write and any person can open; the build reads them as reference.
 - The canvas trusts nothing in a screen: no scripts run, links do not navigate, saved files are scrubbed.
 - A build task only sees design changes after Styx commits them in the design lane and the build merges them in.
+
+## Security review (before release)
+
+- Design files are read and written without following links: the worktree is resolved for real, `.styx`,
+  `.styx/designs`, a screen's folder and the file itself must not be links, writes open `O_NOFOLLOW` and refuse a
+  file with more than one name (hard link) before truncating.
+- Styx's own commits of the design folder (`GitService.commitOwnedPaths`) run with hooks, fsmonitor and signing off,
+  `--no-verify`, only the given paths, and only when the worktree's git common dir is the project's own.
+- Each design frame starts with its own policy (`default-src 'none'`, inline styles, data: images and fonts, no
+  frames, no forms) ahead of the agent's markup; DNS-prefetch / preconnect hints and `http-equiv` metas are dropped.
+- A build task links only to a live design task of the same project.

@@ -483,6 +483,13 @@ export class SessionService {
     const { repos, clock } = this.deps;
     const project =
       repos.projects.get(input.projectId) ?? fail('not-found', `project ${input.projectId} not found`);
+    // A build task links only to a live design task of the same project (#140): its pointers and design changes
+    // travel along that link.
+    if (input.designSessionId !== undefined) {
+      const d = repos.sessions.get(input.designSessionId);
+      if (d === null || d.kind !== 'design' || d.projectId !== project.id || d.archivedAt !== null)
+        fail('invalid-input', 'not a design task of this project');
+    }
     const repo =
       repos.repos.byProject(project.id) ?? fail('not-found', `project ${project.name} has no repo`);
     const settings = projectSettingsFor(repos, project.id);
