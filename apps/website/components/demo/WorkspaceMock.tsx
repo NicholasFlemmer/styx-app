@@ -11,6 +11,19 @@ type Props = { step: DemoStep; compact: boolean; chrome: Chrome };
 const tabs = ['Tasks', 'Design', 'Preview', 'Changes', 'Code', 'Terminal'] as const;
 
 /**
+ * The tab in front at each step, as you would move through the app: the board shows the task asking, Changes shows
+ * what it wants to apply while you decide, Terminal shows it run, and Changes again once it is ready to land.
+ */
+const MODE: Readonly<Record<DemoStep, 'Tasks' | 'Changes' | 'Terminal'>> = {
+  command: 'Tasks',
+  ask: 'Tasks',
+  sheet: 'Changes',
+  mfa: 'Changes',
+  granted: 'Terminal',
+  logged: 'Changes',
+};
+
+/**
  * The Styx window mid-grant, drawn as the app is laid out since 0.4 (ADR-0027, #138–#140): lanes in the project nav,
  * the lane's tabs, its Changes page, the chat with the request inline, and the access sheet over the chat. Pure: what
  * shows depends only on the step.
@@ -21,6 +34,7 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
   const granted = reached(step, 'granted');
   const logged = reached(step, 'logged');
   const mfa = chrome === 'win' ? 'Windows Hello' : 'Touch ID';
+  const mode = MODE[step];
 
   return (
     <div className={styles.app} data-compact={compact ? 'true' : undefined} data-chrome={chrome}>
@@ -112,52 +126,117 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
             <div className={styles.center}>
               <div className={styles.modes}>
                 {tabs.map((t) => (
-                  <span key={t} className={styles.mode} data-inv={t === 'Changes' ? 'true' : undefined}>
+                  <span key={t} className={styles.mode} data-inv={t === mode ? 'true' : undefined}>
                     {t}
                   </span>
                 ))}
               </div>
-              <div className={styles.page}>
-                <div className={styles.paper}>
-                  <div className={styles.paperMeta}>
-                    <span className={styles.state}>
-                      <span className={styles.stateSq} data-on={needsYou ? 'true' : undefined} />
-                      {needsYou ? 'Waiting on you' : logged ? 'Ready to land' : 'Working'}
-                    </span>
-                    <span>Codex, 1 turn</span>
-                  </div>
-                  <div className={styles.paperTitle}>
-                    Fix the flaky order test and make sure the schema matches prod.
-                  </div>
-                  <p className={styles.paperBody}>
-                    The test fails because migration 0042 was never applied to prod. It adds orders.status
-                    with a default and an index.
-                  </p>
-                  <div className={styles.file}>
-                    <div className={`${styles.fileHead} mono`}>
-                      <span>supabase/migrations/0042_status.sql</span>
-                      <span className={styles.plus}>+5</span>
+              {mode === 'Tasks' && (
+                <div className={styles.board}>
+                  <div className={styles.card} data-on={needsYou ? 'true' : undefined}>
+                    <div className={styles.cardTop}>
+                      <span className={styles.agentSq} data-agent="codex" />
+                      <span>Codex</span>
+                      <span className="mono">test/flaky</span>
+                      <span className={styles.kind}>Build</span>
                     </div>
-                    <ol className={`${styles.diff} mono`}>
-                      <li>-- 0042: order status</li>
-                      <li data-add="true">alter table orders</li>
-                      <li data-add="true">{'  '}add column status text</li>
-                      <li data-add="true">{'  '}not null default &apos;open&apos;;</li>
-                      <li data-add="true">create index orders_status_idx</li>
-                      <li data-add="true">{'  '}on orders (status);</li>
-                    </ol>
+                    <div className={styles.cardTitle}>
+                      Fix the flaky order test and make sure the schema matches prod.
+                    </div>
+                    {needsYou ? (
+                      <>
+                        <span className={styles.yourTurn}>Your turn</span>
+                        <div className={styles.cardLine}>Requesting Supabase prod · read + write</div>
+                      </>
+                    ) : (
+                      <div className={styles.cardMeta}>Working, now</div>
+                    )}
+                    <div className={styles.cardFoot}>1 file changed</div>
+                  </div>
+                  <div className={styles.card}>
+                    <div className={styles.cardTop}>
+                      <span className={styles.agentSq} data-agent="claude" />
+                      <span>Claude</span>
+                      <span className="mono">fix/checkout</span>
+                      <span className={styles.kind}>Build</span>
+                    </div>
+                    <div className={styles.cardTitle}>
+                      Add input validation to checkout and cover it with tests.
+                    </div>
+                    <div className={styles.cardMeta}>Working, 14m</div>
+                    <div className={styles.cardLine}>Added validation, 42 tests pass.</div>
+                    <div className={styles.cardFoot}>3 files changed</div>
+                  </div>
+                  <div className={styles.card}>
+                    <div className={styles.cardTop}>
+                      <span className={styles.agentSq} data-agent="gemini" />
+                      <span>Gemini</span>
+                      <span className="mono">design/pay</span>
+                      <span className={styles.kind}>Design</span>
+                    </div>
+                    <div className={styles.cardTitle}>Design the checkout: one Pay button</div>
+                    <div className={styles.cardMeta}>Working, 3m</div>
+                    <div className={styles.cardFoot}>3 screens</div>
+                  </div>
+                  <div className={styles.cardAdd}>
+                    <div className={styles.cardTitle}>Start another lane alongside</div>
+                    <div className={styles.cardMeta}>Its own branch, so it never steps on the others.</div>
                   </div>
                 </div>
-              </div>
-              <div className={styles.actions}>
-                <span className={styles.miniBtn} data-on={logged ? 'true' : undefined}>
-                  ↓ Land
-                </span>
-                <span className={styles.miniBtn}>Ask for changes</span>
-              </div>
-              <div className={`${styles.terminal} mono`}>
+              )}
+              {mode === 'Changes' && (
+                <>
+                  <div className={styles.page}>
+                    <div className={styles.paper}>
+                      <div className={styles.paperMeta}>
+                        <span className={styles.state}>
+                          <span className={styles.stateSq} data-on={needsYou ? 'true' : undefined} />
+                          {needsYou ? 'Waiting on you' : logged ? 'Ready to land' : 'Working'}
+                        </span>
+                        <span>Codex, 1 turn</span>
+                      </div>
+                      <div className={styles.paperTitle}>
+                        Fix the flaky order test and make sure the schema matches prod.
+                      </div>
+                      <p className={styles.paperBody}>
+                        {logged
+                          ? 'Migration 0042 is applied to prod and the order test passes, 42 of 42.'
+                          : 'The test fails because migration 0042 was never applied to prod. It adds orders.status with a default and an index.'}
+                      </p>
+                      <div className={styles.file}>
+                        <div className={`${styles.fileHead} mono`}>
+                          <span>supabase/migrations/0042_status.sql</span>
+                          <span className={styles.plus}>+5</span>
+                        </div>
+                        <ol className={`${styles.diff} mono`}>
+                          <li>-- 0042: order status</li>
+                          <li data-add="true">alter table orders</li>
+                          <li data-add="true">{'  '}add column status text</li>
+                          <li data-add="true">{'  '}not null default &apos;open&apos;;</li>
+                          <li data-add="true">create index orders_status_idx</li>
+                          <li data-add="true">{'  '}on orders (status);</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
+                  <div className={styles.actions}>
+                    <span className={styles.miniBtn} data-on={logged ? 'true' : undefined}>
+                      ↓ Land
+                    </span>
+                    <span className={styles.miniBtn}>Ask for changes</span>
+                  </div>
+                </>
+              )}
+              <div className={`${styles.terminal} mono`} data-full={mode === 'Terminal' ? 'true' : undefined}>
                 <div className={styles.termLabel}>Terminal, test/flaky</div>
                 <div className={styles.termLines}>
+                  {mode === 'Terminal' && (
+                    <>
+                      <div>$ npx vitest run orders</div>
+                      <div className={styles.termMuted}>✗ orders.test.ts › status defaults to open</div>
+                      <div className={styles.termMuted}>{'  '}column &quot;status&quot; does not exist</div>
+                    </>
+                  )}
                   <div>$ supabase db push --linked</div>
                   <div className={styles.termMuted}>styx: prod db needs a grant (write)</div>
                   {needsYou && (
@@ -168,10 +247,14 @@ export const WorkspaceMock = ({ step, compact, chrome }: Props) => {
                   )}
                   {granted && <div className={styles.termOk}>✓ grant supabase/prod-db · write · 1h</div>}
                   {step === 'granted' && (
-                    <div>
-                      Applying 0042_status.sql…
-                      <span className={styles.cursor} />
-                    </div>
+                    <>
+                      <div className={styles.termMuted}>Connecting to remote database…</div>
+                      <div className={styles.termMuted}>Applying migration 0042_status.sql…</div>
+                      <div>
+                        alter table orders add column status text
+                        <span className={styles.cursor} />
+                      </div>
+                    </>
                   )}
                   {logged && <div className={styles.termOk}>✓ pushed 1 migration (2.1s)</div>}
                 </div>

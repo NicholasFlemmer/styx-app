@@ -662,3 +662,79 @@
   font-size: 11px;
   color: var(--mu);
 }
+
+/* Tasks: every lane as a card (#138–#139); the one asking has a lime edge. */
+.board {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: min-content;
+  gap: 10px;
+  padding: 14px;
+  overflow: hidden;
+}
+.card,
+.cardAdd {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--ln);
+}
+.card[data-on='true'] {
+  border-color: var(--ac);
+}
+.cardAdd {
+  border-style: dashed;
+}
+.cardTop {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--mu);
+}
+.cardTop .agentSq {
+  margin-top: 0;
+}
+.cardTop :global(.mono) {
+  font-size: 10.5px;
+}
+.kind {
+  margin-left: auto;
+  padding: 0 4px;
+  border: 1px solid var(--tx);
+  color: var(--tx);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.cardTitle {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.cardMeta {
+  font-size: 11.5px;
+  color: var(--mu);
+}
+.cardLine {
+  font-size: 11.5px;
+}
+.cardFoot {
+  width: 100%;
+  padding-top: 6px;
+  border-top: 1px solid var(--ln);
+  font-size: 11px;
+  color: var(--mu);
+}
+/* The Terminal tab: the lane's terminal, full height. */
+.terminal[data-full='true'] {
+  flex: 1;
+  height: auto;
+  border-top: 0;
+  font-size: 12px;
+}
