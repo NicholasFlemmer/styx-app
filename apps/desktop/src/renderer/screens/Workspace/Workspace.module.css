@@ -75,3 +75,45 @@
     padding: 14px 16px;
   }
 }
+@layer screens {
+  /* Tabs in the person's order (#140): the dragged tab dims, a lime bar shows where it will land. */
+  .tabDragging {
+    opacity: 0.5;
+  }
+  .tabGapBefore {
+    border-left: 3px solid var(--ac);
+  }
+  .tabGapAfter {
+    border-right: 3px solid var(--ac);
+  }
+  .tabMenu {
+    position: fixed;
+    z-index: 30;
+    min-width: 170px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--tx);
+    background: var(--bg);
+  }
+  .tabMenuItem {
+    padding: 7px 12px;
+    border: 0;
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .tabMenuItem:hover,
+  .tabMenuItem:focus-visible {
+    background: var(--tx);
+    color: var(--bg);
+    outline: none;
+  }
+  .tabMenuItem:disabled {
+    color: var(--mu);
+    cursor: default;
+    background: transparent;
+  }
+}

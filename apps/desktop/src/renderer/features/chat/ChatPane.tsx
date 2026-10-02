@@ -524,6 +524,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
             kind="user"
             text={item.text}
             attachments={messageChips(item.attachments)}
+            {...(item.pointer !== undefined ? { pointer: item.pointer } : {})}
             compact={compact}
           />
         );

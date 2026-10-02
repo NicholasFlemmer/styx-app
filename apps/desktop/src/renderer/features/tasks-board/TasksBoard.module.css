@@ -170,4 +170,78 @@
   .addStart {
     margin-left: auto;
   }
+  /* Design or build (#140): a small outlined word, lime-text for design. */
+  .kind {
+    flex: none;
+    padding: 0 5px;
+    border: 1px solid currentColor;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--tx);
+  }
+  .kind[data-kind='design'] {
+    color: var(--act);
+  }
+  .here {
+    margin-left: 0;
+  }
+  .who .kind {
+    margin-left: auto;
+  }
+  .link {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    font-size: 12px;
+    color: var(--mu);
+    min-width: 0;
+  }
+  .link > span:first-child {
+    color: var(--act);
+  }
+  .linkLabel {
+    flex: none;
+    white-space: nowrap;
+  }
+  .link b {
+    font-weight: 600;
+    color: var(--tx);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .kinds {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin-top: 10px;
+    border: 1px solid var(--ln);
+  }
+  .kindItem {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 9px;
+    border: 0;
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .kindItem + .kindItem {
+    border-left: 1px solid var(--ln);
+  }
+  .kindItem span {
+    font-size: 11.5px;
+    color: var(--mu);
+  }
+  .kindItem[data-inv='true'] {
+    background: var(--tx);
+    color: var(--bg);
+  }
+  .kindItem[data-inv='true'] span {
+    color: var(--bg);
+    opacity: 0.75;
+  }
 }

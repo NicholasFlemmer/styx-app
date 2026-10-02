@@ -5,16 +5,17 @@ import {
   rows,
   activeLaneOf,
   type AgentChange,
+  type Instrument,
   type ProjectId,
   type ReadModel,
   type SessionId,
   type Worktree,
   SUPPORT_URL,
 } from '@styx/core';
-import { Tab } from '@styx/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChatPane } from '../../features/chat/ChatPane';
 import { TasksBoard } from '../../features/tasks-board/TasksBoard';
+import { DesignCanvas } from '../../features/design-canvas/DesignCanvas';
 import { ChangesPage } from '../../features/changes/ChangesPage';
 import { NewTask } from '../../features/new-task/NewTask';
 import { FilesPane } from '../../features/editor/FilesPane';
@@ -47,25 +48,10 @@ import { onEvent } from '../../state/bridge';
 import { command } from '../../state/commands';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
 import { useUiStore } from '../../state/ui-store';
+import { InstrumentTabs } from './InstrumentTabs';
+import { INSTRUMENT_CODE, WORKSPACE_MODE_KEY, defaultInstrument, instrumentOf } from './instruments';
 import s from './Workspace.module.css';
 
-/** Which instrument the centre shows (ADR-0027 §2); persisted alongside the pane sizes. */
-const WORKSPACE_MODE_KEY = 'workspace-mode';
-/** The instruments on a lane, and how each is stored in `paneSizes` (0 and 1 kept from Code / Design). */
-type Instrument = 'tasks' | 'code' | 'design' | 'changes' | 'terminal';
-const INSTRUMENT_CODE: Record<Instrument, number> = { code: 0, design: 1, changes: 2, terminal: 3, tasks: 4 };
-const instrumentOf = (n: number | undefined, fallback: Instrument): Instrument =>
-  n === 0
-    ? 'code'
-    : n === 1
-      ? 'design'
-      : n === 2
-        ? 'changes'
-        : n === 3
-          ? 'terminal'
-          : n === 4
-            ? 'tasks'
-            : fallback;
 /** git needs a moment after a turn ends before its marks are final; one re-read, not one per delta. */
 const TREE_REFRESH_DEBOUNCE_MS = 400;
 
@@ -258,7 +244,11 @@ export function Workspace() {
   // The instrument lives in the ui store's pane sizes so it survives a screen switch like the other pane prefs.
   // Until the person picks one, a project that knows how to run its app opens on Preview, any other on Tasks (#138).
   const modePref = useUi((u) => u.paneSizes[WORKSPACE_MODE_KEY]);
-  const mode = instrumentOf(modePref, devUrl !== null || devCommand !== null ? 'design' : 'tasks');
+  const instrumentOrder = useModel((m) => m.settings.app.instrumentOrder);
+  const mode = instrumentOf(
+    modePref,
+    defaultInstrument(instrumentOrder, devUrl !== null || devCommand !== null),
+  );
   const setMode = (next: Instrument) => {
     setPaneSize(WORKSPACE_MODE_KEY, INSTRUMENT_CODE[next]);
     void command('ui.persist', { paneSizes: { [WORKSPACE_MODE_KEY]: INSTRUMENT_CODE[next] } });
@@ -308,54 +298,15 @@ export function Workspace() {
           Terminal. Publish and Deploy stay on the strip; Land is in the lane header.
         */}
         <div className={s['modes']}>
-          <div
-            className={s['tabs']}
-            role="tablist"
-            aria-label={copy.chat.instruments.label}
-            data-instruments="true"
-          >
-            <Tab
-              variant="approvals"
-              label={copy.chat.instruments.tasks}
-              inv={mode === 'tasks'}
-              onClick={() => setMode('tasks')}
-              data-workspace-mode="tasks"
-            />
-            <Tab
-              variant="approvals"
-              label={copy.chat.instruments.preview}
-              inv={mode === 'design'}
-              onClick={() => setMode('design')}
-              data-workspace-mode="design"
-            />
-            <Tab
-              variant="approvals"
-              label={copy.chat.instruments.changes}
-              inv={mode === 'changes'}
-              onClick={() => setMode('changes')}
-              data-workspace-mode="changes"
-            />
-            <Tab
-              variant="approvals"
-              label={copy.chat.instruments.code}
-              inv={mode === 'code'}
-              onClick={() => setMode('code')}
-              data-workspace-mode="code"
-            />
-            <Tab
-              variant="approvals"
-              label={copy.chat.instruments.terminal}
-              inv={mode === 'terminal'}
-              onClick={() => setMode('terminal')}
-              data-workspace-mode="terminal"
-            />
-          </div>
+          <InstrumentTabs mode={mode} onPick={setMode} />
           {/* Land lives in the lane header over the chat (ADR-0027 §1); Publish and Deploy stay here. */}
           <PublishButton projectId={projectId} />
           <DeployButton projectId={projectId} />
         </div>
         {mode === 'tasks' ? (
           <TasksBoard projectId={projectId} activeSessionId={activeSessionId} />
+        ) : mode === 'canvas' ? (
+          <DesignCanvas projectId={projectId} sessionId={activeSessionId} />
         ) : mode === 'design' ? (
           <DesignPane
             projectId={projectId}
@@ -367,6 +318,7 @@ export function Workspace() {
             device={model.devices[projectId] ?? null}
             devPlatform={model.settings.project[projectId]?.devPlatform.value ?? null}
             devDevice={model.settings.project[projectId]?.devDevice.value ?? null}
+            sessionId={activeSessionId}
           />
         ) : mode === 'changes' ? (
           <ChangesPage projectId={projectId} sessionId={activeSessionId} />

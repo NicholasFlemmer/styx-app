@@ -1,0 +1,49 @@
+@layer screens {
+  /* Select to fix (#140): under the URL bar while a pick waits for words; the page keeps the rest. */
+  .strip {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 12px 10px;
+    border-bottom: 1px solid var(--ln);
+    background: var(--bg);
+  }
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    min-width: 0;
+  }
+  .chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 1px 7px;
+    border: 1px solid var(--ac);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chip::before {
+    content: '';
+    flex: none;
+    width: 7px;
+    height: 7px;
+    background: var(--ac);
+  }
+  .box {
+    border-color: var(--ac);
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .spacer {
+    flex: 1;
+  }
+}

@@ -1,4 +1,13 @@
-import { AGENT_LABEL, copy, navLanes, type ProjectId, type ReadModel, type SessionId } from '@styx/core';
+import {
+  AGENT_LABEL,
+  copy,
+  navLanes,
+  taskOf,
+  type ProjectId,
+  type ReadModel,
+  type SessionId,
+  type TaskKind,
+} from '@styx/core';
 import { AgentDot, Button, Select, Textarea } from '@styx/ui';
 import { useId, useState, type KeyboardEvent } from 'react';
 import { SPAWN_AGENTS } from '../modals/modals';
@@ -41,6 +50,16 @@ export function TasksBoard({ projectId, activeSessionId }: TasksBoardProps) {
         const here = lane.sessionId === activeSessionId;
         const card = taskCard(model, lane.sessionId);
         const branch = model.worktrees.byId[lane.worktreeId]?.branch ?? '';
+        const session = model.sessions.byId[lane.sessionId];
+        const kind = session?.kind ?? 'build';
+        // Design and build tasks name each other (#140).
+        const fromDesign =
+          session?.designSessionId === undefined
+            ? null
+            : (model.sessions.byId[session.designSessionId] ?? null);
+        const builtBy = Object.values(model.sessions.byId).filter(
+          (x) => x !== undefined && x.designSessionId === lane.sessionId && x.archivedAt === null,
+        );
         return (
           <button
             key={lane.sessionId}
@@ -56,6 +75,9 @@ export function TasksBoard({ projectId, activeSessionId }: TasksBoardProps) {
               <AgentDot agent={lane.agent} />
               <span>{AGENT_LABEL[lane.agent]}</span>
               <span className={s['branch']}>{branch}</span>
+              <span className={s['kind']} data-kind={kind} data-tasks-kind={kind}>
+                {copy.chat.tasks.kind[kind]}
+              </span>
               {here ? <span className={s['here']}>{copy.chat.tasks.inChat}</span> : null}
             </span>
             <span className={s['task']}>{lane.task}</span>
@@ -75,6 +97,22 @@ export function TasksBoard({ projectId, activeSessionId }: TasksBoardProps) {
               <span className={s['note']}>{card.note}</span>
             ) : null}
             {card.summary !== '' ? <span className={s['summary']}>{card.summary}</span> : null}
+            {fromDesign !== null ? (
+              <span className={s['link']} data-tasks-link="from">
+                <span aria-hidden="true">←</span>
+                <span className={s['linkLabel']}>{copy.chat.tasks.fromDesign}</span>
+                <b>{taskOf(fromDesign) || AGENT_LABEL[fromDesign.agent]}</b>
+              </span>
+            ) : null}
+            {builtBy.map((b) =>
+              b === undefined ? null : (
+                <span key={b.id} className={s['link']} data-tasks-link="built-by">
+                  <span aria-hidden="true">→</span>
+                  <span className={s['linkLabel']}>{copy.chat.tasks.builtBy}</span>
+                  <b>{taskOf(b) || AGENT_LABEL[b.agent]}</b>
+                </span>
+              ),
+            )}
           </button>
         );
       })}
@@ -88,11 +126,12 @@ function Alongside({ projectId, first }: { projectId: ProjectId; first: boolean 
   const platform = useUi((u) => u.platform);
   const { form, setForm, pickAgent, valid, busy, spawn } = useSpawnForm(projectId);
   const [text, setText] = useState('');
+  const [kind, setKind] = useState<TaskKind>('build');
   const ids = { text: useId(), agent: useId() };
   const ready = valid && text.trim() !== '';
   const start = async () => {
     if (!ready) return;
-    const id = await spawn(text.trim());
+    const id = await spawn(text.trim(), kind);
     if (id !== null) {
       setText('');
       setForm((f) => ({ ...f, firstMessage: '' }));
@@ -107,16 +146,30 @@ function Alongside({ projectId, first }: { projectId: ProjectId; first: boolean 
   };
   const t = copy.chat.tasks.alongside;
   return (
-    <section
-      className={[s['tile'], s['add']].join(' ')}
-      aria-labelledby={`${ids.text}-title`}
-      data-tasks-add="true"
-    >
+    <section className={s['add']} aria-labelledby={`${ids.text}-title`} data-tasks-add="true">
       <div className={s['addIn']}>
         <h3 id={`${ids.text}-title`} className={s['addTitle']}>
           {first ? t.first : t.title}
         </h3>
         <p className={s['addBody']}>{first ? t.firstBody : t.body}</p>
+        {/* Design it first, or build it (#140). */}
+        <div className={s['kinds']} role="radiogroup" aria-label={copy.chat.tasks.startKind}>
+          {(['design', 'build'] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              role="radio"
+              aria-checked={kind === k}
+              data-inv={kind === k ? 'true' : undefined}
+              className={s['kindItem']}
+              onClick={() => setKind(k)}
+              data-tasks-add-kind={k}
+            >
+              <b>{copy.chat.tasks.kind[k]}</b>
+              <span>{copy.chat.tasks.kindBody[k]}</span>
+            </button>
+          ))}
+        </div>
         <label htmlFor={ids.text} className="visually-hidden">
           {t.label}
         </label>

@@ -586,6 +586,8 @@ export class SessionService {
     this.deps.publisher.upsert('sessions', [session.id]);
     this.deps.publisher.upsert('worktrees', [worktree.id]);
     this.deps.publisher.upsert('projects', [project.id]);
+    // A design task's tokens exist before its first turn, so screens can link them and Type and colour has values.
+    if (session.kind === 'design') ensureDesignTokens(worktree.path);
     if (input.firstMessage) this.deps.transcript.user(session.id, input.firstMessage);
     this.deps.activity.append({
       who: AGENT_LABEL[session.agent],
@@ -656,7 +658,6 @@ export class SessionService {
       this.notes.set(session.id, [agentPreamble(lane), ...(this.notes.get(session.id) ?? [])]);
     // A design task learns where screens go and how they are drawn (#140), once, ahead of its first turn.
     if (session.kind === 'design' && session.lastActivityAt === null) {
-      ensureDesignTokens(worktree.path);
       this.notes.set(session.id, [copy.agentPrompt.design, ...(this.notes.get(session.id) ?? [])]);
     }
     const outgoing = firstMessage === null ? null : this.withNotes(session.id, firstMessage);

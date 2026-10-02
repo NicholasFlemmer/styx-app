@@ -271,7 +271,8 @@ export const copy = {
         type: 'Type',
         corners: 'Corners',
         none: 'None',
-        apply: 'Change it here and it changes now. Or tell {agent}: it gets the screen, this element and a picture of it.',
+        apply:
+          'Change it here and it changes now. Or tell {agent}: it gets the screen, this element and a picture of it.',
       },
       area: {
         title: 'Area',
@@ -503,7 +504,7 @@ export const copy = {
       'The design you are building changed in the design task on {branch}: {what}. Bring it in with `git merge {branch}` (only .styx/designs should change), look at the screens again, and update the build to match.',
     /** The first message of a build task started from a design (#140). */
     handover:
-      'Build these screens from the design in .styx/designs: {screens}. Match each one at the sizes drawn (desktop, tablet, phone).{tokens} Build them in this app’s own stack and components; the design files are the reference, not code to copy.{note}',
+      'Build {screens} from the design “{task}”.\n\nThe screens are in .styx/designs ({paths}). Match each one at the sizes drawn (desktop, tablet, phone).{tokens} Build them in this app’s own stack and components; the design files are the reference, not code to copy.{note}',
     handoverTokens:
       ' Use the design’s colours, type, corners and spacing from .styx/designs/tokens.json as the app’s design tokens (add them to the app’s theme).',
     handoverNote: ' From the person: {note}',
@@ -1973,8 +1974,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
         body: 'Ask, steer, drop in files. Its work reads as plain steps, and each finished turn comes back as a card you can open or undo. Carrying on keeps it.',
       },
       instruments: {
-        title: 'Look at the work five ways',
-        body: 'Tasks shows your other lanes side by side, each one answerable where it stands. Preview runs your app, Changes reads the lane as a page, Code is the full editor, Terminal is the lane’s shell.',
+        title: 'Look at the work your way',
+        body: 'Tasks shows every task as it works. Design is where an agent draws screens before anything is built; select anything to change it or tell the agent. Preview runs your app (Select to fix works there too), Changes reads the lane as a page, Code is the full editor, Terminal its shell. Drag the tabs into the order you want.',
       },
       changes: {
         title: 'Sign it off',

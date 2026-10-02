@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { isAbsolute, join, resolve, sep } from 'node:path';
 import {
   DEFAULT_DESIGN_TOKENS,
   DESIGN_DIR,
@@ -9,6 +9,7 @@ import {
   fill,
   parseDesignPath,
   screenName,
+  taskOf,
   tokensCss,
   type Agent,
   type DesignFile,
@@ -25,6 +26,8 @@ import type { SessionService } from './session-service';
 
 /** A design's tokens and their CSS, written when a design task starts so screens can link them from the first turn. */
 export const ensureDesignTokens = (worktreePath: string): void => {
+  // A display path (`~/code/…` in fixtures) is not a place on disk: never write relative to the working directory.
+  if (!isAbsolute(worktreePath)) return;
   const dir = join(worktreePath, DESIGN_DIR);
   try {
     mkdirSync(dir, { recursive: true });
@@ -179,8 +182,7 @@ export class DesignService {
     this.seen.set(design.id, now);
     if (builds.length === 0) return;
     const paths = new Set(hint);
-    if (before !== undefined)
-      for (const [p, m] of now) if (before.get(p) !== m) paths.add(p);
+    if (before !== undefined) for (const [p, m] of now) if (before.get(p) !== m) paths.add(p);
     if (paths.size === 0) return;
     const what = [...paths]
       .map((p) => (p === 'tokens.json' ? copy.chat.design.tokens.title : screenName(p.split('/')[0] ?? p)))
@@ -194,10 +196,7 @@ export class DesignService {
     }
     for (const b of builds)
       this.deps.sessions.tell(b.id, fill(copy.agentPrompt.designChanged, { branch: wt.branch ?? '', what }));
-    this.deps.transcript.system(
-      design.id,
-      fill(copy.chat.design.toldBuild, { n: builds.length, what }),
-    );
+    this.deps.transcript.system(design.id, fill(copy.chat.design.toldBuild, { n: builds.length, what }));
   }
 
   /** A design task's turn ended: if it changed screens, its build tasks hear about it. */
@@ -223,6 +222,8 @@ export class DesignService {
     const names = input.screens.map(screenName).join(', ');
     const message = fill(copy.agentPrompt.handover, {
       screens: names,
+      task: taskOf(design) || copy.chat.design.handover.title,
+      paths: input.screens.map((x) => `${x}/`).join(', '),
       tokens: input.tokens ? copy.agentPrompt.handoverTokens : '',
       note: input.note.trim() === '' ? '' : fill(copy.agentPrompt.handoverNote, { note: input.note.trim() }),
     });
