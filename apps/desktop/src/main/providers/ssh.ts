@@ -100,7 +100,8 @@ export class SshAdapter implements ProviderAdapter {
             '-p',
             port,
             `${user}@${host}`,
-            'true',
+            // A command every server shell knows: sh, cmd.exe and PowerShell (`true` does not exist on Windows).
+            'exit 0',
           ],
           { env: { ...process.env, ...issued.env }, reject: false, timeout: 15_000 },
         );
