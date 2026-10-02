@@ -62,6 +62,7 @@ import { SkillsService } from './services/skills-service';
 import { TargetService } from './services/target-service';
 import { TerminalService } from './services/terminal-service';
 import { TranscriptService } from './services/transcript-service';
+import { DesignService } from './services/design-service';
 import { UsageService } from './services/usage-service';
 import { AccountService, DEFAULT_API } from './services/account-service';
 import { UpdateService, type Updater } from './services/update-service';
@@ -105,6 +106,9 @@ export interface PreviewPort {
   detach(): void;
   /** A PNG of the loaded page (checkpoint screenshots); null when nothing is loaded. */
   capture(): Promise<Buffer | null>;
+  /** Select to fix (#140): what the person picked in the page, described, with a picture; null when cancelled. */
+  pick(): Promise<{ label: string; detail: string; image: string | null } | null>;
+  cancelPick(): void;
   /** The loaded page's URL and the project it was set for; null when nothing is loaded. */
   loaded(): { url: string; projectId: string } | null;
 }
@@ -115,6 +119,8 @@ const NO_PREVIEW: PreviewPort = {
   openExternal: async () => undefined,
   detach: () => undefined,
   capture: async () => null,
+  pick: async () => null,
+  cancelPick: () => undefined,
   loaded: () => null,
 };
 
@@ -163,6 +169,8 @@ export interface ContainerOptions {
   runtime: Runtime;
   windows: WindowsPort;
   preview?: PreviewPort;
+  /** A picture of part of a renderer window (a selection on the Design canvas, #140); absent in tests. */
+  captureWindow?: (senderId: number, rect: { x: number; y: number; width: number; height: number }) => Promise<Buffer | null>;
   /** The simulator / emulator mirror's OS hooks; faked in tests (`NO_DEVICE_HOOKS`). */
   deviceHooks?: DeviceHooks;
   /** Device tooling runner (`xcrun simctl`, `adb`) and lookup; faked in tests. */
@@ -276,6 +284,8 @@ export interface Container {
   broker: BrokerHost;
   windows: WindowsPort;
   preview: PreviewPort;
+  design: DesignService;
+  captureWindow: (senderId: number, rect: { x: number; y: number; width: number; height: number }) => Promise<Buffer | null>;
   dialogs: DialogsPort;
   runtime: Runtime;
   openExternal: (url: string) => Promise<void>;
@@ -364,6 +374,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     runtime,
   });
   sessions.backfillTasks();
+  const design = new DesignService({ repos, git, sessions, transcript });
   const grants = new GrantService({
     repos,
     audit,
@@ -888,6 +899,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     turnStarted: (id, messageId) => checkpoints.onTurnStarted(id, messageId),
     turnSettled: (id) => {
       checkpoints.onTurnSettled(id);
+      // A design task that drew or changed screens tells the build tasks built from it (#140).
+      design.onTurnSettled(id);
       // The lane ledger (overlaps between lanes) refreshed only on Fetch when Track agent edits is off: a turn
       // that wrote files is the moment the overlap appeared.
       const settled = repos.sessions.get(id);
@@ -964,6 +977,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     broker,
     windows: opts.windows,
     preview: opts.preview ?? NO_PREVIEW,
+    design,
+    captureWindow: opts.captureWindow ?? (async () => null),
     dialogs: opts.dialogs ?? NO_DIALOGS,
     runtime,
     openExternal: opts.openExternal,

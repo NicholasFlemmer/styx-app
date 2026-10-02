@@ -53,8 +53,10 @@ import {
   permissionModeSchema,
   sessionTogglesSchema,
   sessionPurposeSchema,
+  taskKindSchema,
   transcriptMessageSchema,
 } from '../model/session';
+import { designListSchema, designTokensSchema } from '../model/design';
 import { appSettingsSchema, previewDeviceSchema, projectSettingsSchema } from '../model/settings';
 import { pendingAskSchema } from '../model/session';
 import { notificationSchema } from '../model/notification';
@@ -409,6 +411,69 @@ export const commands = {
     output: ok,
   },
   'preview.reload': { input: z.object({}), output: ok },
+  /**
+   * Select to fix (#140): the running app in Preview takes a click (one element) or a drag (an area) and resolves with
+   * what was picked, its source when the page says, and a picture of it. `off` cancels a pick in progress (it then
+   * resolves null).
+   */
+  'preview.pick': {
+    input: z.object({ mode: z.enum(['pick', 'off']) }),
+    output: z.object({
+      pick: z
+        .object({
+          label: z.string(),
+          detail: z.string(),
+          /** PNG, base64 without a data: prefix; null when the page could not be captured. */
+          image: z.string().nullable(),
+        })
+        .nullable(),
+    }),
+  },
+  // --- design.* — the Design tab (#140): screens as files under .styx/designs in a task's worktree ---
+  'design.list': { input: z.object({ worktreeId: worktreeIdSchema }), output: designListSchema },
+  /** One screen's markup and the design's tokens as CSS, for the canvas to draw. */
+  'design.read': {
+    input: z.object({ worktreeId: worktreeIdSchema, path: z.string().min(1).max(200) }),
+    output: z.object({ html: z.string(), css: z.string() }),
+  },
+  /** A screen changed by hand on the canvas (text, fill, type, corners). */
+  'design.write': {
+    input: z.object({
+      worktreeId: worktreeIdSchema,
+      path: z.string().min(1).max(200),
+      html: z.string().max(2_000_000),
+    }),
+    output: ok,
+  },
+  /** Type and colour: writes tokens.json and tokens.css. */
+  'design.setTokens': { input: z.object({ worktreeId: worktreeIdSchema, tokens: designTokensSchema }), output: ok },
+  /** A picture of part of the calling window (a selection on the canvas), PNG base64. */
+  'design.capture': {
+    input: z.object({
+      rect: z.object({
+        x: z.number().int().nonnegative(),
+        y: z.number().int().nonnegative(),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+      }),
+    }),
+    output: z.object({ image: z.string().nullable() }),
+  },
+  /**
+   * Build it: hand a design task's screens over to be built, in a new build task branched from the design (linked to
+   * it) or in the design task itself.
+   */
+  'design.handover': {
+    input: z.object({
+      sessionId: sessionIdSchema,
+      mode: z.enum(['new', 'here']),
+      agent: agentSchema,
+      screens: z.array(z.string().min(1)).min(1).max(50),
+      tokens: z.boolean(),
+      note: z.string().max(4000),
+    }),
+    output: z.object({ sessionId: sessionIdSchema }),
+  },
   // --- device.* — the simulator / emulator the design window mirrors (owner request: a simulator in the design tab) ---
   /** Which tooling this machine has: Xcode's simctl, the Android SDK's adb / emulator, and input bridges (idb). */
   'device.tooling': {
@@ -503,6 +568,10 @@ export const commands = {
       effort: effortSchema.nullable().default(null),
       /** Set when Styx starts the session for a job of its own (Run locally / Deploy); gates `remember_command`. */
       purpose: sessionPurposeSchema.nullable().default(null),
+      /** Design or build (#140); null = build. */
+      kind: taskKindSchema.nullable().default(null),
+      /** A build task started from a design task: linked both ways, told when the design changes. */
+      designSessionId: sessionIdSchema.optional(),
       taskTargetId: targetIdSchema.optional(),
     }),
     output: z.object({ sessionId: sessionIdSchema, worktreeId: worktreeIdSchema }),
@@ -577,6 +646,19 @@ export const commands = {
         )
         .max(20)
         .default([]),
+      /**
+       * What the message points at (#140): an element or area picked in a design or the running app. `label` is the
+       * chip on the message; `detail` (the screen, the elements, their markup, the source lines) goes to the agent.
+       */
+      pointer: z
+        .object({
+          source: z.enum(['design', 'preview']),
+          label: z.string().min(1).max(200),
+          detail: z.string().max(20_000),
+          /** Send it to the build task's design task instead (a design problem seen in the build). */
+          toDesign: z.boolean().default(false),
+        })
+        .optional(),
     }),
     output: ok,
   },

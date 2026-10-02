@@ -23,8 +23,18 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
     return {};
   });
 
-  bus.register('session.sendMessage', async ({ sessionId, body, attachments }) => {
-    await sessions.sendMessage(sessionId, body, attachments);
+  bus.register('session.sendMessage', async ({ sessionId, body, attachments, pointer }) => {
+    // A design problem seen in the build goes to the design task the build was started from (#140).
+    const target =
+      pointer?.toDesign === true ? (repos.sessions.get(sessionId)?.designSessionId ?? sessionId) : sessionId;
+    await sessions.sendMessage(
+      target,
+      body,
+      attachments,
+      pointer === undefined
+        ? {}
+        : { pointer: { source: pointer.source, label: pointer.label, detail: pointer.detail } },
+    );
     app.usageReports.record('message.sent');
     return {};
   });

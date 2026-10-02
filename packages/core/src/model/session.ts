@@ -73,6 +73,13 @@ export const sessionTogglesSchema = z.object({
 });
 export type SessionToggles = z.infer<typeof sessionTogglesSchema>;
 
+/**
+ * What a task is for (owner request, discrepancy #140): a Design task draws screens before anything is built; a Build
+ * task writes the code. Absent on rows from before the split: those are build tasks.
+ */
+export const taskKindSchema = z.enum(['design', 'build']);
+export type TaskKind = z.infer<typeof taskKindSchema>;
+
 export const sessionSchema = z
   .object({
     id: sessionIdSchema,
@@ -82,6 +89,10 @@ export const sessionSchema = z
     runner: runnerSchema,
     purpose: sessionPurposeSchema.optional(),
     taskTargetId: targetIdSchema.optional(),
+    /** Design or build (#140); absent = build. */
+    kind: taskKindSchema.optional(),
+    /** A build task started from a design: the design task it builds, told when that design changes (#140). */
+    designSessionId: sessionIdSchema.optional(),
     model: z.string().nullable(),
     /** Claude Code only; other agents keep `default`. */
     permissionMode: permissionModeSchema,
@@ -220,8 +231,22 @@ export const askAnswerSchema = z.object({
 });
 export type AskAnswer = z.infer<typeof askAnswerSchema>;
 
+/**
+ * What a message points at (#140): an element or an area picked in a design or in the running app, shown as a chip on
+ * the message. The agent gets the full detail with the message; the row keeps the label.
+ */
+export const pointerSchema = z.object({
+  source: z.enum(['design', 'preview']),
+  label: z.string().min(1).max(200),
+});
+export type Pointer = z.infer<typeof pointerSchema>;
+
 export const messagePayloadSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('user'), attachments: z.array(attachmentSchema).optional() }),
+  z.object({
+    kind: z.literal('user'),
+    attachments: z.array(attachmentSchema).optional(),
+    pointer: pointerSchema.optional(),
+  }),
   /** `streaming`: the body is still being patched from partial stream events (renders a cursor). */
   z.object({ kind: z.literal('agent'), streaming: z.boolean().optional() }),
   z.object({ kind: z.literal('file-list'), files: z.array(fileListEntrySchema) }),

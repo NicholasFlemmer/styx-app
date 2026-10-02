@@ -244,3 +244,17 @@ export const isHotspot = (file: string, hotspots: readonly string[]): boolean =>
   const path = file.replace(/\\/g, '/');
   return globs.some((g) => globToRegExp(g).test(path));
 };
+
+/** `agent/<name>-<n>` (spec §4.11): prefix from project settings, n = first free counter among existing branches. */
+export const autoBranch = (agent: Agent, prefix: string, existingBranches: readonly string[]): string => {
+  const name = copy.agentProducts[agent].toLowerCase().split(' ')[0] ?? agent;
+  const taken = new Set<number>();
+  const re = new RegExp(`^${prefix.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')}${name}-(\\d+)$`);
+  for (const b of existingBranches) {
+    const m = re.exec(b);
+    if (m?.[1] !== undefined) taken.add(Number(m[1]));
+  }
+  let n = 1;
+  while (taken.has(n)) n += 1;
+  return `${prefix}${name}-${n}`;
+};

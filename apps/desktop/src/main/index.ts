@@ -426,6 +426,13 @@ async function boot(): Promise<void> {
       mainWindow: () => windowService.mainWindow() ?? null,
       onStatus: (status) => container?.publisher.sendEvent('preview.status', status),
     }),
+    // A selection on the Design canvas, as a picture for the agent (#140): only ever the asking window's own pixels.
+    captureWindow: async (senderId, rect) => {
+      const wc = webContents.fromId(senderId);
+      if (wc === undefined || wc.isDestroyed()) return null;
+      const image = await wc.capturePage(rect);
+      return image.isEmpty() ? null : image.toPNG();
+    },
     deviceHooks: {
       windowSources: async () =>
         (await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 } })).map(

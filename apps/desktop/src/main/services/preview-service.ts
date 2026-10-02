@@ -1,5 +1,6 @@
 import { WebContentsView, net, session, shell, type BrowserWindow } from 'electron';
 import { PREVIEW_VIEWPORTS, type PreviewDevice, isLocalDevUrl } from '@styx/core';
+import { CANCEL_PICK_SCRIPT, PICK_SCRIPT, describePick, rawPickSchema } from './preview-pick';
 import { logger } from './logger';
 import { PreviewProbe, type PreviewStatus } from './preview-probe';
 
@@ -145,6 +146,50 @@ export class PreviewService {
       logger.warn('preview: capture failed', { error: (e as Error).message });
       return null;
     }
+  }
+
+  /**
+   * Select to fix (#140): runs the pick in the loaded page and resolves with what the person clicked or dragged over,
+   * described for the agent, with a picture of it; null when cancelled, nothing is loaded or the page refused.
+   */
+  async pick(): Promise<{ label: string; detail: string; image: string | null } | null> {
+    const view = this.view;
+    if (view === null || this.loadedUrl === null || view.webContents.isDestroyed()) return null;
+    let raw: unknown;
+    try {
+      raw = await view.webContents.executeJavaScript(PICK_SCRIPT, true);
+    } catch (e) {
+      logger.warn('preview: pick failed', { error: (e as Error).message });
+      return null;
+    }
+    if (raw === null) return null;
+    const parsed = rawPickSchema.safeParse(raw);
+    if (!parsed.success) return null;
+    const { label, detail } = describePick(parsed.data);
+    // The page draws at `zoom`; the capture rectangle is in the view's own pixels.
+    const r = parsed.data.rect;
+    const pad = 8;
+    const rect = {
+      x: Math.max(0, Math.floor((r.x - pad) * this.zoom)),
+      y: Math.max(0, Math.floor((r.y - pad) * this.zoom)),
+      width: Math.max(1, Math.ceil((r.width + pad * 2) * this.zoom)),
+      height: Math.max(1, Math.ceil((r.height + pad * 2) * this.zoom)),
+    };
+    let image: string | null = null;
+    try {
+      const shot = await view.webContents.capturePage(rect);
+      image = shot.isEmpty() ? null : shot.toPNG().toString('base64');
+    } catch (e) {
+      logger.warn('preview: pick capture failed', { error: (e as Error).message });
+    }
+    return { label, detail, image };
+  }
+
+  /** Cancels a pick in progress. */
+  cancelPick(): void {
+    const view = this.view;
+    if (view === null || view.webContents.isDestroyed()) return;
+    void view.webContents.executeJavaScript(CANCEL_PICK_SCRIPT, true).catch(() => undefined);
   }
 
   /** Detaches on window close / app teardown. Kept separate from `set` so teardown never needs bounds. */

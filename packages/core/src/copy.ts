@@ -194,6 +194,7 @@ export const copy = {
     instruments: {
       label: 'Lane view',
       tasks: 'Tasks',
+      canvas: 'Design',
       preview: 'Preview',
       changes: 'Changes',
       code: 'Code',
@@ -203,6 +204,12 @@ export const copy = {
     tasks: {
       label: 'Tasks in this project',
       inChat: 'In the chat',
+      kind: { design: 'Design', build: 'Build' },
+      builtBy: 'Being built by',
+      fromDesign: 'From design',
+      designChanged: 'Design changed · told the build task',
+      startKind: 'Design it first, or build it.',
+      kindBody: { design: 'Screens first, in wireframe or hi-fi', build: 'Straight to code' },
       alongside: {
         title: 'Start another lane alongside',
         body: 'Its own branch, so it never steps on the others. It shows here as it goes.',
@@ -213,6 +220,111 @@ export const copy = {
         agent: 'Agent',
         start: 'Start',
       },
+    },
+    /** The Design instrument (#140): screens the agent draws before anything is built. */
+    design: {
+      wireframe: 'Wireframe',
+      hifi: 'Hi-fi',
+      fidelity: 'Fidelity',
+      sizes: 'Sizes',
+      allSizes: 'All sizes',
+      size: { desktop: 'Desktop', tablet: 'Tablet', phone: 'Phone' },
+      select: 'Select (V): click an element, or drag over an area',
+      typeColour: 'Type and colour',
+      zoom: 'Zoom',
+      buildIt: 'Build it',
+      screens: 'Screens',
+      askScreen: '+ Ask for a screen',
+      askScreenText: 'Design a {screen} screen.',
+      withAgent: 'Design with {agent}',
+      withAgentBody: 'Describe a screen or a change. {agent} draws it here, in this task, as files you keep.',
+      noScreens: 'No screens yet',
+      noScreensBody: 'Ask {agent} for a screen in the chat, as a wireframe or high fidelity.',
+      noScreensWire: 'No wireframes of these screens yet. Ask {agent} for them, or switch to Hi-fi.',
+      noScreensHi: 'Only wireframes so far. Ask {agent} for the high-fidelity pass, or switch to Wireframe.',
+      start: {
+        title: 'Design it before you build it',
+        body: 'A design task draws your screens first, as wireframes or high fidelity, at desktop and phone size, in your type and colours. Select anything to change it or to tell the agent what to fix, then hand it over to build.',
+        placeholder: 'What should it design? e.g. a checkout with a summary and one Pay button',
+        label: 'What to design',
+        start: 'Start a design task',
+      },
+      linked: 'From the design task “{task}”',
+      tokens: {
+        title: 'Type and colour',
+        scope: 'every screen',
+        colours: 'Colours',
+        typefaces: 'Typefaces',
+        heading: 'Headings',
+        body: 'Body',
+        scale: 'Type scale',
+        corners: 'Corners',
+        spacing: 'Spacing',
+        foot: 'Applies to every screen at once. Saved as the design’s tokens, which the build uses.',
+        none: 'This design has no tokens yet. Start from these and change them, or ask the agent to set them.',
+        use: 'Use these',
+      },
+      element: {
+        text: 'Text',
+        fill: 'Fill',
+        colour: 'Colour',
+        type: 'Type',
+        corners: 'Corners',
+        none: 'None',
+        apply: 'Change it here and it changes now. Or tell {agent}: it gets the screen, this element and a picture of it.',
+      },
+      area: {
+        title: 'Area',
+        size: 'Size',
+        holds: 'Holds',
+        tag: 'Area · {n} elements · {w} × {h}',
+        tagOne: 'Area · 1 element · {w} × {h}',
+        foot: 'Drag on a screen to select an area: a section, part of one, or across several. Click still picks one element.',
+      },
+      tell: 'Tell {agent}',
+      tellPlaceholder: 'What should change?',
+      send: 'Send to {agent}',
+      sent: 'Sent to {agent}',
+      hint: 'Select (V) a screen’s element, or drag over an area, to change it or tell the agent about it.',
+      /** System rows in the design task's chat. */
+      toldBuild: 'The design changed ({what}): told the build task, which brings it in.',
+      handedOver: 'Handed over to a new build task on {branch}.',
+      handover: {
+        title: 'Build these designs',
+        body: 'The build gets the screens and the design’s colours and type. Change the design later and the build task is told what changed.',
+        newTask: 'New build task',
+        newTaskBody: 'Its own lane, branched from this design. Pick the agent.',
+        here: 'Build here',
+        hereBody: 'This task carries on and builds it',
+        agent: 'Agent',
+        tokens: 'Type and colour',
+        tokensMeta: '{colours} colours · {sizes} sizes',
+        note: 'Anything the agent should know? e.g. “use our Button component”',
+        noteLabel: 'Note for the build',
+        start: 'Start building',
+        cancel: 'Cancel',
+      },
+    },
+    /** Select to fix in Preview (#140). */
+    pick: {
+      start: 'Select to fix',
+      stop: 'Stop selecting',
+      hint: 'Click an element in the app, or drag over an area.',
+      title: 'Fix this',
+      titleArea: 'Fix this area',
+      placeholder: 'What is wrong?',
+      label: 'What to fix',
+      toDesign: 'It’s a design problem: tell the design task',
+      send: 'Send to {agent}',
+      cancel: 'Cancel',
+    },
+    /** Tabs in the person's order (#140). */
+    order: {
+      moveLeft: 'Move left',
+      moveRight: 'Move right',
+      moveFront: 'Move to front',
+      reset: 'Reset order',
+      menu: 'Arrange {tab}',
     },
     /** The Changes instrument: the lane as a page you sign off (ADR-0027 §3). */
     changes: {
@@ -376,6 +488,25 @@ export const copy = {
     /** Keep lanes current (ADR-0023): the lane's base is Styx's job, so agents do not invent their own git choreography. */
     /** After the person's message: attachments saved in the worktree, one absolute path per line (any agent can open them). */
     attached: 'Attached with this message, saved in your worktree — open them with your file tools:',
+    /**
+     * Ahead of a design task's first turn (#140): where screens go and how they are drawn, so the Design tab can show
+     * them, let the person select and edit them, and hand them over to be built.
+     */
+    design:
+      'This is a design task: draw screens, do not build the app. Write each screen as one self-contained HTML file in .styx/designs/<screen>/<size>.html, where <screen> is a short lowercase slug (checkout, order-history) and <size> is desktop (1280 px wide), tablet (834) or phone (390). For a wireframe, name it <size>.wire.html: greys, boxes and placeholder text, structure before brand. Every file links ../tokens.css and uses its variables for colour, type, corners and spacing (var(--color-primary), var(--font-heading), var(--text-body-size), var(--radius), var(--space)); the design\u2019s values live in .styx/designs/tokens.json ({"colors":[{"name","value":"#RRGGBB"}],"fonts":{"heading","body"},"scale":[{"name","size","line","weight"}],"radius","spacing"}) — write or change that file to set them, and Styx writes tokens.css from it. Inline all CSS in a <style> block; no scripts, no external requests, no frameworks; images as inline SVG or data URIs. Use real, plausible content rather than lorem ipsum. Give meaningful elements an id or a short class so a selection can name them. When the person points at something, the message says which screen and which elements, with their markup; change exactly that.',
+    /** Under a message that points at something (#140): what was picked, for the agent. */
+    pointer: 'The person pointed at this ({source}):',
+    pointerDesign: 'a design screen',
+    pointerPreview: 'the running app in Preview',
+    /** To a build task when the design it builds changes (#140). */
+    designChanged:
+      'The design you are building changed in the design task on {branch}: {what}. Bring it in with `git merge {branch}` (only .styx/designs should change), look at the screens again, and update the build to match.',
+    /** The first message of a build task started from a design (#140). */
+    handover:
+      'Build these screens from the design in .styx/designs: {screens}. Match each one at the sizes drawn (desktop, tablet, phone).{tokens} Build them in this app’s own stack and components; the design files are the reference, not code to copy.{note}',
+    handoverTokens:
+      ' Use the design’s colours, type, corners and spacing from .styx/designs/tokens.json as the app’s design tokens (add them to the app’s theme).',
+    handoverNote: ' From the person: {note}',
     /** Ahead of the first turn for CLIs without a system-prompt flag (Codex, Gemini, Cursor): the same lines Claude Code gets. */
     preamble: 'From Styx, the app running this session — read before the message that follows:',
     lane: 'Your worktree is the branch {branch}, cut from {base}. Styx keeps it current: it fetches before a session starts, merges {base} in before Publish, and shows how far behind the lane is. Do not rebase, merge or switch branches yourself. If a merge conflict appears in the tree, resolve it in place and tell the user. When the user asks you to merge, land, publish or push this work to {base} (or "to main"), call the styx `land` tool with a one-line summary of what the lane did: Styx commits what you left uncommitted, brings {base} in, runs the project checks, merges into {base} and pushes it. Never push {base}, merge into it, or open a pull request yourself; if `land` refuses, tell the user its reason in one line.',
