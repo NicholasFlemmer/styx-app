@@ -325,8 +325,9 @@ export function buildContainer(opts: ContainerOptions): Container {
   });
   const pty = opts.pty ?? new PtyService(runtime.platform);
   // git is looked up where a terminal would find it, so one installed while Styx runs is found without a restart.
+  // Fixture and test containers keep the process PATH, as detection does (no login shell per test app).
   const gitRunner = new ExecaGitRunner({
-    loginPath: (o) => pty.resolveLoginPath(o),
+    ...((opts.redetectClis ?? true) ? { loginPath: (o: { maxAgeMs?: number }) => pty.resolveLoginPath(o) } : {}),
     platform: runtime.platform,
   });
   const git = new GitService(gitRunner);
