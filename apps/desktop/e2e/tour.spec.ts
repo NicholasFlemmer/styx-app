@@ -11,7 +11,7 @@ test('walkthrough: palette → fourteen steps across Home, the lane, the board a
   await page.waitForTimeout(1200);
   await expect(page.locator('[data-tour="true"]')).toHaveCount(0);
 
-  await page.keyboard.press('Meta+K');
+  await page.keyboard.press('ControlOrMeta+K');
   await page.keyboard.type('walkthrough');
   await page.keyboard.press('Enter');
   const tour = page.locator('[data-tour="true"]');

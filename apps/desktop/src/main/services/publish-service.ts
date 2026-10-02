@@ -23,6 +23,7 @@ import { findOnPath } from './detect-service';
 import type { GitService, GitStatus } from './git';
 import type { GrantService } from './grant-service';
 import { isSecretFile, logger, redactArgv, redactPatch } from './logger';
+import { onePathKey } from './spawn-cli';
 
 export type PublishStep = 'commit' | 'push' | 'pr';
 export type MessageKind = 'commit' | 'pr';
@@ -762,7 +763,7 @@ export const execaPublishExec =
     Object.assign(env, opts.env ?? {});
     const r = await execa(file, args, {
       cwd: opts.cwd,
-      env,
+      env: onePathKey(env),
       extendEnv: false,
       reject: false,
       timeout: opts.timeoutMs,

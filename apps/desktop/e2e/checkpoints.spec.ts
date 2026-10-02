@@ -166,7 +166,7 @@ test('a turn keeps the design window page before and after; Review shows Before 
         return { empty: img.isEmpty(), ...img.getSize() };
       }, DEV_PORT);
     const shown = await capture();
-    await page.keyboard.press('Meta+K');
+    await page.keyboard.press('ControlOrMeta+K');
     await expect(page.getByRole('dialog')).toBeVisible();
     const hidden = await capture();
     await page.keyboard.press('Escape');

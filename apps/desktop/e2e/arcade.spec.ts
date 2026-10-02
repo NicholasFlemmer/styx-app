@@ -15,7 +15,7 @@ test('palette → Play while you wait → board, keys, pause on blur, Esc back',
   const composer = page.locator('[data-chat-pane] [data-keyscope="composer"] textarea');
   await composer.focus();
 
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K');
+  await page.keyboard.press(process.platform === 'darwin' ? 'ControlOrMeta+K' : 'Control+K');
   const input = page.getByRole('dialog').getByRole('combobox');
   await input.fill('snake');
   await expect(page.getByRole('dialog').getByRole('option').first()).toContainText('Play while you wait');
@@ -67,7 +67,7 @@ test("the game is the pane's: another tab keeps it; a tab that needs you holds i
   const { app, page } = await launchStyx({ screen: 'workspace', fixture: 'demo', theme: 'dark' });
   await page.waitForSelector('[data-chat-pane]', { timeout: 10_000 });
   await page.click('[data-nav-lane][data-lane-status="working"] >> nth=0');
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K');
+  await page.keyboard.press(process.platform === 'darwin' ? 'ControlOrMeta+K' : 'Control+K');
   await page.getByRole('dialog').getByRole('combobox').fill('snake');
   await page.keyboard.press('Enter');
   const board = page.locator('[data-arcade="snake"]');
@@ -90,7 +90,7 @@ test("the game is the pane's: another tab keeps it; a tab that needs you holds i
   await expect(page.locator('[data-chat-pane] [role="log"]')).toHaveCount(1);
   await expect(page.locator('[data-arcade-held]')).toHaveAttribute('data-arcade-held', 'waiting');
   await expect(page.locator('[data-arcade-held]')).toContainText('Codex needs you');
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K');
+  await page.keyboard.press(process.platform === 'darwin' ? 'ControlOrMeta+K' : 'Control+K');
   await page.getByRole('dialog').getByRole('combobox').fill('snake');
   // The game is not offered (a loose fuzzy match on another row, "Send feedback … makes Styx", may remain).
   await expect(page.getByRole('option', { name: /Play while you wait/ })).toHaveCount(0);
