@@ -352,6 +352,20 @@ describe('a machine without git (owner request: git is never a requirement to st
   );
 
   it.skipIf(process.platform === 'win32')(
+    'Windows\' answer for a missing command (cmd.exe: "is not recognized…", exit 1) counts as no git',
+    async () => {
+      const bin = mkdtempSync(join(tmpdir(), 'styx-win-missing-'));
+      writeFileSync(
+        join(bin, 'git'),
+        '#!/bin/sh\necho "\'git\' is not recognized as an internal or external command," >&2\nexit 1\n',
+        { mode: 0o755 },
+      );
+      const git = new GitService(new ExecaGitRunner({ loginPath: async () => bin }));
+      await expect(git.version()).rejects.toThrow(/^git is not installed/);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
     "macOS's /usr/bin/git stub (no Command Line Tools) counts as no git",
     async () => {
       const bin = mkdtempSync(join(tmpdir(), 'styx-stub-git-'));
