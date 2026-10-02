@@ -652,6 +652,35 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .menu2 div { padding: 7px 12px; display: flex; justify-content: space-between; gap: 14px; }
 .menu2 div small { color: var(--mu); font-family: var(--mono); font-size: 11px; }
 .menu2 div[data-inv] { background: var(--tx); color: var(--bg); }
+
+.area { position: absolute; border: 1.5px dashed var(--ac); background: rgba(214,255,61,.08); z-index: 2; }
+.area .tagx { position: absolute; top: -22px; left: -2px; background: var(--ac); color: var(--acx); font: 700 10px/1 var(--ui); padding: 4px 5px; white-space: nowrap; }
+.area .h { position: absolute; width: 7px; height: 7px; background: var(--ac); }
+.kind { font-size: 11px; font-weight: 700; padding: 1px 6px; border: 1px solid currentColor; }
+.kind.d { color: var(--act); }
+.kind.b { color: var(--tx); }
+.tcards { padding: 16px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; align-content: start; background: var(--bg); min-height: 0; }
+.tc { border: 1px solid var(--ln); background: var(--s1); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.tc .w { display: flex; align-items: center; gap: 8px; color: var(--mu); }
+.tc .w .r { margin-left: auto; }
+.tc h5 { font: 600 15px/1.3 var(--ui); }
+.tc .st { color: var(--mu); } .tc .st.you { align-self: flex-start; background: var(--ac); color: var(--acx); font-weight: 600; padding: 0 5px; }
+.tc ol { list-style: none; display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
+.tc li { display: flex; gap: 8px; color: var(--mu); }
+.tc li::before { content: ''; width: 8px; height: 8px; margin-top: 4px; flex: none; border: 1.5px solid var(--act); background: var(--act); }
+.tc li.n { color: var(--tx); } .tc li.n::before { background: transparent; }
+.tc .link { display: flex; gap: 6px; align-items: center; border-top: 1px solid var(--ln); padding-top: 7px; color: var(--mu); }
+.tc .link b { color: var(--tx); font-weight: 600; }
+.tc .link .arrow { color: var(--act); }
+.tc .sum { color: var(--mu); }
+.tc[data-here] { border-color: var(--tx); }
+.tc .msg { border-left: 2px solid var(--act); padding: 4px 8px; color: var(--tx); background: var(--bg); }
+.tc .msg small { display: block; color: var(--mu); }
+.choice { display: grid; grid-template-columns: 1fr 1fr; margin-top: 12px; border: 1px solid var(--ln); }
+.choice div { padding: 9px 10px; font-size: 12.5px; }
+.choice div + div { border-left: 1px solid var(--ln); }
+.choice div small { display: block; color: var(--mu); font-size: 11.5px; margin-top: 2px; line-height: 1.35; }
+.choice div[data-inv] { background: var(--tx); color: var(--bg); } .choice div[data-inv] small { color: #5d6259; }
 </style>
 </head><body>
 <section class="doc">
@@ -914,6 +943,156 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 </div></div></div></div>
       <div class="tip" style="left:180px;top:48px">Drag a tab to where you want it. Your order is kept for every project.</div>
       <div class="menu2" style="left:390px;top:110px"><div>Move left<small>⌥⇧←</small></div><div data-inv>Move right<small>⌥⇧→</small></div><div>Move to front</div><div style="border-top:1px solid var(--ln)">Reset order</div></div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-4</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Design the checkout before we build it</h3>
+        <div class="sum"><span>5 screens · high fidelity</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed"><div class="rcpt"><b>▸ Wireframes for checkout, home, settings</b><span>Kept 10:02</span></div><div class="umsg">Good. Now high fidelity in our brand: blue, rounded, friendly.</div><div class="card-p"><div class="top"><span class="ok">Done in 3 min</span><span>5 screens</span></div><h4>High-fidelity pass on all of them</h4><p>Blue #2F5BFF, 8px corners, system type. Pay is the one strong button on checkout.</p><div class="acts"><span class="btn">Show screens</span><span class="btn">Undo this turn</span></div></div></div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+
+<section class="doc" style="margin-top:96px"><h1 style="font-size:40px">Round 2: areas, and design and build tasks that talk</h1></section>
+<section class="note" id="a1"><h2>7 · Select an area, not just an element</h2><p>Drag on the canvas to draw a box: a whole section, part of one, or across several. The box shows what it holds; Claude gets the area, every element in it and a picture of it. A click still picks one element.</p><div class="was"><b>Today</b>You can only point at one element at a time.</div></section>
+<div class="win" data-place="design" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr;position:relative">
+      <div class="itabs"><span >Tasks</span><span data-inv>Design</span><span >Preview</span><span >Changes</span><span >Code</span><span >Terminal</span><div class="acts"><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div></div>
+      <div class="dz"><div class="dbar">
+  <span class="grp"><span >Wireframe</span><span data-inv>Hi-fi</span></span>
+  <span class="grp"><span data-inv>All sizes</span><span>Desktop</span><span>Tablet</span><span>Phone</span></span>
+  <span class="tool" data-on title="Select (V)">↖</span><span class="tool" title="Text (T)">T</span><span class="tool"  title="Type and colour">Aa</span>
+  <span class="sp z">72% ▾</span>
+  <span class="btn pri sm">Build it →</span>
+</div><div class="dmain"><div class="scr">
+  <div class="h"><span>Screens</span><span>5</span></div>
+  <div class="it" data-inv><span>Checkout</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Home</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Settings</span><small>Desktop</small></div>
+  <div class="new">+ Ask for a screen</div>
+  <div class="ask"><b>Design with Claude</b>Describe a screen or a change. Claude draws it here, in this lane, as files you keep.</div>
+</div><div class="canvas"><div class="brow" style="left:26px;top:30px">
+  <div class="ab "><div class="lbl"><b>Checkout</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Checkout</b> Phone</div><div class="fr" style="width:160px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div>
+<div class="brow" style="left:26px;top:370px">
+  <div class="ab"><div class="lbl"><b>Settings</b> Desktop</div><div class="fr" style="width:250px;height:200px"><div class="ac-top">Settings<i>Nic</i></div><div class="ac-b"><div class="ac-h">Settings</div><div class="ac-row"><span>Email updates</span><span>On</span></div><div class="ac-row"><span>Dark mode</span><span>Match system</span></div><div class="ac-row"><span>Currency</span><span>EUR</span></div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Phone</div><div class="fr" style="width:160px;height:200px;overflow:hidden"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div><div class="area" style="left:34px;top:203px;width:238px;height:112px"><span class="tagx">Area · 3 elements · 236 × 104</span><span class="h" style="right:-4px;bottom:-4px"></span><span class="h" style="left:-4px;top:-4px"></span></div></div><div class="ins">
+  <div class="sec"><div class="t"><b>Area</b><span>Checkout · Desktop</span></div>
+    <div class="f"><span>Size</span><span class="v">236 × 104</span></div>
+    <div class="f"><span>Holds</span><span class="v">Total row, Pay button, card logos</span></div>
+  </div>
+  <div class="sec"><div class="t"><b>Tell Claude</b><span>⌘⏎</span></div>
+    <div class="ask2">This whole block should sit in a card that stays on screen as you scroll.</div>
+    <div class="row2"><span class="btn pri">Send to Claude</span></div>
+  </div>
+  <div class="foot">Drag on the canvas to select an area: a section, part of one, or across several. Claude gets the area, everything in it and a picture of it. Click still picks one element.</div>
+</div></div></div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-4</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Design the checkout before we build it</h3>
+        <div class="sum"><span>5 screens · high fidelity</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed"><div class="rcpt"><b>▸ Wireframes for checkout, home, settings</b><span>Kept 10:02</span></div><div class="umsg">Good. Now high fidelity in our brand: blue, rounded, friendly.</div><div class="card-p"><div class="top"><span class="ok">Done in 3 min</span><span>5 screens</span></div><h4>High-fidelity pass on all of them</h4><p>Blue #2F5BFF, 8px corners, system type. Pay is the one strong button on checkout.</p><div class="acts"><span class="btn">Show screens</span><span class="btn">Undo this turn</span></div></div><div class="umsg"><span class="chip"><i></i>Checkout › Area: Total, Pay button, card logos</span><br>This whole block should sit in a card that stays on screen as you scroll.</div></div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+<section class="note" id="a2"><h2>8 · Areas in the running app too</h2><p>The same drag works in Preview. Styx maps the box to the elements under it and, where it can, the source lines that draw them.</p><div class="was"><b>Today</b>Describing a region of the running app in words.</div></section>
+<div class="win" data-place="project" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr auto">
+      <div class="itabs"><span >Tasks</span><span >Design</span><span data-inv>Preview</span><span >Changes</span><span >Code</span><span >Terminal</span><div class="acts"><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div></div>
+      <div class="pv">
+        <div class="pickbar"><span class="u">localhost:3000/checkout</span><span class="btn" data-on>↖ Select to fix</span><span class="seg"><span data-inv>Desktop</span><span>Tablet</span><span>Phone</span></span></div>
+        <div class="pvwrap">
+          <div class="fr"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div><div class="area" style="left:6px;top:96px;width:418px;height:118px"><span class="tagx">Area · 4 elements · 412 × 112</span></div>
+          <div class="fixcard" style="left:140px;top:226px"><div class="t"><b>Fix this area</b><span>checkout.tsx:31–58</span></div><div class="box">These rows and the button are cramped on phone. Give them the spacing from the design.</div><div class="row2"><span class="btn">Cancel</span><span class="btn pri">Send to Claude</span></div></div>
+        </div>
+      </div>
+      <div class="term"><div class="h"><span>Terminal, agent/claude-4</span><span>Hide</span></div>$ pnpm dev<br><span class="ok">ready</span> on http://localhost:3000<br>$ ▌</div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-4</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Build the checkout from the design</h3>
+        <div class="sum"><span>2 turns kept · 6 files changed</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed"><div class="rcpt"><b>▸ Built Checkout and Home from the design</b><span>Kept 10:41</span></div><div class="umsg"><span class="chip"><i></i>Preview › Area: 2 rows, Total, Pay button · checkout.tsx:31–58</span><br>These rows and the button are cramped on phone. Give them the spacing from the design.</div><div class="live"><div class="hd"><i></i>Working<span>20 s</span></div><ol><li class="d">Read checkout.tsx</li><li class="n">Reserving room for the total while it loads</li><li>Rename the button</li></ol></div></div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+<section class="note" id="t1"><h2>9 · Two kinds of task, linked</h2><p>A task is a Design task or a Build task, chosen when you start it. Build it on a design starts a build task branched from the design (so it has the files) and links the two: the design says who is building it, the build says which design it is from. Change the design afterwards and Styx tells the build task what changed, with the element; the build card shows the message arrive. A fix picked in Preview goes to the build task; mark it “a design problem” and it goes to the design task instead.</p><div class="was"><b>Today</b>Tasks are independent: one task’s agent can message another, but nothing links a design to its build.</div></section>
+<div class="win" data-place="project" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr">
+      <div class="itabs"><span data-inv>Tasks</span><span >Design</span><span >Preview</span><span >Changes</span><span >Code</span><span >Terminal</span><div class="acts"><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div></div>
+      <div class="tcards">
+        <div class="tc"><div class="w"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-4</span><span class="r kind d">Design</span></div><h5>Checkout flow</h5><span class="st">Waiting for you</span><ol><li>Drew Checkout, Desktop and Phone</li><li>High-fidelity pass on all screens</li></ol>
+          <div class="msg"><small>You changed the design · told the build task</small>Checkout › Pay button: sticky on phone, card logos under it</div>
+          <div class="link"><span class="arrow">→</span>Being built by <b>Build the checkout from the design</b></div></div>
+        <div class="tc" data-here><div class="w"><span class="dot c-codex"></span>Codex <span class="mono">agent/codex-2</span><span class="r kind b">Build</span></div><h5>Build the checkout from the design</h5><span class="st">Working, 4 min</span><ol><li>Built Checkout from the design</li><li class="n">Making the Pay button sticky on phone</li></ol>
+          <div class="link"><span class="arrow">←</span>From design <b>Checkout flow</b> · 5 screens</div></div>
+        <div class="tc"><div class="w"><span class="dot c-gemini"></span>Gemini <span class="mono">agent/gemini-1</span><span class="r kind b">Build</span></div><h5>Fix the flaky orders test</h5><span class="st you">Your turn</span><ol><li>Read orders.test.ts</li></ol><div class="sum">1 file changed</div></div>
+        <div class="tc" style="border-style:dashed"><h5>Start a task</h5><span class="st">Design it first, or build it.</span><div class="choice"><div data-inv>Design<small>Screens first, in wireframe or hi-fi</small></div><div>Build<small>Straight to code</small></div></div></div>
+      </div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-codex"></span>Codex <span class="mono">agent/codex-2</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Build the checkout from the design</h3>
+        <div class="sum"><span>From design: Checkout flow · 3 files changed</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed"><div class="umsg">Build Checkout and Home from the design “Checkout flow”. Use the design’s colours and type as tokens.</div><div class="card-p"><div class="top"><span class="ok">Done in 6 min</span><span>3 files</span></div><h4>Checkout built from the design</h4><p>Tokens from the design are in theme.css; Checkout matches the Desktop and Phone screens.</p><div class="acts"><span class="btn">Show changes</span><span class="btn">Undo this turn</span></div></div><div class="umsg" style="background:var(--bg);border:1px solid var(--act)"><span class="chip"><i></i>From the design task · Checkout › Pay button</span><br>The design changed: make the Pay button sticky at the bottom on phone and show the card logos under it.</div><div class="live"><div class="hd"><i></i>Working<span>40 s</span></div><ol><li class="n">Making the Pay button sticky on phone</li></ol></div></div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+<section class="note" id="t2"><h2>10 · Handover picks the task</h2><p>Build it asks where: a new build task (its own lane, branched from the design, any agent), or here (this task carries on and builds). Either way the build gets the screens and the design’s colours and type.</p><div class="was"><b>Today</b>—</div></section>
+<div class="win" data-place="design" data-lane="claude" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr;position:relative">
+      <div class="itabs"><span >Tasks</span><span data-inv>Design</span><span >Preview</span><span >Changes</span><span >Code</span><span >Terminal</span><div class="acts"><span class="btn">Publish</span><span class="btn">Deploy to ▾</span></div></div>
+      <div class="dz"><div class="dbar">
+  <span class="grp"><span >Wireframe</span><span data-inv>Hi-fi</span></span>
+  <span class="grp"><span data-inv>All sizes</span><span>Desktop</span><span>Tablet</span><span>Phone</span></span>
+  <span class="tool"  title="Select (V)">↖</span><span class="tool" title="Text (T)">T</span><span class="tool"  title="Type and colour">Aa</span>
+  <span class="sp z">72% ▾</span>
+  <span class="btn pri sm">Build it →</span>
+</div><div class="dmain noins"><div class="scr">
+  <div class="h"><span>Screens</span><span>5</span></div>
+  <div class="it" data-inv><span>Checkout</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Home</span><small>Desktop · Phone</small></div>
+  <div class="it"><span>Settings</span><small>Desktop</small></div>
+  <div class="new">+ Ask for a screen</div>
+  <div class="ask"><b>Design with Claude</b>Describe a screen or a change. Claude draws it here, in this lane, as files you keep.</div>
+</div><div class="canvas"><div class="brow" style="left:26px;top:30px">
+  <div class="ab "><div class="lbl"><b>Checkout</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Checkout</b> Phone</div><div class="fr" style="width:160px;height:300px"><div class="ac-top">Checkout<i>2 items</i></div><div class="ac-b"><div class="ac-h">Pay securely</div><div class="ac-row"><span>Linen shirt</span><span>€48</span></div><div class="ac-row"><span>Canvas tote</span><span>€22</span></div><div class="ac-row"><span><b>Total</b></span><span><b>€70</b></span></div><div class="ac-btn">Pay €70</div><div class="ac-p" style="margin-top:6px;text-align:center">Apple Pay · card · PayPal</div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Desktop</div><div class="fr" style="width:250px;height:300px"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div>
+<div class="brow" style="left:26px;top:370px">
+  <div class="ab"><div class="lbl"><b>Settings</b> Desktop</div><div class="fr" style="width:250px;height:200px"><div class="ac-top">Settings<i>Nic</i></div><div class="ac-b"><div class="ac-h">Settings</div><div class="ac-row"><span>Email updates</span><span>On</span></div><div class="ac-row"><span>Dark mode</span><span>Match system</span></div><div class="ac-row"><span>Currency</span><span>EUR</span></div></div></div></div>
+  <div class="ab"><div class="lbl"><b>Home</b> Phone</div><div class="fr" style="width:160px;height:200px;overflow:hidden"><div class="ac-top">Acme Shop<i>Account</i></div><div class="ac-b"><div class="ac-h">New this week</div><div class="ac-p">Fresh picks, shipped free over €40.</div><div class="ac-hero"></div><div class="ac-card"><span class="ac-img"></span><div>Linen shirt<div class="ac-p">€48</div></div></div><div class="ac-card"><span class="ac-img"></span><div>Canvas tote<div class="ac-p">€22</div></div></div></div></div></div>
+</div></div></div></div>
+      <div class="dimmer"></div><div class="hand"><h4>Build these designs</h4><p>The build gets the screens and the design’s colours and type. Change the design later and the build task is told what changed.</p><div class="choice"><div data-inv>New build task<small>Its own lane, branched from this design. Pick the agent.</small></div><div>Build here<small>This task carries on and builds it</small></div></div>
+<div style="margin-top:8px"><div class="hk" style="border-bottom:1px solid var(--ln)"><span style="color:var(--mu)">Agent</span><small style="color:var(--tx)"><span class="dot c-codex" style="margin-right:6px"></span>Codex ▾</small></div>
+<div class="hk"><i></i>Checkout<small>Desktop · Phone</small></div>
+<div class="hk"><i></i>Home<small>Desktop · Phone</small></div>
+<div class="hk"><i class="off"></i>Settings<small>Desktop</small></div>
+<div class="hk"><i></i>Type and colour<small>6 colours · 4 sizes</small></div>
+</div>
+<div class="note2">Anything Claude should know? e.g. “use our Button component”</div>
+<div class="acts"><span class="btn">Cancel</span><span class="btn pri">Start building</span></div></div>
     </section>
     <aside class="chat">
       <div class="lanehead">
