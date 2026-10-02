@@ -569,6 +569,8 @@ async function boot(): Promise<void> {
 function realUpdater(fixture: string | null): Updater | null {
   if (!app.isPackaged || fixture !== null || env['STYX_E2E'] === '1') return null;
   if (!isMac && platform !== 'win32') return null;
+  // A Microsoft Store install is updated by the Store; electron-updater must not try to replace it.
+  if (process.windowsStore === true) return null;
   const override = env['STYX_UPDATE_URL'];
   const feedFile = join(process.resourcesPath, 'app-update.yml');
   if (override === undefined && !existsSync(feedFile)) return null;

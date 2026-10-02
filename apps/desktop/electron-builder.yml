@@ -37,6 +37,18 @@ win:
 nsis:
   oneClick: false
   perMachine: false
+# The Microsoft Store package (`pnpm package:win:store`, Windows only). Microsoft signs it on submission, so Windows
+# shows no unknown-publisher warning and the Store delivers updates (the in-app updater is off in a Store build).
+# Identity values are Partner Center's Product identity for the reserved name; displayName must equal that name.
+# Tiles are in build/appx/.
+appx:
+  identityName: HeyStyx.HeyStyx
+  publisher: CN=03B88DAC-F4A5-4B15-A423-61DAEF99F34D
+  publisherDisplayName: Hey Styx
+  applicationId: Styx
+  displayName: Hey Styx
+  backgroundColor: "#0d0e0c"
+  languages: [en-US]
 protocols:
   - name: Styx
     schemes: [styx]
