@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { fixtures, type ProjectFileV1, copy } from '@styx/core';
 import { describe, expect, it } from 'vitest';
 import { makeTestApp } from '../test-support';
@@ -66,17 +66,19 @@ describe('project.scan merge + suggestion logic', () => {
   });
 
   it('isTransientPath: the home, .styx worktrees and OS temp scratch dirs are never candidates', () => {
-    const home = '/Users/me';
-    expect(isTransientPath(home, home, '/tmp')).toBe(true);
-    expect(isTransientPath('/Users/me/.styx/worktrees/app/agent-claude-1', home, '/tmp')).toBe(true);
-    expect(isTransientPath('/Users/me/code/app/.styx/worktrees/lane', home, '/tmp')).toBe(true);
-    expect(isTransientPath('/tmp/claude-501/scratchpad', home, '/tmp')).toBe(true);
-    expect(isTransientPath('/tmp/claude-501/scratchpad', home, '/tmp/')).toBe(true);
-    expect(isTransientPath('/Users/me/code/app', home, '/tmp')).toBe(false);
-    expect(isTransientPath('/Users/me/.styxy/app', home, '/tmp')).toBe(false);
-    expect(isTransientPath('/tmpfs/app', home, '/tmp')).toBe(false);
+    // The service splits on the host separator: spell the POSIX fixtures with it, so a Windows host checks the same.
+    const h = (p: string) => p.split('/').join(sep);
+    const home = h('/Users/me');
+    expect(isTransientPath(home, home, h('/tmp'))).toBe(true);
+    expect(isTransientPath(h('/Users/me/.styx/worktrees/app/agent-claude-1'), home, h('/tmp'))).toBe(true);
+    expect(isTransientPath(h('/Users/me/code/app/.styx/worktrees/lane'), home, h('/tmp'))).toBe(true);
+    expect(isTransientPath(h('/tmp/claude-501/scratchpad'), home, h('/tmp'))).toBe(true);
+    expect(isTransientPath(h('/tmp/claude-501/scratchpad'), home, h('/tmp/'))).toBe(true);
+    expect(isTransientPath(h('/Users/me/code/app'), home, h('/tmp'))).toBe(false);
+    expect(isTransientPath(h('/Users/me/.styxy/app'), home, h('/tmp'))).toBe(false);
+    expect(isTransientPath(h('/tmpfs/app'), home, h('/tmp'))).toBe(false);
     // A home under the temp dir (tests) keeps its own folders.
-    expect(isTransientPath('/tmp/home-x/code/app', '/tmp/home-x', '/tmp')).toBe(false);
+    expect(isTransientPath(h('/tmp/home-x/code/app'), h('/tmp/home-x'), h('/tmp'))).toBe(false);
   });
 });
 

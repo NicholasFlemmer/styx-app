@@ -474,7 +474,7 @@ describe('PublishService.publish', () => {
       '--draft',
     ]);
     for (const c of [view, create]) {
-      expect(c?.file).toMatch(/\/bin\/gh$/);
+      expect(c?.file).toMatch(/[\\/]bin[\\/]gh$/);
       expect(c?.opts.env).toMatchObject({ GH_TOKEN: 'ghp_grant', GH_PROMPT_DISABLED: '1', NO_COLOR: '1' });
       expect(c?.args.join(' ')).not.toContain('ghp_grant');
     }

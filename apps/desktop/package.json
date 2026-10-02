@@ -7,7 +7,7 @@
   "main": "./out/main/index.js",
   "author": "Styx",
   "scripts": {
-    "dev": "env -u ELECTRON_RUN_AS_NODE electron-vite dev",
+    "dev": "node scripts/dev.mjs",
     "build": "pnpm run build:cli && electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
@@ -25,7 +25,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "visual:report": "node --experimental-strip-types e2e/visual/report.ts",
-    "build:cli": "pnpm -F @styx/cli build && mkdir -p resources/cli && cp ../../packages/cli/dist/styx.js resources/cli/styx.js",
+    "build:cli": "pnpm -F @styx/cli build && node scripts/copy-cli.mjs",
     "package:mac:dir": "pnpm run build && electron-builder --mac --dir",
     "package:win:dir": "pnpm run build && electron-builder --win --dir",
     "package:smoke": "node --experimental-strip-types e2e/run.ts --project e2e --grep packaged"

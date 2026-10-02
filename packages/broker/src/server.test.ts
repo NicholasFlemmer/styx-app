@@ -1,7 +1,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, statSync, symlinkSync } from 'node:fs';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BrokerClient, BrokerClientError } from './client';
 import { assertPrivateDir, BrokerServer, BrokerError } from './server';
@@ -22,7 +22,7 @@ let path: string;
 let now = 1_800_000_000_000;
 
 beforeEach(async () => {
-  path = join(mkdtempSync(join(tmpdir(), 'styx-brk-')), 'b.sock');
+  path = freshEndpoint('styx-brk-');
   server = new BrokerServer({
     authenticate: async (sid, tok) => (sid === 's1' && tok === TOKEN ? session : null),
     rateLimitPerMinute: 2,
@@ -32,6 +32,12 @@ beforeEach(async () => {
   await server.listen(path);
 });
 afterEach(async () => server.close());
+
+/** A Unix socket in a fresh temp dir on POSIX; a uniquely named pipe on Windows (no AF_UNIX listen in TEMP). */
+const freshEndpoint = (prefix: string): string => {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  return process.platform === 'win32' ? `\\\\.\\pipe\\${basename(dir)}` : join(dir, 'b.sock');
+};
 
 const client = () =>
   new BrokerClient({ endpoint: path, sessionId: 's1', token: TOKEN, client: 'mcp', pid: 1 });
@@ -88,7 +94,14 @@ describe('BrokerServer', () => {
     const s = await c.connect();
     expect(s.projectName).toBe('acme-shop');
     expect(await c.call('list_targets', {})).toEqual([
-      { id: 'tgt-1', name: 't-acme-shop', provider: 'vercel', env: 'prod', lockState: 'locked', scopes: ['deploy'] },
+      {
+        id: 'tgt-1',
+        name: 't-acme-shop',
+        provider: 'vercel',
+        env: 'prod',
+        lockState: 'locked',
+        scopes: ['deploy'],
+      },
     ]);
     await expect(c.call('get_credential', { grantId: 'g' })).rejects.toMatchObject({
       code: ErrorCode.revoked,
@@ -199,7 +212,7 @@ describe('BrokerServer hardening', () => {
         return sid === 's1' && tok === TOKEN ? session : null;
       },
     });
-    const p2 = join(mkdtempSync(join(tmpdir(), 'styx-brk-')), 'b.sock');
+    const p2 = freshEndpoint('styx-brk-');
     await slow.listen(p2);
     const sock = connect(p2);
     await new Promise<void>((r) => sock.once('connect', () => r()));
@@ -241,20 +254,24 @@ describe('BrokerServer hardening', () => {
     },
   );
 
-  it('listen removes a stale socket file but refuses to steal one another broker is still serving', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'styx-broker-'));
-    chmodSync(dir, 0o700);
-    const p = join(dir, 'broker.sock');
-    const first = new BrokerServer({ authenticate: async () => null });
-    await first.listen(p);
-    // Live: a second instance must not unlink it (that is exactly what killed the running app's shims).
-    const second = new BrokerServer({ authenticate: async () => null });
-    await expect(second.listen(p)).rejects.toThrow(/another broker is listening/);
-    expect(statSync(p).isSocket()).toBe(true);
-    await first.close();
-    // The file stays behind after a close; now nothing answers, so a new instance may take the path.
-    await second.listen(p);
-    expect(statSync(p).isSocket()).toBe(true);
-    await second.close();
-  });
+  // Socket-file semantics: a Windows named pipe leaves no file behind to be stale.
+  it.skipIf(process.platform === 'win32')(
+    'listen removes a stale socket file but refuses to steal one another broker is still serving',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'styx-broker-'));
+      chmodSync(dir, 0o700);
+      const p = join(dir, 'broker.sock');
+      const first = new BrokerServer({ authenticate: async () => null });
+      await first.listen(p);
+      // Live: a second instance must not unlink it (that is exactly what killed the running app's shims).
+      const second = new BrokerServer({ authenticate: async () => null });
+      await expect(second.listen(p)).rejects.toThrow(/another broker is listening/);
+      expect(statSync(p).isSocket()).toBe(true);
+      await first.close();
+      // The file stays behind after a close; now nothing answers, so a new instance may take the path.
+      await second.listen(p);
+      expect(statSync(p).isSocket()).toBe(true);
+      await second.close();
+    },
+  );
 });

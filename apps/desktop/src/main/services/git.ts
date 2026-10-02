@@ -89,6 +89,10 @@ export interface GitIdentity {
   email: string;
 }
 
+/** What git says when it has no author to commit as. */
+const NO_IDENTITY =
+  /tell me who you are|empty ident|auto-detection is disabled|no (name|email) was given|user\.(name|email)/i;
+
 /** The fallback since v1: replaced by the signed-in Styx account when there is one (ADR-0026 §6). */
 export const STYX_IDENTITY: GitIdentity = { name: 'Styx', email: 'styx@localhost' };
 
@@ -372,7 +376,11 @@ export class GitService {
 
   /** `git merge --no-edit <ref>` in a worktree; a conflict returns `ok: false` with the tree mid-merge (see `mergeAbort`). */
   async merge(path: string, ref: string): Promise<{ ok: boolean; output: string }> {
-    const r = await this.git.run(['merge', '--no-edit', ref], path, { reject: false });
+    // A merge commit needs an author: as the user, or as Styx when git has none (a fresh machine; checked before git
+    // touches the tree, so the retry starts clean).
+    let r = await this.git.run(['merge', '--no-edit', ref], path, { reject: false });
+    if (r.exitCode !== 0 && NO_IDENTITY.test(r.stderr))
+      r = await this.git.run([...this.identityArgs(), 'merge', '--no-edit', ref], path, { reject: false });
     return { ok: r.exitCode === 0, output: (r.stderr || r.stdout).trim() };
   }
 
@@ -600,11 +608,7 @@ export class GitService {
   private async asUserOrStyx(args: string[], path: string): Promise<{ ok: boolean; output: string }> {
     const r = await this.git.run(args, path, { reject: false });
     if (r.exitCode === 0) return { ok: true, output: '' };
-    if (
-      /tell me who you are|empty ident|auto-detection is disabled|no (name|email) was given|user\.(name|email)/i.test(
-        r.stderr,
-      )
-    ) {
+    if (NO_IDENTITY.test(r.stderr)) {
       const r2 = await this.git.run([...this.identityArgs(), ...args], path, { reject: false });
       return { ok: r2.exitCode === 0, output: (r2.stderr || r2.stdout).trim() };
     }

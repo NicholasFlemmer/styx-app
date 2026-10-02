@@ -30,6 +30,11 @@ import {
 import { IdeImportService } from './ide-import-service';
 
 const FIX = join(__dirname, '__fixtures__');
+/**
+ * These cases simulate a darwin search (`:`-joined PATH) over real temp dirs. On a Windows host the temp dirs carry a
+ * drive-letter colon and `findAllOnPath` splits on the host's `;`, so the simulation cannot hold there.
+ */
+const darwinPathOnWin = process.platform === 'win32';
 
 function bin(dir: string, name: string) {
   const p = join(dir, name);
@@ -50,13 +55,15 @@ describe('DetectService', () => {
     const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
     bin(dir, 'claude');
     bin(dir, 'gemini');
+    // A darwin $SHELL; Windows has no /bin/sh, so point at a stand-in written with `/` (the row names it by basename).
+    const shell = process.platform === 'win32' ? bin(dir, 'sh').replace(/\\/g, '/') : '/bin/sh';
     mkdirSync(join(home, '.claude'));
     writeFileSync(join(home, '.claude', '.credentials.json'), '{}');
     const deps: DetectDeps = {
       platform: 'darwin',
       home,
       pathEnv: dir,
-      env: { SHELL: '/bin/sh' },
+      env: { SHELL: shell },
       exec: async (b, args) => {
         if (args[0] === '--version')
           return {
@@ -110,73 +117,82 @@ describe('DetectService', () => {
   });
 
   describe('what the terminal sees (#98)', () => {
-    it('unions the login PATH, the shell answer and the install folders; PATH > shell > well-known; searched lists the folders', async () => {
-      const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
-      const loginDir = join(home, 'login-bin');
-      const local = join(home, '.local', 'bin');
-      const nvm = join(home, '.nvm', 'versions', 'node', 'v22.1.0', 'bin');
-      const shims = join(home, 'shims');
-      for (const d of [loginDir, local, nvm, shims]) mkdirSync(d, { recursive: true });
-      const onLogin = bin(loginDir, 'codex'); // on the login PATH only — the Dock-launched process never had it
-      const inLocal = bin(local, 'claude'); // the native installer's folder, on no PATH at all
-      const inNvm = bin(nvm, 'gemini'); // an npm global under nvm
-      const shim = bin(shims, 'agent'); // Cursor's `agent`, known to the shell alone (alias / shim)
-      const versions: Record<string, string> = {
-        [onLogin]: 'codex-cli 0.5.0',
-        [inLocal]: 'claude 2.1.300',
-        [inNvm]: 'gemini 1.0.0',
-        [shim]: 'cursor-agent 1.2.0',
-      };
-      const execPaths: string[] = [];
-      const deps: DetectDeps = {
-        platform: 'darwin',
-        home,
-        pathEnv: '/nonexistent/bin',
-        env: { SHELL: '/bin/sh' },
-        login: async () => ({ path: `${loginDir}:/nonexistent/bin`, which: { agent: shim } }),
-        exec: async (b, args, opts) => {
-          if (opts !== undefined) execPaths.push(opts.PATH);
-          if (args[0] === '--version') return { stdout: versions[b] ?? 'sh 3.2', exitCode: 0 };
-          return { stdout: 'usage', exitCode: 0 };
-        },
-      };
-      const reported: string[][] = [];
-      const svc = new DetectService(deps);
-      svc.onSearched = (dirs) => reported.push(dirs);
-      const by = Object.fromEntries((await svc.detectClis()).map((c) => [c.agent, c]));
-      expect(by['codex']).toMatchObject({ found: true, binary: onLogin, source: 'path', version: '0.5.0' });
-      expect(by['claude']).toMatchObject({ found: true, binary: inLocal, source: 'well-known' });
-      expect(by['gemini']).toMatchObject({ found: true, binary: inNvm, source: 'well-known' });
-      expect(by['cursor']).toMatchObject({ found: true, binary: shim, source: 'shell', version: '1.2.0' });
-      // The folders that exist, login PATH first; every row carries them and the watcher hears about them.
-      expect(by['claude']?.searched).toEqual([loginDir, local, nvm]);
-      expect(by['shell']?.searched).toEqual([loginDir, local, nvm]);
-      expect(reported).toEqual([[loginDir, local, nvm]]);
-      expect(toCliInstall(by['claude']!, 1).capabilities['searched']).toEqual([loginDir, local, nvm]);
-      // Version probes run with the whole search space on PATH, so a shim that needs its manager's dir can answer.
-      expect(execPaths[0]).toBe(`${loginDir}:/nonexistent/bin:${local}:${nvm}`);
-      // A bare name typed into the modal resolves the same way: the shell's answer first, then the search space.
-      expect(await svc.resolveName('agent')).toBe(shim);
-      expect(await svc.resolveName('claude')).toBe(inLocal);
-      expect(await svc.resolveName('nope')).toBeNull();
-      // A login shell that does not answer leaves the process PATH and the install folders in play.
-      const quiet = new DetectService({
-        ...deps,
-        login: async () => {
-          throw new Error('shell timed out');
-        },
-      });
-      const again = await quiet.detectClis();
-      expect(again.find((c) => c.agent === 'claude')).toMatchObject({
-        binary: inLocal,
-        source: 'well-known',
-      });
-      expect(again.find((c) => c.agent === 'codex')).toMatchObject({ found: false, searched: [local, nvm] });
-    });
+    it.skipIf(darwinPathOnWin)(
+      'unions the login PATH, the shell answer and the install folders; PATH > shell > well-known; searched lists the folders',
+      async () => {
+        const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+        const loginDir = join(home, 'login-bin');
+        const local = join(home, '.local', 'bin');
+        const nvm = join(home, '.nvm', 'versions', 'node', 'v22.1.0', 'bin');
+        const shims = join(home, 'shims');
+        for (const d of [loginDir, local, nvm, shims]) mkdirSync(d, { recursive: true });
+        const onLogin = bin(loginDir, 'codex'); // on the login PATH only — the Dock-launched process never had it
+        const inLocal = bin(local, 'claude'); // the native installer's folder, on no PATH at all
+        const inNvm = bin(nvm, 'gemini'); // an npm global under nvm
+        const shim = bin(shims, 'agent'); // Cursor's `agent`, known to the shell alone (alias / shim)
+        const versions: Record<string, string> = {
+          [onLogin]: 'codex-cli 0.5.0',
+          [inLocal]: 'claude 2.1.300',
+          [inNvm]: 'gemini 1.0.0',
+          [shim]: 'cursor-agent 1.2.0',
+        };
+        const execPaths: string[] = [];
+        const deps: DetectDeps = {
+          platform: 'darwin',
+          home,
+          pathEnv: '/nonexistent/bin',
+          env: { SHELL: '/bin/sh' },
+          login: async () => ({ path: `${loginDir}:/nonexistent/bin`, which: { agent: shim } }),
+          exec: async (b, args, opts) => {
+            if (opts !== undefined) execPaths.push(opts.PATH);
+            if (args[0] === '--version') return { stdout: versions[b] ?? 'sh 3.2', exitCode: 0 };
+            return { stdout: 'usage', exitCode: 0 };
+          },
+        };
+        const reported: string[][] = [];
+        const svc = new DetectService(deps);
+        svc.onSearched = (dirs) => reported.push(dirs);
+        const by = Object.fromEntries((await svc.detectClis()).map((c) => [c.agent, c]));
+        expect(by['codex']).toMatchObject({ found: true, binary: onLogin, source: 'path', version: '0.5.0' });
+        expect(by['claude']).toMatchObject({ found: true, binary: inLocal, source: 'well-known' });
+        expect(by['gemini']).toMatchObject({ found: true, binary: inNvm, source: 'well-known' });
+        expect(by['cursor']).toMatchObject({ found: true, binary: shim, source: 'shell', version: '1.2.0' });
+        // The folders that exist, login PATH first; every row carries them and the watcher hears about them.
+        expect(by['claude']?.searched).toEqual([loginDir, local, nvm]);
+        expect(by['shell']?.searched).toEqual([loginDir, local, nvm]);
+        expect(reported).toEqual([[loginDir, local, nvm]]);
+        expect(toCliInstall(by['claude']!, 1).capabilities['searched']).toEqual([loginDir, local, nvm]);
+        // Version probes run with the whole search space on PATH, so a shim that needs its manager's dir can answer.
+        expect(execPaths[0]).toBe(`${loginDir}:/nonexistent/bin:${local}:${nvm}`);
+        // A bare name typed into the modal resolves the same way: the shell's answer first, then the search space.
+        expect(await svc.resolveName('agent')).toBe(shim);
+        expect(await svc.resolveName('claude')).toBe(inLocal);
+        expect(await svc.resolveName('nope')).toBeNull();
+        // A login shell that does not answer leaves the process PATH and the install folders in play.
+        const quiet = new DetectService({
+          ...deps,
+          login: async () => {
+            throw new Error('shell timed out');
+          },
+        });
+        const again = await quiet.detectClis();
+        expect(again.find((c) => c.agent === 'claude')).toMatchObject({
+          binary: inLocal,
+          source: 'well-known',
+        });
+        expect(again.find((c) => c.agent === 'codex')).toMatchObject({
+          found: false,
+          searched: [local, nvm],
+        });
+      },
+    );
 
     it("install folders: the vendors' and package managers' dirs under home, plus injected machine-wide ones", () => {
       const home = '/Users/nic';
-      const posix = wellKnownBinDirs(home, 'darwin', {}, ['/opt/homebrew/bin']);
+      // `join` follows the host: compare the darwin dirs with `/` so a Windows host checks the same layout.
+      const posix = wellKnownBinDirs(home, 'darwin', {}, ['/opt/homebrew/bin']).map((d) =>
+        d.replace(/\\/g, '/'),
+      );
       expect(posix.slice(0, 3)).toEqual([
         '/Users/nic/.local/bin',
         '/opt/homebrew/bin',
@@ -266,57 +282,63 @@ describe('DetectService', () => {
       };
     }
 
-    it('the highest version wins across PATH, VS Code and Cursor bundles; every candidate is listed', async () => {
-      const m = machine();
-      const onPath = m.add(m.local, 'claude', '2.1.199');
-      const brew = m.add(m.brew, 'claude', '2.1.15');
-      const ext = m.add(m.ext, 'claude', '2.1.261');
-      const cursor = m.add(m.cursorExt, 'claude', '2.1.250');
-      const desk = m.add(join(m.apps, 'Claude.app', 'Contents', 'Resources'), 'claude', '2.1.100');
-      const svc = new DetectService(m.deps);
-      const claude = (await svc.detectClis()).find((c) => c.agent === 'claude')!;
-      expect(claude).toMatchObject({
-        found: true,
-        binary: ext,
-        version: '2.1.261',
-        source: 'vscode-extension',
-        capabilities: { streamJson: true },
-      });
-      expect(claude.alternatives).toEqual([
-        { binary: onPath, version: '2.1.199', source: 'path' },
-        { binary: brew, version: '2.1.15', source: 'path' },
-        { binary: ext, version: '2.1.261', source: 'vscode-extension' },
-        { binary: cursor, version: '2.1.250', source: 'cursor-extension' },
-        { binary: desk, version: '2.1.100', source: 'desktop-app' },
-      ]);
-      expect(findAllOnPath('claude', m.deps.pathEnv, 'darwin')).toEqual([onPath, brew]);
-      const row = toCliInstall(claude, 1);
-      expect(row.capabilities['source']).toBe('vscode-extension');
-      expect(row.capabilities['alternatives']).toEqual(claude.alternatives);
+    it.skipIf(darwinPathOnWin)(
+      'the highest version wins across PATH, VS Code and Cursor bundles; every candidate is listed',
+      async () => {
+        const m = machine();
+        const onPath = m.add(m.local, 'claude', '2.1.199');
+        const brew = m.add(m.brew, 'claude', '2.1.15');
+        const ext = m.add(m.ext, 'claude', '2.1.261');
+        const cursor = m.add(m.cursorExt, 'claude', '2.1.250');
+        const desk = m.add(join(m.apps, 'Claude.app', 'Contents', 'Resources'), 'claude', '2.1.100');
+        const svc = new DetectService(m.deps);
+        const claude = (await svc.detectClis()).find((c) => c.agent === 'claude')!;
+        expect(claude).toMatchObject({
+          found: true,
+          binary: ext,
+          version: '2.1.261',
+          source: 'vscode-extension',
+          capabilities: { streamJson: true },
+        });
+        expect(claude.alternatives).toEqual([
+          { binary: onPath, version: '2.1.199', source: 'path' },
+          { binary: brew, version: '2.1.15', source: 'path' },
+          { binary: ext, version: '2.1.261', source: 'vscode-extension' },
+          { binary: cursor, version: '2.1.250', source: 'cursor-extension' },
+          { binary: desk, version: '2.1.100', source: 'desktop-app' },
+        ]);
+        expect(findAllOnPath('claude', m.deps.pathEnv, 'darwin')).toEqual([onPath, brew]);
+        const row = toCliInstall(claude, 1);
+        expect(row.capabilities['source']).toBe('vscode-extension');
+        expect(row.capabilities['alternatives']).toEqual(claude.alternatives);
 
-      // Second run: nothing changed on disk → no --version / --help is executed again (stat-keyed cache).
-      const before = m.calls.length;
-      const again = (await svc.detectClis()).find((c) => c.agent === 'claude')!;
-      expect(again.binary).toBe(ext);
-      expect(m.calls.slice(before).filter((c) => c.includes('claude'))).toEqual([]);
-    });
+        // Second run: nothing changed on disk → no --version / --help is executed again (stat-keyed cache).
+        const before = m.calls.length;
+        const again = (await svc.detectClis()).find((c) => c.agent === 'claude')!;
+        expect(again.binary).toBe(ext);
+        expect(m.calls.slice(before).filter((c) => c.includes('claude'))).toEqual([]);
+      },
+    );
 
-    it('a manual override wins while it exists and is listed first among the alternatives', async () => {
-      const m = machine();
-      const onPath = m.add(m.local, 'claude', '2.1.199');
-      const ext = m.add(m.ext, 'claude', '2.1.261');
-      const picked = m.add(m.home, 'my-claude', '2.0.0');
-      m.versions.set(picked, '2.0.0');
-      const svc = new DetectService(m.deps);
-      const claude = (await svc.detectClis({ claude: picked })).find((c) => c.agent === 'claude')!;
-      expect(claude).toMatchObject({ binary: picked, version: '2.0.0', source: 'manual', found: true });
-      expect(claude.alternatives.map((a) => a.binary)).toEqual([picked, onPath, ext]);
-      // An override pointing at a file that is gone is ignored: detection is honest again.
-      const gone = (await svc.detectClis({ claude: join(m.home, 'nope') })).find(
-        (c) => c.agent === 'claude',
-      )!;
-      expect(gone).toMatchObject({ binary: ext, source: 'vscode-extension' });
-    });
+    it.skipIf(darwinPathOnWin)(
+      'a manual override wins while it exists and is listed first among the alternatives',
+      async () => {
+        const m = machine();
+        const onPath = m.add(m.local, 'claude', '2.1.199');
+        const ext = m.add(m.ext, 'claude', '2.1.261');
+        const picked = m.add(m.home, 'my-claude', '2.0.0');
+        m.versions.set(picked, '2.0.0');
+        const svc = new DetectService(m.deps);
+        const claude = (await svc.detectClis({ claude: picked })).find((c) => c.agent === 'claude')!;
+        expect(claude).toMatchObject({ binary: picked, version: '2.0.0', source: 'manual', found: true });
+        expect(claude.alternatives.map((a) => a.binary)).toEqual([picked, onPath, ext]);
+        // An override pointing at a file that is gone is ignored: detection is honest again.
+        const gone = (await svc.detectClis({ claude: join(m.home, 'nope') })).find(
+          (c) => c.agent === 'claude',
+        )!;
+        expect(gone).toMatchObject({ binary: ext, source: 'vscode-extension' });
+      },
+    );
 
     it('no candidates anywhere → not found, no alternatives', async () => {
       const m = machine();
@@ -336,21 +358,24 @@ describe('DetectService', () => {
       });
     });
 
-    it('codex / gemini pick the highest version among PATH entries only (no bundle lookup)', async () => {
-      const m = machine();
-      const oldCodex = m.add(m.local, 'codex', '0.40.0');
-      const newCodex = m.add(m.brew, 'codex', '0.42.0');
-      m.versions.set(oldCodex, 'codex-cli 0.40.0');
-      m.versions.set(newCodex, 'codex-cli 0.42.0');
-      mkdirSync(join(m.home, '.vscode', 'extensions', 'anthropic.claude-code-9.9.9-darwin-arm64', 'x'), {
-        recursive: true,
-      });
-      bin(join(m.home, '.vscode', 'extensions', 'anthropic.claude-code-9.9.9-darwin-arm64', 'x'), 'codex');
-      const svc = new DetectService(m.deps);
-      const codex = (await svc.detectClis()).find((c) => c.agent === 'codex')!;
-      expect(codex).toMatchObject({ binary: newCodex, version: '0.42.0', source: 'path' });
-      expect(codex.alternatives.map((a) => a.binary)).toEqual([oldCodex, newCodex]);
-    });
+    it.skipIf(darwinPathOnWin)(
+      'codex / gemini pick the highest version among PATH entries only (no bundle lookup)',
+      async () => {
+        const m = machine();
+        const oldCodex = m.add(m.local, 'codex', '0.40.0');
+        const newCodex = m.add(m.brew, 'codex', '0.42.0');
+        m.versions.set(oldCodex, 'codex-cli 0.40.0');
+        m.versions.set(newCodex, 'codex-cli 0.42.0');
+        mkdirSync(join(m.home, '.vscode', 'extensions', 'anthropic.claude-code-9.9.9-darwin-arm64', 'x'), {
+          recursive: true,
+        });
+        bin(join(m.home, '.vscode', 'extensions', 'anthropic.claude-code-9.9.9-darwin-arm64', 'x'), 'codex');
+        const svc = new DetectService(m.deps);
+        const codex = (await svc.detectClis()).find((c) => c.agent === 'codex')!;
+        expect(codex).toMatchObject({ binary: newCodex, version: '0.42.0', source: 'path' });
+        expect(codex.alternatives.map((a) => a.binary)).toEqual([oldCodex, newCodex]);
+      },
+    );
   });
 
   describe('probe of a picked path (Locate binary)', () => {
@@ -367,9 +392,9 @@ describe('DetectService', () => {
         applicationsDir: apps,
         exec: async (b, args) => {
           if (args[0] === '--version') {
-            if (b.endsWith('/broken')) return { stdout: 'zsh: exec format error', exitCode: 126 };
-            if (b.endsWith('/codex')) return { stdout: 'codex-cli 0.42.0', exitCode: 0 };
-            if (b.endsWith('/claude')) return { stdout: '2.1.263 (Claude Code)', exitCode: 0 };
+            if (/[\\/]broken$/.test(b)) return { stdout: 'zsh: exec format error', exitCode: 126 };
+            if (/[\\/]codex$/.test(b)) return { stdout: 'codex-cli 0.42.0', exitCode: 0 };
+            if (/[\\/]claude$/.test(b)) return { stdout: '2.1.263 (Claude Code)', exitCode: 0 };
             return { stdout: '', exitCode: 1 };
           }
           return { stdout: '--mcp-config', exitCode: 0 };

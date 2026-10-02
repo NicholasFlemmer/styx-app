@@ -1,5 +1,6 @@
 import {
   closeSync,
+  constants,
   existsSync,
   ftruncateSync,
   mkdirSync,
@@ -33,6 +34,13 @@ const wellFormed = (text: string): string => {
   const fn = (text as unknown as { toWellFormed?: () => string }).toWellFormed;
   return typeof fn === 'function' ? fn.call(text) : text;
 };
+
+/**
+ * Open for writing without O_APPEND, and every write goes at an explicit position (the end the log keeps count of).
+ * On Windows an append-mode handle has no right to truncate, so the rewrite that redacts a secret split across two
+ * chunks failed there and left the first half of the secret on disk; a plain write handle can truncate everywhere.
+ */
+const openForWrite = (path: string): number => openSync(path, constants.O_WRONLY | constants.O_CREAT);
 
 interface OpenLog {
   fd: number;
@@ -92,7 +100,7 @@ export class PtyLog {
       mkdirSync(this.dir, { recursive: true });
       const p = this.path(sessionId);
       const size = existsSync(p) ? statSync(p).size : 0;
-      f = { fd: openSync(p, 'a'), size, tail: '' };
+      f = { fd: openForWrite(p), size, tail: '' };
       this.open.set(sessionId, f);
     }
     return f;
@@ -109,14 +117,14 @@ export class PtyLog {
       closeSync(f.fd);
       const p = this.path(sessionId);
       renameSync(p, `${p}.1`);
-      f.fd = openSync(p, 'a');
+      f.fd = openForWrite(p);
       f.size = 0;
       if (f.tail !== '') {
-        writeSync(f.fd, f.tail);
+        writeSync(f.fd, f.tail, 0);
         f.size = tailBytes;
       }
     }
-    writeSync(f.fd, data);
+    writeSync(f.fd, data, f.size);
     f.size += bytes;
     f.tail = tailOf(f.tail + data);
   }

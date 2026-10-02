@@ -41,10 +41,38 @@ export const spawnCli: typeof spawnChild = ((
 ) => {
   if (process.platform !== 'win32') return spawnChild(command, [...args], options);
   if (options.env) options = { ...options, env: onePathKey(options.env) };
-  const shim = npmShimTarget(command);
+  const file = resolveWin(command, options.env ?? process.env);
+  // Not found: a plain spawn fails with ENOENT before `spawn`, as on every other platform (cross-spawn would hand it
+  // to cmd.exe, which starts fine and only then says it is not recognised).
+  if (file === null) return spawnChild(command, [...args], options);
+  const shim = npmShimTarget(file);
   if (shim !== null) return spawnChild(shim.node, [shim.script, ...args], options);
-  return crossSpawn(command, [...args], options);
+  return /\.(cmd|bat)$/i.test(file)
+    ? crossSpawn(file, [...args], options)
+    : spawnChild(file, [...args], options);
 }) as typeof spawnChild;
+
+/** Where Windows would find `command`: the path itself, or the first PATH folder holding it with a PATHEXT ending. */
+export const resolveWin = (
+  command: string,
+  env: Record<string, string | undefined>,
+  exists: (f: string) => boolean = existsSync,
+): string | null => {
+  const exts = (env['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean);
+  const withExt = (base: string): string | null => {
+    if (/\.[a-z0-9]+$/i.test(base) && exists(base)) return base;
+    for (const e of exts) if (exists(base + e)) return base + e;
+    for (const e of exts) if (exists(base + e.toLowerCase())) return base + e.toLowerCase();
+    return null;
+  };
+  if (/[\\/]/.test(command)) return withExt(command);
+  const path = Object.entries(env).find(([k]) => /^path$/i.test(k))?.[1] ?? '';
+  for (const dir of path.split(';').filter(Boolean)) {
+    const hit = withExt(join(dir, command));
+    if (hit !== null) return hit;
+  }
+  return null;
+};
 
 /**
  * Windows keeps `Path` in the environment; setting `PATH` beside it leaves two, and a child (node-pty passes the block

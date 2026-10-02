@@ -393,7 +393,9 @@ export class AppServerRunner extends EventEmitter<StreamEvents> implements Strea
           reject(err);
         }
       });
-      proc.once('close', (code) => this.onClose(entry, proc, code));
+      // A stop we asked for ends with no exit code, as a signal does on macOS: Windows' taskkill /F leaves 1, which
+      // would read as the agent failing.
+      proc.once('close', (code) => this.onClose(entry, proc, entry.killed ? null : code));
     });
   }
 

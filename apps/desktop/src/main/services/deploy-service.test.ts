@@ -128,7 +128,13 @@ describe('DeployService', () => {
     const r = await t.app.deploys.start(target.id, 'palette');
     const spawned = pty.spawned.at(-1);
     expect(spawned?.shell).toBe('/bin/zsh');
-    expect(spawned?.args).toEqual(['-lc', 'gcloud run deploy api --source . --region europe-west1']);
+    // The login shell's `-lc` on POSIX; PowerShell with a process-scoped Bypass on Windows.
+    const custom = 'gcloud run deploy api --source . --region europe-west1';
+    expect(spawned?.args).toEqual(
+      process.platform === 'win32'
+        ? ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-Command', custom]
+        : ['-lc', custom],
+    );
     expect(spawned?.env).toMatchObject({ CLOUDSDK_AUTH_ACCESS_TOKEN: 'ya29.scoped' });
     const grants = t.app.repos.grants.byTarget(target.id).filter((g) => g.scope.includes('deploy'));
     expect(t.app.repos.grantUses.byGrant(grants[0]!.id).at(-1)).toMatchObject({

@@ -10,10 +10,12 @@ const fakeFs = (
   root = '/repo',
 ) => {
   const all = new Set([...files.map((f) => `${root}/${f}`), ...Object.keys(dirs).map((d) => `${root}/${d}`)]);
+  // The detector builds paths with `join`, which uses `\\` on a Windows host; the fake speaks `/`.
+  const n = (p: string) => p.replace(/\\/g, '/');
   const deps: Omit<DeployDetectDeps, 'cli'> = {
-    exists: (p) => all.has(p),
-    readDir: (p) => dirs[p.replace(`${root}/`, '')] ?? [],
-    readText: (p) => texts[p.replace(`${root}/`, '')] ?? null,
+    exists: (p) => all.has(n(p)),
+    readDir: (p) => dirs[n(p).replace(`${root}/`, '')] ?? [],
+    readText: (p) => texts[n(p).replace(`${root}/`, '')] ?? null,
   };
   return deps;
 };
