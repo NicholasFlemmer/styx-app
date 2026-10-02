@@ -553,7 +553,7 @@ export class ProjectService {
     const { repos, git, clock, publisher } = this.deps;
     const path = resolve(rawPath.replace(/^~(?=$|[\\/])/, this.home));
     const existing = repos.projects.byPath(path);
-    if (existing) return existing;
+    if (existing) return existing.removedAt === null ? existing : this.restore(existing);
     if (!existsSync(path)) fail('not-found', `${path} does not exist`);
     if (!isDirectory(path))
       fail('invalid-input', `${path} is not a directory`, { reason: 'not-a-directory' });
@@ -612,6 +612,40 @@ export class ProjectService {
     publisher.upsert('projects', [project.id]);
     publisher.upsert('repos', [repo.id]);
     publisher.upsert('worktrees', [main.id]);
+    await this.reconcileProjectFile(project.id);
+    return this.require(project.id);
+  }
+
+  /**
+   * Adding a folder that was removed brings the same project back (owner request): its id, settings, targets, lanes
+   * and every agent thread with it, since removing only hid them. Git facts are refreshed, as the folder may have
+   * changed while it was gone.
+   */
+  private async restore(project: Project): Promise<Project> {
+    const { repos, git, publisher } = this.deps;
+    const back: Project = {
+      ...project,
+      removedAt: null,
+      railOrder: repos.projects.count(),
+      hasProjectFile: existsSync(join(project.path, PROJECT_FILE_PATH)),
+    };
+    repos.projects.upsert(back, repos.projects.settings(project.id));
+    publisher.upsert('projects', [project.id]);
+    const repo = repos.repos.byProject(project.id);
+    const main = repos.worktrees.byProject(project.id).find((w) => w.isMain);
+    if (repo && main && (await git.isRepo(project.path))) {
+      const info = await this.describeGit(project.path);
+      repos.repos.upsert({
+        ...repo,
+        defaultBranch: info.defaultBranch,
+        remotes: info.remotes,
+        ahead: info.ahead,
+        behind: info.behind,
+      });
+      repos.worktrees.upsert({ ...main, branch: info.branch, headCommit: info.head });
+      publisher.upsert('repos', [repo.id]);
+      publisher.upsert('worktrees', [main.id]);
+    }
     await this.reconcileProjectFile(project.id);
     return this.require(project.id);
   }
@@ -939,12 +973,30 @@ export class ProjectService {
 
   // --- remove / reorder / select ---------------------------------------------
 
+  /**
+   * Removing a project hides it (`removedAt`) and keeps everything else, so adding the folder again brings its
+   * threads back (owner request; `add` → `restore`). The caller stops its agents and closes its grants first.
+   * Deleting the files as well is the one hard delete: with the folder gone there is nothing to come back to.
+   */
   async remove(
     projectId: string,
     deleteFiles: boolean,
   ): Promise<{ sessionIds: string[]; worktreePaths: string[] }> {
     const { repos, publisher } = this.deps;
     const project = this.require(projectId);
+    if (!deleteFiles) {
+      repos.projects.upsert(
+        { ...project, removedAt: this.deps.clock.now() },
+        repos.projects.settings(project.id),
+      );
+      publisher.upsert('projects', [project.id]);
+      this.repackRail();
+      return { sessionIds: repos.sessions.byProject(project.id).map((s) => s.id), worktreePaths: [] };
+    }
+    const home = resolve(this.home);
+    const inHome = project.path.startsWith(home + '/') || project.path.startsWith(home + '\\');
+    if (!inHome || project.path === home)
+      fail('fs-denied', 'refusing to delete a folder outside the home directory');
     const sessionIds = repos.sessions.byProject(project.id).map((s) => s.id);
     const worktrees = repos.worktrees.byProject(project.id);
     const repo = repos.repos.byProject(project.id);
@@ -962,21 +1014,20 @@ export class ProjectService {
     );
     if (repo) publisher.remove('repos', [repo.id]);
     publisher.remove('projects', [project.id]);
-    // Re-pack rail order.
-    const rest = repos.projects.all();
-    rest.forEach((p, i) => repos.projects.upsert({ ...p, railOrder: i }));
+    this.repackRail();
+    await rm(project.path, { recursive: true, force: true });
+    return { sessionIds, worktreePaths: worktrees.filter((w) => !w.isMain).map((w) => w.path) };
+  }
+
+  /** Rail order counts the projects on the rail, so a removed one leaves no gap. */
+  private repackRail(): void {
+    const { repos, publisher } = this.deps;
+    const rest = repos.projects.all().filter((p) => p.removedAt === null);
+    rest.forEach((p, i) => repos.projects.upsert({ ...p, railOrder: i }, repos.projects.settings(p.id)));
     publisher.upsert(
       'projects',
       rest.map((p) => p.id),
     );
-    if (deleteFiles) {
-      const home = resolve(this.home);
-      const inHome = project.path.startsWith(home + '/') || project.path.startsWith(home + '\\');
-      if (!inHome || project.path === home)
-        fail('fs-denied', 'refusing to delete a folder outside the home directory');
-      await rm(project.path, { recursive: true, force: true });
-    }
-    return { sessionIds, worktreePaths: worktrees.filter((w) => !w.isMain).map((w) => w.path) };
   }
 
   reorder(ids: readonly string[]): void {

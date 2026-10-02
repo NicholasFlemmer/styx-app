@@ -44,7 +44,7 @@ export class ProjectsRepo {
     this.setSettingsStmt = db.prepare(
       'UPDATE projects SET settings_json = ?, settings_mtime = ? WHERE id = ?',
     );
-    this.countStmt = db.prepare('SELECT COUNT(*) AS n FROM projects');
+    this.countStmt = db.prepare('SELECT COUNT(*) AS n FROM projects WHERE removed_at IS NULL');
   }
 
   /** Inserts or updates the entity columns; `settings_json` is only written on insert (see `setSettings`). */
