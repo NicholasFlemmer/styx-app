@@ -73,3 +73,32 @@ describe('parseLoginEnv / mergePaths (#98)', () => {
     expect(mergePaths('C:\\A;C:\\B', 'c:\\b;C:\\C', 'win32')).toBe('C:\\A;C:\\B;C:\\C');
   });
 });
+
+describe('PtyService.kill on Windows', () => {
+  it('a second kill before the exit never reaches conpty (it corrupts the heap and takes the app down)', async () => {
+    const kills: (string | undefined)[] = [];
+    let exit: (e: { exitCode: number; signal?: number }) => void = () => undefined;
+    const fake = {
+      pid: 1,
+      onData: () => undefined,
+      onExit: (cb: typeof exit) => {
+        exit = cb;
+      },
+      kill: (signal?: string) => kills.push(signal),
+      write: () => undefined,
+      resize: () => undefined,
+    };
+    const pty = new PtyService('win32');
+    // The native module is the one thing faked: spawn hands back the pty above.
+    Object.assign(pty, { load: async () => ({ spawn: () => fake }) });
+    await pty.spawn({ id: 'p1', cwd: process.cwd(), shell: 'cmd.exe', args: [] });
+    pty.kill('p1');
+    pty.kill('p1');
+    expect(kills).toHaveLength(1);
+    exit({ exitCode: 0 });
+    // Once it has exited the id is free: a new pty under it can be killed again.
+    await pty.spawn({ id: 'p1', cwd: process.cwd(), shell: 'cmd.exe', args: [] });
+    pty.kill('p1');
+    expect(kills).toHaveLength(2);
+  });
+});

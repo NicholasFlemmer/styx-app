@@ -222,13 +222,21 @@ export class AgentSetupService {
         logger.warn('agent setup: stopped', { agent, problem: e.problem });
         this.patch(agent, { status: 'failed', problem: e.problem, message: e.message });
       } else {
+        // Anything unexpected is reported against the step it happened in, not as a failed install.
         const message = e instanceof Error ? e.message : String(e);
-        logger.warn('agent setup: failed', { agent, error: message });
-        this.patch(agent, {
-          status: 'failed',
-          problem: 'install-failed',
-          message: fill(copy.agentSetup.problems.install, { product: copy.agentProducts[agent] }),
-        });
+        const step = this.runs.get(agent)?.step ?? 'install';
+        logger.warn('agent setup: failed', { agent, step, error: message });
+        const product = copy.agentProducts[agent];
+        const p = copy.agentSetup.problems;
+        const [problem, text]: [SetupProblem, string] =
+          step === 'prepare'
+            ? ['prepare-failed', p.prepareNode]
+            : step === 'signin'
+              ? ['signin', fill(p.signinFailed, { product })]
+              : step === 'test'
+                ? ['test-failed', fill(p.test, { product })]
+                : ['install-failed', fill(p.install, { product })];
+        this.patch(agent, { status: 'failed', problem, message: text });
       }
     } finally {
       this.cancels.delete(agent);
@@ -237,8 +245,10 @@ export class AgentSetupService {
 
   cancel(agent: SetupAgent): void {
     const run = this.runs.get(agent);
-    this.cancels.get(agent)?.();
-    if (run?.terminalId) this.deps.terminals.kill(run.terminalId);
+    const cancel = this.cancels.get(agent);
+    // A sign-in's own cancel closes its terminal; otherwise (an installer running) close it here. Never both.
+    if (cancel !== undefined) cancel();
+    if (run?.terminalId && run.status !== 'waiting') this.deps.terminals.kill(run.terminalId);
   }
 
   /** The code a browser shows when it cannot reach the CLI; typed into the waiting sign-in. */
@@ -255,6 +265,9 @@ export class AgentSetupService {
 
   private async run(agent: SetupAgent, update: boolean, guard: () => void): Promise<void> {
     const product = copy.agentProducts[agent];
+    // Look again first: the row may be stale (a CLI removed or moved since the last detection).
+    await this.deps.refreshClis();
+    guard();
     let cli = this.deps.repos.discovery.cli(agent);
     if (update || cli === null || !cli.found) {
       await this.prepare(agent, guard);
