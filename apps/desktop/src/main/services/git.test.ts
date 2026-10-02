@@ -173,6 +173,40 @@ describe('a machine where git has no name or email', () => {
     expect(stdout.split(' ')[0]).toBe('Styx');
     expect(stdout.split(' ').length).toBe(3); // a merge: two parents
   });
+
+  it('undoing a merge reverts it as Styx in one go, never half-applied (revert changes the tree before it asks for an author)', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'styx-noident-rev-'));
+    const r = join(root, 'r');
+    mkdirSync(r);
+    await git.init(r);
+    writeFileSync(join(r, 'a.txt'), 'a');
+    await sh(['add', '.'], r);
+    await sh(['commit', '-q', '-m', 'init'], r);
+    await sh(['checkout', '-q', '-b', 'side'], r);
+    writeFileSync(join(r, 'b.txt'), 'b');
+    await sh(['add', '.'], r);
+    await sh(['commit', '-q', '-m', 'side'], r);
+    await sh(['checkout', '-q', 'main'], r);
+    await sh(['merge', '-q', '--no-ff', '-m', 'land side', 'side'], r);
+    const landed = (await execa('git', ['rev-parse', 'HEAD'], { cwd: r })).stdout.trim();
+    const empty = join(root, 'empty.gitconfig');
+    writeFileSync(empty, '');
+    await sh(['config', 'user.useConfigOnly', 'true'], r);
+    const saved = { g: process.env['GIT_CONFIG_GLOBAL'], s: process.env['GIT_CONFIG_NOSYSTEM'] };
+    process.env['GIT_CONFIG_GLOBAL'] = empty;
+    process.env['GIT_CONFIG_NOSYSTEM'] = '1';
+    try {
+      expect((await git.revertMerge(r, landed)).ok).toBe(true);
+      expect((await git.status(r)).clean).toBe(true);
+    } finally {
+      if (saved.g === undefined) delete process.env['GIT_CONFIG_GLOBAL'];
+      else process.env['GIT_CONFIG_GLOBAL'] = saved.g;
+      if (saved.s === undefined) delete process.env['GIT_CONFIG_NOSYSTEM'];
+      else process.env['GIT_CONFIG_NOSYSTEM'] = saved.s;
+    }
+    const { stdout } = await execa('git', ['log', '-1', '--format=%an'], { cwd: r });
+    expect(stdout.trim()).toBe('Styx');
+  });
 });
 
 describe('commitOwnedPaths (ADR-0028)', () => {

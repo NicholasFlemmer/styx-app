@@ -22,7 +22,8 @@ describe('seedDemoRepos', () => {
     const r = await seedDemoRepos({ repos: app.repos, userData, fixture: 'demo' });
     const elapsed = Date.now() - t0;
     expect(r.created).toHaveLength(5);
-    expect(elapsed).toBeLessThan(4000);
+    // Git starts several times slower on Windows (process creation, Defender): the same budget, scaled.
+    expect(elapsed).toBeLessThan(process.platform === 'win32' ? 12_000 : 4000);
 
     const acme = app.repos.projects.get(ids.project.acmeShop)!;
     expect(acme.path).toBe(join(userData, 'demo-repos', 'acme-shop'));
