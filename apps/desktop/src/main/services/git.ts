@@ -62,8 +62,12 @@ export interface GitRunner {
 /** Thrown (and returned as exit 127 when not rejecting) when there is no git to run; the message names it. */
 export const GIT_MISSING = 'git is not installed';
 export const isGitMissing = (message: string): boolean => message.startsWith(GIT_MISSING);
-/** macOS ships a /usr/bin/git stub that only offers to install the Command Line Tools: that is no git either. */
-const MAC_STUB = /xcrun: error: invalid active developer path|no developer tools were found/i;
+/**
+ * Answers that mean there is no git to run: macOS's /usr/bin/git stub that only offers the Command Line Tools, and
+ * Windows, where a missing command comes back from cmd.exe as "is not recognized…" with exit 1 rather than ENOENT.
+ */
+const MAC_STUB =
+  /xcrun: error: invalid active developer path|no developer tools were found|is not recognized as an internal or external command/i;
 
 export interface ExecaGitRunnerOptions {
   gitBin?: string;
