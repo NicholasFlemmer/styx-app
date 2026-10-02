@@ -19,7 +19,9 @@ export const npmShimTarget = (
   } catch {
     return null;
   }
-  const m = /"%(?:~?dp0%|dp0%)\\?([^"%]+\.[cm]?js)"\s+%\*/i.exec(text);
+  // npm's shim runs `"%_prog%" "%dp0%\<entry>" %*`, with `_prog` node; the entry is usually `.js` but need not be.
+  if (!/%_prog%/i.test(text)) return null;
+  const m = /"%(?:~?dp0%|dp0%)\\?([^"%]+)"\s+%\*/i.exec(text);
   if (!m?.[1]) return null;
   const dir = dirname(cmdFile);
   const script = join(dir, m[1].replace(/\\/g, '/'));

@@ -1,0 +1,3 @@
+# Windows batch files keep CRLF on every checkout (cmd.exe mis-reads labels and GOTO with bare LF).
+*.cmd text eol=crlf
+*.bat text eol=crlf

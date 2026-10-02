@@ -37,6 +37,23 @@ describe('spawn-cli (Windows launches)', () => {
         () => true,
       ),
     ).toBeNull();
+    // A shim that starts something other than node, even with a quoted path and %*, is not npm's.
+    expect(
+      npmShimTarget(
+        '/x/py.cmd',
+        () => '@echo off\r\npython "%dp0%\\run.py" %*\r\n',
+        () => true,
+      ),
+    ).toBeNull();
+    // npm's own shape with an entry that has no .js ending still runs on node.
+    const bare = shim.replace('node_modules\\@openai\\codex\\bin\\codex.js', 'codex');
+    expect(
+      npmShimTarget(
+        '/npm/codex.cmd',
+        () => bare,
+        (f) => f.replace(/\\/g, '/') === '/npm/codex',
+      )?.script.replace(/\\/g, '/'),
+    ).toBe('/npm/codex');
     expect(
       npmShimTarget(
         '/x/gone.cmd',
