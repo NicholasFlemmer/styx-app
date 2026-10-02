@@ -2,7 +2,7 @@
 
 > Styx is an agentic development environment (ADE): a Mac app for developers who run AI coding agents. It puts every project and every agent (Claude Code, OpenAI Codex, Gemini CLI and Cursor's agent) in one window, on top of the editor you already use, and makes agents ask before they touch production.
 
-Styx is free to download for macOS on Apple silicon. Windows is coming. It is made by one person in South Africa.
+Styx is free to download for macOS on Apple silicon, and in beta for Windows 10 and 11 (x64). It is made by one person in South Africa.
 
 ## What it does
 

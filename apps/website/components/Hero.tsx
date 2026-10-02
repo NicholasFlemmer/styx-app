@@ -51,7 +51,8 @@ export const Hero = () => (
           />
         </a>
         <p className={styles.micro}>
-          An agentic development environment (ADE) for Mac. Windows soon. Your keys never leave your computer.
+          An agentic development environment (ADE) for Mac, and in beta for Windows. Your keys never leave
+          your computer.
         </p>
       </div>
       <div className={styles.demo} data-load="fade">

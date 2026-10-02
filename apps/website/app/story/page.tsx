@@ -83,7 +83,7 @@ export default function StoryPage() {
           </figure>
           <div className={styles.cta}>
             <DownloadButton />
-            <span className={styles.note}>Free · Mac · Windows soon</span>
+            <span className={styles.note}>Free · Mac · Windows beta</span>
           </div>
           <section className={styles.transcript} aria-labelledby="transcript">
             <h2 id="transcript">Transcript</h2>

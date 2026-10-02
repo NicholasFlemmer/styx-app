@@ -20,14 +20,6 @@
 .meta {
   color: var(--mu);
 }
-.soon {
-  font: 600 var(--fs-32) / 1.1 var(--font-ui);
-  letter-spacing: -0.02em;
-  color: var(--tx);
-}
-.card[data-soon='true'] {
-  background: var(--s1);
-}
 .card :global(.btn) {
   align-self: flex-start;
   margin-top: var(--sp-3);

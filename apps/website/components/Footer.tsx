@@ -19,7 +19,7 @@ export const Footer = () => (
         <span className={styles.wordmark}>STYX</span>
         <p>
           Named after the river everything must cross. Every project, every agent, every key, one window. Mac
-          now, Windows soon.
+          now, Windows in beta.
         </p>
       </div>
       <nav aria-label="Footer" className={styles.links}>

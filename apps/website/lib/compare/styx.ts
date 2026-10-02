@@ -2,7 +2,7 @@ import type { RowKey, StyxPoint } from './types';
 
 /** Styx's column, the same on every comparison page. Keep it true to the shipped app. */
 export const STYX_CELLS: Record<RowKey, string> = {
-  runsOn: 'Mac (Apple silicon); Windows coming',
+  runsOn: 'Mac (Apple silicon); Windows 10 and 11 (beta)',
   agents: 'Claude Code, Codex, Gemini CLI, Cursor',
   price: 'Free',
   isolation: 'Own git worktree and branch',

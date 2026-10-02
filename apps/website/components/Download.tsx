@@ -3,12 +3,7 @@ import { Section } from './Section';
 import styles from './Download.module.css';
 
 export const Download = () => (
-  <Section
-    tone="panel"
-    id="download"
-    title="Download"
-    lede={`Beta ${site.version} for Mac. Windows is on its way.`}
-  >
+  <Section tone="panel" id="download" title="Download" lede={`Beta ${site.version} for Mac and Windows.`}>
     <div className={styles.cards}>
       <div className={styles.card}>
         <h3>Mac</h3>
@@ -17,11 +12,17 @@ export const Download = () => (
           Download for Mac
         </a>
       </div>
-      <div className={styles.card} data-soon="true">
+      <div className={styles.card}>
         <h3>Windows</h3>
-        <p className={styles.soon}>Coming soon</p>
         <p className={styles.meta}>
-          Windows Hello for anything that touches production. Same app, same rules.
+          Windows Hello for anything that touches production. Same app, same rules. Windows 10 and 11, x64.
+        </p>
+        <a className="btn" href={site.links.downloadWin}>
+          Download for Windows
+        </a>
+        <p className={styles.meta}>
+          Beta, not yet signed: Windows will say it doesn’t know the publisher. Choose More info, then Run
+          anyway. It doesn’t update itself yet, so download it again for a newer version.
         </p>
       </div>
     </div>

@@ -30,6 +30,7 @@ export const site = {
   version: desktop.version,
   links: {
     downloadMac: process.env['NEXT_PUBLIC_DOWNLOAD_MAC'] ?? '/#download',
+    downloadWin: process.env['NEXT_PUBLIC_DOWNLOAD_WIN'] ?? '/#download',
     /** Buy Me a Coffee (owner request): the footer's support band. */
     support: 'https://buymeacoffee.com/heystyx',
     /** Product Hunt (launch, 30 September 2026): the product page and its featured badge. */

@@ -12,21 +12,22 @@ export const usePlatform = (): Platform =>
 
 type Props = { primary?: boolean; small?: boolean; className?: string; note?: boolean };
 
-/** Mac is what ships first; a Windows visitor gets the button plus one honest line. */
+/** The visitor's own platform first: Windows gets the Windows installer and the one honest line about the beta. */
 export const DownloadButton = ({ primary = true, small = false, className, note = false }: Props) => {
   const platform = usePlatform();
+  const win = platform === 'win';
   return (
     <>
       <a
         className={['btn', small ? 'btnSm' : '', className ?? ''].join(' ').trim()}
         data-on={primary ? 'true' : undefined}
-        href={site.links.downloadMac}
+        href={win ? site.links.downloadWin : site.links.downloadMac}
       >
-        Download for Mac
+        {win ? 'Download for Windows' : 'Download for Mac'}
       </a>
-      {note && platform === 'win' && (
+      {note && win && (
         <span suppressHydrationWarning style={{ color: 'var(--mu)', fontSize: 'var(--fs-13)' }}>
-          Windows is coming soon.
+          Beta. Windows will ask before it runs.
         </span>
       )}
     </>
