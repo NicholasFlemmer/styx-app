@@ -18,7 +18,7 @@ export const Hero = () => (
           first.
         </p>
         <div className={styles.ctas}>
-          <DownloadButton note />
+          <DownloadButton />
           <a href="#access" className={styles.secondary}>
             What happens at the crossing
           </a>
