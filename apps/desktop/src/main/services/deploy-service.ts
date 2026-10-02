@@ -163,7 +163,7 @@ export class DeployService {
         this.deps.platform === 'win32'
           ? /wsl(\.exe)?$/i.test(shell)
             ? ['-e', 'sh', '-lc', custom]
-            : ['-NoLogo', '-Command', custom]
+            : ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-Command', custom]
           : ['-lc', custom];
       spawn = { file: shell, args, env: {}, label: customLabel };
     } else {

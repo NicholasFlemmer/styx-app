@@ -11,9 +11,11 @@
   },
   "dependencies": {
     "@styx/broker": "workspace:*",
-    "@styx/core": "workspace:*"
+    "@styx/core": "workspace:*",
+    "cross-spawn": "^7.0.6"
   },
   "devDependencies": {
+    "@types/cross-spawn": "^6.0.6",
     "esbuild": "^0.25.0"
   }
 }

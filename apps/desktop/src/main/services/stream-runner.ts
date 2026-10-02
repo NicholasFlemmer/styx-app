@@ -1,4 +1,5 @@
-import { spawn as spawnChild, type ChildProcess } from 'node:child_process';
+import type { ChildProcess, spawn as spawnChild } from 'node:child_process';
+import { killTree, spawnCli } from './spawn-cli';
 import { EventEmitter } from 'node:events';
 import { isAbsolute, relative, sep } from 'node:path';
 import {
@@ -680,7 +681,7 @@ export type SpawnFn = typeof spawnChild;
 export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRunnerLike {
   private readonly entries = new Map<string, Entry>();
 
-  constructor(private readonly spawnFn: SpawnFn = spawnChild) {
+  constructor(private readonly spawnFn: SpawnFn = spawnCli) {
     super();
   }
 
@@ -868,7 +869,7 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
     entry.killed = true;
     if (entry.proc) {
       entry.proc.stdin?.end();
-      entry.proc.kill();
+      killTree(entry.proc);
       return;
     }
     this.entries.delete(id);

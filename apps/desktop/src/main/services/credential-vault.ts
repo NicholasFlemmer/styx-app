@@ -39,7 +39,12 @@ export class MemoryVault implements CredentialVault {
 }
 
 const SERVICE = 'dev.styx';
-const CHUNK = 2000; // Windows Credential Manager caps blobs at 2560 bytes; chunk conservatively.
+/**
+ * Characters per keychain entry. Windows Credential Manager caps a blob at 2560 bytes and the keyring stores UTF-16
+ * there (two bytes a character), so 1200 on Windows; elsewhere the old 2000, which values already saved were split by
+ * (reading joins whatever parts exist, so either size reads back).
+ */
+const CHUNK = process.platform === 'win32' ? 1200 : 2000;
 
 interface KeyringEntry {
   getPassword(): string | null;

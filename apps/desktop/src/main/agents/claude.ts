@@ -39,7 +39,9 @@ export async function claudeLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch
   await mkdir(ctx.configDir, { recursive: true });
   const mcpPath = join(ctx.configDir, 'styx-mcp.json');
   const settingsPath = join(ctx.configDir, 'styx-settings.json');
-  const hook = `"${styxBin(ctx)}" hook claude`;
+  // Claude Code runs hooks in a shell (Git Bash on Windows): forward slashes keep the Windows path intact there.
+  const bin = ctx.platform === 'win32' ? styxBin(ctx).replace(/\\/g, '/') : styxBin(ctx);
+  const hook = `"${bin}" hook claude`;
   const hookEntry = [{ hooks: [{ type: 'command', command: hook }] }];
   await writeFile(mcpPath, JSON.stringify({ mcpServers: { styx: styxMcpServer(ctx) } }, null, 2));
   await writeFile(

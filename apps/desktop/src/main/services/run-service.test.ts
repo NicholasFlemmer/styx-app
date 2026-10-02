@@ -657,7 +657,10 @@ describe('RunService', () => {
       platform: 'win32',
     });
     await ps.start(acme, 'npm run dev');
-    expect(calls.at(-1)).toEqual({ file: 'powershell.exe', args: ['-NoLogo', '-Command', 'npm run dev'] });
+    expect(calls.at(-1)).toEqual({
+      file: 'powershell.exe',
+      args: ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-Command', 'npm run dev'],
+    });
     const wsl = new RunService({
       ...(fake as unknown as ConstructorParameters<typeof RunService>[0]),
       shell: () => 'wsl.exe',

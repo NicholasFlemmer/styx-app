@@ -15,7 +15,12 @@ const el = (over: Partial<PickedElement> = {}): PickedElement => ({
 
 describe('preview pick (#140)', () => {
   it('an element: its component, tag and text as the label; source and markup for the agent', () => {
-    const { label, detail } = describePick({ kind: 'element', path: '/checkout', rect: el().rect, items: [el()] });
+    const { label, detail } = describePick({
+      kind: 'element',
+      path: '/checkout',
+      rect: el().rect,
+      items: [el()],
+    });
     expect(label).toBe('PayButton › button.pay “Pay €70”');
     expect(detail).toContain('Page: /checkout');
     expect(detail).toContain('source: src/checkout.tsx:48');
@@ -35,7 +40,14 @@ describe('preview pick (#140)', () => {
 
   it('refuses page data that does not fit the shape', () => {
     expect(rawPickSchema.safeParse({ kind: 'area', path: '/', rect: {}, items: [] }).success).toBe(false);
-    expect(rawPickSchema.safeParse({ kind: 'element', path: '/', rect: el().rect, items: [el({ html: 'x'.repeat(5000) })] }).success).toBe(false);
+    expect(
+      rawPickSchema.safeParse({
+        kind: 'element',
+        path: '/',
+        rect: el().rect,
+        items: [el({ html: 'x'.repeat(5000) })],
+      }).success,
+    ).toBe(false);
   });
 
   it('the script parses', () => {

@@ -2,6 +2,7 @@ import type { IPty } from 'node-pty';
 import { execa } from 'execa';
 import { EventEmitter } from 'node:events';
 import { STRIPPED_ENV } from '../providers/cli-runner';
+import { onePathKey } from './spawn-cli';
 
 export interface PtySpawnOptions {
   id: string;
@@ -155,7 +156,15 @@ export class PtyService extends EventEmitter<PtyEvents> {
   async spawn(opts: PtySpawnOptions): Promise<{ pid: number }> {
     const { spawn } = await this.load();
     const shell = opts.shell ?? this.defaultShell();
-    const args = opts.args ?? (this.platform === 'win32' ? [] : ['-il']);
+    // Windows: PowerShell with a process-scoped Bypass, so `pnpm dev` (a .ps1 shim) runs as it would in a configured
+    // terminal; WSL takes no arguments.
+    const args =
+      opts.args ??
+      (this.platform === 'win32'
+        ? /powershell(\.exe)?$|pwsh(\.exe)?$/i.test(shell)
+          ? ['-NoLogo', '-ExecutionPolicy', 'Bypass']
+          : []
+        : ['-il']);
     const loginPath = await this.resolveLoginPath();
     const env: Record<string, string> = {};
     for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !STRIPPED_ENV.has(k)) env[k] = v;
@@ -169,7 +178,7 @@ export class PtyService extends EventEmitter<PtyEvents> {
       cols: opts.cols ?? 120,
       rows: opts.rows ?? 30,
       cwd: opts.cwd,
-      env,
+      env: onePathKey(env, this.platform),
     });
     this.ptys.set(opts.id, p);
     p.onData((d) => this.emit('data', opts.id, d));

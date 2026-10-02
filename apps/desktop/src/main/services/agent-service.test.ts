@@ -499,29 +499,33 @@ describe('AgentService.install (#98)', () => {
     ]);
   });
 
-  it('gemini: Homebrew when the login PATH has brew, npm otherwise, a clear refusal with neither', async () => {
-    const tools = mkdtempSync(join(tmpdir(), 'styx-tools-'));
-    const tool = (name: string) => {
-      writeFileSync(join(tools, name), '#!/bin/sh\n');
-      chmodSync(join(tools, name), 0o755);
-    };
-    tool('npm');
-    const npmOnly = setup(undefined, {}, NO_APP_SERVER, tools);
-    missing(npmOnly.app, 'gemini');
-    expect((await npmOnly.agents.install('gemini')).command).toBe('npm install -g @google/gemini-cli');
-    tool('brew');
-    const both = setup(undefined, {}, NO_APP_SERVER, tools);
-    missing(both.app, 'gemini');
-    expect((await both.agents.install('gemini')).command).toBe('brew install gemini-cli');
-    const neither = setup(undefined, {}, NO_APP_SERVER, mkdtempSync(join(tmpdir(), 'styx-empty-')));
-    missing(neither.app, 'gemini');
-    await expect(neither.agents.install('gemini')).rejects.toMatchObject({
-      code: 'not-found',
-      message:
-        'No installer for Gemini CLI on this machine: install it with your package manager, then rescan.',
-    });
-    expect(neither.pty.spawned).toHaveLength(0);
-  });
+  // POSIX stubs on the login PATH; Windows installs through its own recipes.
+  it.skipIf(process.platform === 'win32')(
+    'gemini: Homebrew when the login PATH has brew, npm otherwise, a clear refusal with neither',
+    async () => {
+      const tools = mkdtempSync(join(tmpdir(), 'styx-tools-'));
+      const tool = (name: string) => {
+        writeFileSync(join(tools, name), '#!/bin/sh\n');
+        chmodSync(join(tools, name), 0o755);
+      };
+      tool('npm');
+      const npmOnly = setup(undefined, {}, NO_APP_SERVER, tools);
+      missing(npmOnly.app, 'gemini');
+      expect((await npmOnly.agents.install('gemini')).command).toBe('npm install -g @google/gemini-cli');
+      tool('brew');
+      const both = setup(undefined, {}, NO_APP_SERVER, tools);
+      missing(both.app, 'gemini');
+      expect((await both.agents.install('gemini')).command).toBe('brew install gemini-cli');
+      const neither = setup(undefined, {}, NO_APP_SERVER, mkdtempSync(join(tmpdir(), 'styx-empty-')));
+      missing(neither.app, 'gemini');
+      await expect(neither.agents.install('gemini')).rejects.toMatchObject({
+        code: 'not-found',
+        message:
+          'No installer for Gemini CLI on this machine: install it with your package manager, then rescan.',
+      });
+      expect(neither.pty.spawned).toHaveLength(0);
+    },
+  );
 
   it('exit re-detects, re-verifies the now-installed row, logs the activity, and only then reports exited', async () => {
     const { agents, app, pty, win, exec, refreshClis } = setup(async () => ({

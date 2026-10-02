@@ -475,6 +475,11 @@ describe('installOpenIn', () => {
     expect(calls[1]).toBe(
       `reg add HKCU\\Software\\Classes\\Directory\\shell\\Styx\\command /ve /d "${bin}\\styx.cmd" "%V" /f`,
     );
-    expect(calls.at(-1)).toBe(`setx PATH C:\\Users\\me\\bin;${bin}`);
+    // The user PATH goes back through the registry as REG_EXPAND_SZ (setx would cut it at 1024 and flatten %VARS%).
+    expect(calls.at(-2)).toBe(
+      `reg add HKCU\\Environment /v Path /t REG_EXPAND_SZ /d C:\\Users\\me\\bin;${bin} /f`,
+    );
+    expect(calls.at(-1)).toBe('setx STYX_OPEN_IN 1');
+    expect(calls.some((c) => c.startsWith('setx PATH'))).toBe(false);
   });
 });

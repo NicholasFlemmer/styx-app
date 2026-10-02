@@ -156,6 +156,11 @@ app.on('open-url', (e, url) => {
   e.preventDefault();
   void handleUrl(url);
 });
+// Windows and Linux hand a link that started Styx in argv (macOS sends `open-url`); handled once the app is up.
+if (process.platform !== 'darwin') {
+  const coldUrl = process.argv.find((a) => a.startsWith('styx://'));
+  if (coldUrl) pendingUrl = coldUrl;
+}
 app.on('second-instance', (_e, argv) => {
   const url = argv.find((a) => a.startsWith('styx://'));
   if (url) void handleUrl(url);
@@ -562,7 +567,14 @@ function realUpdater(fixture: string | null): Updater | null {
   if (!app.isPackaged || fixture !== null || env['STYX_E2E'] === '1') return null;
   if (!isMac && platform !== 'win32') return null;
   const override = env['STYX_UPDATE_URL'];
-  if (override === undefined && !existsSync(join(process.resourcesPath, 'app-update.yml'))) return null;
+  const feedFile = join(process.resourcesPath, 'app-update.yml');
+  if (override === undefined && !existsSync(feedFile)) return null;
+  // Windows checks an update's signature only against the publisher named in app-update.yml, which a build has only
+  // when it was signed (WIN_CSC_LINK). An unsigned Windows build never updates itself in place.
+  if (platform === 'win32') {
+    const named = existsSync(feedFile) && /^publisherName:/m.test(readFileSync(feedFile, 'utf8'));
+    if (!named) return null;
+  }
   const updater = autoUpdater;
   updater.logger = {
     info: (m: unknown) => logger.info('updater', { message: String(m) }),

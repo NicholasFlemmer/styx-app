@@ -635,11 +635,27 @@ export async function installOpenIn(deps: OpenInInstallDeps): Promise<OpenInInst
     const onPath = (deps.env['PATH'] ?? '').split(';').some((p) => p.toLowerCase() === binDir.toLowerCase());
     if (!onPath) {
       // Append to the *user* PATH only (never the merged machine PATH), read back from the registry.
-      const q = await deps.exec('reg', ['query', 'HKCU\\Environment', '/v', 'Path']);
+      // Written back with `reg add` as REG_EXPAND_SZ, never `setx`: setx cuts the value at 1024 characters and stores
+      // `%USERPROFILE%`-style entries as plain text, which damages the person's PATH.
+      const q = await deps
+        .exec('reg', ['query', 'HKCU\\Environment', '/v', 'Path'])
+        .catch(() => ({ stdout: '' }));
       const m = /Path\s+REG_(?:EXPAND_)?SZ\s+(.*)$/m.exec(q.stdout);
       const current = (m?.[1] ?? '').trim();
       const next = current ? `${current.replace(/;+$/, '')};${binDir}` : binDir;
-      await deps.exec('setx', ['PATH', next]);
+      await deps.exec('reg', [
+        'add',
+        'HKCU\\Environment',
+        '/v',
+        'Path',
+        '/t',
+        'REG_EXPAND_SZ',
+        '/d',
+        next,
+        '/f',
+      ]);
+      // Tell Windows the environment changed so new terminals see it (setx of a variable of Styx's own broadcasts it).
+      await deps.exec('setx', ['STYX_OPEN_IN', '1']).catch(() => undefined);
     }
     return {
       installedAt: launcher,

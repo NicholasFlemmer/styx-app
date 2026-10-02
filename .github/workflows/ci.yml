@@ -25,6 +25,12 @@ jobs:
       - name: Electron e2e (main window, shell, grant flow, a11y)
         if: runner.os == 'macOS'
         run: pnpm e2e
+      - name: Electron e2e on Windows (main window, shell, grant flow, a11y)
+        if: runner.os == 'Windows'
+        run: pnpm e2e
       - name: Packaged app smoke (unsigned)
         if: runner.os == 'macOS'
         run: pnpm -F @styx/desktop package:mac:dir && pnpm -F @styx/desktop package:smoke
+      - name: Packaged app smoke on Windows (unsigned)
+        if: runner.os == 'Windows'
+        run: pnpm -F @styx/desktop package:win:dir && pnpm -F @styx/desktop package:smoke
