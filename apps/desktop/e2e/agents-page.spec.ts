@@ -38,6 +38,10 @@ test('Settings › Agents lists every agent with its account and opens Connect a
     await page.locator('[data-agent-row="gemini"] button', { hasText: 'Connect' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
+    // The dialog is Gemini's setup card first (owner request); the manual tools are one click away.
+    await expect(dialog.locator('[data-agent-setup="gemini"]')).toHaveAttribute('data-state', 'signed-out');
+    await expect(dialog.getByRole('button', { name: 'Sign in to Gemini' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'I’ll do it myself' }).click();
     await expect(dialog).toContainText('Connect Gemini CLI');
     await expect(dialog.locator('[data-cli-installed]')).toContainText('/opt/homebrew/bin/gemini');
 

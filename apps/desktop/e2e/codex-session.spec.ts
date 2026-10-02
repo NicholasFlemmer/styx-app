@@ -25,7 +25,7 @@ test('a Codex session runs through the app-server: pong, an approval ask, tokens
     const codex = ((detected.value as { clis: CliInstall[] }).clis ?? []).find((c) => c.agent === 'codex');
     expect(codex?.binary ?? '').toMatch(/e2e[/\\]fixtures[/\\]bin[/\\]codex(\.cmd)?$/);
     expect(codex?.capabilities['appServer']).toBe(true);
-    expect(codex?.version).toBe('0.154.0');
+    expect(codex?.version).toBe('99.0.0');
 
     // Spawn a Codex session with a first message.
     await page.getByRole('button', { name: '+ Spawn agent' }).click();

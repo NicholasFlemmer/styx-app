@@ -4,7 +4,8 @@
  * Fake Codex CLI for e2e (apps/desktop/e2e/launch.ts prepends this directory to PATH, so detection and every
  * Codex session in a test land here instead of on a real CLI that would spend the owner's usage).
  *
- *   codex --version      → `codex-cli 0.154.0`
+ *   codex --version      → `codex-cli 99.0.0` (the highest version wins detection, so this fake beats any real
+ *                           Codex, including one inside an editor extension, and no test spends the owner's usage)
  *   codex --help         → mentions `app-server` and `-c, --config <key=value>` (what DetectService reads)
  *   codex login status   → "Logged in using ChatGPT" on stderr, like the real 0.154.0
  *   codex app-server …   → JSON-RPC 2.0 over stdio (docs/research/agent-parity.md §2.4): answers initialize,
@@ -38,7 +39,7 @@ Options:
 `;
 
 if (args[0] === '--version' || args[0] === '-V') {
-  process.stdout.write('codex-cli 0.154.0\n');
+  process.stdout.write('codex-cli 99.0.0\n');
   process.exit(0);
 }
 if (args[0] === '--help' || args[0] === '-h' || args.length === 0) {
@@ -111,7 +112,7 @@ const thread = () => ({
   model: 'gpt-6-astra',
   status: { type: 'idle' },
   cwd,
-  cliVersion: '0.154.0',
+  cliVersion: '99.0.0',
   originator: 'styx',
   turns: [],
 });
@@ -253,7 +254,7 @@ function onMessage(m) {
   const params = m.params || {};
   switch (m.method) {
     case 'initialize':
-      send({ id: m.id, result: { userAgent: 'codex-fake/0.154.0', codexHome: '/tmp/codex-fake', platformFamily: 'unix', platformOs: 'macos' } });
+      send({ id: m.id, result: { userAgent: 'codex-fake/99.0.0', codexHome: '/tmp/codex-fake', platformFamily: 'unix', platformOs: 'macos' } });
       return;
     case 'model/list':
       send({ id: m.id, result: MODELS });
