@@ -34,10 +34,11 @@ publish() {
     exit 1
   fi
   local f
-  for f in $(sed -n 's/^  - url: //p' "$rel/$yml"); do
+  # Line by line: the Windows installer's name has spaces ("Styx Setup 0.4.2.exe").
+  while IFS= read -r f; do
     upload "$rel/$f" "gs://$BUCKET/$os/$f"
     if [ -f "$rel/$f.blockmap" ]; then upload "$rel/$f.blockmap" "gs://$BUCKET/$os/$f.blockmap"; fi
-  done
+  done < <(sed -n 's/^  - url: //p' "$rel/$yml")
   upload --cache-control="no-cache, max-age=0" "$rel/$yml" "gs://$BUCKET/$os/$yml"
   # One address that always holds the newest installer (no website redeploy per release).
   local installer
