@@ -33,15 +33,18 @@ export const landLabelOf = (
 /** A task line is one line, at most this long, so a pasted essay does not become the whole prompt. */
 export const TASK_MAX = 140;
 
-/** The lane's task: the first line of what the user asked, else the agent's latest `report_status` note. */
-export const taskOf = (session: Pick<Session, 'firstMessage' | 'note'>): string => {
+/**
+ * The lane's task: the first line of what the person asked (main records the first thing sent when a lane started
+ * without one). Empty when they have asked nothing yet; never the agent's status note, which is its latest reply and
+ * read as the lane's title (#138).
+ */
+export const taskOf = (session: Pick<Session, 'firstMessage'>): string => {
   const first =
     session.firstMessage
       ?.split('\n')
       .map((l) => l.trim())
       .find((l) => l !== '') ?? '';
-  const text = first !== '' ? first : (session.note ?? '').trim();
-  return text.length > TASK_MAX ? `${text.slice(0, TASK_MAX - 1).trimEnd()}…` : text;
+  return first.length > TASK_MAX ? `${first.slice(0, TASK_MAX - 1).trimEnd()}…` : first;
 };
 
 export interface ActiveLane {

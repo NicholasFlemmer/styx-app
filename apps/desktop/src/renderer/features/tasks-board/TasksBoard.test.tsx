@@ -32,36 +32,38 @@ describe('TasksBoard (#138)', () => {
     Object.assign(window, { styx: undefined });
   });
 
-  it('tiles every running lane but the one in the chat, each a small chat under its task', () => {
+  it('a card per running task, with its task and whose turn; the one in the chat is marked', () => {
     render(<TasksBoard projectId={acme} activeSessionId={claude} />);
     const running = navLanes(fixtures.demoReadModel(), acme, fixtures.DEMO_NOW).filter(
-      (l) => l.status !== 'landed' && l.status !== 'finished' && l.sessionId !== claude,
+      (l) => l.status !== 'landed' && l.status !== 'finished',
     );
-    expect(running.length).toBeGreaterThan(0);
-    const tiles = document.querySelectorAll('[data-tasks-tile]');
-    expect([...tiles].map((t) => t.getAttribute('data-tasks-tile'))).toEqual(running.map((l) => l.sessionId));
-    expect(document.querySelector(`[data-tasks-tile="${claude}"]`)).toBeNull();
-    const first = running[0];
-    if (first === undefined) throw new Error('fixture');
-    const tile = tiles[0] as HTMLElement;
-    expect(within(tile).getByRole('heading', { name: first.task })).toBeTruthy();
-    expect(tile.querySelector(`[data-chat-tile="${first.sessionId}"]`)).not.toBeNull();
-    // A tile is not the lane's chat: e2e and keyboard code that look for the chat pane find only the real one.
+    const cards = [...document.querySelectorAll('[data-tasks-card]')];
+    expect(cards.map((c) => c.getAttribute('data-tasks-card'))).toEqual(running.map((l) => l.sessionId));
+    const here = document.querySelector(`[data-tasks-card="${claude}"]`) as HTMLElement;
+    expect(here.getAttribute('aria-current')).toBe('true');
+    expect(within(here).getByText(copy.chat.tasks.inChat)).toBeTruthy();
+    for (const lane of running) {
+      const card = document.querySelector(`[data-tasks-card="${lane.sessionId}"]`) as HTMLElement;
+      expect(card.textContent).toContain(lane.task);
+      expect(card.textContent).toContain(lane.statusLabel);
+    }
+    // Summaries, not chats: no composer on the board.
     expect(document.querySelector('[data-chat-pane]')).toBeNull();
   });
 
-  it('Open in chat brings that lane into the chat', () => {
+  it('clicking a card opens its lane in the chat', () => {
     render(<TasksBoard projectId={acme} activeSessionId={claude} />);
-    const open = document.querySelector('[data-tasks-open]') as HTMLButtonElement;
-    const id = open.getAttribute('data-tasks-open');
-    fireEvent.click(open);
-    expect(useUiStore.getState().projectSession[acme]).toBe(id);
+    const other = [...document.querySelectorAll('[data-tasks-card]')].find(
+      (c) => c.getAttribute('data-tasks-card') !== claude,
+    ) as HTMLButtonElement;
+    fireEvent.click(other);
+    expect(useUiStore.getState().projectSession[acme]).toBe(other.getAttribute('data-tasks-card'));
   });
 
   it('starts another lane alongside without taking the chat', async () => {
     render(<TasksBoard projectId={acme} activeSessionId={claude} />);
-    const add = screen.getByRole('region', { name: copy.chat.tasks.label });
-    expect(within(add).getByRole('heading', { name: copy.chat.tasks.alongside.title })).toBeTruthy();
+    const board = screen.getByRole('region', { name: copy.chat.tasks.label });
+    expect(within(board).getByRole('heading', { name: copy.chat.tasks.alongside.title })).toBeTruthy();
     fireEvent.change(screen.getByLabelText(copy.chat.tasks.alongside.label), {
       target: { value: 'Add a sitemap' },
     });

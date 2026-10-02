@@ -199,11 +199,10 @@ export const copy = {
       code: 'Code',
       terminal: 'Terminal',
     },
-    /** The Tasks instrument: the project's other lanes side by side, each a small chat (#138). */
+    /** The Tasks instrument: every task in the project as a card of its live status; a click opens its lane (#138). */
     tasks: {
-      label: 'Lanes in this project',
-      openInChat: 'Open in chat',
-      openInChatNamed: 'Open {task} in the chat',
+      label: 'Tasks in this project',
+      inChat: 'In the chat',
       alongside: {
         title: 'Start another lane alongside',
         body: 'Its own branch, so it never steps on the others. It shows here as it goes.',

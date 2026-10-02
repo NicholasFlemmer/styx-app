@@ -1,18 +1,10 @@
-import {
-  AGENT_LABEL,
-  copy,
-  fill,
-  navLanes,
-  type ProjectId,
-  type ReadModel,
-  type SessionId,
-} from '@styx/core';
+import { AGENT_LABEL, copy, navLanes, type ProjectId, type ReadModel, type SessionId } from '@styx/core';
 import { AgentDot, Button, Select, Textarea } from '@styx/ui';
 import { useId, useState, type KeyboardEvent } from 'react';
-import { ChatPane } from '../chat/ChatPane';
 import { SPAWN_AGENTS } from '../modals/modals';
 import { useSpawnForm } from '../modals/use-spawn-form';
 import { useModel, useNow, useUi } from '../../state/hooks';
+import { taskCard } from './task-card';
 import s from './TasksBoard.module.css';
 
 const selectModel = (m: ReadModel) => m;
@@ -20,23 +12,22 @@ const AGENT_OPTIONS = SPAWN_AGENTS.map((a) => ({ value: a, label: copy.agentProd
 
 export interface TasksBoardProps {
   projectId: ProjectId;
-  /** The lane in the chat: it is already beside the board, so it gets no tile. */
+  /** The lane in the chat: its card is marked. */
   activeSessionId: SessionId | null;
 }
 
 /**
- * The Tasks instrument (#138): the project's other running lanes side by side, each a small chat (the pop-out's
- * compact pane) under its task and whose turn it is, so a question is answered where it stands. "Open in chat"
- * brings a lane into the chat. The last tile starts another lane alongside without leaving the one in focus.
+ * The Tasks instrument (#138): every running task in the project as a card of its live status: its task, whose
+ * turn, the latest steps as they happen, its status line and what it holds. A card is a button: it opens the task's
+ * lane in the chat (the one already there is marked). The last card starts another task alongside.
  */
 export function TasksBoard({ projectId, activeSessionId }: TasksBoardProps) {
-  const now = useNow();
   const model = useModel(selectModel);
   const openSession = useUi((u) => u.openSession);
+  const now = useNow();
   const lanes = navLanes(model, projectId, now).filter(
-    (l) => l.status !== 'landed' && l.status !== 'finished' && l.sessionId !== activeSessionId,
+    (l) => l.status !== 'landed' && l.status !== 'finished',
   );
-  const anyLane = activeSessionId !== null || lanes.length > 0;
 
   return (
     <div
@@ -45,53 +36,54 @@ export function TasksBoard({ projectId, activeSessionId }: TasksBoardProps) {
       aria-label={copy.chat.tasks.label}
       data-tasks-board="true"
       data-count={lanes.length + 1}
-      data-odd={(lanes.length + 1) % 2 === 1 ? 'true' : undefined}
     >
       {lanes.map((lane) => {
+        const here = lane.sessionId === activeSessionId;
+        const card = taskCard(model, lane.sessionId);
         const branch = model.worktrees.byId[lane.worktreeId]?.branch ?? '';
-        const titleId = `tasks-tile-${lane.sessionId}`;
         return (
-          <section
+          <button
             key={lane.sessionId}
-            className={s['tile']}
-            aria-labelledby={titleId}
-            data-tasks-tile={lane.sessionId}
+            type="button"
+            className={s['card']}
+            aria-current={here ? 'true' : undefined}
+            data-here={here ? 'true' : undefined}
             data-you={lane.status === 'your-turn' ? 'true' : undefined}
+            onClick={() => openSession(projectId, lane.sessionId)}
+            data-tasks-card={lane.sessionId}
           >
-            <header className={s['head']}>
-              <div className={s['who']}>
-                <AgentDot agent={lane.agent} />
-                <span>{AGENT_LABEL[lane.agent]}</span>
-                <span className={s['branch']}>{branch}</span>
-                <button
-                  type="button"
-                  className={s['open']}
-                  aria-label={fill(copy.chat.tasks.openInChatNamed, { task: lane.task })}
-                  onClick={() => openSession(projectId, lane.sessionId)}
-                  data-tasks-open={lane.sessionId}
-                >
-                  {copy.chat.tasks.openInChat}
-                </button>
-              </div>
-              <h3 id={titleId} className={s['task']} title={lane.task}>
-                {lane.task}
-              </h3>
-              <span className={s['status']} data-tone={lane.status === 'your-turn' ? 'yours' : undefined}>
-                {lane.statusLabel}
+            <span className={s['who']}>
+              <AgentDot agent={lane.agent} />
+              <span>{AGENT_LABEL[lane.agent]}</span>
+              <span className={s['branch']}>{branch}</span>
+              {here ? <span className={s['here']}>{copy.chat.tasks.inChat}</span> : null}
+            </span>
+            <span className={s['task']}>{lane.task}</span>
+            <span className={s['status']} data-tone={lane.status === 'your-turn' ? 'yours' : undefined}>
+              {lane.statusLabel}
+            </span>
+            {card.steps.length > 0 ? (
+              <span className={s['steps']} data-tasks-steps="true">
+                {card.steps.map((step) => (
+                  <span key={step.key} className={s['step']} data-status={step.status}>
+                    {step.label}
+                  </span>
+                ))}
               </span>
-            </header>
-            <div className={s['chat']}>
-              <ChatPane projectId={projectId} sessionId={lane.sessionId} tile />
-            </div>
-          </section>
+            ) : null}
+            {card.note !== null && card.note !== lane.task ? (
+              <span className={s['note']}>{card.note}</span>
+            ) : null}
+            {card.summary !== '' ? <span className={s['summary']}>{card.summary}</span> : null}
+          </button>
         );
       })}
-      <Alongside projectId={projectId} first={!anyLane} />
+      <Alongside projectId={projectId} first={lanes.length === 0} />
     </div>
   );
 }
 
-/** The last tile: a task box, the agent, Start. The new lane joins the board; the chat keeps its lane. */
+/** The last card: a task box, the agent, Start. The new task joins the board; the chat keeps its lane. */
 function Alongside({ projectId, first }: { projectId: ProjectId; first: boolean }) {
   const platform = useUi((u) => u.platform);
   const { form, setForm, pickAgent, valid, busy, spawn } = useSpawnForm(projectId);
@@ -131,7 +123,7 @@ function Alongside({ projectId, first }: { projectId: ProjectId; first: boolean 
         <Textarea
           id={ids.text}
           className={s['addText']}
-          minHeight={64}
+          minHeight={56}
           placeholder={t.placeholder}
           value={text}
           onChange={(e) => setText(e.currentTarget.value)}
