@@ -28,6 +28,7 @@
     "build:cli": "pnpm -F @styx/cli build && node scripts/copy-cli.mjs",
     "package:mac:dir": "pnpm run build && electron-builder --mac --dir",
     "package:win:dir": "pnpm run build && electron-builder --win --dir",
+    "package:win:store": "pnpm run build && electron-builder --win appx",
     "package:smoke": "node --experimental-strip-types e2e/run.ts --project e2e --grep packaged"
   },
   "dependencies": {

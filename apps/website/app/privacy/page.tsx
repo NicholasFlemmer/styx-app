@@ -115,8 +115,8 @@ export default function PrivacyPage() {
           launch, it is not signed in, it is out of date, it reported an error, or it closed straight away;
         </li>
         <li>
-          Styx crashed: a window, one of its helper processes, or the app itself (noticed the next time you open
-          it).
+          Styx crashed: a window, one of its helper processes, or the app itself (noticed the next time you
+          open it).
         </li>
       </ul>
       <p>
@@ -143,11 +143,11 @@ export default function PrivacyPage() {
         Nothing from your projects is attached.
       </p>
       <p>
-        If you tick <strong>Include diagnostics</strong> when you send feedback (it is off unless you do), we also
-        receive the last part of Styx&apos;s own log file, so we can see what went wrong. Passwords, keys and
-        tokens are masked before it leaves your computer. The log can include the names and folders of your
-        projects and the names of the agents you use, but never the contents of your files or anything your agents
-        wrote. It is kept with your feedback, for a year.
+        If you tick <strong>Include diagnostics</strong> when you send feedback (it is off unless you do), we
+        also receive the last part of Styx&apos;s own log file, so we can see what went wrong. Passwords, keys
+        and tokens are masked before it leaves your computer. The log can include the names and folders of
+        your projects and the names of the agents you use, but never the contents of your files or anything
+        your agents wrote. It is kept with your feedback, for a year.
       </p>
 
       <h2>5. This website</h2>

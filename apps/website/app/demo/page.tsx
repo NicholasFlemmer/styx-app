@@ -79,7 +79,7 @@ export default function DemoPage() {
           </figure>
           <div className={styles.cta}>
             <DownloadButton />
-            <span className={styles.note}>Free · Mac · Windows soon</span>
+            <span className={styles.note}>Free · Mac · Windows beta</span>
           </div>
           <section className={styles.transcript} aria-labelledby="on-screen">
             <h2 id="on-screen">On screen</h2>

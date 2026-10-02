@@ -18,7 +18,7 @@ export const Hero = () => (
           first.
         </p>
         <div className={styles.ctas}>
-          <DownloadButton note />
+          <DownloadButton />
           <a href="#access" className={styles.secondary}>
             What happens at the crossing
           </a>
@@ -51,7 +51,8 @@ export const Hero = () => (
           />
         </a>
         <p className={styles.micro}>
-          An agentic development environment (ADE) for Mac. Windows soon. Your keys never leave your computer.
+          An agentic development environment (ADE) for Mac, and in beta for Windows. Your keys never leave
+          your computer.
         </p>
       </div>
       <div className={styles.demo} data-load="fade">

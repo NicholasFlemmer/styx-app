@@ -17,6 +17,7 @@ fi
 # (nginx.conf; discrepancy #122): the one address, Styx-latest-arm64.dmg, that `pnpm release:publish` keeps on
 # the newest signed build.
 NEXT_PUBLIC_DOWNLOAD_MAC="${NEXT_PUBLIC_DOWNLOAD_MAC:-https://heystyx.com/download/mac}" \
+NEXT_PUBLIC_DOWNLOAD_WIN="${NEXT_PUBLIC_DOWNLOAD_WIN:-https://heystyx.com/download/win}" \
 NEXT_PUBLIC_SITE_URL=https://heystyx.com NEXT_PUBLIC_GTM_ID="${GTM_ID:?set GTM_ID, e.g. GTM_ID=GTM-XXXXXXX apps/website/deploy/deploy.sh}" pnpm -F @styx/website build
 
 STAGE="$(mktemp -d)"
