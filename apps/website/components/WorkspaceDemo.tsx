@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { demoDurations, demoStepDescriptions, demoStepLabels, demoSteps, nextStep } from '@/lib/demo-script';
+import { demoDurations, demoSteps, nextStep, stepDescription, stepLabel } from '@/lib/demo-script';
 import { useDemo } from './demo/DemoContext';
 import { MockFrame } from './demo/MockFrame';
 import { WORKSPACE_COMPACT, WORKSPACE_FULL, WorkspaceMock } from './demo/WorkspaceMock';
@@ -56,7 +56,7 @@ export const WorkspaceDemo = () => {
               >
                 <span className="sq" data-on={s === step ? 'true' : undefined} aria-hidden="true" />
                 <span className={styles.stepNo}>{i + 1}</span>
-                <span className={styles.stepLabel}>{demoStepLabels[s]}</span>
+                <span className={styles.stepLabel}>{stepLabel(s, chrome)}</span>
               </button>
             </li>
           ))}
@@ -90,7 +90,7 @@ export const WorkspaceDemo = () => {
           {playing ? 'Pause' : 'Play'}
         </button>
         <p className="srOnly" aria-live="polite">
-          {demoStepDescriptions[step]}
+          {stepDescription(step, chrome)}
         </p>
       </figcaption>
     </figure>

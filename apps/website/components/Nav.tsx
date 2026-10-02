@@ -3,7 +3,7 @@ import { DownloadButton } from './DownloadButton';
 import { ThemeToggle } from './ThemeToggle';
 import styles from './Nav.module.css';
 
-const navIds = new Set(['how', 'access', 'agents', 'repo', 'ship', 'security']);
+const navIds = new Set(['how', 'access', 'agents', 'repo', 'design', 'ship', 'security']);
 
 /** `current` marks the page's own item (Story, Compare); section anchors are never current. */
 export const Nav = ({ current }: { current?: 'launch' | 'story' | 'compare' } = {}) => (

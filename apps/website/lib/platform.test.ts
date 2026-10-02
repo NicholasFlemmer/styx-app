@@ -25,6 +25,8 @@ describe('formatShortcut', () => {
     ['Escape', 'mac', 'esc'],
     ['a', 'mac', 'a'],
     ['Mod+1..4', 'mac', '⌘1..4'],
+    ['Alt+Shift+←', 'mac', '⌥⇧←'],
+    ['Alt+Shift+←', 'win', 'Alt+⇧+←'],
   ])('%s on %s → %s', (chord, platform, expected) => {
     expect(formatShortcut(chord, platform as 'mac' | 'win')).toBe(expected);
   });

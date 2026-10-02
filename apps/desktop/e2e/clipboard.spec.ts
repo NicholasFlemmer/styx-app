@@ -48,7 +48,7 @@ test.describe('chat clipboard', () => {
     await composer.click();
     await composer.fill('');
     await page.evaluate(() => navigator.clipboard.writeText('styx-paste-probe'));
-    await composer.press('Meta+V');
+    await composer.press('ControlOrMeta+V');
     await expect(composer).toHaveValue('styx-paste-probe');
 
     await app.close();

@@ -17,8 +17,13 @@ describe.skipIf(!available)('PtyService', () => {
     await pty.spawn({
       id: 's1',
       cwd: process.cwd(),
-      shell: '/bin/sh',
-      args: ['-c', 'echo __hello__; exit 3'],
+      // A POSIX shell, or cmd.exe by full path on Windows (node-pty resolves bare names on the login PATH only).
+      ...(process.platform === 'win32'
+        ? {
+            shell: process.env['ComSpec'] ?? 'C:\\Windows\\System32\\cmd.exe',
+            args: ['/c', 'echo __hello__& exit 3'],
+          }
+        : { shell: '/bin/sh', args: ['-c', 'echo __hello__; exit 3'] }),
     });
     const code = await exited;
     expect(code).toBe(3);

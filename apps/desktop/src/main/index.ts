@@ -293,12 +293,15 @@ async function boot(): Promise<void> {
   // Packaged: `resources/**` is asarUnpack'd (electron-builder.yml) so the CLI and templates are real files the shims,
   // MCP server and `fs.cp` can reach: <Resources>/app.asar.unpacked/resources/…, never <Resources>/cli (that path was
   // wrong until 2026-09-07 and every shim exec'd a missing file).
+  // Unpackaged (dev, e2e), from the bundle's own place (apps/desktop/out/main): `app.getAppPath()` is the script's
+  // folder when Electron is started on a file (Playwright on Windows), which put the CLI under apps/desktop/packages.
+  const desktopDir = resolve(__dirname, '..', '..');
   const resourcesDir = app.isPackaged
     ? join(app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked'), 'resources')
-    : resolve(app.getAppPath(), 'resources');
+    : resolve(desktopDir, 'resources');
   const cliPath = app.isPackaged
     ? join(resourcesDir, 'cli', 'styx.js')
-    : resolve(app.getAppPath(), '../../packages/cli/dist/styx.js');
+    : resolve(desktopDir, '..', '..', 'packages', 'cli', 'dist', 'styx.js');
   if (!existsSync(cliPath)) logger.error('styx cli not found: agent shims and MCP will fail', { cliPath });
   else logger.info('runtime paths', { cliPath, resourcesDir });
   const endpoint = brokerEndpoint({

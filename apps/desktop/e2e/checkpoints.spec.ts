@@ -33,7 +33,7 @@ test('a turn that writes a file becomes a checkpoint row; Review shows its patch
       (window as unknown as StyxWindow).styx.command('detect.clis', {}),
     );
     const codex = ((detected.value as { clis: CliInstall[] }).clis ?? []).find((c) => c.agent === 'codex');
-    expect(codex?.binary ?? '').toMatch(/e2e[/\\]fixtures[/\\]bin[/\\]codex$/);
+    expect(codex?.binary ?? '').toMatch(/e2e[/\\]fixtures[/\\]bin[/\\]codex(\.cmd)?$/);
 
     await page.getByRole('button', { name: '+ Spawn agent' }).click();
     const dialog = page.getByRole('dialog');
@@ -166,7 +166,7 @@ test('a turn keeps the design window page before and after; Review shows Before 
         return { empty: img.isEmpty(), ...img.getSize() };
       }, DEV_PORT);
     const shown = await capture();
-    await page.keyboard.press('Meta+K');
+    await page.keyboard.press('ControlOrMeta+K');
     await expect(page.getByRole('dialog')).toBeVisible();
     const hidden = await capture();
     await page.keyboard.press('Escape');

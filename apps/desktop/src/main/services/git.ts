@@ -89,6 +89,10 @@ export interface GitIdentity {
   email: string;
 }
 
+/** What git says when it has no author to commit as. */
+const NO_IDENTITY =
+  /tell me who you are|empty ident|auto-detection is disabled|no (name|email) was given|user\.(name|email)/i;
+
 /** The fallback since v1: replaced by the signed-in Styx account when there is one (ADR-0026 §6). */
 export const STYX_IDENTITY: GitIdentity = { name: 'Styx', email: 'styx@localhost' };
 
@@ -372,7 +376,10 @@ export class GitService {
 
   /** `git merge --no-edit <ref>` in a worktree; a conflict returns `ok: false` with the tree mid-merge (see `mergeAbort`). */
   async merge(path: string, ref: string): Promise<{ ok: boolean; output: string }> {
-    const r = await this.git.run(['merge', '--no-edit', ref], path, { reject: false });
+    // A merge commit needs an author: the user, or Styx when git has none (a fresh machine).
+    const r = await this.git.run([...(await this.authorArgs(path)), 'merge', '--no-edit', ref], path, {
+      reject: false,
+    });
     return { ok: r.exitCode === 0, output: (r.stderr || r.stdout).trim() };
   }
 
@@ -586,29 +593,26 @@ export class GitService {
     if (opts.asUser) {
       const r = await this.git.run(args, path, { reject: false });
       if (r.exitCode === 0) return;
-      if (
-        !/tell me who you are|empty ident|auto-detection is disabled|no (name|email) was given|user\.(name|email)/i.test(
-          r.stderr,
-        )
-      )
+      if (!NO_IDENTITY.test(r.stderr))
         throw new Error(`git commit failed (${r.exitCode}): ${r.stderr.trim()}`);
     }
     await this.git.run([...this.identityArgs(), ...args], path);
   }
 
-  /** Runs a commit-making command as the user, with Styx's identity only when git has none (see `commit`). */
+  /**
+   * Who a commit-making command runs as: the user, or Styx when git has no identity. Decided before the command,
+   * because `revert` and `cherry-pick` change the tree first and only then fail for want of an author; a retry would
+   * then find its own half-done changes in the way ("your local changes would be overwritten").
+   */
+  private async authorArgs(path: string): Promise<string[]> {
+    const r = await this.git.run(['var', 'GIT_COMMITTER_IDENT'], path, { reject: false });
+    return r.exitCode === 0 ? [] : this.identityArgs();
+  }
+
+  /** Runs a commit-making command as the user, with Styx's identity only when git has none (see `authorArgs`). */
   private async asUserOrStyx(args: string[], path: string): Promise<{ ok: boolean; output: string }> {
-    const r = await this.git.run(args, path, { reject: false });
-    if (r.exitCode === 0) return { ok: true, output: '' };
-    if (
-      /tell me who you are|empty ident|auto-detection is disabled|no (name|email) was given|user\.(name|email)/i.test(
-        r.stderr,
-      )
-    ) {
-      const r2 = await this.git.run([...this.identityArgs(), ...args], path, { reject: false });
-      return { ok: r2.exitCode === 0, output: (r2.stderr || r2.stdout).trim() };
-    }
-    return { ok: false, output: (r.stderr || r.stdout).trim() };
+    const r = await this.git.run([...(await this.authorArgs(path)), ...args], path, { reject: false });
+    return { ok: r.exitCode === 0, output: r.exitCode === 0 ? '' : (r.stderr || r.stdout).trim() };
   }
 
   /** `git merge --no-ff -m <message> <ref>`: a landing is one commit on the base naming the lane. A conflict returns `ok: false` mid-merge. */

@@ -161,6 +161,8 @@ export interface FakeCliResponse extends Partial<CliRunResult> {
   args?: string[];
 }
 
+const fakeKey = (path: string): string => path.replace(/\\/g, '/');
+
 /** Scriptable runner for tests: binaries on a fake PATH, canned outputs per (bin, args prefix), files by path. */
 export class FakeCliRunner implements CliRunner {
   readonly platform: NodeJS.Platform;
@@ -189,8 +191,10 @@ export class FakeCliRunner implements CliRunner {
     return this;
   }
 
+  /** Paths are keyed with `/` separators, so a fixture written as `/Users/test/...` still matches what an adapter
+   * builds with `path.join` when the suite runs on a Windows host. */
   file(path: string, contents: string): this {
-    this.files.set(path, contents);
+    this.files.set(fakeKey(path), contents);
     return this;
   }
 
@@ -231,7 +235,7 @@ export class FakeCliRunner implements CliRunner {
   }
 
   async readFile(path: string): Promise<string | null> {
-    return this.files.get(path) ?? null;
+    return this.files.get(fakeKey(path)) ?? null;
   }
 
   async readKeychain(service: string, account: string): Promise<string | null> {

@@ -14,6 +14,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      # Unpack Electron once: parallel test workers that load it otherwise race its download.
+      - run: node node_modules/electron/install.js
       - run: pnpm tokens:build
       - run: pnpm typecheck
       - run: pnpm lint

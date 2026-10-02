@@ -23,6 +23,7 @@ import { findOnPath } from './detect-service';
 import type { GitService, GitStatus } from './git';
 import type { GrantService } from './grant-service';
 import { isSecretFile, logger, redactArgv, redactPatch } from './logger';
+import { onePathKey } from './spawn-cli';
 
 export type PublishStep = 'commit' | 'push' | 'pr';
 export type MessageKind = 'commit' | 'pr';
@@ -400,7 +401,7 @@ export class PublishService {
     return { kind: 'grant', grant: outcome.grant, target, env: cred.env };
   }
 
-  private async gh(access: GhAccess, cwd: string, args: string[]): Promise<ExecResult> {
+  private async gh(access: GhAccess, cwd: string, args: string[], input?: string): Promise<ExecResult> {
     const file = await this.ghBinary();
     if (file === null) fail('cli-missing', fill(copy.deploy.cliMissing, { bin: 'gh' }));
     // The persisted use / audit label goes through `redactArgv`: a PR body is collateral (its value is dropped),
@@ -418,6 +419,7 @@ export class PublishService {
       cwd,
       env: { ...GH_ENV, ...(access.kind === 'grant' ? access.env : {}) },
       timeoutMs: this.deps.ghTimeoutMs ?? GH_TIMEOUT_MS,
+      ...(input !== undefined ? { input } : {}),
     });
     if (use !== null) this.deps.grants.endUse(use.useId, r.exitCode);
     logger.debug('publish: gh ran', { args, exitCode: r.exitCode, via: access.kind });
@@ -450,10 +452,16 @@ export class PublishService {
     message: PublishMessage,
     draft: boolean,
   ): Promise<WorktreePr> {
-    const title = message.title.trim().slice(0, TITLE_MAX * 2) || branch;
-    const args = ['pr', 'create', '--head', branch, '--base', base, '--title', title, '--body', message.body];
+    const title =
+      message.title
+        .replace(/\s*\n\s*/g, ' ')
+        .trim()
+        .slice(0, TITLE_MAX * 2) || branch;
+    // The body goes in on stdin (`--body-file -`), never as an argument: it has line breaks, which no argument can
+    // carry through cmd.exe when gh is a .cmd (npm/scoop installs on Windows), and it can be long.
+    const args = ['pr', 'create', '--head', branch, '--base', base, '--title', title, '--body-file', '-'];
     if (draft) args.push('--draft');
-    const r = await this.gh(access, wt.path, args);
+    const r = await this.gh(access, wt.path, args, message.body);
     if (r.exitCode !== 0)
       fail(
         'provider-error',
@@ -762,7 +770,7 @@ export const execaPublishExec =
     Object.assign(env, opts.env ?? {});
     const r = await execa(file, args, {
       cwd: opts.cwd,
-      env,
+      env: onePathKey(env),
       extendEnv: false,
       reject: false,
       timeout: opts.timeoutMs,

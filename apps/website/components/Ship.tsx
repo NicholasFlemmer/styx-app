@@ -5,53 +5,12 @@ import styles from './Ship.module.css';
 /**
  * Everything between an agent finishing and the change being live. Added once the app grew these (discrepancy
  * #117): the site had stopped at "review the branch", and the app had carried on to running, publishing,
- * deploying and auditing. Four features get a row of their own with a drawing of the app beside them; three
- * smaller ones share a row of cards. Drawings use the app's own words (copy.ts: design, publish, connectRepo,
+ * deploying and auditing. Three features get a row of their own with a drawing of the app beside them; three
+ * smaller ones share a row of cards. (The Design tab row moved to DesignBuild, as Preview, in 0.4.) Drawings use the app's own words (copy.ts: design, publish, connectRepo,
  * deploy, debtAudit, queue, checkpoints, skills).
  */
 
-/* ---------- The four large drawings ---------- */
-
-const DesignShot = () => (
-  <>
-    <div className={styles.strip}>
-      <span className={styles.chips}>
-        <span>Code</span>
-        <span data-inv="true">Design</span>
-      </span>
-      <span className={styles.muted}>Before · After</span>
-    </div>
-    <div className={styles.bar}>
-      <span className={styles.btn} data-inv="true">
-        ■ Stop
-      </span>
-      <span className={styles.field}>pnpm dev</span>
-      <span className={styles.field} data-grow="true">
-        localhost:3000/checkout
-      </span>
-      <span className={styles.chips}>
-        <span>Desktop</span>
-        <span>Tablet</span>
-        <span data-inv="true">Phone</span>
-      </span>
-    </div>
-    <div className={styles.stage}>
-      <div className={styles.phone}>
-        <i style={{ width: '46%' }} />
-        <u />
-        <i style={{ width: '80%' }} />
-        <i style={{ width: '64%' }} />
-        <u data-small="true" />
-        <i style={{ width: '72%' }} />
-        <b />
-      </div>
-      <span className={styles.rotate}>↻ Rotate</span>
-    </div>
-    <div className={styles.status}>
-      <span className={styles.dot} /> dev · localhost:3000
-    </div>
-  </>
-);
+/* ---------- The three large drawings ---------- */
 
 const GithubShot = () => (
   <>
@@ -242,16 +201,6 @@ type Feature = {
 
 const features: readonly Feature[] = [
   {
-    title: 'See what you’re building, next to the code.',
-    body: 'The Design tab shows your app running beside the files and the chat. Press Run locally and Styx starts it. The first time, an agent works out how, and Styx remembers the command.',
-    facts: [
-      'Desktop, tablet and phone sizes, and a rotate button.',
-      'A before and after picture of the app for every turn an agent takes.',
-      'It only shows pages on your own machine. A repo can’t point it anywhere else.',
-    ],
-    shot: <DesignShot />,
-  },
-  {
     title: 'Straight to GitHub.',
     body: 'No repo yet? Create one, private by default, or link one you already have. Publish then commits, pushes and opens the pull request in one step, with the message drafted by your agent from the changes.',
     facts: [
@@ -303,7 +252,6 @@ const cards = [
 
 export const Ship = () => (
   <Section
-    tone="panel"
     id="ship"
     title="From a finished branch to live, without leaving."
     lede="Once an agent is done, everything else happens in the same window too. Anything that reaches production still asks you first."

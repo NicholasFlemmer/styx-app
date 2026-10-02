@@ -255,8 +255,11 @@ describe('ConnectModal', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Sign in with gcloud…' }));
       await waitFor(() => expect(document.querySelector('[data-login-terminal]')).not.toBeNull());
       emit('connect.cliLogin', { terminalId: 'pty-login-1', provider: 'gcp', status: 'exited', exitCode: 1 });
-      await waitFor(() =>
-        expect(screen.getByRole('status').textContent).toBe('gcloud auth login exited with code 1.'),
+      // The exit lands through a re-fetch of the CLI status; a loaded machine (the full suite on Windows) needs longer
+      // than waitFor's 1s default.
+      await waitFor(
+        () => expect(screen.getByRole('status').textContent).toBe('gcloud auth login exited with code 1.'),
+        { timeout: 5_000 },
       );
       expect(document.querySelector('[data-login-terminal]')?.textContent).toContain('exited with code 1');
       expect(calls('target.connect.cliStatus')).toHaveLength(2);

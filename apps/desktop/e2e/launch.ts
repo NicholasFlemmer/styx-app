@@ -22,8 +22,11 @@ function cleanEnv(): Record<string, string> {
     if (v !== undefined && k !== 'ELECTRON_RUN_AS_NODE') env[k] = v;
   // Fake agent CLIs (e2e/fixtures/bin: `codex` speaking the app-server protocol, …) shadow the real ones, so a
   // session spawned in a test never launches a real agent or spends anyone's usage.
-  env['PATH'] =
-    `${resolve(__dirname, 'fixtures', 'bin')}${process.platform === 'win32' ? ';' : ':'}${env['PATH'] ?? ''}`;
+  // Windows names it `Path`, and this copy is case-sensitive: read whichever key there is and leave one `PATH`.
+  const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
+  const path = env[key] ?? '';
+  delete env[key];
+  env['PATH'] = `${resolve(__dirname, 'fixtures', 'bin')}${process.platform === 'win32' ? ';' : ':'}${path}`;
   return env;
 }
 

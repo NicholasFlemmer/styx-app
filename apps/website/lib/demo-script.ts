@@ -36,6 +36,14 @@ export const demoStepDescriptions: Readonly<Record<DemoStep, string>> = {
     'A notification confirms it is on the record: what Codex got, for how long, and where you approved it.',
 };
 
+/** Windows asks with Windows Hello where a Mac asks with Touch ID: the step's label and words follow the chrome shown. */
+const forChrome = (text: string, chrome: 'mac' | 'win'): string =>
+  chrome === 'win' ? text.replace(/Touch ID/g, 'Windows Hello') : text;
+export const stepLabel = (step: DemoStep, chrome: 'mac' | 'win'): string =>
+  forChrome(demoStepLabels[step], chrome);
+export const stepDescription = (step: DemoStep, chrome: 'mac' | 'win'): string =>
+  forChrome(demoStepDescriptions[step], chrome);
+
 export const stepIndex = (step: DemoStep): number => demoSteps.indexOf(step);
 
 export const nextStep = (step: DemoStep): DemoStep => {
