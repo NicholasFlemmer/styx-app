@@ -14,6 +14,7 @@ export const formatShortcut = (chord: string, platform: Platform): string => {
   const glyph: Record<string, string> = {
     mod: platform === 'win' ? 'Ctrl' : '⌘',
     shift: '⇧',
+    alt: platform === 'win' ? 'Alt' : '⌥',
     enter: '⏎',
     backspace: '⌫',
     escape: 'esc',

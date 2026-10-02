@@ -180,3 +180,13 @@ other, sides alternating — the Design tab, GitHub (connect a repo, Publish, th
 (per-target commands, learned once, Touch ID for anything live, all in the log) and the tech debt audit. Queue,
 undo a turn and skills stay as three smaller cards. The Touch ID ask is still the only accent in the section.
 Plans and sign-in providers are not mentioned anywhere on the site (owner decision).
+
+0.4 (2 October 2026, owner: "update the website with everything we have changed, including visuals"): a new
+section, **Design it first. Then point at what's wrong.** (`components/DesignBuild.tsx`, nav "Design"), between
+"Your code" and Shipping: Tasks as cards, the Design tab (screens at every size, select to change or tell the agent,
+Build it) and Preview's Select to fix. Its pictures are the real app over the demo fixture, cropped to the
+instrument, taken by `apps/desktop/e2e/site-shots.spec.ts` (`STYX_SITE_SHOTS=1 pnpm e2e -- --grep "site shots"`),
+so they are retaken rather than redrawn when the app changes. Shipping's Design-tab row went (it described what is
+now Preview). The screens strip is gone: its drawings were the original handoff's screens (All projects, Agents,
+Repo …), which the app no longer has. Tones: Design is a panel and Shipping is plain, so the page still alternates.
+Keyboard gained V (select) and Alt+Shift+←/→ (move a tab).

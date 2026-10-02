@@ -1,0 +1,80 @@
+/* Three rows: words on one side, a picture of the real app on the other, sides alternating (as Shipping). */
+.rows {
+  border-top: 1px solid var(--ln);
+}
+.row {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gutter);
+  row-gap: var(--sp-6);
+  align-items: center;
+  padding-block: var(--sp-12);
+  border-bottom: 1px solid var(--ln);
+}
+.copy {
+  grid-column: 1 / span 4;
+  min-width: 0;
+}
+.row > .shot {
+  grid-column: 5 / span 8;
+}
+.row[data-flip='true'] .copy {
+  grid-column: 9 / span 4;
+  grid-row: 1;
+}
+.row[data-flip='true'] > .shot {
+  grid-column: 1 / span 8;
+  grid-row: 1;
+}
+.copy h3 {
+  font-size: var(--fs-24);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  margin-bottom: var(--sp-4);
+}
+.copy p {
+  color: var(--mu);
+  margin-bottom: var(--sp-5);
+}
+.copy ul {
+  border-top: 1px solid var(--ln);
+}
+.copy li {
+  display: flex;
+  gap: 10px;
+  padding-block: 10px;
+  border-bottom: 1px solid var(--ln);
+  font-size: var(--fs-13);
+}
+.copy li::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-top: 7px;
+  background: var(--tx);
+}
+/* The app is dark in these pictures; a text-colour rule frames it on either theme (floating-surface rule). */
+.shot {
+  min-width: 0;
+  border: 1px solid var(--tx);
+  line-height: 0;
+}
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+@media (max-width: 900px) {
+  .copy,
+  .row > .shot,
+  .row[data-flip='true'] .copy,
+  .row[data-flip='true'] > .shot {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .row {
+    padding-block: var(--sp-8);
+  }
+}
