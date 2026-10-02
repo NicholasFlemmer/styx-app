@@ -33,7 +33,7 @@ test('a turn that writes a file becomes a checkpoint row; Review shows its patch
       (window as unknown as StyxWindow).styx.command('detect.clis', {}),
     );
     const codex = ((detected.value as { clis: CliInstall[] }).clis ?? []).find((c) => c.agent === 'codex');
-    expect(codex?.binary ?? '').toMatch(/e2e[/\\]fixtures[/\\]bin[/\\]codex$/);
+    expect(codex?.binary ?? '').toMatch(/e2e[/\\]fixtures[/\\]bin[/\\]codex(\.cmd)?$/);
 
     await page.getByRole('button', { name: '+ Spawn agent' }).click();
     const dialog = page.getByRole('dialog');

@@ -24,7 +24,7 @@ test('a Gemini session runs over ACP: pong, a permission ask, the allowed comman
       (window as unknown as StyxWindow).styx.command('detect.clis', {}),
     );
     const gemini = ((detected.value as { clis: CliInstall[] }).clis ?? []).find((c) => c.agent === 'gemini');
-    expect(gemini?.binary ?? '').toMatch(/e2e[/\\]fixtures[/\\]bin[/\\]gemini$/);
+    expect(gemini?.binary ?? '').toMatch(/e2e[/\\]fixtures[/\\]bin[/\\]gemini(\.cmd)?$/);
     expect(gemini?.capabilities['acp']).toBe(true);
     expect(gemini?.version).toBe('0.39.1');
 

@@ -40,7 +40,7 @@ test('Open PR on a lane: the agent drafts the message, Publish commits, pushes a
     const claude = ((detected.value as { clis: { agent: string; binary: string | null }[] }).clis ?? []).find(
       (c) => c.agent === 'claude',
     );
-    expect(claude?.binary ?? '').toMatch(/e2e[/\\]fixtures[/\\]bin[/\\]claude$/);
+    expect(claude?.binary ?? '').toMatch(/e2e[/\\]fixtures[/\\]bin[/\\]claude(\.cmd)?$/);
 
     await page.locator('[data-repo]').waitFor({ timeout: 20_000 });
     const lane = page.locator('[data-lane="test/flaky"]');

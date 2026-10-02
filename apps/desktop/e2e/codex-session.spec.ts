@@ -23,7 +23,7 @@ test('a Codex session runs through the app-server: pong, an approval ask, tokens
       (window as unknown as StyxWindow).styx.command('detect.clis', {}),
     );
     const codex = ((detected.value as { clis: CliInstall[] }).clis ?? []).find((c) => c.agent === 'codex');
-    expect(codex?.binary ?? '').toMatch(/e2e[/\\]fixtures[/\\]bin[/\\]codex$/);
+    expect(codex?.binary ?? '').toMatch(/e2e[/\\]fixtures[/\\]bin[/\\]codex(\.cmd)?$/);
     expect(codex?.capabilities['appServer']).toBe(true);
     expect(codex?.version).toBe('0.154.0');
 
