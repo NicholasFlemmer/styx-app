@@ -1,0 +1,33 @@
+/* Written by Styx from tokens.json; edit Type and colour in the Design tab, or tokens.json. */
+:root {
+  --color-primary: #D6FF3D;
+  --color-ink: #0D0E0C;
+  --color-surface: #121411;
+  --color-raised: #1C1E1A;
+  --color-line: #2D302A;
+  --color-text: #E9EBE3;
+  --color-muted: #858A81;
+  --color-claude: #E8916A;
+  --color-codex: #8FB3FF;
+  --color-gemini: #B79BFF;
+  --color-paper: #F7F8F3;
+  --font-heading: Archivo, system-ui, -apple-system, sans-serif;
+  --font-body: Archivo, system-ui, -apple-system, sans-serif;
+  --text-hero-size: 34px;
+  --text-hero-line: 36px;
+  --text-hero-weight: 600;
+  --text-display-size: 26px;
+  --text-display-line: 30px;
+  --text-display-weight: 600;
+  --text-heading-size: 15px;
+  --text-heading-line: 20px;
+  --text-heading-weight: 600;
+  --text-body-size: 12px;
+  --text-body-line: 17px;
+  --text-body-weight: 400;
+  --text-caption-size: 9px;
+  --text-caption-line: 12px;
+  --text-caption-weight: 600;
+  --radius: 0px;
+  --space: 4px;
+}

@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { track } from '@/lib/analytics';
+import { classifyDownloadLink } from '@/lib/download-link';
 
 /**
  * Where on the page a link sits, in words a report can use: the top bar is `nav`; a section is its id, or
@@ -27,8 +28,13 @@ export const Tracking = () => {
       if (!a) return;
       const href = a.getAttribute('href') ?? '';
       const label = (a.textContent ?? '').trim().slice(0, 60);
-      if (/download/i.test(label) || /\.dmg($|\?)/i.test(href) || /\/download\/mac/.test(href)) {
-        track('download_click', { platform: 'mac', link_text: label, link_url: href, location: placeOf(a) });
+      const dl = classifyDownloadLink(href);
+      if (dl?.kind === 'file') {
+        // An actual download, Mac or Windows (GA4 download_click; the Meta pixel's Lead).
+        track('download_click', { platform: dl.platform, link_text: label, link_url: href, location: placeOf(a) });
+      } else if (dl?.kind === 'section') {
+        // A button that only opens the Download section, where the visitor then picks Mac or Windows.
+        track('download_open', { link_text: label, location: placeOf(a) });
       } else if (/^https?:\/\//.test(href) && !href.includes(location.host)) {
         track('outbound_click', { link_url: href, link_text: label });
       }
