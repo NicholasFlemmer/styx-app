@@ -561,10 +561,11 @@ async function boot(): Promise<void> {
 }
 
 /**
- * electron-updater's `autoUpdater` for a packaged build (#119): signed builds only (macOS, Windows), never under a
+ * electron-updater's `autoUpdater` for a packaged build (#119, #147): macOS and Windows, never under a
  * fixture or the e2e harness, and only when the build carries its feed (`app-update.yml`, written by electron-builder
  * from `publish` in electron-builder.yml). `STYX_UPDATE_URL` points a build at another feed (a local one when testing
- * an update end to end); whatever the feed, an update installs only if it carries the running app's signature.
+ * an update end to end). macOS installs an update only if it carries the running app's signature; Windows does once
+ * its builds are signed, and checks the feed's sha512 until then.
  */
 function realUpdater(fixture: string | null): Updater | null {
   if (!app.isPackaged || fixture !== null || env['STYX_E2E'] === '1') return null;
@@ -574,12 +575,11 @@ function realUpdater(fixture: string | null): Updater | null {
   const override = env['STYX_UPDATE_URL'];
   const feedFile = join(process.resourcesPath, 'app-update.yml');
   if (override === undefined && !existsSync(feedFile)) return null;
-  // Windows checks an update's signature only against the publisher named in app-update.yml, which a build has only
-  // when it was signed (WIN_CSC_LINK). An unsigned Windows build never updates itself in place.
-  if (platform === 'win32') {
-    const named = existsSync(feedFile) && /^publisherName:/m.test(readFileSync(feedFile, 'utf8'));
-    if (!named) return null;
-  }
+  // Windows (owner decision 2026-10-03, row #147): an unsigned build updates in place too. electron-updater checks an
+  // update's signature only against the publisher named in app-update.yml, which a build has only once it is signed
+  // (WIN_CSC_LINK); until then the installer is checked against the sha512 in latest.yml, both fetched over HTTPS
+  // from the release bucket the download link already serves. A signed build names its publisher and gets the full
+  // signature check without any change here.
   const updater = autoUpdater;
   updater.logger = {
     info: (m: unknown) => logger.info('updater', { message: String(m) }),

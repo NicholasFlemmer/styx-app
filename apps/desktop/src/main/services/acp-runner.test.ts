@@ -1121,7 +1121,7 @@ describe('resolveAcpMode / pickAuthMethod / acpMcpServer', () => {
     ['plan', gemini, 'plan', true],
     ['bypassPermissions', gemini, 'yolo', true],
     ['dontAsk', gemini, 'yolo', true],
-    ['auto', gemini, 'yolo', true],
+    ['auto', gemini, 'auto_edit', true],
     ['default', cursor, 'agent', true],
     ['acceptEdits', cursor, 'agent', true],
     ['plan', cursor, 'plan', true],

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { copy, fixtures, navLanes, type ProjectId, type SessionId } from '@styx/core';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { copy, fixtures, navLanes, rows, upsertRows, type ProjectId, type SessionId } from '@styx/core';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
@@ -72,5 +72,33 @@ describe('TasksBoard (#138)', () => {
     const spawn = commands.find((c) => c.name === 'session.spawn')?.input as { firstMessage: string };
     expect(spawn.firstMessage).toBe('Add a sitemap');
     expect(useUiStore.getState().projectSession[acme]).toBeUndefined();
+  });
+
+  it('a second lane from the same box gets a new branch once the first lane exists (owner report 2026-10-03)', async () => {
+    render(<TasksBoard projectId={acme} activeSessionId={claude} />);
+    const spawns = () => commands.filter((c) => c.name === 'session.spawn');
+    const branchOf = (n: number) => (spawns()[n]?.input as { worktree: { branch: string } }).worktree.branch;
+    const start = async (text: string, n: number) => {
+      fireEvent.change(screen.getByLabelText(copy.chat.tasks.alongside.label), { target: { value: text } });
+      fireEvent.click(document.querySelector('[data-tasks-add-start]') as HTMLButtonElement);
+      await waitFor(() => expect(spawns()).toHaveLength(n));
+    };
+    await start('Add a sitemap', 1);
+    const first = branchOf(0);
+    // The first lane's worktree reaches the read model, as main's delta delivers it.
+    const model = useReadModel.getState().model;
+    const main = rows(model.worktrees).find((w) => w.projectId === acme);
+    if (main === undefined) throw new Error('fixture has no acme worktree');
+    act(() =>
+      useReadModel.setState({
+        model: {
+          ...model,
+          worktrees: upsertRows(model.worktrees, [{ ...main, id: 'wt-new-lane' as never, isMain: false, branch: first }]),
+        },
+      }),
+    );
+    await start('Add a robots.txt', 2);
+    expect(branchOf(1)).not.toBe(first);
+    expect(branchOf(1)).toMatch(/^agent\/claude-\d+$/);
   });
 });

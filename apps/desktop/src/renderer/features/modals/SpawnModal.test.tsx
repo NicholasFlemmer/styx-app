@@ -214,7 +214,7 @@ describe('SpawnModal', () => {
       firstMessage: 'Add validation',
       toggles: { autoApproveEdits: true, mayRequestTargets: true, notifyWhenNeedsMe: true },
       model: null,
-      permissionMode: 'default',
+      permissionMode: 'auto',
       effort: null,
       kind: null,
     });
@@ -226,8 +226,8 @@ describe('SpawnModal', () => {
   it('Claude tile shows Permissions / Model / Effort selects seeded from project defaults; picks ride along (discrepancy #54)', async () => {
     render(<SpawnModal id="modal-1" projectId={acme} />);
     const mode = screen.getByLabelText(copy.chat.controls.permissions) as HTMLSelectElement;
-    expect(mode.value).toBe('default');
-    expect(screen.getByText(copy.session.permissionModeHints.default)).toBeTruthy();
+    expect(mode.value).toBe('auto');
+    expect(screen.getByText(copy.session.permissionModeHints.auto)).toBeTruthy();
     fireEvent.change(mode, { target: { value: 'plan' } });
     expect(screen.getByText(copy.session.permissionModeHints.plan)).toBeTruthy();
     fireEvent.change(screen.getByLabelText(copy.chat.controls.model), { target: { value: 'sonnet' } });
@@ -248,14 +248,14 @@ describe('SpawnModal', () => {
     fireEvent.change(screen.getByLabelText(copy.chat.controls.effort), { target: { value: 'max' } });
     fireEvent.click(screen.getByRole('radio', { name: /^Cursor/ }));
     expect(screen.getByLabelText(copy.chat.controls.permissions)).toBeTruthy();
-    expect(screen.getByText(copy.session.permissionModeHintsByAgent.cursor.default)).toBeTruthy();
+    expect(screen.getByText(copy.session.permissionModeHintsByAgent.cursor.auto)).toBeTruthy();
     expect(screen.queryByLabelText(copy.chat.controls.effort)).toBeNull();
     // Cursor has no alias list: the Claude pick resets to the CLI default rather than riding along.
     const cursorModel = screen.getByLabelText(copy.chat.controls.model) as HTMLSelectElement;
     expect(cursorModel.value).toBe('default');
     expect([...cursorModel.options].map((o) => o.value)).toEqual(['default']);
     fireEvent.click(screen.getByRole('radio', { name: /^Codex/ }));
-    expect(screen.getByText(copy.session.permissionModeHintsByAgent.codex.default)).toBeTruthy();
+    expect(screen.getByText(copy.session.permissionModeHintsByAgent.codex.auto)).toBeTruthy();
     const codexModel = screen.getByLabelText(copy.chat.controls.model) as HTMLSelectElement;
     expect([...codexModel.options].map((o) => o.textContent)).toEqual([
       'Default model',

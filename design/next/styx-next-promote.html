@@ -1,0 +1,1098 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Styx next: Promote mode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+:root {
+  /* Styx tokens, verbatim */
+  --page:#181916; --bg:#0d0e0c; --s1:#121411; --s2:#1c1e1a; --ln:#2d302a; --tx:#e9ebe3; --mu:#858a81;
+  --ac:#d6ff3d; --acx:#0d0e0c; --act:#d6ff3d; --add:rgba(214,255,61,.13); --term:#080908; --termtx:#c9cdc2; --dim:rgba(0,0,0,.6);
+  /* Paper: the light theme's surfaces, for work that has come back */
+  --p-bg:#f7f8f3; --p-s2:#e1e3db; --p-ln:#b3b7ab; --p-tx:#14160f; --p-mu:#5d6259; --p-act:#6e8f00; --p-add:rgba(150,200,0,.2);
+  --del:rgba(255,110,80,.14); --p-del:rgba(200,70,40,.13);
+  /* New: one colour per agent, used only as a small square */
+  --claude:#e8916a; --codex:#8fb3ff; --gemini:#b79bff; --cursor:#e9ebe3; --shell:#858a81;
+  --ui: 'Archivo', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--page); color: var(--tx); font: 400 14px/1.5 var(--ui); padding: 56px 0 140px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.mu { color: var(--mu); }
+
+/* ================= the document ================= */
+.doc { width: 1280px; margin: 0 auto; }
+.doc h1 { font: 600 54px/1.02 var(--ui); letter-spacing: -0.02em; letter-spacing: -.01em; max-width: 17ch; }
+.doc .lede { margin-top: 18px; max-width: 64ch; color: var(--mu); font-size: 18px; line-height: 1.5; }
+.doc .lede strong { color: var(--tx); font-weight: 600; }
+.rules { margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 32px; }
+.rules div { padding: 16px 0; border-top: 1px solid var(--ln); }
+.rules b { display: block; font: 600 17px/1.2 var(--ui); letter-spacing: 0; }
+.rules span { display: block; margin-top: 6px; color: var(--mu); font-size: 14px; max-width: 40ch; }
+.index { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 6px; }
+.index a { color: var(--tx); text-decoration: none; padding: 6px 10px; border: 1px solid var(--ln); font-size: 13px; }
+.index a:hover { background: var(--tx); color: var(--bg); }
+.part { margin-top: 104px; padding-top: 18px; border-top: 1px solid var(--tx); font: 600 32px/1 var(--ui); letter-spacing: -0.02em; }
+.note { width: 1280px; margin: 72px auto 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
+.note h2 { font: 600 24px/1.12 var(--ui); letter-spacing: -0.02em; grid-column: 1; }
+.note .was { grid-column: 2; grid-row: 1 / span 2; color: var(--mu); font-size: 13px; border-left: 1px solid var(--ln); padding-left: 20px; }
+.note .was b { display: block; color: var(--tx); font-weight: 600; margin-bottom: 4px; }
+.note p { grid-column: 1; margin-top: 8px; color: var(--mu); font-size: 15px; max-width: 60ch; }
+.note + .note { margin-top: 24px; }
+
+/* ================= window frame ================= */
+.win { width: 1280px; height: 800px; margin: 0 auto; background: var(--bg); border: 1px solid var(--ln); display: grid; grid-template-rows: 38px 1fr 26px; overflow: hidden; position: relative; }
+.win.bare { grid-template-rows: 38px 1fr; }
+.title { display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid var(--ln); background: var(--s1); font-size: 13px; }
+.lights { display: flex; gap: 8px; width: 60px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); }
+.word { font: 600 12px/1 var(--ui); letter-spacing: 0; letter-spacing: .24em; }
+.crumb { display: flex; gap: 8px; align-items: center; color: var(--mu); }
+.crumb b { color: var(--tx); font-weight: 600; }
+.search { margin-left: auto; width: 320px; border: 1px solid var(--ln); padding: 5px 10px; color: var(--mu); display: flex; justify-content: space-between; }
+.search kbd { font: 500 11px var(--mono); }
+.count { display: flex; align-items: center; gap: 6px; }
+.count i { width: 8px; height: 8px; background: var(--ac); }
+.count i.off { background: none; border: 1px solid var(--tx); }
+.me { width: 24px; height: 24px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); font: 600 10px/22px var(--ui); text-align: center; }
+.frame { display: grid; grid-template-columns: 56px 216px 1fr; min-height: 0; }
+.frame.wide { grid-template-columns: 56px 1fr; }
+.status { display: flex; gap: 20px; align-items: center; padding: 0 14px; border-top: 1px solid var(--ln); background: var(--s1); font-size: 12px; color: var(--mu); }
+.status .sp { margin-left: auto; }
+.status .tx { color: var(--tx); }
+.status .coffee { background: var(--ac); color: var(--acx); font-weight: 700; padding: 3px 9px; margin-right: -14px; height: 26px; display: flex; align-items: center; }
+
+/* rail: places on top, projects below, settings at the foot */
+.rail { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; }
+.rail .ic { width: 36px; height: 36px; display: grid; place-items: center; color: var(--mu); position: relative; }
+.rail .ic svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.rail .ic[data-inv] { background: var(--tx); color: var(--bg); }
+.rail .ic b { position: absolute; top: 2px; right: 2px; width: 7px; height: 7px; background: var(--ac); }
+.rail hr { width: 24px; border: 0; border-top: 1px solid var(--ln); margin: 4px 0; }
+.rail .pj { width: 36px; height: 36px; border: 1px solid var(--ln); display: grid; place-items: center; font: 700 11px var(--ui); position: relative; }
+.rail .pj[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.rail .pj b { position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; background: var(--ac); border: 2px solid var(--s1); }
+.rail .pj.add { border-style: dashed; color: var(--mu); }
+.rail .foot { margin-top: auto; }
+
+/* project nav: the work first, then the project's tools */
+.nav { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.nav .ph { padding: 14px 14px 10px; }
+.nav .ph b { display: block; font: 600 16px/1.2 var(--ui); letter-spacing: 0; }
+.nav .ph span { font: 400 11px var(--mono); color: var(--mu); }
+.nav .grp { padding: 14px 14px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.lanes { display: flex; flex-direction: column; }
+.ln { display: grid; grid-template-columns: 10px 1fr auto; gap: 2px 8px; padding: 8px 14px; border-top: 1px solid var(--ln); }
+.ln:last-child { border-bottom: 1px solid var(--ln); }
+.ln .d { width: 8px; height: 8px; margin-top: 6px; }
+.ln .t { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.ln .s { grid-column: 2 / -1; font-size: 12px; color: var(--mu); }
+.ln .s.you { color: var(--acx); background: var(--ac); justify-self: start; padding: 0 5px; font-weight: 600; }
+.ln[data-inv] { background: var(--tx); color: var(--bg); }
+.ln[data-inv] .s { color: #5d6259; }
+.ln.old { opacity: .55; }
+.newtask { margin: 10px 14px 0; padding: 8px 10px; border: 1px dashed var(--ln); color: var(--mu); font-size: 13px; }
+.tools { display: flex; flex-direction: column; margin-top: 4px; }
+.tools a { display: flex; justify-content: space-between; padding: 7px 14px; font-size: 13px; border-top: 1px solid var(--ln); }
+.tools a:last-child { border-bottom: 1px solid var(--ln); }
+.tools a span { color: var(--mu); font-size: 12px; }
+.tools a[data-inv] { background: var(--tx); color: var(--bg); }
+.nav .nf { margin-top: auto; padding: 10px 14px; border-top: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+.nav .nf .mono { font-size: 11px; }
+
+/* shared bits */
+.dot { display: inline-block; width: 8px; height: 8px; flex: none; }
+.c-claude { background: var(--claude); } .c-codex { background: var(--codex); } .c-gemini { background: var(--gemini); } .c-cursor { background: var(--cursor); } .c-shell { background: var(--shell); }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--ln); font-size: 13px; white-space: nowrap; }
+.btn.pri { background: var(--ac); color: var(--acx); border-color: var(--ac); font-weight: 700; }
+.btn.inv { background: var(--tx); color: var(--bg); border-color: var(--tx); font-weight: 600; }
+.btn.line { border-color: var(--tx); font-weight: 600; }
+.btn.sm { padding: 4px 9px; font-size: 12px; }
+.btn kbd { font: 500 10px var(--mono); opacity: .7; }
+.tag { display: inline-block; padding: 1px 6px; font-size: 11px; font-weight: 600; border: 1px solid var(--ln); color: var(--mu); }
+.tag.prod { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.pagehead { display: flex; align-items: flex-end; gap: 16px; padding: 22px 28px 16px; border-bottom: 1px solid var(--ln); }
+.pagehead h3 { font: 600 28px/1 var(--ui); letter-spacing: -0.02em; }
+.pagehead p { color: var(--mu); font-size: 13px; padding-bottom: 2px; }
+.pagehead .r { margin-left: auto; display: flex; gap: 8px; }
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--ln); padding: 0 28px; }
+.tabs span { padding: 10px 14px; font-size: 13px; color: var(--mu); display: flex; gap: 6px; align-items: center; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs span[data-inv] { color: var(--tx); border-bottom-color: var(--tx); font-weight: 600; }
+.tabs .n { font-size: 11px; padding: 0 5px; background: var(--ac); color: var(--acx); font-weight: 700; }
+.tabs .n.q { background: none; color: var(--mu); border: 1px solid var(--ln); font-weight: 500; }
+.scrim { position: absolute; inset: 38px 0 0 0; background: var(--dim); z-index: 5; }
+.modal { position: absolute; z-index: 6; background: var(--bg); border: 1px solid var(--tx); }
+
+/* the customer's app (Acme Shop) inside previews and results */
+.acme { background: #fff; color: #1f2430; font-family: system-ui, -apple-system, sans-serif; border-radius: 10px; overflow: hidden; }
+.acme.dark { background: #1b1f2a; color: #e8ebf2; }
+.acme .top { display: flex; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e7e9ef; font-weight: 700; font-size: 13px; }
+.acme.dark .top { border-color: #2c3242; }
+.acme .top i { font-style: normal; font-weight: 500; font-size: 12px; color: #7b8294; }
+.acme .b { padding: 14px 16px; }
+.acme h5 { font-size: 17px; margin-bottom: 8px; }
+.acme .set { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eef0f4; font-size: 13px; }
+.acme.dark .set { border-color: #2c3242; }
+.acme .set small { display: block; color: #7b8294; font-size: 12px; margin-top: 1px; }
+.tog { width: 34px; height: 20px; border-radius: 10px; background: #5b6cff; position: relative; flex: none; }
+.tog::after { content: ''; position: absolute; top: 2px; left: 16px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+.tog.off { background: #c9ced9; } .acme.dark .tog.off { background: #3a4152; } .tog.off::after { left: 2px; }
+.acme .new { outline: 2px dashed var(--ac); outline-offset: 3px; }
+
+/* ================= workspace ================= */
+.ws { display: grid; grid-template-columns: 1fr 400px; min-height: 0; }
+.stagecol { display: grid; grid-template-rows: 40px 1fr auto; min-width: 0; border-right: 1px solid var(--ln); min-height: 0; }
+.itabs { display: flex; align-items: stretch; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.itabs > span { padding: 0 14px; display: flex; align-items: center; gap: 7px; color: var(--mu); border-right: 1px solid var(--ln); }
+.itabs > span[data-inv] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.itabs .n { font-size: 11px; padding: 0 4px; border: 1px solid currentColor; }
+.itabs .acts { margin-left: auto; display: flex; gap: 6px; align-items: center; padding: 0 8px; border: 0; }
+.itabs .acts .btn { padding: 5px 10px; font-size: 12px; }
+.stage { background: var(--s1); padding: 18px 22px; display: grid; grid-template-rows: auto 1fr; gap: 10px; min-height: 0; overflow: hidden; }
+.urlbar { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--mu); }
+.urlbar .u { font: 400 12px var(--mono); color: var(--tx); border: 1px solid var(--ln); padding: 4px 8px; background: var(--bg); }
+.urlbar .seg { margin-left: auto; display: flex; border: 1px solid var(--ln); }
+.urlbar .seg span { padding: 3px 9px; } .urlbar .seg span[data-inv] { background: var(--tx); color: var(--bg); }
+.term { background: var(--term); color: var(--termtx); font: 400 12px/1.65 var(--mono); padding: 8px 14px 10px; border-top: 1px solid var(--ln); height: 112px; }
+.term .h { font: 400 12px var(--ui); color: var(--mu); display: flex; justify-content: space-between; margin-bottom: 2px; }
+.term .ok { color: var(--act); }
+
+.chat { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; background: var(--bg); }
+.lanehead { padding: 14px 16px 12px; border-bottom: 1px solid var(--ln); }
+.lanehead .who { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--mu); }
+.lanehead .who .mono { color: var(--mu); }
+.lanehead .who .x { margin-left: auto; display: flex; gap: 10px; }
+.lanehead h3 { font: 600 19px/1.2 var(--ui); letter-spacing: 0; margin-top: 6px; }
+.lanehead .sum { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--mu); }
+.lanehead .sum .btn { margin-left: auto; }
+.feed { overflow: hidden; padding: 14px 16px 0; display: flex; flex-direction: column; gap: 10px; }
+.rcpt { display: flex; justify-content: space-between; gap: 10px; padding: 8px 12px; background: var(--s1); border: 1px solid var(--ln); font-size: 13px; }
+.rcpt b { font-weight: 600; }
+.rcpt span { color: var(--mu); font-size: 12px; white-space: nowrap; }
+.umsg { align-self: flex-end; max-width: 85%; background: var(--s2); padding: 8px 12px; font-size: 14px; }
+.card-p { background: var(--p-bg); color: var(--p-tx); padding: 13px 15px 11px; }
+.card-p .top { display: flex; justify-content: space-between; font-size: 12px; color: var(--p-mu); }
+.card-p .top .ok { color: var(--p-act); font-weight: 600; }
+.card-p h4 { font: 600 16px/1.22 var(--ui); letter-spacing: 0; margin-top: 5px; }
+.card-p p { font-size: 13px; margin-top: 5px; line-height: 1.45; }
+.card-p .acts { display: flex; gap: 6px; margin-top: 10px; align-items: center; }
+.card-p .acts .btn { border-color: var(--p-ln); padding: 5px 10px; font-size: 12px; }
+.card-p .acts .k { margin-left: auto; font-size: 12px; color: var(--p-mu); }
+.live { border: 1px solid var(--ln); padding: 10px 12px; }
+.live .hd { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.live .hd i { width: 8px; height: 8px; background: var(--ac); }
+.live .hd span { margin-left: auto; color: var(--mu); font-weight: 400; font-size: 12px; }
+.live ol { list-style: none; margin-top: 7px; font-size: 13px; }
+.live li { display: flex; gap: 8px; padding: 2px 0; color: var(--mu); }
+.live li::before { content: ''; width: 9px; height: 9px; margin-top: 5px; flex: none; border: 1.5px solid var(--ln); }
+.live li.d { color: var(--tx); } .live li.d::before { background: var(--ac); border-color: var(--ac); }
+.live li.n { color: var(--tx); } .live li.n::before { border-color: var(--ac); }
+.live .raw { margin-top: 6px; font-size: 12px; color: var(--mu); text-decoration: underline; text-underline-offset: 3px; }
+.ask { border: 1px solid var(--ac); padding: 12px; }
+.ask .hd { font-size: 12px; color: var(--mu); display: flex; gap: 8px; align-items: center; }
+.ask .hd i { width: 8px; height: 8px; background: var(--ac); }
+.ask h4 { font: 600 16px/1.25 var(--ui); letter-spacing: 0; margin-top: 6px; }
+.ask p { font-size: 13px; color: var(--mu); margin-top: 4px; }
+.ask .acts { display: flex; gap: 6px; margin-top: 10px; }
+.compose { padding: 10px 16px 12px; border-top: 1px solid var(--ln); }
+.compose .box { border: 1px solid var(--ln); padding: 9px 12px; color: var(--mu); min-height: 54px; font-size: 14px; }
+.compose .row { display: flex; gap: 14px; margin-top: 7px; font-size: 12px; color: var(--mu); }
+.compose .row .send { margin-left: auto; color: var(--tx); }
+
+/* code instrument: today's editor, kept */
+.code { display: grid; grid-template-columns: 200px 1fr; min-height: 0; background: var(--bg); }
+.files { border-right: 1px solid var(--ln); padding: 10px 0; font: 400 12px/1.9 var(--mono); }
+.files .h { font: 400 12px var(--ui); color: var(--mu); padding: 0 12px 4px; }
+.files div { padding: 0 12px; display: flex; justify-content: space-between; }
+.files div.in { padding-left: 24px; }
+.files div[data-inv] { background: var(--tx); color: var(--bg); }
+.files .m { color: var(--act); }
+.files div[data-inv] .m { color: var(--p-act); }
+.editor { display: grid; grid-template-rows: 32px 1fr auto; min-width: 0; }
+.etabs { display: flex; border-bottom: 1px solid var(--ln); font: 400 12px var(--mono); }
+.etabs span { padding: 0 14px; display: flex; align-items: center; border-right: 1px solid var(--ln); color: var(--mu); }
+.etabs span[data-inv] { color: var(--tx); background: var(--s1); }
+.etabs .open { margin-left: auto; font: 400 12px var(--ui); border-left: 1px solid var(--ln); border-right: 0; }
+.src { font: 400 12.5px/1.75 var(--mono); padding: 10px 0; overflow: hidden; }
+.src div { display: grid; grid-template-columns: 44px 1fr; white-space: pre; }
+.src div span:first-child { color: var(--mu); text-align: right; padding-right: 14px; }
+.src .a { background: var(--add); }
+.src .k { color: #c6a8ff; } .src .s { color: #d6ff3d; } .src .c { color: var(--mu); }
+.hunknote { display: grid; grid-template-columns: 44px 1fr; margin: 4px 0; }
+.hunknote > div { grid-column: 2; margin-right: 18px; padding: 8px 12px; background: var(--p-bg); color: var(--p-tx); font: 400 13px/1.4 var(--ui); display: flex; gap: 12px; align-items: center; white-space: normal; }
+.hunknote b { font-weight: 600; }
+.hunknote .r { margin-left: auto; display: flex; gap: 6px; }
+.hunknote .r span { padding: 3px 8px; border: 1px solid var(--p-ln); font-size: 12px; }
+.hunkbar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--ln); font-size: 13px; color: var(--mu); }
+.hunkbar .r { margin-left: auto; display: flex; gap: 6px; }
+
+/* access sheet */
+.sheet { position: absolute; top: 38px; right: 0; bottom: 26px; width: 400px; background: var(--bg); border-left: 1px solid var(--tx); z-index: 4; display: grid; grid-template-rows: auto 1fr auto; }
+.sheet .sh { padding: 16px 18px 14px; border-bottom: 1px solid var(--ln); }
+.sheet .sh .who { font-size: 12px; color: var(--mu); display: flex; gap: 8px; align-items: center; }
+.sheet .sh h3 { font: 600 22px/1.15 var(--ui); letter-spacing: -0.02em; margin-top: 8px; }
+.sheet .sb { padding: 16px 18px; display: flex; flex-direction: column; gap: 16px; }
+.sheet .why { font-size: 14px; line-height: 1.5; padding: 12px 14px; background: var(--s1); border-left: 2px solid var(--ac); }
+.sheet .lbl { font-size: 12px; color: var(--mu); margin-bottom: 6px; }
+.opt { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border: 1px solid var(--ln); margin-top: -1px; font-size: 14px; }
+.opt small { display: block; font-size: 12px; color: var(--mu); }
+.ck { width: 14px; height: 14px; border: 1.5px solid var(--mu); flex: none; display: inline-block; }
+.ck.on { background: var(--tx); border-color: var(--tx); }
+.seg4 { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--ln); }
+.seg4 span { padding: 8px 0; text-align: center; font-size: 13px; border-right: 1px solid var(--ln); }
+.seg4 span:last-child { border-right: 0; }
+.seg4 span[data-on] { background: var(--ac); color: var(--acx); font-weight: 700; }
+.sheet .fine { font-size: 12px; color: var(--mu); line-height: 1.5; }
+.sheet .sf { display: grid; grid-template-columns: 1fr 1.6fr; border-top: 1px solid var(--ln); }
+.sheet .sf button { padding: 16px; text-align: center; font-size: 14px; }
+.sheet .sf .pri { background: var(--ac); color: var(--acx); font-weight: 700; }
+
+/* new task */
+.newt { padding: 30px 40px 0; display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+.newt h3 { font: 600 38px/1.05 var(--ui); letter-spacing: -0.02em; }
+.newt h3 span { color: var(--mu); }
+.composer { margin-top: 22px; border: 1px solid var(--tx); background: var(--s1); }
+.composer .text { padding: 16px 18px 6px; font-size: 17px; min-height: 84px; }
+.composer .text .caret { display: inline-block; width: 2px; height: 20px; background: var(--ac); vertical-align: -4px; }
+.composer .row { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 18px; border-top: 1px solid var(--ln); font-size: 13px; color: var(--mu); }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid var(--ln); color: var(--tx); font-size: 13px; }
+.composer .row .btn.pri { margin-left: auto; padding: 9px 20px; }
+.more { border: 1px solid var(--ln); border-top: 0; display: grid; grid-template-columns: repeat(4, 1fr); }
+.more > div { padding: 12px 16px; border-right: 1px solid var(--ln); }
+.more > div:last-child { border-right: 0; }
+.more .l { font-size: 12px; color: var(--mu); }
+.more .v { font-size: 14px; margin-top: 3px; display: flex; justify-content: space-between; }
+.more .v .mono { font-size: 12px; }
+.agents5 { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--ln); border-top: 0; }
+.agents5 div { padding: 9px 11px; border-right: 1px solid var(--ln); font-size: 13px; }
+.agents5 div:last-child { border-right: 0; }
+.agents5 div small { display: block; font: 400 11px var(--mono); color: var(--mu); margin-top: 2px; }
+.agents5 div[data-inv] { background: var(--tx); color: var(--bg); }
+.agents5 div[data-inv] small { color: #5d6259; }
+.agents5 div.miss { color: var(--mu); }
+.starters { margin-top: 26px; }
+.starters h4 { font-size: 13px; color: var(--mu); font-weight: 500; margin-bottom: 8px; }
+.starter { display: grid; grid-template-columns: 1fr 220px 100px; align-items: center; padding: 11px 0; border-top: 1px solid var(--ln); }
+.starter:last-child { border-bottom: 1px solid var(--ln); }
+.starter .t { font-size: 15px; font-weight: 500; }
+.starter .t small { display: block; font-size: 12px; color: var(--mu); font-weight: 400; }
+.starter .m { color: var(--mu); font-size: 12px; }
+.starter .btn { justify-self: end; }
+.runs { padding: 22px; display: flex; flex-direction: column; gap: 12px; background: var(--s1); border-left: 1px solid var(--ln); }
+.runs h4 { font-size: 13px; color: var(--mu); font-weight: 500; }
+.lane-mini { border: 1px solid var(--ln); padding: 10px 12px; background: var(--bg); font-size: 13px; }
+.lane-mini b { display: block; font-weight: 600; margin-top: 3px; }
+.lane-mini small { color: var(--mu); font-size: 12px; }
+
+/* paper page: changes / review */
+.paperwrap { background: #22241f; display: grid; place-items: start center; padding-top: 22px; min-height: 0; overflow: hidden; position: relative; }
+.page { width: 820px; background: var(--p-bg); color: var(--p-tx); padding: 30px 46px 120px; }
+.page .ready { display: flex; gap: 12px; font-size: 13px; color: var(--p-mu); align-items: center; }
+.page .ready .ok { color: var(--p-act); font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
+.page .ready .ok i { width: 9px; height: 9px; background: var(--p-act); }
+.page h3 { font: 600 30px/1.08 var(--ui); letter-spacing: -0.02em; margin-top: 10px; max-width: 36ch; }
+.page .sum { margin-top: 10px; font-size: 15px; line-height: 1.55; max-width: 64ch; }
+.page h5 { font: 600 13px var(--ui); color: var(--p-mu); margin: 22px 0 8px; display: flex; justify-content: space-between; }
+.turn { border: 1px solid var(--p-ln); margin-top: -1px; }
+.turn .th { display: flex; gap: 10px; align-items: center; padding: 10px 14px; font-size: 14px; }
+.turn .th b { font-weight: 600; }
+.turn .th .r { margin-left: auto; display: flex; gap: 6px; }
+.turn .th .r span { padding: 3px 8px; border: 1px solid var(--p-ln); font-size: 12px; }
+.turn .th .st { font-size: 12px; color: var(--p-mu); }
+.diff { font: 400 12px/1.7 var(--mono); border-top: 1px solid var(--p-ln); background: #fff; }
+.diff .f { padding: 4px 14px; background: var(--p-s2); color: var(--p-mu); display: flex; justify-content: space-between; }
+.diff div.l { padding: 0 14px; white-space: pre; }
+.diff .a { background: var(--p-add); }
+.diff .x { background: var(--p-del); }
+.decide { position: absolute; left: 0; right: 0; bottom: 0; height: 72px; display: flex; align-items: center; gap: 10px; padding: 0 calc((100% - 820px) / 2 + 46px); background: var(--bg); border-top: 1px solid var(--tx); }
+.decide .r { margin-left: auto; font-size: 12px; color: var(--mu); display: flex; gap: 14px; }
+.decide kbd { font: 500 10px var(--mono); border: 1px solid var(--ln); padding: 1px 4px; margin-left: 4px; }
+
+/* home */
+.home { padding: 0; overflow: hidden; }
+.hello { padding: 26px 28px 20px; display: flex; align-items: flex-end; border-bottom: 1px solid var(--ln); }
+.hello h3 { font: 600 34px/1.05 var(--ui); letter-spacing: -0.02em; }
+.hello p { color: var(--mu); margin-top: 6px; font-size: 15px; }
+.hello .r { margin-left: auto; display: flex; gap: 8px; }
+.attn { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--ln); }
+.attn > div { padding: 14px 28px 16px; border-right: 1px solid var(--ln); }
+.attn > div:last-child { border-right: 0; }
+.attn .num { font: 600 40px/1 var(--ui); font-variant-numeric: tabular-nums; }
+.attn .num.on { color: var(--act); }
+.attn .lab { font-size: 13px; color: var(--mu); margin-top: 4px; }
+.projs { display: flex; flex-direction: column; }
+.proj { display: grid; grid-template-columns: 220px 1fr 160px; gap: 20px; padding: 14px 28px; border-bottom: 1px solid var(--ln); align-items: center; }
+.proj .n { font: 600 17px/1.2 var(--ui); letter-spacing: 0; display: flex; gap: 8px; align-items: center; }
+.proj .n small { display: block; }
+.proj .p { font: 400 11px var(--mono); color: var(--mu); margin-top: 3px; }
+.proj .work { display: flex; gap: 6px; flex-wrap: wrap; }
+.wk { display: inline-flex; gap: 6px; align-items: center; padding: 4px 8px; border: 1px solid var(--ln); font-size: 12px; }
+.wk.you { border-color: var(--ac); }
+.wk.you em { font-style: normal; background: var(--ac); color: var(--acx); padding: 0 4px; font-weight: 600; font-size: 11px; }
+.wk.rd { background: var(--p-bg); color: var(--p-tx); border-color: var(--p-bg); }
+.proj .meta { font-size: 12px; color: var(--mu); text-align: right; }
+.addrow { display: flex; gap: 8px; padding: 14px 28px; border-bottom: 1px solid var(--ln); }
+.addrow .btn { border-style: dashed; color: var(--mu); }
+.feedline { padding: 14px 28px; }
+.feedline h4 { font-size: 13px; color: var(--mu); font-weight: 500; margin-bottom: 8px; }
+.feedline div { display: grid; grid-template-columns: 50px 1fr; padding: 4px 0; font-size: 13px; }
+.feedline div span:first-child { color: var(--mu); font-variant-numeric: tabular-nums; }
+
+/* agents board */
+.board { display: grid; grid-template-columns: repeat(4, 1fr); min-height: 0; }
+.bcol { border-right: 1px solid var(--ln); padding: 18px 16px; display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: hidden; }
+.bcol:last-child { border-right: 0; }
+.bcol h4 { font: 600 18px/1 var(--ui); letter-spacing: 0; display: flex; gap: 8px; align-items: baseline; }
+.bcol h4 .c { font-size: 13px; color: var(--mu); font-weight: 600; }
+.bcol h4 .c[data-on] { background: var(--ac); color: var(--acx); padding: 1px 6px; }
+.bcol .sub { font-size: 12px; color: var(--mu); margin-top: -4px; }
+.bc { border: 1px solid var(--ln); background: var(--s1); padding: 12px; }
+.bc .w { display: flex; gap: 7px; align-items: center; font-size: 12px; color: var(--mu); }
+.bc .w .r { margin-left: auto; }
+.bc .t { font-size: 14px; font-weight: 600; margin-top: 6px; line-height: 1.3; }
+.bc .q { font-size: 13px; color: var(--mu); margin-top: 4px; }
+.bc .acts { display: flex; gap: 6px; margin-top: 10px; }
+.bc.you { border-color: var(--ac); }
+.bc .bar { height: 3px; background: var(--s2); margin-top: 10px; position: relative; }
+.bc .bar i { position: absolute; inset: 0 auto 0 0; background: var(--tx); }
+.bc .mini { margin-top: 10px; height: 64px; overflow: hidden; border-radius: 6px; }
+.bc .mini .acme { transform: scale(.5); transform-origin: top left; width: 200%; }
+.bc.paper { background: var(--p-bg); color: var(--p-tx); border-color: var(--p-bg); }
+.bc.paper .w, .bc.paper .q { color: var(--p-mu); }
+.bc.paper .btn { border-color: var(--p-ln); }
+.bc.paper .btn.inv { background: var(--p-tx); color: var(--p-bg); border-color: var(--p-tx); }
+.bc.landed { opacity: .6; }
+
+/* lanes (repo) */
+.ltable { display: flex; flex-direction: column; }
+.lrow { display: grid; grid-template-columns: 1.6fr 1fr 1fr 120px 210px; gap: 16px; align-items: center; padding: 12px 28px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.lrow.h { font-size: 12px; color: var(--mu); padding-top: 10px; padding-bottom: 8px; }
+.lrow .t b { display: block; font-size: 14px; font-weight: 600; }
+.lrow .t .mono { color: var(--mu); font-size: 11px; }
+.lrow .acts { display: flex; gap: 6px; justify-content: flex-end; }
+.lrow[data-inv] { background: var(--s2); }
+.spark { display: flex; gap: 2px; align-items: flex-end; height: 16px; }
+.spark i { width: 4px; background: var(--act); }
+.spark i.x { background: #c4593a; }
+.lane-detail { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid var(--ln); }
+.lane-detail > div { padding: 16px 28px; }
+.lane-detail > div + div { border-left: 1px solid var(--ln); }
+.lane-detail h5 { font-size: 13px; color: var(--mu); font-weight: 500; margin-bottom: 8px; }
+.tl { list-style: none; font-size: 13px; }
+.tl li { display: grid; grid-template-columns: 52px 1fr; padding: 4px 0; }
+.tl li span:first-child { color: var(--mu); font-variant-numeric: tabular-nums; }
+.lane-detail .mainline { font-size: 13px; line-height: 1.6; }
+
+/* access */
+.acc { display: grid; grid-template-columns: 1fr 380px; min-height: 0; }
+.inbox { display: flex; flex-direction: column; }
+.req { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; padding: 14px 28px; border-bottom: 1px solid var(--ln); }
+.req .s { font-size: 15px; } .req .s b { font-weight: 600; }
+.req .why { grid-column: 1; font-size: 13px; color: var(--mu); }
+.req .acts { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 6px; align-items: center; }
+.req.on { box-shadow: inset 2px 0 0 var(--ac); }
+.auto { padding: 12px 28px; font-size: 13px; color: var(--mu); }
+.pol { border-left: 1px solid var(--ln); display: flex; flex-direction: column; background: var(--s1); }
+.pol h4 { padding: 16px 18px 10px; font: 700 17px var(--ui); }
+.rule { display: grid; grid-template-columns: 34px 1fr; gap: 2px 10px; padding: 11px 18px; border-top: 1px solid var(--ln); font-size: 14px; }
+.sw { width: 30px; height: 18px; border: 1.5px solid var(--mu); position: relative; margin-top: 2px; }
+.sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; background: var(--mu); }
+.sw.on { border-color: var(--ac); background: var(--ac); } .sw.on::after { left: 14px; background: var(--acx); }
+.rule small { grid-column: 2; font-size: 12px; color: var(--mu); }
+.pol .pf { margin-top: auto; padding: 12px 18px; border-top: 1px solid var(--ln); display: flex; gap: 8px; }
+.audit { display: flex; flex-direction: column; }
+.arow { display: grid; grid-template-columns: 64px 1fr 140px; gap: 14px; padding: 9px 28px; border-bottom: 1px solid var(--ln); font-size: 13px; align-items: baseline; }
+.arow .t { color: var(--mu); font-variant-numeric: tabular-nums; }
+.arow .k { font-size: 12px; color: var(--mu); text-align: right; }
+.arow[data-inv] { background: var(--tx); color: var(--bg); }
+.arow[data-inv] .t, .arow[data-inv] .k { color: #5d6259; }
+.drawer { position: absolute; top: 38px; right: 0; bottom: 26px; width: 380px; background: var(--bg); border-left: 1px solid var(--tx); z-index: 4; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.drawer h3 { font: 600 21px/1.2 var(--ui); letter-spacing: 0; }
+.kv { display: grid; grid-template-columns: 110px 1fr; font-size: 13px; }
+.kv div { padding: 7px 0; border-top: 1px solid var(--ln); }
+.kv div:nth-child(odd) { color: var(--mu); }
+.chain { font: 400 11px/1.6 var(--mono); color: var(--mu); padding: 10px; background: var(--s1); word-break: break-all; }
+
+/* usage */
+.use { padding: 0 28px; overflow: hidden; }
+.use .grid2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 40px; margin-top: 18px; }
+.use h4 { font-size: 13px; color: var(--mu); font-weight: 500; margin-bottom: 8px; }
+.bars { display: flex; flex-direction: column; gap: 10px; }
+.brow { display: grid; grid-template-columns: 120px 1fr 90px; gap: 12px; align-items: center; font-size: 13px; }
+.brow .tr { height: 14px; background: var(--s2); position: relative; }
+.brow .tr i { position: absolute; inset: 0 auto 0 0; }
+.brow .v { text-align: right; color: var(--mu); font-variant-numeric: tabular-nums; }
+.limit { border: 1px solid var(--ln); padding: 12px 14px; margin-bottom: 10px; }
+.limit .h { display: flex; justify-content: space-between; font-size: 14px; }
+.limit .h span { color: var(--mu); font-size: 12px; }
+.limit .tr { height: 6px; background: var(--s2); margin-top: 8px; position: relative; }
+.limit .tr i { position: absolute; inset: 0 auto 0 0; background: var(--tx); }
+.limit .tr i.hot { background: var(--ac); }
+.week { display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; align-items: end; height: 120px; margin-top: 4px; }
+.week i { background: var(--s2); position: relative; }
+.week i.t { background: var(--tx); }
+.weeklab { display: flex; justify-content: space-between; font-size: 11px; color: var(--mu); margin-top: 6px; }
+
+/* settings */
+.set2 { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
+.snav { border-right: 1px solid var(--ln); padding: 16px 0; font-size: 13px; }
+.snav .g { padding: 10px 18px 6px; font-size: 12px; color: var(--mu); }
+.snav a { display: block; padding: 6px 18px; }
+.snav a[data-inv] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.sbody { overflow: hidden; }
+.trow { display: grid; grid-template-columns: 1.3fr 90px 1.2fr 1fr 150px; gap: 14px; align-items: center; padding: 12px 28px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.trow.h { font-size: 12px; color: var(--mu); padding: 10px 28px 8px; }
+.trow .n b { display: block; font-size: 14px; font-weight: 600; }
+.trow .n small { color: var(--mu); font-size: 12px; }
+.sel { border: 1px solid var(--ln); padding: 5px 9px; display: flex; justify-content: space-between; font-size: 13px; }
+.trow .acts { display: flex; gap: 6px; justify-content: flex-end; }
+.trow .st.open { color: var(--act); }
+.cli { display: grid; grid-template-columns: 34px 1fr 1.2fr 170px; gap: 14px; align-items: center; padding: 14px 28px; border-bottom: 1px solid var(--ln); }
+.cli .ico { width: 30px; height: 30px; display: grid; place-items: center; font: 700 12px var(--ui); color: var(--acx); }
+.cli .n b { display: block; font-size: 15px; font-weight: 600; }
+.cli .n small { font: 400 11px var(--mono); color: var(--mu); }
+.cli .state { font-size: 13px; }
+.cli .state small { display: block; color: var(--mu); font-size: 12px; }
+.cli .state .good { color: var(--act); }
+.cli .state .bad { color: #ffb86b; }
+.cli .acts { display: flex; justify-content: flex-end; }
+
+/* onboarding */
+.onb { display: grid; grid-template-columns: 300px 1fr; min-height: 0; }
+.steps-side { border-right: 1px solid var(--ln); padding: 32px 28px; display: flex; flex-direction: column; gap: 4px; background: var(--s1); }
+.steps-side .word { margin-bottom: 26px; }
+.stp { display: grid; grid-template-columns: 26px 1fr; gap: 2px 10px; padding: 10px 0; }
+.stp i { width: 20px; height: 20px; border: 1.5px solid var(--ln); font: 700 11px/17px var(--ui); font-style: normal; text-align: center; color: var(--mu); }
+.stp.done i { background: var(--tx); border-color: var(--tx); color: var(--bg); }
+.stp.now i { background: var(--ac); border-color: var(--ac); color: var(--acx); }
+.stp b { font-size: 15px; font-weight: 600; }
+.stp.next b { color: var(--mu); font-weight: 500; }
+.stp small { grid-column: 2; font-size: 12px; color: var(--mu); }
+.steps-side .fin { margin-top: auto; font-size: 12px; color: var(--mu); line-height: 1.5; }
+.onbody { padding: 44px 56px 0; display: flex; flex-direction: column; min-height: 0; }
+.onbody h3 { font: 600 40px/1.05 var(--ui); letter-spacing: -0.02em; max-width: 18ch; }
+.onbody .p { color: var(--mu); font-size: 16px; margin-top: 12px; max-width: 58ch; }
+.agentcards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 26px; }
+.ac { border: 1px solid var(--ln); padding: 14px 16px; display: grid; grid-template-columns: 30px 1fr auto; gap: 4px 12px; align-items: center; }
+.ac .ico { grid-row: 1 / span 2; width: 30px; height: 30px; display: grid; place-items: center; font: 700 12px var(--ui); color: var(--acx); }
+.ac b { font-size: 15px; font-weight: 600; }
+.ac small { grid-column: 2; font-size: 12px; color: var(--mu); }
+.ac .btn { grid-row: 1 / span 2; grid-column: 3; }
+.ac.ok { border-color: var(--tx); }
+.ac .good { color: var(--act); }
+.onfoot { margin-top: auto; display: flex; gap: 8px; padding: 18px 0 24px; border-top: 1px solid var(--ln); }
+.onfoot .btn.pri { margin-left: auto; padding: 10px 22px; }
+
+/* palette & modals */
+.palette { top: 90px; left: 280px; width: 720px; }
+.palette .in { padding: 16px 18px; font-size: 17px; border-bottom: 1px solid var(--ln); display: flex; gap: 10px; }
+.palette .in .caret { display: inline-block; width: 2px; height: 21px; background: var(--ac); vertical-align: -4px; }
+.palette .grp { padding: 10px 18px 4px; font-size: 12px; color: var(--mu); }
+.pi { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; padding: 8px 18px; font-size: 14px; align-items: center; }
+.pi .ic { color: var(--mu); font-size: 12px; text-align: center; }
+.pi .m { font-size: 12px; color: var(--mu); }
+.pi[data-inv] { background: var(--tx); color: var(--bg); }
+.pi[data-inv] .m, .pi[data-inv] .ic { color: #5d6259; }
+.palette .pf { display: flex; gap: 16px; padding: 9px 18px; border-top: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+.palette .pf .sp { margin-left: auto; }
+.np { top: 80px; left: 290px; width: 700px; }
+.np .mh { padding: 18px 22px 0; display: flex; }
+.np .mh h3 { font: 600 26px/1.1 var(--ui); letter-spacing: -0.02em; }
+.np .mh .x { margin-left: auto; color: var(--mu); }
+.np .mb { padding: 16px 22px; display: flex; flex-direction: column; gap: 14px; }
+.field .l { font-size: 12px; color: var(--mu); margin-bottom: 5px; }
+.field .v { border: 1px solid var(--ln); padding: 9px 12px; font-size: 15px; }
+.field .v.mono { font-size: 13px; }
+.how { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--ln); }
+.how > div { padding: 12px 14px; border-right: 1px solid var(--ln); }
+.how > div:last-child { border-right: 0; }
+.how b { font-size: 14px; font-weight: 600; display: block; }
+.how small { font-size: 12px; color: var(--mu); }
+.how > div[data-inv] { background: var(--tx); color: var(--bg); }
+.how > div[data-inv] small { color: #5d6259; }
+.brief { border: 1px solid var(--ln); padding: 10px 12px; font-size: 14px; min-height: 64px; }
+.checks { display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px; }
+.checks span { display: flex; gap: 7px; align-items: center; }
+.np .mf { display: flex; gap: 8px; padding: 14px 22px; border-top: 1px solid var(--ln); align-items: center; }
+.np .mf .fine { font-size: 12px; color: var(--mu); }
+.np .mf .btn.pri { margin-left: auto; padding: 9px 20px; }
+.conn { top: 90px; left: 330px; width: 620px; }
+.prov { display: grid; grid-template-columns: repeat(3, 1fr); }
+.prov > div { padding: 14px 16px; border-right: 1px solid var(--ln); border-bottom: 1px solid var(--ln); }
+.prov > div:nth-child(3n) { border-right: 0; }
+.prov b { font-size: 15px; display: block; }
+.prov small { font-size: 12px; color: var(--mu); }
+.prov > div[data-inv] { background: var(--tx); color: var(--bg); }
+.prov > div[data-inv] small { color: #5d6259; }
+.cform { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.cli-reuse { display: flex; gap: 12px; align-items: center; padding: 12px 14px; background: var(--s1); border-left: 2px solid var(--ac); font-size: 14px; }
+.cli-reuse .btn { margin-left: auto; }
+.envs { display: flex; gap: 6px; }
+.envs span { padding: 5px 10px; border: 1px solid var(--ln); font-size: 13px; }
+.envs span[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); font-weight: 600; }
+.toast { position: absolute; z-index: 7; right: 16px; bottom: 40px; width: 360px; background: var(--bg); border: 1px solid var(--tx); padding: 14px 16px; }
+.toast .hd { font-size: 12px; color: var(--mu); display: flex; gap: 8px; align-items: center; }
+.toast h4 { font: 600 16px/1.25 var(--ui); letter-spacing: 0; margin-top: 6px; }
+.toast p { font-size: 13px; color: var(--mu); margin-top: 3px; }
+.toast .acts { display: flex; gap: 6px; margin-top: 10px; }
+.upd { top: 210px; left: 430px; width: 420px; padding: 22px; }
+.upd h3 { font: 600 24px/1.1 var(--ui); letter-spacing: -0.02em; }
+.upd p { color: var(--mu); margin-top: 8px; font-size: 14px; }
+.upd ul { margin: 12px 0 0 18px; font-size: 14px; }
+.upd .acts { display: flex; gap: 8px; margin-top: 18px; }
+
+/* pins */
+.pin { position: absolute; z-index: 9; width: 20px; height: 20px; border-radius: 50%; background: var(--tx); color: var(--bg); font: 700 11px/20px var(--ui); text-align: center; }
+
+/* ================= promote mode (new) ================= */
+.modesw { display: flex; border: 1px solid var(--ln); margin-left: 6px; }
+.modesw span { padding: 3px 12px; font-size: 12px; color: var(--mu); }
+.modesw span[data-inv] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.linkhd { padding: 14px 14px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.linkbox { margin: 0 14px; border: 1px solid var(--ln); padding: 8px 10px; font-size: 13px; }
+.linkbox .h { display: flex; align-items: center; gap: 8px; }
+.linkbox .h b { font-weight: 600; }
+.linkbox .h .sw { margin: 0 0 0 auto; transform: scale(.8); }
+.linkbox small { display: block; font-size: 11px; color: var(--mu); margin-top: 3px; }
+.xmsg { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border: 1px dashed var(--ln); font-size: 13px; }
+.xmsg .tag { flex: none; }
+.xmsg span:last-child { margin-left: auto; color: var(--mu); font-size: 12px; white-space: nowrap; }
+/* brand page */
+.brand { background: var(--bg); display: grid; grid-template-columns: 1fr 400px; min-height: 0; }
+.brand .main { display: flex; flex-direction: column; min-height: 0; overflow: hidden; border-right: 1px solid var(--ln); }
+.ccard { display: grid; grid-template-columns: 76px 1fr auto; gap: 14px; padding: 14px 28px; border-bottom: 1px solid var(--ln); align-items: center; }
+.ccard .thumb { width: 76px; height: 76px; background: var(--s1); border: 1px solid var(--ln); position: relative; overflow: hidden; display: grid; place-items: center; font: 600 10px/1.1 var(--ui); text-align: center; padding: 6px; }
+.ccard .thumb mark { background: var(--ac); color: var(--acx); }
+.ccard .t b { display: block; font-size: 16px; font-weight: 600; }
+.ccard .t small { color: var(--mu); font-size: 13px; }
+.ccard .t .st { margin-top: 6px; display: flex; gap: 8px; font-size: 12px; color: var(--mu); align-items: center; }
+.ccard .t .st .live { background: var(--ac); color: var(--acx); padding: 0 5px; font-weight: 600; }
+.ccard .t .st .you { border: 1px solid var(--ac); padding: 0 5px; color: var(--tx); }
+.ccard .n { text-align: right; font-size: 12px; color: var(--mu); }
+.ccard .n b { display: block; font: 600 22px/1 var(--ui); color: var(--tx); font-variant-numeric: tabular-nums; }
+.side { background: var(--s1); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.side h4 { padding: 16px 18px 8px; font: 600 15px var(--ui); display: flex; justify-content: space-between; align-items: baseline; }
+.side h4 span { font: 400 12px var(--ui); color: var(--mu); }
+.lproj { margin: 0 18px; border: 1px solid var(--tx); background: var(--bg); }
+.lproj .h { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--ln); }
+.lproj .h b { font-size: 15px; font-weight: 600; }
+.lproj .h small { display: block; font: 400 11px var(--mono); color: var(--mu); }
+.lproj .h .sw { margin: 0 0 0 auto; }
+.lproj .rule { padding: 9px 12px; border-top: 0; border-bottom: 1px solid var(--ln); grid-template-columns: 30px 1fr; }
+.lproj .rule:last-child { border-bottom: 0; }
+.lproj .rule small { display: block; }
+.lproj.add { border-style: dashed; border-color: var(--ln); padding: 10px 12px; color: var(--mu); font-size: 13px; margin-top: 10px; }
+.xlog { padding: 0 18px; display: flex; flex-direction: column; gap: 6px; }
+.xlog .x { display: grid; grid-template-columns: 54px 1fr; gap: 8px; font-size: 13px; padding: 6px 0; border-top: 1px solid var(--ln); }
+.xlog .x span:first-child { color: var(--mu); font-variant-numeric: tabular-nums; font-size: 12px; }
+.xlog .x small { display: block; color: var(--mu); font-size: 12px; }
+.dir { white-space: nowrap; font-size: 11px; font-weight: 600; padding: 0 4px; border: 1px solid var(--ln); color: var(--mu); margin-right: 4px; }
+
+.mode-unused { display: grid; grid-template-columns: 1fr 1fr; margin: 0 14px 6px; border: 1px solid var(--ln); }
+.mode span { padding: 5px 0; text-align: center; font-size: 12px; color: var(--mu); }
+.mode span[data-inv] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.cmp .s.live { color: var(--acx); background: var(--ac); justify-self: start; padding: 0 5px; font-weight: 600; }
+.chan { display: flex; flex-direction: column; margin-top: 4px; }
+.chan a { display: grid; grid-template-columns: 1fr auto; padding: 7px 14px; font-size: 13px; border-top: 1px solid var(--ln); }
+.chan a:last-child { border-bottom: 1px solid var(--ln); }
+.chan a span { color: var(--mu); font-size: 12px; }
+.chan a span.ok { color: var(--act); }
+
+/* creative */
+.crea { background: var(--s1); padding: 16px 22px; display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow: hidden; }
+.crea .hd { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--mu); }
+.crea .hd b { color: var(--tx); font-size: 13px; white-space: nowrap; }
+.crea .hd .seg { margin-left: auto; display: flex; border: 1px solid var(--ln); }
+.crea .hd .seg span { padding: 3px 9px; } .crea .hd .seg span[data-inv] { background: var(--tx); color: var(--bg); }
+.reels { display: flex; gap: 10px; }
+.beat { width: 100px; flex: none; }
+.reel { width: 100px; height: 178px; position: relative; background: var(--bg); border: 1px solid var(--ln); overflow: hidden; padding: 29px 7px 0; }
+.reel[data-inv] { outline: 2px solid var(--tx); outline-offset: 2px; }
+.reel .safe-t, .reel .safe-b { position: absolute; left: 0; right: 0; background: repeating-linear-gradient(135deg, transparent 0 5px, rgba(233,235,227,.07) 5px 6px); }
+.reel .safe-t { top: 0; height: 14%; border-bottom: 1px dashed var(--mu); }
+.reel .safe-b { bottom: 0; height: 35%; border-top: 1px dashed var(--mu); }
+.reel .cap { font: 600 11px/1.05 var(--ui); letter-spacing: -0.02em; }
+.reel .cap mark { background: var(--ac); color: var(--acx); padding: 0 2px; }
+.reel .ui { margin-top: 6px; border: 1px solid var(--tx); background: var(--s1); padding: 4px; font-size: 6px; line-height: 1.35; }
+.reel .ui i { display: block; height: 3px; margin-top: 3px; }
+.reel .ui .p { border: 1px solid var(--ac); padding: 3px; }
+.reel .end { position: absolute; inset: 14% 9px 35%; display: grid; place-content: center; text-align: center; gap: 6px; }
+.reel .end b { font: 700 18px/1 var(--ui); letter-spacing: .14em; }
+.reel .end span { font-size: 8px; font-weight: 600; } .reel .end small { font-size: 6px; letter-spacing: .12em; text-transform: uppercase; }
+.beat .t { display: flex; justify-content: space-between; font-size: 11px; color: var(--mu); margin-top: 6px; }
+.beat .t .mono { font-size: 10px; }
+.scrub { display: flex; height: 22px; border: 1px solid var(--ln); font: 500 10px var(--mono); color: var(--mu); }
+.scrub span { display: grid; place-items: center; border-right: 1px solid var(--ln); }
+.scrub span:last-child { border-right: 0; }
+.scrub span[data-inv] { background: var(--tx); color: var(--bg); }
+.hooks { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--ln); }
+.hooks > div { padding: 10px 12px; border-right: 1px solid var(--ln); font-size: 13px; }
+.hooks > div:last-child { border-right: 0; }
+.hooks small { display: block; font-size: 12px; color: var(--mu); margin-top: 2px; }
+.hooks > div[data-inv] { background: var(--tx); color: var(--bg); } .hooks > div[data-inv] small { color: #5d6259; }
+.checksrow { display: flex; gap: 18px; font-size: 12px; color: var(--mu); }
+.checksrow span { display: flex; gap: 6px; align-items: center; }
+.checksrow i { width: 8px; height: 8px; background: var(--act); }
+
+/* tracking */
+.trk { background: var(--bg); overflow: hidden; min-height: 0; }
+.setup { padding: 12px 28px 2px; }
+.setup h4, .evt h4 { font-size: 13px; color: var(--mu); font-weight: 500; margin-bottom: 8px; display: flex; justify-content: space-between; }
+.st2 { display: grid; grid-template-columns: 18px 1fr auto; gap: 1px 12px; align-items: center; padding: 6px 0; border-top: 1px solid var(--ln); font-size: 14px; }
+.st2:last-child { border-bottom: 1px solid var(--ln); }
+.st2 .ck { width: 14px; height: 14px; }
+.st2 .ck.on { background: var(--act); border-color: var(--act); }
+.st2 small { grid-column: 2; font-size: 12px; color: var(--mu); }
+.st2 .r { grid-row: 1 / span 2; grid-column: 3; display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--mu); }
+.st2.you { box-shadow: inset 2px 0 0 var(--ac); padding-left: 10px; margin-left: -10px; }
+.evt { padding: 10px 28px; }
+.erow { display: grid; grid-template-columns: 1.3fr 1fr 1fr 80px; gap: 12px; padding: 6px 0; border-top: 1px solid var(--ln); font-size: 13px; align-items: center; }
+.erow.h { font-size: 12px; color: var(--mu); }
+.erow .mono { font-size: 11px; }
+.erow .pass { color: var(--act); font-weight: 600; }
+.erow .fail { color: #ffb86b; font-weight: 600; }
+.found { margin: 4px 28px 0; }
+
+/* launch sheet extras */
+.capbar { display: grid; grid-template-columns: 1fr 1fr 1fr; border: 1px solid var(--ln); }
+.capbar > div { padding: 9px 11px; border-right: 1px solid var(--ln); }
+.capbar > div:last-child { border-right: 0; }
+.capbar small { display: block; font-size: 11px; color: var(--mu); }
+.capbar b { font: 600 18px/1.1 var(--ui); font-variant-numeric: tabular-nums; }
+.plan { display: grid; grid-template-columns: 96px 1fr; font-size: 13px; }
+.plan div { padding: 6px 0; border-top: 1px solid var(--ln); }
+.plan div:nth-child(odd) { color: var(--mu); }
+.launchpage { background: #22241f; display: grid; place-items: start center; padding-top: 22px; overflow: hidden; min-height: 0; }
+.launchpage .page { width: 600px; padding: 26px 34px 90px; }
+
+/* results */
+.res { background: var(--bg); overflow: hidden; min-height: 0; display: flex; flex-direction: column; }
+.res .attn .num small { font-size: 16px; color: var(--mu); font-weight: 500; }
+.res .grid2 { display: grid; grid-template-columns: 1.15fr 1fr; gap: 0; border-bottom: 1px solid var(--ln); }
+.res .grid2 > div { padding: 14px 28px 16px; }
+.res .grid2 > div + div { border-left: 1px solid var(--ln); }
+.res h4 { font-size: 13px; color: var(--mu); font-weight: 500; margin-bottom: 10px; display: flex; justify-content: space-between; }
+.days { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; align-items: end; height: 96px; }
+.days div { display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; height: 100%; }
+.days i { display: block; background: var(--s2); }
+.days i.l { background: var(--ac); }
+.days i.f { background: none; border: 1px dashed var(--ln); }
+.dlab { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; font-size: 11px; color: var(--mu); margin-top: 6px; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--mu); margin-top: 8px; }
+.legend span { display: flex; gap: 6px; align-items: center; } .legend i { width: 8px; height: 8px; }
+.res .card-p { margin: 14px 28px 0; }
+.res .card-p h4 { display: block; color: var(--p-tx); font: 600 16px/1.22 var(--ui); margin: 5px 0 0; }
+.res .card-p .btn.inv { background: var(--p-tx); color: var(--p-bg); border-color: var(--p-tx); }
+.res .brow .tr, .res .brow .tr i { display: block; }
+.res .bars { width: 100%; }
+.res .brow { width: 100%; grid-template-columns: 130px 1fr 32px; }
+</style>
+</head>
+<body>
+
+<section class="doc">
+  <h1>Promote: a second mode, for getting what you built to people.</h1>
+  <p class="lede">Building is half of shipping. The other half is getting it in front of people and finding out whether they came. Today that means a second set of tools, logins and dashboards, with nothing tying an ad back to the code it sells. <strong>Promote is a mode of Styx, beside Build, the way Claude has Code, Design and Chat. It stands on its own: a brand, its accounts and its campaigns, with or without a codebase. Link a brand to a Build project and the two can talk; leave it unlinked and they never do.</strong> Everything below is the campaign Styx ran for itself on 3 October 2026, drawn as it would look inside Styx.</p>
+  <div class="rules">
+    <div><b>A mode beside Build</b><span>The switch in the title bar changes everything below it. The agents, Access, the audit log and Usage are shared; nothing else is.</span></div>
+    <div><b>Brands, then campaigns</b><span>The rail lists brands (Styx, Good Shout) where Build lists projects. A brand holds its website, its accounts and its campaigns, by whose move it is.</span></div>
+    <div><b>Instruments for promotion</b><span>Creative, Tracking, Launch and Results are the tabs on a campaign, the way Preview, Changes, Code and Terminal are on a lane.</span></div>
+    <div><b>Spend is the new risk</b><span>Creating things paused is an ordinary grant. Going live, raising a budget or publishing a tag needs Touch ID, and the grant carries the cap. The broker refuses anything above it.</span></div>
+    <div><b>Checks are code, not judgement</b><span>Safe zones, tracking that respects consent, EU advertiser fields, merge-never-overwrite: Styx runs them, the agent does not improvise them.</span></div>
+    <div><b>Talking is opt-in</b><span>A brand links to Build projects if you want. Linked, Promote can ask Build for a fix and hear when it lands, and Build can offer “announce this release”. Each direction has its own switch.</span></div>
+  </div>
+  <nav class="index">
+    <a href="#brand">Brand</a><a href="#creative">Creative</a><a href="#tracking">Tracking</a><a href="#launch">Launch</a><a href="#results">Results</a><a href="#build-side">Build, hearing from Promote</a>
+  </nav>
+</section>
+
+<h2 class="doc part">A brand, and what it is linked to</h2>
+
+<section class="note" id="brand">
+  <h2>The brand: campaigns, accounts and links</h2>
+  <p>Promote opens on a brand. Its campaigns are listed by whose move it is, each with the one number that matters. On the right is what the brand is linked to: the STYX project in Build, with a switch per direction, and everything the two modes have said to each other. Good Shout sits in the rail with no link at all and works the same way, minus the tracking check against code.</p>
+  <div class="was"><b>Today</b>None of this exists. The link was me: I read the campaign’s failed check, opened the website code in this lane, fixed it, landed and deployed it, then reran the check.</div>
+</section>
+<div class="win" data-place="project" data-lane="none" data-status="promote">
+  <div class="brand">
+    <div class="main">
+      <div class="pagehead"><div><h3>Styx</h3></div><p>heystyx.com · @heystyx · ads from Good Shou 2 (rand)</p><div class="r"><span class="btn">Brand kit</span><span class="btn pri">New campaign</span></div></div>
+      <div class="ccard"><div class="thumb">One ask. <mark>Four agents.</mark></div><div class="t"><b>Build the thing you keep putting off</b><small>10 s Reel, Instagram and Facebook Reels and Stories</small><div class="st"><span class="live">Live</span><span>Day 3 of 5, R412 of R900</span></div></div><div class="n"><b>31</b>downloads</div></div>
+      <div class="ccard"><div class="thumb">You already pay for Claude.</div><div class="t"><b>Opening B: the team</b><small>Same video, a different first 1.5 seconds</small><div class="st"><span>Draft, video ready, waits for A to end</span></div></div><div class="n"><b>–</b>not live</div></div>
+      <div class="ccard"><div class="thumb" style="background:var(--p-bg);color:var(--p-tx)">Windows 0.5</div><div class="t"><b>Windows launch</b><small>Suggested by Build when 0.5.0 landed</small><div class="st"><span class="you">Your turn: pick a date</span></div></div><div class="n"><b>–</b>draft</div></div>
+      <div class="ccard" style="opacity:.55"><div class="thumb">PH</div><div class="t"><b>Product Hunt launch</b><small>30 Sep, from the founder video</small><div class="st"><span>Ended</span></div></div><div class="n"><b>122</b>downloads</div></div>
+    </div>
+    <aside class="side">
+      <h4>Linked to Build <span>optional</span></h4>
+      <div class="lproj">
+        <div class="h"><span class="pj" style="width:30px;height:30px;border:1px solid var(--ln);display:grid;place-items:center;font:700 11px var(--ui)">SX</span><div><b>STYX</b><small>~/STYX · apps/website is heystyx.com</small></div><span class="sw on"></span></div>
+        <div class="rule"><span class="sw on"></span><span>Promote may ask Build for fixes<small>Opens a lane in STYX; you approve it like any task</small></span></div>
+        <div class="rule"><span class="sw on"></span><span>Build tells Promote about releases<small>Landing a version can suggest a campaign</small></span></div>
+        <div class="rule"><span class="sw"></span><span>Share the codebase with Promote’s agent<small>Off: it sees the live site only, not the code</small></span></div>
+      </div>
+      <div class="lproj add">+ Link another project</div>
+      <h4 style="margin-top:6px">Between the modes <span>this week</span></h4>
+      <div class="xlog">
+        <div class="x"><span>Sat 09:10</span><span><span class="dir">Build → Promote</span>0.5.0 landed with Windows<small>Drafted “Windows launch”, waiting on you</small></span></div>
+        <div class="x"><span>Fri 11:24</span><span><span class="dir">Build → Promote</span>Download tracking fix is live<small>Tracking check rerun: 4 of 4 pass</small></span></div>
+        <div class="x"><span>Fri 11:12</span><span><span class="dir">Promote → Build</span>Fix download tracking on heystyx.com<small>Lane agent/claude-5 in STYX, landed 11:20</small></span></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<h2 class="doc part">A campaign, start to finish</h2>
+
+<!-- ======================================================= CREATIVE ======================================================= -->
+<section class="note" id="creative">
+  <h2>Creative: the ad, beat by beat</h2>
+  <p>The mode switch sits under the project name; in Promote the nav lists campaigns and the channels they run on. Creative is the Design canvas for motion: every beat at Reels size with Instagram’s covered areas hatched, the timeline under it, and the openings to test side by side. The agent researched, drew the storyboard and rendered the video in this lane; each step came back as a receipt.</p>
+  <div class="was"><b>Today</b>This took a storyboard file in <span class="mono">.styx/designs</span>, an HTML animation, a render script and three screenshots pasted into chat. Point-to-fix from ADR-0028 works here unchanged: drag over a frame, tell the agent.</div>
+</section>
+<div class="win" data-place="project" data-lane="build" data-status="promote">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr">
+      <div class="itabs">
+        <span data-inv>Creative</span><span>Tracking <b class="n">1</b></span><span>Launch</span><span>Results</span>
+        <div class="acts"><span class="btn">Render video</span><span class="btn line">Review launch</span></div>
+      </div>
+      <div class="crea">
+        <div class="hd"><b>10 s Reel, 1080×1920</b><span>Instagram and Facebook Reels and Stories</span><span class="seg"><span data-inv>Storyboard</span><span>Video</span><span>Wireframe</span></span></div>
+        <div class="reels">
+          <div class="beat"><div class="reel" data-inv><span class="safe-t"></span><div class="cap">That app you keep saying <mark>you’ll build?</mark></div><div class="ui">What should an agent do in bakery?<div class="p">An order-ahead app for my sister’s bakery…</div><i style="background:var(--claude);width:40%"></i></div><span class="safe-b"></span></div><div class="t"><span>Hook</span><span class="mono">0–1.5</span></div></div>
+          <div class="beat"><div class="reel"><span class="safe-t"></span><div class="cap">One ask. <mark>Four agents.</mark></div><div class="ui">Claude Code × 4<i style="background:var(--claude);width:74%"></i><i style="background:var(--claude);width:61%"></i><i style="background:var(--claude);width:86%"></i><i style="background:var(--claude);width:44%"></i></div><span class="safe-b"></span></div><div class="t"><span>Split</span><span class="mono">1.5–4</span></div></div>
+          <div class="beat"><div class="reel"><span class="safe-t"></span><div class="cap">Point at it. <mark>Fixed.</mark></div><div class="ui" style="background:var(--p-bg);color:var(--p-tx);border-color:var(--p-bg)">Crumb&amp;Co.<br><b style="font-size:9px">Order ahead.</b><i style="background:var(--claude);height:12px"></i><div class="p" style="background:var(--p-tx);color:var(--p-bg)">Pay with Apple Pay</div></div><span class="safe-b"></span></div><div class="t"><span>Fix</span><span class="mono">4–6.5</span></div></div>
+          <div class="beat"><div class="reel"><span class="safe-t"></span><div class="cap">Live <mark>before dinner.</mark></div><div class="ui">crumbandco.app<i style="background:var(--p-bg);height:30px"></i><div class="p">£ New order · 2 × Lemon tart</div></div><span class="safe-b"></span></div><div class="t"><span>Payoff</span><span class="mono">6.5–8.5</span></div></div>
+          <div class="beat"><div class="reel"><span class="safe-t"></span><div class="end"><b>STYX</b><span>Build the thing you keep putting off.</span><small>■ Download free for Mac &amp; Windows</small></div><span class="safe-b"></span></div><div class="t"><span>End card</span><span class="mono">8.5–10</span></div></div>
+        </div>
+        <div class="scrub"><span style="flex:1.5" data-inv>0:00</span><span style="flex:2.5">1.5</span><span style="flex:2.5">4.0</span><span style="flex:2">6.5</span><span style="flex:1.5">8.5</span></div>
+        <div class="hooks">
+          <div data-inv><b>A · The idea</b><small>“That app you keep saying you’ll build?”</small></div>
+          <div><b>B · The team</b><small>“You already pay for Claude. Now it’s four of them.”</small></div>
+          <div><b>C · The clock</b><small>“Idea at 2pm. Customers by 6.”</small></div>
+        </div>
+        <div class="checksrow"><span><i></i>Words inside the safe zone, every beat</span><span><i></i>Reads with the sound off</span><span><i></i>10.0 s, under the 15 s sweet spot</span><span><i></i>End card matches your other videos</span></div>
+      </div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">promote/claude-8</span><span class="x"><span>Pop out</span><span>⋯</span></span></div>
+        <h3>Build the thing you keep putting off</h3>
+        <div class="sum"><span>Video ready, tracking needs one fix</span></div>
+      </div>
+      <div class="feed">
+        <div class="rcpt"><b>Researched what converts on Reels right now</b><span>Kept 08:41</span></div>
+        <div class="rcpt"><b>Storyboard: 5 beats, product only</b><span>Kept 09:02</span></div>
+        <div class="umsg">The hook isn’t the granting. Make it inspirational.</div>
+        <div class="rcpt"><b>New story: one sentence, four agents, live</b><span>Kept 09:14</span></div>
+        <div class="umsg">Use the real logo and say it’s on Windows too.</div>
+        <div class="card-p">
+          <div class="top"><span class="ok">Rendered in 25 s</span><span>1080×1920, 10.0 s, 0.7 MB</span></div>
+          <h4>The end card now matches the demo video, with Mac and Windows</h4>
+          <p>Same wordmark and label as the 21-second demo. The first beat is also the thumbnail people see before it plays.</p>
+          <div class="acts"><span class="btn">Play</span><span class="btn">Undo this turn</span><span class="k">Kept when you carry on</span></div>
+        </div>
+      </div>
+      <div class="compose"><div class="box">Tell Claude more, or drag over a frame to point at it…</div><div class="row"><span>Select</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+
+<!-- ======================================================= TRACKING ======================================================= -->
+<section class="note" id="tracking">
+  <h2>Tracking: ready to measure, or not</h2>
+  <p>Before a campaign can optimise for anything, the account, the identity and the pixel have to exist and the site has to report the right thing. The top half is the setup, with the steps only you can do marked as your move and opened in the right Meta screen. The bottom half is Styx’s own check: it loads the live site as a first-time visitor, blocks every request to Meta so nothing is counted, and shows what would have been sent.</p>
+  <div class="was"><b>Today</b>This was an hour in a separate Chrome window: a portfolio search, a Page wizard, a passkey, a Tag Manager import whose default would have deleted 16 tags, and a consent bug found only by testing. The double-counted download was the same check, failing.</div>
+</section>
+<div class="win" data-place="project" data-lane="build" data-status="promote">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr">
+      <div class="itabs">
+        <span>Creative</span><span data-inv>Tracking <b class="n">1</b></span><span>Launch</span><span>Results</span>
+        <div class="acts"><span class="btn">Run check again</span></div>
+      </div>
+      <div class="trk">
+        <div class="setup">
+          <h4><span>Setup on Meta</span><span>6 of 6 done</span></h4>
+          <div class="st2"><span class="ck on"></span><span>Facebook Page “Styx”</span><small>Created here; software, heystyx.com, the lime mark</small><span class="r">You did this in Meta</span></div>
+          <div class="st2"><span class="ck on"></span><span>Instagram @heystyx, linked to the Page</span><small>Ads show as @heystyx on Instagram, Styx on Facebook</small><span class="r">You logged in, passkey</span></div>
+          <div class="st2"><span class="ck on"></span><span>Ad account Good Shou 2</span><small>Rand, Visa ···· 7265, in Shopify Business Manager</small><span class="r mono">act_…5374</span></div>
+          <div class="st2"><span class="ck on"></span><span>Pixel “Styx”, on heystyx.com through Tag Manager</span><small>Fires only after a visitor accepts cookies; merged into GTM-MMQJ8LBX, nothing replaced</small><span class="r">Version 5 live</span></div>
+        </div>
+        <div class="evt">
+          <h4><span>What the live site reports, checked 11:31 with Meta blocked</span><span>3 of 4 pass</span></h4>
+          <div class="erow h"><span>Visitor does</span><span>Should send</span><span>Sent</span><span></span></div>
+          <div class="erow"><span>Arrives, hasn’t chosen</span><span>Nothing</span><span>Nothing</span><span class="pass">Pass</span></div>
+          <div class="erow"><span>Clicks Accept</span><span class="mono">PageView</span><span class="mono">PageView</span><span class="pass">Pass</span></div>
+          <div class="erow"><span>Clicks Download (Windows)</span><span class="mono">Lead · win</span><span class="mono">Lead · mac</span><span class="fail">Fail</span></div>
+          <div class="erow"><span>Clicks the nav Download (scrolls only)</span><span>No Lead</span><span class="mono">Lead · mac</span><span class="fail">Fail</span></div>
+        </div>
+        <div class="found ask">
+          <div class="hd"><i></i>Found by the check</div>
+          <h4>Every download is labelled Mac, and buttons that only scroll count as downloads</h4>
+          <p>Meta would optimise for people who never downloaded. The fix is in heystyx.com’s code, which lives in the linked STYX project.</p>
+          <div class="acts"><span class="btn pri">Ask Build (STYX) to fix it</span><span class="btn">Launch anyway</span></div>
+        </div>
+      </div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">promote/claude-8</span></div>
+        <h3>Build the thing you keep putting off</h3>
+        <div class="sum"><span>Waiting on the tracking fix</span></div>
+      </div>
+      <div class="feed">
+        <div class="rcpt"><b>Created the Styx pixel, connected only to Good Shou 2</b><span>11:02</span></div>
+        <div class="rcpt"><b>Merged two pixel tags into Tag Manager, published</b><span>11:08</span></div>
+        <div class="xmsg"><span class="dir">Promote → Build</span><span>Asked STYX to fix download tracking</span><span>11:12</span></div>
+        <div class="live"><div class="hd"><i></i>In Build, STYX<span>agent/claude-5</span></div>
+          <ol><li class="d">Classify links: build download or section jump</li><li class="d">15 tests, typecheck, lint</li><li class="n">Landed and deployed heystyx.com</li><li>Run the tracking check again</li></ol>
+        </div>
+      </div>
+      <div class="compose"><div class="box">Tell Claude more…</div><div class="row"><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+
+<!-- ======================================================= LAUNCH ======================================================= -->
+<section class="note" id="launch">
+  <h2>Launch: one page, one decision, a cap on the money</h2>
+  <p>The campaign comes back on paper like any finished work: what will run, where, for whom and for how long. Styx has already created all of it paused on Meta and read it back, so this page is what Meta holds, not what the agent meant to send. Going live opens the spend sheet. It is the same access sheet as a production write, with the budget written into the grant: the agent can never spend past it, and the broker pauses the campaign at the cap.</p>
+  <div class="was"><b>Today</b>The campaign was built by a script, created paused, read back field by field in chat, then switched on with three API calls. The EU advertiser field failed the first attempt; Styx knows it is required for EU countries and asks for it here.</div>
+</section>
+<div class="win" data-place="project" data-lane="build" data-status="promote">
+  <div class="ws" style="grid-template-columns:1fr">
+    <section class="stagecol" style="grid-template-rows:40px 1fr;border-right:0">
+      <div class="itabs">
+        <span>Creative</span><span>Tracking</span><span data-inv>Launch</span><span>Results</span>
+      </div>
+      <div class="launchpage" style="padding-right:400px">
+        <div class="page">
+          <div class="ready"><span class="ok"><i></i>Created paused on Meta, read back</span><span>11:32</span></div>
+          <h3>Build the thing you keep putting off</h3>
+          <p class="sum">A 10-second Reel from @heystyx. It goes to heystyx.com with a Download button, and Meta looks for people likely to download.</p>
+          <h5><span>The ad</span></h5>
+          <div class="plan">
+            <div>Shows as</div><div>@heystyx on Instagram, Styx on Facebook</div>
+            <div>Where</div><div>Reels and Stories only</div>
+            <div>Text</div><div>Bring your Claude Code plan. Split one ask across four agents, and build the thing you keep putting off. Free for Mac &amp; Windows.</div>
+            <div>Button</div><div>Download → heystyx.com, tagged <span class="mono">utm_campaign=reel_10s_build</span></div>
+          </div>
+          <h5><span>Who sees it</span></h5>
+          <div class="plan">
+            <div>Countries</div><div>US, UK, Canada, Australia, New Zealand, Ireland, Germany, Netherlands, Sweden, South Africa</div>
+            <div>People</div><div>18+, Meta’s automatic audience, starting from AI, GitHub, programming</div>
+            <div>Goal</div><div>Downloads (the pixel’s Lead), passing the tracking check</div>
+            <div>Named (EU)</div><div>Styx, as advertiser and payer, in Meta’s Ad Library</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <div class="sheet">
+    <div class="sh"><div class="who"><span class="dot c-claude"></span>Claude, Build the thing you keep putting off</div><h3>Spend up to R900 on Meta over 5 days</h3></div>
+    <div class="sb">
+      <div class="why">“Everything is created and checked. Switching it on starts spending from Good Shou 2 today at 11:32.”</div>
+      <div class="capbar"><div><small>Cap</small><b>R900</b></div><div><small>About</small><b>$10/day</b></div><div><small>Ends</small><b>8 Oct</b></div></div>
+      <div><div class="lbl">What it may do</div>
+        <div class="opt"><div>Switch the campaign on and off</div><span class="ck on"></span></div>
+        <div class="opt"><div>Move budget between openings<small>Within the R900</small></div><span class="ck on"></span></div>
+        <div class="opt" style="color:var(--mu)"><div>Raise the budget</div><span class="ck"></span></div>
+      </div>
+      <div class="fine">Spending needs Touch ID. The grant ends with the campaign or when you revoke it; at the cap Styx pauses the campaign itself. Every change is in the audit log.</div>
+    </div>
+    <div class="sf"><button>Keep paused</button><button class="pri">Go live with Touch ID</button></div>
+  </div>
+</div>
+
+<!-- ======================================================= RESULTS ======================================================= -->
+<section class="note" id="results">
+  <h2>Results: was it worth it</h2>
+  <p>The numbers that answer the question, in the project’s own terms: money in, downloads out, what each one cost. Spend, Leads and cost per lead come from Meta; downloads and sign-ups come from Styx’s own counters, so the two can be compared. Once a day the agent reads the numbers and, when something should change, comes back on paper with one suggestion and the button to do it.</p>
+  <div class="was"><b>Today</b>Results would be read in Ads Manager and Google Analytics, separately. Sign-ups are not yet reported to Meta; the Results tab says so and offers the Build lane that adds it.</div>
+</section>
+<div class="win" data-place="project" data-lane="build" data-status="promote">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr">
+      <div class="itabs">
+        <span>Creative</span><span>Tracking</span><span>Launch</span><span data-inv>Results</span>
+        <div class="acts"><span class="btn">Pause</span><span class="btn">Open in Ads Manager</span></div>
+      </div>
+      <div class="res">
+        <div class="attn">
+          <div><div class="num">R412</div><div class="lab">Spent of R900, day 3 of 5</div></div>
+          <div><div class="num on">31</div><div class="lab">Downloads from the ad</div></div>
+          <div><div class="num">R13.29</div><div class="lab">Per download, about $0.74</div></div>
+          <div><div class="num">9</div><div class="lab">Signed in to Styx after</div></div>
+        </div>
+        <div class="grid2">
+          <div><h4><span>Each day</span><span>Spend and downloads</span></h4>
+            <div class="days">
+              <div><i style="height:44%"></i><i class="l" style="height:22%"></i></div>
+              <div><i style="height:48%"></i><i class="l" style="height:34%"></i></div>
+              <div><i style="height:46%"></i><i class="l" style="height:40%"></i></div>
+              <div><i class="f" style="height:46%"></i></div>
+              <div><i class="f" style="height:46%"></i></div>
+            </div>
+            <div class="dlab"><span>Fri 3</span><span>Sat 4</span><span>Sun 5</span><span>Mon 6</span><span>Tue 7</span></div>
+            <div class="legend"><span><i style="background:var(--s2)"></i>Spend</span><span><i style="background:var(--ac)"></i>Downloads</span><span><i style="border:1px dashed var(--ln)"></i>Still to run</span></div>
+          </div>
+          <div><h4><span>Where downloads came from</span></h4>
+            <div class="bars">
+              <div class="brow"><span>Instagram Reels</span><span class="tr"><i style="width:68%;background:var(--tx)"></i></span><span class="v">21</span></div>
+              <div class="brow"><span>Instagram Stories</span><span class="tr"><i style="width:23%;background:var(--tx)"></i></span><span class="v">7</span></div>
+              <div class="brow"><span>Facebook Reels</span><span class="tr"><i style="width:10%;background:var(--tx)"></i></span><span class="v">3</span></div>
+              <div class="brow"><span>Mac</span><span class="tr"><i style="width:74%;background:var(--mu)"></i></span><span class="v">23</span></div>
+              <div class="brow"><span>Windows</span><span class="tr"><i style="width:26%;background:var(--mu)"></i></span><span class="v">8</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="card-p">
+          <div class="top"><span class="ok">Today’s read, 08:00</span><span>Based on 3 days, 31 downloads</span></div>
+          <h4>The US and UK bring 80% of downloads at half the cost. Put the last two days there?</h4>
+          <p>Germany, the Netherlands and Sweden have spent R96 for 2 downloads. Moving their share keeps the R900 cap and the end date.</p>
+          <div class="acts"><span class="btn inv">Move the budget</span><span class="btn">Leave it</span><span class="k">Inside the grant, no Touch ID</span></div>
+        </div>
+      </div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">promote/claude-8</span></div>
+        <h3>Build the thing you keep putting off</h3>
+        <div class="sum"><span>Live, R412 of R900, ends 8 Oct</span></div>
+      </div>
+      <div class="feed">
+        <div class="rcpt"><b>Went live with Touch ID, cap R900</b><span>Fri 11:32</span></div>
+        <div class="rcpt"><b>Meta approved the ad</b><span>Fri 12:10</span></div>
+        <div class="rcpt"><b>Daily read: on track, no change</b><span>Sat 08:00</span></div>
+        <div class="ask"><div class="hd"><i></i>Not measured yet</div><h4>Sign-ups aren’t reported to Meta</h4><p>So it optimises for downloads. STYX’s API could send them.</p><div class="acts"><span class="btn">Ask Build (STYX)</span></div></div>
+      </div>
+      <div class="compose"><div class="box">Ask about the numbers…</div><div class="row"><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+
+<h2 class="doc part">The other side of the link</h2>
+
+<section class="note" id="build-side">
+  <h2>Build, hearing from Promote</h2>
+  <p>Flip the switch back to Build and the request is an ordinary lane in STYX: started by Promote, named by its ask, with the failed check attached as the first message. It is reviewed, kept and landed like any work. When it lands, the campaign hears about it and reruns the check by itself. Nothing in Build changes for someone who never links a brand.</p>
+  <div class="was"><b>Today</b>This was the lane I worked in: <span class="mono">lib/download-link.ts</span>, 15 tests, Tracking.tsx, landed as af2a57f and deployed as styx-web-00029.</div>
+</section>
+<div class="win" data-place="project" data-mode="build" data-lane="fix" data-status="lane">
+  <div class="ws">
+    <section class="stagecol" style="grid-template-rows:40px 1fr">
+      <div class="itabs">
+        <span>Preview</span><span>Changes <b class="n">3</b></span><span data-inv>Code</span><span>Terminal</span>
+        <div class="acts"><span class="btn">Land</span><span class="btn">Deploy to ▾</span></div>
+      </div>
+      <div class="code">
+        <div class="files"><div class="h">Changed in this lane</div><div data-inv>download-link.ts <span class="m">+23</span></div><div>download-link.test.ts <span class="m">+30</span></div><div>Tracking.tsx <span class="m">+8</span></div></div>
+        <div class="editor" style="grid-template-rows:32px 1fr">
+          <div class="etabs"><span data-inv>lib/download-link.ts</span></div>
+          <div class="src">
+            <div class="a"><span>10</span><span><i class="k">export const</i> classifyDownloadLink = (href: string): DownloadLink =&gt; {</span></div>
+            <div class="a"><span>11</span><span>  <i class="k">const</i> h = href.trim().toLowerCase()</span></div>
+            <div class="a"><span>13</span><span>  <i class="c">// /download/mac and /download/win count the download and redirect</i></span></div>
+            <div class="a"><span>14</span><span>  <i class="k">const</i> route = /\/download(?:\/(mac|win))?\/?(?:[?#]|$)/.exec(h)</span></div>
+            <div class="a"><span>15</span><span>  <i class="k">if</i> (route) <i class="k">return</i> { kind: <i class="s">'file'</i>, platform: route[1] === <i class="s">'win'</i> ? <i class="s">'win'</i> : <i class="s">'mac'</i> }</span></div>
+            <div class="hunknote"><div><b>Each download now says Mac or Windows, from the link clicked.</b><span class="r"><span>Keep</span><span>Revert</span></span></div></div>
+            <div class="a"><span>19</span><span>  <i class="k">if</i> (/#download$/.test(h)) <i class="k">return</i> { kind: <i class="s">'section'</i> }</span></div>
+            <div class="hunknote"><div><b>A button that only scrolls to Download is no longer a download.</b><span class="r"><span>Keep</span><span>Revert</span></span></div></div>
+            <div class="a"><span>20</span><span>  <i class="k">return null</i></span></div>
+            <div class="a"><span>21</span><span>}</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot c-claude"></span>Claude <span class="mono">agent/claude-5</span><span class="x"><span>From Promote</span></span></div>
+        <h3>Fix download tracking on heystyx.com</h3>
+        <div class="sum"><span>3 files, 58 tests pass</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed">
+        <div class="ask" style="border-color:var(--ln)"><div class="hd"><i style="background:var(--tx)"></i>From Promote · Styx · Build the thing you keep putting off</div><h4>The tracking check failed on 2 of 4</h4><p>Windows downloads report as Mac, and the nav Download button (it only scrolls) counts as a download. The campaign optimises for downloads, so both cost money.</p><div class="acts"><span class="btn sm">Open the campaign</span></div></div>
+        <div class="card-p">
+          <div class="top"><span class="ok">Done in 6 min</span><span>3 files, 15 new tests</span></div>
+          <h4>Only real downloads count, with the right platform</h4>
+          <p>Scroll-only buttons send their own download_open event instead. When this lands, Promote reruns its check.</p>
+          <div class="acts"><span class="btn">Show changes</span><span class="btn">Undo this turn</span><span class="k">Kept when you carry on</span></div>
+        </div>
+      </div>
+      <div class="compose"><div class="box">Tell Claude more…</div><div class="row"><span>@file</span><span>Attach</span><span>Opus 5.5 ▾</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+</div>
+
+<script>
+/* The shared chrome, as in styx-next-app.html, with the project in Promote mode: the switch under the project
+   name, campaigns instead of lanes, channels instead of project tools. */
+const ICON = {
+  home: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7"/><rect x="13" y="4" width="7" height="7"/><rect x="4" y="13" width="7" height="7"/><rect x="13" y="13" width="7" height="7"/></svg>',
+  agents: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>',
+  access: '<svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg>',
+  tasks: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/><path d="M10 9l5 3-5 3z"/></svg>',
+  usage: '<svg viewBox="0 0 24 24"><path d="M5 19V12M10 19V7M15 19v-5M20 19V4"/></svg>',
+  settings: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><rect x="14" y="5" width="4" height="4"/><rect x="8" y="15" width="4" height="4"/></svg>',
+};
+const CAMPAIGNS = [
+  { id: 'build', c: 'claude', t: 'Build the thing you keep putting off', s: 'Live, day 3 of 5', live: true },
+  { id: 'teamhook', c: 'claude', t: 'Opening B: the team', s: 'Draft, video ready' },
+  { id: 'win', c: 'codex', t: 'Windows launch', s: 'Your turn: pick a date', you: true },
+  { id: 'ph', c: 'gemini', t: 'Product Hunt launch', s: 'Ended 30 Sep', old: true },
+];
+const CHANNELS = [['Meta: Instagram, Facebook', 'Connected', true], ['Google Tag Manager', 'Connected', true], ['Google Analytics', 'Connected', true], ['TikTok', 'Connect']];
+
+for (const win of document.querySelectorAll('.win')) {
+  const body = [...win.children];
+  const cur = CAMPAIGNS.find((l) => l.id === win.dataset.lane);
+  const build = win.dataset.mode === 'build';
+  const title = `<div class="title"><span class="lights"><i></i><i></i><i></i></span><span class="word">STYX</span>` +
+    `<span class="modesw"><span ${build ? 'data-inv' : ''}>Build</span><span ${build ? '' : 'data-inv'}>Promote</span></span>` +
+    (build ? `<span class="crumb"><b>STYX</b><span>/</span><span>Fix download tracking on heystyx.com</span></span>`
+           : `<span class="crumb"><b>Styx</b>${cur ? '<span>/</span><span>' + cur.t + '</span>' : ''}</span>`) +
+    `<span class="search">Ask an agent, switch, deploy…<kbd>⌘K</kbd></span><span class="count"><i></i>1 needs you</span><span class="count"><i class="off"></i>1 locked</span><span class="me">N</span></div>`;
+  const r = (k, label, badge) => `<span class="ic" title="${label}">${ICON[k]}${badge ? '<b></b>' : ''}</span>`;
+  const rail = `<nav class="rail">${r('home', 'All projects')}${r('agents', 'Agents')}${r('access', 'Access', true)}${r('tasks', 'Background tasks')}${r('usage', 'Usage')}<hr>` +
+    (build ? `<span class="pj" data-on>SX</span><span class="pj">AS</span><span class="pj">TR</span><span class="pj add">+</span>`
+           : `<span class="pj" data-on title="Styx">SX</span><span class="pj" title="Good Shout">GS<b></b></span><span class="pj add">+</span>`) +
+    `<span class="foot">${r('settings', 'Settings')}</span></nav>`;
+  const items = CAMPAIGNS.map((l) => `<div class="ln cmp ${l.old ? 'old' : ''}" ${win.dataset.lane === l.id ? 'data-inv' : ''}><span class="d dot c-${l.c}"></span><span class="t">${l.t}</span><span></span><span class="s ${l.you ? 'you' : ''} ${l.live && win.dataset.lane !== l.id ? 'live' : ''}">${l.s}</span></div>`).join('');
+  const chans = CHANNELS.map(([n, s, ok]) => `<a>${n}<span class="${ok ? 'ok' : ''}">${s}</span></a>`).join('');
+  const BL = [['fix', 'claude', 'Fix download tracking on heystyx.com', 'Ready to land', 'From Promote'], ['w', 'codex', 'Windows installer signing', 'Working, 12 min'], ['d', 'gemini', 'Design: Promote mode', 'Your turn', '', true]];
+  const nav = build
+    ? `<nav class="nav"><div class="ph"><b>STYX</b><span>~/STYX</span></div><div class="grp"><span>Work</span><span>3 lanes</span></div><div class="lanes">` +
+      BL.map(([id, c, t, s, from, you]) => `<div class="ln" ${win.dataset.lane === id ? 'data-inv' : ''}><span class="d dot c-${c}"></span><span class="t">${t}</span><span></span><span class="s ${you ? 'you' : ''}">${s}${from ? ' · ' + from : ''}</span></div>`).join('') +
+      `</div><div class="newtask">+ New task</div><div class="linkhd"><span>Linked brands</span></div><div class="linkbox"><div class="h"><b>Styx</b><span class="mu" style="font-size:12px">in Promote</span><span class="sw on"></span></div><small>1 live campaign · may ask for fixes</small></div>` +
+      `<div class="nf">main, up to date<br><span class="mono">heystyx.com deployed 11:22</span></div></nav>`
+    : `<nav class="nav"><div class="ph"><b>Styx</b><span>heystyx.com · @heystyx</span></div>` +
+      `<div class="grp"><span>Campaigns</span><span>R412 spent</span></div><div class="lanes">${items}</div>` +
+      `<div class="newtask">+ New campaign</div><div class="grp" style="margin-top:8px"><span>Channels</span></div><div class="chan">${chans}</div>` +
+      `<div class="linkhd"><span>Linked to Build</span><span>optional</span></div><div class="linkbox"><div class="h"><b>STYX</b><span class="mu" style="font-size:12px">project</span><span class="sw on"></span></div><small>Can ask for fixes · hears about releases</small></div></nav>`;
+  const frame = document.createElement('div');
+  frame.className = 'frame';
+  frame.innerHTML = rail + nav;
+  const main = document.createElement('div');
+  main.style.minWidth = '0'; main.style.minHeight = '0'; main.style.display = 'grid';
+  const overlays = body.filter((el) => el.matches('.scrim, .modal, .sheet, .drawer, .toast, .pin'));
+  for (const el of body) if (!overlays.includes(el)) main.appendChild(el);
+  frame.appendChild(main);
+  const status = build
+    ? `<div class="status"><span class="tx mono">agent/claude-5</span><span>Cloud Run (styx-web) open, 41 min</span><span class="sp">Feedback</span><span class="coffee">☕ Buy us a coffee</span></div>`
+    : `<div class="status"><span class="tx mono">${cur ? 'promote/claude-8' : 'Styx'}</span><span>Meta spend open, R488 left, ends 8 Oct</span><span>Tag Manager locked</span><span class="sp">Feedback</span><span class="coffee">☕ Buy us a coffee</span></div>`;
+  win.innerHTML = '';
+  win.insertAdjacentHTML('beforeend', title);
+  win.appendChild(frame);
+  win.insertAdjacentHTML('beforeend', status);
+  for (const el of overlays) win.appendChild(el);
+}
+</script>
+</body>
+</html>

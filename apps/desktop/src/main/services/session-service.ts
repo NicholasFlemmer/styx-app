@@ -510,7 +510,9 @@ export class SessionService {
       // Plain folder: no worktree isolation exists; sessions run in the folder itself (the spawn modal offers only that).
       fail('git-error', `${project.name} is not a git repository: agents work in the folder itself`);
     } else {
-      const branch = input.worktree.branch;
+      const branch =
+        (await this.deps.git.freeBranch(project.path, input.worktree.branch, settings.branchPrefix.value)) ??
+        fail('invalid-input', `A branch named ${input.worktree.branch} already exists. Pick another name.`);
       const path =
         settings.worktreeLocation.value === 'inside'
           ? join(project.path, '.styx', 'worktrees', branch.replace(/[^A-Za-z0-9._-]+/g, '-'))
