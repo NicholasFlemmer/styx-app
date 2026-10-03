@@ -157,7 +157,7 @@ describe('spawn helpers', () => {
       firstMessage: 'Add tests',
       toggles: form.toggles,
       model: null,
-      permissionMode: 'default',
+      permissionMode: 'auto',
       effort: null,
     });
     expect(spawnValid(model, form)).toBe(true);
@@ -169,7 +169,7 @@ describe('spawn helpers', () => {
 
   it('session settings ride along for every agent but the shell (discrepancies #54, #83)', () => {
     expect(defaultSessionSettings(model, acme)).toEqual({
-      permissionMode: 'default',
+      permissionMode: 'auto',
       model: null,
       effort: null,
     });

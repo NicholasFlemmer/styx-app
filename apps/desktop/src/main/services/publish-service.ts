@@ -597,6 +597,10 @@ export const draftInput = (
   return head + cut;
 };
 
+/** Replaces Claude Code's own system prompt for a draft, so nothing but the diff and the request shapes the reply. */
+const DRAFTER_SYSTEM_PROMPT =
+  'You write git commit messages and pull request descriptions from a diff. You describe what changed and why. You never review the code, give advice or ask questions.';
+
 const PROMPTS: Record<MessageKind, string> = {
   commit:
     'Write a git commit message for the diff on stdin. Reply with the message only: a subject line of at most 72 characters in the imperative mood, then a blank line, then a short body saying what changed and why. No code fences, no preamble, no tool calls.',
@@ -621,7 +625,23 @@ export const agentInvocation = (agent: Agent, binary: string, kind: MessageKind)
     case 'claude':
       return {
         file: binary,
-        args: ['-p', '--output-format', 'json', '--tools', '', prompt],
+        // Isolated from the person's own setup: CLAUDE.md files, settings hooks, plugins, MCP servers and output
+        // styles all reach a plain `claude -p`, and one of them turned a land summary into a code review (2026-10-03).
+        // `--bare` would isolate it fully but cannot use a subscription login, so the pieces are switched off one by one.
+        args: [
+          '-p',
+          '--output-format',
+          'json',
+          '--tools',
+          '',
+          '--setting-sources',
+          '',
+          '--strict-mcp-config',
+          '--disable-slash-commands',
+          '--system-prompt',
+          DRAFTER_SYSTEM_PROMPT,
+          prompt,
+        ],
         parse: parseClaudeJson,
       };
     case 'codex':

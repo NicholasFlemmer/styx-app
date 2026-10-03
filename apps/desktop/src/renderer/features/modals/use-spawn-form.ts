@@ -10,7 +10,7 @@ import {
   type SessionId,
   type TaskKind,
 } from '@styx/core';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { command } from '../../state/commands';
 import { useModel, useUi } from '../../state/hooks';
 import {
@@ -43,7 +43,7 @@ const selectModel = (m: ReadModel) => m;
 export function useSpawnForm(projectId: ProjectId, initialMessage = '') {
   const model = useModel(selectModel);
   const pushOverlay = useUi((u) => u.pushOverlay);
-  const [form, setForm] = useState<SpawnForm>(() => {
+  const [stored, setForm] = useState<SpawnForm>(() => {
     // Starts with an agent that works (owner request): the project's default when it is ready, else one that is.
     const preferred = projectSettingsOfOrDefault(model, projectId).defaultAgent;
     const agent = startingAgent(model, preferred);
@@ -60,6 +60,13 @@ export function useSpawnForm(projectId: ProjectId, initialMessage = '') {
       : reconcileSessionSettings(agent, base, modelCatalogueFor(model, agent));
   });
   const [branchTouched, setBranchTouched] = useState(false);
+  // The suggestion follows the lanes: a form that stays open (the Tasks board's "alongside" box, a New task screen
+  // left up) would otherwise keep proposing the branch the last lane just took. A branch the person typed is kept.
+  const suggested = autoBranchFor(model, projectId, stored.agent);
+  const form: SpawnForm = useMemo(
+    () => (branchTouched || stored.branch === suggested ? stored : { ...stored, branch: suggested }),
+    [stored, suggested, branchTouched],
+  );
   const [busy, setBusy] = useState(false);
   const [locateError, setLocateError] = useState<string | null>(null);
 

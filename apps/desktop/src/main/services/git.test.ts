@@ -45,6 +45,13 @@ describe('GitService', () => {
     expect(wt).toContain(join('.styx', 'worktrees', 'acme-shop', 'agent-claude-1'));
     await git.worktreeAdd(repo, { branch: 'agent/claude-1', base: 'main', path: wt });
     expect(await git.nextAgentBranch(repo, 'claude')).toBe('agent/claude-2');
+    // A second lane started from a form that still suggests claude-1 (it was filled in before the first lane
+    // existed) gets the next free number instead of failing `git worktree add -b`; a free name passes through;
+    // a taken name someone typed is theirs to change.
+    expect(await git.freeBranch(repo, 'agent/claude-1')).toBe('agent/claude-2');
+    expect(await git.freeBranch(repo, 'agent/codex-1')).toBe('agent/codex-1');
+    expect(await git.freeBranch(repo, 'main')).toBeNull();
+    expect(await git.freeBranch(repo, 'feature/basket')).toBe('feature/basket');
     const list = await git.worktreeList(repo);
     expect(list.map((w) => w.branch)).toEqual(['main', 'agent/claude-1']);
     expect(list[0]?.main).toBe(true);

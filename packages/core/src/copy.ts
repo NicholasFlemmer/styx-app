@@ -570,7 +570,7 @@ export const copy = {
         plan: "Gemini's plan mode, when enabled: read-only until you approve the plan.",
         bypassPermissions: 'Gemini YOLO: every tool runs without asking. Only for sandboxes you trust.',
         dontAsk: 'Gemini has no such mode; it becomes YOLO: every tool runs without asking.',
-        auto: 'Gemini has no reviewer; it becomes YOLO: every tool runs without asking.',
+        auto: 'Gemini has no reviewer: edits run without asking (auto_edit); commands still ask.',
       },
       cursor: {
         default: 'Agent mode: edits and commands ask you here.',

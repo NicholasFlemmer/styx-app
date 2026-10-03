@@ -466,6 +466,19 @@ export class GitService {
     return `${prefix}${agent}-${n + 1}`;
   }
 
+  /**
+   * The branch a new lane can actually use. A name nobody has is used as asked. A taken automatic name
+   * (`agent/claude-1`, spec §1) moves on to the next free number from the branches git really has: the form's
+   * suggestion can be stale (it was computed before the last lane started) or blind to branches the read model
+   * never saw. A taken name the person typed is theirs to change, so that gives null.
+   */
+  async freeBranch(path: string, requested: string, prefix = 'agent/'): Promise<string | null> {
+    const existing = await this.branches(path);
+    if (!existing.includes(requested)) return requested;
+    const auto = new RegExp(`^${escapeRe(prefix)}(.+)-(\\d+)$`).exec(requested);
+    return auto?.[1] === undefined ? null : this.nextAgentBranch(path, auto[1], prefix);
+  }
+
   async worktreeList(path: string): Promise<WorktreeInfo[]> {
     const { stdout } = await this.git.run(['worktree', 'list', '--porcelain'], path);
     const out: WorktreeInfo[] = [];

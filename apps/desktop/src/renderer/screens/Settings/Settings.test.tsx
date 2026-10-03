@@ -187,7 +187,7 @@ describe('sectionRows', () => {
       ['haiku', 'Haiku'],
     ]);
     const mode = rows.find((r) => r.id === 'permissionMode');
-    expect(mode?.value).toBe('default');
+    expect(mode?.value).toBe('auto');
     expect(mode?.options.map((o) => o.label)).toEqual([
       'Ask each time',
       'Accept edits',
@@ -379,7 +379,7 @@ describe('sectionRows', () => {
       'Claude Code',
       'Default',
       'Off',
-      'Ask each time',
+      'Auto',
       'Bypass permissions',
       'Default effort',
       'On',

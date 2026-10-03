@@ -174,7 +174,10 @@ export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   defaultAgent: 'claude',
   model: null,
-  permissionMode: 'default',
+  // Auto (owner decision 2026-10-03): asking before every command made a first task stop at nearly every step.
+  // Claude decides what needs approval and Codex's reviewer does; Gemini edits freely and asks for commands; Cursor
+  // still asks. Ask each time stays one click away in the composer and in Settings.
+  permissionMode: 'auto',
   taskPermissionMode: 'bypassPermissions',
   effort: null,
   autoApproveEdits: false,

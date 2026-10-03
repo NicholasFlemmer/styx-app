@@ -204,6 +204,13 @@ describe('PublishService.generateMessage', () => {
     const call = exec.calls[0];
     expect(call?.file).toBe('/opt/homebrew/bin/claude'); // the discovery row's binary
     expect(call?.args.slice(0, 5)).toEqual(['-p', '--output-format', 'json', '--tools', '']);
+    // Isolated from the person's CLAUDE.md, hooks, plugins and MCP servers: one of them once turned a land summary
+    // into a code review.
+    const args = call?.args ?? [];
+    expect(args[args.indexOf('--setting-sources') + 1]).toBe('');
+    expect(args).toContain('--strict-mcp-config');
+    expect(args).toContain('--disable-slash-commands');
+    expect(args[args.indexOf('--system-prompt') + 1]).toMatch(/never review/);
     expect(call?.args.at(-1)).toContain('commit message');
     expect(call?.opts.input).toContain('Branch: fix/checkout (base: main)');
     expect(call?.opts.input).toContain('checkout.ts +1 -0');

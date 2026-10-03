@@ -182,7 +182,8 @@ const GEMINI_MODES: Readonly<Record<PermissionMode, string>> = {
   plan: 'plan',
   bypassPermissions: 'yolo',
   dontAsk: 'yolo',
-  auto: 'yolo',
+  // Gemini has no reviewer. Auto is the default for new lanes, so it must not mean "nothing asks": edits run, commands ask.
+  auto: 'auto_edit',
 };
 /** Cursor agent modes: agent (tools, asks through request_permission), plan (read-only), ask (Q&A only, unused). */
 const CURSOR_MODES: Readonly<Record<PermissionMode, string>> = {
@@ -200,7 +201,7 @@ const MODE_HINTS: Readonly<Record<PermissionMode, readonly RegExp[]>> = {
   plan: [/plan/],
   bypassPermissions: [/yolo/, /bypass/, /danger/, /full/, /auto/, /agent/],
   dontAsk: [/yolo/, /bypass/, /danger/, /full/, /auto/, /agent/],
-  auto: [/auto/, /yolo/, /bypass/, /agent/],
+  auto: [/auto/, /edit/, /agent/, /default/],
 };
 
 /**
