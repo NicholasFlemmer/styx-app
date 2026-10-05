@@ -29,11 +29,13 @@ Styx runs on your machine. Your code, projects, paths and prompts never leave it
 
 Signing in (with GitHub or Google) is optional and everything works without it.
 
-Release builds send **anonymous usage counts** so we know which features get used: how many times a day the app
-was opened, a project added, an agent started, an access request approved, a deploy run, onboarding finished, a
-message sent and a branch landed. That is the whole list: the counts carry no names, paths or text, only a random
-install id, the app version and the operating system. They are deleted after 180 days. Turn them off in
-**Settings › Styx account › Send usage counts**. Builds you make from source never send them.
+Release builds send **usage counts** so we know which features get used and where people get stuck: how often
+the app is opened, a project added, an agent started or fails to start (and why: not installed, not signed in, out
+of quota), an access request approved, a deploy run, a branch landed, the app crashed, and the like. The full,
+fixed list is `usageEventSchema` in [`packages/core/src/model/usage-report.ts`](packages/core/src/model/usage-report.ts):
+each is a name and a count, with no field for names, paths or text, sent with a random install id, the app
+version and the operating system (and your account, if you are signed in). Counts are deleted after 180 days.
+Turn them off in **Settings › Styx account › Send usage counts**. Builds you make from source never send them.
 
 ## Build from source
 
