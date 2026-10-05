@@ -323,6 +323,7 @@ async function boot(): Promise<void> {
     rendererUrl,
     platform,
     additionalArguments: bootEnv,
+    largerThanScreen: env['STYX_E2E'] === '1',
     onWindowCreated: (win) => container?.publisher.register(win.webContents),
     onWindowClosed: (id) => container?.publisher.unregister(id),
   });

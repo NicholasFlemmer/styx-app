@@ -12,6 +12,11 @@ export interface WindowServiceDeps {
   onAllClosed?: () => void;
   /** Extra `process.argv` entries for the preload (`--styx-env=…`). */
   additionalArguments?: () => string[];
+  /**
+   * Let windows be larger than the screen (macOS clamps them otherwise). Only the e2e harness sets this: CI's
+   * virtual displays are smaller than the default 1280×800, and a shrunken window changes layout under test.
+   */
+  largerThanScreen?: boolean;
   /** Window registry hooks (Publisher / CommandBus sender allowlist). */
   onWindowCreated?: (win: BrowserWindow, kind: 'main' | 'popout' | 'dock', sessionId: string | null) => void;
   onWindowClosed?: (webContentsId: number) => void;
@@ -41,6 +46,7 @@ export class WindowService {
       ...clampToDisplay(bounds),
       minWidth: min.w,
       minHeight: min.h,
+      ...(this.deps.largerThanScreen ? { enableLargerThanScreen: true } : {}),
       show: false,
       frame: false,
       backgroundColor: colors[t].bg,

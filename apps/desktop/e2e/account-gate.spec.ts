@@ -1,6 +1,7 @@
 /**
- * Signing in (owner request, discrepancy #113): the dialog is the conventional one, Settings › Account is for
- * managing an account rather than getting one, and Styx is free for one project — a second asks for an account.
+ * Signing in (owner request, discrepancy #113): the dialog is the conventional one, and Settings › Account is for
+ * managing an account rather than getting one. Since #148 the account gates nothing: signed out, every project
+ * route opens straight away.
  * `STYX_API` points at a port nothing is listening on, so no sign-in can complete and none of this needs one.
  */
 import { test, expect } from '@playwright/test';
@@ -42,26 +43,22 @@ test('the Account pane manages an account; the dialog is where one is got', asyn
   await app.close();
 });
 
-test('free for one project: a second asks for an account', async () => {
+test('signed out, adding another project opens straight away: the account gates nothing (#148)', async () => {
   const { app, page } = await launchStyx({
     screen: 'home',
     fixture: 'demo',
     theme: 'dark',
     env: { STYX_E2E: '0', STYX_API: OFFLINE_API },
   });
-  // Signed in to start with, so adding is never in the way.
   await page.waitForSelector('[data-rail]', { timeout: 10_000 });
   await page.evaluate(() => window.styx?.command('account.signOut', {}));
   await page.waitForTimeout(500); // the sign-out delta has to land before the rail is asked
 
-  // Now signed out with projects already there: the rail's + asks for an account instead of adding.
+  // Signed out with five projects already there: the rail's + still opens the new-project modal.
   await page.click('[data-rail-add]');
   await page.locator('[data-rail-add-menu] [role="menuitem"]').first().click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toContainText('Sign in to Styx');
-  await expect(dialog).toContainText('free for one project');
-  // The new-project modal never opened.
-  await expect(page.locator('[data-new-project-modal]')).toHaveCount(0);
+  await expect(page.locator('[data-new-project-modal]')).toBeVisible();
+  await expect(page.getByRole('dialog')).not.toContainText('Sign in to Styx');
 
   await app.close();
 });
