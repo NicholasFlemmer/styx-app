@@ -61,9 +61,9 @@ describe('detectDeployCommands', () => {
     const cli = new FakeCliRunner()
       .install('gcloud')
       .on('gcloud', ['run', 'services', 'list'], { exitCode: 0, stdout: list });
-    const matched = await detectDeployCommands(gcp(), '/Users/nic/acme-web', {
+    const matched = await detectDeployCommands(gcp(), '/Users/dev/acme-web', {
       cli,
-      ...fakeFs(['Dockerfile'], {}, {}, '/Users/nic/acme-web'),
+      ...fakeFs(['Dockerfile'], {}, {}, '/Users/dev/acme-web'),
     });
     expect(matched).toEqual([
       {
