@@ -24,8 +24,9 @@
     font-size: 12px;
     color: var(--paper-mu);
   }
+  /* Paper text, not --paper-act: lime on paper is 3.5:1, under AA for 14px (axe colour-contrast). */
   .done {
-    color: var(--paper-act);
+    color: var(--paper-tx);
     font-weight: 600;
   }
   .body {
