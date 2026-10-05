@@ -8,7 +8,6 @@ import { openFolderAsProject } from '../../state/project-entry';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
 import { openArcade } from '../arcade/ArcadePanel';
-import { guardAddProject } from '../../state/account-gate';
 
 export interface RunOptions {
   /** Mod+⏎: open agents in a new (pop-out) window. */
@@ -45,18 +44,17 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
     case 'new-task':
       ui.openNewTask(action.projectId, action.text);
       return;
-    // The four routes that add a project: free for one, a second asks for an account (discrepancy row 113).
     case 'new-project':
-      if (guardAddProject()) open({ kind: 'modal', modal: 'new-project' });
+      open({ kind: 'modal', modal: 'new-project' });
       return;
     case 'add-existing':
-      if (guardAddProject()) open({ kind: 'modal', modal: 'add-existing' });
+      open({ kind: 'modal', modal: 'add-existing' });
       return;
     case 'open-folder':
-      if (guardAddProject()) void openFolderAsProject();
+      void openFolderAsProject();
       return;
     case 'clone-url':
-      if (guardAddProject()) open({ kind: 'modal', modal: 'new-project', mode: 'clone' });
+      open({ kind: 'modal', modal: 'new-project', mode: 'clone' });
       return;
     case 'agent-dock':
       void command('window.agentDock', { open: true });

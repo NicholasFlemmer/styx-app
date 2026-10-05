@@ -140,3 +140,18 @@ has. A person with five projects who signs out keeps all five, and removed proje
 free one. Nothing already on the machine is withheld because an auth server is unreachable — the only thing a
 signed-out person cannot do is grow. Decisions 4, 5 and 6 are untouched: tokens stay in the keychain, offline
 stays a note on a live session, and git identity stays a fallback.
+
+## Amendment (2026-10-05): open source, and the gate comes out
+
+The owner is open-sourcing Styx under Apache-2.0, following the model where the app is fully usable signed out
+and an account only unlocks features that need a server ("the only sign in orca has is Orca Account … Sign in
+to extend Orca with cloud features"). A project limit in an open-source app is one deleted line in a fork, so it
+protects nothing and only gets in the way of the people who build from source.
+
+- **Free for one project is gone.** `FREE_PROJECTS`, `addingProjectNeedsAccount`, `liveProjectCount`, the
+  renderer's `guardAddProject` and main's `project.add` / `clone` / `create` backstop are removed, as is the
+  dialog's `second-project` lead. Every add route opens straight away, signed in or not.
+- **What stays:** the sign-in dialog, its first-launch prompt (it has `Not now`), Settings › Account, tokens in
+  the keychain, and the Styx API. Decision 1 is back in force: the account is additive, never a gate. What an
+  account adds will be features that need the server (for example, approving an agent's request from a phone),
+  not access to the app itself.

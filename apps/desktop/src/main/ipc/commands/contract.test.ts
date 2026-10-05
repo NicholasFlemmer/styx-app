@@ -1,8 +1,8 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { COMMAND_NAMES, accountStateSchema, commandResultSchema, commands, fixtures } from '@styx/core';
-import { describe, expect, it, vi } from 'vitest';
+import { COMMAND_NAMES, commandResultSchema, commands, fixtures } from '@styx/core';
+import { describe, expect, it } from 'vitest';
 import { makeTestApp } from '../../test-support';
 
 describe('command contract', () => {
@@ -428,17 +428,7 @@ describe('project.remove keeps the threads; adding the folder again brings them 
     const live = app.repos.projects.all().filter((p) => p.removedAt === null);
     expect(live.map((p) => p.railOrder)).toEqual(live.map((_, i) => i));
 
-    // Restoring counts as adding against the free plan's one project, so removing can't be used to get around it.
-    const refused = await app.bus.dispatch(sender, 'project.add', { path: project.path });
-    expect(refused.ok).toBe(false);
-    expect(app.repos.projects.get(projectId)?.removedAt).not.toBeNull();
-    vi.spyOn(app.account, 'current').mockReturnValue(
-      accountStateSchema.parse({
-        kind: 'signed-in',
-        account: { id: 'acct_1', email: 'nic@acme.dev', provider: 'github' },
-        signedInAt: 0,
-      }),
-    );
+    // Adding the same path again restores the project, signed in or not.
     const added = await app.bus.dispatch(sender, 'project.add', { path: project.path });
     if (!added.ok) throw new Error(added.error.message);
     expect(added.value.projectId).toBe(projectId);
