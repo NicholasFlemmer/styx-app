@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
+import { slow } from '../test-timeouts';
 
 const { ids } = fixtures;
 const acme = ids.project.acmeShop;
@@ -70,7 +71,7 @@ const lastSystemLine = (t: TestApp, sessionId: string): string | null =>
 describe('LaneSyncService (keep lanes current, ADR-0023)', () => {
   it(
     'fetch counts how far a lane is behind main and tells its session; sync merges main in and resets the count',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, repo, wt } = await rig();
       const { app, sender } = t;
@@ -131,7 +132,7 @@ describe('LaneSyncService (keep lanes current, ADR-0023)', () => {
 
   it(
     'uncommitted work on a file main also touched is committed first (git will not merge over it), then main comes in and the work is kept',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, repo, wt } = await rig();
       const lines = Array.from({ length: 10 }, (_, i) => `l${i + 1}`);
@@ -156,7 +157,7 @@ describe('LaneSyncService (keep lanes current, ADR-0023)', () => {
 
   it(
     'a conflicting merge is undone on the spot: the tree is untouched, the lane is marked and the session pauses',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, repo, wt } = await rig();
       const { app, sender } = t;
@@ -188,7 +189,7 @@ describe('LaneSyncService (keep lanes current, ADR-0023)', () => {
 describe('LaneSyncService.autoSync (ADR-0025)', () => {
   it(
     'brings the base in at a turn boundary when clean, says so, and leaves a conflicting lane marked and paused',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, repo, wt } = await rig();
       const { app } = t;
@@ -242,7 +243,7 @@ describe('LaneSyncService.autoSync (ADR-0025)', () => {
 
   it(
     'auto mode (the default): a conflicting turn-end sync is handed straight to the resolver',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, repo, wt } = await rig();
       const { app } = t;
@@ -283,7 +284,7 @@ async function withOriginAhead(repo: string): Promise<{ bare: string; remoteHead
 describe('LaneSyncService.freshenBase (the local base follows its upstream, ADR-0023 closed)', () => {
   it(
     'fetch fast-forwards a clean main folder to origin, and the lane is measured against what origin has',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, repo, wt } = await rig();
       const { remoteHead } = await withOriginAhead(repo);
@@ -311,7 +312,7 @@ describe('LaneSyncService.freshenBase (the local base follows its upstream, ADR-
 
   it(
     'a dirty main folder is left alone; the lane is measured against origin/main and merges from it',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, repo, wt } = await rig();
       const { remoteHead } = await withOriginAhead(repo);
@@ -360,7 +361,7 @@ describe('LaneSyncService.freshenBase (the local base follows its upstream, ADR-
 
   it(
     'a diverged main (local commits origin lacks) is never moved; the person sees it on the Repo row',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, repo } = await rig();
       await withOriginAhead(repo);
@@ -382,7 +383,7 @@ describe('LaneSyncService.freshenBase (the local base follows its upstream, ADR-
     },
   );
 
-  it('a base checked out nowhere is moved by ref', { timeout: 30_000 }, async () => {
+  it('a base checked out nowhere is moved by ref', { timeout: slow(30_000) }, async () => {
     const { t, repo } = await rig();
     const { remoteHead } = await withOriginAhead(repo);
     await sh(['checkout', '-q', '-b', 'other'], repo);
@@ -392,7 +393,7 @@ describe('LaneSyncService.freshenBase (the local base follows its upstream, ADR-
     expect(await sh(['branch', '--show-current'], repo)).toBe('other');
   });
 
-  it('no remote, no upstream: nothing to do and nothing said', { timeout: 30_000 }, async () => {
+  it('no remote, no upstream: nothing to do and nothing said', { timeout: slow(30_000) }, async () => {
     const { t } = await rig();
     expect(await t.app.laneSync.freshenBase(acme)).toEqual({ state: 'no-remote' });
     expect(t.app.laneSync.baseRefOf(acme)).toBe('main');
@@ -400,7 +401,7 @@ describe('LaneSyncService.freshenBase (the local base follows its upstream, ADR-
 
   it(
     'fetch re-reads the remotes, so a remote added or removed outside Styx shows on the Repo header',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, repo } = await rig();
       // The fixture row still names github.com/acme/shop; the folder has no remote at all.
