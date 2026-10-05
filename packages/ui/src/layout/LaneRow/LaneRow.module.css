@@ -23,7 +23,11 @@
     background: var(--tx);
     color: var(--bg);
   }
+  /* Quiet (finished) lanes recede through colour, not opacity: a faded row took its status under 4.5:1 (axe). */
   .row[data-tone='quiet']:not([data-inv='true']) {
+    color: var(--mu);
+  }
+  .row[data-tone='quiet']:not([data-inv='true']) .dot {
     opacity: 0.55;
   }
   .dot {
