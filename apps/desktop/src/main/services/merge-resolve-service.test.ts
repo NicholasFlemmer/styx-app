@@ -7,6 +7,7 @@ import { copy, fixtures } from '@styx/core';
 import { describe, expect, it, vi } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
 import type { ImageBlock, StreamEvents, StreamRunnerLike, StreamSpawnOptions } from './stream-runner';
+import { slow } from '../test-timeouts';
 
 const { ids } = fixtures;
 const acme = ids.project.acmeShop;
@@ -150,7 +151,7 @@ const parents = async (wt: string): Promise<number> =>
 describe('MergeResolveService (ADR-0025 phase B)', () => {
   it(
     'hands the conflict to the lane agent with both intents, then verifies, runs the checks and commits the merge',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, stream, checks, wt } = await rig();
       const { app } = t;
@@ -191,7 +192,7 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
       // The agent resolves the file and goes quiet: Styx verifies, runs the checks in the lane, commits.
       writeFileSync(join(wt, 'a.ts'), 'main version\nlane version\n');
       stream.quiet(claude);
-      await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('done'), { timeout: 10_000 });
+      await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('done'), { timeout: slow(10_000) });
       expect(checks).toHaveBeenCalledWith(wt, 'pnpm check');
       expect(await app.git.mergeInProgress(wt)).toBe(false);
       expect(await parents(wt)).toBe(2);
@@ -226,14 +227,14 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
 
   it(
     'markers left → one more turn with the reason; still there → the merge is undone and the lane is as it was',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, stream, wt } = await rig({ checksCommand: null });
       const { app } = t;
       await app.resolver.resolve(fixCheckout);
       expect(stream.sent).toHaveLength(1);
       stream.quiet(claude); // the agent did nothing
-      await vi.waitFor(() => expect(lane(t).resolution?.attempts).toBe(2), { timeout: 10_000 });
+      await vi.waitFor(() => expect(lane(t).resolution?.attempts).toBe(2), { timeout: slow(10_000) });
       expect(lane(t).resolution?.state).toBe('resolving');
       expect(stream.sent).toHaveLength(2);
       expect(stream.sent[1]?.text).toBe(
@@ -243,7 +244,7 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
         'The merge is not finished: conflict markers remain in a.ts. Asked Claude Code once more.',
       );
       stream.quiet(claude); // still nothing
-      await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('failed'), { timeout: 10_000 });
+      await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('failed'), { timeout: slow(10_000) });
       expect(await app.git.mergeInProgress(wt)).toBe(false);
       expect(readFileSync(join(wt, 'a.ts'), 'utf8')).toBe('lane version\n');
       expect((await app.git.status(wt)).clean).toBe(true);
@@ -263,20 +264,20 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
 
   it(
     'a red check goes back to the agent with the command, the exit code and the output tail',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, stream, checks, wt } = await rig();
       checks.mockResolvedValueOnce({ exitCode: 2, output: 'src/a.ts(1,1): error TS1005' });
       await t.app.resolver.resolve(fixCheckout);
       writeFileSync(join(wt, 'a.ts'), 'merged\n');
       stream.quiet(claude);
-      await vi.waitFor(() => expect(stream.sent).toHaveLength(2), { timeout: 10_000 });
+      await vi.waitFor(() => expect(stream.sent).toHaveLength(2), { timeout: slow(10_000) });
       expect(stream.sent[1]?.text).toContain(
         'the checks failed (`pnpm check` exited 2)\nsrc/a.ts(1,1): error TS1005',
       );
       // Second time green: committed.
       stream.quiet(claude);
-      await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('done'), { timeout: 10_000 });
+      await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('done'), { timeout: slow(10_000) });
       // Red once, then green. Under load git can be busy at verify time and the resolver verifies again (its own test
       // below), which runs the checks once more: at least the two, and the last one green.
       expect(checks.mock.calls.length).toBeGreaterThanOrEqual(2);
@@ -286,7 +287,7 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
 
   it(
     'a lane whose agent is gone gets a hidden merge task on the same lane; a conflict-free merge just lands',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, stream, wt } = await rig({ checksCommand: null });
       const { app } = t;
@@ -307,7 +308,7 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
       expect(lane(t).owner).toEqual({ kind: 'session', sessionId: taskSession?.id });
       writeFileSync(join(wt, 'a.ts'), 'merged\n');
       stream.quiet(taskSession?.id ?? '');
-      await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('done'), { timeout: 10_000 });
+      await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('done'), { timeout: slow(10_000) });
       expect(await parents(wt)).toBe(2);
       // The hidden task ends with its turn.
       expect(app.repos.sessions.get(taskSession?.id ?? '')?.state).toBe('done');
@@ -319,7 +320,7 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
 
   it(
     'Mergiraf settles what it can before any agent is asked; a fully mechanical merge is committed as a sync',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const mergiraf = vi.fn(async (file: string, cwd: string) => {
         writeFileSync(join(cwd, file), 'main version\nlane version\n');
@@ -341,7 +342,7 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
 
   it(
     'Stop merging while the agent is at it: its turn is interrupted, the merge undone, the conflict marked again',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, wt } = await rig();
       const { app } = t;
@@ -370,7 +371,7 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
     },
   );
 
-  it('refuses while the agent is mid-turn, and does nothing twice', { timeout: 30_000 }, async () => {
+  it('refuses while the agent is mid-turn, and does nothing twice', { timeout: slow(30_000) }, async () => {
     const { t } = await rig();
     const s = t.app.repos.sessions.get(claude);
     if (!s) throw new Error('session');
@@ -383,7 +384,7 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
 
   it(
     'git busy while verifying: waited out, then committed — never left at "checking"',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, stream, wt } = await rig({ checksCommand: null });
       await t.app.resolver.resolve(fixCheckout);
@@ -391,18 +392,18 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
       const lock = join((await sh(['rev-parse', '--absolute-git-dir'], wt)).trim(), 'index.lock');
       writeFileSync(lock, '');
       stream.quiet(claude);
-      await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('checking'), { timeout: 5_000 });
+      await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('checking'), { timeout: slow(5_000) });
       // Another git process lets go shortly after.
       await new Promise((r) => setTimeout(r, 100));
       rmSync(lock);
-      await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('done'), { timeout: 10_000 });
+      await vi.waitFor(() => expect(lane(t).resolution?.state).toBe('done'), { timeout: slow(10_000) });
       expect(await parents(wt)).toBe(2);
     },
   );
 
   it(
     'a verify that keeps failing goes back to resolving with the reason; Land verifies it again once git is free',
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, stream, wt } = await rig({ checksCommand: null });
       await t.app.resolver.resolve(fixCheckout);
@@ -411,7 +412,7 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
       writeFileSync(lock, '');
       stream.quiet(claude);
       await vi.waitFor(() => expect(lane(t).resolution?.failure ?? '').toContain('index.lock'), {
-        timeout: 15_000,
+        timeout: slow(15_000),
       });
       expect(lane(t).resolution?.state).toBe('resolving');
       expect(
@@ -426,7 +427,7 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
   it(
     'recover: a lane left at "checking" by a Styx that quit is movable again, and Stop merging works on it',
     {
-      timeout: 30_000,
+      timeout: slow(30_000),
     },
     async () => {
       const { t, wt } = await rig();
@@ -447,7 +448,7 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
 
   it(
     "the lane's own agent can start the resolve from inside its turn (the `land` tool)",
-    { timeout: 30_000 },
+    { timeout: slow(30_000) },
     async () => {
       const { t, stream } = await rig();
       const s = t.app.repos.sessions.get(claude);

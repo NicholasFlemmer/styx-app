@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { fixtures } from '@styx/core';
 import { describe, expect, it, vi } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
+import { slow } from '../test-timeouts';
 
 const { ids } = fixtures;
 const acme = ids.project.acmeShop;
@@ -134,7 +135,7 @@ const systemLines = (t: TestApp, sessionId: string): string[] =>
     .map((m) => m.body);
 
 // Real repos and several landings per case: room under a fully parallel run.
-describe('LandService (ADR-0025 phase C)', { timeout: 30_000 }, () => {
+describe('LandService (ADR-0025 phase C)', { timeout: slow(30_000) }, () => {
   it("preview: the lane's files against the base, committed and not, and whether the base is pushed", async () => {
     const { t } = await rig();
     expect(await t.app.land.preview(fixCheckout)).toEqual({

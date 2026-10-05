@@ -17,6 +17,10 @@ class FakePty extends PtyService {
   constructor() {
     super('darwin');
   }
+  /** Pinned, so the assertion doesn't depend on the machine's `$SHELL` (CI runners use bash). */
+  override defaultShell(): string {
+    return '/bin/zsh';
+  }
   override async resolveLoginPath(): Promise<string> {
     return '/usr/local/bin:/usr/bin';
   }
