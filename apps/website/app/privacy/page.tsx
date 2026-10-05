@@ -42,9 +42,7 @@ export default function PrivacyPage() {
       <p>
         This policy explains how Styx (&ldquo;we&rdquo;, &ldquo;us&rdquo;) handles personal information. We
         are responsible for the information described here.
-        {legal.entity !== 'Styx'
-          ? ` Styx is provided by ${legal.entity}${legal.registration ? ` (registration ${legal.registration})` : ''}${legal.address ? `, ${legal.address}` : ''}.`
-          : ''}{' '}
+        {` Styx is provided by ${legal.entity}${legal.registration ? ` (registration ${legal.registration})` : ''}${legal.address ? `, ${legal.address}` : ''}.`}{' '}
         Questions, requests and complaints go to <a href={`mailto:${legal.email}`}>{legal.email}</a>.
       </p>
       <p>
