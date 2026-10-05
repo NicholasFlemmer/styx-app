@@ -11,6 +11,7 @@ import { loadFixture, seed, type FixtureName } from './db/seed';
 import { FakeCliRunner } from './providers/cli-runner';
 import { MemoryVault } from './services/credential-vault';
 import type { DetectService } from './services/detect-service';
+import type { DeviceExec } from './services/device-service';
 import { FakeMfaProvider, type MfaResult } from './services/mfa-service';
 import type { PtyService } from './services/pty-service';
 import type { ProbeAnswer } from './services/run-service';
@@ -67,6 +68,12 @@ export interface TestAppOptions {
   openExternal?: (url: string) => Promise<void>;
   /** AgentService's CLI status runner (`claude auth status --json` …); tests fake it so no real CLI runs. */
   exec?: (bin: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>;
+  /**
+   * The simulator / emulator tool seams (`xcrun`, `adb`, `emulator`). Default: none installed, so a test's outcome
+   * never depends on whether the machine running it has Xcode (CI's macOS runners do; most dev Macs may not).
+   */
+  deviceExec?: DeviceExec;
+  deviceWhich?: (bin: string) => Promise<string | null>;
   /** RunService's URL probe; tests answer it so nothing is ever connected to for real. */
   probe?: (url: string) => Promise<boolean | ProbeAnswer>;
   /** The merge resolver's checks runner and Mergiraf hook (ADR-0025 phase B); tests fake both. */
@@ -133,6 +140,9 @@ export function makeTestApp(opts: TestAppOptions = {}): TestApp {
     ...(opts.detect ? { detect: opts.detect } : {}),
     ...(opts.exec ? { exec: opts.exec } : {}),
     ...(opts.probe ? { probe: opts.probe } : {}),
+    deviceWhich: opts.deviceWhich ?? (async () => null),
+    deviceExec:
+      opts.deviceExec ?? (async () => ({ stdout: '', stderr: 'no simulator tools in tests', exitCode: 127 })),
     runChecks: opts.runChecks ?? (async () => ({ exitCode: 0, output: '' })),
     ...(opts.mergiraf ? { mergiraf: opts.mergiraf } : {}),
     redetectClis: opts.redetectClis ?? false,
