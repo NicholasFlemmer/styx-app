@@ -1,10 +1,4 @@
-import {
-  DEFAULT_PROJECT_SETTINGS,
-  FREE_PROJECTS,
-  copy,
-  type ProjectSettings,
-  type SessionId,
-} from '@styx/core';
+import { DEFAULT_PROJECT_SETTINGS, type ProjectSettings, type SessionId } from '@styx/core';
 import type { Container } from '../../container';
 import { projectSettingsFor } from '../../store/projection';
 import { type CommandBus, fail } from '../bus';
@@ -13,24 +7,11 @@ import { type CommandBus, fail } from '../bus';
 export function registerProjectCommands(bus: CommandBus, app: Container): void {
   const { projects, repos } = app;
 
-  /**
-   * Styx is free for one project; a second asks for an account (owner request, discrepancy row 113). The
-   * renderer gates every add route so the answer is a sign-in dialog, and this is the backstop that makes the
-   * rule true rather than merely presented. A project that already exists is never taken away: the check is on
-   * *adding*, and the count ignores removed ones.
-   */
-  const guardAdd = (): void => {
-    if (app.account.current().kind === 'signed-in') return;
-    const live = repos.projects.all().filter((p) => p.removedAt === null).length;
-    if (live >= FREE_PROJECTS) fail('forbidden', copy.account.modal.secondProject);
-  };
-
   bus.register('project.scan', async ({ includeIdeRecents, includeAgentHistory }) => ({
     repos: await projects.scan(includeIdeRecents, includeAgentHistory),
   }));
 
   bus.register('project.add', async ({ path, name }) => {
-    guardAdd();
     const project = await projects.add(path, name);
     app.usageReports.record('project.added');
     return { projectId: project.id };
@@ -54,7 +35,6 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
   };
 
   bus.register('project.clone', async ({ url, into, openInIde }) => {
-    guardAdd();
     const project = await projects.clone(url, into);
     app.usageReports.record('project.added');
     if (openInIde) openInFallbackIde(project.path);
@@ -62,7 +42,6 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
   });
 
   bus.register('project.create', async (input) => {
-    guardAdd();
     const project = await projects.create({
       name: input.name,
       location: input.location,

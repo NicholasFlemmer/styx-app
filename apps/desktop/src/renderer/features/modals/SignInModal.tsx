@@ -5,7 +5,7 @@ import { useModel, useUi } from '../../state/hooks';
 import s from './SignInModal.module.css';
 
 /** Why the dialog opened, which is the only thing that changes about it. */
-export type SignInReason = 'welcome' | 'second-project' | 'plain';
+export type SignInReason = 'welcome' | 'plain';
 
 export interface SignInModalProps {
   id: string;
@@ -16,7 +16,6 @@ const selectAccount = (m: ReadModel) => m.account;
 
 const LEAD: Record<SignInReason, string> = {
   welcome: copy.account.modal.welcome,
-  'second-project': copy.account.modal.secondProject,
   plain: copy.account.modal.plain,
 };
 

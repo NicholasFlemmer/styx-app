@@ -75,8 +75,8 @@ export default function PrivacyPage() {
 
       <h2>3. Your Styx account</h2>
       <p>
-        Signing in is optional: Styx works for one project without an account. If you sign in with GitHub or
-        Google, we receive and keep:
+        Signing in is optional: all of Styx works without an account. If you sign in with GitHub or Google, we
+        receive and keep:
       </p>
       <ul>
         <li>your email address, name and profile picture link, as provided by GitHub or Google;</li>

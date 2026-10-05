@@ -2391,8 +2391,6 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       title: 'Sign in to Styx',
       /** First launch. */
       welcome: 'Sign in to keep your projects, plan and settings with you.',
-      /** Opened because the person is adding a project beyond the free one. */
-      secondProject: 'Styx is free for one project. Sign in to add more.',
       /** Opened from the Account pane. */
       plain: 'Sign in with the account you already use.',
       later: 'Not now',

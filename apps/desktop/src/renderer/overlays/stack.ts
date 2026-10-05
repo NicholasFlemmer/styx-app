@@ -47,7 +47,7 @@ export type ModalPayload =
   /** Approvals › Policies › + Rule: an auto-approve / ask rule; `policyId` edits an existing custom rule. */
   | { modal: 'policy-rule'; policyId?: PolicyId }
   /** The sign-in dialog (discrepancy row 113); `reason` only changes its one line of lead copy. */
-  | { modal: 'sign-in'; reason?: 'welcome' | 'second-project' | 'plain' }
+  | { modal: 'sign-in'; reason?: 'welcome' | 'plain' }
   /** A downloaded update (#119): Restart to update, or Later (the banner stays). */
   | { modal: 'update' }
   /** Feedback to the owner (#123): status bar, palette. */

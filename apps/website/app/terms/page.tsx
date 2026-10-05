@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 const Summary = () => (
   <ul>
     <li>You can use Styx for personal and commercial work. Your code stays yours.</li>
-    <li>Styx is free for one project without an account, and free with an account for now.</li>
+    <li>Styx is free, and an account is optional.</li>
     <li>
       You&apos;re responsible for what your agents do and for the services you connect. Styx&apos;s approvals
       help you control that; they aren&apos;t a sandbox.
@@ -43,8 +43,8 @@ export default function TermsPage() {
 
       <h2>3. Your account</h2>
       <p>
-        You can use Styx for one project without an account. For more, you sign in with GitHub or Google. Keep
-        your account secure; you are responsible for activity under it. Tell us at{' '}
+        You can use all of Styx without an account. If you choose to sign in, you do so with GitHub or Google.
+        Keep your account secure; you are responsible for activity under it. Tell us at{' '}
         <a href={`mailto:${legal.email}`}>{legal.email}</a> if you think someone else has used it.
       </p>
 
@@ -102,8 +102,8 @@ export default function TermsPage() {
       <h2>9. Changes and availability</h2>
       <p>
         Styx is under active development. Features may change, and we may stop offering parts of it. The
-        account service may occasionally be unavailable; the app keeps working for one project without it. We
-        will give reasonable notice before removing anything significant you rely on.
+        account service may occasionally be unavailable; the app keeps working without it. We will give
+        reasonable notice before removing anything significant you rely on.
       </p>
 
       <h2>10. Feedback</h2>

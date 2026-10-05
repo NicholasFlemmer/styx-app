@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
-import { copy, fixtures, upsertRows, type ProjectId, type ReadModel } from '@styx/core';
+import { copy, fixtures, type ReadModel } from '@styx/core';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { guardAddProject } from '../../state/account-gate';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
 import { SignInModal } from './SignInModal';
@@ -36,7 +35,7 @@ describe('SignInModal (discrepancy #113)', () => {
     Object.assign(window, { styx: undefined });
   });
 
-  const open = (reason?: 'welcome' | 'second-project' | 'plain') => {
+  const open = (reason?: 'welcome' | 'plain') => {
     const id = useUiStore
       .getState()
       .pushOverlay({ kind: 'modal', modal: 'sign-in', ...(reason === undefined ? {} : { reason }) });
@@ -56,7 +55,6 @@ describe('SignInModal (discrepancy #113)', () => {
 
   it.each([
     ['welcome', copy.account.modal.welcome],
-    ['second-project', copy.account.modal.secondProject],
     ['plain', copy.account.modal.plain],
   ] as const)('%s opens with its own one line of lead', (reason, lead) => {
     open(reason);
@@ -171,62 +169,5 @@ describe('first launch (discrepancy #113)', () => {
     // Signed in on a fresh install (a second machine): nothing to ask.
     useUiStore.getState().resolveInitialScreen({ ...fixtures.demoReadModel(), settings: model.settings });
     expect(useUiStore.getState().overlays).toEqual([]);
-  });
-});
-
-describe('the free-project gate (discrepancy #113)', () => {
-  beforeEach(() => {
-    useUiStore.setState({ overlays: [] });
-  });
-  afterEach(cleanup);
-
-  /** The demo model with `n` live projects and nobody signed in. */
-  const withProjects = (n: number): ReadModel => {
-    const model = fixtures.demoReadModel();
-    const keep = model.projects.ids.slice(0, n);
-    const removed = model.projects.ids
-      .slice(n)
-      .map((id) => model.projects.byId[id])
-      .filter((p) => p !== undefined)
-      .map((p) => ({ ...p, removedAt: fixtures.DEMO_NOW }));
-    return {
-      ...model,
-      account: { kind: 'signed-out', error: null },
-      projects: upsertRows(model.projects, removed),
-      ...(keep.length === 0 ? { projects: { byId: {}, ids: [] as ProjectId[] } } : {}),
-    } as ReadModel;
-  };
-
-  it('lets the first project through and asks for an account for the second', () => {
-    useReadModel.getState().replaceModel(withProjects(0), 'connected');
-    expect(guardAddProject()).toBe(true);
-    expect(useUiStore.getState().overlays).toEqual([]);
-
-    useReadModel.getState().replaceModel(withProjects(1), 'connected');
-    expect(guardAddProject()).toBe(false);
-    expect(useUiStore.getState().overlays).toMatchObject([
-      { kind: 'modal', modal: 'sign-in', reason: 'second-project' },
-    ]);
-  });
-
-  it('never gets in the way of someone signed in, however many projects they have', () => {
-    // The demo fixture is signed in and has five projects.
-    useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
-    expect(guardAddProject()).toBe(true);
-    expect(useUiStore.getState().overlays).toEqual([]);
-  });
-
-  it('a removed project does not count against the free one', () => {
-    const model = withProjects(1);
-    const first = model.projects.ids[0];
-    const row = first === undefined ? undefined : model.projects.byId[first];
-    if (row === undefined) throw new Error('fixture');
-    useReadModel
-      .getState()
-      .replaceModel(
-        { ...model, projects: upsertRows(model.projects, [{ ...row, removedAt: fixtures.DEMO_NOW }]) },
-        'connected',
-      );
-    expect(guardAddProject()).toBe(true);
   });
 });
