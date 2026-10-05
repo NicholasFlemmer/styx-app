@@ -27,6 +27,11 @@ jobs:
       - name: Electron e2e (main window, shell, grant flow, a11y)
         if: runner.os == 'macOS'
         run: pnpm e2e
+      # The runner's virtual display is 1024×768, smaller than Styx's 1280×800 window, and Windows keeps windows on
+      # screen: a shrunken window changes the layout under test (the terminal overlaps the footer, lists scroll).
+      - name: Display large enough for the window (Windows)
+        if: runner.os == 'Windows'
+        run: Set-DisplayResolution -Width 1920 -Height 1080 -Force
       - name: Electron e2e on Windows (main window, shell, grant flow, a11y)
         if: runner.os == 'Windows'
         run: pnpm e2e
