@@ -8,6 +8,8 @@
 
 [**Download for Mac**](https://heystyx.com/download/mac?from=github) &nbsp;·&nbsp; [**Download for Windows**](https://heystyx.com/download/win?from=github) &nbsp;·&nbsp; [**Linux**](https://github.com/NicholasFlemmer/styx-app/releases/latest) &nbsp;·&nbsp; [Website](https://heystyx.com) &nbsp;·&nbsp; [Watch the story (1:42)](https://heystyx.com/story)
 
+**Contribute:** [Add an agent](docs/contributing/adding-an-agent.md) &nbsp;·&nbsp; [Add a deploy target](docs/contributing/adding-a-target.md) &nbsp;·&nbsp; [Contributing guide](CONTRIBUTING.md)
+
 [![CI](https://img.shields.io/github/actions/workflow/status/NicholasFlemmer/styx-app/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/NicholasFlemmer/styx-app/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-d6ff3d?style=flat-square&labelColor=0d0e0c)](LICENSE)
 ![macOS · Windows · Linux](https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-free-d6ff3d?style=flat-square&labelColor=0d0e0c)
@@ -188,6 +190,13 @@ If Electron starts as plain Node, your shell has `ELECTRON_RUN_AS_NODE` set; the
 
 Bug reports, ideas and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md). To report a security
 problem, please follow [SECURITY.md](SECURITY.md) instead of opening an issue.
+
+The two easiest ways in are self-contained, with a worked example and a checklist each:
+
+- **[Add an agent](docs/contributing/adding-an-agent.md):** support another coding agent CLI (OpenCode, Aider, Goose,
+  Amp, …).
+- **[Add a deploy target](docs/contributing/adding-a-target.md):** let agents ask for another platform (Netlify,
+  Cloudflare, Fly.io, Railway, Render, Azure, …).
 
 ## License
 
