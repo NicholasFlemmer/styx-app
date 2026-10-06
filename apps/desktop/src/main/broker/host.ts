@@ -66,6 +66,8 @@ export interface BrokerHostDeps {
       steps: string[];
       reason: string | null;
     }>;
+    /** Issue #2: Land asked this session to work out the project's checks, so it may teach them. */
+    askedForChecks(sessionId: string): boolean;
   };
 }
 
@@ -275,7 +277,7 @@ export class BrokerHost {
       const scopes = adapter.scopeOfCommand(p.argv, p.tool) as Scope[];
       // Persisted as grants.reason / grant_uses.command / audit triggered_by: never the raw argv (M1).
       const command = redact(`$ ${[p.tool, ...redactArgv(p.argv)].join(' ')}`);
-      const picked = this.pickTarget(ctx, adapter.provider, p.argv, scopes);
+      const picked = this.pickTarget(ctx, adapter, p.argv, p.tool, scopes);
       if (!picked)
         throw new BrokerError(
           ErrorCode.targetNotFound,
@@ -392,13 +394,14 @@ export class BrokerHost {
         return { ok: true };
       }
       if (p.kind === 'checks') {
-        // ADR-0025 phase B: only the agent Styx is using to finish a merge may set the checks Styx will then run.
+        // ADR-0025 phase B: only the agent Styx is using to finish a merge may set the checks Styx will then run —
+        // or the lane's agent Land asked for them at the project's first landing (issue #2).
         const me = deps.repos.sessions.get(ctx.session.sessionId);
         const lane = me ? deps.repos.worktrees.get(me.worktreeId) : null;
         const resolving =
           lane?.resolution?.sessionId === ctx.session.sessionId &&
           (lane.resolution.state === 'resolving' || lane.resolution.state === 'checking');
-        if (!resolving && purpose !== 'merge')
+        if (!resolving && purpose !== 'merge' && !deps.landing.askedForChecks(ctx.session.sessionId))
           throw new BrokerError(ErrorCode.notAllowed, copy.abilities.checksNotResolving);
         const refused = await deps.abilities.rememberChecks(ctx.session.sessionId, p.command);
         if (refused !== null) throw new BrokerError(ErrorCode.notAllowed, refused);
@@ -558,25 +561,38 @@ export class BrokerHost {
     return { grantId: grant.id, useId, env: cred?.env ?? {} };
   }
 
-  /** Which target a shim call means: a live covering grant wins; `--prod`/`production` picks prod; else the first non-prod. */
+  /**
+   * Which target a shim call means. The environment is decided first: `--prod`/`--production`/`production` in argv,
+   * else what the adapter says (`envOfCommand`), else unknown, and an unknown command is production whenever the
+   * project has a production target (fail closed: `supabase db push` names no environment, and a staging target's
+   * rules must never decide a command that may hit production). Only then does a live covering grant win, and only
+   * among targets in that environment, so a staging grant can't carry a production command.
+   */
   private pickTarget(
     ctx: ConnectionContext,
-    provider: Target['provider'],
+    adapter: {
+      provider: Target['provider'];
+      envOfCommand?: (argv: string[], tool?: string) => 'prod' | 'non-prod' | null;
+    },
     argv: string[],
+    tool: string,
     scopes: Scope[],
   ): Target | null {
     const candidates = this.deps.repos.targets
       .byProject(ctx.session.projectId)
-      .filter((t) => t.provider === provider);
+      .filter((t) => t.provider === adapter.provider);
     if (candidates.length === 0) return null;
-    const covered = candidates.find(
-      (t) => this.deps.grants.covering(t, ctx.session.sessionId, scopes) !== null,
-    );
-    if (covered) return covered;
-    const wantsProd = argv.some((a) => a === '--prod' || a === '--production' || a === 'production');
+    const flagged = argv.some((a) => a === '--prod' || a === '--production' || a === 'production')
+      ? 'prod'
+      : null;
+    const env = flagged ?? adapter.envOfCommand?.(argv, tool) ?? null;
+    const prod = candidates.filter((t) => t.env === 'prod');
+    const rest = candidates.filter((t) => t.env !== 'prod');
+    const pool =
+      env === 'non-prod' ? (rest.length > 0 ? rest : candidates) : prod.length > 0 ? prod : candidates;
     return (
-      (wantsProd ? candidates.find((t) => t.env === 'prod') : candidates.find((t) => t.env !== 'prod')) ??
-      candidates[0] ??
+      pool.find((t) => this.deps.grants.covering(t, ctx.session.sessionId, scopes) !== null) ??
+      pool[0] ??
       null
     );
   }

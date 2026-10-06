@@ -44,7 +44,12 @@ export type RowChange =
   /** Updates in place (#119): the row's value is the status line; `check` asks the feed, `install` restarts. */
   | { kind: 'update' }
   /** The walkthrough (#124): the value says whether it was seen; `show` plays it. */
-  | { kind: 'tour' };
+  | { kind: 'tour' }
+  /**
+   * A command typed in a text field rather than picked (issue #2: the checks Land runs). The value is the text ('' =
+   * not set); `patch` turns what was typed into the setting (blank clears it).
+   */
+  | { kind: 'project-text'; key: keyof ProjectSettings; patch: (value: string) => Partial<ProjectSettings> };
 
 export interface RowOption {
   value: string;
@@ -61,6 +66,8 @@ export interface SettingsRow {
   change: RowChange;
   /** Project value from `.styx/project.json` → reset affordance (plan §5, spec §4.6). */
   overridden: boolean;
+  /** `project-text` rows: what the empty field says. */
+  placeholder?: string;
 }
 
 export interface RowContext {
@@ -576,7 +583,29 @@ const agentDefaultsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => 
     ),
     // ADR-0025 phase C: off until trusted; a finished lane then lands on its own when the checks pass.
     projectRow(model, ctx, 'autoLand', r.autoLand, 'autoLand', onOff, isOn, ON_OFF, true),
+    checksRow(model, ctx),
   ];
+};
+
+/**
+ * Issue #2: the checks Land (and a finished merge) runs first — learned by the lane's agent at the first landing,
+ * seen and edited here. Main trims it, clears it when blank and refuses one carrying a secret.
+ */
+const checksRow = (model: ReadModel, ctx: RowContext): SettingsRow => {
+  const entry = ctx.projectId === null ? null : projectSettingsOf(model, ctx.projectId)?.checksCommand;
+  return {
+    id: 'checksCommand',
+    label: copy.settings.rows.checksCommand,
+    value: entry?.value ?? '',
+    options: [],
+    change: {
+      kind: 'project-text',
+      key: 'checksCommand',
+      patch: (v) => ({ checksCommand: v.trim() === '' ? null : v.trim() }),
+    },
+    overridden: entry?.source === 'project',
+    placeholder: copy.settings.values.checksNone,
+  };
 };
 
 const envRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {

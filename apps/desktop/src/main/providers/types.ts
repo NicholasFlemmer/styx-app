@@ -105,6 +105,13 @@ export interface ProviderAdapter {
    * receives the full token no matter what the shim heuristics decided.
    */
   issuesScoped?(scope: readonly Scope[], target?: Pick<TargetInfo, 'credentialRef' | 'config'>): boolean;
+  /**
+   * Which environment a shim command acts on, when the provider's CLI says so without a `--prod` flag (Vercel: a
+   * deploy without `--prod` is a preview). Absent or null = unknown, and the broker then treats the command as
+   * production when the project has a production target (fail closed): many CLIs (supabase, aws, gcloud) carry no
+   * environment in argv, and their credentials often can't be narrowed to one target.
+   */
+  envOfCommand?(argv: string[], tool?: string): 'prod' | 'non-prod' | null;
   /** Which shim binaries route to this provider. */
   readonly tools: string[];
   /** CLI-first connect: what the local CLI knows (installed, version, accounts). Absent = no CLI mode (SSH). */

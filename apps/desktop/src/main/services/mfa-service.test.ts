@@ -1,10 +1,11 @@
 import { existsSync, mkdtempSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   FakeMfaProvider,
   helloArgs,
+  macPasswordArgs,
   MfaService,
   POLKIT_ACTION,
   PolkitProvider,
@@ -23,8 +24,19 @@ describe('MfaService', () => {
       },
     });
     expect(await cancelled.verify('x')).toBe('cancelled');
-    const none = new TouchIdProvider({ canPromptTouchID: () => false, promptTouchID: async () => {} });
-    expect(await none.verify('x')).toBe('unavailable');
+    const promptTouchID = vi.fn(async () => {});
+    const calls: string[][] = [];
+    const noSensor = (exitCode: number, stderr = '') =>
+      new TouchIdProvider({ canPromptTouchID: () => false, promptTouchID }, async (args) => {
+        calls.push(args);
+        return { exitCode, stderr };
+      });
+    // No Touch ID: the system password prompt instead of a refusal.
+    expect(await noSensor(0).verify('Grant Codex write on Supabase prod')).toBe('ok');
+    expect(await noSensor(1, 'execution error: User canceled. (-128)').verify('x')).toBe('cancelled');
+    expect(await noSensor(1, 'execution error: wrong password').verify('x')).toBe('failed');
+    expect(await noSensor(0).available()).toBe(true);
+    expect(promptTouchID).not.toHaveBeenCalled();
     expect(await new MfaService(new FakeMfaProvider('failed')).verify('x')).toBe('failed');
     expect(new MfaService(new FakeMfaProvider()).label).toBe('Touch ID');
   });
@@ -168,5 +180,17 @@ describe('PolkitProvider (Linux)', () => {
     expect(await none.verify()).toBe('unavailable');
     expect(r.calls).toEqual([]);
     expect(new PolkitProvider().label).toBe('system password');
+  });
+});
+
+describe('macPasswordArgs', () => {
+  it('passes the reason as an argument, never inside the script, so a name cannot inject AppleScript', () => {
+    const evil = 'Supabase" & (do shell script "rm -rf ~") & "\n';
+    const args = macPasswordArgs(evil);
+    expect(args.slice(0, 6).join(' ')).not.toContain('rm -rf');
+    expect(args.at(-1)).toBe('Supabase" & (do shell script "rm -rf ~") & "');
+    expect(args).toContain(
+      'do shell script "/usr/bin/true" with prompt (item 1 of argv) with administrator privileges',
+    );
   });
 });

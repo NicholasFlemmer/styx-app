@@ -100,7 +100,8 @@ export const ComparePage = ({ c }: { c: Competitor }) => {
         Choose <strong>{c.name}</strong> if {c.choose.them}. Choose <strong>Styx</strong> if {c.choose.styx}.
       </p>
       <p>
-        <a href="/#download">Download Styx</a>. It is free. <a href="/compare">See every comparison</a>.
+        <a href="/#download">Download Styx</a>. It is free and open source.{' '}
+        <a href="/compare">See every comparison</a>.
       </p>
 
       <h2>Questions</h2>

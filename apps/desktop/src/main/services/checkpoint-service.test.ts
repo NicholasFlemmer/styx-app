@@ -1,4 +1,12 @@
-import { fixtures, type Checkpoint, type ProjectId, type SessionId, type WorktreeId } from '@styx/core';
+import {
+  copy,
+  fill,
+  fixtures,
+  type Checkpoint,
+  type ProjectId,
+  type SessionId,
+  type WorktreeId,
+} from '@styx/core';
 import { execa } from 'execa';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -42,6 +50,7 @@ const withScreens = (
     clock: t.clock,
     git: new ExecaGitRunner(),
     transcript: t.app.transcript,
+    tell: (id, text) => t.app.sessions.tell(id, text),
     rescanHunks: async () => undefined,
     screens,
     screenshot,
@@ -238,7 +247,7 @@ describe('CheckpointService', () => {
     expect(t.app.repos.transcripts.last(claude).filter((m) => m.body.startsWith('Turn 2'))).toEqual([]);
   });
 
-  it('revert restores the worktree to before the turn: edits undone, added files deleted, deleted files back; later turns are marked too', async () => {
+  it('reverting the latest turn restores the worktree to before it: edits undone, added files deleted, deleted files back', async () => {
     const t = makeTestApp();
     const repo = await realWorktree(t);
     const one = await turn(t, 'm1', () => {
@@ -252,23 +261,30 @@ describe('CheckpointService', () => {
     });
     await sh(['add', 'new.txt'], repo); // the agent staged one of its files
     writeFileSync(join(repo, 'keep.log'), 'ignored\n');
+    const indexBefore = await sh(['ls-files', '--stage'], repo);
     t.win.sent.length = 0;
 
-    await t.app.checkpoints.revert(one.id);
+    await t.app.checkpoints.revert(two.id);
 
-    expect(read(repo, 'checkout.ts')).toBe('a\nb\nc\n');
+    expect(read(repo, 'checkout.ts')).toBe('a\nB\nc\n'); // turn 1 stays
     expect(read(repo, 'pay.ts')).toBe('one\ntwo\n');
     expect(existsSync(join(repo, 'new.txt'))).toBe(false);
     expect(existsSync(join(repo, 'src', 'deep.ts'))).toBe(false);
     expect(existsSync(join(repo, 'keep.log'))).toBe(true); // ignored files are never touched
-    // Both turns are reverted; the refs stay (the diff can still be read).
-    const after = rows(t);
-    expect(after.map((c) => [c.turn, c.revertedAt])).toEqual([
-      [1, t.clock.now()],
+    // Exactly the tree before turn 2, and the index is as it was (the staged file reads staged-but-deleted).
+    expect(await treeOf(repo, (await t.app.checkpoints.capture(repo)) ?? '')).toEqual(
+      await treeOf(repo, two.baseRef),
+    );
+    expect(await sh(['ls-files', '--stage'], repo)).toBe(indexBefore);
+    // Only turn 2 is reverted; the refs stay (the diff can still be read).
+    expect(rows(t).map((c) => [c.turn, c.revertedAt])).toEqual([
+      [1, null],
       [2, t.clock.now()],
     ]);
     expect((await refs(repo)).length).toBe(4);
-    expect(t.app.repos.transcripts.last(claude).at(-1)?.body).toBe('Workspace restored to before turn 1.');
+    expect(t.app.repos.transcripts.last(claude).at(-1)?.body).toBe(
+      fill(copy.checkpoints.revertDone, { n: 2 }),
+    );
     // The hunks were re-scanned against the restored tree and the rows re-published.
     expect(t.win.events('hunks.changed').length).toBeGreaterThanOrEqual(1);
     t.app.publisher.flush();
@@ -278,7 +294,105 @@ describe('CheckpointService', () => {
         .flatMap((b) => b.deltas)
         .some((d) => d.op === 'checkpoints.replace'),
     ).toBe(true);
-    expect(two.revertedAt).toBeNull();
+    expect(one.revertedAt).toBeNull();
+  });
+
+  it("reverting an earlier turn takes back only that turn: a later turn and the person's own edits stay", async () => {
+    const t = makeTestApp();
+    const repo = await realWorktree(t);
+    writeFileSync(join(repo, 'checkout.ts'), 'a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n');
+    const one = await turn(t, 'm1', () => {
+      writeFileSync(join(repo, 'checkout.ts'), 'A\nb\nc\nd\ne\nf\ng\nh\ni\nj\n'); // top of the file
+      writeFileSync(join(repo, 'made.ts'), 'made by turn 1\n');
+      rmSync(join(repo, 'pay.ts'));
+    });
+    await turn(t, 'm2', () => {
+      writeFileSync(join(repo, 'checkout.ts'), 'A\nb\nc\nd\ne\nf\ng\nh\ni\nJ\n'); // bottom of the file
+      writeFileSync(join(repo, 'later.ts'), 'made by turn 2\n');
+    });
+    // The person's own edits since: an unrelated file, and a new one.
+    writeFileSync(join(repo, '.gitignore'), '*.log\n*.tmp\n');
+    writeFileSync(join(repo, 'mine.md'), 'notes\n');
+
+    await t.app.checkpoints.revert(one.id);
+
+    expect(read(repo, 'checkout.ts')).toBe('a\nb\nc\nd\ne\nf\ng\nh\ni\nJ\n'); // turn 1 out, turn 2 in
+    expect(existsSync(join(repo, 'made.ts'))).toBe(false); // created by the turn: deleted
+    expect(read(repo, 'pay.ts')).toBe('one\ntwo\n'); // deleted by the turn: back
+    expect(read(repo, 'later.ts')).toBe('made by turn 2\n');
+    expect(read(repo, '.gitignore')).toBe('*.log\n*.tmp\n');
+    expect(read(repo, 'mine.md')).toBe('notes\n');
+    expect(rows(t).map((c) => [c.turn, c.revertedAt])).toEqual([
+      [1, t.clock.now()],
+      [2, null],
+    ]);
+    // The agent is told, ahead of its next message (an idle session is not woken up).
+    expect(t.app.repos.transcripts.last(claude).at(-1)?.body).toBe(
+      fill(copy.checkpoints.revertDone, { n: 1 }),
+    );
+  });
+
+  it('a later edit to the same lines makes undo refuse with the files named, and the worktree stays byte-identical', async () => {
+    const t = makeTestApp();
+    const repo = await realWorktree(t);
+    const bin = Buffer.from([0, 1, 2, 3, 255, 254, 0, 10, 13]);
+    const one = await turn(t, 'm1', () => {
+      writeFileSync(join(repo, 'checkout.ts'), 'a\nB\nc\n');
+      writeFileSync(join(repo, 'pay.ts'), 'one\nTWO\n');
+      writeFileSync(join(repo, '[logo].bin'), bin);
+    });
+    // Later: turn 2 rewrites the line turn 1 changed; the person edits the binary turn 1 created.
+    await turn(t, 'm2', () => writeFileSync(join(repo, 'checkout.ts'), 'a\nBee\nc\n'));
+    writeFileSync(join(repo, '[logo].bin'), Buffer.concat([bin, Buffer.from([7])]));
+    const snapshot = (): Record<string, string> =>
+      Object.fromEntries(
+        ['checkout.ts', 'pay.ts', '[logo].bin', '.gitignore'].map((f) => [
+          f,
+          readFileSync(join(repo, f)).toString('base64'),
+        ]),
+      );
+    const before = snapshot();
+    const indexBefore = await sh(['ls-files', '--stage'], repo);
+
+    const err = await t.app.checkpoints.revert(one.id).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toMatchObject({
+      code: 'invalid-transition',
+      detail: { reason: 'conflict', files: ['[logo].bin', 'checkout.ts'] },
+    });
+    expect((err as Error).message).toBe(
+      fill(copy.checkpoints.revertConflict, { n: 1, files: '[logo].bin, checkout.ts' }),
+    );
+    expect(snapshot()).toEqual(before);
+    expect(await sh(['ls-files', '--stage'], repo)).toBe(indexBefore);
+    expect(await sh(['status', '--porcelain'], repo)).toBe(' M checkout.ts\n M pay.ts\n?? [logo].bin');
+    expect(rows(t).map((c) => c.revertedAt)).toEqual([null, null]);
+  });
+
+  it('binary files: a turn that adds, changes and deletes binaries is undone exactly, beside a later turn', async () => {
+    const t = makeTestApp();
+    const repo = await realWorktree(t);
+    const v1 = Buffer.from([0, 159, 146, 150, 0, 255]);
+    const v2 = Buffer.from([0, 159, 146, 151, 0, 255, 1]);
+    writeFileSync(join(repo, 'old.bin'), v1);
+    writeFileSync(join(repo, 'gone.bin'), v1);
+    await sh(['add', '.'], repo);
+    await sh(['commit', '-q', '-m', 'bins'], repo);
+    const one = await turn(t, 'm1', () => {
+      writeFileSync(join(repo, 'old.bin'), v2);
+      rmSync(join(repo, 'gone.bin'));
+      writeFileSync(join(repo, 'new.bin'), v2);
+    });
+    await turn(t, 'm2', () => writeFileSync(join(repo, 'pay.ts'), 'one\ntwo\nthree\n'));
+
+    await t.app.checkpoints.revert(one.id);
+
+    expect(readFileSync(join(repo, 'old.bin')).equals(v1)).toBe(true);
+    expect(readFileSync(join(repo, 'gone.bin')).equals(v1)).toBe(true);
+    expect(existsSync(join(repo, 'new.bin'))).toBe(false);
+    expect(read(repo, 'pay.ts')).toBe('one\ntwo\nthree\n');
   });
 
   it('revert keeps a pre-existing ignored file the turn un-ignored, never captures secret files, and refuses a second revert', async () => {

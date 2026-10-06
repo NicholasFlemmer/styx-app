@@ -42,20 +42,19 @@ At the bottom is the decision:
 
 ## Undo a turn
 
-**Undo this turn** asks first: "Put the files back as they were before this turn?" **Undo it** goes ahead; **Keep it** cancels.
+**Undo this turn** asks first: "Take back the changes this turn made? Later turns and your own edits stay." **Undo it** goes ahead; **Keep it** cancels.
 
 What it does:
 
-- **It restores the task's files to how they were before that turn.** Files the turn changed or deleted are written back; files it created are deleted. Files your `.gitignore` excludes are left alone.
-- **It takes everything after that point with it.** Undoing an earlier turn also undoes every later turn, and any edits you made in the worktree since. Those turns are marked undone.
+- **It takes back that turn's changes, and only those.** Lines the turn changed go back to how they were; files it created are deleted; files it deleted come back. Binary files work the same way. Files your `.gitignore` excludes are left alone.
+- **Later turns and your own edits stay.** Undoing an earlier turn keeps everything that happened after it, including changes you made yourself. Only that turn is marked undone. For the most recent turn, with nothing after it, the files end up exactly as they were before it.
+- **It refuses rather than guess.** If a later turn or one of your edits changed the same lines, the turn can't be taken out on its own. Styx changes nothing and says which files are in the way ("Could not undo turn 2 on its own: later changes touched the same lines in checkout.ts…"). Ask the agent to undo that change instead, or revert the hunk yourself (below).
 - **It doesn't touch git history.** It makes no commit and removes none. If the agent committed during the turn, the commit stays, and the undo shows up as uncommitted changes on top of it.
 - **It waits for the agent.** You can't undo while a turn is running or waiting on you ("Wait for the agent to finish before undoing").
+- **The agent is told.** A line in the chat ("Turn 2 was undone: the changes it made were taken back. Later changes stay.") is also passed to the agent ahead of your next message, so it doesn't build on work that's gone.
 
-The agent isn't told that you undid a turn. If it matters for what comes next, say so in your next message.
-
-<Callout type="warn" title="Undo rewinds the whole worktree">
-  Undo puts the whole worktree back to a moment in time. To drop one change and keep the rest, revert the hunk
-  instead.
+<Callout type="note" title="Undo takes out one turn">
+  Undo removes one turn's changes and leaves the rest. To drop just one part of a turn, revert the hunk instead.
 </Callout>
 
 ## Revert a single hunk

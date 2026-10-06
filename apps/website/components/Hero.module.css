@@ -31,6 +31,11 @@
   line-height: 1.5;
   max-width: 30em;
 }
+.oss {
+  margin-top: var(--sp-4);
+  font-size: var(--fs-15);
+  color: var(--mu);
+}
 .ctas {
   margin-top: var(--sp-8);
   display: flex;

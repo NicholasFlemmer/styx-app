@@ -107,6 +107,11 @@ export const projectFileV1Schema = z
       })
       .passthrough()
       .optional(),
+    /**
+     * What proves the work is good (`pnpm typecheck && pnpm test`): Land and a finished merge run it in the lane
+     * first. Learned by the agent at the first landing (issue #2) and editable in Settings; it describes the project.
+     */
+    checks: z.object({ command: z.string().optional() }).passthrough().optional(),
     env: z
       .object({
         files: z.array(z.string()).optional(),
@@ -193,6 +198,7 @@ const KEY_ORDER = [
   'shell',
   'lineEndings',
   'dev',
+  'checks',
   'env',
 ];
 const TARGET_KEY_ORDER = ['name', 'provider', 'env', 'authMethod', 'config', 'policy'];
@@ -244,6 +250,9 @@ export const projectSettingsFromFile = (file: ProjectFileV1): Partial<ProjectSet
   // A device name and a bundle id / package are plain identifiers; anything else stays out of the settings.
   if (file.dev?.device !== undefined && DEVICE_NAME.test(file.dev.device)) out.devDevice = file.dev.device;
   if (file.dev?.appId !== undefined && APP_ID.test(file.dev.appId)) out.devAppId = file.dev.appId;
+  // An empty command is "not known" (the agent is asked at the first landing), never a command that always passes.
+  const checks = file.checks?.command?.trim();
+  if (checks !== undefined && checks !== '') out.checksCommand = checks;
   if (file.env?.files !== undefined) out.envFiles = file.env.files;
   if (file.env?.shareWithAgents !== undefined) out.envShareWithAgents = file.env.shareWithAgents;
   return out;

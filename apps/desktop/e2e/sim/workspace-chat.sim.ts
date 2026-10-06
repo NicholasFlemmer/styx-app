@@ -703,7 +703,7 @@ test('sim: workspace-chat', async () => {
         const row = chat().locator('[data-kind="checkpoint"][data-turn="1"]');
         await row.getByRole('button', { name: 'Revert this turn · Turn 1', exact: true }).click();
         const ask = row.locator('[data-checkpoint-confirm]');
-        await expect(ask).toContainText('Restore the workspace to before turn 1?');
+        await expect(ask).toContainText('Take back the changes turn 1 made?');
         // Escape puts the actions back; ask again and confirm.
         await page().keyboard.press('Escape');
         await expect(ask).toHaveCount(0);
@@ -715,7 +715,7 @@ test('sim: workspace-chat', async () => {
         await expect(row).toHaveAttribute('data-reverted', 'true', { timeout: 20_000 });
         await expect(row).toContainText('Reverted');
         await expect(
-          chat().locator('[data-kind="system"]').filter({ hasText: 'Workspace restored to before turn 1.' }),
+          chat().locator('[data-kind="system"]').filter({ hasText: 'Turn 1 was undone:' }),
         ).toBeVisible({ timeout: 10_000 });
         await expect
           .poll(() => existsSync(join(codexLane.path, 'sim-a.txt')), { timeout: 10_000 })

@@ -10,6 +10,7 @@ import {
 } from '@styx/core';
 import {
   Button,
+  Input,
   Label,
   LabelValueRow,
   NavItem,
@@ -328,10 +329,15 @@ function Rows({
       case 'tour':
         if (value === TOUR_SHOW) openTour();
         return;
+      case 'project-text':
+        if (projectId !== null && value.trim() !== row.value) {
+          void command('project.settings.set', { projectId, patch: change.patch(value) });
+        }
+        return;
     }
   };
   const onReset = (row: SettingsRow) => {
-    if (row.change.kind === 'project' && projectId !== null) {
+    if ((row.change.kind === 'project' || row.change.kind === 'project-text') && projectId !== null) {
       void command('project.settings.reset', { projectId, key: row.change.key });
     }
   };
@@ -346,16 +352,64 @@ function Rows({
           data-settings-row={row.id}
           {...(row.overridden ? { onReset: () => onReset(row) } : {})}
           control={
-            <Select
-              aria-label={row.label}
-              options={[...row.options]}
-              value={row.value}
-              disabled={row.change.kind === 'project' && projectId === null}
-              onChange={(e) => onChange(row, e.currentTarget.value)}
-            />
+            row.change.kind === 'project-text' ? (
+              <TextControl row={row} disabled={projectId === null} onCommit={(v) => onChange(row, v)} />
+            ) : (
+              <Select
+                aria-label={row.label}
+                options={[...row.options]}
+                value={row.value}
+                disabled={row.change.kind === 'project' && projectId === null}
+                onChange={(e) => onChange(row, e.currentTarget.value)}
+              />
+            )
           }
         />
       ))}
     </div>
+  );
+}
+
+/**
+ * A typed setting (issue #2: the checks command): edited in place, saved on Enter or when focus leaves, Escape puts
+ * the saved value back. Blank clears it; main has the last word (it trims, and refuses a secret).
+ */
+function TextControl({
+  row,
+  disabled,
+  onCommit,
+}: {
+  row: SettingsRow;
+  disabled: boolean;
+  onCommit: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(row.value);
+  const [saved, setSaved] = useState(row.value);
+  // The saved value moved (the agent learned it, Reset, another window): show it.
+  if (saved !== row.value) {
+    setSaved(row.value);
+    setDraft(row.value);
+  }
+  return (
+    <Input
+      mono
+      aria-label={row.label}
+      value={draft}
+      placeholder={row.placeholder}
+      disabled={disabled}
+      spellCheck={false}
+      autoComplete="off"
+      className={s['textControl'] ?? ''}
+      onChange={(e) => setDraft(e.currentTarget.value)}
+      onBlur={() => onCommit(draft)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onCommit(draft);
+        else if (e.key === 'Escape' && draft !== row.value) {
+          // Only a changed field swallows Escape; an unchanged one lets it close whatever it sits in.
+          e.stopPropagation();
+          setDraft(row.value);
+        }
+      }}
+    />
   );
 }

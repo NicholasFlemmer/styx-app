@@ -751,6 +751,7 @@ export function buildContainer(opts: ContainerOptions): Container {
           return refuse(reason);
         }
       },
+      askedForChecks: (sessionId) => land.askedForChecks(sessionId),
     },
     abilities: {
       // The agent worked out how to run the project: keep the command (and URL), say so in its chat and on Home,
@@ -825,6 +826,17 @@ export function buildContainer(opts: ContainerOptions): Container {
         }
         await projects.setSettings(session.projectId, { checksCommand: cmd });
         transcript.system(session.id, fill(copy.abilities.learnedChecks, { command: cmd }));
+        const project = repos.projects.get(session.projectId);
+        activity.append({
+          who: copy.agentProducts[session.agent],
+          what: fill(copy.abilities.activityChecks, {
+            agent: copy.agentProducts[session.agent],
+            project: project?.name ?? '',
+          }),
+          projectId: session.projectId,
+          sessionId: session.id,
+        });
+        land.checksLearned(session.projectId);
         return null;
       },
       rememberDeploy: async (sessionId, targetId, command) => {
@@ -862,6 +874,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     clock,
     git: gitRunner,
     transcript,
+    tell: (id, text) => sessions.tell(id, text),
     rescanHunks: (id) => hunks.rescan(id),
     screens,
     // The running app's picture for a turn: the mirrored device when one is up, else the design window's page —
@@ -957,6 +970,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     resolver,
     publish,
     archive: (worktreeId) => worktrees.archive(worktreeId),
+    // Issue #2: the lane's agent works out the checks at the first landing — a Styx-authored turn, sent now.
+    askAgent: (sessionId, text) => sessions.sendMessage(sessionId, text, [], { now: true, from: 'styx' }),
     runChecks:
       opts.runChecks ??
       checksInLoginShell(

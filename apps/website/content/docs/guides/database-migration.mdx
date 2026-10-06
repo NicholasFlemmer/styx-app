@@ -68,11 +68,11 @@ The agent runs the Supabase CLI as it normally would. Styx sits in front of that
 read, write, delete or deploy, and checked against your grants before it runs. `supabase db push` counts as a write;
 `supabase db reset` counts as a delete, which is asked for separately.
 
-<Callout type="warn" title="Ask for the prod target by name">
-  When a Supabase command doesn't say which target it means, Styx applies it to the staging target unless a
-  prod grant is already open. Which database the command actually changes is decided by the Supabase CLI
-  itself (the project the repo is linked to). So have the agent request the prod target by name, as in the
-  message above, and read the command in the request before you approve it.
+<Callout type="warn" title="Read the command before you approve">
+  A Supabase command doesn't say which target it means, so Styx treats it as production whenever the project
+  has a production target, even if a staging grant is open. Which database the command actually changes is
+  decided by the Supabase CLI itself (the project the repo is linked to), so read the command in the request
+  before you approve it.
 </Callout>
 
 ## Review the migration before you approve

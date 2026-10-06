@@ -9,7 +9,7 @@ import {
   type SessionId,
 } from '@styx/core';
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { copyFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import type { Clock } from '../clock';
@@ -55,6 +55,9 @@ export interface CheckpointFile {
   removed: number;
 }
 
+/** One turn taken out of the live worktree: the tree to restore, or the files that stop it. */
+type UndoTree = { ok: true; tree: string } | { ok: false; files: string[] };
+
 export interface CheckpointDiff {
   patch: string;
   files: CheckpointFile[];
@@ -66,6 +69,11 @@ export interface CheckpointServiceDeps {
   clock: Clock;
   git: GitRunner;
   transcript: TranscriptService;
+  /**
+   * A Styx line for the session's agent (SessionService.tell): shown in the chat now and sent ahead of the agent's
+   * next turn, so it knows a turn of its was undone.
+   */
+  tell: (sessionId: SessionId, text: string) => void;
   /** Re-diffs the session's worktree once a revert has rewritten it (HunkService). */
   rescanHunks: (sessionId: SessionId) => Promise<unknown>;
   /** Where the before / after pictures live (served as `styx-device://checkpoint/<id>/<side>`). */
@@ -439,18 +447,22 @@ export class CheckpointService {
   }
 
   /**
-   * Restores the worktree to the state before the turn: files the turn (or anything since) added are deleted,
-   * every other path that differs is written back from `base`. The index and HEAD stay as they are. This turn
-   * and every later one are marked reverted, the chat gets a system line, and the hunks are re-scanned.
+   * Undoes this turn's own changes and nothing else (issue #1): the turn's reverse diff (`after` → `base`) is
+   * applied to the worktree as it is now, so later turns and the person's own edits stay. The reverse patch is
+   * applied with a 3-way fallback to a temporary index holding the live worktree; only when every file applies
+   * cleanly is the result written back (`restore`), so a conflict changes nothing and is refused with the files
+   * named. For the latest turn with nothing after it the result is the old "restore to before the turn". The
+   * index and HEAD stay as they are. Only this turn is marked reverted; the agent is told (`tell`), and the hunks
+   * are re-scanned.
    */
   async revert(checkpointId: string): Promise<void> {
-    const { repos, clock, transcript } = this.deps;
+    const { repos, clock } = this.deps;
     const cp =
       repos.checkpoints.get(checkpointId) ?? fail('not-found', `checkpoint ${checkpointId} not found`);
     const session = repos.sessions.get(cp.sessionId) ?? fail('not-found', 'session missing');
     if (session.state === 'working' || session.state === 'needs-you')
       fail('invalid-transition', 'The agent is still working. Wait for the turn to finish before reverting.');
-    // Reverting twice is a no-op in git terms but a lie in the UI: say so instead of restoring again.
+    // Reverting twice would apply the reverse patch again (or fail): say so instead.
     if (cp.revertedAt !== null) fail('invalid-transition', 'This turn was already reverted.');
     const worktree = repos.worktrees.get(cp.worktreeId) ?? fail('not-found', 'worktree missing');
     await this.enqueue(cp.sessionId, async () => {
@@ -469,18 +481,31 @@ export class CheckpointService {
       const path = worktree.path;
       const base = await this.resolve(path, cp.baseRef);
       if (base === null) fail('git-error', `checkpoint ${cp.baseRef} is gone`);
+      // A turn that never settled (no settle signal) ends now: everything since its base is its change.
+      const after = cp.ref === null ? await this.tryCapture(path) : await this.resolve(path, cp.ref);
+      if (after === null) fail('git-error', `checkpoint ${cp.ref ?? cp.baseRef} is gone`);
+      let undone: UndoTree;
       try {
-        await this.restore(path, base);
+        undone = await this.undoTree(path, after, base);
       } catch (e) {
         fail('git-error', (e as Error).message);
       }
-      const now = clock.now();
-      for (const row of repos.checkpoints.bySession(cp.sessionId)) {
-        if (row.turn < cp.turn || row.revertedAt !== null) continue;
-        repos.checkpoints.upsert({ ...row, revertedAt: now });
+      if (!undone.ok)
+        fail(
+          'invalid-transition',
+          fill(copy.checkpoints.revertConflict, { n: cp.turn, files: undone.files.join(', ') }),
+          { reason: 'conflict', files: undone.files },
+        );
+      try {
+        await this.restore(path, undone.tree);
+      } catch (e) {
+        fail('git-error', (e as Error).message);
       }
+      const fresh = repos.checkpoints.get(cp.id);
+      if (fresh !== null) repos.checkpoints.upsert({ ...fresh, revertedAt: clock.now() });
       this.publish(cp.sessionId);
-      transcript.system(cp.sessionId, fill(copy.checkpoints.revertDone, { n: cp.turn }));
+      // In the chat, and owed to the agent ahead of its next turn: its own turn is no longer in the files.
+      this.deps.tell(cp.sessionId, fill(copy.checkpoints.revertDone, { n: cp.turn }));
     });
     await this.deps.rescanHunks(cp.sessionId).catch(() => undefined);
   }
@@ -561,6 +586,98 @@ export class CheckpointService {
       );
       return commit.stdout.trim();
     });
+  }
+
+  private async tryCapture(worktreePath: string): Promise<string | null> {
+    try {
+      return await this.capture(worktreePath);
+    } catch (e) {
+      logger.warn('checkpoint: capture failed', { error: (e as Error).message });
+      return null;
+    }
+  }
+
+  /**
+   * The worktree as it is now with one turn's change taken out: `diff after base` (written by git to a file, so no
+   * byte is re-encoded on the way) applied with `apply --cached --3way` to a temporary index holding the live
+   * worktree. git apply is all-or-nothing; a 3-way merge that leaves unmerged entries is a conflict too. Either
+   * way the files are named and nothing is written; when it applies, the resulting tree is returned for `restore`.
+   */
+  private async undoTree(worktreePath: string, after: string, base: string): Promise<UndoTree> {
+    const names = await this.git(['diff', '--name-only', '--no-renames', '-z', after, base], worktreePath);
+    const touched = names.stdout.split('\0').filter(Boolean);
+    return this.withTempIndex(worktreePath, async (env) => {
+      if (touched.length > 0) {
+        const dir = await mkdtemp(join(tmpdir(), 'styx-undo-'));
+        try {
+          const patch = join(dir, 'undo.patch');
+          // Explicit prefixes and no textconv / external diff: a user's diff config must not change the patch.
+          await this.git(
+            [
+              'diff',
+              '--binary',
+              '--full-index',
+              '--no-renames',
+              '--no-color',
+              '--no-ext-diff',
+              '--no-textconv',
+              '--no-relative',
+              '--src-prefix=a/',
+              '--dst-prefix=b/',
+              `--output=${patch}`,
+              after,
+              base,
+            ],
+            worktreePath,
+          );
+          const index = env['GIT_INDEX_FILE'] ?? '';
+          const clean = join(dir, 'clean-index');
+          await copyFile(index, clean);
+          const r = await this.apply(worktreePath, patch, index, null);
+          if (r !== 0)
+            return { ok: false, files: await this.conflictFiles(worktreePath, patch, clean, touched) };
+        } finally {
+          await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+        }
+      }
+      const tree = (await this.git(['write-tree'], worktreePath, { env })).stdout.trim();
+      return { ok: true, tree };
+    });
+  }
+
+  /** `git apply --cached --3way` of the patch (or one path of it) to the index file; exit 1 also means conflicts. */
+  private async apply(
+    worktreePath: string,
+    patch: string,
+    index: string,
+    only: string | null,
+  ): Promise<number> {
+    const include = only === null ? [] : [`--include=${only.replace(/[*?[\\]/g, (c) => `\\${c}`)}`];
+    const r = await this.git(
+      ['apply', '--cached', '--3way', '--whitespace=nowarn', ...include, patch],
+      worktreePath,
+      { env: { GIT_INDEX_FILE: index }, reject: false },
+    );
+    return r.exitCode;
+  }
+
+  /**
+   * Which files stop an undo: git apply stops at the first file it cannot apply, so each path of the patch is tried
+   * on its own against a fresh copy of the live index. Only reached when the whole patch failed.
+   */
+  private async conflictFiles(
+    worktreePath: string,
+    patch: string,
+    clean: string,
+    touched: readonly string[],
+  ): Promise<string[]> {
+    const probe = `${clean}.probe`;
+    const files: string[] = [];
+    for (const path of touched) {
+      await copyFile(clean, probe);
+      if ((await this.apply(worktreePath, patch, probe, path)) !== 0) files.push(path);
+    }
+    return files.length > 0 ? files.sort() : [...touched];
   }
 
   /**

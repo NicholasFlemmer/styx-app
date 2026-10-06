@@ -144,8 +144,9 @@ export const projectSettingsSchema = z.object({
   /** Auto mode only (ADR-0025 phase C): land a lane by itself when its session finishes and the checks pass. Off until trusted. */
   autoLand: z.boolean(),
   /**
-   * What proves a merge is good (`pnpm typecheck && pnpm test` …): run in the lane before a resolved merge is
-   * committed. Learned by the agent the first time (`remember_command` kind `checks`), editable in
+   * What proves the work is good (`pnpm typecheck && pnpm test` …): run in the lane before a landing merges and
+   * before a resolved merge is committed. Learned by the agent the first time (`remember_command` kind `checks`,
+   * asked at the first landing — issue #2), editable in Settings › Agent defaults and as `checks.command` in
    * `.styx/project.json`; null = not known yet.
    */
   checksCommand: z.string().nullable(),

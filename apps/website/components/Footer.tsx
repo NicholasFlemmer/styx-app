@@ -18,8 +18,8 @@ export const Footer = () => (
       <div className={styles.brand}>
         <span className={styles.wordmark}>STYX</span>
         <p>
-          Named after the river everything must cross. Every project, every agent, every key, one window. Mac
-          now, Windows in beta.
+          Named after the river everything must cross. Every project, every agent, every key, one window. Free
+          and open source (Apache-2.0). For Mac, with Windows and Linux in beta.
         </p>
       </div>
       <nav aria-label="Footer" className={styles.links}>
@@ -32,6 +32,8 @@ export const Footer = () => (
         <a href="/story">Story</a>
         <a href="/compare">Compare</a>
         <a href="/docs">Docs</a>
+        <a href={site.links.github}>GitHub</a>
+        <a href={site.links.discussions}>Discussions</a>
       </nav>
       <div className={styles.meta}>
         <ThemeToggle />

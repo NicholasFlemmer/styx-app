@@ -1335,6 +1335,14 @@ export const applySettingsToFile = (file: ProjectFileV1, s: Partial<ProjectSetti
     if (Object.keys(dev).length > 0) out.dev = dev as ProjectFileV1['dev'];
     else delete out.dev;
   }
+  // `checksCommand` is `checks.command` (issue #2), on the same rules as `dev`: null clears it, an empty block goes.
+  if (s.checksCommand !== undefined) {
+    const checks: Record<string, unknown> = { ...(file.checks ?? {}) };
+    if (s.checksCommand === null) delete checks['command'];
+    else checks['command'] = s.checksCommand;
+    if (Object.keys(checks).length > 0) out.checks = checks as ProjectFileV1['checks'];
+    else delete out.checks;
+  }
   const env: Record<string, unknown> = { ...(file.env ?? {}) };
   set(env, 'files', s.envFiles);
   set(env, 'shareWithAgents', s.envShareWithAgents);

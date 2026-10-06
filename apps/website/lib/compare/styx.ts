@@ -2,18 +2,21 @@ import type { RowKey, StyxPoint } from './types';
 
 /** Styx's column, the same on every comparison page. Keep it true to the shipped app. */
 export const STYX_CELLS: Record<RowKey, string> = {
-  runsOn: 'Mac (Apple silicon); Windows 10 and 11 (beta)',
+  runsOn: 'Mac (Apple silicon); Windows 10 and 11 and Linux (beta)',
   agents: 'Claude Code, Codex, Gemini CLI, Cursor',
-  price: 'Free',
+  price: 'Free and open source (Apache 2.0)',
   isolation: 'Own git worktree and branch',
   scope: 'Every project you work on',
-  review: 'Diff with per-hunk accept and reject; checks before landing',
+  review:
+    'Changes turn by turn; undo a turn, revert a hunk or ask for changes; runs your checks before landing once it has learned them',
   editor: 'Imports recents, keybindings and theme; opens files back in it',
-  secrets: 'In the macOS Keychain; agents get scoped, expiring access',
-  production: 'Agents ask; you approve for a set time; Touch ID for live systems',
+  secrets:
+    'In the OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service); agents get scoped, expiring access',
+  production:
+    'Agents ask; you approve for a set time; Touch ID, Windows Hello or your system password on Linux for live systems',
   audit: 'Every request, approval and use, append-only',
   deploy: 'Vercel, AWS, Google Cloud, Supabase, GitHub, SSH',
-  cloud: 'No: everything runs on your Mac',
+  cloud: 'No: everything runs on your computer',
   team: 'No',
   issues: 'No',
 };
@@ -26,14 +29,14 @@ export const STYX_POINTS: Record<StyxPoint, { title: string; text: string }> = {
   },
   keys: {
     title: 'Agents never hold your keys',
-    text: 'Useful agents need real things: a deploy, a database, a server. In Styx the credentials stay in your Mac’s Keychain. When an agent wants production, it stops and asks; you approve it for a set time, with Touch ID for anything live, and the access ends on its own. Every request, approval and use goes into a log nobody can edit.',
+    text: 'Useful agents need real things: a deploy, a database, a server. In Styx the credentials stay in your system’s keychain. When an agent wants production, it stops and asks; you approve it for a set time, with Touch ID, Windows Hello or your password for anything live, and the access ends on its own. Every request, approval and use goes into a log nobody can edit.',
   },
   editor: {
     title: 'On top of your editor',
     text: 'Styx brings in your editor’s recent projects, keybindings and theme, and opens any file back in it with one key. It is not trying to be the place you write code.',
   },
   local: {
-    title: 'Everything stays on your Mac',
+    title: 'Everything stays on your computer',
     text: 'Your code, prompts, agent conversations and credentials never reach a Styx server. Agents run on your machine, under your own agent subscriptions.',
   },
   agents: {
@@ -44,7 +47,7 @@ export const STYX_POINTS: Record<StyxPoint, { title: string; text: string }> = {
 
 /** Said on every page, because it is true of Styx whatever it is compared with. */
 export const STYX_LIMIT =
-  'One honest limit: this is a guardrail, not a sandbox. Agents run as you, on your Mac, and an agent that deliberately goes around Styx’s tools is not stopped by them.';
+  'One honest limit: this is a guardrail, not a sandbox. Agents run as you, on your computer, and an agent that deliberately goes around Styx’s tools is not stopped by them.';
 
 /** Questions every comparison can answer the same way. */
 export const SHARED_FAQ = [

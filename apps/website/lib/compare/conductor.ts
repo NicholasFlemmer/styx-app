@@ -35,7 +35,7 @@ export const conductor: Competitor = {
   ahead: [
     {
       title: 'Cloud workspaces',
-      text: 'Agents can run on Conductor’s machines, so work carries on with your laptop closed. Styx runs everything on your Mac.',
+      text: 'Agents can run on Conductor’s machines, so work carries on with your laptop closed. Styx runs everything on your computer.',
     },
     {
       title: 'Teams',

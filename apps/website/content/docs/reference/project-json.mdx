@@ -46,7 +46,8 @@ Styx writes the file whenever you change one of these settings in the app, and r
     ]
   },
   "worktrees": { "baseBranch": "main", "branchPrefix": "agent/", "location": "sibling" },
-  "dev": { "command": "pnpm dev", "url": "http://localhost:3000" }
+  "dev": { "command": "pnpm dev", "url": "http://localhost:3000" },
+  "checks": { "command": "pnpm typecheck && pnpm test" }
 }
 ```
 
@@ -160,6 +161,14 @@ How to run the app locally, for **Run locally** and **Preview**. Usually written
 | `appId`    | string                  | Up to 200 characters. The bundle id or package, such as `com.acme.shop`.                                          |
 
 A command that looks like it carries a secret (such as `API_KEY=… pnpm dev`) is run but never written to the file.
+
+### `checks`
+
+What proves the work is good. **Land** runs it in the lane before merging, and Styx runs it before it commits a merge it resolved. Usually written by Styx when the task's agent works it out at the project's first landing; editable in **Settings › Agent defaults › Checks before landing**.
+
+| Field     | Type   | Notes                                                                                                     |
+| --------- | ------ | --------------------------------------------------------------------------------------------------------- |
+| `command` | string | The command, run from the root of the lane, such as `pnpm typecheck && pnpm test`. Blank means not known. |
 
 ### `env`
 

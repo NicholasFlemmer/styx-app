@@ -1,8 +1,8 @@
 import { site } from '@/lib/site';
 
 /**
- * Schema.org JSON-LD for the home page: who makes Styx, the site, and the app itself as a free macOS developer
- * tool with its download. Only facts the page itself states: no ratings, reviews or claims it does not make.
+ * Schema.org JSON-LD for the home page: who makes Styx, the site, and the app itself as a free, open-source
+ * developer tool for macOS, Windows and Linux, with its download. Only facts the page itself states: no ratings, reviews or claims it does not make.
  * Social profiles go in `sameAs` once they exist.
  */
 const graph = () => {
@@ -37,12 +37,14 @@ const graph = () => {
         image: `${site.url}/opengraph-image`,
         applicationCategory: 'DeveloperApplication',
         applicationSubCategory: 'Agentic development environment (ADE)',
-        operatingSystem: 'macOS, Windows 10, Windows 11',
-        processorRequirements: 'Apple silicon (Mac), x64 (Windows)',
+        operatingSystem: 'macOS, Windows 10, Windows 11, Linux',
+        processorRequirements: 'Apple silicon (Mac), x64 (Windows and Linux)',
         softwareVersion: site.version,
         downloadUrl: `${site.url}/#download`,
         installUrl: `${site.url}/#download`,
         isAccessibleForFree: true,
+        license: 'https://www.apache.org/licenses/LICENSE-2.0',
+        sameAs: [site.links.github],
         offers: {
           '@type': 'Offer',
           price: '0',
@@ -54,8 +56,9 @@ const graph = () => {
           'Every project and agent in one window, with the ones that need you first',
           'Each agent in its own git worktree and branch',
           'Works on top of your existing editor, with your recents, keybindings and theme',
-          'Agents ask before touching production; you approve for a set time, with Touch ID for live systems',
+          'Agents ask before touching production; you approve for a set time, with Touch ID, Windows Hello or your system password for live systems',
           'An append-only log of every request, approval and use',
+          'Free and open source under the Apache License 2.0',
         ],
         publisher: { '@id': org },
       },

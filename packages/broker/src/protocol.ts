@@ -4,6 +4,11 @@ export const PROTOCOL_VERSION = 1 as const;
 
 export const Scope = z.enum(['read', 'write', 'deploy', 'delete']);
 export type Scope = z.infer<typeof Scope>;
+/**
+ * What `remember_command` teaches: `run` (start the project locally), `deploy` (to one target), `checks` (what
+ * proves the work is good — Land and a finished merge run it). One list, so the MCP tool and the broker agree.
+ */
+export const RememberKind = z.enum(['run', 'deploy', 'checks']);
 export const Duration = z.enum(['once', '1h', 'session', 'always']);
 export type Duration = z.infer<typeof Duration>;
 
@@ -190,11 +195,12 @@ export const methods = {
   /**
    * The agent teaches Styx an ability it worked out (owner principle: the Run locally / Deploy buttons do what asking
    * an agent does, then the result persists). `run` = the command that starts the project locally and the URL it
-   * serves; `deploy` = the command that deploys to one of the project's targets (`targetId` from list_targets).
+   * serves; `deploy` = the command that deploys to one of the project's targets (`targetId` from list_targets);
+   * `checks` = the command that proves the work is good (typecheck, tests), run before a landing or merge counts.
    */
   remember_command: {
     params: z.object({
-      kind: z.enum(['run', 'deploy', 'checks']),
+      kind: RememberKind,
       command: z.string().min(1).max(2000),
       targetId: z.string().optional(),
       url: z.string().max(500).optional(),

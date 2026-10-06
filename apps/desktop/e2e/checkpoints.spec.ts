@@ -93,15 +93,19 @@ test('a turn that writes a file becomes a checkpoint row; Review shows its patch
     await diff.getByRole('button', { name: 'Done' }).click();
     await expect(chat).toBeVisible();
 
-    // Undo asks first, then restores the worktree: the file is gone, the card reads Undone, HEAD is untouched.
+    // Undo asks first, then takes the turn's changes back (the only turn, so the worktree is as before it): the file is gone, the card reads Undone, HEAD is untouched.
     await row.getByRole('button', { name: 'Undo this turn' }).click();
     const ask = row.locator('[data-turn-confirm]');
-    await expect(ask).toContainText('Put the files back as they were before this turn?');
+    await expect(ask).toContainText(
+      'Take back the changes this turn made? Later turns and your own edits stay.',
+    );
     await ask.getByRole('button', { name: 'Undo it' }).click();
     await expect(row).toHaveAttribute('data-undone', 'true', { timeout: slow(20_000) });
     await expect(row).toContainText('Undone');
     await expect(
-      chat.locator('[data-kind="system"]').filter({ hasText: 'Workspace restored to before turn 1.' }),
+      chat
+        .locator('[data-kind="system"]')
+        .filter({ hasText: 'Turn 1 was undone: the changes it made were taken back. Later changes stay.' }),
     ).toBeVisible();
     expect(existsSync(join(worktree.path, 'notes.txt'))).toBe(false);
     expect(git(['rev-parse', 'HEAD'], worktree.path)).toBe(headBefore);

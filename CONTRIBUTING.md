@@ -3,6 +3,15 @@
 Thanks for helping. This page covers how to report a problem, how to get a change merged, and the few rules
 the codebase holds to.
 
+## Where to talk
+
+- **Questions, ideas and show-and-tell:** [GitHub Discussions](https://github.com/NicholasFlemmer/styx-app/discussions).
+- **Bugs:** an [issue](https://github.com/NicholasFlemmer/styx-app/issues/new/choose).
+- **Security problems:** privately, as [SECURITY.md](SECURITY.md) describes, never in public.
+
+New issues and pull requests get a first reply within **2 working days**. If one slips past that, a polite nudge on
+the thread is welcome.
+
 ## Reporting a bug or asking for something
 
 Open an issue with what you did, what you expected and what happened instead. Include your OS, the Styx
@@ -67,5 +76,5 @@ name: the Styx name and logo are not part of the licence.
 
 ## Code of conduct
 
-Be kind, assume good intent, and keep discussion about the work. Harassment or personal attacks get you
-removed from the project.
+Everyone taking part follows the [Contributor Covenant](CODE_OF_CONDUCT.md). Report a problem to
+hello@heystyx.com (subject "Code of conduct"); it's read by a person, privately.

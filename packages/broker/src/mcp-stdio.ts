@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { BrokerClient, BrokerClientError } from './client';
-import { Scope } from './protocol';
+import { RememberKind, Scope } from './protocol';
 
 const text = (value: unknown) => ({
   content: [
@@ -201,9 +201,9 @@ export function createStyxMcpServer(client: BrokerClient): McpServer {
     'remember_command',
     {
       description:
-        'Teach Styx an ability you have just worked out, so its buttons can do it directly from now on. kind "run": the exact command that starts this project locally from the project root, plus the local URL it serves (Styx will start it itself after you stop yours). For a mobile app, the command that builds and launches it on a simulator / emulator instead, with platform "ios" or "android", the device name and the app\'s bundle id / package (appId); Styx boots that device and mirrors it in its design window. kind "deploy": the exact command that deploys this project to one target (targetId from list_targets). Only call it once the command has actually worked.',
+        'Teach Styx an ability you have just worked out, so its buttons can do it directly from now on. kind "run": the exact command that starts this project locally from the project root, plus the local URL it serves (Styx will start it itself after you stop yours). For a mobile app, the command that builds and launches it on a simulator / emulator instead, with platform "ios" or "android", the device name and the app\'s bundle id / package (appId); Styx boots that device and mirrors it in its design window. kind "deploy": the exact command that deploys this project to one target (targetId from list_targets). kind "checks": the exact command, run from the project root, that proves the work is good (typecheck, tests, lint — usually from the package scripts); Styx runs it before it lands a lane or finishes a merge, and accepts it only when Styx asked you for it. Only call it once the command has actually worked.',
       inputSchema: {
-        kind: z.enum(['run', 'deploy']),
+        kind: RememberKind,
         command: z.string().min(1).max(2000),
         targetId: z.string().optional().describe('deploy only: the target id from list_targets'),
         url: z.string().max(500).optional().describe('run only: the local URL the server answers on'),

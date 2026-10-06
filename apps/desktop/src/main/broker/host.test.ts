@@ -412,7 +412,7 @@ describe('BrokerHost agent-to-agent messaging', () => {
     await expect(
       client.call('remember_command', { kind: 'checks', command: 'pnpm check' }),
     ).rejects.toMatchObject({
-      message: 'A checks command is accepted only from the agent finishing a merge.',
+      message: copy.abilities.checksNotResolving,
     });
     const lane = app.app.repos.worktrees.get(ids.worktree.fixCheckout);
     if (!lane) throw new Error('lane');
@@ -438,7 +438,11 @@ describe('BrokerHost agent-to-agent messaging', () => {
       'pnpm typecheck && pnpm test',
     );
     expect(app.app.repos.transcripts.last(ids.session.claude).at(-1)?.body).toBe(
-      'Styx will check merges with `pnpm typecheck && pnpm test` from now on.',
+      fill(copy.abilities.learnedChecks, { command: 'pnpm typecheck && pnpm test' }),
+    );
+    // Like run and deploy, a learned checks command is a line on Home (issue #2).
+    expect(app.app.repos.activity.recent(1)[0]?.what).toBe(
+      fill(copy.abilities.activityChecks, { agent: copy.agentProducts.claude, project: 'acme-shop' }),
     );
     // A command carrying a secret is refused on every path — as an error the agent sees, not a silent ok.
     await expect(
@@ -826,5 +830,71 @@ describe('BrokerHost learned abilities (remember_command)', () => {
       client.call('remember_command', { kind: 'deploy', command: 'gcloud run deploy' }),
     ).rejects.toMatchObject({ code: ErrorCode.targetNotFound });
     expect(app.repos.targets.get(ids.target.infraGcp)?.config['deployCommand']).toBeUndefined();
+  });
+});
+
+/**
+ * Which target a shim command is judged against (security regression): a CLI that names no environment (supabase,
+ * aws, gcloud …) is production whenever the project has a production target, and a staging grant never carries it.
+ * Vercel says what it means: a deploy without `--prod` is a preview.
+ */
+describe('BrokerHost exec_authorize picks the target fail-closed', () => {
+  /** acme-shop with a second, looser Supabase target: staging, auto-approved. */
+  const withSupabaseStaging = (app: TestApp['app']) => {
+    const prod = app.repos.targets.get(ids.target.supabaseProd);
+    const side = app.repos.targets.get(ids.target.sideSupabase);
+    if (!prod || !side) throw new Error('fixture');
+    app.repos.targets.upsert({ ...side, projectId: ids.project.acmeShop, env: 'staging', policy: 'always' });
+    return { prod, staging: { ...side, projectId: ids.project.acmeShop } };
+  };
+  const requestedFor = (app: TestApp['app']) =>
+    app.repos.grants
+      .bySession(ids.session.gemini)
+      .filter((g) => g.state === 'requested')
+      .map((g) => g.targetId);
+
+  it('an ambiguous supabase command is judged against production, never the looser staging target', async () => {
+    const { t: test, client } = await connectedClient(ids.session.gemini);
+    const { staging } = withSupabaseStaging(test.app);
+    void client
+      .call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' })
+      .catch(() => undefined);
+    await vi.waitFor(() => expect(requestedFor(test.app)).toEqual([ids.target.supabaseProd]));
+    expect(test.app.repos.grants.all().some((g) => g.targetId === staging.id)).toBe(false);
+  });
+
+  it('a live staging grant does not carry an ambiguous command to production', async () => {
+    const { t: test, client } = await connectedClient(ids.session.gemini);
+    const { staging } = withSupabaseStaging(test.app);
+    if (staging.credentialRef)
+      await test.vault.set(staging.credentialRef, JSON.stringify({ token: 'FIXTURE_sbp' }));
+    const outcome = await test.app.grants.request({
+      sessionId: ids.session.gemini,
+      targetId: staging.id,
+      scope: ['write'],
+      reason: '$ supabase db push',
+      triggeredBy: '$ supabase db push',
+    });
+    expect(outcome.kind).toBe('active');
+    void client
+      .call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' })
+      .catch(() => undefined);
+    await vi.waitFor(() => expect(requestedFor(test.app)).toEqual([ids.target.supabaseProd]));
+  });
+
+  it('Vercel: a deploy without --prod is a preview; --prod, --target production and promote are production', async () => {
+    const { t: test, client } = await connectedClient(ids.session.gemini);
+    const preview = test.app.repos.targets.get(ids.target.vercelPreview);
+    if (!preview?.credentialRef) throw new Error('fixture');
+    await test.vault.set(preview.credentialRef, JSON.stringify({ token: 'vt-preview' }));
+    const r = await client.call('exec_authorize', { tool: 'vercel', argv: ['deploy'], cwd: '/tmp' });
+    expect(r.env).toEqual({ VERCEL_TOKEN: 'vt-preview' });
+    for (const argv of [
+      ['deploy', '--prod'],
+      ['deploy', '--target', 'production'],
+      ['promote', 'https://x.vercel.app'],
+    ])
+      void client.call('exec_authorize', { tool: 'vercel', argv, cwd: '/tmp' }).catch(() => undefined);
+    await vi.waitFor(() => expect(new Set(requestedFor(test.app))).toEqual(new Set([ids.target.vercelProd])));
   });
 });

@@ -132,20 +132,20 @@ Returns `{ "delivered": true }`. Fails if `to` is the caller itself, doesn't exi
 
 ### remember_command
 
-Teaches Styx a command the agent has just got working, so the **Run locally** and **Deploy** buttons can run it directly from then on. Styx only accepts it from a task it started for that purpose (the one those buttons start); from any other task it is refused and the agent is told to give you the command instead.
+Teaches Styx a command the agent has just got working, so the **Run locally** and **Deploy** buttons can run it directly from then on, and Land and merges run the project's checks first. Styx only accepts it from a task it asked: `run` and `deploy` from the task those buttons start, `checks` from the agent finishing a merge for Styx or the task's agent Land asked at the project's first landing. From any other task it is refused and the agent is told to give you the command instead.
 
-| Parameter  | Type                      | Required     | Notes                                                                                                   |
-| ---------- | ------------------------- | ------------ | ------------------------------------------------------------------------------------------------------- |
-| `kind`     | `run` or `deploy`         | yes          |                                                                                                         |
-| `command`  | string                    | yes          | 1–2000 characters. The exact command, run from the project root.                                        |
-| `targetId` | string                    | for `deploy` | A target `id` from `list_targets`, in this project.                                                     |
-| `url`      | string                    | no           | `run` only. The local URL the server answers on. Up to 500 characters.                                  |
-| `platform` | `web`, `ios` or `android` | no           | `run` only. Leave it out for a web server.                                                              |
-| `device`   | string                    | no           | `run` on `ios` or `android`: simulator or emulator name, such as `iPhone 17 Pro`. Up to 120 characters. |
-| `appId`    | string                    | no           | `run` on `ios` or `android`: bundle id or package, such as `com.acme.shop`. Up to 200 characters.       |
-| `note`     | string                    | no           | Up to 200 characters.                                                                                   |
+| Parameter  | Type                        | Required     | Notes                                                                                                   |
+| ---------- | --------------------------- | ------------ | ------------------------------------------------------------------------------------------------------- |
+| `kind`     | `run`, `deploy` or `checks` | yes          | `checks`: the command that proves the work is good (typecheck, tests, lint).                            |
+| `command`  | string                      | yes          | 1–2000 characters. The exact command, run from the project root.                                        |
+| `targetId` | string                      | for `deploy` | A target `id` from `list_targets`, in this project.                                                     |
+| `url`      | string                      | no           | `run` only. The local URL the server answers on. Up to 500 characters.                                  |
+| `platform` | `web`, `ios` or `android`   | no           | `run` only. Leave it out for a web server.                                                              |
+| `device`   | string                      | no           | `run` on `ios` or `android`: simulator or emulator name, such as `iPhone 17 Pro`. Up to 120 characters. |
+| `appId`    | string                      | no           | `run` on `ios` or `android`: bundle id or package, such as `com.acme.shop`. Up to 200 characters.       |
+| `note`     | string                      | no           | Up to 200 characters.                                                                                   |
 
-Returns `{ "ok": true }`. A `deploy` command is only accepted after this task has run a granted command on that target that exited with 0. A run command is saved to `.styx/project.json` as `dev.command`, with `dev.url` when the URL is on `localhost`, `127.0.0.1` or `[::1]` (see [project.json](/docs/reference/project-json)); a deploy command is kept with the target on this machine. A command that looks like it contains a secret is refused.
+Returns `{ "ok": true }`. A `deploy` command is only accepted after this task has run a granted command on that target that exited with 0. A run command is saved to `.styx/project.json` as `dev.command`, with `dev.url` when the URL is on `localhost`, `127.0.0.1` or `[::1]` (see [project.json](/docs/reference/project-json)); a deploy command is kept with the target on this machine; a checks command is saved as `checks.command`. A command that looks like it contains a secret is refused.
 
 ### land
 
@@ -155,6 +155,6 @@ Lands the task's work in the project's base branch and pushes it: Styx commits a
 | --------- | ------ | -------- | --------------------------------------------------------------------------------------------------------------------- |
 | `summary` | string | yes      | 1–2000 characters. The first line (cut at 120 characters) is the record's subject; any further lines become its body. |
 
-Returns `{ "landed", "commit", "pushed", "steps", "reason" }`. When Styx refuses (the task works in the project folder rather than its own lane, the project is set to **I review and merge myself**, a conflict is being resolved, the checks fail, or there is nothing to land), `landed` is `false` and `reason` says why.
+Returns `{ "landed", "commit", "pushed", "steps", "reason" }`. When Styx refuses (the task works in the project folder rather than its own lane, the project is set to **I review and merge myself**, a conflict is being resolved, the checks fail, or there is nothing to land), `landed` is `false` and `reason` says why. The first time in a project with no checks known, `reason` asks the agent to work them out, call `remember_command` with kind `checks`, and call `land` again.
 
 Next: [CLI](/docs/reference/cli) for the shims that use these grants, and [How access works](/docs/access/how-access-works).

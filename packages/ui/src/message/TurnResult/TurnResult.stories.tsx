@@ -4,7 +4,7 @@ import { TurnResult, type TurnResultLabels } from './TurnResult';
 const labels: TurnResultLabels = {
   showChanges: 'Show changes',
   undo: 'Undo this turn',
-  undoAsk: 'Put the files back as they were before this turn?',
+  undoAsk: 'Take back the changes this turn made? Later turns and your own edits stay.',
   undoConfirm: 'Undo it',
   undoCancel: 'Keep it',
   kept: 'Kept when you carry on',

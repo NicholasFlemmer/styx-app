@@ -1,31 +1,31 @@
 import desktop from '../../desktop/package.json';
 
 /**
- * Site facts and links. Anything that does not exist yet (release URLs, a source repository) defaults
- * to a page anchor so the page never links into the void; fill these in when the artefacts exist.
+ * Site facts and links. The Mac and Windows downloads come from the build's environment and default to the
+ * Download section, so a local build never links into the void.
  */
 export const site = {
   name: 'Styx',
   /** The search result's title (≤60 characters): what people type, not the slogan. */
-  title: 'Styx: Claude Code, Codex and Cursor agents in one Mac app',
+  title: 'Styx: Claude Code, Codex and Cursor agents in one app',
   /** The search result's snippet (≤155 characters, or Google cuts it off). */
   description:
-    'Run Claude Code, Codex, Gemini and Cursor across every project in one Mac app. See which agent needs you. Nothing reaches production without your OK.',
+    'Run Claude Code, Codex, Gemini and Cursor on every project from one free, open-source app. Mac, Windows, Linux. Nothing reaches production without your OK.',
   /** The brand line, for share cards where there is room for it. */
   tagline: 'Styx: every project, every agent, every key, one window',
   /** The category people search for (Warp's term, June 2025); used as a label, never as the headline. */
   category: 'agentic development environment (ADE)',
   shareDescription:
-    'The desktop app where your work converges: every repo you touch, the AI coding agents building in them, and every login they need to ship. Nothing crosses into production without you.',
+    'The desktop app where your work converges: every repo you touch, the AI coding agents building in them, and every login they need to ship. Nothing crosses into production without you. Free and open source, for Mac, with Windows and Linux in beta.',
   email: 'hello@heystyx.com',
   /** When the home page's words last changed (the sitemap's lastmod). Bump it with a copy change, not a deploy. */
-  updated: '2 October 2026',
+  updated: '6 October 2026',
   /** When the founder video on /story last changed (the sitemap's lastmod for it). */
   storyUpdated: '29 September 2026',
   /** When the 21-second demo on /demo last changed. */
   demoUpdated: '30 September 2026',
   /** When the launch article last changed. */
-  launchUpdated: '30 September 2026',
+  launchUpdated: '6 October 2026',
   /** When the docs (content/docs) last changed: the sitemap's date for every docs page. Bump with a docs change. */
   docsUpdated: '6 October 2026',
   url: process.env['NEXT_PUBLIC_SITE_URL'] ?? 'http://localhost:3100',
@@ -33,6 +33,13 @@ export const site = {
   links: {
     downloadMac: process.env['NEXT_PUBLIC_DOWNLOAD_MAC'] ?? '/#download',
     downloadWin: process.env['NEXT_PUBLIC_DOWNLOAD_WIN'] ?? '/#download',
+    /** Linux (beta) has no heystyx.com/download route: the AppImage and .deb are on the latest GitHub release. */
+    downloadLinux: 'https://github.com/NicholasFlemmer/styx-app/releases/latest',
+    /** The source (Apache-2.0), its community and the two contributor guides the site points people to. */
+    github: 'https://github.com/NicholasFlemmer/styx-app',
+    discussions: 'https://github.com/NicholasFlemmer/styx-app/discussions',
+    addAgent: '/docs/contributing/add-an-agent',
+    addTarget: '/docs/contributing/add-a-target',
     /** Buy Me a Coffee (owner request): the footer's support band. */
     support: 'https://buymeacoffee.com/heystyx',
     /** Product Hunt (launch, 30 September 2026): the product page and its featured badge. */
@@ -57,6 +64,7 @@ export const sections = [
   { id: 'security', label: 'Security' },
   { id: 'keyboard', label: 'Keyboard' },
   { id: 'download', label: 'Download' },
+  { id: 'source', label: 'Open source' },
 ] as const;
 
 export type SectionId = (typeof sections)[number]['id'];

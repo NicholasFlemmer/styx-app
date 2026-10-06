@@ -7,12 +7,12 @@ export const emdash: Competitor = {
   what: 'A free, open-source agentic development environment that runs dozens of coding agents in parallel, on any OS.',
   title: 'Styx vs Emdash: comparing two ADEs for coding agents',
   description:
-    'Styx and Emdash both run coding agents in parallel worktrees. How they differ: open source, platforms, agent count, issue trackers and production access.',
+    'Styx and Emdash both run coding agents in parallel worktrees. How they differ: agent count, issue trackers, cloud workspaces and production access.',
   intro:
-    'Styx and Emdash are both agentic development environments: several coding agents at once, each on its own branch in its own worktree, with diffs to review before anything merges. Emdash is open source and casts the widest net; Styx is narrower and puts its effort into what agents may touch.',
+    'Styx and Emdash are both agentic development environments: several coding agents at once, each on its own branch in its own worktree, with diffs to review before anything merges. Both are open source. Emdash casts the widest net; Styx is narrower and puts its effort into what agents may touch.',
   summary: [
     'Both run coding agents in parallel, one git worktree per task.',
-    'Emdash is open source, runs on Mac, Windows and Linux, and supports 34 CLI agents.',
+    'Both are free and open source. Emdash supports 34 CLI agents; Styx supports four.',
     'Emdash pulls tasks from Linear, Jira, GitHub, Notion and Asana.',
     'Styx gates production access with expiring, approved grants and an audit log.',
   ],
@@ -33,7 +33,6 @@ export const emdash: Competitor = {
     issues: 'Linear, Jira, GitHub, Notion, Asana',
   },
   ahead: [
-    { title: 'Open source', text: 'Emdash’s code is public. Styx is not open source.' },
     { title: 'Every platform', text: 'It ships for Windows and Linux as well as the Mac.' },
     { title: 'More agents', text: 'It supports 34 CLI agents; Styx supports four.' },
     {
@@ -43,17 +42,17 @@ export const emdash: Competitor = {
   ],
   styxPoints: ['keys', 'projects', 'editor'],
   choose: {
-    them: 'you want open source, Windows or Linux, the longest list of agents, or tasks straight from your issue tracker',
-    styx: 'you are on a Mac, work across several projects, and want agents to ask before they touch anything live',
+    them: 'you want the longest list of agents, cloud workspaces, or tasks straight from your issue tracker',
+    styx: 'you work across several projects and want agents to ask before they touch anything live',
   },
   faq: [
     {
       q: 'Is Styx an Emdash alternative?',
-      a: 'Yes. Both run coding agents in parallel, each in its own git worktree. Emdash is open source, cross-platform and supports more agents; Styx adds every project in one window and a gate on production access.',
+      a: 'Yes. Both run coding agents in parallel, each in its own git worktree. Emdash supports more agents and pulls tasks from issue trackers; Styx adds every project in one window and a gate on production access.',
     },
     {
       q: 'Is Styx open source like Emdash?',
-      a: 'No. Styx is free to use but its source is not public.',
+      a: 'Yes. Styx is free and open source under the Apache License 2.0, and its code is on GitHub.',
     },
   ],
   sources: [

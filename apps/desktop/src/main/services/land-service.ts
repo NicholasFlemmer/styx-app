@@ -1,4 +1,4 @@
-import { copy, fill, type Worktree, type WorktreeLanding } from '@styx/core';
+import { copy, fill, type Session, type Worktree, type WorktreeLanding } from '@styx/core';
 import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
 import { fail } from '../ipc/bus';
@@ -59,6 +59,11 @@ export interface LandDeps {
   archive: (worktreeId: string) => Promise<void>;
   /** A lane reached the base: counted as `lane.landed` (discrepancy #122), however it was landed. */
   onLanded?: () => void;
+  /**
+   * Issue #2: a Styx-authored turn to the lane's agent (`SessionService.sendMessage`, from Styx, now) — how the
+   * first landing in a project with no checks asks that agent to work them out. Without it Land never asks.
+   */
+  askAgent?: (sessionId: string, text: string) => Promise<void>;
 }
 
 export interface LandFile {
@@ -95,6 +100,12 @@ export class LandService {
   private readonly queues = new Map<string, Promise<unknown>>();
   /** The last reason an automatic landing was refused, per lane: a standing reason is said once, not every turn. */
   private readonly refused = new Map<string, string>();
+  /**
+   * Issue #2: projects whose checks Land asked an agent to work out → that session (it alone may then teach them,
+   * `askedForChecks`), or null once they were learned. Asked once per project per run of Styx: the next Land with
+   * still none known goes ahead without checks and says so, rather than asking again and again.
+   */
+  private readonly checksAsked = new Map<string, string | null>();
 
   constructor(private readonly deps: LandDeps) {}
 
@@ -227,9 +238,14 @@ export class LandService {
       if (synced.merged > 0) steps.push(fill(copy.land.steps.sync, { base, n: synced.merged }));
       if ((await git.aheadBehind(project.path, branch, base)).ahead === 0)
         fail('invalid-input', fill(copy.land.nothing, { branch, base }));
-      // 3. The checks, in the lane, before anything reaches the base.
+      // 3. The checks, in the lane, before anything reaches the base. None known yet: the lane's agent is asked to
+      // work them out first (issue #2), once; after that — or with no agent to ask — the landing says none ran.
       const checks = this.deps.settingsOf(project.id).checksCommand;
-      if (checks !== null) {
+      if (checks === null) {
+        const asked = await this.askForChecks(project.id, owner, byOwner, branch, base);
+        if (asked !== null) fail('invalid-transition', asked);
+        steps.push(copy.land.steps.noChecks);
+      } else {
         const r = await this.deps.runChecks(wt.path, checks);
         if (r.exitCode !== 0)
           fail(
@@ -337,6 +353,55 @@ export class LandService {
       });
       logger.info('land: landed lane tidied away', { branch, base });
     }
+  }
+
+  /** Issue #2: this session is the one Land asked for the project's checks (it may call `remember_command` checks). */
+  askedForChecks(sessionId: string): boolean {
+    return [...this.checksAsked.values()].includes(sessionId);
+  }
+
+  /** Issue #2: the project's checks were taught; the ask is spent. */
+  checksLearned(projectId: string): void {
+    this.checksAsked.set(projectId, null);
+  }
+
+  /**
+   * The first landing with no checks known asks the lane's agent to work them out (the way Run locally and Deploy
+   * hand the first attempt to an agent) and returns why nothing landed; null when there is nobody to ask — no
+   * agent session, a shell, a background task, one that is not idle — or it was asked already: land without.
+   */
+  private async askForChecks(
+    projectId: string,
+    owner: Session | null,
+    byOwner: boolean,
+    branch: string,
+    base: string,
+  ): Promise<string | null> {
+    const ask = this.deps.askAgent;
+    if (ask === undefined || this.checksAsked.has(projectId)) return null;
+    if (owner === null || owner.agent === 'shell' || owner.purpose) return null;
+    if (!byOwner && owner.state !== 'idle') return null;
+    const review = this.deps.settingsOf(projectId).integration === 'review';
+    const prompt = fill(copy.agentPrompt.learnChecks, {
+      branch,
+      base,
+      then: review && !byOwner ? copy.agentPrompt.learnChecksThenTell : copy.agentPrompt.learnChecksThenLand,
+    });
+    this.checksAsked.set(projectId, owner.id);
+    // The agent asked from inside its turn (the `land` tool): the refusal it reads is the ask.
+    if (byOwner) return prompt;
+    try {
+      await ask(owner.id, prompt);
+    } catch (e) {
+      logger.warn('land: could not ask for the checks', { error: (e as Error).message });
+      this.checksAsked.set(projectId, null);
+      return null;
+    }
+    logger.info('land: asked the agent for the checks', { branch });
+    return fill(review ? copy.land.learningChecksReview : copy.land.learningChecks, {
+      branch,
+      agent: copy.agentProducts[owner.agent],
+    });
   }
 
   /** The agent went quiet: landed lanes settle, then the lane may land on its own. */

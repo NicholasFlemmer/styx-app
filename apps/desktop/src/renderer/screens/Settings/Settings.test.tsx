@@ -134,6 +134,7 @@ describe('sectionRows', () => {
       ['autoSync', false],
       ['integration', false],
       ['autoLand', false],
+      ['checksCommand', false],
     ]);
   });
 
@@ -174,6 +175,36 @@ describe('sectionRows', () => {
       value: 'off',
     });
     expect(autoLand?.change.kind === 'project' && autoLand.change.patch('on')).toEqual({ autoLand: true });
+  });
+
+  it('Agent defaults › Checks (issue #2): shows the command Land runs, typed rather than picked; blank clears it; a project-file value can be reset', () => {
+    const none = sectionRows(model, 'project:agent-defaults', ctx).find((r) => r.id === 'checksCommand');
+    expect(none).toMatchObject({
+      label: copy.settings.rows.checksCommand,
+      value: '',
+      placeholder: copy.settings.values.checksNone,
+      overridden: false,
+      change: { kind: 'project-text', key: 'checksCommand' },
+    });
+    expect(none?.change.kind === 'project-text' && none.change.patch('  pnpm test ')).toEqual({
+      checksCommand: 'pnpm test',
+    });
+    expect(none?.change.kind === 'project-text' && none.change.patch('   ')).toEqual({ checksCommand: null });
+    const settings = model.settings.project[acme];
+    if (settings === undefined) throw new Error('fixture settings');
+    const filed = {
+      ...model,
+      settings: {
+        ...model.settings,
+        project: {
+          ...model.settings.project,
+          [acme]: { ...settings, checksCommand: { value: 'make check', source: 'project' as const } },
+        },
+      },
+    };
+    expect(
+      sectionRows(filed, 'project:agent-defaults', ctx).find((r) => r.id === 'checksCommand'),
+    ).toMatchObject({ value: 'make check', overridden: true });
   });
 
   it('Agent defaults: Model lists the CLI aliases; Permission mode / Effort rows patch project settings (discrepancy #54)', () => {
@@ -311,6 +342,7 @@ describe('sectionRows', () => {
       'autoSync',
       'integration',
       'autoLand',
+      'checksCommand',
     ]);
     expect(geminiRows.find((r) => r.id === 'model')?.options.map((o) => o.value)).toEqual(['default']);
   });
@@ -387,6 +419,8 @@ describe('sectionRows', () => {
       'After every turn',
       'Keep my project up to date for me',
       'Off',
+      // The checks command is typed, not picked (issue #2): no option label.
+      undefined,
     ]);
     expect(values('project:env')).toEqual(['Keychain', 'Per grant', '.styx/project.json']);
   });
@@ -677,6 +711,28 @@ describe('<Settings />', () => {
       projectId: acme,
       key: 'defaultAgent',
     });
+  });
+
+  it('Checks (issue #2): a text field — Enter or leaving it saves, Escape puts the saved value back, an unchanged one sends nothing', () => {
+    render(<Settings />);
+    act(() => useUiStore.getState().setSettingsSection('project:agent-defaults'));
+    const field = screen.getByRole('textbox', { name: copy.settings.rows.checksCommand });
+    expect(field).toHaveProperty('value', '');
+    expect(field.getAttribute('placeholder')).toBe(copy.settings.values.checksNone);
+    fireEvent.blur(field);
+    expect(commandMock).not.toHaveBeenCalledWith('project.settings.set', expect.anything());
+    fireEvent.change(field, { target: { value: 'pnpm typecheck && pnpm test' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(commandMock).toHaveBeenCalledWith('project.settings.set', {
+      projectId: acme,
+      patch: { checksCommand: 'pnpm typecheck && pnpm test' },
+    });
+    commandMock.mockClear();
+    fireEvent.change(field, { target: { value: 'oops' } });
+    fireEvent.keyDown(field, { key: 'Escape' });
+    expect(field).toHaveProperty('value', '');
+    fireEvent.blur(field);
+    expect(commandMock).not.toHaveBeenCalled();
   });
 
   it('a project section names the committed file in its header; an app section does not', () => {
