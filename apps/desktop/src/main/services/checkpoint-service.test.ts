@@ -128,6 +128,20 @@ const turn = async (t: TestApp, messageId: string, mutate: () => void): Promise<
 };
 
 describe('CheckpointService', () => {
+  it('onTurnStarted resolves once the baseline exists, so an agent editing at once still has its edit in the turn', async () => {
+    const t = makeTestApp();
+    const repo = await realWorktree(t);
+    // The agent starts the moment the promise resolves (what SessionService does): no settled() in between.
+    await t.app.checkpoints.onTurnStarted(claude, 'm1');
+    expect(rows(t).at(-1)?.baseRef).toBe('refs/styx/checkpoints/' + claude + '/1/base');
+    writeFileSync(join(repo, 'first-edit.ts'), 'written straight away\n');
+    t.app.checkpoints.onTurnSettled(claude);
+    await t.app.checkpoints.settled(claude);
+    const row = rows(t).at(-1);
+    expect(row?.files).toBe(1);
+    expect(await treeOf(repo, row?.baseRef ?? '')).not.toContain('first-edit.ts');
+  });
+
   it('parses numstat (binary rows count as files without lines) and sums it', () => {
     const files = parseNumstat('3\t1\tsrc/a.ts\n-\t-\timg.png\n0\t4\tb.ts\n');
     expect(files).toEqual([

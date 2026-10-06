@@ -252,7 +252,7 @@ describe('SessionService spawn + stream runner', () => {
     stream.effect(session.id, { type: 'session', event: 'quiet' });
     expect(a.sessions.get(session.id)?.state).toBe('idle');
 
-    a.sessions.sendMessage(session.id, 'Now add tests');
+    await a.sessions.sendMessage(session.id, 'Now add tests');
     expect(stream.sent).toEqual([{ id: session.id, text: 'Now add tests' }]);
     expect(pty.writes).toEqual([]);
     expect(a.sessions.get(session.id)?.state).toBe('working');
@@ -962,7 +962,7 @@ describe('SessionService pty runner + CLI hooks', () => {
     expect(a.sessions.get(session.id)).toMatchObject({ state: 'idle', note: 'All green.' });
 
     // Idle: the message goes straight into the TUI (mid-turn it would wait in the queue instead).
-    a.sessions.sendMessage(session.id, 'more');
+    await a.sessions.sendMessage(session.id, 'more');
     await typed();
     // Text, then Enter a beat later: one write would be a paste burst to a TUI, and Enter inside it a newline.
     expect(pty.writes).toEqual([
@@ -2520,7 +2520,7 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
 
     stream.effect(session.id, { type: 'session', event: 'quiet' });
     // idle for a moment, then straight back to working on the held message
-    expect(a.sessions.get(session.id)?.state).toBe('working');
+    await vi.waitFor(() => expect(a.sessions.get(session.id)?.state).toBe('working'));
     expect(stream.sent).toEqual([{ id: session.id, text: 'first' }]);
     expect(userRows(a, session.id)).toEqual(['Fix it', 'first']);
     expect(a.repos.queuedMessages.bySession(session.id).map((m) => m.body)).toEqual(['second']);
@@ -2528,7 +2528,7 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     expect(queueDeltas(win, session.id).at(-1)).toEqual(['second']);
 
     stream.effect(session.id, { type: 'session', event: 'quiet' });
-    expect(stream.sent.map((m) => m.text)).toEqual(['first', 'second']);
+    await vi.waitFor(() => expect(stream.sent.map((m) => m.text)).toEqual(['first', 'second']));
     expect(a.repos.queuedMessages.bySession(session.id)).toEqual([]);
     stream.effect(session.id, { type: 'session', event: 'quiet' });
     expect(a.sessions.get(session.id)?.state).toBe('idle');
@@ -2545,17 +2545,17 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     expect(stream.sent).toEqual([]);
     expect(a.sessions.get(session.id)?.state).toBe('idle');
     stream.effect(session.id, { type: 'session', event: 'quiet' });
-    expect(stream.sent).toEqual([{ id: session.id, text: 'one' }]);
+    await vi.waitFor(() => expect(stream.sent).toEqual([{ id: session.id, text: 'one' }]));
     expect(a.sessions.get(session.id)?.state).toBe('working');
     a.sessions.onHook(session.id, 'claude', 'Stop', {}); // the next turn's Stop, before its result
     expect(stream.sent).toHaveLength(1);
     stream.effect(session.id, { type: 'session', event: 'quiet' });
-    expect(stream.sent.map((m) => m.text)).toEqual(['one', 'two']);
+    await vi.waitFor(() => expect(stream.sent.map((m) => m.text)).toEqual(['one', 'two']));
     // The other order — result first, then the hook — sends one as well.
     await a.sessions.sendMessage(session.id, 'three');
     stream.effect(session.id, { type: 'session', event: 'quiet' });
     a.sessions.onHook(session.id, 'claude', 'Stop', {});
-    expect(stream.sent.map((m) => m.text)).toEqual(['one', 'two', 'three']);
+    await vi.waitFor(() => expect(stream.sent.map((m) => m.text)).toEqual(['one', 'two', 'three']));
   });
 
   it('a pty session settles through the Claude Stop hook / the Codex notify hook', async () => {
@@ -2567,22 +2567,24 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     await a.sessions.sendMessage(session.id, 'after stop');
     expect(pty.writes).toEqual([]);
     a.sessions.onHook(session.id, 'claude', 'Stop', {});
-    await typed();
-    expect(pty.writes).toEqual([
-      { id: session.id, data: 'after stop' },
-      { id: session.id, data: '\r' },
-    ]);
+    await vi.waitFor(() =>
+      expect(pty.writes).toEqual([
+        { id: session.id, data: 'after stop' },
+        { id: session.id, data: '\r' },
+      ]),
+    );
     pty.writes.length = 0;
 
     const { session: codex } = await a.sessions.spawn(spawnInput('codex', ids.worktree.testFlaky));
     await a.sessions.sendMessage(codex.id, 'after notify');
     expect(pty.writes).toEqual([]); // held, not typed into the TUI mid-turn
     a.sessions.onHook(codex.id, 'codex', 'notify', { type: 'agent-turn-complete' });
-    await typed();
-    expect(pty.writes).toEqual([
-      { id: codex.id, data: 'after notify' },
-      { id: codex.id, data: '\r' },
-    ]);
+    await vi.waitFor(() =>
+      expect(pty.writes).toEqual([
+        { id: codex.id, data: 'after notify' },
+        { id: codex.id, data: '\r' },
+      ]),
+    );
     expect(userRows(a, codex.id)).toEqual(['Fix it', 'after notify']);
   });
 
@@ -2600,7 +2602,7 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
       await a.sessions.sendMessage(session.id, 'later');
       expect(pty.writes).toEqual([]);
       await vi.advanceTimersByTimeAsync(3100);
-      expect(pty.writes[0]).toEqual({ id: session.id, data: 'later' });
+      await vi.waitFor(() => expect(pty.writes[0]).toEqual({ id: session.id, data: 'later' }));
     } finally {
       vi.useRealTimers();
     }
@@ -2698,7 +2700,7 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     expect(stream.sent).toEqual([{ id: session.id, text: 'wake up' }]);
     expect(a.repos.queuedMessages.bySession(session.id).map((m) => m.body)).toEqual(['held']);
     stream.effect(session.id, { type: 'session', event: 'quiet' });
-    expect(stream.sent.map((m) => m.text)).toEqual(['wake up', 'held']);
+    await vi.waitFor(() => expect(stream.sent.map((m) => m.text)).toEqual(['wake up', 'held']));
   });
 
   it('attachments: a held message keeps its files and images as paths; nothing is dropped, and they go out with it', async () => {

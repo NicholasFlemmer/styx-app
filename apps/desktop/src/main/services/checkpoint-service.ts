@@ -22,6 +22,9 @@ import { logger } from './logger';
 import type { ScreenSide, ScreensStore } from './screens-store';
 import type { TranscriptService } from './transcript-service';
 
+/** The longest a turn waits for its `before` snapshot before the message goes out anyway. */
+export const BASE_WAIT_MS = 15_000;
+
 /** Every checkpoint ref lives here, out of `refs/heads` and `refs/tags`: nothing lands on the user's branch. */
 export const CHECKPOINT_REF_ROOT = 'refs/styx/checkpoints';
 
@@ -229,10 +232,28 @@ export class CheckpointService {
 
   // --- turn hooks ------------------------------------------------------------
 
-  onTurnStarted(sessionId: SessionId, messageId: string): void {
-    void this.enqueue(sessionId, () => this.startTurn(sessionId, messageId)).catch((e: unknown) =>
-      logger.warn('checkpoint: turn start failed', { sessionId, error: (e as Error).message }),
-    );
+  /**
+   * Records the turn's baseline. Resolves once the `before` snapshot is taken (or skipped, or failed), not after
+   * the screen picture: the caller hands the message to the agent only then, or the agent's first edits can land
+   * before the snapshot and count as "before" (they'd be missing from the turn's changes and from Undo). Capped
+   * at BASE_WAIT_MS so a wedged git can delay a turn but never stop it. Never rejects.
+   */
+  onTurnStarted(sessionId: SessionId, messageId: string): Promise<void> {
+    let ready: () => void = () => undefined;
+    const baseReady = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    const cap = setTimeout(ready, BASE_WAIT_MS);
+    cap.unref?.();
+    void this.enqueue(sessionId, () => this.startTurn(sessionId, messageId, ready))
+      .catch((e: unknown) =>
+        logger.warn('checkpoint: turn start failed', { sessionId, error: (e as Error).message }),
+      )
+      .finally(() => {
+        clearTimeout(cap);
+        ready();
+      });
+    return baseReady;
   }
 
   onTurnSettled(sessionId: SessionId): void {
@@ -253,7 +274,7 @@ export class CheckpointService {
     return next;
   }
 
-  private async startTurn(sessionId: SessionId, messageId: string): Promise<void> {
+  private async startTurn(sessionId: SessionId, messageId: string, onBase: () => void): Promise<void> {
     const { repos, clock } = this.deps;
     const session = repos.sessions.get(sessionId);
     if (!session) return;
@@ -292,6 +313,7 @@ export class CheckpointService {
     };
     repos.checkpoints.upsert(row);
     this.publish(sessionId);
+    onBase(); // the baseline is down: the agent may start; the screen picture follows
     const shot = await this.snap(session.projectId);
     if (open !== null && carried !== null) await this.attach(open, 'after', shot);
     await this.attach(row, 'before', shot);
