@@ -90,10 +90,11 @@ describe('reference: keyboard shortcuts', () => {
   const tokens = read('packages/tokens/src/generated.ts');
   const block = /export const shortcuts = \{([\s\S]*?)\} as const;/.exec(tokens)?.[1] ?? '';
   const chordsOf = new Map<string, string[]>();
-  for (const m of block.matchAll(/^\s*(\w+):\s*(\[[^\]]*\]|'[^']*')/gm)) {
+  // Either quote style: prettier writes `palette: 'Mod+K'`, `pnpm tokens:build` writes `"palette": "Mod+K"` (CI).
+  for (const m of block.matchAll(/^\s*["']?(\w+)["']?:\s*(\[[^\]]*\]|'[^']*'|"[^"]*")/gm)) {
     chordsOf.set(
       m[1] ?? '',
-      [...(m[2] ?? '').matchAll(/'([^']*)'/g)].map((c) => c[1] ?? ''),
+      [...(m[2] ?? '').matchAll(/['"]([^'"]*)['"]/g)].map((c) => c[1] ?? ''),
     );
   }
 
