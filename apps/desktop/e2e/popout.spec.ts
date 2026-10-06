@@ -120,7 +120,7 @@ test('⤢ opens a pop-out window with the compact chat; Mod+Shift+O docks it', a
 for (const theme of ['dark', 'light'] as const) {
   test(`pop-out window matches its reference · ${theme} · mac`, async () => {
     // The references are macOS renders (fonts, antialiasing); Windows draws the same pixels differently.
-    test.skip(process.platform === 'win32', 'pixel references are rendered on macOS');
+    test.skip(process.platform !== 'darwin', 'pixel references are rendered on macOS');
     const file = `popout-${theme}-mac.png`;
     const { app, page } = await launchStyx({
       screen: 'workspace',

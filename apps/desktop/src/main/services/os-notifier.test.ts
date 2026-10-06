@@ -145,6 +145,27 @@ describe('ElectronOsNotifier', () => {
     expect(trays[0]?.destroy).toHaveBeenCalled();
   });
 
+  it('Linux: a tray like Windows, and plain desktop notifications with a Review button', () => {
+    const { e, trays, notes, dock } = fakeElectron('linux');
+    const os = new ElectronOsNotifier(e);
+    const onClick = vi.fn();
+    os.setTray({ attention: true, menu, onClick });
+    expect(trays.length).toBe(1);
+    expect(trays[0]?.image).toEqual({ url: trayIconDataUrl(true) });
+    trays[0]?.handlers.forEach((h) => h());
+    expect(onClick).toHaveBeenCalledTimes(1);
+    os.bounceOnce(); // no dock to bounce
+    expect(dock.bounce).not.toHaveBeenCalled();
+
+    const onReview = vi.fn();
+    os.toast({ id: 'a1', title: 'T', body: 'B', sound: true, onReview, onLater: vi.fn() });
+    expect(notes[0]?.opts).toMatchObject({ title: 'T', body: 'B', silent: false });
+    expect(notes[0]?.opts.toastXml).toBeUndefined();
+    notes[0]?.handlers['action']?.();
+    expect(onReview).toHaveBeenCalledTimes(1);
+    os.dispose();
+  });
+
   it('macOS: dock badge, bounce, dock menu, Notification Center toast with Review action and Later close button', () => {
     const { e, trays, notes, dock } = fakeElectron('darwin');
     const os = new ElectronOsNotifier(e);

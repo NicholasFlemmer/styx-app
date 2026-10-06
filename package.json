@@ -12,6 +12,7 @@
     "build": "pnpm -r --filter \"./packages/*\" build && pnpm -F @styx/desktop build",
     "package:mac": "pnpm -F @styx/desktop package:mac",
     "package:win": "pnpm -F @styx/desktop package:win",
+    "package:linux": "pnpm -F @styx/desktop package:linux",
     "release:preflight": "pnpm -F @styx/desktop release:preflight",
     "release:publish": "pnpm -F @styx/desktop release:publish",
     "rebuild:native": "pnpm -F @styx/desktop rebuild:native",

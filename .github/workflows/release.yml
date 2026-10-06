@@ -1,5 +1,5 @@
 name: release
-# Signed, notarized macOS artifacts and a Windows installer on every `v*` tag.
+# Signed, notarized macOS artifacts, a Windows installer and Linux AppImage + .deb on every `v*` tag.
 #
 # Secrets (Settings › Secrets and variables › Actions):
 #   CSC_LINK / CSC_KEY_PASSWORD            base64 .p12 of the Developer ID Application certificate + its password
@@ -70,9 +70,29 @@ jobs:
             apps/desktop/release/*.exe
             apps/desktop/release/*.exe.blockmap
             apps/desktop/release/latest.yml
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The version comes from package.json's packageManager; naming it here too makes the action refuse to run.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsecret-1-dev rpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tokens:build
+      - name: Package (AppImage + .deb)
+        run: pnpm package:linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: styx-linux
+          path: |
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/latest-linux.yml
   publish:
     if: github.event_name == 'push'
-    needs: [mac, win]
+    needs: [mac, win, linux]
     runs-on: ubuntu-latest
     permissions: { contents: write }
     steps:
@@ -84,3 +104,4 @@ jobs:
           files: |
             dist/styx-mac/*
             dist/styx-win/*
+            dist/styx-linux/*

@@ -1,6 +1,7 @@
 import type { IPty } from 'node-pty';
 import { execa } from 'execa';
 import { EventEmitter } from 'node:events';
+import { existsSync } from 'node:fs';
 import { STRIPPED_ENV } from '../providers/cli-runner';
 import { onePathKey } from './spawn-cli';
 
@@ -27,6 +28,18 @@ export interface LoginEnv {
 }
 
 /** Every agent CLI binary name DetectService knows, asked of the shell in the same call that reads PATH. */
+/**
+ * The shell when `$SHELL` is unset: zsh on a Mac (its default since Catalina); on Linux bash, else `/bin/sh` (many
+ * distros and containers have no zsh).
+ */
+export function fallbackShell(
+  platform: NodeJS.Platform,
+  exists: (p: string) => boolean = existsSync,
+): string {
+  if (platform === 'darwin') return '/bin/zsh';
+  return ['/bin/bash', '/usr/bin/bash'].find(exists) ?? '/bin/sh';
+}
+
 export const SHELL_WHICH_NAMES: readonly string[] = ['claude', 'codex', 'gemini', 'agent', 'cursor-agent'];
 
 const PATH_MARK = '__STYX_PATH__';
@@ -171,7 +184,7 @@ export class PtyService extends EventEmitter<PtyEvents> {
   defaultShell(): string {
     if (this.platform === 'win32')
       return process.env['STYX_WIN_SHELL'] === 'wsl' ? 'wsl.exe' : 'powershell.exe';
-    return process.env['SHELL'] || '/bin/zsh';
+    return process.env['SHELL'] || fallbackShell(this.platform);
   }
 
   async spawn(opts: PtySpawnOptions): Promise<{ pid: number }> {

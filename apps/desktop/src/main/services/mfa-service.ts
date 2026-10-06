@@ -8,7 +8,7 @@ export type MfaResult = 'ok' | 'failed' | 'unavailable' | 'cancelled';
 export interface MfaProvider {
   available(): Promise<boolean>;
   verify(reason: string): Promise<MfaResult>;
-  label: string; // "Touch ID" | "Windows Hello"
+  label: string; // "Touch ID" | "Windows Hello" | "system password"
 }
 
 /** macOS: Touch ID via Electron's systemPreferences (LocalAuthentication); the OS handles the password fallback. */
@@ -128,6 +128,78 @@ function mapHello(r: string): MfaResult {
       return 'unavailable';
     default:
       return 'failed';
+  }
+}
+
+/** The polkit action the .deb installs (build/linux/polkit/com.heystyx.styx.policy): "auth_self", your own password. */
+export const POLKIT_ACTION = 'com.heystyx.styx.approve-grant';
+
+export type PolkitRunner = (bin: string, args: string[]) => Promise<{ exitCode: number; stderr: string }>;
+
+const defaultPolkitRunner: PolkitRunner = async (bin, args) => {
+  const r = await execa(bin, args, { reject: false, timeout: 120_000 });
+  return { exitCode: typeof r.exitCode === 'number' ? r.exitCode : -1, stderr: String(r.stderr ?? '') };
+};
+
+/**
+ * Linux: the desktop's polkit authentication dialog (your password, or a fingerprint where PAM has one set up).
+ * With the .deb's action installed, `pkcheck` asks for *your own* password under a Styx-named prompt; without it
+ * (AppImage), `pkexec /bin/true` falls back to the standard admin prompt. No graphical session or no polkit at all
+ * is `unavailable`, which refuses the prod grant (as a Mac without Touch ID would).
+ */
+export class PolkitProvider implements MfaProvider {
+  label = 'system password';
+  constructor(
+    private readonly opts: {
+      run?: PolkitRunner;
+      which?: (bin: string) => Promise<string | null>;
+      env?: NodeJS.ProcessEnv;
+      pid?: number;
+    } = {},
+  ) {}
+
+  private async has(bin: string): Promise<string | null> {
+    if (this.opts.which) return this.opts.which(bin);
+    const r = await execa('which', [bin], { reject: false });
+    return r.exitCode === 0 ? String(r.stdout).trim() || null : null;
+  }
+
+  private graphical(): boolean {
+    const env = this.opts.env ?? process.env;
+    return Boolean(env['DISPLAY'] || env['WAYLAND_DISPLAY']);
+  }
+
+  async available(): Promise<boolean> {
+    if (!this.graphical()) return false;
+    return (await this.has('pkcheck')) !== null || (await this.has('pkexec')) !== null;
+  }
+
+  async verify(): Promise<MfaResult> {
+    if (!this.graphical()) return 'unavailable';
+    const run = this.opts.run ?? defaultPolkitRunner;
+    const pkcheck = await this.has('pkcheck');
+    if (pkcheck) {
+      const pid = String(this.opts.pid ?? process.pid);
+      const r = await run(pkcheck, [
+        '--action-id',
+        POLKIT_ACTION,
+        '--process',
+        pid,
+        '--allow-user-interaction',
+      ]);
+      // 0 authorized · 1 not authorized · 2 challenge without interaction · 3 dismissed · 4 error
+      if (r.exitCode === 0) return 'ok';
+      if (r.exitCode === 3) return 'cancelled';
+      if (r.exitCode === 1 || r.exitCode === 2) return 'failed';
+      // 4: most often the action isn't installed (not the .deb); fall through to pkexec.
+    }
+    const pkexec = await this.has('pkexec');
+    if (!pkexec) return 'unavailable';
+    const r = await run(pkexec, ['--disable-internal-agent', '/bin/true']);
+    if (r.exitCode === 0) return 'ok';
+    if (/no authentication agent/i.test(r.stderr)) return 'unavailable';
+    // 126: the dialog was dismissed; 127: authentication failed or not authorized.
+    return r.exitCode === 126 ? 'cancelled' : 'failed';
   }
 }
 

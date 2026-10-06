@@ -11,6 +11,7 @@ import {
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
+import { fallbackShell } from './pty-service';
 import type { CliCandidate, CliInstall, CliSource } from '@styx/core';
 
 export type AgentKind = 'claude' | 'codex' | 'gemini' | 'cursor' | 'shell';
@@ -733,7 +734,7 @@ export class DetectService {
         searched: this.lastSearched,
       };
     }
-    const shell = this.deps.env['SHELL'] || '/bin/zsh';
+    const shell = this.deps.env['SHELL'] || fallbackShell(this.deps.platform);
     const name = shell.split('/').pop() ?? 'sh';
     const v = await this.deps.exec(shell, ['--version']);
     return {

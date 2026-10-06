@@ -5,7 +5,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -35,9 +35,16 @@ jobs:
       - name: Electron e2e on Windows (main window, shell, grant flow, a11y)
         if: runner.os == 'Windows'
         run: pnpm e2e
+      # Linux runs Electron under a virtual display large enough for the 1280×800 window.
+      - name: Electron e2e on Linux (main window, shell, grant flow, a11y)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" pnpm e2e
       - name: Packaged app smoke (unsigned)
         if: runner.os == 'macOS'
         run: pnpm -F @styx/desktop package:mac:dir && pnpm -F @styx/desktop package:smoke
       - name: Packaged app smoke on Windows (unsigned)
         if: runner.os == 'Windows'
         run: pnpm -F @styx/desktop package:win:dir && pnpm -F @styx/desktop package:smoke
+      - name: Packaged app smoke on Linux
+        if: runner.os == 'Linux'
+        run: pnpm -F @styx/desktop package:linux:dir && xvfb-run -a -s "-screen 0 1920x1080x24" pnpm -F @styx/desktop package:smoke

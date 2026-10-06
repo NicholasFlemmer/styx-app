@@ -13,7 +13,8 @@ asarUnpack:
   - "resources/**"
 # Updates in place (#119): with a publish feed configured, electron-builder writes `app-update.yml` into the app and
 # `latest-mac.yml` / `latest.yml` next to the artefacts. A build never uploads anything itself (`--publish never` is the
-# default outside CI); `pnpm release:publish` puts a finished build on the feed. `${os}` is `mac` or `win`.
+# default outside CI); `pnpm release:publish` puts a finished build on the feed. `${os}` is `mac`, `win` or `linux`
+# (`latest-linux.yml`; only the AppImage updates itself, a .deb is the package manager's).
 publish:
   - provider: generic
     url: https://storage.googleapis.com/styx-desktop-releases/${os}
@@ -49,6 +50,32 @@ appx:
   displayName: Hey Styx
   backgroundColor: "#0d0e0c"
   languages: [en-US]
+# Linux (beta): an AppImage (any distro, updates itself) and a .deb (Debian/Ubuntu). The .deb installs the polkit
+# action that guards production grants (build/linux/polkit, see PolkitProvider in src/main/services/mfa-service.ts);
+# an AppImage can't install one and falls back to the standard pkexec prompt. Build these on Linux (CI does).
+linux:
+  target: [AppImage, deb]
+  category: Development
+  executableName: styx
+  artifactName: Styx-${version}-${arch}.${ext}
+  synopsis: Run coding agents on every project; they ask before they touch production.
+  description: >-
+    Styx runs Claude Code, Codex, Gemini CLI and Cursor's agent across all your projects in one window. Each task
+    gets its own branch, and an agent has to ask before it deploys or touches anything live.
+  maintainer: Styx <hello@heystyx.com>
+  vendor: Styx
+  extraResources:
+    - from: build/linux/polkit
+      to: polkit
+  desktop:
+    entry:
+      StartupWMClass: Styx
+deb:
+  afterInstall: build/linux/after-install.sh
+  afterRemove: build/linux/after-remove.sh
+  # Secret Service for the keyring (@napi-rs/keyring); polkit for prod approvals.
+  depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0]
+  recommends: [pkexec | policykit-1]
 protocols:
   - name: Styx
     schemes: [styx]

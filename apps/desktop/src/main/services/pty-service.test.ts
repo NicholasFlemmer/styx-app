@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergePaths, parseLoginEnv, PtyService } from './pty-service';
+import { mergePaths, parseLoginEnv, PtyService, fallbackShell } from './pty-service';
 
 let available = true;
 try {
@@ -100,5 +100,14 @@ describe('PtyService.kill on Windows', () => {
     await pty.spawn({ id: 'p1', cwd: process.cwd(), shell: 'cmd.exe', args: [] });
     pty.kill('p1');
     expect(kills).toHaveLength(2);
+  });
+});
+
+describe('fallbackShell (no $SHELL)', () => {
+  it('is zsh on a Mac, bash on Linux where there is one, else /bin/sh', () => {
+    expect(fallbackShell('darwin', () => false)).toBe('/bin/zsh');
+    expect(fallbackShell('linux', (p) => p === '/bin/bash')).toBe('/bin/bash');
+    expect(fallbackShell('linux', (p) => p === '/usr/bin/bash')).toBe('/usr/bin/bash');
+    expect(fallbackShell('linux', () => false)).toBe('/bin/sh');
   });
 });

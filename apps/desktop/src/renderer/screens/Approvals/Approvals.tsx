@@ -8,6 +8,7 @@ import {
   type InboxRow,
   type Policy,
   type ReadModel,
+  type CopyPlatform,
 } from '@styx/core';
 import { Button, Checkbox, Label, Tab, TabRow, Table, TableCell, TableRow, Tag } from '@styx/ui';
 import { useCallback, useEffect } from 'react';
@@ -201,7 +202,7 @@ function AuditLog({ rows, onOpen }: AuditLogProps) {
 
 interface PoliciesPaneProps {
   policies: Policy[];
-  platform: 'darwin' | 'win32';
+  platform: CopyPlatform;
 }
 
 function PoliciesPane({ policies, platform }: PoliciesPaneProps) {

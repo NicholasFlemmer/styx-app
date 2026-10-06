@@ -15,7 +15,7 @@ import {
   type Env,
   type IdeInstall,
   type PermissionMode,
-  type Platform,
+  type CopyPlatform,
   type ProjectId,
   type Provider,
   type ReadModel,
@@ -360,7 +360,12 @@ export const githubNote = (target: Target, name: string): string => {
   });
 };
 
-export const createLabel = (startFrom: StartFrom, agent: Agent, platform: Platform, mod: string): string =>
+export const createLabel = (
+  startFrom: StartFrom,
+  agent: Agent,
+  platform: CopyPlatform,
+  mod: string,
+): string =>
   startFrom === 'agent'
     ? fill(copy.newProject.createSpawn, { agent: copy.agentProducts[agent], mod })
     : fill(copy.newProject.create, { mod, platform });

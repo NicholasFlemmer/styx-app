@@ -166,7 +166,8 @@ export function trayIconDataUrl(attention: boolean, theme: 'dark' | 'light' = 'd
 }
 
 /**
- * The real `OsNotifier`: Windows tray + Action Center toasts, macOS dock badge / bounce / menu + Notification Center.
+ * The real `OsNotifier`: Windows tray + Action Center toasts, macOS dock badge / bounce / menu + Notification Center,
+ * Linux tray + desktop notifications (libnotify).
  * Everything Electron-specific arrives through `ElectronLike` so this can be unit-tested with fakes.
  */
 export class ElectronOsNotifier implements OsNotifier {
@@ -226,7 +227,7 @@ export class ElectronOsNotifier implements OsNotifier {
       this.e.dock?.setMenu(menu);
       return;
     }
-    if (this.e.platform !== 'win32') return;
+    // Windows and Linux: a tray icon (KDE natively; GNOME through the AppIndicator extension most distros ship).
     if (!this.tray) {
       this.tray = this.e.createTray(this.e.imageFromDataUrl(trayIconDataUrl(opts.attention, this.theme())));
       this.tray.on('click', () => this.onTrayClick());

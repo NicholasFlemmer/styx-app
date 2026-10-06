@@ -7,7 +7,7 @@ import {
   requiresMfa,
   type Duration,
   type Env,
-  type Platform,
+  type CopyPlatform,
   type Provider,
   type Scope,
 } from '@styx/core';
@@ -76,7 +76,7 @@ export const grantButtonLabel = (
   env: Env,
   scope: readonly Scope[],
   duration: Duration,
-  platform: Platform,
+  platform: CopyPlatform,
 ): string => {
   const label = copy.grantSheet.durations[duration];
   return requiresMfa(env, scope)

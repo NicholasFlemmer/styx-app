@@ -6,19 +6,22 @@ import { join, resolve } from 'node:path';
 import { DEMO_NOW } from './launch';
 
 /**
- * Boots the packaged app when it exists: `pnpm package:mac:dir` (release/mac-arm64/Styx.app) or `pnpm package:win:dir`
- * (release/win-unpacked/Styx.exe), then `pnpm package:smoke`.
+ * Boots the packaged app when it exists: `pnpm package:mac:dir` (release/mac-arm64/Styx.app), `pnpm package:win:dir`
+ * (release/win-unpacked/Styx.exe) or `pnpm package:linux:dir` (release/linux-unpacked/styx), then `pnpm package:smoke`.
  */
 const WIN = process.platform === 'win32';
+const LINUX = process.platform === 'linux';
 const EXE = WIN
   ? resolve(__dirname, '../release/win-unpacked/Styx.exe')
-  : resolve(__dirname, `../release/mac-${process.arch}/Styx.app/Contents/MacOS/Styx`);
+  : LINUX
+    ? resolve(__dirname, `../release/linux-${process.arch === 'arm64' ? 'arm64-' : ''}unpacked/styx`)
+    : resolve(__dirname, `../release/mac-${process.arch}/Styx.app/Contents/MacOS/Styx`);
 /** Where electron-builder puts `resources/` next to the binary. */
-const RESOURCES = WIN ? resolve(EXE, '../resources') : resolve(EXE, '../../Resources');
+const RESOURCES = WIN || LINUX ? resolve(EXE, '../resources') : resolve(EXE, '../../Resources');
 
 test.describe('packaged app', () => {
   test.skip(
-    (process.platform !== 'darwin' && !WIN) || !existsSync(EXE),
+    (process.platform !== 'darwin' && !WIN && !LINUX) || !existsSync(EXE),
     'no packaged build for this platform in release/',
   );
 
