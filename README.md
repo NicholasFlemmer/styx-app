@@ -6,7 +6,7 @@
 
 **Run Claude Code, Codex, Gemini and Cursor on all your projects at once.<br />They ask before they touch production.**
 
-[**Download for Mac**](https://heystyx.com/download/mac?from=github) &nbsp;·&nbsp; [**Download for Windows**](https://heystyx.com/download/win?from=github) &nbsp;·&nbsp; [**Linux**](https://github.com/NicholasFlemmer/styx-app/releases/latest) &nbsp;·&nbsp; [Website](https://heystyx.com) &nbsp;·&nbsp; [Watch the story (1:42)](https://heystyx.com/story)
+[**Download for Mac**](https://heystyx.com/download/mac?from=github) &nbsp;·&nbsp; [**Download for Windows**](https://heystyx.com/download/win?from=github) &nbsp;·&nbsp; [**Linux**](https://github.com/NicholasFlemmer/styx-app/releases/latest) &nbsp;·&nbsp; [**Docs**](https://heystyx.com/docs) &nbsp;·&nbsp; [Website](https://heystyx.com) &nbsp;·&nbsp; [Watch the story (1:42)](https://heystyx.com/story)
 
 **Contribute:** [Add an agent](docs/contributing/adding-an-agent.md) &nbsp;·&nbsp; [Add a deploy target](docs/contributing/adding-a-target.md) &nbsp;·&nbsp; [Contributing guide](CONTRIBUTING.md)
 
@@ -189,7 +189,8 @@ If Electron starts as plain Node, your shell has `ELECTRON_RUN_AS_NODE` set; the
 
 ## Contributing
 
-Bug reports, ideas and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md). To report a security
+Bug reports, ideas and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); the
+[docs](https://heystyx.com/docs/contributing/how-styx-is-built) explain how Styx is built. To report a security
 problem, please follow [SECURITY.md](SECURITY.md) instead of opening an issue.
 
 The two easiest ways in are self-contained, with a worked example and a checklist each:
