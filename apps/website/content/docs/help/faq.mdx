@@ -1,0 +1,72 @@
+---
+title: FAQ
+description: Short, straight answers about price, privacy, supported agents and platforms, and how Styx compares.
+---
+
+## Is Styx free?
+
+Yes. Every feature works without paying and without an account. You pay for your agents' plans (Claude, ChatGPT, Google, Cursor) directly with those companies, as you would without Styx.
+
+## Is it open source?
+
+Yes, under the [Apache License 2.0](https://github.com/NicholasFlemmer/styx-app/blob/main/LICENSE). The code is on [GitHub](https://github.com/NicholasFlemmer/styx-app). The Styx name and logo aren't covered by the licence, so a fork needs its own name.
+
+## Does my code leave my machine?
+
+Not through Styx. Your code, projects, file paths, prompts, agent conversations and credentials never reach a Styx server.
+
+Your agents do talk to their own providers: that's how they work, with or without Styx. When Claude Code reads a file, it sends it to Anthropic under your account, exactly as it would in a terminal. The same goes for the summaries Styx asks an agent to draft when you land or publish.
+
+What Styx itself sends is a short, fixed list of usage counts (which you can turn off), and anything you choose to send, like feedback. The details are in [Privacy and usage counts](/docs/help/privacy).
+
+## Which agents does it support?
+
+Claude Code, Codex, Gemini CLI and Cursor's agent, plus a plain shell. Styx runs the CLIs on your computer, signed in to your own plans, so there are no API keys to paste. See [Connect your agents](/docs/getting-started/connect-agents). Want another one? [Adding an agent](/docs/contributing/add-an-agent) is one of the easiest ways to contribute.
+
+## Can I keep using my own editor?
+
+Yes. Styx isn't trying to be where you write code. During setup it detects VS Code, Cursor, Windsurf, Zed, JetBrains IDEs and Neovim, can import your editor's recent folders, keybindings and theme, and **Open in** sends any file or task back to your editor. The built-in editor and terminal are there for reading and fixing agent work without switching windows. See [Use Styx alongside VS Code](/docs/guides/alongside-your-editor).
+
+## How is it different from running agents in terminals?
+
+The agents are the same; what's around them is different:
+
+- **Every task gets its own branch** in its own copy of the repo, so two agents never edit the same checkout.
+- **You can see who needs you.** One count, one board and one notification for every agent in every project, instead of checking terminals.
+- **Agents never hold your keys.** Deploy and server credentials stay in your system keychain. An agent asks, you approve for a set time, and the access ends on its own. Production needs Touch ID, Windows Hello or your system password. A plain terminal gives an agent whatever your shell can reach.
+- **Review and landing are built in:** Changes turn by turn, Undo this turn, and Land with your checks.
+
+## How is it different from Cursor?
+
+Cursor is an AI code editor with its own agent. Styx isn't an editor: it runs Claude Code, Codex, Gemini CLI and Cursor's agent side by side across your projects, and sits on top of whichever editor you use, Cursor included. Many people use both. Cursor has things Styx doesn't, such as a full IDE and cloud agents.
+
+## How is it different from other apps that run agents in parallel?
+
+Several apps run coding agents side by side in worktrees. Where Styx is different:
+
+- **It's built around all your projects**, not one repository at a time.
+- **It runs agents from several companies** next to each other, on the plans you already pay for.
+- **It gates production.** Credentials stay in your keychain, agents ask for scoped, expiring access, and every request, approval and use goes into an append-only audit log.
+- **It brings your editor along** rather than replacing it.
+
+And where it isn't: Styx runs everything on your computer (no cloud machines), and it's built for one person today (no team features). The website has [side-by-side comparisons](https://heystyx.com/compare) with specific tools.
+
+## Is Styx a sandbox?
+
+No, and we'd rather say so. Styx is a guardrail: agents run as you, on your machine, with your file access. What Styx guarantees is that it never hands an agent your keys, and that every grant it gives is scoped, timed and written down. An agent that deliberately goes around Styx's tools, for example by calling a cloud CLI by its full path, isn't stopped by them; Styx warns you in the chat when it sees that. See the [Security model](/docs/access/security-model).
+
+## What does the account do?
+
+Very little, on purpose. You can sign in with GitHub or Google, and nothing is gated behind it. Today it's used to sign the commits Styx makes when git on your computer has no name and email set, and while you're signed in your usage counts are tied to your account instead of only an anonymous install id. Styx never sees your password.
+
+## Does it work on Windows and Linux?
+
+Yes, both in beta. Windows 10 and 11 (x64) have the same app and the same rules as the Mac, with Windows Hello for production approvals; the build isn't code-signed yet, so SmartScreen warns on install. Linux comes as an AppImage or a .deb, uses polkit (your system password) for production approvals and the Secret Service keyring for credentials. On a Mac you need Apple Silicon; there's no Intel build. See [Install](/docs/getting-started/install).
+
+## Can I build iOS or Android apps with it?
+
+Yes. **Run locally** can build and run a mobile app on a simulator or emulator and mirror it in Preview. iOS simulators need a Mac with Xcode; Android emulators work on any platform where the Android SDK's `adb` and `emulator` are on your PATH.
+
+## How do I contribute?
+
+Start with [CONTRIBUTING.md](https://github.com/NicholasFlemmer/styx-app/blob/main/CONTRIBUTING.md) and [How Styx is built](/docs/contributing/how-styx-is-built). The two easiest ways in are [adding an agent](/docs/contributing/add-an-agent) and [adding a deploy target](/docs/contributing/add-a-target). Bug reports and ideas are welcome as [GitHub issues](https://github.com/NicholasFlemmer/styx-app/issues), or through **Feedback** in the app's status bar. To report a security problem, follow [SECURITY.md](https://github.com/NicholasFlemmer/styx-app/blob/main/SECURITY.md) instead of opening an issue.

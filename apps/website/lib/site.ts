@@ -26,6 +26,8 @@ export const site = {
   demoUpdated: '30 September 2026',
   /** When the launch article last changed. */
   launchUpdated: '30 September 2026',
+  /** When the docs (content/docs) last changed: the sitemap's date for every docs page. Bump with a docs change. */
+  docsUpdated: '6 October 2026',
   url: process.env['NEXT_PUBLIC_SITE_URL'] ?? 'http://localhost:3100',
   version: desktop.version,
   links: {

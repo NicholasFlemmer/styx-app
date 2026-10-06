@@ -1,0 +1,127 @@
+---
+title: Settings
+description: Every setting on the Settings screen, what it does, its default, and whether it is saved on this machine or in the project.
+---
+
+Settings has two groups. **App** settings are yours and stay on this machine; open them with **Settings** in the rail. **Project** settings (**Targets**, **Agent defaults**, **Env & secrets**) belong to one project and are opened from that project's nav. A few rows in the App sections apply to the current project; they're marked below.
+
+Where a value is kept:
+
+- **This machine**: Styx's local database. Not shared with anyone.
+- **project.json**: the project's `.styx/project.json`, which you commit, so everyone on the project gets it. Secrets never go there. See [project.json](/docs/reference/project-json).
+- **Keychain**: the macOS Keychain, Windows Credential Manager or the system keyring on Linux.
+
+In **Agent defaults** and **Env & secrets**, a **Reset** button appears next to a value the project has set; it puts the default back.
+
+<Callout type="note" title="Saved but not applied yet">
+  A few rows are stored but don't change anything in this version: **Open files in**, **Line endings**,
+  **Auto-create worktree per agent**, **Shell (Windows)**, **Inject as** and **Share with agents**. They are
+  marked "Not applied yet" below.
+</Callout>
+
+## App
+
+### General
+
+| Setting                           | What it does                                                                                                                                        | Default       | Kept         |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------ |
+| **Theme**                         | **System**, **Dark** or **Light**. <Keys k="Mod+Shift+T" /> switches between light and dark.                                                        | System        | This machine |
+| **Notify when an agent needs me** | **Badge + sound**, **Badge** or **Off**: how Styx tells you a task is waiting for you.                                                              | Badge + sound | This machine |
+| **Launch at login**               | Start Styx when you log in (installed app only).                                                                                                    | On            | This machine |
+| **Updates**                       | Shows the running version and what the updater is doing. **Check now** looks for an update; **Restart to update** installs one that has downloaded. | —             | —            |
+| **Walkthrough**                   | Whether you've seen the walkthrough. **Show the walkthrough** plays it again.                                                                       | Not seen yet  | This machine |
+
+### Account
+
+Signing in to Styx with GitHub or Google, your plan, **Refresh** and **Sign out**.
+
+| Setting               | What it does                                                                                                                                                   | Default | Kept         |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------ |
+| **Send usage counts** | Sends counts of which features get used: tied to your account when signed in, under a random install id when not. Never your code, projects, paths or prompts. | On      | This machine |
+
+### Editor
+
+| Setting                             | What it does                                                                                                                                             | Default                          | Kept         |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ------------ |
+| **Engine**                          | The built-in editor: Monaco (embedded). Not changeable.                                                                                                  | Monaco (embedded)                | —            |
+| **Open files in**                   | **Styx** or **Fallback editor**. Not applied yet.                                                                                                        | Styx                             | This machine |
+| **Fallback editor**                 | The editor **Open in…** uses, chosen from the editors Styx found on this machine.                                                                        | The detected fallback, else None | This machine |
+| **Line endings**                    | Current project. **Per repo**, **LF** or **CRLF**. Not applied yet.                                                                                      | Per repo                         | project.json |
+| **Screen reader mode**              | Turns on the editor's screen reader mode and the terminal's accessibility tree.                                                                          | Off                              | This machine |
+| **Track agent edits (diff review)** | Watches agents' worktrees so their edits show as changes in the editor, the change bar and diff review. Off because it slows Styx down on large changes. | Off                              | This machine |
+
+### Agents
+
+The table of agents (Claude Code, Codex, Gemini CLI, Cursor's agent, shell) with **Connect**, **Sign in**, **Verify**, **Locate binary** and **Rescan**. See [Connect your agents](/docs/getting-started/connect-agents). Under **Preferences**:
+
+| Setting                            | What it does                                                                                                                                                                                                        | Default             | Kept         |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ------------ |
+| **Default agent**                  | Current project. The agent a new task starts with.                                                                                                                                                                  | Claude Code         | project.json |
+| **Auto-create worktree per agent** | Not applied yet: in a git project every new task gets its own worktree and branch.                                                                                                                                  | On                  | This machine |
+| **Shell (Windows)**                | Current project. **PowerShell** or **WSL**. Not applied yet; set `STYX_WIN_SHELL=wsl` instead (see [Environment variables](/docs/reference/environment-variables)).                                                 | PowerShell          | project.json |
+| **Detected CLIs**                  | The agent CLIs Styx found, with version and where they come from. Read-only.                                                                                                                                        | —                   | —            |
+| **_Agent_ binary**                 | Shown when an agent has more than one runnable copy (for example on `PATH` and inside an editor extension), or one you located by hand. Picks which one Styx runs; **Detected automatically** undoes a manual pick. | The detected binary | This machine |
+
+### Skills
+
+The skills installed for your agents and a catalogue to install from, with **Install**, **Read** and **Remove**. Project skills are committed with the repo. No settings rows.
+
+### Keychain & secrets
+
+| Setting                | What it does                                                                                             | Default                | Kept         |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------- | ------------ |
+| **Store**              | Where credentials are kept: macOS Keychain, Windows Credential Manager or the system keyring. Read-only. | —                      | —            |
+| **MFA for prod write** | What confirms prod write, deploy and delete: Touch ID, Windows Hello or your system password. Read-only. | —                      | —            |
+| **Inject as**          | **Scoped token, else env** or **Env**. Not applied yet.                                                  | Scoped token, else env | This machine |
+
+### Policies
+
+| Setting                        | What it does                                                                                                        | Default | Kept         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------- | ------- | ------------ |
+| **Auto-approve staging reads** | Turns the built-in rule that grants read access to staging and preview targets for 1 hour without asking on or off. | On      | This machine |
+| **Grant idle expiry**          | A grant ends after 1 hour without use. Read-only.                                                                   | 1 hour  | —            |
+| **Export**                     | The audit log export format. Read-only.                                                                             | JSON    | —            |
+
+All policies, including your own rules, are on the **Approvals** screen. See [Policies](/docs/access/policies).
+
+### Shortcuts
+
+Read-only: **Palette** (<Keys k="Mod+K" />), **Switch project** (<Keys k="Mod+P" />), **Focus agent 1–4** (<Keys k="Mod+1" /> to <Keys k="Mod+4" />) and **Approve / deny** (<Keys k="Mod+Enter" /> / <Keys k="Mod+Backspace" />). The full list is in [Keyboard shortcuts](/docs/reference/keyboard-shortcuts).
+
+## Project
+
+### Targets
+
+A table of the project's deploy and server targets: **Target**, **Env**, **Policy**, **State**. Credentials stay in the keychain on this machine. Targets listed in `.styx/project.json` show up here as unconnected until you connect them.
+
+| Setting    | What it does                                                                                                              | Default                                                               | Kept         |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------ |
+| **Policy** | Per target. **Ask · MFA** (ask, then Touch ID, Windows Hello or system password), **Ask each time**, or **Always allow**. | Ask · MFA for `prod`, Always allow for `scm`, Ask each time otherwise | This machine |
+
+Row actions: **Refresh** (targets that use a provider CLI login), **Revoke** (end the open grant), **Edit** or **Connect**, and **Remove**, which needs a second press (**Remove?**) because it deletes the credential and ends the target's grants. Under the table: **+ Connect target · OAuth / key / SSH** and **Deploy commands…**. When the project file sets target policies or rules this machine hasn't accepted, **Accept project policies** appears. See [Connect a target](/docs/access/connect-a-target).
+
+### Agent defaults
+
+What a new task in this project starts with. Each one can also be changed per task.
+
+| Setting                                                           | What it does                                                                                                                         | Default                           | Kept         |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------- | ------------ |
+| **Default agent**                                                 | The agent a new task starts with.                                                                                                    | Claude Code                       | project.json |
+| **Model**                                                         | The model, from the default agent's list. **Default** leaves it to the agent.                                                        | Default                           | project.json |
+| **Auto-approve edits**                                            | Whether a new task starts with **Auto-approve edits** on.                                                                            | Off                               | project.json |
+| **Permission mode**                                               | **Ask each time**, **Accept edits**, **Plan mode**, **Bypass permissions**, **Don't ask** or **Auto**.                               | Auto                              | project.json |
+| **Styx tasks · Run locally, Deploy, Tech debt audit, merges**     | The permission mode for the tasks Styx starts itself. Same six options.                                                              | Bypass permissions                | project.json |
+| **Effort**                                                        | How hard the agent thinks, from the agent's own list. Shown only for agents that take an effort.                                     | Default                           | project.json |
+| **Fetch before cutting a lane**                                   | Fetch from the remote before a new task's branch is created, so it starts from the latest code.                                      | On                                | This machine |
+| **Bring in the base branch before publishing**                    | Merge the base branch into a lane before it is pushed or opened as a pull request.                                                   | On                                | This machine |
+| **Bring in the base branch**                                      | **After every turn**, **Before publishing** or **Only when I ask**: when Styx merges the base branch into a lane by itself.          | After every turn                  | This machine |
+| **Merging**                                                       | **Keep my project up to date for me** (Styx resolves conflicts with the agent, checks and commits) or **I review and merge myself**. | Keep my project up to date for me | This machine |
+| **Land on its own when the agent goes quiet and the checks pass** | A finished lane lands in the base branch by itself.                                                                                  | Off                               | This machine |
+
+### Env & secrets
+
+| Setting               | What it does                                                | Default   | Kept         |
+| --------------------- | ----------------------------------------------------------- | --------- | ------------ |
+| **.env source**       | Secrets come from the keychain. Read-only.                  | Keychain  | —            |
+| **Share with agents** | **Per grant**, **Always** or **Never**. Not applied yet.    | Per grant | project.json |
+| **Committed file**    | The project settings file: `.styx/project.json`. Read-only. | —         | —            |

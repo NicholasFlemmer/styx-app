@@ -183,8 +183,10 @@ function brokerPipeSecret(userData: string): string {
 }
 
 function mfaProvider(): MfaProvider {
-  if (env['STYX_MFA'] === 'auto') return new FakeMfaProvider('ok');
-  if (env['STYX_MFA'] === 'deny') return new FakeMfaProvider('failed');
+  // STYX_MFA fakes the OS prompt for tests and dev runs only. A packaged build ignores it: an agent runs as the person
+  // and could otherwise relaunch Styx with STYX_MFA=auto and approve its own production grants.
+  if (!app.isPackaged && env['STYX_MFA'] === 'auto') return new FakeMfaProvider('ok');
+  if (!app.isPackaged && env['STYX_MFA'] === 'deny') return new FakeMfaProvider('failed');
   if (isMac) return new TouchIdProvider(systemPreferences);
   if (platform === 'win32') return new WindowsHelloProvider();
   if (platform === 'linux') return new PolkitProvider();

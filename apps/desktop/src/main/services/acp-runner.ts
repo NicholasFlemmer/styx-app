@@ -12,6 +12,7 @@ import {
 } from '@styx/core';
 import type { McpServerEntry } from '../agents/types';
 import { logger } from './logger';
+import { STRIPPED_ENV } from '../providers/cli-runner';
 import {
   toolHint,
   type ImageBlock,
@@ -445,8 +446,9 @@ export class AcpRunner extends EventEmitter<StreamEvents> implements StreamRunne
   private start(entry: Entry): Promise<number> {
     const { opts } = entry;
     const env: Record<string, string> = {};
-    for (const [k, v] of Object.entries(process.env))
-      if (v !== undefined && k !== 'ELECTRON_RUN_AS_NODE') env[k] = v;
+    // Provider tokens in Styx's own environment (a shell's GH_TOKEN, VERCEL_TOKEN …) never reach an agent: its access
+    // to targets goes through grants. The agent's own credentials (ANTHROPIC_API_KEY and the like) pass through.
+    for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !STRIPPED_ENV.has(k)) env[k] = v;
     Object.assign(env, { NO_COLOR: '1', TERM: 'dumb' }, opts.env);
     const proc = this.spawnFn(opts.command, opts.args, {
       cwd: opts.cwd,

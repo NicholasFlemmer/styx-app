@@ -1,0 +1,103 @@
+---
+title: Install
+description: Download Styx for Mac, Windows or Linux, get through first launch, and keep it up to date.
+---
+
+Styx is a free download for macOS, with Windows and Linux in beta. Installing takes a minute; the first launch then walks you through your editor, your projects and your agents.
+
+## What you need
+
+- **A Mac with Apple Silicon**, **a 64-bit PC with Windows 10 or 11**, or **a 64-bit Linux desktop**. There is no build for Intel Macs.
+- **A screen that fits a 1100 × 680 window.** That's the smallest the Styx window goes.
+- **git**, so each task gets its own branch. Styx works without it (agents then work in the project folder directly), and offers to install it for you when it's missing.
+- **At least one coding agent and a plan for it**: Claude (Pro or Max), ChatGPT (Plus, Pro or Team, for Codex), a Google account (for Gemini CLI) or a Cursor plan. If the agent isn't installed yet, Styx can install it and sign you in during setup.
+
+## Download and install
+
+### Mac
+
+1. [Download Styx for Mac](https://heystyx.com/download/mac). It's a `.dmg` for Apple Silicon.
+2. Open it and drag **Styx** into **Applications**.
+3. Open Styx from Applications.
+
+The app and the disk image are signed and notarized by Apple, so macOS opens it without a warning.
+
+### Windows (beta)
+
+1. [Download Styx for Windows](https://heystyx.com/download/win). It's an `.exe` installer for x64.
+2. Run it. Windows will probably show **Windows protected your PC**: the Windows build isn't code-signed yet, so SmartScreen doesn't recognise it. Select **More info**, then **Run anyway**.
+3. Follow the installer. It asks whether to install Styx just for you or for everyone on the PC.
+
+Windows is in beta: the app and its rules are the same as on a Mac (production approvals use Windows Hello), but it has had far less use. [Tell us](https://github.com/NicholasFlemmer/styx-app/issues) what breaks.
+
+### Linux (beta)
+
+Download from [the latest GitHub release](https://github.com/NicholasFlemmer/styx-app/releases/latest). There are two packages, both for x64:
+
+- **AppImage**, for any distribution. Make it executable and run it:
+
+  ```sh
+  chmod +x Styx-*.AppImage
+  ./Styx-*.AppImage
+  ```
+
+- **.deb**, for Debian and Ubuntu:
+
+  ```sh
+  sudo apt install ./Styx-*.deb
+  ```
+
+Two parts of your desktop matter on Linux:
+
+- **polkit**, for production approvals. Where a Mac asks for Touch ID, Linux asks for your own password through polkit. The .deb installs a Styx polkit action, so the prompt names Styx. The AppImage can't install one and uses the standard `pkexec` prompt instead. Without polkit, an authentication agent or a graphical session, Styx refuses production grants rather than issue them unchecked.
+- **A Secret Service keyring** (GNOME Keyring or KWallet), where Styx keeps the credentials for your deploy targets. The .deb pulls in `libsecret-1-0`.
+
+Notifications use your desktop's notifications and a tray icon. KDE shows the tray icon as is; GNOME needs the AppIndicator extension. There's no dock badge on Linux.
+
+<Callout type="note" title="Beta">
+  Linux is new and in beta. The AppImage and .deb aren't signed. Simulators: iOS needs a Mac; Android
+  emulators work wherever `adb` and `emulator` are on your PATH.
+</Callout>
+
+## First launch
+
+The first time Styx opens, it asks you to sign in. This is optional: choose **Not now** and everything still works. (More on [what the account does](#the-optional-account) below.)
+
+Then setup runs through four steps. Each one says why it matters, and **Skip** finishes setup at any point.
+
+1. **Your editor.** Styx lists the editors it found (VS Code, Cursor, Windsurf, Zed, JetBrains IDEs, Neovim) and picks one as the place **Open in** goes. You can import its keybindings, theme and font, and its recent folders, and let Styx look where Claude Code and Codex have worked. Nothing in your editor changes.
+2. **Your projects.** The repos Styx found on this machine, with your editor's recent folders. Tick the ones you want. The row underneath adds more: **+ new project**, **add folder** or **clone URL**. If git isn't installed, this step says so and offers to install it.
+3. **Your AI.** One card per plan: Claude, ChatGPT (Codex), Gemini and Cursor. **Set up** installs the agent if it's missing, signs you in in your browser, and sends a test message so you know it answers. One is enough to start. See [Connect your agents](/docs/getting-started/connect-agents).
+4. **Where you deploy.** Optional. Connect Vercel, AWS, Google Cloud, Supabase, GitHub or an SSH host now, or wait until an agent first asks. Secrets go to your system keychain, never into a repo. See [Connect a target](/docs/access/connect-a-target).
+
+After setup, a short walkthrough points at each part of the window. You can replay it from the command palette (**Show the walkthrough**) or **Settings › General › Walkthrough**.
+
+## Updates
+
+On a Mac, on Windows and with the AppImage, Styx updates itself. It checks shortly after launch and every few hours, downloads a new version in the background, and installs it the next time you quit. When an update is ready you'll see **Restart to update**; if agents are working, Styx tells you how many a restart would stop (they pick up again when Styx reopens). **Settings › General › Updates** shows the version you're on and has **Check now**.
+
+The .deb doesn't update itself. Download the new .deb from [GitHub Releases](https://github.com/NicholasFlemmer/styx-app/releases/latest) and install it the same way.
+
+On Windows, until the build is code-signed, an update is checked against the checksum published with it, over HTTPS from the same place the download comes from.
+
+## The optional account
+
+You can sign in with GitHub or Google, now or later from **Settings › Account**. Signing in gates nothing: every feature works without an account. Today the account is used to sign the commits Styx makes when git on your computer has no name and email set, and it ties Styx's usage counts to you rather than to an anonymous install id. Styx never sees your password. See [Privacy and usage counts](/docs/help/privacy).
+
+## Uninstall
+
+- **Mac:** quit Styx and move it from Applications to the Bin.
+- **Windows:** uninstall **Styx** from **Settings › Apps**.
+- **Linux:** delete the AppImage. For the .deb, remove the package with `sudo apt remove` and its name, which `dpkg -l | grep -i styx` shows; this also removes the polkit action.
+
+Removing the app leaves your projects alone. A few things stay behind until you delete them:
+
+- Styx's own data (its database, settings and logs): `~/Library/Application Support/Styx` and `~/Library/Logs/Styx` on a Mac, `%APPDATA%\Styx` on Windows, `~/.config/Styx` on Linux.
+- Task worktrees, in a `.styx/worktrees` folder in each project's parent folder. Land or discard what you want first; the branches stay in your repo.
+- Credentials you connected for deploy targets, in your system keychain under `dev.styx`.
+
+## Build from source
+
+Styx is open source. To run it from a checkout, follow **Build from source** in the [README](https://github.com/NicholasFlemmer/styx-app#readme): Node 22, pnpm 10 and git, then `pnpm install`, `pnpm tokens:build` and `pnpm dev`.
+
+Next: [Your first task](/docs/getting-started/first-task).

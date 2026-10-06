@@ -3,6 +3,7 @@ import { site } from '@/lib/site';
 import { legal } from '@/lib/legal';
 import { COMPETITORS } from '@/lib/compare';
 import { dayOf } from '@/lib/dates';
+import { docsUrls } from '@/lib/docs-urls';
 
 export const dynamic = 'force-static';
 
@@ -40,6 +41,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: compared[i] ?? latest,
       changeFrequency: 'monthly' as const,
       priority: 0.6,
+    })),
+    // Every docs page carries the docs' recorded date (site.docsUpdated), never the build time.
+    ...docsUrls().map((url) => ({
+      url: `${site.url}${url}`,
+      lastModified: dayOf(site.docsUpdated),
+      changeFrequency: 'weekly' as const,
+      priority: url === '/docs' ? 0.8 : 0.5,
     })),
     {
       url: `${site.url}/privacy`,

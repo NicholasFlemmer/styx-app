@@ -9,10 +9,14 @@
     "build": "next build",
     "start": "npx serve out --listen 3100",
     "typecheck": "next typegen && tsc --noEmit -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
     "@styx/tokens": "workspace:*",
+    "@types/mdx": "^2.0.14",
+    "fumadocs-core": "^16.16.2",
+    "fumadocs-mdx": "^15.4.6",
     "next": "^16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8"

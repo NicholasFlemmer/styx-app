@@ -1,0 +1,129 @@
+---
+title: Keyboard shortcuts
+description: Every keyboard shortcut in Styx, grouped by where it works.
+---
+
+`Mod` is ⌘ on a Mac and Ctrl on Windows and Linux. Shortcuts can't be changed yet. **Settings › Shortcuts** lists the main ones.
+
+## Anywhere in the window
+
+| Shortcut                 | What it does                                                                           |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| <Keys k="Mod+K" />       | Open or close the command palette.                                                     |
+| <Keys k="Mod+P" />       | Switch project: the palette, showing projects only.                                    |
+| <Keys k="Mod+Shift+N" /> | New task in the current project.                                                       |
+| <Keys k="Mod+Shift+T" /> | Switch between light and dark. (**System** is set in **Settings › General**.)          |
+| <Keys k="Esc" />         | Close the topmost sheet, drawer, dialog or palette and return focus to what opened it. |
+
+## Workspace
+
+| Shortcut                   | What it does                                                                 |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| <Keys k="Mod+1" />         | Go to the first task in the project's nav.                                   |
+| <Keys k="Mod+2" />         | Go to the second task.                                                       |
+| <Keys k="Mod+3" />         | Go to the third task.                                                        |
+| <Keys k="Mod+4" />         | Go to the fourth task.                                                       |
+| <Keys k="Mod+Shift+O" />   | Pop the current task's chat out into its own window, or dock it back.        |
+| <Keys k="Mod+Enter" />     | Grant the current task's access request as asked: its own scope, for 1 hour. |
+| <Keys k="Mod+Backspace" /> | Deny the current task's access request.                                      |
+
+Grant and deny work from the chat and the workspace while the access request sheet is closed. Prod write, deploy and delete still ask for Touch ID, Windows Hello or your system password.
+
+## Chat composer
+
+| Shortcut                 | What it does                                                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <Keys k="Enter" />       | Send.                                                                                                                                             |
+| <Keys k="Shift+Enter" /> | New line.                                                                                                                                         |
+| <Keys k="Esc" />         | Stop the agent's current turn (only while it is working).                                                                                         |
+| <Keys k="Shift+Tab" />   | Next permission mode: **Ask each time** → **Accept edits** → **Plan mode** → **Ask each time**. From any other mode it goes to **Ask each time**. |
+
+Type `@` to mention a file or `/` for a command. While that list is open: <Keys k="↑" /> and <Keys k="↓" /> move, <Keys k="Enter" /> or <Keys k="Tab" /> picks, <Keys k="Esc" /> closes the list.
+
+## Access request sheet
+
+| Shortcut                   | What it does                                           |
+| -------------------------- | ------------------------------------------------------ |
+| <Keys k="Mod+Enter" />     | Grant with the scope and duration chosen in the sheet. |
+| <Keys k="Mod+Backspace" /> | Deny.                                                  |
+
+## Agents board
+
+On a focused card that needs you:
+
+| Shortcut                   | What it does                                                               |
+| -------------------------- | -------------------------------------------------------------------------- |
+| <Keys k="Mod+Enter" />     | Grant the access request as asked (1 hour), or run the card's main action. |
+| <Keys k="Mod+Backspace" /> | Deny the request, or reject the plan.                                      |
+
+## Command palette
+
+| Shortcut                                  | What it does                                             |
+| ----------------------------------------- | -------------------------------------------------------- |
+| <Keys k="↑" /> <Keys k="↓" />             | Move through the results.                                |
+| <Keys k="Enter" />                        | Run the highlighted result.                              |
+| <Keys k="Mod+Enter" />                    | Run it in a new window.                                  |
+| <Keys k="Tab" /> / <Keys k="Shift+Tab" /> | Next or previous scope (all, actions, agents, projects). |
+| <Keys k="Esc" />                          | Close.                                                   |
+
+## New task and Tasks
+
+| Shortcut               | What it does                                                                        |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| <Keys k="Mod+Enter" /> | Start the task (in **New task**, and in the box for a task alongside on **Tasks**). |
+| <Keys k="Esc" />       | Close **New task**.                                                                 |
+
+## Design
+
+While the **Design** tab is showing, and you're not typing in a field:
+
+| Shortcut         | What it does                                                       |
+| ---------------- | ------------------------------------------------------------------ |
+| <Keys k="V" />   | Turn **Select** on or off: click an element, or drag over an area. |
+| <Keys k="Esc" /> | Clear the selection; press again to leave **Select**.              |
+
+In the design panes:
+
+| Shortcut               | What it does                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------- |
+| <Keys k="Mod+Enter" /> | **Start a design task** from what you typed, or send what you wrote under **Tell** about the selection. |
+| <Keys k="Enter" />     | **+ Ask for a screen**: ask for the screen you named. <Keys k="Esc" /> cancels.                         |
+
+## Preview
+
+| Shortcut               | What it does                                |
+| ---------------------- | ------------------------------------------- |
+| <Keys k="Mod+Enter" /> | **Select to fix**: send what should change. |
+| <Keys k="Esc" />       | **Select to fix**: cancel.                  |
+
+## Diff review
+
+| Shortcut               | What it does                               |
+| ---------------------- | ------------------------------------------ |
+| <Keys k="j" />         | Next change.                               |
+| <Keys k="k" />         | Previous change.                           |
+| <Keys k="r" />         | Revert the focused change in the worktree. |
+| <Keys k="Mod+Enter" /> | Done: back to the workspace.               |
+
+When you review a single turn, only <Keys k="Mod+Enter" /> applies.
+
+## Pop-out chat window
+
+| Shortcut                 | What it does                             |
+| ------------------------ | ---------------------------------------- |
+| <Keys k="Mod+Shift+O" /> | Dock the chat back into the main window. |
+| <Keys k="Mod+Shift+T" /> | Switch between light and dark.           |
+
+The chat composer keys work as above. The palette and <Keys k="Esc" /> to close belong to the main window.
+
+## Moving and resizing
+
+| Where                   | Shortcut                                            | What it does                                       |
+| ----------------------- | --------------------------------------------------- | -------------------------------------------------- |
+| A project in the rail   | <Keys k="Alt+↑" /> / <Keys k="Alt+↓" />             | Move it up or down.                                |
+| A workspace tab         | <Keys k="Alt+Shift+←" /> / <Keys k="Alt+Shift+→" /> | Move it left or right.                             |
+| A workspace tab         | <Keys k="Shift+F10" />                              | Open its menu (so does the Menu key).              |
+| The chat's left edge    | <Keys k="←" /> / <Keys k="→" />                     | Make the chat wider or narrower.                   |
+| The terminal's top edge | <Keys k="↑" /> / <Keys k="↓" />                     | Make the terminal taller or shorter.               |
+| The terminal's top edge | <Keys k="Enter" />                                  | Collapse or expand the terminal.                   |
+| The walkthrough         | <Keys k="←" /> / <Keys k="→" />                     | Previous or next step. <Keys k="Esc" /> closes it. |

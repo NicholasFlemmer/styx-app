@@ -1,0 +1,105 @@
+---
+title: CLI
+description: The two `styx` commands, the session CLI agents use and the "Open in Styx" launcher, plus the provider shims and their exit codes.
+---
+
+There are two different commands called `styx`. The **session CLI** lives in a directory Styx puts at the front of every task's `PATH`; agents use it, and it only works inside a task. The **"Open in Styx" launcher** is optional, goes on your own `PATH`, and opens a folder in the app.
+
+## Session CLI
+
+```sh
+styx mcp                                   # run the MCP server (stdio) for the current task
+styx wrap <tool> [args…]                   # run a provider CLI through the grant broker
+styx hook <agent>                          # forward an agent lifecycle hook (JSON on stdin)
+styx request <target> <scope…> [-r reason] # ask you for access from a shell task
+styx status [note]                         # show, or set, the task's one-line status
+styx targets                               # list connected targets and their lock state
+```
+
+Every command except `wrap` needs `STYX_BROKER`, `STYX_SESSION_ID` and `STYX_TOKEN`, which Styx sets for each task. Outside a task they fail with `Not inside a Styx session (STYX_BROKER / STYX_SESSION_ID / STYX_TOKEN missing).`
+
+### styx mcp
+
+Runs the `styx` MCP server over stdio and stays up until the agent closes it or the task stops. Styx configures every agent to start it; you don't run it yourself. The tools are listed in [MCP tools](/docs/reference/mcp-tools).
+
+### styx wrap
+
+`styx wrap <tool> [args…]` runs a provider CLI under a grant:
+
+1. Finds the real `<tool>`: the first executable of that name on `PATH`, skipping the shim directory.
+2. Inside a task, asks Styx to authorize the command. Styx works out the scope from the arguments (for example `vercel deploy` is `deploy`, `gh pr list` is `read`, `gh repo delete` is `delete`, and a `gh` command it doesn't recognise counts as `write`) and picks the project's target for that provider, the `prod` one when the arguments include `--prod`, `--production` or `production`. A live grant that covers the scope is reused; otherwise a request opens and the command waits for your decision, up to 10 minutes.
+3. Runs the real tool with the grant's credentials added to its environment, with its own stdin, stdout and stderr.
+4. Reports the exit code, which goes into the audit log.
+
+Outside a task it just runs the real tool. Tools Styx knows: `vercel`; `aws`, `sam`, `cdk`; `gcloud`, `gsutil`, `bq`; `supabase`; `gh`; `ssh`, `scp`, `rsync`, `sftp`. Any other tool is refused with `<tool> is not a Styx-managed tool`.
+
+### styx hook
+
+`styx hook <agent>` reads a lifecycle event as JSON on stdin and passes it to Styx; `<agent>` is `claude`, `codex`, `gemini`, `cursor` or `shell`. Styx uses these to know when an agent starts and finishes work. It always exits 0, so a hook can never block an agent.
+
+### styx request
+
+```sh
+styx request supabase-prod read write -r "migration 0042"
+```
+
+Asks you for access from a shell task, the same as the `request_access` MCP tool. `<target>` takes the same forms (name, `provider:env`, …); each scope is `read`, `write`, `deploy` or `delete`; everything after `-r` is the reason (without it the reason is `requested from shell`). Prints the outcome as one JSON line. Waits up to 5 minutes for your decision.
+
+### styx status
+
+Prints `<agent> · <project> · <branch>`. With a note (`styx status Running the migration`) it also sets the task's one-line status.
+
+### styx targets
+
+Prints one line per target in the project, tab-separated: name, provider, env, lock state.
+
+### Exit codes
+
+| Code | Meaning                                                                                    |
+| ---- | ------------------------------------------------------------------------------------------ |
+| 0    | Done. For `styx request`: access is active.                                                |
+| 1    | `styx request`: denied, or still pending after the wait.                                   |
+| 64   | Unknown command or missing arguments. The usage is printed to stderr.                      |
+| 70   | Unexpected error, such as no broker or a failed call. The message is printed as `styx: …`. |
+| 77   | `styx wrap`: access was not granted.                                                       |
+| 126  | `styx wrap`: the real tool could not be started.                                           |
+| 127  | `styx wrap`: the tool is not installed (not on `PATH`).                                    |
+| 128  | `styx wrap`: the tool was killed by a signal.                                              |
+
+Otherwise `styx wrap` exits with the real tool's own code.
+
+## Provider shims
+
+At startup Styx writes small scripts to a `bin` folder inside its app data directory (on macOS, `~/Library/Application Support/Styx/bin`):
+
+| Script                                             | Runs                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------- |
+| `styx`                                             | the session CLI                                                     |
+| `vercel`, `gh`, `aws`, `gcloud`, `supabase`, `ssh` | `styx wrap <the same name> "$@"`                                    |
+| `git-credential-styx`                              | `styx credential`, which doesn't exist yet: it does nothing for now |
+
+On Windows they are `.cmd` files. The scripts run the CLI with the Styx app's own executable (`STYX_EXE`, with `ELECTRON_RUN_AS_NODE=1`) and the bundled `styx.js` (`STYX_CLI`), so nothing else needs to be installed.
+
+When a task starts, Styx sets `STYX_SHIM_DIR` to that folder and puts it first on the task's `PATH`, ahead of your login shell's `PATH`. So when an agent types `vercel deploy --prod`, it runs the shim, which asks you, and only then runs the real `vercel`.
+
+<Callout type="warn" title="A guardrail, not a sandbox">
+  The shims catch the provider CLIs an agent calls by name. An agent that calls a provider's API some other
+  way, with a credential it found on its own, isn't stopped by them. Keep long-lived keys out of the repo and
+  out of the shell environment the agent inherits.
+</Callout>
+
+## The "Open in Styx" launcher
+
+During onboarding, **Install "Open in Styx" command** puts a separate `styx` launcher on your own `PATH`:
+
+```sh
+styx            # opens the current folder in Styx
+styx ~/code/app # opens that folder
+```
+
+It opens `styx://open?path=<folder>`, and Styx asks before it adds a folder as a project.
+
+| Platform     | Where it goes                                                                                                     |
+| ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| macOS, Linux | A symlink in `/usr/local/bin`, else `~/.local/bin` (Styx tells you if that isn't on your `PATH`).                 |
+| Windows      | `%LOCALAPPDATA%\Styx\bin\styx.cmd`, added to your user `PATH`, plus **Open in Styx** on the Explorer folder menu. |

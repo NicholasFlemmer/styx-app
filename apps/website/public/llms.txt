@@ -2,7 +2,7 @@
 
 > Styx is an agentic development environment (ADE): a Mac app for developers who run AI coding agents. It puts every project and every agent (Claude Code, OpenAI Codex, Gemini CLI and Cursor's agent) in one window, on top of the editor you already use, and makes agents ask before they touch production.
 
-Styx is free to download for macOS on Apple silicon, and in beta for Windows 10 and 11 (x64). It is made by one person in South Africa.
+Styx is free and open source (Apache-2.0). It runs on macOS on Apple silicon, and in beta on Windows 10 and 11 (x64) and Linux (AppImage or .deb). It is made by one person in South Africa.
 
 ## What it does
 
@@ -28,6 +28,9 @@ Styx is free to download for macOS on Apple silicon, and in beta for Windows 10 
 
 ## Links
 
+- [Documentation](https://heystyx.com/docs): getting started, every feature, access and security, guides, reference (settings, shortcuts, CLI, MCP tools, project.json, environment variables), troubleshooting and contributing
+- [Documentation as one text file](https://heystyx.com/llms-full.txt): every docs page in Markdown, for agents and LLM tools; any single page is also at https://heystyx.com/md/docs/<path>
+- [Source code](https://github.com/NicholasFlemmer/styx-app): Apache-2.0
 - [Home and download](https://heystyx.com/): features, screenshots and the Download for Mac button
 - [Download for Mac](https://heystyx.com/download/mac): the latest signed, notarized build
 - [Introducing Styx](https://heystyx.com/launch): the launch article — who makes it, why, what it does, how it was built and where it stops

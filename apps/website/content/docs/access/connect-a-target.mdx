@@ -1,0 +1,86 @@
+---
+title: Connect a target
+description: Connect Vercel, AWS, GCP, Supabase, GitHub or an SSH host so agents can ask for access, and keep the connection healthy.
+---
+
+A target is a deploy provider or server that agents in one project can ask to use. Connecting one is optional: agents work locally without any. You connect a target once per project and environment, and from then on every agent in that project can request access to it, with you deciding each time (or a [policy](/docs/access/policies) deciding for you).
+
+Styx prefers to reuse the login your provider's own CLI already has. You don't paste a key unless you want to.
+
+## Open the connect flow
+
+Go to **Settings**, pick **Targets** under the project, and click **+ Connect target · OAuth / key / SSH**. The onboarding's **Targets** step opens the same flow. Pick a provider from the grid: **Vercel**, **AWS**, **GCP**, **Supabase**, **GitHub** or **SSH host**.
+
+## Connect with the provider's CLI
+
+For every provider except SSH, the first screen is **Connect with** the CLI: `vercel`, `aws`, `gcloud`, `supabase` or `gh`.
+
+<Steps>
+
+1. **Check the CLI.** Styx shows whether the CLI is installed and lists the accounts it's signed in to (for `aws`, your profiles). If it isn't installed, install it first, or use **Advanced** below.
+2. **Pick an account.** If none is listed, or you want another one, click **Sign in with** the CLI. Styx runs the CLI's own login (for example `gcloud auth login` or `gh auth login`) in a terminal inside the dialog. When it finishes, pick the account.
+3. **Choose the environment.** Pick `prod`, `staging` or `preview`. It defaults to `prod`. This decides how careful Styx is: production writes, deploys and deletes always need Touch ID, Windows Hello or your system password.
+4. **Name it (optional) and click Connect.**
+
+</Steps>
+
+In this mode Styx stores no secret. The keychain entry only names the account. Each time a grant is issued, Styx gets a current token from the CLI, either by asking it (for example `gcloud auth print-access-token`, or `aws configure export-credentials` for a profile) or by reading the token it keeps, and hands that to the granted command. Nothing is copied into Styx's keychain entry. Your OS may ask once whether Styx may read the CLI's keychain item.
+
+The dialog states the important caveat itself, for GCP: "Anything running as you can also use gcloud, so prefer scoped roles for prod." An agent that calls the real CLI directly, skipping the shim, uses your login with no grant. Styx warns about that in the chat when it sees it; see the [security model](/docs/access/security-model).
+
+## Advanced: tokens, keys and service accounts
+
+Under the CLI screen, **Advanced** (key, service account or token) opens the older forms:
+
+- **Vercel and Supabase:** Styx opens the provider's token page in your browser. Create a token there, paste it into **Secret**, and click **Save to Keychain** (**Save to Credential Manager** on Windows, **Save to Keyring** on Linux).
+- **GitHub:** Styx runs GitHub's device sign-in. It shows a short code, opens `github.com/login/device`, and saves the token once you approve there.
+- **AWS and GCP:** paste an access key and secret, or a service-account key, then **Test connection** and save. Styx recommends a dedicated IAM role with no delete permissions. With AWS keys, every grant gets temporary STS credentials limited to the granted scopes.
+
+Styx checks a pasted credential against the provider before it stores it, and never shows it again.
+
+## SSH hosts
+
+SSH has its own form: **Host**, **User**, **Port** (default 22), **Key** (with **Browse**, starting in `~/.ssh`), and **Passphrase** if the key is encrypted. Pick the environment, then **Test connection** and **Save**.
+
+Styx stores the key's path and passphrase in the keychain, not the key itself, and reads the key from disk each time a grant is issued. Agents never get the key file. They get a forwarded SSH agent socket that works for the grant's lifetime, as the form says.
+
+## Where credentials go
+
+Secrets go to your operating system's credential store and nowhere else:
+
+| Platform | Store                                                                |
+| -------- | -------------------------------------------------------------------- |
+| macOS    | macOS Keychain                                                       |
+| Windows  | Windows Credential Manager                                           |
+| Linux    | The system keyring through Secret Service (GNOME Keyring or KWallet) |
+
+Entries are stored under the service name `dev.styx`. Styx's database, logs, project files and the app's interface only ever hold a reference to the entry. **Settings › Keychain & secrets** shows which store is in use.
+
+Non-secret settings for a target (a Vercel project id, a Supabase project ref, an SSH host and user) live with the target and can be committed in `.styx/project.json`. A few advanced options are only set there, such as an AWS `roleArn` to assume for CLI-backed AWS targets. See [project.json](/docs/reference/project-json).
+
+## The Targets table
+
+**Settings › Targets** lists the project's targets with their **Env**, **Policy** and **State**:
+
+- **locked**: connected, no grant open.
+- **open · 42m left**: a grant is active, with the time until it ends.
+- **persistent**: an `always` grant is active, or the target's policy is **Always allow**.
+- **expired**: the credential stopped working.
+- **unconnected**: the target exists (for example from `.styx/project.json`) but has no credential on this machine yet.
+
+The row's actions change with its state: **Connect**, **Edit** (reopens the connect flow on that target), or **Revoke** while a timed grant is open. CLI-backed targets also have **Refresh**, which checks the login now. **Remove** needs two presses (**Remove?** the second time). It ends the target's grants and deletes its keychain entry. For a CLI-backed target that entry is only the account name, so your CLI login is untouched.
+
+The **Policy** column sets how requests to that target are decided. Targets you connect in Styx start as **Ask · MFA** for `prod` and **Ask each time** otherwise. [Policies](/docs/access/policies) explains the options.
+
+## When a login expires
+
+Styx checks every connected target every 30 minutes, when you bring the app to the front, and when your computer wakes. A brief network failure doesn't count. Only a real authentication failure, seen by two checks in a row (or once when you press **Refresh**, or when a grant can't be issued because the CLI is signed out), marks the target **expired**.
+
+When that happens, a banner names the target, says how long ago its credentials expired, and adds "Agents requesting it are paused." Click **Reconnect**. For a CLI-backed target, Styx reruns the CLI's login in a terminal (for an AWS SSO profile, `aws sso login --profile …`). Once you sign in, every other target using the same account is checked again, so one login clears all their banners. For a token-based target, Reconnect starts that target's connect flow again.
+
+While a target is expired, agents asking for it get an error telling them to reconnect it in Styx.
+
+## Next
+
+- [Approve a request](/docs/access/approve-a-request) to see what happens when an agent asks.
+- [Adding a target provider](/docs/contributing/add-a-target) if your provider isn't in the list.

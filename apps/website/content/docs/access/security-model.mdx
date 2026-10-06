@@ -1,0 +1,63 @@
+---
+title: Security model
+description: What Styx guarantees about your keys, production and the audit log, and what it doesn't protect against.
+---
+
+Styx is a guardrail, not a sandbox. Agents run as you, on your machine, with your files. What Styx controls is the path to your deploy targets and servers: it holds the keys, it decides with you who gets access to what and for how long, and it writes everything down. This page says plainly what that covers and where it stops, so you can decide what else you need.
+
+## What Styx guarantees
+
+**Your stored credentials stay in the OS keychain.** Tokens, keys and passphrases you give Styx go to the macOS Keychain, Windows Credential Manager or the Linux system keyring, and nowhere else: not Styx's database, its logs, its project files, its messages between processes, or the app's interface. Everything else refers to a credential by name only.
+
+**Agents only get access through grants.** A grant names one target, the scopes you allowed and how long it lasts. Credentials go to the granted command for the life of the grant, never into an agent's starting environment. Where the provider supports it (AWS, and GCP for reads), the command gets a new short-lived credential limited to the grant. For SSH, the agent gets a socket to an SSH agent Styx runs, never the key. [How access works](/docs/access/how-access-works) has the details for each provider.
+
+**Production needs you.** Writes, deploys and deletes on a `prod` target always need Touch ID, Windows Hello or your system password (polkit on Linux) before the grant is issued. The same goes for any grant on a `prod` target whose provider can't narrow the credential, reads included. Styx's main process decides this from its own records. No policy, project file, agent or anything in the app's interface can switch it off. If your machine can't verify you, Styx refuses the grant rather than skip the check.
+
+**Everything is written down.** Every request, grant, denial, use, revoke and expiry is recorded with who did it, which session and worktree it came from, and the command that triggered it. The log is append-only and hash-chained, and secrets are scrubbed from it before anything is written. See [Audit log](/docs/access/audit-log).
+
+**The app's interface can't touch your system.** The window you click in runs sandboxed: it has no access to files, processes, the network or the keychain. Everything it does goes through a fixed set of named commands handled by Styx's main process.
+
+**Agents can't talk their way around it.** Each agent's connection to Styx is tied to its own session. A session can only see its own grants, or `always` grants on its own project's targets. New requests are limited to five a minute per session, and a repeated request collapses into the one already waiting. Reasons and commands an agent supplies are scrubbed for secrets before they are stored. Policies that arrive in a repo's `.styx/project.json` can only make Styx ask more, never less, until you accept them on your machine.
+
+## What Styx doesn't protect against
+
+**Agents run as you.** An agent can read and write anything your user account can, run any program, and reach the network. Styx doesn't contain it. Inside the worktree, what an agent may do without asking is set by the agent's own permission mode, not by Styx's grants.
+
+**An agent that goes around Styx isn't stopped.** The shims catch `vercel`, `gh`, `aws`, `gcloud`, `supabase` and `ssh` when they're run by name. They don't catch:
+
+- the real CLI called by its full path. If you connected that provider through its CLI, the CLI is still signed in as you and works without a grant. Styx tells agents not to do this, and when Claude Code or Codex does it anyway, Styx posts a warning in the chat saying no grant was asked and nothing was audited. It warns; it doesn't block;
+- other tools from the same providers: `scp`, `rsync`, `sftp`, `gsutil`, `bq`, `sam` and `cdk` aren't wrapped today;
+- `git push` with your usual git credentials, or a provider's SDK or API called with a token the agent found on disk.
+
+The connect dialog says the same about CLI logins: "Anything running as you can also use" the CLI, "so prefer scoped roles for prod".
+
+**Un-narrowed tokens are your whole token.** For Vercel, Supabase and GitHub, a granted command receives the token you stored, whatever scope you granted. A command could copy it during the grant, and revoking the grant stops Styx delivering it but doesn't cancel it at the provider. Use dedicated tokens with the least access that works, and rotate them if you suspect one was copied.
+
+**Your SSH key stays where it is.** Styx keeps the key's path, not the key, and agents only get a socket. But the key file is still on your disk, readable by anything running as you.
+
+**The hash chain detects edits, not a full rewrite.** Someone who can already write to your files could rewrite the whole log and recompute every hash. Keeping a copy of the latest hash elsewhere makes that detectable.
+
+**Someone already running code as you** is outside what Styx can defend against, as for any desktop app.
+
+In short: Styx makes the safe path the easy one and keeps a record of it. It won't stop an agent that's trying to escape. If you need that, run agents in a container or VM as well.
+
+## Your account and what leaves your machine
+
+Signing in to Styx, with GitHub or Google, is optional, and every feature works without it. Your code, projects, file paths and prompts never leave your machine, and neither do your target credentials or the audit log. Release builds send anonymous usage counts, from a fixed list with no field that could carry a name, path or text. Turn them off in **Settings › Styx account**. Builds you make from source never send anything. See [Privacy](/docs/help/privacy).
+
+## Builds and signing
+
+- **macOS:** signed with an Apple Developer ID and notarized by Apple.
+- **Windows (beta):** not code-signed yet, so Windows may warn about an unknown publisher when you install. Updates are checked against a SHA-512 checksum fetched over HTTPS.
+- **Linux (beta):** the AppImage and `.deb` aren't signed. Updates get the same checksum check. On Linux, production approvals use polkit: the `.deb` installs a Styx action that asks for your own password, and the AppImage falls back to the standard administrator prompt.
+
+Styx is open source under the Apache License 2.0. You can read every line that handles your credentials, starting with the [grant service](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/grant-service.ts), the [policy engine](https://github.com/NicholasFlemmer/styx-app/blob/main/packages/core/src/policy/engine.ts) and the [provider adapters](https://github.com/NicholasFlemmer/styx-app/tree/main/apps/desktop/src/main/providers), and build it yourself.
+
+## Report a vulnerability
+
+Please report security problems privately, not in a public issue:
+
+- on GitHub, with **Report a vulnerability** on the repository's Security tab, or
+- by email to hello@heystyx.com, with "Security" in the subject.
+
+Say what you found, how to reproduce it, and what an attacker could do with it. You'll get an acknowledgement within 3 working days and an assessment, with a fix plan for anything confirmed, within 14 days. Fixes are credited in the release notes if you'd like. In scope is anything that breaks the promises above: an agent getting a credential without an approved grant or keeping it after the grant ends, secrets reaching the database, logs or interface, a way past Touch ID or Windows Hello for production, undetected changes to the audit log, or the app's interface gaining system access. The full policy is in [SECURITY.md](https://github.com/NicholasFlemmer/styx-app/blob/main/SECURITY.md).

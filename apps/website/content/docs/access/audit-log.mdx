@@ -1,0 +1,111 @@
+---
+title: Audit log
+description: What Styx records about access, how to read an entry, and how to check nobody has altered the log.
+---
+
+Every time an agent asks for access, and every time access is granted, used, denied, revoked or runs out, Styx writes it down. The log answers "who touched production, with what, and why" after the fact. It lives on your machine, entries can't be changed or deleted through Styx, and each entry is chained to the one before it so tampering shows.
+
+## What's recorded
+
+| Entry                            | Written when                                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **requested**                    | An agent asks for access, through a shimmed command or the `request_access` tool.                                  |
+| **granted**                      | You approve a request, or a policy or an existing `always` grant does.                                             |
+| **denied**                       | You deny a request, or a policy does (for example, a task started with **May request targets** off).               |
+| **used**                         | A granted command runs, or an agent fetches a credential with `get_credential`. One entry per use.                 |
+| **revoked**                      | A grant ends early: you revoked it, its session ended, its target was removed, or a `once` grant was used.         |
+| **expired**                      | A grant runs out, or ends after an hour idle.                                                                      |
+| **connected** / **disconnected** | A target is connected or removed.                                                                                  |
+| **tested connection**            | A target's connection is tested by hand, or a health check finds its credential has expired or works again.        |
+| **changed policies**             | A rule is added, edited, switched on or off, or removed; a target's policy changes; project policies are accepted. |
+| **opened PR**                    | Publish opens a pull request.                                                                                      |
+
+Each entry carries:
+
+- **Actor:** you, the system (a policy, a timer), or the agent, by name.
+- **Target**, **Scope** and **Duration**.
+- **Session** and **Worktree:** which agent session and which worktree it came from.
+- **Triggered by:** what caused it. For a use, the command itself, such as `$ vercel deploy --prod`. For other entries, where the decision came from: the grant sheet, the audit drawer, settings, the idle timer, the expiry timer.
+- **Policy:** the rule that decided it, if one did.
+- Detail such as the agent's reason, whether you verified with Touch ID, Windows Hello or your password, and why a grant ended.
+
+Before anything is written, Styx scrubs anything that looks like a secret from commands, reasons and labels, so a token an agent pasted into a command line doesn't end up in the log.
+
+## Read the log
+
+Open **Access** and choose the **Audit log** tab. It lists the most recent 500 entries, newest first, with the time, who, the target and what happened. Older entries stay in the database.
+
+Click an entry to open the **Audit entry** drawer. It shows the rows above (**Actor**, **Target**, **Scope**, **Duration**, **Session**, **Worktree**, **Triggered by**, **Policy**) and two buttons:
+
+- **Copy JSON** copies the full entry to the clipboard.
+- **Revoke now** ends the grant the entry belongs to, if it's still active and you approved it. The revoke is itself a new entry.
+
+## Where it lives
+
+The log is a table in Styx's local SQLite database, `styx.db`, in the app's data folder:
+
+| Platform | Path                                         |
+| -------- | -------------------------------------------- |
+| macOS    | `~/Library/Application Support/Styx/styx.db` |
+| Windows  | `%APPDATA%\Styx\styx.db`                     |
+| Linux    | `~/.config/Styx/styx.db`                     |
+
+It never leaves your machine. There's no export button in the app yet. To take a copy, read the database with the `sqlite3` command-line tool (version 3.33 or later for `-json`):
+
+```sh
+sqlite3 -readonly -json ~/Library/Application\ Support/Styx/styx.db \
+  "SELECT * FROM audit_entries ORDER BY seq" > audit.json
+```
+
+## Append-only
+
+The database refuses to update or delete audit entries: triggers on the table abort any attempt. Nothing in Styx edits an entry. When a grant is revoked, Styx adds a **revoked** entry rather than changing the **granted** one.
+
+## The hash chain
+
+Each entry has a sequence number, the hash of the entry before it (`prev_hash`), and its own `hash`: a SHA-256 of the previous hash and the entry's contents. Changing any field of any entry, or removing one from the middle, breaks the chain from that point on.
+
+Styx checks the chain internally, but there's no button for it in the app yet. You can check it yourself with Node.js and `sqlite3`. Save this as `verify-audit.mjs`:
+
+```js
+import { createHash } from 'node:crypto';
+
+const chunks = [];
+for await (const chunk of process.stdin) chunks.push(chunk);
+const rows = JSON.parse(Buffer.concat(chunks).toString('utf8') || '[]');
+const camel = (k) => k.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+
+let prev = '';
+for (const r of rows) {
+  const row = {};
+  for (const [k, v] of Object.entries(r)) if (k !== 'hash') row[camel(k)] = v;
+  const canonical = JSON.stringify(row, Object.keys(row).sort());
+  const hash = createHash('sha256').update(prev).update('\n').update(canonical).digest('hex');
+  if (row.prevHash !== prev || hash !== r.hash) {
+    console.log(`Chain broken at entry ${row.seq}`);
+    process.exit(1);
+  }
+  prev = r.hash;
+}
+console.log(`Chain intact: ${rows.length} entries`);
+```
+
+Then run it against your database (macOS path shown):
+
+```sh
+sqlite3 -readonly -json ~/Library/Application\ Support/Styx/styx.db \
+  "SELECT * FROM audit_entries ORDER BY seq" | node verify-audit.mjs
+```
+
+It prints `Chain intact` with the number of entries, or the first entry where the chain breaks.
+
+<Callout type="note" title="What the chain can and can't show">
+  The chain proves entries weren't edited one at a time after the fact. It can't stop someone who can write to
+  your files from rewriting the whole log and recomputing every hash. If that matters to you, keep a copy of
+  the latest `hash` somewhere else from time to time. Any later rewrite of the history before it won't match.
+</Callout>
+
+## Next
+
+- [Approve a request](/docs/access/approve-a-request) to see where the entries come from.
+- [Security model](/docs/access/security-model) for what the log does and doesn't protect against.

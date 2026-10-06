@@ -35,3 +35,6 @@ apps/desktop/e2e/sim/out/
 
 # Roadmap and execution state (gsd) stay on the owner's machine.
 .planning/
+
+# Fumadocs MDX output (apps/website/.source)
+.source/

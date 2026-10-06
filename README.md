@@ -136,7 +136,8 @@ an account. Signing in (with GitHub or Google) is optional.
 **What leaves my machine?** Your code, projects, paths and prompts never do. Release builds send anonymous usage counts
 (how often the app opens, a task starts, an agent fails to start and why) so we know what to fix. The complete, fixed
 list is [`usageEventSchema`](packages/core/src/model/usage-report.ts), with no field that could carry a name, path or
-text. Turn it off in **Settings › Styx account**. Builds you make from source never send anything.
+text. Turn it off in **Settings › Account › Send usage counts**. Running from source (`pnpm dev`) never sends anything;
+a build you package yourself does, unless you point it at your own service (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 **Is it a sandbox?** No, and we'd rather say so. Styx is a guardrail: agents run as you, on your machine, and an agent
 that deliberately goes around Styx's tools isn't stopped by them. What Styx guarantees is that it never hands an agent

@@ -31,6 +31,7 @@ export const Footer = () => (
         <a href="/launch">Launch</a>
         <a href="/story">Story</a>
         <a href="/compare">Compare</a>
+        <a href="/docs">Docs</a>
       </nav>
       <div className={styles.meta}>
         <ThemeToggle />

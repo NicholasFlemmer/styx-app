@@ -1,0 +1,4 @@
+{
+  "title": "Contributing",
+  "pages": ["how-styx-is-built", "add-an-agent", "add-a-target", "testing", "decisions"]
+}

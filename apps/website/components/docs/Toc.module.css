@@ -1,0 +1,64 @@
+.toc {
+  position: sticky;
+  top: var(--nav-h);
+  align-self: start;
+  padding: 36px 0;
+  font-size: 13px;
+}
+.title {
+  font: 600 12px var(--font-ui);
+  color: var(--mu);
+  margin: 0 0 8px;
+}
+.toc ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.toc li a {
+  display: block;
+  padding: 4px 0 4px 12px;
+  border-left: 1px solid var(--ln);
+  color: var(--mu);
+  text-decoration: none;
+}
+.toc li[data-depth='3'] a {
+  padding-left: 24px;
+}
+.toc li a:hover {
+  color: var(--tx);
+}
+.toc li a[aria-current] {
+  border-left: 2px solid var(--tx);
+  padding-left: 11px;
+  color: var(--tx);
+}
+.tools {
+  margin-top: 26px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ln);
+  display: grid;
+  gap: 8px;
+}
+.tools a,
+.tools button {
+  font: inherit;
+  color: var(--mu);
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--ln);
+  text-underline-offset: 3px;
+}
+.tools a:hover,
+.tools button:hover {
+  color: var(--tx);
+}
+@media (max-width: 1180px) {
+  .toc {
+    display: none;
+  }
+}

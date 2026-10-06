@@ -18,7 +18,7 @@ This file is for coding agents and people alike. [CONTRIBUTING.md](CONTRIBUTING.
 ## Where truth lives
 
 1. **The code**, then **`docs/adr/`** (decisions with rationale; read ADR-0027 and ADR-0028 before UI work). Numbers
-   run to 0028; the next is 0029 (ADR-0024 is filed as `0020-agent-clis-…md`).
+   run to 0029; the next is 0030 (ADR-0024 is filed as `0020-agent-clis-…md`).
 2. **`docs/handoff-discrepancies.md`**: one row per deliberate departure from the original handoff or from
    established behaviour (`# | Where | Prototype | Spec | Resolution`). Add a row (next number after the last) when you
    change what a screen shows, a flow, a default or a rule the handoff states; name the files touched and the
