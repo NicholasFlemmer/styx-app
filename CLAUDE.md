@@ -17,7 +17,7 @@ grants with an append-only audit log.
 - Why -> `UX Research Memo.dc.html`. `Wireframes.dc.html`, `support.js`, `doc-page.js` are history / viewer runtime: never port.
 
 Use `/spec-lookup <topic>` to read the HTML with tags stripped. Copy §10 strings verbatim via `packages/core/src/copy.ts`.
-Decisions with rationale: `docs/adr/`. Progress: `.planning/STATE.md` (owned by `/gsd:*`).
+Decisions with rationale: `docs/adr/`. Progress: `.planning/STATE.md` (local and gitignored, owned by `/gsd:*`).
 
 ## Monorepo map (pnpm workspaces)
 
