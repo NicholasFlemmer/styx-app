@@ -13,6 +13,8 @@ export interface LaunchOptions {
   theme?: 'dark' | 'light';
   chrome?: 'mac' | 'win';
   env?: Record<string, string>;
+  /** Record the window as video (the README GIF, e2e/readme/): a directory and the frame size. */
+  recordVideo?: { dir: string; size: { width: number; height: number } };
 }
 
 /** Drops ELECTRON_RUN_AS_NODE (set by VS Code extension hosts) so Electron boots as an app, not as Node. */
@@ -56,6 +58,7 @@ export async function launchStyx(
       ...(opts.chrome ? { STYX_CHROME: opts.chrome } : {}),
       ...opts.env,
     },
+    ...(opts.recordVideo ? { recordVideo: opts.recordVideo } : {}),
   });
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
