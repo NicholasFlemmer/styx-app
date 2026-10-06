@@ -4,7 +4,7 @@ import type { SectionId } from '@/lib/site';
 type Props = {
   id: SectionId;
   title: string;
-  lede?: string;
+  lede?: ReactNode;
   children: ReactNode;
   className?: string;
   tone?: 'panel';

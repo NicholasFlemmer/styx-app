@@ -1,4 +1,5 @@
 import { site } from '@/lib/site';
+import { LiveVersion } from './LiveVersion';
 import { Section } from './Section';
 import styles from './Download.module.css';
 
@@ -7,7 +8,12 @@ export const Download = () => (
     tone="panel"
     id="download"
     title="Download"
-    lede={`Version ${site.version}, free and open source. For Mac, with Windows and Linux in beta.`}
+    lede={
+      <>
+        Version <LiveVersion fallback={site.version} />, free and open source. For Mac, with Windows and Linux
+        in beta.
+      </>
+    }
   >
     <div className={styles.cards}>
       <div className={styles.card}>
