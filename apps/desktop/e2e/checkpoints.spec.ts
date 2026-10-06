@@ -11,6 +11,9 @@ import { join } from 'node:path';
 import { test, expect } from '@playwright/test';
 import { launchStyx } from './launch';
 
+/** A wait in ms, tripled on CI, where a turn's git work (the checkpoint) is far slower than on a dev machine. */
+const slow = (ms: number): number => (process.env['CI'] ? ms * 3 : ms);
+
 type StyxWindow = Window & {
   styx: { command: (name: string, input: unknown) => Promise<{ ok: boolean; value?: unknown }> };
 };
@@ -27,7 +30,7 @@ const PNG_MAGIC = Buffer.from('89504e470d0a1a0a', 'hex');
 test('a turn that writes a file becomes a checkpoint row; Review shows its patch; Revert this turn restores the worktree', async () => {
   const { app, page } = await launchStyx({ screen: 'agents', fixture: 'demo', theme: 'dark', chrome: 'mac' });
   try {
-    await page.locator('[data-screen-ready="agents"]').waitFor({ state: 'attached', timeout: 20_000 });
+    await page.locator('[data-screen-ready="agents"]').waitFor({ state: 'attached', timeout: slow(20_000) });
     // The demo rows name binaries this machine does not have: re-detect so the fake `codex` on PATH takes over.
     const detected = await page.evaluate(() =>
       (window as unknown as StyxWindow).styx.command('detect.clis', {}),
@@ -43,9 +46,9 @@ test('a turn that writes a file becomes a checkpoint row; Review shows its patch
     await dialog.getByRole('button', { name: /^Spawn/ }).click();
 
     const chat = page.locator('[data-chat-pane]');
-    await expect(chat).toBeVisible({ timeout: 20_000 });
+    await expect(chat).toBeVisible({ timeout: slow(20_000) });
     const decision = chat.locator('[data-kind="decision"]');
-    await expect(decision).toBeVisible({ timeout: 20_000 });
+    await expect(decision).toBeVisible({ timeout: slow(20_000) });
     await expect(decision).toContainText('echo hi > notes.txt');
     await decision.getByRole('button', { name: 'Allow' }).click();
 
@@ -53,7 +56,7 @@ test('a turn that writes a file becomes a checkpoint row; Review shows its patch
     await expect(
       chat.locator('[data-kind="system"]').filter({ hasText: 'Turn 1: 1 files changed.' }),
     ).toBeVisible({
-      timeout: 20_000,
+      timeout: slow(20_000),
     });
     // The turn ends on paper (ADR-0027 §3): what changed, then Show changes and Undo this turn.
     const row = chat.locator('[data-kind="turn-result"]').last();
@@ -83,7 +86,9 @@ test('a turn that writes a file becomes a checkpoint row; Review shows its patch
     const diff = page.locator('[data-diff-checkpoint]');
     await expect(diff).toBeVisible();
     await expect(diff.locator('[data-diff-meta]')).toContainText('Turn 1 · 1 files · +1 −0');
-    await expect(diff.locator('[data-patch-file="notes.txt"]')).toContainText('+ hi', { timeout: 10_000 });
+    await expect(diff.locator('[data-patch-file="notes.txt"]')).toContainText('+ hi', {
+      timeout: slow(10_000),
+    });
     await expect(diff.getByRole('button', { name: /Revert/ })).toHaveCount(0);
     await diff.getByRole('button', { name: 'Done' }).click();
     await expect(chat).toBeVisible();
@@ -93,7 +98,7 @@ test('a turn that writes a file becomes a checkpoint row; Review shows its patch
     const ask = row.locator('[data-turn-confirm]');
     await expect(ask).toContainText('Put the files back as they were before this turn?');
     await ask.getByRole('button', { name: 'Undo it' }).click();
-    await expect(row).toHaveAttribute('data-undone', 'true', { timeout: 20_000 });
+    await expect(row).toHaveAttribute('data-undone', 'true', { timeout: slow(20_000) });
     await expect(row).toContainText('Undone');
     await expect(
       chat.locator('[data-kind="system"]').filter({ hasText: 'Workspace restored to before turn 1.' }),
@@ -126,7 +131,7 @@ test('a turn keeps the design window page before and after; Review shows Before 
       join(repo, 'package.json'),
       JSON.stringify({ name: 'acme-shop', private: true, scripts: { dev: DEV_SCRIPT } }, null, 2),
     );
-    await page.waitForSelector('[data-workspace-mode="design"]', { timeout: 10_000 });
+    await page.waitForSelector('[data-workspace-mode="design"]', { timeout: slow(10_000) });
     await page.click('[data-workspace-mode="design"]');
     await page.evaluate(
       (projectId) =>
@@ -136,10 +141,10 @@ test('a turn keeps the design window page before and after; Review shows Before 
         }),
       fixtures.ids.project.acmeShop,
     );
-    await expect(page.locator('[data-run-command]')).toHaveValue('npm run dev', { timeout: 10_000 });
+    await expect(page.locator('[data-run-command]')).toHaveValue('npm run dev', { timeout: slow(10_000) });
     await page.click('[data-run-start]');
     await expect(page.getByLabel('Dev server URL')).toHaveValue(`http://localhost:${DEV_PORT}`, {
-      timeout: 20_000,
+      timeout: slow(20_000),
     });
     // The native view has the page once its title arrives; the "waiting" placeholder is gone by then.
     const view = () =>
@@ -151,7 +156,7 @@ test('a turn keeps the design window page before and after; Review shows Before 
             ?.getTitle() ?? null,
         DEV_PORT,
       );
-    await expect.poll(view, { timeout: 20_000 }).toBe('Acme Shop');
+    await expect.poll(view, { timeout: slow(20_000) }).toBe('Acme Shop');
     await expect(page.locator('[data-preview-status]')).toHaveCount(0);
 
     // A precondition, measured rather than assumed: `capturePage` on the WebContentsView yields pixels while it is
@@ -183,17 +188,21 @@ test('a turn keeps the design window page before and after; Review shows Before 
     await task.locator('[role="radio"][data-agent="codex"]').click();
     await task.locator('[data-new-task-text]').fill('hi');
     await task.locator('[data-new-task-start]').click();
-    await expect(task).toHaveCount(0, { timeout: 20_000 });
+    await expect(task).toHaveCount(0, { timeout: slow(20_000) });
     const decision = chat.locator('[data-kind="decision"]');
-    await expect(decision).toBeVisible({ timeout: 20_000 });
+    await expect(decision).toBeVisible({ timeout: slow(20_000) });
     await decision.getByRole('button', { name: 'Allow' }).click();
-    await expect(chat.locator('[data-kind="steps"] li[data-status="ok"]')).toBeVisible({ timeout: 20_000 });
+    await expect(chat.locator('[data-kind="steps"] li[data-status="ok"]')).toBeVisible({
+      timeout: slow(20_000),
+    });
     const snapshot = async () =>
       (await page.evaluate(() => (window as unknown as StyxWindow).styx.command('store.snapshot', {})))
         .value as { sessions: Session[]; checkpoints: Record<string, Checkpoint[]> };
     const codexSession = async () =>
       (await snapshot()).sessions.find((s) => s.agent === 'codex' && s.firstMessage === 'hi') ?? null;
-    await expect.poll(async () => (await codexSession())?.state ?? null, { timeout: 20_000 }).toBe('idle');
+    await expect
+      .poll(async () => (await codexSession())?.state ?? null, { timeout: slow(20_000) })
+      .toBe('idle');
     const session = await codexSession();
     if (session === null) throw new Error('codex session missing');
     const turnTwo = async () => (await snapshot()).checkpoints[session.id]?.find((c) => c.turn === 2) ?? null;
@@ -205,19 +214,19 @@ test('a turn keeps the design window page before and after; Review shows Before 
     await composer.fill('write notes.txt');
     await composer.press('Enter');
     await expect
-      .poll(async () => (await turnTwo())?.screens ?? null, { timeout: 20_000 })
+      .poll(async () => (await turnTwo())?.screens ?? null, { timeout: slow(20_000) })
       .toEqual(['before']);
-    await expect(decision.last()).toContainText('echo hi > notes.txt', { timeout: 20_000 });
+    await expect(decision.last()).toContainText('echo hi > notes.txt', { timeout: slow(20_000) });
     await decision.last().getByRole('button', { name: 'Allow' }).click();
     await expect(
       chat.locator('[data-kind="system"]').filter({ hasText: 'Turn 2: 1 files changed.' }),
-    ).toBeVisible({ timeout: 20_000 });
+    ).toBeVisible({ timeout: slow(20_000) });
     const row = chat.locator('[data-kind="turn-result"]').last();
     await expect(row).toBeVisible();
 
     // Main kept both PNGs beside the row and named them on it (`after` arrives after the settle line: poll).
     await expect
-      .poll(async () => (await turnTwo())?.screens ?? null, { timeout: 20_000 })
+      .poll(async () => (await turnTwo())?.screens ?? null, { timeout: slow(20_000) })
       .toEqual(['before', 'after']);
     const checkpoint = await turnTwo();
     if (checkpoint === null) throw new Error('turn 2 checkpoint missing');
@@ -245,7 +254,7 @@ test('a turn keeps the design window page before and after; Review shows Before 
     await expect(imgs.nth(1)).toHaveAttribute('src', `styx-device://checkpoint/${checkpoint.id}/after`);
     await expect
       .poll(() => imgs.evaluateAll((els) => els.map((e) => (e as HTMLImageElement).naturalWidth)), {
-        timeout: 10_000,
+        timeout: slow(10_000),
       })
       .toEqual([expect.any(Number), expect.any(Number)]);
     const widths = await imgs.evaluateAll((els) => els.map((e) => (e as HTMLImageElement).naturalWidth));
