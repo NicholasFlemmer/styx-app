@@ -34,6 +34,16 @@ exports.default = async function notarizing(context) {
   const cred = credentials();
   console.log(`  • notarizing  app=${appPath} credentials=${cred.label}`);
   const started = Date.now();
-  await notarize({ tool: 'notarytool', appPath, ...cred.options });
+  // Apple's service and the network both blip; a failed submission is retried, three attempts in all.
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await notarize({ tool: 'notarytool', appPath, ...cred.options });
+      break;
+    } catch (err) {
+      if (attempt >= 3) throw err;
+      console.log(`  • notarization failed, retrying  attempt=${attempt} error=${String(err).split('\n')[0]}`);
+      await new Promise((r) => setTimeout(r, 30_000 * attempt));
+    }
+  }
   console.log(`  • notarized and stapled  seconds=${Math.round((Date.now() - started) / 1000)}`);
 };

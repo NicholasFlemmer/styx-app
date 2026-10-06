@@ -1,22 +1,87 @@
 name: release
-# Signed, notarized macOS artifacts, a Windows installer and Linux AppImage + .deb on every `v*` tag.
+# Builds a release on styx-app and leaves it as a draft; publishing the draft (a person's click) runs publish.yml.
 #
-# Secrets (Settings › Secrets and variables › Actions):
+#   Actions › release › Run workflow › version 0.4.7   (tags main; it must match apps/desktop/package.json)
+#   or push a tag: git tag v0.4.7 && git push origin v0.4.7
+#
+# 1. verify: the tag matches the app version, no release exists for it, and CI passed for exactly that commit
+#    (waits up to 90 minutes for a CI run still in progress).
+# 2. mac (signed + notarized, notarization retried), win, linux, in parallel.
+# 3. draft: a draft GitHub release with every installer and feed file. Drafts are invisible to everyone else.
+#
+# Secrets (styx-app › Settings › Secrets and variables › Actions):
 #   CSC_LINK / CSC_KEY_PASSWORD            base64 .p12 of the Developer ID Application certificate + its password
 #   APPLE_API_KEY_P8 / APPLE_API_KEY_ID /  App Store Connect API key (contents of the .p8, its key id, the issuer id)
-#   APPLE_API_ISSUER                       — used by build/notarize.cjs instead of the local keychain profile
+#   APPLE_API_ISSUER                       used by build/notarize.cjs and build/notarize-dmg.cjs
 #   WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD    optional Windows code-signing certificate; unsigned when absent
 on:
   push:
     tags: ['v*']
-  # A Windows installer on demand, without a tag (Actions › release › Run workflow): the win job only.
   workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, e.g. 0.4.7 (must match apps/desktop/package.json on main)
+        required: true
+permissions: { contents: read }
+concurrency: { group: release, cancel-in-progress: false }
 jobs:
-  mac:
-    if: github.event_name == 'push'
-    runs-on: macos-latest
+  verify:
+    if: github.repository == 'NicholasFlemmer/styx-app'
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    permissions: { contents: write, actions: read }
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      sha: ${{ steps.v.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || 'main' }}
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT: ${{ inputs.version }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./apps/desktop/package.json').version")
+          if [ "$EVENT" = push ]; then tag="$GITHUB_REF_NAME"; else tag="v${INPUT#v}"; fi
+          if [ "$tag" != "v$version" ]; then
+            echo "::error::Tag $tag does not match apps/desktop/package.json ($version). Bump the version first."
+            exit 1
+          fi
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::A release $tag already exists. Bump the version for a new release."
+            exit 1
+          fi
+          sha=$(git rev-parse HEAD)
+          # CI must have passed for exactly this commit. Wait for a run still in progress.
+          for i in $(seq 1 90); do
+            state=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci --commit "$sha" --json status,conclusion \
+              --jq 'if length == 0 then "none" elif any(.[]; .conclusion == "success") then "success"
+                    elif any(.[]; .status != "completed") then "running" else "failed" end')
+            case "$state" in
+              success) break ;;
+              running) echo "CI is still running for $sha ($i min)"; sleep 60 ;;
+              none) echo "::error::No CI run for $sha. Push it to main and let CI pass first."; exit 1 ;;
+              *) echo "::error::CI failed for $sha. Fix it, then release again."; exit 1 ;;
+            esac
+          done
+          [ "$state" = success ] || { echo "::error::CI did not finish within 90 minutes for $sha."; exit 1; }
+          if [ "$EVENT" != push ]; then
+            git tag "$tag" "$sha"
+            git push origin "$tag"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag from $sha" >> "$GITHUB_STEP_SUMMARY"
+  mac:
+    needs: verify
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ needs.verify.outputs.sha }}' }
       # The version comes from package.json's packageManager; naming it here too makes the action refuse to run.
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -33,6 +98,8 @@ jobs:
       - name: Preflight
         run: pnpm release:preflight
         env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
       - name: Package (sign + notarize)
@@ -42,17 +109,31 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      - name: Check the signature and notarization
+        working-directory: apps/desktop/release
+        run: |
+          set -euo pipefail
+          codesign --verify --deep --strict mac-arm64/Styx.app
+          spctl -a -vv -t install mac-arm64/Styx.app
+          xcrun stapler validate mac-arm64/Styx.app
+          grep -q "^version: $(node -p "require('../package.json').version")$" latest-mac.yml
       - uses: actions/upload-artifact@v4
         with:
           name: styx-mac
+          if-no-files-found: error
           path: |
             apps/desktop/release/*.dmg
+            apps/desktop/release/*.dmg.blockmap
             apps/desktop/release/*.zip
+            apps/desktop/release/*.zip.blockmap
+            apps/desktop/release/latest-mac.yml
   win:
+    needs: verify
     runs-on: windows-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      # The version comes from package.json's packageManager; naming it here too makes the action refuse to run.
+        with: { ref: '${{ needs.verify.outputs.sha }}' }
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
@@ -66,15 +147,18 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: styx-win
+          if-no-files-found: error
           path: |
             apps/desktop/release/*.exe
             apps/desktop/release/*.exe.blockmap
             apps/desktop/release/latest.yml
   linux:
+    needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      # The version comes from package.json's packageManager; naming it here too makes the action refuse to run.
+        with: { ref: '${{ needs.verify.outputs.sha }}' }
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
@@ -86,22 +170,38 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: styx-linux
+          if-no-files-found: error
           path: |
             apps/desktop/release/*.AppImage
             apps/desktop/release/*.deb
             apps/desktop/release/latest-linux.yml
-  publish:
-    if: github.event_name == 'push'
-    needs: [mac, win, linux]
+  draft:
+    needs: [verify, mac, win, linux]
     runs-on: ubuntu-latest
     permissions: { contents: write }
     steps:
       - uses: actions/download-artifact@v4
         with: { path: dist }
+      - name: Check every file is there
+        run: |
+          set -euo pipefail
+          for f in dist/styx-mac/latest-mac.yml dist/styx-win/latest.yml dist/styx-linux/latest-linux.yml; do
+            dir=$(dirname "$f")
+            sed -n 's/^  - url: //p' "$f" | while IFS= read -r u; do
+              [ -f "$dir/$u" ] || { echo "::error::$f names $u, which was not built"; exit 1; }
+            done
+          done
+          ls -la dist/*
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.verify.outputs.tag }}
+          target_commitish: ${{ needs.verify.outputs.sha }}
+          name: Styx ${{ needs.verify.outputs.tag }}
           draft: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             dist/styx-mac/*
             dist/styx-win/*
             dist/styx-linux/*
+      - run: echo "Draft ready. Review it under Releases and press Publish release; that runs publish.yml." >> "$GITHUB_STEP_SUMMARY"

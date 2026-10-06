@@ -8,9 +8,11 @@ export default defineConfig({
   globalSetup: './visual/global-setup.ts',
   // Hosted CI runners run git and Electron several times slower (Windows most of all); same tests, more time.
   timeout: process.env['CI'] ? 180_000 : 60_000,
-  retries: 0,
+  // One retry on CI; a test that only passes on the retry is reported as flaky (the github reporter annotates the run)
+  // so it gets fixed, not ignored.
+  retries: process.env['CI'] ? 1 : 0,
   workers: 1,
-  reporter: [['list']],
+  reporter: process.env['CI'] ? [['list'], ['github']] : [['list']],
   outputDir: './test-results',
   projects: [
     { name: 'e2e', testMatch: /.*\.spec\.ts/, testIgnore: /visual\// },

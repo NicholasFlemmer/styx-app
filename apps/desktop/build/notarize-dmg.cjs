@@ -29,12 +29,23 @@ exports.default = async function notarizeDmg(buildResult) {
   for (const dmg of dmgs) {
     const started = Date.now();
     console.log(`  • notarizing dmg  file=${dmg}`);
-    const out = execFileSync(
-      'xcrun',
-      ['notarytool', 'submit', dmg, ...credentialArgs(), '--wait', '--output-format', 'json'],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
-    );
-    const result = JSON.parse(out);
+    // Apple's service and the network both blip: a submission that errors (not one Apple rejects) is retried.
+    let result;
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        const out = execFileSync(
+          'xcrun',
+          ['notarytool', 'submit', dmg, ...credentialArgs(), '--wait', '--output-format', 'json'],
+          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
+        );
+        result = JSON.parse(out);
+        break;
+      } catch (err) {
+        if (attempt >= 3) throw err;
+        console.log(`  • dmg notarization errored, retrying  attempt=${attempt}`);
+        await new Promise((r) => setTimeout(r, 30_000 * attempt));
+      }
+    }
     if (result.status !== 'Accepted')
       throw new Error(`dmg notarization ${result.status ?? 'failed'} (id ${result.id}); see: xcrun notarytool log ${result.id}`);
     console.log(`  • dmg notarized  seconds=${Math.round((Date.now() - started) / 1000)} id=${result.id}`);

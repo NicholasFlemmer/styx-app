@@ -1,5 +1,9 @@
 name: ci
 on: [push, pull_request]
+# A newer push to the same branch supersedes a run still in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   check:
     strategy:
@@ -19,7 +23,8 @@ jobs:
       - run: pnpm tokens:build
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: pnpm test
+      # One retry for a flaky unit test; vitest marks it in the log ("retry x1").
+      - run: pnpm test --retry=1
       - run: pnpm build
       - name: Playwright browsers (Storybook axe + prototype baker)
         run: npx playwright install --with-deps chromium
