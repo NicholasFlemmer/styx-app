@@ -205,17 +205,31 @@ export class VercelAdapter implements ProviderAdapter {
    * A Vercel command without a production signal acts on a preview: `vercel deploy` builds a preview unless it's
    * given `--prod` (or `--target production`). `promote` and `rollback` change what production serves.
    */
-  envOfCommand(argv: string[]): 'prod' | 'non-prod' {
+  /**
+   * Only what Vercel itself says is a preview counts as non-prod: a deploy or build without a production flag, and
+   * reads. Everything else (rm, env add, alias, redeploy, domains …) is judged against production (fail closed).
+   */
+  envOfCommand(argv: string[]): 'prod' | 'non-prod' | null {
     const [cmd] = commandHead(argv);
-    const target = argv.findIndex((a) => a === '--target');
+    const valueOf = (flag: string) => {
+      const i = argv.findIndex((a) => a === flag);
+      return i === -1 ? undefined : argv[i + 1];
+    };
     const prod =
       argv.includes('--prod') ||
       argv.includes('--production') ||
       argv.includes('--target=production') ||
-      (target !== -1 && argv[target + 1] === 'production') ||
+      argv.includes('--environment=production') ||
+      valueOf('--target') === 'production' ||
+      valueOf('--environment') === 'production' ||
       cmd === 'promote' ||
       cmd === 'rollback';
-    return prod ? 'prod' : 'non-prod';
+    if (prod) return 'prod';
+    if (cmd === undefined || cmd === 'deploy' || cmd === 'build') return 'non-prod';
+    // `vercel env add|rm NAME preview|development`: the environment is named, and it isn't production.
+    if (cmd === 'env' && argv.some((a) => a === 'preview' || a === 'development')) return 'non-prod';
+    const scopes = this.scopeOfCommand(argv);
+    return scopes.length > 0 && scopes.every((s) => s === 'read') ? 'non-prod' : null;
   }
 
   scopeOfCommand(argv: string[]): Scope[] {

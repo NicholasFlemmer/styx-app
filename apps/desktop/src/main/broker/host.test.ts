@@ -54,7 +54,7 @@ describe('BrokerHost', () => {
     await app.vault.set(target.credentialRef, JSON.stringify({ token: 'vt-preview' }));
     const r = await client.call('exec_authorize', {
       tool: 'vercel',
-      argv: ['env', 'add', 'FOO'],
+      argv: ['env', 'add', 'FOO', 'preview'],
       cwd: '/tmp',
     });
     expect(r.env).toEqual({ VERCEL_TOKEN: 'vt-preview' });
@@ -64,7 +64,7 @@ describe('BrokerHost', () => {
       targetId: ids.target.vercelPreview,
       scope: ['write'],
       decidedBy: 'target-policy',
-      reason: '$ vercel env add FOO',
+      reason: '$ vercel env add FOO preview',
     });
     expect(app.app.repos.grantUses.get(r.useId)).toMatchObject({
       via: 'shim',
@@ -76,7 +76,7 @@ describe('BrokerHost', () => {
     const used = app.app.repos.audit.all().find((e) => e.grantId === r.grantId && e.action === 'used');
     expect(used).toMatchObject({
       actorKind: 'agent',
-      triggeredBy: '$ vercel env add FOO',
+      triggeredBy: '$ vercel env add FOO preview',
       targetLabel: 'vercel-preview',
     });
     const targets = await client.call('list_targets', {});
@@ -177,7 +177,7 @@ describe('BrokerHost security regressions', () => {
     const ghp = `ghp_${'c'.repeat(36)}`;
     const r = await client.call('exec_authorize', {
       tool: 'vercel',
-      argv: ['--token', 'secretvalue123', 'env', 'add', 'X', '--password=hunter2', ghp],
+      argv: ['--token', 'secretvalue123', 'env', 'add', 'X', 'preview', '--password=hunter2', ghp],
       cwd: '/tmp',
     });
     expect(r.env).toEqual({ VERCEL_TOKEN: 'vt-preview' }); // the real credential still flows to the shim
@@ -208,7 +208,7 @@ describe('BrokerHost security regressions', () => {
     expect(dump).not.toContain('hunter2');
     expect(dump).not.toContain(ghp);
     expect(app.app.repos.grants.get(r.grantId)?.reason).toBe(
-      '$ vercel --token [redacted] env add X --password=[redacted] [redacted]',
+      '$ vercel --token [redacted] env add X preview --password=[redacted] [redacted]',
     );
     expect(requested?.reason).toBe('migrate with [redacted]');
     app.app.grants.deny(requested?.id ?? '');
@@ -545,7 +545,7 @@ describe('BrokerHost agent-to-agent messaging', () => {
     const { client } = await connectedClient(ids.session.gemini);
     let refused = 0;
     for (let i = 0; i < 25; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
+       
       await client.call('send_message', { to: ids.session.claude, body: `m${i}` }).catch(() => {
         refused += 1;
       });
@@ -893,6 +893,23 @@ describe('BrokerHost exec_authorize picks the target fail-closed', () => {
       ['deploy', '--prod'],
       ['deploy', '--target', 'production'],
       ['promote', 'https://x.vercel.app'],
+    ])
+      void client.call('exec_authorize', { tool: 'vercel', argv, cwd: '/tmp' }).catch(() => undefined);
+    await vi.waitFor(() => expect(new Set(requestedFor(test.app))).toEqual(new Set([ids.target.vercelProd])));
+  });
+
+  it('Vercel: anything but a preview deploy or a read (rm, env rm, alias, a prod env pull) is production', async () => {
+    const { t: test, client } = await connectedClient(ids.session.gemini);
+    const preview = test.app.repos.targets.get(ids.target.vercelPreview);
+    if (!preview?.credentialRef) throw new Error('fixture');
+    await test.vault.set(preview.credentialRef, JSON.stringify({ token: 'vt-preview' }));
+    const r = await client.call('exec_authorize', { tool: 'vercel', argv: ['ls'], cwd: '/tmp' });
+    expect(r.env).toEqual({ VERCEL_TOKEN: 'vt-preview' });
+    for (const argv of [
+      ['rm', 'my-app', '--yes'],
+      ['env', 'rm', 'DATABASE_URL'],
+      ['alias', 'set', 'x.vercel.app', 'shop.example'],
+      ['env', 'pull', '--environment=production'],
     ])
       void client.call('exec_authorize', { tool: 'vercel', argv, cwd: '/tmp' }).catch(() => undefined);
     await vi.waitFor(() => expect(new Set(requestedFor(test.app))).toEqual(new Set([ids.target.vercelProd])));

@@ -5,7 +5,7 @@ project, a Supabase database, a GitHub repo, or an SSH host. Each target belongs
 an environment (`prod`, `staging`, `preview` or `scm`), a policy, and a `credentialRef` that points at a secret in the
 OS keychain. Agents never hold the stored credential up front. When an agent runs the provider's CLI (say
 `vercel deploy --prod`), a Styx shim catches the call and works out what it needs (`read`, `write`, `deploy` or
-`delete`). Styx then asks the user, with Touch ID or Windows Hello for prod writes, issues a short-lived credential
+`delete`). Styx then asks the user, with OS authentication for prod writes (Touch ID or the Mac password, Windows Hello, polkit on Linux), issues a short-lived credential
 for that grant only, and audits every step. When you add a provider, users can connect it from the Connect target
 modal (preferably by reusing the login its own CLI already holds), and agents get gated, audited access to it.
 
@@ -163,6 +163,12 @@ return ['write']; // unknown verbs fail closed
 
 The tests in [`providers.test.ts`](../../apps/desktop/src/main/providers/providers.test.ts) include a "scope
 classification fails closed (M2)" block that every provider is held to.
+
+If the CLI makes the environment knowable from the command, also implement `envOfCommand(argv, tool)`: return
+`'non-prod'` only for commands that provably can't touch production (Vercel: a deploy without `--prod`, an `env`
+command naming `preview`, a read), `'prod'` when it says production, and `null` otherwise. When a project has a prod
+and a non-prod target for your provider, `null` is judged against prod (`BrokerHost.pickTarget`), so leaving the
+method out is safe; returning `'non-prod'` too eagerly lets a staging target's policy decide a production command.
 
 ### 7. Registration, shim and the rest
 

@@ -1,0 +1,52 @@
+/* What a technical article needs on top of the launch article's layout (Launch.module.css): code, lists, one portrait shot. */
+.portrait img {
+  max-width: 360px;
+}
+.body :not(pre) > code {
+  font: 400 0.88em var(--font-mono);
+  background: var(--s2);
+  padding: 1px 5px;
+}
+/* Code reads as the app's terminal: --term on dark, a ruled surface on light. Square, no shadow. */
+.body pre {
+  margin: 0 0 var(--sp-4);
+  padding: 14px 16px;
+  background: var(--term);
+  color: var(--termtx);
+  font: 400 var(--fs-13) / 1.7 var(--font-mono);
+  overflow-x: auto;
+}
+:global(html[data-theme='light']) .body pre {
+  background: var(--s1);
+  color: var(--tx);
+  border: 1px solid var(--ln);
+}
+.body pre code {
+  font: inherit;
+}
+.body ol,
+.body ul {
+  margin: 0 0 var(--sp-4);
+  padding-left: 22px;
+}
+.body ol {
+  list-style: decimal;
+}
+.body ul {
+  list-style: square;
+}
+.body li + li {
+  margin-top: 6px;
+}
+.body li::marker {
+  color: var(--mu);
+}
+.body blockquote {
+  margin: 0 0 var(--sp-4);
+  padding-left: var(--sp-4);
+  border-left: 1px solid var(--tx);
+}
+.note {
+  font-size: var(--fs-13);
+  color: var(--mu);
+}
