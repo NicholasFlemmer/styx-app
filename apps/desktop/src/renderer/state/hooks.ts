@@ -1,7 +1,7 @@
-import type { ReadModel, Session, SessionId } from '@styx/core';
+import type { CopyPlatform, ReadModel, Session, SessionId } from '@styx/core';
 import { useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { env, type BridgePlatform } from './bridge';
+import { env, osPlatform } from './bridge';
 import { useReadModel } from './read-model';
 import { selectSessionId, useUiStore, type UiStore } from './ui-store';
 
@@ -31,10 +31,13 @@ export const useSessionId = (): SessionId | null => useUiStore(selectSessionId);
  * override, else `ui.platform`), so win chrome never mixes mac copy (spec §7). Keyboard *handling* (metaKey vs
  * ctrlKey) and chord hints stay on `ui.platform` (discrepancy #21).
  */
-export function useCopyPlatform(): BridgePlatform {
+export function useCopyPlatform(): CopyPlatform {
   const platform = useUiStore((u) => u.platform);
   const chrome = env().chrome;
-  return chrome === 'mac' ? 'darwin' : chrome === 'win' ? 'win32' : platform;
+  if (chrome === 'mac') return 'darwin';
+  if (chrome === 'win') return 'win32';
+  // Linux has win32 chrome and keys but its own words: system password, system keyring, bash.
+  return osPlatform() === 'linux' ? 'linux' : platform;
 }
 
 const frozenNow = (): number | null => {

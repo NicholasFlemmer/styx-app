@@ -475,7 +475,7 @@ export class GrantService {
       if (r === 'unavailable')
         fail(
           'mfa-required',
-          `${platformCopy(this.deps.platform === 'win32' ? 'win32' : 'darwin').mfa} is not available on this machine`,
+          `${platformCopy(this.deps.platform === 'win32' || this.deps.platform === 'linux' ? this.deps.platform : 'darwin').mfa} is not available on this machine`,
         );
       if (r !== 'ok')
         fail('mfa-failed', r === 'cancelled' ? 'verification cancelled' : 'verification failed');

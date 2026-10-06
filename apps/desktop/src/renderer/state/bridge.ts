@@ -18,6 +18,12 @@ export const bridge = (): Partial<StyxApi> | null => {
 
 export type BridgePlatform = 'darwin' | 'win32';
 
+/** The OS itself, Linux included (for words; layout and keys use `platform()`, where Linux is win32-style). */
+export const osPlatform = (): 'darwin' | 'win32' | 'linux' => {
+  const p = bridge()?.platform;
+  return p === 'darwin' || p === 'linux' ? p : 'win32';
+};
+
 /** Keyboard platform: Mod = ⌘ on darwin, Ctrl elsewhere (linux keys like win32). */
 export const platform = (): BridgePlatform => (bridge()?.platform === 'darwin' ? 'darwin' : 'win32');
 

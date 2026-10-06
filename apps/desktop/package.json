@@ -5,6 +5,7 @@
   "license": "Apache-2.0",
   "private": true,
   "description": "Styx — project, agent and repo switcher",
+  "homepage": "https://heystyx.com",
   "main": "./out/main/index.js",
   "author": "Styx",
   "scripts": {
@@ -21,6 +22,7 @@
     "postinstall": "electron-builder install-app-deps",
     "package:mac": "pnpm run build && STYX_NOTARIZE=1 electron-builder --mac",
     "package:win": "pnpm run build && electron-builder --win",
+    "package:linux": "pnpm run build && electron-builder --linux",
     "release:preflight": "bash scripts/release-preflight.sh",
     "release:publish": "bash scripts/release-publish.sh",
     "db:generate": "drizzle-kit generate",
@@ -30,6 +32,7 @@
     "build:cli": "pnpm -F @styx/cli build && node scripts/copy-cli.mjs",
     "package:mac:dir": "pnpm run build && electron-builder --mac --dir",
     "package:win:dir": "pnpm run build && electron-builder --win --dir",
+    "package:linux:dir": "pnpm run build && electron-builder --linux --dir",
     "package:win:store": "pnpm run build && electron-builder --win appx",
     "package:smoke": "node --experimental-strip-types e2e/run.ts --project e2e --grep packaged"
   },

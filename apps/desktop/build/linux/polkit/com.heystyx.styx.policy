@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- Installed by the Styx .deb. Styx asks polkit for this action before it gives an agent write, deploy or delete
+     access to a production target: your own password (or fingerprint, where PAM has one), every time. -->
+<policyconfig>
+  <vendor>Styx</vendor>
+  <vendor_url>https://heystyx.com</vendor_url>
+  <action id="com.heystyx.styx.approve-grant">
+    <description>Approve an agent's access to production</description>
+    <message>Styx: an agent is asking for access to a production system. Authenticate to approve it.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_self</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

@@ -1,8 +1,7 @@
 import { idFrom } from '../ids';
 import type { PolicyId } from '../ids';
-import type { Platform } from '../model/common';
 import type { BuiltinPolicyKey, Policy } from '../model/policy';
-import { platformCopy, copy } from '../copy';
+import { platformCopy, copy, type CopyPlatform } from '../copy';
 
 /** Stable ids so builtins can be referenced from fixtures and project files (`disabledBuiltins`). */
 export const BUILTIN_POLICY_IDS: Record<BuiltinPolicyKey, PolicyId> = {
@@ -52,5 +51,5 @@ export const defaultPolicies = (createdAt = 0): Policy[] => [
 ];
 
 /** Substitute `{mfa}` for the platform's biometric name ("Touch ID" / "Windows Hello"). */
-export const policyRuleText = (policy: Pick<Policy, 'ruleText'>, platform: Platform): string =>
+export const policyRuleText = (policy: Pick<Policy, 'ruleText'>, platform: CopyPlatform): string =>
   policy.ruleText.replaceAll('{mfa}', platformCopy(platform).mfa);

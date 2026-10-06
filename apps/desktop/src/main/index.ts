@@ -38,6 +38,7 @@ import { logger } from './services/logger';
 import type { Updater } from './services/update-service';
 import {
   FakeMfaProvider,
+  PolkitProvider,
   TouchIdProvider,
   WindowsHelloProvider,
   type MfaProvider,
@@ -186,6 +187,7 @@ function mfaProvider(): MfaProvider {
   if (env['STYX_MFA'] === 'deny') return new FakeMfaProvider('failed');
   if (isMac) return new TouchIdProvider(systemPreferences);
   if (platform === 'win32') return new WindowsHelloProvider();
+  if (platform === 'linux') return new PolkitProvider();
   return new FakeMfaProvider('unavailable');
 }
 
@@ -562,7 +564,7 @@ async function boot(): Promise<void> {
 }
 
 /**
- * electron-updater's `autoUpdater` for a packaged build (#119, #147): macOS and Windows, never under a
+ * electron-updater's `autoUpdater` for a packaged build (#119, #147): macOS, Windows and a Linux AppImage, never under a
  * fixture or the e2e harness, and only when the build carries its feed (`app-update.yml`, written by electron-builder
  * from `publish` in electron-builder.yml). `STYX_UPDATE_URL` points a build at another feed (a local one when testing
  * an update end to end). macOS installs an update only if it carries the running app's signature; Windows does once
@@ -570,7 +572,8 @@ async function boot(): Promise<void> {
  */
 function realUpdater(fixture: string | null): Updater | null {
   if (!app.isPackaged || fixture !== null || env['STYX_E2E'] === '1') return null;
-  if (!isMac && platform !== 'win32') return null;
+  // Linux: only an AppImage updates itself (electron-updater swaps the file); a .deb belongs to the package manager.
+  if (!isMac && platform !== 'win32' && !(platform === 'linux' && env['APPIMAGE'])) return null;
   // A Microsoft Store install is updated by the Store; electron-updater must not try to replace it.
   if (process.windowsStore === true) return null;
   const override = env['STYX_UPDATE_URL'];

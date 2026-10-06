@@ -9,6 +9,7 @@ import {
   projectSettingsOfOrDefault,
   repoNameOfUrl,
   type ReadModel,
+  type CopyPlatform,
 } from '@styx/core';
 import { Button, Checkbox, Field, Input, Modal, Select, Textarea } from '@styx/ui';
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
@@ -38,7 +39,7 @@ export interface NewProjectModalProps {
 }
 
 /** `<picked>/<repo>` (or `<picked>\<repo>` on Windows chrome); the picked folder alone while the URL has no name. */
-export const cloneDestinationIn = (folder: string, url: string, platform: 'darwin' | 'win32'): string => {
+export const cloneDestinationIn = (folder: string, url: string, platform: CopyPlatform): string => {
   const name = repoNameOfUrl(url);
   if (name === '') return folder;
   const sep = platform === 'win32' ? '\\' : '/';

@@ -6,11 +6,11 @@
 
 **Run Claude Code, Codex, Gemini and Cursor on all your projects at once.<br />They ask before they touch production.**
 
-[**Download for Mac**](https://heystyx.com/download/mac?from=github) &nbsp;·&nbsp; [**Download for Windows**](https://heystyx.com/download/win?from=github) &nbsp;·&nbsp; [Website](https://heystyx.com) &nbsp;·&nbsp; [Watch the story (1:42)](https://heystyx.com/story)
+[**Download for Mac**](https://heystyx.com/download/mac?from=github) &nbsp;·&nbsp; [**Download for Windows**](https://heystyx.com/download/win?from=github) &nbsp;·&nbsp; [**Linux**](https://github.com/NicholasFlemmer/styx-app/releases/latest) &nbsp;·&nbsp; [Website](https://heystyx.com) &nbsp;·&nbsp; [Watch the story (1:42)](https://heystyx.com/story)
 
 [![CI](https://img.shields.io/github/actions/workflow/status/NicholasFlemmer/styx-app/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/NicholasFlemmer/styx-app/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-d6ff3d?style=flat-square&labelColor=0d0e0c)](LICENSE)
-![macOS · Windows](https://img.shields.io/badge/macOS%20%C2%B7%20Windows-free-d6ff3d?style=flat-square&labelColor=0d0e0c)
+![macOS · Windows · Linux](https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-free-d6ff3d?style=flat-square&labelColor=0d0e0c)
 
 <br />
 
@@ -29,7 +29,7 @@ database or touch anything live, it has to ask you first.
 
 ## Get started
 
-1. **[Download Styx](https://heystyx.com)** for Mac (Apple Silicon) or Windows (beta). It's free.
+1. **[Download Styx](https://heystyx.com)** for Mac (Apple Silicon), Windows or Linux (both beta). It's free.
 2. **Add a project.** Styx finds the repos you already have, along with your editor's recent projects.
 3. **Start a task.** Say what you want and pick the agent. It works on its own branch, and you land the result on
    main when you're happy.
@@ -65,8 +65,8 @@ says why, and you choose what it gets and for how long (once, an hour, or the se
 
 - **Scoped and short-lived.** Agents get a token or an SSH agent socket for that grant only, and it's revoked when
   the grant ends. They never see your keys.
-- **Production needs you physically there.** Deploys, writes and deletes on production ask for Touch ID or Windows
-  Hello.
+- **Production needs you physically there.** Deploys, writes and deletes on production ask for Touch ID, Windows
+  Hello, or on Linux your system password.
 - **Your keys stay in your keychain.** Never in the project, the database, the logs or the agent's environment.
 - **Everything is written down.** Every request, approval, use and revoke goes into an audit log that can't be
   edited after the fact.
@@ -123,7 +123,7 @@ gets the element, the page and a picture of it.
 
 - **Agents:** Claude Code · Codex · Gemini CLI · Cursor agent · any shell
 - **Targets agents can ask for:** Vercel · AWS · Google Cloud · Supabase · GitHub · SSH
-- **Platforms:** macOS (Apple Silicon) · Windows 10 and 11 (beta)
+- **Platforms:** macOS (Apple Silicon) · Windows 10 and 11 (beta) · Linux, as an AppImage or .deb (beta)
 - **Editors:** the built-in editor and terminal, or open any task in VS Code, Cursor, Zed or JetBrains
 
 ## Free, open, and private
@@ -151,7 +151,8 @@ notification, and approving it anywhere resolves it everywhere. The design decis
 <br />
 
 You need Node 22 or newer, pnpm 10 (`corepack enable` picks the right version) and git. On macOS, the Xcode command line
-tools; on Windows, the Visual Studio C++ build tools (for the native modules).
+tools; on Windows, the Visual Studio C++ build tools; on Linux, `build-essential` and `python3` (for the native
+modules). Running the end-to-end tests on a headless Linux machine needs `xvfb-run`.
 
 ```sh
 pnpm install

@@ -1273,7 +1273,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     /** In the chat, when an agent's account stops it mid-task. */
     chat: {
       signedOut: '{name} is signed out.',
-      signedOutBody: 'Your login on this computer expired. Sign in again and this message goes out as soon as you’re back.',
+      signedOutBody:
+        'Your login on this computer expired. Sign in again and this message goes out as soon as you’re back.',
       limit: 'Your {name} plan is out of usage for now.',
       limitBody: 'It works again when your limit resets.',
       signIn: 'Sign in to {name}',
@@ -2450,43 +2451,61 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
 export type Copy = typeof copy;
 
 export interface PlatformCopy {
-  mfa: 'Touch ID' | 'Windows Hello';
+  mfa: 'Touch ID' | 'Windows Hello' | 'system password';
   mfaFallback: 'password' | 'PIN';
   mod: '⌘' | 'Ctrl';
-  keychainName: 'macOS Keychain' | 'Windows Credential Manager';
-  keychainShort: 'Keychain' | 'Credential Manager';
+  keychainName: 'macOS Keychain' | 'Windows Credential Manager' | 'system keyring';
+  keychainShort: 'Keychain' | 'Credential Manager' | 'Keyring';
   defaultProjectDir: '~/code' | 'C:\\dev';
-  shell: 'zsh' | 'PowerShell';
+  shell: 'zsh' | 'PowerShell' | 'bash';
 }
 
+/**
+ * The platform the words are for. Linux keeps the Windows-style chrome (`Platform` stays two-valued for layout and
+ * keyboard handling) but has its own words: polkit's system password for prod, the Secret Service keyring, bash.
+ */
+export type CopyPlatform = Platform | 'linux';
+
+const LINUX_WORDS: PlatformCopy = {
+  mfa: 'system password',
+  mfaFallback: 'password',
+  mod: 'Ctrl',
+  keychainName: 'system keyring',
+  keychainShort: 'Keyring',
+  defaultProjectDir: '~/code',
+  shell: 'bash',
+};
+
 /** Platform words (spec §7). */
-export const platformCopy = (platform: Platform): PlatformCopy =>
-  platform === 'win32'
-    ? {
-        mfa: 'Windows Hello',
-        mfaFallback: 'PIN',
-        mod: 'Ctrl',
-        keychainName: 'Windows Credential Manager',
-        keychainShort: 'Credential Manager',
-        defaultProjectDir: 'C:\\dev',
-        shell: 'PowerShell',
-      }
-    : {
-        mfa: 'Touch ID',
-        mfaFallback: 'password',
-        mod: '⌘',
-        keychainName: 'macOS Keychain',
-        keychainShort: 'Keychain',
-        defaultProjectDir: '~/code',
-        shell: 'zsh',
-      };
+export const platformCopy = (platform: CopyPlatform): PlatformCopy =>
+  platform === 'linux'
+    ? LINUX_WORDS
+    : platform === 'win32'
+      ? {
+          mfa: 'Windows Hello',
+          mfaFallback: 'PIN',
+          mod: 'Ctrl',
+          keychainName: 'Windows Credential Manager',
+          keychainShort: 'Credential Manager',
+          defaultProjectDir: 'C:\\dev',
+          shell: 'PowerShell',
+        }
+      : {
+          mfa: 'Touch ID',
+          mfaFallback: 'password',
+          mod: '⌘',
+          keychainName: 'macOS Keychain',
+          keychainShort: 'Keychain',
+          defaultProjectDir: '~/code',
+          shell: 'zsh',
+        };
 
 /** Fill `{name}` placeholders. Unknown placeholders are left as-is so missing values are visible. */
 export const fill = (template: string, vars: Record<string, string | number>): string =>
   template.replaceAll(/\{(\w+)\}/g, (m, key: string) => (key in vars ? String(vars[key]) : m));
 
 /** Default project location for a new project name (spec §4.12). */
-export const defaultProjectLocation = (name: string, platform: Platform): string =>
+export const defaultProjectLocation = (name: string, platform: CopyPlatform): string =>
   platform === 'win32' ? `C:\\dev\\${name}` : `~/code/${name}`;
 
 /** `git@github.com:acme/shop.git` · `https://github.com/acme/shop/` · `/srv/git/shop` → `shop`; '' when nothing usable. */
@@ -2500,7 +2519,7 @@ export const repoNameOfUrl = (url: string): string => {
 };
 
 /** Clone destination for a URL: `~/code/<repo>` (`C:\dev\<repo>` on Windows); the bare root when the URL has no name yet. */
-export const defaultCloneLocation = (url: string, platform: Platform): string => {
+export const defaultCloneLocation = (url: string, platform: CopyPlatform): string => {
   const name = repoNameOfUrl(url);
   return platform === 'win32' ? `C:\\dev${name ? `\\${name}` : ''}` : `~/code${name ? `/${name}` : ''}`;
 };

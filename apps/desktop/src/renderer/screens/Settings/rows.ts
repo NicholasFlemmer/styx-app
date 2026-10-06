@@ -16,6 +16,7 @@ import {
   projectSettingsOf,
   type Agent,
   type AppSettings,
+  type CopyPlatform,
   type Platform,
   type PolicyId,
   type ProjectId,
@@ -66,8 +67,8 @@ export interface RowContext {
   projectId: ProjectId | null;
   /** Keyboard platform: shortcut chords (discrepancy #21). */
   platform: Platform;
-  /** Rendered-chrome platform: keychain / MFA words (spec §7). */
-  copyPlatform: Platform;
+  /** Rendered-chrome platform: keychain / MFA words (spec §7); Linux has its own. */
+  copyPlatform: CopyPlatform;
   /** The clock for relative times ("checked 5m ago"); the injected app clock in the screen, `Date.now()` otherwise. */
   now?: number;
 }
