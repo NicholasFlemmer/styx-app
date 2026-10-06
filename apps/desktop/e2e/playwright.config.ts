@@ -6,7 +6,8 @@ process.env['STYX_VISUAL_RUN'] ??= `${new Date().toISOString().replace(/[:.]/g, 
 export default defineConfig({
   testDir: '.',
   globalSetup: './visual/global-setup.ts',
-  timeout: 60_000,
+  // Hosted CI runners run git and Electron several times slower (Windows most of all); same tests, more time.
+  timeout: process.env['CI'] ? 180_000 : 60_000,
   retries: 0,
   workers: 1,
   reporter: [['list']],
