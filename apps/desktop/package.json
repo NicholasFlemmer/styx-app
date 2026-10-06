@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "e2e": "node --experimental-strip-types e2e/run.ts --project e2e",
+    "readme:gif": "bash scripts/readme-gif.sh",
     "visual": "node --experimental-strip-types e2e/run.ts --project visual",
     "visual:baseline": "node --experimental-strip-types e2e/visual/bake-baseline.ts",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3,node-pty",

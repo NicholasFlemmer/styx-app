@@ -18,6 +18,8 @@ export default defineConfig({
     { name: 'a11y', testMatch: /a11y\.spec\.ts/ },
     { name: 'visual', testMatch: /visual\/.*\.spec\.ts/ },
     // User simulations (owner request): long, soft-failing walkthroughs that write docs/reports/user-sim/<area>.md.
+    // The README GIF (`pnpm -F @styx/desktop readme:gif`): records, never asserts much; not part of `pnpm e2e`.
+    { name: 'readme', testMatch: /readme\/.*\.rec\.ts/, timeout: 5 * 60_000 },
     { name: 'sim', testMatch: /sim\/.*\.sim\.ts/, timeout: 30 * 60_000 },
   ],
 });

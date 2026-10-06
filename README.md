@@ -14,7 +14,7 @@
 
 <br />
 
-<img src=".github/assets/readme-tasks.jpg" alt="Styx: five tasks running side by side, two waiting on you, with the chat for the one you're looking at" width="900" />
+<img src=".github/assets/readme-hero.gif" alt="A Codex task asks for write access to the production Supabase database; you review the request and grant it for an hour, and the task carries on" width="900" />
 
 </div>
 
@@ -41,6 +41,8 @@ through us.
 ## What it does
 
 ### Many tasks, side by side
+
+<img src=".github/assets/readme-tasks.jpg" alt="Tasks: five tasks side by side, two waiting on you, with the chat for the one you're looking at" width="900" />
 
 Every task runs in its own copy of the repo on its own branch. Tasks shows them all at once: what each is doing,
 what it changed, and which ones are waiting on you. When one is done, **Land** commits it, brings main in, runs your
