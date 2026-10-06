@@ -1,0 +1,97 @@
+---
+title: Use Styx alongside your editor
+description: Keep working in VS Code, Cursor, Zed or a JetBrains IDE while agents work on their own branches, and move between the two in one click.
+---
+
+Styx doesn't ask you to give up your editor. Agents work in their own copies of the repo, so you can keep coding in
+your usual editor while they run, open any task's files there in one click, and use Styx's built-in editor and
+terminal for quick looks and small fixes.
+
+## Connect your editor
+
+The first step of onboarding, **Your editor**, lists the editors Styx found on this machine: VS Code (and Insiders),
+Cursor, Windsurf, Zed, JetBrains IDEs (WebStorm, IntelliJ IDEA, PyCharm, GoLand, Rider and the rest) and Neovim. Tick the one you use and it is marked **Fallback · Open in**: that's where **Open in** sends
+you from then on.
+
+Under the list are five options. Styx only reads your editor's files; nothing in your editor changes.
+
+- **Import recent folders (feeds next step):** your editor's recent projects become suggestions on the next step,
+  **Your projects**. Styx reads them from VS Code, Cursor and Windsurf (recent folders and workspaces), from JetBrains
+  IDEs (recent projects) and from Neovim (the git repos holding your recently opened files). Zed's history isn't read.
+- **Also look where Claude Code and Codex have worked:** adds the folders those agents' own session history mentions.
+- **Import keybindings:** reads `keybindings.json` from VS Code, Cursor or Windsurf.
+- **Import theme & font:** reads the colour theme and editor font from VS Code, Cursor, Windsurf or Zed.
+- **Install "Open in Styx" command:** see [below](#open-a-folder-in-styx-from-your-terminal).
+
+<Callout type="note" title="Keybindings and theme are saved, not applied yet">
+  Styx stores the keybindings and theme it imports, but the built-in editor doesn't use them yet: it keeps
+  Styx's own look and keys. Recent folders and Open in work today.
+</Callout>
+
+Skipped the step, or changed editors? Pick a different one under **Settings** › **Editor** › **Fallback editor**.
+To add more projects from your editor's recents later, open the command palette (<Keys k="Mod+K" />) and choose
+**Add from recent projects…**.
+
+## Your checkout stays yours
+
+Every task runs in a git worktree: a separate folder with its own branch, next to your project rather than inside it.
+For a project at `~/code/shop`, a Claude task's folder is `~/code/.styx/worktrees/shop/agent-claude-1`, on the
+branch `agent/claude-1`.
+
+So the folder you have open in your editor is never touched while agents work. They don't switch your branch, write
+to your files or leave half-finished edits in your working tree. You can keep coding on your own branch while three
+agents work on theirs.
+
+There is one point where Styx does use your folder: **landing**. Land merges a task's branch into `main` in the
+project folder you added to Styx, so that folder has to be on `main` with nothing uncommitted at that moment. If it
+isn't, Land says so and does nothing. Commit or stash your own work first, or work on your own branch in a separate
+worktree. See [Land, publish and deploy](/docs/using/land-publish-deploy).
+
+## Open a task's files in your editor
+
+<Steps>
+
+1. **Pick the task** in the project nav.
+2. **Open the Code tab.** The file tree shows the task's folder, with changed files marked.
+3. **Click Open in.** The button at the foot of the file tree is named after your editor (**Open in VS Code**, **Open
+   in Cursor**, and so on). It opens the task's folder in your editor, or just the open file if one is open in the
+   Code tab.
+
+</Steps>
+
+Your editor now has the agent's branch open in its own window, separate from your main checkout, and you can read,
+run or change anything there. Edits you make in a task's folder show up on its **Changes** tab under **Changes not
+tied to a turn**, so they're never confused with the agent's work, and they land with the task.
+
+Two habits keep this smooth. Avoid editing a file while the agent is mid-turn on it; wait for the turn to finish, or
+tell the agent what you changed. And let Styx manage the task's branch: commit there if you like, but don't switch
+branches or rebase in a task's folder, because Styx keeps it in step with `main` for you.
+
+On the **Lanes** page (**Lanes and branches** in the project nav), **Open** on the row for your main folder opens it
+in your editor too.
+
+## Use the built-in Code tab and terminal
+
+For a quick look or a one-line fix, you don't need to leave Styx:
+
+- **Code** is an embedded Monaco editor, the editor inside VS Code, on the selected task's folder. Edits save on their
+  own as you type. Binary files and files over 1 MB open read-only. Turn on **Settings** › **Editor** › **Track agent
+  edits (diff review)** to see the agent's changes highlighted in the editor as it makes them.
+- **Terminal** is a shell already in the task's folder, on its branch. Run the tests, check `git log`, or try the
+  agent's change by hand.
+
+The other tabs cover the rest of a task: **Changes** for reviewing what it did turn by turn, **Preview** for the
+running app. See [Working with an agent](/docs/using/working-with-an-agent).
+
+## Open a folder in Styx from your terminal
+
+If you ticked **Install "Open in Styx" command** during onboarding, run this in any project folder:
+
+```sh
+styx .
+```
+
+Styx comes to the front and asks **Add this folder as a Styx project?** before adding it. On macOS the command goes
+in `/usr/local/bin`, or `~/.local/bin` if that isn't writable (add it to your `PATH` if it isn't there already). On
+Windows it goes in your user `PATH` (open a new terminal to pick it up), and you also get **Open in Styx** when you
+right-click a folder in Explorer.

@@ -1,0 +1,181 @@
+---
+title: project.json
+description: Every field of `.styx/project.json`, the project settings file you commit, with types, defaults and an example.
+---
+
+`.styx/project.json` holds the project settings everyone working on the repo should share: the default agent and model, the base branch, the targets, extra access rules, and how to run the app. You commit it. It never holds a secret.
+
+Styx writes the file whenever you change one of these settings in the app, and reads it when you add the project. You can also edit it by hand.
+
+## Example
+
+```json
+{
+  "$schema": "https://styx.dev/schema/project.v1.json",
+  "version": 1,
+  "name": "acme-shop",
+  "targets": [
+    { "name": "acme-shop", "provider": "vercel", "env": "prod", "authMethod": "cli", "policy": "ask-mfa" },
+    {
+      "name": "shop-db",
+      "provider": "supabase",
+      "env": "staging",
+      "authMethod": "oauth",
+      "config": { "ref": "abcd1234" }
+    }
+  ],
+  "agents": {
+    "default": "claude",
+    "model": null,
+    "permissionMode": "auto",
+    "taskPermissionMode": "bypassPermissions",
+    "autoApproveEdits": false
+  },
+  "policies": {
+    "extra": [
+      {
+        "id": "preview-deploys",
+        "rule": {
+          "kind": "auto-approve",
+          "match": { "provider": ["vercel"], "env": ["preview"] },
+          "scopes": ["deploy"],
+          "duration": "1h"
+        },
+        "ruleText": "Auto-approve Vercel preview deploys for 1 hour"
+      }
+    ]
+  },
+  "worktrees": { "baseBranch": "main", "branchPrefix": "agent/", "location": "sibling" },
+  "dev": { "command": "pnpm dev", "url": "http://localhost:3000" }
+}
+```
+
+## Fields
+
+Only `version` and `name` are required. A field you leave out takes the default shown.
+
+### `$schema`
+
+String. Styx writes `https://styx.dev/schema/project.v1.json`.
+
+### `version`
+
+Must be `1`. A file with a higher version is refused with `project.json version N is newer than this Styx supports (1)`.
+
+### `name`
+
+String, at least one character. The project's name.
+
+### `targets`
+
+Array. Deploy and server targets the project uses. Each one shows up in **Settings › Targets**, unconnected until someone connects it on their own machine; the credential always stays in that machine's keychain.
+
+| Field        | Type                                                | Notes                                                                                                                                                                                        |
+| ------------ | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`       | string                                              | 1–80 characters: letters, digits, space and `. _ / @ : + -`.                                                                                                                                 |
+| `provider`   | `vercel`, `aws`, `gcp`, `supabase`, `github`, `ssh` |                                                                                                                                                                                              |
+| `env`        | `prod`, `staging`, `preview`, `scm`                 |                                                                                                                                                                                              |
+| `authMethod` | `oauth`, `key`, `ssh`, `cli`                        | `cli` reuses the login the provider's own CLI already has.                                                                                                                                   |
+| `config`     | object                                              | Optional. Provider settings: Vercel `projectId`, `teamId`; AWS `region`, `roleArn`; GCP `projectId`, `buckets`; Supabase `ref`; GitHub `owner`, `repo`, `login`; SSH `host`, `port`, `user`. |
+| `policy`     | `ask-mfa`, `ask`, `always`                          | Optional. **Ask · MFA**, **Ask each time** or **Always allow**.                                                                                                                              |
+
+### `agents`
+
+Object. Defaults for new tasks (**Settings › Agent defaults**).
+
+| Field                | Type                                                                                     | Default                          |
+| -------------------- | ---------------------------------------------------------------------------------------- | -------------------------------- |
+| `default`            | `claude`, `codex`, `gemini`, `cursor`, `shell`                                           | `claude`                         |
+| `model`              | string or `null`                                                                         | `null` (the agent's own default) |
+| `permissionMode`     | `default`, `acceptEdits`, `plan`, `bypassPermissions`, `dontAsk`, `auto`                 | `auto`                           |
+| `taskPermissionMode` | same values; for tasks Styx starts itself (Run locally, Deploy, Tech debt audit, merges) | `bypassPermissions`              |
+| `effort`             | `low`, `medium`, `high`, `xhigh`, `max`, `ultra` or `null`                               | `null`                           |
+| `autoApproveEdits`   | boolean                                                                                  | `false`                          |
+| `mayRequestTargets`  | boolean: **May request targets** starts on in **New task**                               | `true`                           |
+| `notifyWhenNeedsMe`  | boolean: **Notify when it needs me** starts on in **New task**                           | `true`                           |
+| `perAgent`           | object keyed by agent, each `{ "model" }`                                                | Read but not used yet.           |
+
+`permissionMode` values are shown in the app as **Ask each time**, **Accept edits**, **Plan mode**, **Bypass permissions**, **Don't ask** and **Auto**.
+
+### `policies`
+
+Object. Extra access rules for the project.
+
+| Field              | Type             | Notes                  |
+| ------------------ | ---------------- | ---------------------- |
+| `extra`            | array of rules   | See below.             |
+| `disabledBuiltins` | array of strings | Read but not used yet. |
+
+Each rule in `extra`:
+
+| Field      | Type    | Notes                                                                               |
+| ---------- | ------- | ----------------------------------------------------------------------------------- |
+| `id`       | string  | 1–64 characters: letters, digits and `. _ : -`.                                     |
+| `rule`     | object  | One of the three shapes below.                                                      |
+| `ruleText` | string  | 1–200 characters. How the rule reads in **Approvals › Policies** and the audit log. |
+| `enabled`  | boolean | Optional, default `true`.                                                           |
+
+`rule` shapes. `match` narrows which targets a rule covers: any of `provider` (array), `env` (array) and `targetIds` (array); a field you leave out matches everything.
+
+- `{ "kind": "auto-approve", "match", "scopes", "duration" }`: grant without asking. `scopes` is a non-empty array of `read`, `write`, `deploy`, `delete`; `duration` is `once`, `1h`, `session` or `always`.
+- `{ "kind": "ask", "match", "scopes", "requireMfa" }`: always ask for these scopes, with Touch ID, Windows Hello or your system password if `requireMfa` is `true`.
+- `{ "kind": "idle-expiry", "match", "idleMs" }`: end a grant after `idleMs` milliseconds without use.
+
+<Callout type="warn" title="Rules from the repo need your OK">
+  Anyone who can push to the repo can edit this file, so its access rules don't take full effect until you
+  accept them on your machine. Until then an `auto-approve` rule only asks, an `idle-expiry` rule is ignored,
+  a target's `policy` isn't applied, and `config` doesn't change a target you've already connected. **Settings
+  › Targets** shows **Accept project policies** with the changes; accepting is written to the audit log.
+  Change the rules and you're asked again.
+</Callout>
+
+### `worktrees`
+
+| Field          | Type                  | Default   | Notes                                                                                                           |
+| -------------- | --------------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
+| `baseBranch`   | string                | `main`    | The branch lanes start from and land in.                                                                        |
+| `branchPrefix` | string                | `agent/`  | Prefix of each task's branch.                                                                                   |
+| `location`     | `sibling` or `inside` | `sibling` | `sibling`: `<parent of the repo>/.styx/worktrees/<repo>/<branch>`. `inside`: `<repo>/.styx/worktrees/<branch>`. |
+
+### `shell`
+
+| Field     | Type                  | Default      | Notes            |
+| --------- | --------------------- | ------------ | ---------------- |
+| `windows` | `powershell` or `wsl` | `powershell` | Not applied yet. |
+
+### `lineEndings`
+
+`auto`, `lf` or `crlf`. Default `auto`. Not applied yet.
+
+### `dev`
+
+How to run the app locally, for **Run locally** and **Preview**. Usually written by Styx once an agent works it out.
+
+| Field      | Type                    | Notes                                                                                                             |
+| ---------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `command`  | string                  | The command that starts the app, run from the project root.                                                       |
+| `url`      | string                  | The URL it serves. Only `localhost`, `127.0.0.1` or `[::1]` over http or https is used; anything else is ignored. |
+| `platform` | `web`, `ios`, `android` | What the command runs on. Leave it out for a web app.                                                             |
+| `device`   | string                  | Up to 120 characters. The simulator or emulator name, such as `iPhone 17 Pro`.                                    |
+| `appId`    | string                  | Up to 200 characters. The bundle id or package, such as `com.acme.shop`.                                          |
+
+A command that looks like it carries a secret (such as `API_KEY=… pnpm dev`) is run but never written to the file.
+
+### `env`
+
+| Field             | Type                           | Default          | Notes            |
+| ----------------- | ------------------------------ | ---------------- | ---------------- |
+| `files`           | array of strings               | `[".env.local"]` | Not applied yet. |
+| `shareWithAgents` | `per-grant`, `always`, `never` | `per-grant`      | Not applied yet. |
+
+## What is never in the file
+
+- **Secrets.** A key whose name contains `secret`, `token`, `password`, `passphrase`, `private_key` / `private-key` / `privatekey` or `credential`, at any depth, makes the whole file invalid (`credentialRef` is the one exception). Credentials live in the keychain.
+- **Settings that are about this machine or this person**: the target **Policy** you choose in Settings, deploy commands, the lane settings in **Agent defaults** (fetch before cutting a lane, bringing in the base branch, merging, landing on its own), and every App setting.
+
+## Validation and versioning
+
+- The file is checked when Styx reads it. If it isn't valid JSON or doesn't match the schema, Styx logs why and keeps the settings it had.
+- Keys Styx doesn't know are kept when it rewrites the file, so a newer Styx's fields survive an older one.
+- Styx writes known keys in a fixed order, then unknown keys sorted, with 2-space indentation and a trailing newline, so diffs stay small.
+- The format is version 1. A future format will raise `version`.

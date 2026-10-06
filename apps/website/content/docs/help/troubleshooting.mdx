@@ -1,0 +1,200 @@
+---
+title: Troubleshooting
+description: Common problems with agents, landing, access and installation, what causes them, and how to fix them.
+---
+
+Each section starts with what you see, then why it happens and what to do. Most messages in Styx name their own fix; this page adds the background. If your problem isn't here, see [Still stuck](#still-stuck) at the end.
+
+## Agents
+
+### Styx says an agent isn't installed, but it works in my terminal
+
+**Cause:** Styx looks where a new login shell would, plus the usual install folders. A CLI added to your PATH only in a terminal-specific config, or installed somewhere unusual, can be missed.
+
+**Fix:** open **Settings › Agents** and select **Rescan**. If it's still missing, select **Connect**, then **I'll do it myself**, and type the command name or full path into **Path or command**, or use **Locate binary**. **Show where** lists every folder Styx searched. The full walkthrough is in [Connect your agents](/docs/getting-started/connect-agents#when-an-agent-isnt-detected).
+
+### A banner says "… not found on PATH. 1 session cannot start."
+
+**Cause:** a task was started with an agent whose CLI isn't installed on this computer, or has since been removed or moved.
+
+**Fix:** select **Install guide** on the banner, or set the agent up from **Settings › Agents** (**Connect**, then **Set up**). Once Styx finds it, the task can start.
+
+### The chat says the agent is signed out
+
+You see **Claude is signed out.** (or Codex, Gemini, Cursor) in the middle of a task.
+
+**Cause:** the agent's own login on this computer expired.
+
+**Fix:** select **Sign in to …** in the chat. Sign-in opens in your browser, and the message you were sending goes out as soon as you're back. If another agent is ready, **Send it to … instead** starts the same ask as a new task with that agent.
+
+### The chat says the plan is out of usage
+
+You see **Your … plan is out of usage for now.**
+
+**Cause:** the agent's account hit its usage or rate limit, or ran out of quota or credit. This is the provider's limit, not Styx's.
+
+**Fix:** wait for the limit to reset (the **Usage** page shows the limits the CLIs report, and when they reset), or use **Send it to … instead** to hand the same ask to another agent that's ready.
+
+### "Claude Code … can't use your default model"
+
+**Cause:** your Claude Code is older than the model it's set to use.
+
+**Fix:** run `claude update` in a terminal, or choose another model in the project's **Agent defaults** or in the composer's model control.
+
+### An agent asks for approval at nearly every step
+
+**Cause:** the task is in **Ask each time**, where every tool call outside the allowlist asks you.
+
+**Fix:** switch the task's **Permissions** in the composer to **Auto** (the default for new tasks) or **Accept edits**. To change the default for a project, use **Permission mode** in its **Agent defaults**.
+
+## Git, landing and publishing
+
+### Git isn't installed
+
+**Cause:** there's no git on this computer. Styx still works, but agents then work directly in the project folder: no branch per task, nothing to land.
+
+**Fix:** select **Install git** where Styx mentions it. It runs `xcode-select --install` on a Mac, `winget` on Windows, or `apt-get` / `dnf` on Linux, and needs no restart. If that fails, **Download git** goes to git-scm.com. For a project you added before installing git, use **Initialise git** on **Lanes and branches**.
+
+### Land says the checks failed
+
+You see **The checks failed (`…` exited 1); agent/claude-1 was not landed.**, followed by the output.
+
+**Cause:** Styx runs your project's checks command in the task before merging, and won't put a failing change on main.
+
+**Fix:** ask the agent to fix what failed (the output is in the message), then **Land** again. The checks command is the one an agent worked out the first time it resolved a merge conflict in this project.
+
+### Land refuses because of the main folder
+
+- **The main folder has uncommitted changes on main. Commit or discard them first.** Styx merges into your main folder, so it has to be clean. Commit or stash your own edits there, then land.
+- **The main folder is on another-branch, not main.** Switch your main folder back to main, then land.
+- **main on this machine and origin/main have each moved on.** Your local main and the remote have diverged. Bring the remote into your local main in the main folder (for example `git pull`), then land again.
+
+### Land refuses because the agent is busy
+
+**Cause:** **… is mid-turn** or **… is waiting on you**. Landing in the middle of a turn would take half-finished work.
+
+**Fix:** wait for the turn to end, or answer the agent (or stop it), then land.
+
+### Land or Bring in main hits a merge conflict
+
+**Cause:** main and the task changed the same lines.
+
+**Fix:** with the default **Merging** setting (**Keep my project up to date for me**), Styx hands the conflict to the task's agent, which resolves it keeping both sides and runs your checks; the chat says when it's done, and you land again. **Undo merge** on **Lanes and branches** takes it back. If the project is set to **I review and merge myself**, the lane is marked instead and a banner says **… conflicts with main in …**; select **Resolve** to ask the agent to merge it. If Styx can't finish the merge, it undoes it and leaves the task as it was.
+
+### Publish says there's no remote
+
+**Cause:** the project has no git remote, so there's nowhere to push. **Publish** can still commit.
+
+**Fix:** select **Connect to GitHub** at the top of **Lanes and branches**. Create a new repository (needs GitHub connected as a target) or paste the URL of one that exists.
+
+### Changes says Agent edit tracking is off
+
+**Cause:** **Review hunk by hunk** needs Styx to watch the task's files, which is off by default.
+
+**Fix:** turn on **Settings › Editor › Track agent edits (diff review)**. **Undo this turn** on the Changes page works without it.
+
+## Access and deploy targets
+
+### A production grant is refused: "Touch ID is not available on this machine"
+
+The same message names **Windows Hello** or the **system password** on Windows and Linux.
+
+**Cause:** writing to, deploying to or deleting from production needs the operating system to confirm it's you, and Styx couldn't ask. Styx refuses rather than grant production access unchecked.
+
+**Fix:**
+
+- **Mac:** Touch ID must be available and have a fingerprint set up. A Mac without Touch ID (or a keyboard with it) can't approve production writes today.
+- **Windows:** set up Windows Hello (a PIN is enough) in Windows **Settings › Accounts › Sign-in options**.
+- **Linux:** polkit and an authentication agent must be running in a graphical session. The .deb installs Styx's polkit action; the AppImage uses `pkexec`, so `pkexec` must be installed.
+
+By default only writes, deploys and deletes on production need this check; reads and staging or preview targets don't, unless a policy asks for it.
+
+### A banner says a target's credentials expired
+
+You see **…: credentials expired … ago. Agents requesting it are paused.**
+
+**Fix:** select **Reconnect** and sign in to the provider again.
+
+### A banner says .styx/project.json wants to change grant policies
+
+**Cause:** the project's committed `.styx/project.json` contains access policies, for example from a teammate. Policies from a repo only apply once you accept them on your machine, so a pulled commit can't quietly loosen what agents may do.
+
+**Fix:** select **Review**, read them, and choose **Accept project policies** in the project's **Targets**.
+
+### The chat warns that a CLI was called by full path
+
+You see **warning: … called by full path — this skips the Styx shim, so no grant was asked and nothing was audited**.
+
+**Cause:** the agent ran a cloud CLI (such as `/opt/homebrew/bin/gcloud`) directly instead of the wrapper Styx puts on its PATH. Styx is a guardrail, not a sandbox: it warns, but it can't stop an agent running a program as you.
+
+**Fix:** tell the agent to use the plain command name. If it keeps happening, check the agent's instructions or skills for hard-coded paths.
+
+## Preview
+
+### Run locally finished, but nothing was learned
+
+**Cause:** the first time you select **Run locally**, an agent works out how to start your app and tells Styx the command. This time it ended without doing so.
+
+**Fix:** run it again, or type the start command into Preview yourself.
+
+### Preview says nothing is answering
+
+You see **Nothing is answering at localhost:3000.**
+
+**Cause:** the dev server isn't running, crashed, or serves a different port. Preview only shows local addresses (localhost, 127.0.0.1).
+
+**Fix:** check the run's **Output**, or use **Ask … to fix it**. Then **Retry**.
+
+### The simulator only shows screenshots (Mac)
+
+**Cause:** live mirroring needs macOS's Screen Recording permission for Styx.
+
+**Fix:** select **Open System Settings** and allow Styx under Screen Recording. iOS simulators need Xcode, so they're Mac-only.
+
+## Installing and updating
+
+### Windows says "Windows protected your PC"
+
+**Cause:** the Windows build isn't code-signed yet, so SmartScreen doesn't recognise it.
+
+**Fix:** select **More info**, then **Run anyway**. The installer is the one from heystyx.com.
+
+### Linux: saving a target fails, or Styx can't reach the keyring
+
+**Cause:** Styx keeps credentials in the Secret Service keyring (GNOME Keyring or KWallet). On a minimal desktop or window manager, none may be running.
+
+**Fix:** install and start GNOME Keyring or KWallet, and make sure `libsecret-1-0` is installed (the .deb requires it).
+
+### Linux: there's no tray icon
+
+**Cause:** GNOME doesn't show tray icons on its own.
+
+**Fix:** install the AppIndicator extension. KDE shows the icon as it is. Notifications work either way.
+
+### Updates don't arrive
+
+**Cause:** the .deb doesn't update itself, and very old builds had no updater (Mac builds before 0.2.0, Windows builds up to 0.4.3).
+
+**Fix:** download the current version once from [heystyx.com](https://heystyx.com) or [GitHub Releases](https://github.com/NicholasFlemmer/styx-app/releases/latest). **Settings › General › Updates** shows the version you're on, when it last checked, and **Check now**.
+
+### Built from source, Electron starts as plain Node
+
+**Cause:** your shell has `ELECTRON_RUN_AS_NODE` set.
+
+**Fix:** `unset ELECTRON_RUN_AS_NODE` before launching Electron yourself. The repo's `pnpm` scripts already clear it.
+
+## Still stuck
+
+### Where the logs are
+
+Styx's own log:
+
+- **Mac:** `~/Library/Logs/Styx/main.log`
+- **Windows:** `%APPDATA%\Styx\logs\main.log`
+- **Linux:** `~/.config/Styx/logs/main.log`
+
+What each agent's terminal printed is kept in `logs/pty` inside Styx's data folder (`~/Library/Application Support/Styx` on a Mac, `%APPDATA%\Styx` on Windows, `~/.config/Styx` on Linux). Styx masks passwords, keys and tokens in its own log.
+
+### Tell us
+
+Select **Feedback** in the status bar (or **Help › Send Feedback…**). It goes straight to the person who makes Styx, and every message is read. Tick **Include diagnostics** to attach the last part of Styx's log, with secrets masked; it can include your projects' names and folders, never their contents. You can also [open an issue on GitHub](https://github.com/NicholasFlemmer/styx-app/issues).

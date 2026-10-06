@@ -1,0 +1,84 @@
+---
+title: Privacy and usage counts
+description: What stays on your computer, the exact usage counts Styx sends, and how to turn them off.
+---
+
+Styx runs on your computer, and almost everything it knows stays there. This page lists what it does send, and why. The legal policy is at [heystyx.com/privacy](https://heystyx.com/privacy); this page describes how the app behaves.
+
+## What stays on your computer
+
+- Your projects, their files, branches and worktrees, and every change your agents make.
+- Your agent sessions and conversations, the prompts you write and what the agents answer.
+- The credentials for your deploy targets, kept in your system keychain (macOS Keychain, Windows Credential Manager, or the Secret Service keyring on Linux). Never in the project, Styx's database, its logs or an agent's environment.
+- The access requests, grants and the audit log.
+- Your settings.
+
+Styx keeps its own data in a local database in its data folder (`~/Library/Application Support/Styx` on a Mac, `%APPDATA%\Styx` on Windows, `~/.config/Styx` on Linux). Project settings you choose to share live in the project's `.styx/project.json`, which never contains secrets.
+
+### What your agents send
+
+Your agents run on your computer under your own accounts and talk to their own providers directly, as they would in a terminal: Claude Code to Anthropic, Codex to OpenAI, Gemini CLI to Google, Cursor's agent to Cursor. That includes the files they read and the summaries Styx asks an agent to draft when you land or publish. What those providers do with it is between you and them. The same applies to the cloud services your agents deploy to.
+
+## Usage counts
+
+Styx counts a few things you do so we can see how many people use it, which parts they reach and where they get stuck. A count is only a name and how many times it happened. The full list is fixed in the code, in [`usageEventSchema`](https://github.com/NicholasFlemmer/styx-app/blob/main/packages/core/src/model/usage-report.ts), and there is no field that could carry a project name, path, branch, command, prompt or anything an agent produced.
+
+### Using the app
+
+- `app.launched`: a Styx window opened.
+- `onboarding.completed`: first-run setup was finished.
+- `project.added`: a project was added, by any route.
+- `tour.shown`, `tour.finished`, `tour.skipped`: the first-run walkthrough came on screen, was played to the end, or was closed early.
+
+### Working with agents
+
+- `agent.spawned`: an agent was started.
+- `message.sent`: a message was sent to an agent.
+- `agent.worked`: an agent finished its first piece of work in a session (once per session).
+- `lane.landed`: a task's work was landed on main.
+
+### Access and deploys
+
+- `grant.approved`: an access request was approved.
+- `deploy.run`: a deploy was started.
+
+### When something goes wrong
+
+- `agent.failed.cli-missing`: an agent couldn't start because its CLI isn't installed.
+- `agent.failed.launch`: the agent's process wouldn't launch.
+- `agent.failed.sign-in`: the agent says it isn't signed in.
+- `agent.failed.outdated`: the agent's CLI is too old.
+- `agent.failed.limit`: the agent's account hit a usage or rate limit, or ran out of quota or credit.
+- `agent.failed.error`: the agent reported another error before finishing a turn.
+- `agent.failed.exited`: the agent closed with an error within its first seconds.
+- `app.crashed.window`: a Styx window crashed.
+- `app.crashed.helper`: one of Styx's helper processes (graphics, network) crashed.
+- `app.ended-unexpectedly`: the last run ended without quitting (a crash, a force quit or a power cut), noticed at the next launch.
+
+### What's sent with them
+
+Each batch carries Styx's version, your operating system (`darwin`, `win32` or `linux`) and an install id: a random code your copy of Styx makes the first time it runs, not derived from your computer or anything about you. While you're signed in, the counts are also tied to your account. Repeats are folded into one count, and Styx sends a batch every few minutes and when it quits.
+
+### Turn them off
+
+Open **Settings › Account** and untick **Send usage counts**. It's one switch, it works signed in or not, and nothing is sent while it's off.
+
+### Builds from source
+
+Running Styx from a checkout with `pnpm dev` sends no counts, and neither do the demo fixtures or the test suite. A build you package yourself (`pnpm package:mac` and so on) behaves like a release build and sends them, until you turn the switch off.
+
+## Everything else Styx connects to
+
+Apart from the counts, Styx goes online only for these, and none of them carries your code:
+
+- **Updates.** Released builds check the release feed for a new version and download it.
+- **Your Styx account**, only if you sign in.
+- **Feedback**, only when you send it. It carries your message, your email if you give one, Styx's version, your operating system and your install id. **Include diagnostics** (off unless you tick it) adds the last part of Styx's own log, with passwords, keys and tokens masked; it can include your projects' names and folders, never their contents.
+- **The skills catalogue**, read from GitHub when you browse **Settings › Skills**.
+- **Your deploy targets and their CLIs**, when you connect a target or an agent uses a grant.
+
+## The optional account
+
+Signing in with GitHub or Google is optional and gates nothing. Styx never sees your password. Signed in, the account service keeps your email, name, profile picture link, which provider you used, your plan, and when you signed up and last used Styx. On your computer, Styx uses your account's name and email to sign the commits it makes when git has no name and email of its own. **Sign out** in **Settings › Account** revokes the sign-in.
+
+For retention periods, the services involved and your rights, read the [privacy policy](https://heystyx.com/privacy).

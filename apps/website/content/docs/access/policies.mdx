@@ -1,0 +1,108 @@
+---
+title: Policies
+description: Decide which access requests Styx approves for you, which always ask, and what no rule can approve.
+---
+
+Policies let Styx answer the routine requests so you only see the ones that matter. A rule can auto-approve a kind of request (reads on staging, say), or make sure a kind of request always asks you, with or without Touch ID, Windows Hello or your system password. Some requests can never be approved by a rule, whatever you set.
+
+You manage rules in **Access**, in the **Policies** pane next to the tabs.
+
+## How a request is decided
+
+Each time an agent asks, Styx goes through these steps in order and stops at the first one that decides:
+
+1. **The task isn't allowed to ask.** If the task was started with **May request targets** off, the request is denied.
+2. **An `always` grant already covers it.** If you've granted this target persistently for these scopes, the agent gets that grant.
+3. **The target's policy is Always allow.** The request is approved, unless it's a production write, deploy or delete.
+4. **Your rules, top to bottom.** The first rule that matches decides. App rules come first, then any rules the project's `.styx/project.json` adds.
+5. **Nothing matched.** Styx asks you.
+
+Whatever decides, two checks come after it (see [What a rule can't approve](#what-a-rule-cant-approve)), and the decision is written to the [audit log](/docs/access/audit-log), naming the rule that made it.
+
+## The built-in rules
+
+Styx starts with three rules. You can switch each one on or off with its checkbox, but not edit or remove them.
+
+| Rule                                                   | What it does                                                                                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Auto-approve read on any staging or preview target** | Reads on `staging` and `preview` targets are granted for 1h without asking.                                                     |
+| **Always ask, require Touch ID for prod write**        | Writes, deploys and deletes on `prod` targets ask you, with verification. (Windows Hello on Windows, system password on Linux.) |
+| **Expire grants after 1h idle**                        | Any grant except `always` ends after an hour without use.                                                                       |
+
+**Settings › Policies** has the first one as a switch too (**Auto-approve staging reads**) and shows the idle expiry.
+
+Turning off the second rule doesn't make production writes approvable without you. That requirement is built into Styx, not into the rule; the rule is there so you can see it.
+
+## The target's own policy
+
+Each target also has a policy, set in the **Policy** column of **Settings › Targets**:
+
+- **Ask · MFA:** every request asks you, with verification, reads included. Auto-approve rules don't apply. This is the default for production targets you connect in Styx.
+- **Ask each time:** requests follow your rules; if none matches, Styx asks. The default for other targets.
+- **Always allow:** requests are approved without asking, except production writes, deploys and deletes, and anything the checks below catch.
+
+## Add a rule
+
+Click **+ Rule** under the policies list. In **New rule**:
+
+<Steps>
+
+1. **Decision.** **Auto-approve** or **Ask**.
+2. **Targets.** **Any target**, or one or more providers.
+3. **Environments.** **Any environment**, or some of **Prod**, **Staging**, **Preview** and **Source control**.
+4. **Scopes.** At least one of read, write, deploy and delete.
+5. **Grant for** (Auto-approve only). How long an auto-approved grant lasts: once, 1h, session or always.
+6. **Require Touch ID** (Ask only). Whether the ask needs verification.
+7. **Rule text.** Styx drafts it from your choices, for example "Auto-approve deploy on Vercel (Preview) for 1h". Edit it if you like. It's how the rule reads in the list and in the audit log. Then **Add rule**.
+
+</Steps>
+
+An **Auto-approve** rule matches only when it covers every scope the agent asked for. An **Ask** rule matches when it covers any of them. So a rule auto-approving `read` doesn't approve a request for `read` and `write`.
+
+New rules go to the bottom of the list. Rules you added have **Edit** and **Remove**. There's no way to reorder rules in the app yet. Each rule shows a count of its recent matches. Adding, editing, switching on or off and removing a rule is recorded in the audit log.
+
+## What a rule can't approve
+
+Some requests always come to you, whatever your rules and target policies say:
+
+- **Production writes, deploys and deletes.** They always ask, and you always verify. The one exception is an `always` grant you approved earlier (with verification) that covers the request.
+- **Anything on a production target whose credential can't be narrowed.** For Vercel, Supabase, GitHub and SSH, and for GCP and AWS in some setups, a grant hands the command your whole credential whatever scope was asked. On a `prod` target Styx turns any auto-approval of those into an ask with verification, reads included. See [what the agent actually gets](/docs/access/how-access-works#what-the-agent-actually-gets).
+- **Anything on a target set to Ask · MFA.**
+
+This means an auto-approve rule for, say, GitHub reads only takes effect on a GitHub target whose environment isn't `prod`.
+
+## Share rules with your team
+
+**Export JSON** at the bottom of the policies list copies all your rules, as JSON, to the clipboard. There's no import.
+
+To share rules with everyone who works on a project, put them in the project's `.styx/project.json` under `policies.extra`, using the same `rule` shape:
+
+```json
+{
+  "version": 1,
+  "name": "acme-shop",
+  "policies": {
+    "extra": [
+      {
+        "id": "github-reads",
+        "rule": {
+          "kind": "auto-approve",
+          "match": { "provider": ["github"] },
+          "scopes": ["read"],
+          "duration": "1h"
+        },
+        "ruleText": "Auto-approve read on GitHub for 1h"
+      }
+    ]
+  }
+}
+```
+
+A rule's `match` can name `provider`, `env` and `targetIds`. Every field given must match, and a field left out matches anything. The file can also set a target's `policy`. See [project.json](/docs/reference/project-json).
+
+Since anyone who can commit to the repo can edit this file, project rules don't take effect on your machine until you accept them. Until then, a banner says the project's `.styx/project.json` wants to change grant policies, its auto-approve rules only ask, its idle-expiry rules are ignored, and its target policies aren't applied. To accept, click **Review** on the banner, or go to **Settings › Targets** and click **Accept project policies**. If the file's policies change later (a new commit, a fresh clone), they need accepting again. Each acceptance is recorded in the audit log.
+
+## Next
+
+- [Audit log](/docs/access/audit-log) to see which rule decided what.
+- [Security model](/docs/access/security-model) for the guarantees behind these limits.

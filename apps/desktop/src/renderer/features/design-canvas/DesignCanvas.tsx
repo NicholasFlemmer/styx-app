@@ -48,7 +48,7 @@ export const designTaskFor = (model: ReadModel, session: Session | null): Sessio
 };
 
 /**
- * The Design tab (#140): a design task's screens on a canvas, every size side by side, wireframe or high fidelity.
+ * The Design tab (#140, #150): a design task's screens (or a build task's own, when its worktree has some) on a canvas, every size side by side, wireframe or high fidelity.
  * Select (V) picks an element or, dragged, an area: change it here, or tell the agent with the element and a picture
  * of it. Aa is Type and colour for every screen. Build it hands the screens over to a build task.
  */
@@ -56,7 +56,14 @@ export function DesignCanvas({ projectId, sessionId }: DesignCanvasProps) {
   const model = useModel(selectModel);
   const session = sessionId === null ? null : (model.sessions.byId[sessionId] ?? null);
   const design = designTaskFor(model, session);
-  if (design === null) return <DesignStart projectId={projectId} />;
+  const own = useOwnScreens(session, design === null);
+  if (design === null) {
+    if (session === null) return <DesignStart projectId={projectId} />;
+    // A build task with screens in its own worktree (a mockup put there by hand, or by its agent) shows them.
+    if (own === true)
+      return <Canvas key={session.id} projectId={projectId} design={session} linked={false} />;
+    return own === null ? null : <DesignStart projectId={projectId} />;
+  }
   return (
     <Canvas
       key={design.id}
@@ -65,6 +72,31 @@ export function DesignCanvas({ projectId, sessionId }: DesignCanvasProps) {
       linked={session !== null && session.id !== design.id}
     />
   );
+}
+
+/**
+ * Whether a task's own worktree holds screens (`.styx/designs/<screen>/<size>.html`), polled like the canvas so files
+ * dropped in by hand appear without a reload. Null until the first answer, or while not asked.
+ */
+function useOwnScreens(session: Session | null, enabled: boolean): boolean | null {
+  const worktreeId = session?.worktreeId ?? null;
+  const [has, setHas] = useState<{ worktreeId: string; screens: boolean } | null>(null);
+  useEffect(() => {
+    if (!enabled || worktreeId === null) return;
+    let live = true;
+    const check = async () => {
+      const r = await command('design.list', { worktreeId });
+      if (live && r.ok) setHas({ worktreeId, screens: r.value.screens.length > 0 });
+    };
+    const first = setTimeout(() => void check(), 0);
+    const t = setInterval(() => void check(), POLL_MS);
+    return () => {
+      live = false;
+      clearTimeout(first);
+      clearInterval(t);
+    };
+  }, [worktreeId, enabled]);
+  return enabled && has !== null && has.worktreeId === worktreeId ? has.screens : null;
 }
 
 function Canvas({ projectId, design, linked }: { projectId: ProjectId; design: Session; linked: boolean }) {
@@ -303,7 +335,8 @@ function Canvas({ projectId, design, linked }: { projectId: ProjectId; design: S
             </option>
           ))}
         </select>
-        {!linked ? (
+        {/* Build it hands a design task's screens to a build task; a build task showing its own screens is one. */}
+        {!linked && design.kind === 'design' ? (
           <Button
             variant="accent"
             size="compact"

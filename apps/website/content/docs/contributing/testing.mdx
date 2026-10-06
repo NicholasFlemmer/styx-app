@@ -1,0 +1,166 @@
+---
+title: Testing
+description: How to run Styx's tests, how to write unit, component and end-to-end tests that fit the codebase, and what a pull request should include.
+---
+
+Styx has four layers of tests: unit tests next to the code, Storybook stories checked for accessibility, end-to-end tests that drive the built Electron app, and screenshot comparisons. CI runs them on macOS, Windows and Linux. None of them ever talks to a real provider, a real agent, the real keychain or the network.
+
+## Before you start
+
+A fresh clone has no `node_modules`. Install, unpack Electron once, and build the tokens:
+
+```sh
+pnpm install
+node node_modules/electron/install.js
+pnpm tokens:build
+```
+
+Unpack Electron in its own step, before any test runs. Otherwise parallel test workers race its download and can leave a half-extracted `node_modules/electron/dist`. If that happens, move the folder aside and run the installer again.
+
+## Unit tests
+
+Unit tests use Vitest. The root config runs every package's `vitest.config.ts` as one project, and tests sit next to the code they test (`foo.ts` and `foo.test.ts`).
+
+```sh
+pnpm test                       # every package
+pnpm -F @styx/core test         # one package
+pnpm -F @styx/desktop test src/main/agents   # one folder
+```
+
+The packages are `@styx/core`, `@styx/desktop`, `@styx/ui`, `@styx/broker`, `@styx/cli`, `@styx/tokens` and `@styx/website`. A few checks only run against real things on your machine (the live skills catalogue, IDE detection); set `STYX_LIVE=1` to include them.
+
+### Core
+
+`packages/core` is pure, so its tests need no mocks. Keep them table-driven and deterministic:
+
+- Pass time in as `now`; never read the clock.
+- Use the demo data in [`packages/core/src/fixtures/demo.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/packages/core/src/fixtures/demo.ts).
+- Take expected strings from `copy.ts` (or `fill()` of it) rather than typing them again.
+- For a state machine, write one row per (state, event) pair, including the pairs that must return `null`.
+
+`machines/`, `policy/`, `selectors/` and `arcade/` must have 100% coverage of lines, branches, functions and statements. The thresholds are in [`packages/core/vitest.config.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/packages/core/vitest.config.ts) and apply when you run Vitest with coverage from the package:
+
+```sh
+pnpm -F @styx/core exec vitest run --coverage
+```
+
+CI's `pnpm test` doesn't collect coverage, so run this yourself when you touch those folders. A few selector files are below the bar today; make sure the files you change are fully covered and the totals don't drop.
+
+### The desktop main process
+
+Build services with `makeTestApp()` from [`apps/desktop/src/main/test-support.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/test-support.ts). It builds the real service graph on an in-memory SQLite database, with an in-memory keychain, fake CLIs, a fake OS-authentication prompt and a fake window, seeded with the demo data. Options let you change the time, the authentication result, or swap in fake runners and probes. Simulator tools are absent unless a test passes `deviceExec` / `deviceWhich`, so results never depend on whether the machine has Xcode.
+
+Every IPC command needs a contract test that dispatches through the real command bus. [`ipc/commands/contract.test.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/ipc/commands/contract.test.ts) shows the pattern:
+
+```ts
+const { app, sender, win } = makeTestApp();
+const r = await app.bus.dispatch(sender, 'settings.set', { patch: { theme: 'light' } });
+expect(r).toEqual({ ok: true, value: {} });
+app.publisher.flush();
+expect(
+  win
+    .batches()
+    .at(-1)
+    ?.deltas.some((d) => d.op === 'settings.set'),
+).toBe(true);
+```
+
+The demo data's project paths are literal (`~/code/acme-shop`). A test that starts a run or writes project settings must point the project at a temporary folder first, or a stray `apps/desktop/~/code/…` appears in the repo.
+
+### Time limits
+
+Hosted CI runners run git and Electron many times slower than a laptop. The desktop Vitest config raises the default limits to 60 s on CI and 30 s on Windows. If a test sets its own limit, wrap it in `slow(ms)` from [`apps/desktop/src/main/test-timeouts.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/test-timeouts.ts), which multiplies it by four on CI:
+
+```ts
+import { slow } from '../test-timeouts';
+
+it(
+  'lands a lane with conflicts',
+  async () => {
+    /* … */
+  },
+  slow(20_000),
+);
+```
+
+## Components and Storybook
+
+Components in `packages/ui` have a story for every variant and state, plus a `Matrix` story. Theme and platform are Storybook toolbar settings. Their tests (testing-library) cover behaviour only: keyboard, focus and ARIA. How they look is covered by the stories and the screenshot checks.
+
+```sh
+pnpm storybook        # browse the stories
+pnpm storybook:test   # build Storybook and run axe over every story
+```
+
+`storybook:test` fails on any axe violation, and CI runs it on all three platforms.
+
+## End-to-end tests
+
+The e2e tests in [`apps/desktop/e2e/`](https://github.com/NicholasFlemmer/styx-app/tree/main/apps/desktop/e2e) drive the built app with Playwright's Electron support. Build first:
+
+```sh
+pnpm build
+pnpm e2e
+pnpm e2e -- --grep "grant flow"   # one test, by name
+```
+
+Start the app through `launchStyx()` in [`e2e/launch.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/e2e/launch.ts). It gives each run:
+
+- a new temporary user-data folder (`STYX_USER_DATA`), seeded with the demo data (`STYX_FIXTURE=demo`);
+- an in-memory keychain (`STYX_KEYCHAIN=memory`) and a fixed clock (`STYX_NOW`);
+- `STYX_E2E=1`;
+- fake CLIs from [`e2e/fixtures/bin`](https://github.com/NicholasFlemmer/styx-app/tree/main/apps/desktop/e2e/fixtures/bin) first on `PATH` (`claude`, `codex`, `gemini`, `gh`, `adb`, `xcrun` and others), so a test never starts a real agent or spends anyone's usage. Each has a `.cmd` twin for Windows where the tests need one.
+
+```ts
+import { test, expect } from '@playwright/test';
+import { launchStyx } from './launch';
+
+test('opens on the demo data', async () => {
+  const { app, page } = await launchStyx();
+  await expect(page).toHaveTitle('Styx');
+  await app.close();
+});
+```
+
+Screens set a `data-screen-ready` attribute once they have painted; wait for it rather than for a timeout. Tests run one at a time, with 60 s each locally and 180 s on CI.
+
+`pnpm e2e -- --grep a11y` runs axe over every screen state the harness knows.
+
+<Callout type="note" title="Electron starting as Node">
+  Terminals inside VS Code set `ELECTRON_RUN_AS_NODE`, which makes Electron start as plain Node. The e2e
+  scripts remove it for you. If you launch Electron by hand, use `env -u ELECTRON_RUN_AS_NODE`.
+</Callout>
+
+## Screenshot checks
+
+`pnpm visual` (after `pnpm build`) takes a screenshot of each screen state in dark and light themes with Mac and Windows window chrome, and compares it with a reference image. A state fails if more than 0.2% of its pixels differ. The references are the app's own screenshots in `e2e/visual/__baseline__/app/`; the original design prototype's images sit beside them as history.
+
+```sh
+pnpm visual                              # compare
+pnpm -F @styx/desktop visual:report      # per-state diff ratios from the last run
+STYX_VISUAL_UPDATE=1 pnpm visual         # take new references after a reviewed change
+```
+
+Don't edit the reference images by hand; regenerate them with the command above and include them in your PR.
+
+## What CI runs
+
+[`.github/workflows/ci.yml`](https://github.com/NicholasFlemmer/styx-app/blob/main/.github/workflows/ci.yml) runs on every push and pull request, on `macos-latest`, `windows-latest` and `ubuntu-latest`:
+
+1. Install with the frozen lockfile, unpack Electron, build tokens.
+2. `pnpm typecheck`, `pnpm lint`, `pnpm test`.
+3. `pnpm build`, then Storybook with axe.
+4. `pnpm e2e`. On Linux it runs under `xvfb-run` with a 1920×1080 virtual display; on Windows the runner's display is enlarged first so the window keeps its size.
+5. An unsigned packaged build of the app, and a smoke test that launches it.
+
+All three platforms have to stay green. Screenshot checks don't run in CI, so run `pnpm visual` yourself for UI changes.
+
+## What a good pull request includes
+
+- The change and its tests, next to the code. A new command has a contract test; a state machine change has a row for every new transition.
+- `pnpm typecheck && pnpm lint && pnpm test` passing locally.
+- For UI changes: the Storybook story, `pnpm e2e` and `pnpm visual` passing, and a screenshot in the PR description.
+- No real tokens anywhere, including fixtures and test data.
+- A short description of what changed and why. For anything bigger than a small fix, open an issue first so the approach is agreed before you spend time on it ([CONTRIBUTING.md](https://github.com/NicholasFlemmer/styx-app/blob/main/CONTRIBUTING.md)).
+
+If your change alters what a screen shows, a flow, a default or a rule, it also needs a row in the deviations log, and a real design decision needs an ADR. [Decisions (ADRs)](/docs/contributing/decisions) explains both.

@@ -1,0 +1,98 @@
+---
+title: Land, publish and deploy
+description: "The three ways a task's work leaves its lane: land it into main, publish it as a pull request, or deploy the project to a target."
+---
+
+A task's work stays on its own branch until you move it. There are three ways to do that, and they suit different ways of working:
+
+- **Land** puts the work into `main` on your machine in one step and pushes `main`. For when you are the reviewer.
+- **Publish** commits, pushes the branch and opens a pull request. For when someone else reviews, or your team works through PRs.
+- **Deploy** ships the project to one of its targets, under the same access rules as an agent.
+
+## Land
+
+**Land** is in the task's header above the chat, at the bottom of the **Changes** tab, and on the task's row in **Lanes and branches**. It opens a short dialog: **Land** the branch **into** `main`, with a summary of what the task did, drafted by the agent from the changes. Edit it if you like: it becomes the merge commit's message, the record in `main`. The dialog says whether `main` will then be pushed, and where.
+
+Press **Land**, and Styx:
+
+1. **commits** anything the agent left uncommitted (files that look like secrets, such as `.env` or key files, are left out);
+2. **brings `main` into the lane**, so the work is tested against the latest base;
+3. **runs the project's checks**, if Styx knows a checks command;
+4. **merges** the lane into `main` in your project folder, as a merge commit (`--no-ff`) with your summary;
+5. **pushes** `main`, if the project has a remote.
+
+The chat and Home then say the branch "is now in main". The lane stays, marked as landed, with a way to undo it.
+
+You can also ask the agent: "land this", "merge it into main". The agent calls Styx's `land` tool, which does exactly the same, and it relays Styx's reason in one line if it can't.
+
+### When Land says no
+
+Land stops before anything reaches `main`, with a reason, when:
+
+- **your project folder has uncommitted changes**, or isn't on `main`. Landing happens in that folder, so it has to be clean and on the base branch.
+- **the agent is mid-turn or waiting on you.** Wait for it, answer it or stop it, then land.
+- **the checks fail.** The message names the command and its exit code, and the branch isn't landed.
+- **there is nothing to land**: the branch has no changes `main` doesn't already have.
+- **`main` on your machine and on the remote have both moved on.** Bring the remote into `main` in your project folder first.
+
+If bringing `main` into the lane conflicts, the landing waits and the conflict goes back to the lane's agent to resolve (see [Tasks stay current](#tasks-stay-current)). Land again when the lane says it's done.
+
+### Undo a landing
+
+While the landing is still the newest commit on `main`, its row in **Lanes and branches** offers **Undo landing**. That adds a revert commit to `main` (pushed too, if the landing was) and the lane is live again. Once `main` has moved on past it, undo it by hand with git. A landed lane whose base has moved on, with nothing new on it, is tidied away by itself.
+
+### The checks command
+
+Styx learns how to check your project the first time one of its agents resolves a merge: the agent works out the project's typecheck, test and lint command, runs it, and tells Styx with the `remember_command` tool. From then on Styx runs that command before every landing and after every merge it resolves. Until it has been learned, Land runs no checks. The command is kept by Styx on this machine.
+
+### Landing on its own
+
+**Agent defaults** has a setting, **Land on its own when the agent goes quiet and the checks pass**, off by default. With it on, Styx tries to land a task each time its agent finishes a turn with changes, using a summary listing the files. If Styx doesn't know a checks command yet, nothing is checked first. If a landing is refused, the chat says why, once.
+
+## Publish
+
+**Publish** in the bar above the workspace (or **Publish** in the palette) does commit, push and pull request in one step for the branch of the task you're looking at.
+
+<Shot
+  src="/docs/img/publish.jpg"
+  alt="The Publish dialog: commit, push and open a pull request, with the commit message, title and description drafted by the agent"
+  caption="Publish, with the message drafted from the diff"
+/>
+
+The dialog drafts the commit message from the diff (the agent writes it); edit it before you send. Choose how far to go: **Commit only**, **Commit & push**, or **Commit, push & open PR**, with a pull request title and description and an optional **Draft pull request**. Then press **Publish**.
+
+- Files that look like secrets are never committed.
+- Before pushing, Styx brings `main` into the branch, so the pull request merges cleanly. If that conflicts, the merge is undone and Publish stops with the file named.
+- The push and the pull request run under a grant for your GitHub target. Pressing Publish is your approval. If no GitHub target is connected, Styx uses your own `gh` login, and the pull request needs the `gh` CLI.
+- A project with no remote can only commit. **Connect to GitHub** in **Lanes and branches** creates a repository or points at an existing one.
+- If a pull request already exists for the branch, Styx links to it instead of opening another.
+
+## Deploy
+
+The **Deploy** button sits next to Publish and always names the target, for example **Deploy to live · Vercel prod**. Production targets win: with one, the button deploys there. With several production targets, or none and several others, it opens a **Deploy to** menu. With no targets it reads **Connect a deploy target**. Every target, staging and preview included, is also in the palette as **Deploy** project **→** target.
+
+**The first deploy** to a target is handed to an agent, the same way [Run locally](/docs/using/preview#run-locally) is. It works out the exact deploy command for your project and that target, tells you what it will do and waits for your go-ahead before changing anything in that environment, runs it under a grant, and, once it has succeeded, tells Styx the command. Vercel targets have a deploy command built in, so they skip this step.
+
+**Every deploy after that** runs the remembered command directly. The deploy dialog shows the exact command, asks for access, and streams the output, with **Cancel** while it runs. A toast tells you when it finishes if the dialog is closed. You can see and change each target's command under **Settings › Targets › Deploy commands…**.
+
+Deploys run from the project's own folder, where landed work goes, not from a task's lane.
+
+Deploying goes through the same access rules as an agent's request. Pressing Deploy is your approval, but a production deploy still asks for Touch ID, Windows Hello or your system password, a policy can still refuse it, and everything is written to the audit log. See [How access works](/docs/access/how-access-works).
+
+## Tasks stay current
+
+A lane is cut from `main`, and `main` keeps moving while the agent works. Styx keeps every lane close to it, so the eventual landing is small and clean:
+
+- **Before a lane is cut**, Styx fetches, so the branch starts from the latest `main`. (**Fetch before cutting a lane**, on by default.)
+- **While the agent works**, each lane shows how far behind it is (`↓3 main`) in **Lanes and branches** and the status bar, and the agent's chat gets a line when `main` moves.
+- **After every turn**, by default, Styx brings `main` into the lane. (**Bring in the base branch**: **After every turn**, **Before publishing** or **Only when I ask**.) **Bring in main** on the lane's row does it any time.
+- **Before publishing and landing**, `main` is brought in again.
+
+Styx always **merges** `main` into the lane. It never rebases, because rebasing rewrites the lane's history and would break the turn checkpoints that [Undo this turn](/docs/using/changes#undo-a-turn) relies on. Nothing is merged while the agent is mid-turn; Styx waits for it to finish.
+
+**When the merge conflicts**, what happens depends on the **Merging** setting:
+
+- **Keep my project up to date for me** (the default). The lane's own agent gets a turn from Styx naming every conflicted file and what each side was doing, with instructions to keep both sides' work. When it finishes, Styx checks that no conflict markers are left, runs the checks, and commits the merge. If it can't be finished, the merge is undone and the lane is as it was. **Undo merge** on the lane's row takes a finished merge back, and **Stop merging** ends one in progress.
+- **I review and merge myself.** The lane is marked as conflicting, and **Resolve** asks the agent to do the merge. Land reads **Merge into main** in this mode.
+
+Both settings live in the project's **Agent defaults**.

@@ -1,0 +1,11 @@
+{
+  "title": "Access and security",
+  "pages": [
+    "how-access-works",
+    "connect-a-target",
+    "approve-a-request",
+    "policies",
+    "audit-log",
+    "security-model"
+  ]
+}

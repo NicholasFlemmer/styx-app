@@ -29,6 +29,7 @@ export const Nav = ({ current }: { current?: 'launch' | 'story' | 'compare' } = 
         <a href="/compare" {...(current === 'compare' ? { 'aria-current': 'page' as const } : {})}>
           Compare
         </a>
+        <a href="/docs">Docs</a>
       </nav>
       <div className={styles.right}>
         <ThemeToggle />

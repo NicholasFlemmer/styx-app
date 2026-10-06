@@ -1,0 +1,101 @@
+---
+title: How access works
+description: How agents ask for access to deploy targets and servers, what a grant is, and how long it lasts.
+---
+
+Agents in Styx can't reach your Vercel project, AWS account, Supabase database or servers on their own. When one needs to, it asks. You see what it wants and why, and you decide. If you say yes, it gets a grant: access to one target, for the scopes you allowed, for a limited time. Every step is written to the [audit log](/docs/access/audit-log).
+
+<Shot
+  src="/docs/img/grant-flow.gif"
+  alt="A Codex task asks for access to a production Supabase database, the request is reviewed and granted, and the task carries on"
+  caption="A Codex task asks for prod Supabase access, you grant it, and it carries on."
+/>
+
+## Targets and environments
+
+A **target** is a place outside the repo that an agent can change. Each target belongs to one project and has:
+
+- a **provider**: Vercel, AWS, GCP, Supabase, GitHub or SSH host;
+- an **environment**: `prod`, `staging` or `preview` (a fourth, `scm`, marks a source-control target such as a GitHub repo declared in `.styx/project.json`);
+- a **policy**: **Ask · MFA**, **Ask each time** or **Always allow**;
+- a reference to its credential in your OS keychain. The credential itself is never stored anywhere else.
+
+The environment matters most. Production is treated differently everywhere: writes, deploys and deletes on a `prod` target always need you to verify with Touch ID, Windows Hello or your system password. See [Connect a target](/docs/access/connect-a-target) for setting one up.
+
+## How an agent asks
+
+There are two ways, and both end at the same place.
+
+**It runs the provider's CLI.** Every agent Styx starts has small wrappers ("shims") first on its `PATH` for `vercel`, `gh`, `aws`, `gcloud`, `supabase` and `ssh`. When the agent runs, say, `vercel deploy --prod`, the shim asks Styx before the real `vercel` runs. Styx works out what the command needs from its verbs: `ls` or `view` is a read, `deploy` is a deploy, `delete` or `drop` is a delete. Anything it doesn't recognise counts as a write, so a misread command is treated as more dangerous, never less. If you approve, the real command runs with the grant's credentials in its environment. If you deny, it fails with `styx: access to vercel was not granted`. The shim waits up to 10 minutes for your answer.
+
+**It asks directly.** Styx also gives each agent an MCP server with a `request_access` tool. The agent names a target, the scopes it wants and a one-line reason, and waits for your decision. See [MCP tools](/docs/reference/mcp-tools).
+
+Either way, the request appears in the agent's chat, on its task, in **Access** and as a notification. Approving it in one place resolves it everywhere. [Approve a request](/docs/access/approve-a-request) walks through the sheet.
+
+If the project has both a prod and a non-prod target for the same provider, a shimmed command goes to the non-prod one unless it says `--prod`, `--production` or `production`.
+
+## Scopes
+
+A grant covers one or more of four scopes:
+
+| Scope    | Means                                             |
+| -------- | ------------------------------------------------- |
+| `read`   | Look: list, view, inspect, read logs and schemas. |
+| `write`  | Change things: create, update, set, run SQL.      |
+| `deploy` | Ship a build or release.                          |
+| `delete` | Remove or drop something.                         |
+
+A grant only covers the scopes it was given. An agent holding a `read` grant that then runs a write command has to ask again.
+
+## Durations
+
+When you grant, you pick how long it lasts. The default is **1h**.
+
+| Duration    | Ends when                                                                                                                     |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **once**    | The first command uses it, or after 1 hour, whichever comes first.                                                            |
+| **1h**      | One hour after you grant it.                                                                                                  |
+| **session** | That agent's session ends: you stop it, its process exits, or the task is marked done.                                        |
+| **always**  | You revoke it. It is persistent: it outlives the session and covers any agent in the same project asking for the same target. |
+
+On top of that, the built-in policy **Expire grants after 1h idle** ends any grant except `always` after an hour without use. Each use restarts that clock. A grant also ends when you revoke it or remove its target.
+
+## The grant lifecycle
+
+Every grant moves through the same states, and every move is written to the audit log.
+
+| State         | How it gets there                                                                      | What happens next                |
+| ------------- | -------------------------------------------------------------------------------------- | -------------------------------- |
+| **requested** | An agent asked, and no policy or existing grant answered for you.                      | You grant or deny it.            |
+| **active**    | You granted it, or a policy approved it.                                               | The agent uses it until it ends. |
+| **denied**    | You denied it, a policy denied it, or the session ended before anyone answered.        | Final. The agent can ask again.  |
+| **expired**   | Its duration ran out, or it sat idle for an hour.                                      | Final.                           |
+| **revoked**   | You revoked it, its session ended, its target was removed, or a `once` grant was used. | Final.                           |
+
+Some requests never wait for you. If an `always` grant already covers the request, or a policy auto-approves it, the grant becomes active straight away. [Policies](/docs/access/policies) explains the rules and what they can't do.
+
+## What the agent actually gets
+
+Styx never puts your stored credentials in an agent's environment. The command that was granted gets credentials for the life of the grant, and nothing else does. What those credentials are depends on what the provider can do:
+
+| Provider | What a granted command gets                                                                                                                                                                                                                   | Narrowed to the grant?             |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| AWS      | Temporary STS credentials (15 minutes to 1 hour) with a session policy limited to the granted scopes. If you connected through the `aws` CLI without a role to assume, your profile's own short-lived credentials are passed through instead. | Yes, except CLI without a role     |
+| GCP      | An access token that lasts at most an hour. A service-account key gets a read-only token for read grants. A `gcloud` login is narrowed for reads only when the target lists its Cloud Storage buckets.                                        | Reads only, in some setups         |
+| Vercel   | Your stored token, as `VERCEL_TOKEN`.                                                                                                                                                                                                         | No                                 |
+| Supabase | Your stored access token, as `SUPABASE_ACCESS_TOKEN`.                                                                                                                                                                                         | No                                 |
+| GitHub   | Your stored token, as `GH_TOKEN` and `GITHUB_TOKEN`.                                                                                                                                                                                          | No                                 |
+| SSH host | A private SSH agent socket that lives as long as the grant. The key never leaves Styx.                                                                                                                                                        | No (the socket can sign any login) |
+
+Where a provider can't narrow its credential, the agent's command gets your whole token for that target, whatever scope you granted. That's why, on a `prod` target with an un-narrowed credential, every grant needs Touch ID, Windows Hello or your system password, reads included, and no policy can approve it for you.
+
+Revoking a grant stops Styx handing out the credential and shuts any SSH socket. For Vercel, Supabase and GitHub there is nothing to revoke upstream: the token you stored stays valid at the provider.
+
+## SSH
+
+For an SSH host, Styx keeps the path to your key (and its passphrase, if it has one) in the keychain. When a grant is issued, Styx starts its own SSH agent holding that key on a private socket and points the command's `SSH_AUTH_SOCK` at it. The agent can log in through that socket while the grant lasts. It never receives the key file. When the grant ends, the socket closes.
+
+## Next
+
+- [Connect a target](/docs/access/connect-a-target) to give agents something to ask for.
+- [Security model](/docs/access/security-model) for what this protects against and what it doesn't.

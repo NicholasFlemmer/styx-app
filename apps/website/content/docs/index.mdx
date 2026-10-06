@@ -1,0 +1,61 @@
+---
+title: Styx documentation
+description: What Styx is, who it's for, the ideas it's built on, and where to start.
+---
+
+Styx is a desktop app for running coding agents on all your projects at once. You give Claude Code, Codex, Gemini CLI or Cursor's agent a task, each one works on its own branch so they never trip over each other, and you review what they did and land it on main when you're happy. When an agent wants to deploy, touch a database or reach a server, it has to ask you first.
+
+It's free and open source (Apache-2.0), and runs on macOS, with Windows and Linux in beta.
+
+<Shot
+  src="/docs/img/grant-flow.gif"
+  alt="A Codex task asks for write access to the production Supabase database; the request is reviewed, granted for an hour, and the task carries on"
+  caption="A task asks for production access, you grant it for an hour, and it carries on."
+/>
+
+## Who it's for
+
+Styx is for developers who already use coding agents and have outgrown a terminal per agent. If you run more than one agent, work across several projects, or have deploy keys you'd rather an agent didn't simply pick up from a `.env` file, Styx gives you one place to see what every agent is doing, what's waiting on you, and what each one is allowed to touch.
+
+It isn't an editor. It has a built-in editor and terminal for reading and fixing agent work, and it opens any file back in the editor you already use.
+
+## The ideas
+
+### Every project in one window
+
+Styx is organised around everything you work on, not one repository. Each project keeps its own tasks, agents, terminal and deploy targets, and they're all one click apart. **All projects** shows what needs you, what's working and what's ready to land across all of them. Read more in [Projects](/docs/using/projects).
+
+### Each task on its own branch
+
+A task is one agent working on its own copy of the repo (a git worktree) on its own branch, such as `agent/claude-1`. Start as many as you like; they work side by side and your main folder stays untouched until you land the result. See [Tasks and lanes](/docs/using/tasks).
+
+### The agents you already use
+
+Styx drives the agent CLIs on your computer, signed in to the plans you already pay for. There are no API keys to paste, and your prompts go straight to the agent's own provider. If an agent isn't installed yet, Styx can install it and sign you in. See [Connect your agents](/docs/getting-started/connect-agents).
+
+### Access that asks first
+
+Connect Vercel, AWS, Google Cloud, Supabase, GitHub or an SSH host once. From then on an agent can't just use them: it asks, says why, and you choose what it gets and for how long. Anything that writes to, deploys to or deletes from production also needs Touch ID, Windows Hello or, on Linux, your system password. Every request, approval and use goes into an audit log that can't be edited. See [How access works](/docs/access/how-access-works).
+
+### Review, undo, land
+
+**Changes** shows what an agent did, turn by turn, with each diff. **Undo this turn** puts the files back as they were before it. When you're happy, **Land** commits the task, brings main in, runs your checks and merges it. Prefer a pull request? **Publish** pushes the branch and opens one. See [Changes and Undo this turn](/docs/using/changes) and [Land, Publish and Deploy](/docs/using/land-publish-deploy).
+
+### Design and preview
+
+A design task draws your screens first, at desktop, tablet and phone sizes, and hands them to a build task when they look right. **Preview** runs your app inside Styx, and **Select to fix** lets you point at what's wrong and tell the agent. See [Design](/docs/using/design) and [Preview and Select to fix](/docs/using/preview).
+
+## Start here
+
+If you're new, these three pages take you from download to a change landed on main:
+
+1. [Install Styx](/docs/getting-started/install) on Mac, Windows or Linux.
+2. [Your first task](/docs/getting-started/first-task): ask an agent for a change, review it and land it.
+3. [Connect your agents](/docs/getting-started/connect-agents): set up Claude Code, Codex, Gemini CLI or Cursor, and fix detection when Styx can't find one.
+
+## Where to go next
+
+- **[Guides](/docs/guides/two-agents-one-feature)** are recipes for real jobs: two agents on one feature, a database migration, designing a screen and then building it, working alongside VS Code.
+- **[Reference](/docs/reference/settings)** lists every setting, keyboard shortcut, `styx` command, MCP tool, `.styx/project.json` key and environment variable.
+- **[Help](/docs/help/troubleshooting)** covers common problems, the FAQ, and exactly what Styx sends and keeps.
+- **[Contributing](/docs/contributing/how-styx-is-built)** explains how Styx is built and how to add an agent or a deploy target.

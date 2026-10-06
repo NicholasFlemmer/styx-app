@@ -1,0 +1,138 @@
+---
+title: How Styx is built
+description: 'The architecture in one page, for a first contribution: where state lives, how a message reaches an agent and comes back, and how an access request is decided.'
+---
+
+Styx is an Electron app in a pnpm monorepo. One rule shapes almost everything: the main process owns all state and does all the work, and the window you see only shows a copy of it. Once you know that, and the two walkthroughs below, you can find your way around most of the code.
+
+[CLAUDE.md](https://github.com/NicholasFlemmer/styx-app/blob/main/CLAUDE.md) is the full set of conventions. It is written for coding agents and applies to people too. This page explains the shape behind it.
+
+## The monorepo
+
+| Path              | What lives there                                                                                                                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/desktop`    | The Electron app: `src/main` (Node, the source of truth), `src/preload` (the typed bridge), `src/renderer` (React 19) and `e2e/` (Playwright).                                                                                  |
+| `apps/website`    | This site: Next.js, exported as static files.                                                                                                                                                                                   |
+| `packages/core`   | The domain: entities and zod schemas, the session and grant state machines, the policy engine, selectors, the IPC contract and every user-facing string (`copy.ts`). Pure TypeScript: no Electron, DOM, file system or network. |
+| `packages/ui`     | The component library, with CSS Modules, design tokens and Storybook.                                                                                                                                                           |
+| `packages/tokens` | Colours, sizes and motion as `tokens.json`, generated into CSS and TS, plus the bundled fonts.                                                                                                                                  |
+| `packages/broker` | The local broker protocol agents talk to, and `styx mcp`, the MCP server that exposes it as tools.                                                                                                                              |
+| `packages/cli`    | The `styx` command and the provider shims (`gh`, `vercel`, `aws`, `gcloud`, `supabase`, `ssh`).                                                                                                                                 |
+
+Inside `apps/desktop/src/main`, [`container.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/container.ts) builds every service once with its dependencies (clock, keychain vault, CLI runners, windows) passed in. Nothing is a singleton at import time, which is what lets tests build the same graph in memory.
+
+## Main is the source of truth
+
+The main process holds the SQLite database, runs git, spawns agent CLIs, talks to the network and reads the keychain. The renderer never does any of that, not even in development, and never imports `electron` or `node:*`.
+
+The renderer keeps a read-only mirror of the data in a Zustand store:
+
+- On connect it asks for `store.snapshot`, the whole read model.
+- After that, main sends batches of changes (deltas), each batch with a sequence number. The publisher in [`store/publisher.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/store/publisher.ts) collects changes for a short moment and sends them as one batch to every window.
+- The renderer applies them in order ([`state/sync.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/renderer/state/sync.ts), using the pure `applyDeltas` in [`packages/core/src/deltas.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/packages/core/src/deltas.ts)). If a sequence number is skipped, it throws its copy away and takes a fresh snapshot.
+
+There are no optimistic updates to domain data. A screen sends a command and waits for the delta that comes back. View state (which tab is open, a draft in the composer) lives in a separate ui-store in the renderer.
+
+## Every change is a named command
+
+The renderer changes nothing directly. It calls `window.styx.command(name, input)`, and every command is declared once with zod schemas for its input and output in [`packages/core/src/ipc/contract.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/packages/core/src/ipc/contract.ts). There are no ad-hoc IPC channel names.
+
+- The preload script ([`src/preload/index.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/preload/index.ts)) exposes exactly one object, `window.styx`, typed by `StyxApi` in `packages/core/src/ipc/api.ts`.
+- In main, the command bus ([`ipc/bus.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/ipc/bus.ts)) checks the sender is a known Styx window and validates the input against the schema before any service runs.
+- Handlers live in `ipc/commands/<domain>.ts`. They are thin: they call a service and return `{ ok, value }` or `{ ok: false, error }`. They never throw across IPC.
+
+Business logic goes in `packages/core` (machines, policy, selectors) or in a main-process service, never in a React component or a handler.
+
+## State machines and policy are pure
+
+Sessions and grants each have a state machine in [`packages/core/src/machines`](https://github.com/NicholasFlemmer/styx-app/tree/main/packages/core/src/machines):
+
+- A session is `idle`, `working`, `needs-you`, `paused` or `done`.
+- A grant is `requested`, `active`, `denied`, `revoked` or `expired`.
+
+Each machine is a function, `transition(state, event, ctx)`, that returns the next state plus a list of effects, or `null` for a transition that isn't allowed. Effects are plain data (append this audit row, notify, and so on) that main carries out. Time comes in as `ctx.now`; core never calls `Date.now()`.
+
+Access decisions work the same way. `evaluatePolicies()` in [`packages/core/src/policy`](https://github.com/NicholasFlemmer/styx-app/tree/main/packages/core/src/policy) takes the target, the requested scope, the session, the app's rules, the project's rules and any standing grants, and returns a decision: allow automatically, ask the person, or deny. Main applies the decision and writes it to the audit log.
+
+Because these are pure, they are tested table by table with full coverage, and the rest of the app can trust them.
+
+## Agent runners
+
+Each agent CLI is driven in the way that gives Styx the most structure. [`runnerFor()`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/session-service.ts) picks `stream` (Styx drives the CLI over pipes and renders a native chat) or `pty` (the CLI's own terminal UI in xterm). Stream sessions go through [`runner-mux.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/runner-mux.ts), which routes each one to a backend:
+
+- **Claude Code**: newline-delimited stream-json, in [`stream-runner.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/stream-runner.ts).
+- **Codex**: JSON-RPC over `codex app-server`, in [`app-server-runner.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/app-server-runner.ts). Codex's terminal UI can't take messages through a pty, so it is never routed there.
+- **Gemini CLI and Cursor's agent**: the Agent Client Protocol, in [`acp-runner.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/acp-runner.ts). Cursor falls back to its `--print` stream-json mode when ACP isn't available.
+- **Shell**: a pty.
+
+Every backend turns its CLI's events into the same `StreamEffect`s (transcript rows, tool steps, permission asks, usage, end of turn). The launch details for each CLI (arguments, environment, how the first message goes in) are one file per agent in [`src/main/agents/`](https://github.com/NicholasFlemmer/styx-app/tree/main/apps/desktop/src/main/agents). The decisions behind this are ADR-0010, ADR-0016 and ADR-0017.
+
+## Lanes
+
+A task (internally a lane) is one session on its own git worktree, on a branch named `agent/<name>-<n>` by default. Several services in `src/main/services` look after lanes:
+
+- `worktree-service` creates and removes worktrees.
+- `lane-sync-service` keeps a lane current with its base branch.
+- `lane-ledger-service` tracks what every live lane is doing and which files it touched, so lanes can be told when they overlap (ADR-0025).
+- `land-service` and `merge-resolve-service` bring a lane's work into the base branch and settle conflicts.
+- `publish-service` commits, pushes and opens a pull request.
+- `checkpoint-service` records every agent turn as hidden git refs under `refs/styx/checkpoints/`, so a turn can be viewed or undone.
+
+Styx merges the base into a lane and never rebases, because a rebase would orphan the checkpoints.
+
+## The broker, `styx mcp` and the shims
+
+Agents reach Styx through a local broker: newline-delimited JSON-RPC over a Unix socket (a named pipe on Windows), defined and zod-validated in [`packages/broker/src/protocol.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/packages/broker/src/protocol.ts). Main answers every call in [`broker/host.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/broker/host.ts). There are two ways in:
+
+- **`styx mcp`**, an MCP server over stdio that each agent CLI is configured to start. It offers tools such as `request_access`, `check_grant`, `get_credential`, `ask_user`, `report_status` and `land`.
+- **Shims**: small scripts named `gh`, `vercel`, `aws`, `gcloud`, `supabase` and `ssh`, put first on the session's `PATH` ([`shim-service.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/shim-service.ts)). Each runs `styx wrap <tool>` ([`packages/cli/src/wrap.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/packages/cli/src/wrap.ts)), which asks the broker for permission and then runs the real CLI.
+
+Every session gets a random token when it starts. Main stores only its hash, and a broker connection is bound to one session after it says hello. The broker itself never holds secrets.
+
+## Storage and secrets
+
+- **SQLite** through better-sqlite3 and Drizzle. The schema is [`db/schema.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/db/schema.ts), with numbered SQL migrations beside it in `db/migrations/`. Generated migrations get CHECK constraints and triggers added by hand (`pnpm db:generate`, then edit).
+- **The audit log** (`audit_entries`) is append-only: database triggers refuse updates and deletes, and each row carries the hash of the one before it. Revoking a grant adds a row; it never edits one. Rows are only written through `AuditService.append`.
+- **Secrets** live only in the OS keychain (macOS Keychain, Windows Credential Manager, the system keyring on Linux), through `@napi-rs/keyring` in [`credential-vault.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/credential-vault.ts). Everything else refers to a secret by its `credentialRef`. Secrets are never in SQLite, logs, IPC payloads, deltas, renderer state, fixtures or `.styx/project.json`.
+- **`.styx/project.json`** is the committed, versioned project file, validated by zod in `packages/core/src/project-file.ts`.
+
+IDs are ULIDs with branded types (`packages/core/src/ids.ts`) and every timestamp is epoch milliseconds.
+
+## A message, from the composer to the agent and back
+
+What happens when you type in a task's chat and press send:
+
+<Steps>
+
+1. **The renderer sends a command.** The chat ([`features/chat/ChatPane.tsx`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/renderer/features/chat/ChatPane.tsx)) calls `command('session.sendMessage', { sessionId, body, attachments })` through [`state/commands.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/renderer/state/commands.ts). A failed result becomes an error toast.
+2. **Main validates and dispatches.** The bus checks the input against the `session.sendMessage` schema and calls the handler in [`ipc/commands/session.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/ipc/commands/session.ts), which calls `SessionService.sendMessage`.
+3. **The session service decides what to do with it.** In [`session-service.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/session-service.ts): if the agent is mid-turn and can't take the message now, it is queued. Otherwise the text is stored as a transcript row (scrubbed of anything shaped like a secret), the checkpoint service records the worktree as it is before the turn, and the session is relaunched first if its process has stopped.
+4. **The message goes to the CLI.** For a stream session it goes through the runner mux to the right backend, which writes it to the CLI in that protocol. For a pty session it is typed into the terminal.
+5. **The agent's output comes back as effects.** The backend parses what the CLI prints and emits `StreamEffect`s. `SessionService.onStreamEffect` turns them into transcript rows through `TranscriptService`, and into session events (`activity`, and the end of the turn) that go through the core session machine.
+6. **Changes become deltas.** As services write to SQLite, they tell the publisher what changed. The publisher sends a numbered batch to every window.
+7. **The renderer shows it.** The sync loop applies the batch to the mirrored store, and React re-renders the chat. When the turn ends, the session goes back to `idle`, the checkpoint for the turn is settled, and the next queued message, if any, goes out.
+
+</Steps>
+
+## An access request, from the agent to your approval and back
+
+Say an agent in a task runs `supabase db push` against a production database:
+
+<Steps>
+
+1. **The shim catches the command.** `supabase` on the session's `PATH` is Styx's shim, which runs `styx wrap supabase db push`. `wrap` connects to the broker with the session's credentials and calls `exec_authorize` with the tool, its arguments and the working directory. An agent can also ask directly through the `request_access` MCP tool.
+2. **Main works out what the command needs.** In [`broker/host.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/broker/host.ts), the provider adapter for Supabase (`src/main/providers/`) classifies the arguments as scopes (`read`, `write`, `deploy`, `delete`; `db push` is `write`) and picks the project's matching target. If a live grant already covers it, the command goes ahead.
+3. **Policy decides.** Otherwise `GrantService.request` in [`grant-service.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/grant-service.ts) runs the pure policy engine. It writes a `requested` grant and an audit row, then either issues it automatically, denies it, or asks the person. A prod target whose adapter can't issue a narrowly scoped credential is always asked, never auto-approved.
+4. **The ask appears everywhere at once.** Asking means a pending ask row, an access-request row in the chat transcript, and a session event that moves the session to `needs-you`. Those writes become deltas, so the request shows up in the chat, on the Tasks board, in the Approvals inbox and as a notification. The broker holds the shim's call open while it waits.
+5. **You decide.** The grant sheet ([`features/grant-sheet/GrantSheet.tsx`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/renderer/features/grant-sheet/GrantSheet.tsx)) sends `grant.approve` (or `grant.deny`) with a duration and, optionally, a narrower scope.
+6. **Main verifies and issues.** `GrantService.approve` works out again from the database whether this grant needs OS authentication; it never takes the renderer's word for it. Production write, deploy and delete ask for Touch ID, Windows Hello or the system password on Linux (`mfa-service.ts`). Then the provider adapter issues a short-lived credential, and the grant becomes `active`, with an audit row for the decision.
+7. **The agent carries on.** The broker host resolves the held `exec_authorize` call with the credential's environment. `wrap` runs the real `supabase` with it, reports the exit code when it finishes, and that use is audited too. The session leaves `needs-you` and goes back to work.
+
+</Steps>
+
+Grants end when they expire, after an hour without use (the default idle limit), when the session ends, or when you revoke them. A revoke adds an audit row, and the broker tells the session the grant is gone.
+
+## Where to go next
+
+- [Add an agent](/docs/contributing/add-an-agent) and [Add a deploy target](/docs/contributing/add-a-target) are the two most self-contained ways to contribute, each with a worked example.
+- [Decisions (ADRs)](/docs/contributing/decisions) explains why things are the way they are.

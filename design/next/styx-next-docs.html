@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your first task · Styx docs (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+/* Styx tokens, verbatim (styx-tokens.css) */
+html[data-theme='dark'] { --bg:#0d0e0c; --s1:#121411; --s2:#1c1e1a; --ln:#2d302a; --tx:#e9ebe3; --mu:#858a81; --ac:#d6ff3d; --acx:#0d0e0c; --act:#d6ff3d; --add:rgba(214,255,61,.13); --term:#080908; --termtx:#c9cdc2; }
+html[data-theme='light'] { --bg:#eeefe9; --s1:#f7f8f3; --s2:#e1e3db; --ln:#b3b7ab; --tx:#14160f; --mu:#5d6259; --ac:#c6f20f; --acx:#14160f; --act:#6e8f00; --add:rgba(150,200,0,.2); --term:#14160f; --termtx:#e9ebe3; }
+:root { --ui:'Archivo', system-ui, sans-serif; --mono:'JetBrains Mono', ui-monospace, monospace; --nav:56px; }
+* { box-sizing:border-box; margin:0; padding:0; }
+body { background:var(--bg); color:var(--tx); font:400 15px/1.6 var(--ui); -webkit-font-smoothing:antialiased; }
+a { color:inherit; text-decoration:underline; text-decoration-color:var(--mu); text-underline-offset:3px; }
+a:hover { text-decoration-color:var(--tx); }
+code, kbd, .mono { font-family:var(--mono); font-size:13px; }
+:focus-visible { outline:2px solid var(--ac); outline-offset:2px; }
+
+/* ---------- site nav (same as heystyx.com) ---------- */
+.nav { position:sticky; top:0; z-index:5; height:var(--nav); background:var(--bg); border-bottom:1px solid var(--tx); }
+.nav .in { max-width:1440px; margin:0 auto; height:100%; display:flex; align-items:center; gap:28px; padding:0 32px; }
+.word { font:700 14px var(--ui); letter-spacing:.32em; text-decoration:none; }
+.word small { font:500 13px var(--ui); letter-spacing:0; color:var(--mu); margin-left:6px; }
+.navlinks { display:flex; gap:22px; font-size:14px; color:var(--mu); }
+.navlinks a { text-decoration:none; }
+.navlinks a[aria-current] { color:var(--tx); }
+.search { margin-left:auto; display:flex; align-items:center; gap:10px; width:340px; height:34px; padding:0 10px; border:1px solid var(--ln); background:var(--s1); color:var(--mu); font-size:14px; }
+.search kbd { margin-left:auto; font-size:11px; border:1px solid var(--ln); padding:1px 5px; }
+.theme { font-size:14px; color:var(--mu); display:flex; align-items:center; gap:8px; }
+.theme i { width:9px; height:9px; background:var(--tx); display:inline-block; }
+.btn { font:600 12px var(--ui); letter-spacing:.12em; text-transform:uppercase; padding:9px 14px; border:1px solid var(--tx); text-decoration:none; }
+
+/* ---------- three columns ---------- */
+.wrap { max-width:1440px; margin:0 auto; display:grid; grid-template-columns:260px minmax(0,1fr) 240px; gap:56px; padding:0 32px; }
+.side { position:sticky; top:var(--nav); height:calc(100vh - var(--nav)); overflow:auto; padding:28px 0 40px; border-right:1px solid var(--ln); padding-right:20px; }
+.side h4 { font:600 12px var(--ui); color:var(--mu); margin:22px 0 6px; }
+.side h4:first-child { margin-top:0; }
+.side a { display:block; padding:4px 10px; margin-left:-10px; font-size:14px; text-decoration:none; color:var(--mu); }
+.side a:hover { color:var(--tx); background:var(--s2); }
+.side a[aria-current] { background:var(--tx); color:var(--bg); }
+.side .ver { display:flex; justify-content:space-between; font-size:13px; color:var(--mu); border:1px solid var(--ln); padding:7px 10px; margin-bottom:18px; }
+
+main { padding:36px 0 120px; max-width:760px; }
+.crumb { font-size:13px; color:var(--mu); }
+.crumb a { text-decoration:none; }
+h1 { font:600 44px/1.08 var(--ui); letter-spacing:-.01em; margin-top:10px; }
+.lede { margin-top:14px; font-size:19px; line-height:1.5; color:var(--mu); max-width:62ch; }
+.lede strong { color:var(--tx); font-weight:600; }
+.meta { margin-top:18px; display:flex; gap:16px; flex-wrap:wrap; font-size:13px; color:var(--mu); }
+.meta button { font:inherit; color:var(--tx); background:var(--s1); border:1px solid var(--ln); padding:5px 10px; cursor:pointer; }
+.meta span { display:flex; align-items:center; gap:6px; }
+h2 { font:600 26px/1.2 var(--ui); margin-top:52px; padding-top:22px; border-top:1px solid var(--ln); scroll-margin-top:72px; }
+h3 { font:600 18px/1.3 var(--ui); margin-top:30px; }
+p, ul, ol { margin-top:14px; }
+ul, ol { padding-left:22px; }
+li { margin-top:6px; }
+li::marker { color:var(--mu); }
+strong { font-weight:600; }
+kbd { border:1px solid var(--ln); border-bottom-width:2px; padding:1px 6px; background:var(--s1); font-size:12px; }
+.ui { font-weight:600; }
+
+/* steps: numbered blocks with the move that's yours in lime */
+.steps { list-style:none; padding:0; counter-reset:s; margin-top:22px; }
+.steps > li { counter-increment:s; position:relative; padding:0 0 26px 52px; margin:0; border-left:1px solid var(--ln); margin-left:15px; }
+.steps > li:last-child { border-left-color:transparent; }
+.steps > li::before { content:counter(s); position:absolute; left:-16px; top:-2px; width:31px; height:31px; display:grid; place-items:center; font:600 14px var(--ui); background:var(--bg); border:1px solid var(--tx); }
+.steps > li > b { display:block; font:600 17px/1.35 var(--ui); }
+figure { margin-top:18px; border:1px solid var(--tx); background:var(--s1); }
+figure img { display:block; width:100%; }
+figcaption { font-size:13px; color:var(--mu); padding:9px 12px; border-top:1px solid var(--ln); display:flex; justify-content:space-between; }
+.callout { margin-top:20px; border:1px solid var(--tx); padding:14px 16px 14px 16px; display:grid; grid-template-columns:auto 1fr; gap:12px; }
+.callout .tag { font:600 11px var(--ui); letter-spacing:.1em; text-transform:uppercase; background:var(--ac); color:var(--acx); padding:3px 7px; align-self:start; }
+.callout.note .tag { background:var(--s2); color:var(--tx); }
+.callout p { margin:0; }
+pre { margin-top:16px; background:var(--term); color:var(--termtx); padding:14px 16px; font:400 13px/1.7 var(--mono); position:relative; overflow:auto; }
+pre .copy { position:absolute; top:8px; right:8px; font:500 11px var(--ui); color:var(--termtx); border:1px solid rgba(233,235,227,.3); padding:3px 8px; background:transparent; }
+pre .c { color:#858a81; }
+.tabs { margin-top:16px; display:flex; border:1px solid var(--ln); border-bottom:0; width:max-content; }
+.tabs span { padding:6px 14px; font-size:13px; border-right:1px solid var(--ln); color:var(--mu); }
+.tabs span:last-child { border-right:0; }
+.tabs span[aria-selected] { background:var(--tx); color:var(--bg); }
+.tabs + pre { margin-top:0; }
+.next { margin-top:60px; display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.next a { display:block; border:1px solid var(--ln); padding:16px 18px; text-decoration:none; }
+.next a:hover { border-color:var(--tx); }
+.next small { display:block; font-size:12px; color:var(--mu); }
+.next b { display:block; font:600 17px var(--ui); margin-top:4px; }
+.next a:last-child { text-align:right; }
+.feedback { margin-top:28px; display:flex; gap:10px; align-items:center; font-size:14px; color:var(--mu); }
+.feedback button { font:inherit; color:var(--tx); background:none; border:1px solid var(--ln); padding:5px 12px; }
+
+.toc { position:sticky; top:var(--nav); padding:36px 0; height:max-content; font-size:13px; }
+.toc h4 { font:600 12px var(--ui); color:var(--mu); margin-bottom:8px; }
+.toc a { display:block; padding:4px 0 4px 12px; border-left:1px solid var(--ln); text-decoration:none; color:var(--mu); }
+.toc a[aria-current] { border-left:2px solid var(--tx); color:var(--tx); padding-left:11px; }
+.toc .tools { margin-top:26px; padding-top:16px; border-top:1px solid var(--ln); display:grid; gap:8px; }
+.toc .tools a { border:0; padding:0; text-decoration:underline; text-decoration-color:var(--ln); }
+
+/* ---------- the annotation strip around the mockup ---------- */
+.anno { max-width:1440px; margin:0 auto; padding:24px 32px 0; font-size:14px; color:var(--mu); }
+.anno b { color:var(--tx); }
+</style>
+</head>
+<body>
+
+<header class="nav" role="banner">
+  <div class="in">
+    <a class="word" href="#">STYX<small>Docs</small></a>
+    <nav class="navlinks" aria-label="Site">
+      <a href="#" aria-current="page">Docs</a>
+      <a href="#">Guides</a>
+      <a href="#">Reference</a>
+      <a href="#">Contributing</a>
+      <a href="#">Changelog</a>
+      <a href="#">GitHub</a>
+    </nav>
+    <div class="search" role="search">
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M9.5 9.5 13 13" stroke="currentColor" stroke-width="1.4"/></svg>
+      Search the docs
+      <kbd>⌘K</kbd>
+    </div>
+    <span class="theme"><i></i>Dark</span>
+    <a class="btn" href="#">Download</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="side" aria-label="Docs">
+    <div class="ver"><span>Styx 0.4.4</span><span>Latest ▾</span></div>
+    <h4>Get started</h4>
+    <a href="#">What is Styx</a>
+    <a href="#">Install</a>
+    <a href="#" aria-current="page">Your first task</a>
+    <a href="#">Connect your agents</a>
+
+    <h4>Using Styx</h4>
+    <a href="#">Projects</a>
+    <a href="#">Tasks and lanes</a>
+    <a href="#">Working with an agent</a>
+    <a href="#">Design</a>
+    <a href="#">Preview and Select to fix</a>
+    <a href="#">Changes and Undo this turn</a>
+    <a href="#">Land, Publish and Deploy</a>
+    <a href="#">Notifications and the Agent dock</a>
+    <a href="#">The command palette</a>
+
+    <h4>Access and security</h4>
+    <a href="#">How access works</a>
+    <a href="#">Connect a target</a>
+    <a href="#">Approve a request</a>
+    <a href="#">Policies</a>
+    <a href="#">The audit log</a>
+    <a href="#">Security model</a>
+
+    <h4>Guides</h4>
+    <a href="#">Run two agents on one feature</a>
+    <a href="#">Ship a database migration safely</a>
+    <a href="#">Design a screen, then build it</a>
+    <a href="#">Use Styx alongside VS Code</a>
+
+    <h4>Reference</h4>
+    <a href="#">Settings</a>
+    <a href="#">Keyboard shortcuts</a>
+    <a href="#">The styx CLI</a>
+    <a href="#">MCP tools for agents</a>
+    <a href="#">project.json</a>
+    <a href="#">Environment variables</a>
+
+    <h4>Help</h4>
+    <a href="#">Troubleshooting</a>
+    <a href="#">FAQ</a>
+    <a href="#">Privacy and usage counts</a>
+
+    <h4>Contributing</h4>
+    <a href="#">How Styx is built</a>
+    <a href="#">Add an agent</a>
+    <a href="#">Add a deploy target</a>
+    <a href="#">Testing</a>
+    <a href="#">Decisions (ADRs)</a>
+  </nav>
+
+  <main id="content">
+    <div class="crumb"><a href="#">Docs</a> / <a href="#">Get started</a></div>
+    <h1>Your first task</h1>
+    <p class="lede">Ask an agent for a change, watch it work on its own branch, review what it did, and land it on main.
+      <strong>About ten minutes</strong>, with an agent you already use.</p>
+    <div class="meta">
+      <span>Works with Claude Code, Codex, Gemini CLI and Cursor</span>
+      <span>· macOS · Windows · Linux</span>
+      <button type="button">Copy page as Markdown</button>
+    </div>
+
+    <h2 id="before">Before you start</h2>
+    <ul>
+      <li>Styx is <a href="#">installed</a>, and you've added at least one project.</li>
+      <li>One agent CLI is installed and signed in, for example <code>claude</code> or <code>codex</code>. Styx uses your
+        existing subscription; there are no API keys to paste.</li>
+    </ul>
+    <div class="callout note"><span class="tag">Note</span>
+      <p>Not sure your agent is ready? <span class="ui">Settings › Agent connections</span> shows every CLI Styx found, its version and
+        whether it's signed in.</p></div>
+
+    <h2 id="start">Start a task</h2>
+    <ol class="steps">
+      <li><b>Open your project and choose New task.</b>
+        <p>In the project nav, select <span class="ui">+ New task</span>, or press <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>N</kbd>
+          (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>N</kbd> on Windows and Linux).</p></li>
+      <li><b>Say what you want, and pick the agent.</b>
+        <p>Choose <span class="ui">Build</span> to go straight to code, describe the change in a sentence, pick your agent
+          and select <span class="ui">Start</span>. Styx creates a branch, <code>agent/claude-1</code>, in its own copy of
+          the repo, so nothing touches your working tree.</p>
+        <figure><img src="../../.github/assets/readme-tasks.jpg" alt="The Tasks board with five tasks, two waiting on you">
+          <figcaption><span>Every task is a card on the Tasks board. Yours is the lime one.</span><span>Tasks</span></figcaption></figure></li>
+      <li><b>Answer when it asks.</b>
+        <p>When the agent needs you, its card says <span class="ui">Your turn</span> and the Dock icon shows a badge.
+          Plans, questions and access requests all appear in the chat, and you answer them there.</p></li>
+    </ol>
+
+    <h2 id="review">Review what it did</h2>
+    <p>Open <span class="ui">Changes</span> to read the task's work turn by turn, each turn with its diff.</p>
+    <ul>
+      <li><strong>Undo this turn</strong> puts the files back exactly as they were before that turn.</li>
+      <li><strong>Revert</strong> on a single change drops just that hunk.</li>
+      <li>Or tell the agent what to change, in the chat.</li>
+    </ul>
+    <div class="callout"><span class="tag">Tip</span>
+      <p>Building UI? <span class="ui">Preview</span> runs your app inside Styx. Use <span class="ui">Select to fix</span>,
+        click what's wrong and say why: the agent gets the element and a picture of it.</p></div>
+
+    <h2 id="land">Land it on main</h2>
+    <p>When you're happy, select <span class="ui">Land</span>. Styx commits the task, brings main in, runs your project's
+      checks and merges it, so main never gets a change that fails them. Prefer a pull request?
+      <span class="ui">Publish</span> pushes the branch and opens one.</p>
+    <div class="tabs" role="tablist"><span role="tab" aria-selected="true">What Land runs</span><span role="tab">From the terminal</span></div>
+    <pre><button class="copy" type="button">Copy</button><span class="c"># the first time, the agent works out your checks and Styx remembers them (checksCommand)</span>
+pnpm typecheck &amp;&amp; pnpm test</pre>
+
+    <h2 id="next">Where to go next</h2>
+    <ul>
+      <li><a href="#">Connect a target</a>, so an agent can ask to deploy or touch a database.</li>
+      <li><a href="#">Run two agents on one feature</a>, side by side, without them stepping on each other.</li>
+    </ul>
+
+    <div class="next">
+      <a href="#"><small>Previous</small><b>Install</b></a>
+      <a href="#"><small>Next</small><b>Connect your agents</b></a>
+    </div>
+    <div class="feedback">Was this page helpful? <button type="button">Yes</button><button type="button">No</button></div>
+  </main>
+
+  <aside class="toc" aria-label="On this page">
+    <h4>On this page</h4>
+    <a href="#before">Before you start</a>
+    <a href="#start" aria-current="true">Start a task</a>
+    <a href="#review">Review what it did</a>
+    <a href="#land">Land it on main</a>
+    <a href="#next">Where to go next</a>
+    <div class="tools">
+      <a href="#">Edit this page on GitHub</a>
+      <a href="#">Copy page as Markdown</a>
+      <a href="#">Open in Claude</a>
+      <a href="#">Report a problem</a>
+    </div>
+  </aside>
+</div>
+</body>
+</html>

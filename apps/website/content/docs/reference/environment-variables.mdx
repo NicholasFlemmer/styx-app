@@ -1,0 +1,58 @@
+---
+title: Environment variables
+description: Every `STYX_*` environment variable the app, the `styx` CLI and the broker read or set, and who each one is for.
+---
+
+Styx needs no environment variables to run. The ones below are for a few user choices, for the variables Styx gives each task, and for development and testing. Set them in the environment that starts Styx (for example `STYX_WIN_SHELL=wsl` in your user environment on Windows).
+
+## For users
+
+| Variable                | Read by                          | What it does                                                                                                                                                       |
+| ----------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `STYX_WIN_SHELL`        | App (terminals, **Run locally**) | Windows only. `wsl` makes terminals and the local run use `wsl.exe`; anything else, or unset, uses PowerShell.                                                     |
+| `STYX_GITHUB_CLIENT_ID` | App (GitHub target)              | A GitHub OAuth app client id for connecting a GitHub target through the browser (device flow). Without it, connect GitHub with your `gh` login or a token instead. |
+
+## Set by Styx for each task
+
+Styx sets these in every agent's environment when a task starts. The `styx` CLI, the provider shims and `styx mcp` read them; your own scripts can too. Never copy `STYX_TOKEN` anywhere: it lets anything that holds it act as that task until the task ends.
+
+| Variable          | Read by                        | What it holds                                                                                                                            |
+| ----------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `STYX_SESSION_ID` | CLI, broker client, MCP config | The task's id.                                                                                                                           |
+| `STYX_TOKEN`      | CLI, broker client, MCP config | The task's broker token. Styx keeps only its hash.                                                                                       |
+| `STYX_BROKER`     | CLI, broker client, MCP config | Where the local broker listens: a Unix socket in a private `styx-<uid>` folder in the system temp directory, or a named pipe on Windows. |
+| `STYX_SHIM_DIR`   | CLI (`styx wrap`)              | The folder with the `styx` and provider shims. It is first on the task's `PATH`; `styx wrap` skips it when it looks for the real tool.   |
+| `STYX_CLI`        | Shim scripts                   | Path of the bundled `styx.js`.                                                                                                           |
+| `STYX_EXE`        | Shim scripts                   | Path of the Styx executable the shims run the CLI with.                                                                                  |
+| `STYX_PROJECT_ID` | Nothing in Styx                | The project's id, for your own scripts.                                                                                                  |
+| `STYX_WORKTREE`   | Nothing in Styx                | The task's worktree path, for your own scripts.                                                                                          |
+
+Terminals you open in Styx get `STYX_SHIM_DIR`, `STYX_CLI`, `STYX_EXE` and `STYX_BROKER`, but no task id or token: they aren't tied to a task and can't ask for grants.
+
+Styx also sets:
+
+- `STYX_SSH_HOST` (as `user@host`) in the credentials of an SSH grant, next to `SSH_AUTH_SOCK`.
+- `STYX_OPEN_IN=1` in your Windows user environment when it installs the "Open in Styx" launcher. It only exists to tell Windows the environment changed.
+
+## For development and testing
+
+These change what Styx does in ways meant for working on Styx itself: fake data, fake keychain, fake Touch ID. Don't set them on the copy you use.
+
+| Variable             | Read by | What it does                                                                                                                                                                          |
+| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STYX_FIXTURE`       | App     | `demo`, `empty` or `error`: start with seeded demo data instead of your own. Uses a fresh temporary data folder unless `STYX_USER_DATA` is set.                                       |
+| `STYX_FIXTURE_RESET` | App     | `1`: delete the database in the data folder before seeding.                                                                                                                           |
+| `STYX_DEMO_REPOS`    | App     | `0`: with the `demo` or `error` fixture, don't create the real git repos behind the demo projects.                                                                                    |
+| `STYX_USER_DATA`     | App     | Use this folder for Styx's data (database, shims) instead of the normal one.                                                                                                          |
+| `STYX_KEYCHAIN`      | App     | `memory`: keep credentials in memory instead of the OS keychain. With a fixture, fake credentials are seeded and target refresh is off.                                               |
+| `STYX_MFA`           | App     | `auto` passes, `deny` fails every Touch ID / Windows Hello / system password check, without a prompt.                                                                                 |
+| `STYX_NOW`           | App     | A time in epoch milliseconds: freezes Styx's clock there.                                                                                                                             |
+| `STYX_THEME`         | App     | `dark`, `light` or `system`: force the theme, overriding the setting.                                                                                                                 |
+| `STYX_CHROME`        | App     | `mac` or `win`: draw that platform's window chrome (for screenshots).                                                                                                                 |
+| `STYX_SCREEN`        | App     | Open on a screen or state, such as `workspace`, `home`, `onboarding-2`, `palette` or `new-project`.                                                                                   |
+| `STYX_E2E`           | App     | `1`: end-to-end test mode. No confirmation for `styx://open`, no updater, no usage counts, file pickers answered by `STYX_E2E_PICK`, and the prototype's sample data in a few places. |
+| `STYX_E2E_PICK`      | App     | With `STYX_E2E=1`: the path every folder picker returns. Unset means the picker was cancelled.                                                                                        |
+| `STYX_API`           | App     | Base URL of the Styx accounts API, for a local or fake server. Setting it also turns on usage counts in a development build.                                                          |
+| `STYX_UPDATE_URL`    | App     | Installed builds only: check this update feed instead of the built-in one.                                                                                                            |
+
+`pnpm dev` with `STYX_FIXTURE=demo` is the usual way to run the app on demo data; see [Testing](/docs/contributing/testing).

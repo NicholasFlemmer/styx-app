@@ -1,0 +1,14 @@
+{
+  "title": "Using Styx",
+  "pages": [
+    "projects",
+    "tasks",
+    "working-with-an-agent",
+    "design",
+    "preview",
+    "changes",
+    "land-publish-deploy",
+    "notifications",
+    "command-palette"
+  ]
+}

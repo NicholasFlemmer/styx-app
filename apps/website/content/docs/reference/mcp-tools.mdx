@@ -1,0 +1,160 @@
+---
+title: MCP tools
+description: The eleven tools every agent gets from Styx through `styx mcp`, with their parameters, results and limits.
+---
+
+Every task Styx starts gets one MCP server named `styx`. It is how an agent asks you for access, asks you a question, sees the other tasks in the project and lands its work. You don't install or configure it: Styx writes it into each agent's MCP configuration when the task starts.
+
+## How the server works
+
+- **Started as** `styx mcp` from the shim directory (see [CLI](/docs/reference/cli)). On Windows it runs through `cmd.exe /d /c`.
+- **Bound to one task.** The server connects to Styx's local broker with the task's `STYX_SESSION_ID` and `STYX_TOKEN` (see [Environment variables](/docs/reference/environment-variables)). Styx stores only a hash of the token and rejects it once the task has ended. Every tool works on that task and its project only; an agent cannot see or reach another project's targets, grants or tasks.
+- **Results** come back as JSON text. Errors come back as an MCP error result with a message and a code (for example `too many access requests; try again in a minute (code -32003)`).
+- **Waiting.** `request_access`, `check_grant` and `ask_user` wait for you. Styx holds each call for up to 5 minutes.
+- **Rate limits** are per task, per minute:
+
+| Bucket          | Limit | Counts                                                                                |
+| --------------- | ----- | ------------------------------------------------------------------------------------- |
+| Access requests | 5     | `request_access`, a shim command that opens a new request, `land`, `remember_command` |
+| Questions       | 30    | `ask_user`, `remember_command`                                                        |
+| Messages        | 20    | `send_message`                                                                        |
+
+Because `remember_command` counts against both its own bucket and the access-request bucket, it is limited to 5 a minute in practice.
+
+## Tools
+
+### request_access
+
+Asks you for scoped, expiring access to one of the project's targets. The request shows up in the chat, on the board, in Approvals, as a notification and on the dock or tray badge. A policy can decide it without asking you. After a grant, the agent should just run the provider CLI (`vercel`, `gh`, `aws`, `gcloud`, `supabase`, `ssh`): it already uses the grant.
+
+| Parameter | Type                                         | Required | Notes                                                                                                                                                                       |
+| --------- | -------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `target`  | string                                       | yes      | Target name, `provider:env` or `provider-env` (for example `supabase-prod`, `vercel:preview`), name plus env, or a bare provider. Matched case-insensitively in that order. |
+| `scope`   | array of `read`, `write`, `deploy`, `delete` | yes      | At least one.                                                                                                                                                               |
+| `reason`  | string                                       | yes      | 1–500 characters. Shown to you word for word.                                                                                                                               |
+
+Returns one of:
+
+- `{ "status": "active", "grantId", "scope", "expiresAt", "decidedBy" }`: `expiresAt` is epoch milliseconds or `null` for an `always` grant; `decidedBy` is `user`, `policy`, `target-policy` or `persistent-grant`.
+- `{ "status": "denied", "grantId" }`
+- `{ "status": "pending", "grantId", "queuePosition" }`: you haven't decided within 5 minutes. The agent calls `check_grant` with the `grantId`.
+
+Fails when the target doesn't exist in the project, isn't connected yet ("connect it in Styx"), or its credentials have expired ("reconnect it in Styx").
+
+### check_grant
+
+Checks, and waits for, the outcome of a request.
+
+| Parameter | Type   | Required | Notes                  |
+| --------- | ------ | -------- | ---------------------- |
+| `grantId` | string | yes      | From `request_access`. |
+
+Returns the same three shapes as `request_access`. While the request is still open it waits up to 5 minutes, then returns `pending`. The agent can only see its own grants and persistent grants on its project's targets; any other id is `unknown grant`.
+
+### get_credential
+
+Returns the credentials of a live grant as environment variables. Agents only need it to call a provider's API directly; the provider CLIs on `PATH` get credentials by themselves. The call is recorded as a use of the grant in the audit log.
+
+| Parameter | Type   | Required | Notes            |
+| --------- | ------ | -------- | ---------------- |
+| `grantId` | string | yes      | An active grant. |
+
+Returns `{ "kind", "env", "socketPath", "expiresAt", "scoped" }`. `kind` is `env` or `ssh-agent`. For SSH, `socketPath` is a forwarded agent socket (`SSH_AUTH_SOCK`), never a key file. `scoped` says whether the credential was narrowed to the grant (a short-lived, down-scoped token) or is the connection's own. Fails once the grant has expired or been revoked.
+
+### list_targets
+
+Lists the deploy and server targets connected to this project. No parameters.
+
+Returns an array of `{ "id", "name", "provider", "env", "lockState", "scopes" }`:
+
+- `provider`: `vercel`, `aws`, `gcp`, `supabase`, `github` or `ssh`.
+- `env`: `prod`, `staging`, `preview` or `scm`.
+- `lockState`: `unconnected`, `expired`, `persistent` (an `always` grant, or the target's policy is **Always allow**), `open` (a live grant for this task) or `locked`.
+- `scopes`: what this task's live grants on the target cover.
+
+### report_status
+
+Sets the one-line status shown on the task's card, for example `Applying migration 0042 to prod`.
+
+| Parameter | Type   | Required | Notes                                            |
+| --------- | ------ | -------- | ------------------------------------------------ |
+| `note`    | string | yes      | Up to 200 characters. An empty string clears it. |
+
+Returns `{ "ok": true }`.
+
+### ask_user
+
+Asks you a question, offers a choice, or asks you to approve a plan, and waits for your answer. The task shows as waiting for you until you answer.
+
+| Parameter | Type                             | Required | Notes                                                                                                                        |
+| --------- | -------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `kind`    | `plan`, `decision` or `question` | yes      |                                                                                                                              |
+| `payload` | object                           | yes      | `plan`: `{ summary, files[] }`. `decision`: `{ prompt, options[] }` (no options means Yes and No). `question`: `{ prompt }`. |
+
+Returns `{ "resolution": … }`:
+
+- plan: `{ "kind": "plan", "answer": "approve" | "reject" | "edit", "note"? }`
+- decision: `{ "kind": "decision", "answer": "<the option you picked>" }`
+- question: `{ "kind": "question", "answer": "<your reply>" }`
+
+If you haven't answered within 5 minutes the call fails with `timed out waiting for the user`.
+
+### list_sessions
+
+Lists the tasks in this project: the caller and its peers. No parameters. Archived tasks are left out.
+
+Returns an array of `{ "sessionId", "agent", "branch", "state", "note", "self", "task", "files", "overlapsWithYou" }`. `task` is what the task was asked to do; `files` are the files its lane changed against the base branch (empty once it is done); `overlapsWithYou` are the ones the caller changed too.
+
+### project_activity
+
+What changed in the project outside the caller's worktree. No parameters. Agents read it before touching files another task has changed.
+
+Returns:
+
+| Field         | Contents                                                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `base`        | The project's base branch.                                                                                                                 |
+| `behind`      | How many base-branch commits the caller's lane hasn't merged.                                                                              |
+| `baseCommits` | Those commits: `sha`, `subject`, `when` (epoch ms), `files`, and `lane` (`agent`, `branch`, `task`) when a Styx task made it, else `null`. |
+| `lanes`       | The other live tasks: `sessionId`, `agent`, `branch`, `state`, `task`, `files`.                                                            |
+| `overlaps`    | Each of the caller's files another task changed too: `file`, and `with` (`sessionId`, `agent`, `branch`, `task`).                          |
+
+### send_message
+
+Sends a message to another task in the same project. It appears in that task's chat, marked as coming from the sender, and you can read it. The receiving agent is told it is a message from a peer, not from you. It is for handing over context or flagging a conflict, not for giving orders.
+
+| Parameter | Type   | Required | Notes                               |
+| --------- | ------ | -------- | ----------------------------------- |
+| `to`      | string | yes      | A `sessionId` from `list_sessions`. |
+| `body`    | string | yes      | Plain text, 1–4000 characters.      |
+
+Returns `{ "delivered": true }`. Fails if `to` is the caller itself, doesn't exist or is archived, belongs to another project, or has ended.
+
+### remember_command
+
+Teaches Styx a command the agent has just got working, so the **Run locally** and **Deploy** buttons can run it directly from then on. Styx only accepts it from a task it started for that purpose (the one those buttons start); from any other task it is refused and the agent is told to give you the command instead.
+
+| Parameter  | Type                      | Required     | Notes                                                                                                   |
+| ---------- | ------------------------- | ------------ | ------------------------------------------------------------------------------------------------------- |
+| `kind`     | `run` or `deploy`         | yes          |                                                                                                         |
+| `command`  | string                    | yes          | 1–2000 characters. The exact command, run from the project root.                                        |
+| `targetId` | string                    | for `deploy` | A target `id` from `list_targets`, in this project.                                                     |
+| `url`      | string                    | no           | `run` only. The local URL the server answers on. Up to 500 characters.                                  |
+| `platform` | `web`, `ios` or `android` | no           | `run` only. Leave it out for a web server.                                                              |
+| `device`   | string                    | no           | `run` on `ios` or `android`: simulator or emulator name, such as `iPhone 17 Pro`. Up to 120 characters. |
+| `appId`    | string                    | no           | `run` on `ios` or `android`: bundle id or package, such as `com.acme.shop`. Up to 200 characters.       |
+| `note`     | string                    | no           | Up to 200 characters.                                                                                   |
+
+Returns `{ "ok": true }`. A `deploy` command is only accepted after this task has run a granted command on that target that exited with 0. A run command is saved to `.styx/project.json` as `dev.command`, with `dev.url` when the URL is on `localhost`, `127.0.0.1` or `[::1]` (see [project.json](/docs/reference/project-json)); a deploy command is kept with the target on this machine. A command that looks like it contains a secret is refused.
+
+### land
+
+Lands the task's work in the project's base branch and pushes it: Styx commits anything left uncommitted, merges the base in, runs the project's checks, merges into the base with the summary as the record, and pushes. Agents call it when you ask them to merge, land or push to main, instead of pushing or opening a pull request themselves.
+
+| Parameter | Type   | Required | Notes                                                                                                                 |
+| --------- | ------ | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| `summary` | string | yes      | 1–2000 characters. The first line (cut at 120 characters) is the record's subject; any further lines become its body. |
+
+Returns `{ "landed", "commit", "pushed", "steps", "reason" }`. When Styx refuses (the task works in the project folder rather than its own lane, the project is set to **I review and merge myself**, a conflict is being resolved, the checks fail, or there is nothing to land), `landed` is `false` and `reason` says why.
+
+Next: [CLI](/docs/reference/cli) for the shims that use these grants, and [How access works](/docs/access/how-access-works).
