@@ -29,10 +29,10 @@ test('palette → Play while you wait → board, keys, pause on blur, Esc back',
   await expect(composer).toBeVisible();
   const frame = page.locator('[data-arcade-frame]');
   await expect(frame).toBeFocused();
-  // Whole pixels per cell: 20 columns at a 16px cell in the 360px pane.
-  const box = await frame.boundingBox();
-  expect(box?.width).toBe(322);
-  expect(box?.height).toBe(258);
+  // Whole pixels per cell: 20 columns at a 16px cell in the 360px pane. Polled: on a slow CI runner the window can
+  // still be settling to its size when the board first lays out (a smaller cell), then re-lays out at 16px.
+  await expect.poll(async () => (await frame.boundingBox())?.width).toBe(322);
+  expect((await frame.boundingBox())?.height).toBe(258);
 
   // An arrow starts it; the snake moves on its own.
   await page.keyboard.press('ArrowUp');

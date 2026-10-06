@@ -124,7 +124,8 @@ export interface SessionHooks {
   /** `PostToolUse Edit|Write` and stream tool results re-diff the worktree. */
   rescanHunks: (sessionId: SessionId) => void;
   /** Turn boundaries for checkpoints (docs/adr/0020): a user turn is about to start / the agent went quiet. */
-  turnStarted?: (sessionId: SessionId, messageId: string) => void;
+  /** Resolves once the turn's baseline is captured; the message goes to the agent only after (checkpoints). */
+  turnStarted?: (sessionId: SessionId, messageId: string) => void | Promise<void>;
   turnSettled?: (sessionId: SessionId) => void;
   /** A CLI reported its account rate limits (UsageService keeps the latest per agent). */
   limitsReported?: (limits: AgentLimits) => void;
@@ -708,7 +709,7 @@ export class SessionService {
     // (checkpoints, ADR-0020), keyed to the user row `spawn` already appended.
     if (firstMessage) {
       const userRow = repos.transcripts.last(session.id).findLast((m) => m.payload.kind === 'user');
-      if (userRow) this.hooks?.turnStarted?.(session.id, userRow.id);
+      if (userRow) await this.hooks?.turnStarted?.(session.id, userRow.id);
     }
     try {
       let pid: number;
@@ -840,7 +841,7 @@ export class SessionService {
     // by); otherwise the lane's title fell back to the agent's status line.
     if (!fromStyx && s.firstMessage === null && body !== '') this.setTask(s.id, shown);
     // The workspace as it is before this turn is the turn's baseline (checkpoints, ADR-0020).
-    this.hooks?.turnStarted?.(s.id, userRow.id);
+    await this.hooks?.turnStarted?.(s.id, userRow.id);
     if (!this.isRunning(s.id) && s.state !== 'paused') {
       const ok = await this.relaunch(s);
       if (!ok) return;
@@ -1747,7 +1748,9 @@ export class SessionService {
           const name = copy.agentSetup.names[s.agent];
           this.deps.transcript.append(
             s.id,
-            fill(account === 'signed-out' ? copy.agentSetup.chat.signedOut : copy.agentSetup.chat.limit, { name }),
+            fill(account === 'signed-out' ? copy.agentSetup.chat.signedOut : copy.agentSetup.chat.limit, {
+              name,
+            }),
             { kind: 'system', problem: { agent: s.agent, kind: account } },
           );
           const owed = account === 'signed-out' ? this.lastUserBody(s.id) : null;
