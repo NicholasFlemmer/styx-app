@@ -181,9 +181,21 @@ describe('AwsAdapter', () => {
   });
 });
 
+/**
+ * ssh2's generator occasionally (about 1 in 240) writes an ed25519 key its own parser rejects as malformed; retry until
+ * the key reads back, so the SSH tests don't flake.
+ */
+const testKey = (opts: { passphrase?: string; cipher?: string } = {}) => {
+  for (;;) {
+    const keys = utils.generateKeyPairSync('ed25519', { comment: 'styx-test', ...opts });
+    const parsed = utils.parseKey(keys.private, opts.passphrase);
+    if (!(parsed instanceof Error)) return keys;
+  }
+};
+
 describe('SshAdapter', () => {
   it('serves a key over an in-process agent and reports signatures', async () => {
-    const keys = utils.generateKeyPairSync('ed25519', { comment: 'styx-test' });
+    const keys = testKey();
     const dir = mkdtempSync(join(tmpdir(), 'styx-ssh-'));
     const keyPath = join(dir, 'id_ed25519');
     writeFileSync(keyPath, keys.private, { mode: 0o600 });
@@ -229,7 +241,7 @@ describe('SshAdapter', () => {
   });
 
   it('expands ~ in the key path: the shell would, readFile will not', async () => {
-    const keys = utils.generateKeyPairSync('ed25519', { comment: 'styx-test' });
+    const keys = testKey();
     const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
     const sshDir = join(home, '.ssh');
     mkdirSync(sshDir, { recursive: true });
@@ -262,7 +274,7 @@ describe('SshAdapter', () => {
   });
 
   it('keeps a non-default port, and defaults to 22 when none is given', async () => {
-    const keys = utils.generateKeyPairSync('ed25519', { comment: 'styx-test' });
+    const keys = testKey();
     const dir = mkdtempSync(join(tmpdir(), 'styx-ssh-'));
     const keyPath = join(dir, 'id_ed25519');
     writeFileSync(keyPath, keys.private, { mode: 0o600 });
@@ -280,11 +292,7 @@ describe('SshAdapter', () => {
   });
 
   it('serves an encrypted key when the passphrase is supplied (and fails without it)', async () => {
-    const keys = utils.generateKeyPairSync('ed25519', {
-      comment: 'styx-test',
-      passphrase: 'hunter2',
-      cipher: 'aes256-cbc',
-    });
+    const keys = testKey({ passphrase: 'hunter2', cipher: 'aes256-cbc' });
     const dir = mkdtempSync(join(tmpdir(), 'styx-ssh-'));
     const keyPath = join(dir, 'id_ed25519');
     writeFileSync(keyPath, keys.private, { mode: 0o600 });
@@ -311,7 +319,7 @@ describe('SshAdapter', () => {
   });
 
   it('answers session-bind@openssh.com so identities still come back (OpenSSH >= 8.9)', async () => {
-    const keys = utils.generateKeyPairSync('ed25519', { comment: 'styx-test' });
+    const keys = testKey();
     const dir = mkdtempSync(join(tmpdir(), 'styx-bind-'));
     // A Unix socket on POSIX; a named pipe on Windows (how SshAdapter serves the agent there).
     const sock =

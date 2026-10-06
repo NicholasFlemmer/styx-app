@@ -24,6 +24,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
+      url: `${site.url}/blog/keeping-agents-away-from-production`,
+      lastModified: dayOf(site.productionPostUpdated),
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
       url: `${site.url}/story`,
       lastModified: dayOf(site.storyUpdated),
       changeFrequency: 'monthly',
