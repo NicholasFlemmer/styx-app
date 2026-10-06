@@ -236,7 +236,7 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
       stream.quiet(claude); // the agent did nothing
       await vi.waitFor(() => expect(lane(t).resolution?.attempts).toBe(2), { timeout: slow(10_000) });
       expect(lane(t).resolution?.state).toBe('resolving');
-      await vi.waitFor(() => expect(stream.sent).toHaveLength(2));
+      await vi.waitFor(() => expect(stream.sent).toHaveLength(2), { timeout: slow(10_000) });
       expect(stream.sent[1]?.text).toBe(
         'Not finished yet: conflict markers remain in a.ts. Fix that and finish the merge as before — do not abort or commit it; Styx commits once the checks pass.',
       );

@@ -14,6 +14,7 @@ import type {
   StreamRunnerLike,
   StreamSpawnOptions,
 } from './stream-runner';
+import { slow } from '../test-timeouts';
 
 const { ids, DEMO_NOW } = fixtures;
 
@@ -172,6 +173,8 @@ const spawnInput = (agent: 'claude' | 'codex' | 'gemini', worktreeId: string, fi
 
 /** Waits out the pty typing delay (text, then Enter 120 ms later). */
 const typed = () => new Promise((r) => setTimeout(r, 170));
+/** How long a send may take to reach the agent: it waits for the turn's baseline first (checkpoints). */
+const WAIT = { timeout: slow(5_000) };
 
 describe('runnerFor (ADR-0010)', () => {
   it('claude streams when its CLI advertises stream-json; cursor also needs --print; the rest is pty', () => {
@@ -294,7 +297,7 @@ describe('SessionService spawn + stream runner', () => {
     expect(done.state).toBe('done');
     expect(done.endedAt).toBe(DEMO_NOW);
     expect(done.exitCode).toBe(0);
-    await vi.waitFor(() => expect(existsSync(join(t!.userData, 'agents', session.id))).toBe(false));
+    await vi.waitFor(() => expect(existsSync(join(t!.userData, 'agents', session.id))).toBe(false), WAIT);
   });
 
   it('auto-approves edits when the toggle is on and denies pending permissions when the session stops', async () => {
@@ -2286,7 +2289,7 @@ describe('SessionService attachments + slash commands', () => {
     });
     // Archiving the session takes what was attached with it.
     a.sessions.close(session.id);
-    await vi.waitFor(() => expect(existsSync(join(root, ATTACHMENTS_DIR, session.id))).toBe(false));
+    await vi.waitFor(() => expect(existsSync(join(root, ATTACHMENTS_DIR, session.id))).toBe(false), WAIT);
   });
 
   it('any file type reaches a stream session: a PDF is saved in the worktree and named by path; a small text file is inlined', async () => {
@@ -2520,7 +2523,7 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
 
     stream.effect(session.id, { type: 'session', event: 'quiet' });
     // idle for a moment, then straight back to working on the held message
-    await vi.waitFor(() => expect(a.sessions.get(session.id)?.state).toBe('working'));
+    await vi.waitFor(() => expect(a.sessions.get(session.id)?.state).toBe('working'), WAIT);
     expect(stream.sent).toEqual([{ id: session.id, text: 'first' }]);
     expect(userRows(a, session.id)).toEqual(['Fix it', 'first']);
     expect(a.repos.queuedMessages.bySession(session.id).map((m) => m.body)).toEqual(['second']);
@@ -2528,7 +2531,7 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     expect(queueDeltas(win, session.id).at(-1)).toEqual(['second']);
 
     stream.effect(session.id, { type: 'session', event: 'quiet' });
-    await vi.waitFor(() => expect(stream.sent.map((m) => m.text)).toEqual(['first', 'second']));
+    await vi.waitFor(() => expect(stream.sent.map((m) => m.text)).toEqual(['first', 'second']), WAIT);
     expect(a.repos.queuedMessages.bySession(session.id)).toEqual([]);
     stream.effect(session.id, { type: 'session', event: 'quiet' });
     expect(a.sessions.get(session.id)?.state).toBe('idle');
@@ -2545,17 +2548,17 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     expect(stream.sent).toEqual([]);
     expect(a.sessions.get(session.id)?.state).toBe('idle');
     stream.effect(session.id, { type: 'session', event: 'quiet' });
-    await vi.waitFor(() => expect(stream.sent).toEqual([{ id: session.id, text: 'one' }]));
+    await vi.waitFor(() => expect(stream.sent).toEqual([{ id: session.id, text: 'one' }]), WAIT);
     expect(a.sessions.get(session.id)?.state).toBe('working');
     a.sessions.onHook(session.id, 'claude', 'Stop', {}); // the next turn's Stop, before its result
     expect(stream.sent).toHaveLength(1);
     stream.effect(session.id, { type: 'session', event: 'quiet' });
-    await vi.waitFor(() => expect(stream.sent.map((m) => m.text)).toEqual(['one', 'two']));
+    await vi.waitFor(() => expect(stream.sent.map((m) => m.text)).toEqual(['one', 'two']), WAIT);
     // The other order — result first, then the hook — sends one as well.
     await a.sessions.sendMessage(session.id, 'three');
     stream.effect(session.id, { type: 'session', event: 'quiet' });
     a.sessions.onHook(session.id, 'claude', 'Stop', {});
-    await vi.waitFor(() => expect(stream.sent.map((m) => m.text)).toEqual(['one', 'two', 'three']));
+    await vi.waitFor(() => expect(stream.sent.map((m) => m.text)).toEqual(['one', 'two', 'three']), WAIT);
   });
 
   it('a pty session settles through the Claude Stop hook / the Codex notify hook', async () => {
@@ -2567,11 +2570,13 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     await a.sessions.sendMessage(session.id, 'after stop');
     expect(pty.writes).toEqual([]);
     a.sessions.onHook(session.id, 'claude', 'Stop', {});
-    await vi.waitFor(() =>
-      expect(pty.writes).toEqual([
-        { id: session.id, data: 'after stop' },
-        { id: session.id, data: '\r' },
-      ]),
+    await vi.waitFor(
+      () =>
+        expect(pty.writes).toEqual([
+          { id: session.id, data: 'after stop' },
+          { id: session.id, data: '\r' },
+        ]),
+      WAIT,
     );
     pty.writes.length = 0;
 
@@ -2579,11 +2584,13 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     await a.sessions.sendMessage(codex.id, 'after notify');
     expect(pty.writes).toEqual([]); // held, not typed into the TUI mid-turn
     a.sessions.onHook(codex.id, 'codex', 'notify', { type: 'agent-turn-complete' });
-    await vi.waitFor(() =>
-      expect(pty.writes).toEqual([
-        { id: codex.id, data: 'after notify' },
-        { id: codex.id, data: '\r' },
-      ]),
+    await vi.waitFor(
+      () =>
+        expect(pty.writes).toEqual([
+          { id: codex.id, data: 'after notify' },
+          { id: codex.id, data: '\r' },
+        ]),
+      WAIT,
     );
     expect(userRows(a, codex.id)).toEqual(['Fix it', 'after notify']);
   });
@@ -2602,7 +2609,7 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
       await a.sessions.sendMessage(session.id, 'later');
       expect(pty.writes).toEqual([]);
       await vi.advanceTimersByTimeAsync(3100);
-      await vi.waitFor(() => expect(pty.writes[0]).toEqual({ id: session.id, data: 'later' }));
+      await vi.waitFor(() => expect(pty.writes[0]).toEqual({ id: session.id, data: 'later' }), WAIT);
     } finally {
       vi.useRealTimers();
     }
@@ -2700,7 +2707,7 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     expect(stream.sent).toEqual([{ id: session.id, text: 'wake up' }]);
     expect(a.repos.queuedMessages.bySession(session.id).map((m) => m.body)).toEqual(['held']);
     stream.effect(session.id, { type: 'session', event: 'quiet' });
-    await vi.waitFor(() => expect(stream.sent.map((m) => m.text)).toEqual(['wake up', 'held']));
+    await vi.waitFor(() => expect(stream.sent.map((m) => m.text)).toEqual(['wake up', 'held']), WAIT);
   });
 
   it('attachments: a held message keeps its files and images as paths; nothing is dropped, and they go out with it', async () => {
@@ -2733,7 +2740,7 @@ describe('SessionService queue (a message sent mid-turn is never dropped)', () =
     // When it goes out the file is inlined for the CLI, while the transcript row keeps metadata only.
     stream.effect(session.id, { type: 'session', event: 'quiet' });
     // The held message is read from disk and inlined before it goes out; wait for it rather than sleep.
-    await vi.waitFor(() => expect(stream.sent.at(-1)?.text ?? '').toContain('<file path="src/a.ts">'));
+    await vi.waitFor(() => expect(stream.sent.at(-1)?.text ?? '').toContain('<file path="src/a.ts">'), WAIT);
     expect(stream.sent.at(-1)?.text).toContain('export const a = 1;');
     // The image waited on disk and goes out as an image block after all.
     expect(stream.sent.at(-1)?.blocks).toEqual([
