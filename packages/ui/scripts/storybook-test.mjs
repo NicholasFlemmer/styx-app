@@ -17,7 +17,10 @@ const binOrRoot = (name) =>
 /** spawn options for a `.bin` shim: through the shell on Windows, with the path quoted for it. */
 const run = (name) =>
   WIN ? { cmd: `"${binOrRoot(name)}"`, shell: true } : { cmd: binOrRoot(name), shell: false };
+// On CI, a few workers: each starts its own browser, and on the Windows runner a burst of them can leave one
+// worker timing out on its browser connection (ETIMEDOUT ::1) before a single story runs.
 const extra = process.argv.slice(2);
+if (process.env.CI && !extra.some((a) => a.startsWith('--maxWorkers'))) extra.push('--maxWorkers=2');
 
 if (!process.env.STYX_SB_SKIP_BUILD) {
   const sb = run('storybook');
