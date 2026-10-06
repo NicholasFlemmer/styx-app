@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in Styx doesn't work the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Found a security problem? Please don't file it here: follow [SECURITY.md](https://github.com/NicholasFlemmer/styx-app/blob/main/SECURITY.md) instead.
+        [Troubleshooting](https://heystyx.com/docs/help/troubleshooting) covers the common problems and their fixes.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Screenshots help a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start a task with Claude Code…
+        2. …
+  - type: input
+    id: version
+    attributes:
+      label: Styx version
+      placeholder: '0.4.4'
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS, Windows, Linux]
+    validations:
+      required: true
+  - type: input
+    id: agents
+    attributes:
+      label: Agents involved
+      description: Which agent CLIs, and their versions if you know them.
+      placeholder: Claude Code 2.x, Codex 0.x
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Where to find them is in [Troubleshooting](https://heystyx.com/docs/help/troubleshooting). Remove anything private first.
+      render: text
