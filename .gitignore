@@ -33,5 +33,5 @@ next-env.d.ts
 *.tsbuildinfo
 apps/desktop/e2e/sim/out/
 
-# Cloudflare Worker local state (apps/api)
-.wrangler/
+# Roadmap and execution state (gsd) stay on the owner's machine.
+.planning/

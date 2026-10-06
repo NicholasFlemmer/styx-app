@@ -26,11 +26,6 @@ export default tseslint.config(
     rules: { 'no-restricted-syntax': 'off' },
   },
   {
-    // A Cloudflare Worker's entrypoint is a default export by platform contract, like a framework route file.
-    files: ['apps/api/src/index.ts'],
-    rules: { 'no-restricted-syntax': 'off' },
-  },
-  {
     // electron-builder hooks are CommonJS by contract: it `require()`s them from its own process.
     files: ['**/build/*.cjs'],
     rules: { '@typescript-eslint/no-require-imports': 'off' },
