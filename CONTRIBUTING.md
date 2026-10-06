@@ -10,6 +10,14 @@ version and which agent CLIs you use. Screenshots help a lot for anything visual
 
 Security problems are different: please don't open a public issue. See [SECURITY.md](SECURITY.md).
 
+## The easiest ways in
+
+Two kinds of contribution are self-contained: you don't need to understand the whole app, and each has a guide with a
+worked example and a checklist of every place to change.
+
+- **[Add an agent](docs/contributing/adding-an-agent.md)**: support another coding agent CLI.
+- **[Add a deploy target](docs/contributing/adding-a-target.md)**: let agents ask for access to another platform.
+
 ## Making a change
 
 1. For anything bigger than a small fix, open an issue first so we can agree on the approach before you spend
