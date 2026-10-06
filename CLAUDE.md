@@ -75,6 +75,9 @@ Node ≥ 22, pnpm 10 (`corepack enable`). Run one package with `pnpm -F <name> <
 - Storybook: `pnpm storybook`; `pnpm storybook:test` builds it and runs every story through axe.
 - Package: `pnpm package:mac` / `pnpm package:win` / `pnpm package:linux` (AppImage + .deb; build on Linux). Unsigned
   dir builds: `pnpm -F @styx/desktop package:mac:dir` (also `:win:dir`, `:linux:dir`).
+- Release: CI only. Bump `apps/desktop/package.json`, then run `release.yml` on styx-app (it waits for green CI,
+  builds signed Mac + Windows + Linux into a draft release); publishing the draft runs `publish.yml` (update feed,
+  Homebrew cask). See `.claude/skills/release/SKILL.md`.
 - README media: `pnpm -F @styx/desktop readme:gif` (after `pnpm build`; needs ffmpeg).
 - DB: `pnpm db:generate` (drizzle-kit, then hand-add CHECKs/triggers; see `/db-migration`), `pnpm db:migrate`,
   `pnpm db:seed`. Tokens: `pnpm tokens:build`. Native ABI trouble: `pnpm rebuild:native`.

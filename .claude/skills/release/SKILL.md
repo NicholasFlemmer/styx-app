@@ -1,22 +1,39 @@
 ---
 name: release
-description: Build and package Styx for mac (signed + notarized) and Windows (signed) with electron-builder; run the pre-release checklist.
+description: Release a new Styx version through CI (styx-app release.yml → draft → publish.yml) and check it end to end.
 disable-model-invocation: true
-allowed-tools: Bash(pnpm:*), Bash(git tag:*), Bash(git log:*), Read
+allowed-tools: Bash(pnpm:*), Bash(gh:*), Bash(git log:*), Read
 ---
-# Release
-1. Pre-flight: `pnpm typecheck && pnpm lint && pnpm test && pnpm e2e && pnpm visual`, then `pnpm release:preflight` (signing identity, notarytool, the `styx-notary` keychain profile or the CI API-key env, packaging inputs; it prints the fix for anything missing).
-2. Bump versions; update `CHANGELOG.md`.
-3. `pnpm package:mac` (hardened runtime, `build/entitlements.mac.plist`, `STYX_NOTARIZE=1` → `build/notarize.cjs` notarizes with the keychain profile locally or `APPLE_API_KEY*` in CI). Verify: `codesign -dv --verbose=2 release/mac-arm64/Styx.app` shows the Developer ID, `spctl -a -vv -t install release/mac-arm64/Styx.app` says accepted, `xcrun stapler validate` passes.
-4. `pnpm package:win` (builds the CLI too; signs when `CSC_LINK`/`CSC_KEY_PASSWORD` point at a Windows certificate).
 
-CI: `.github/workflows/release.yml` runs both on a `v*` tag and drafts a GitHub release with the artifacts (secrets listed at the top of that file).
-5. Smoke each artifact: launch, onboarding, spawn shell session, connect fixture target, biometric prompt appears.
-6. Tag `vX.Y.Z`.
+# Release
+
+Releases are built and published by CI on the public repo (NicholasFlemmer/styx-app), never from a laptop.
+
+1. **Bump** `version` in `apps/desktop/package.json` (every release needs a new number; the feed refuses a version it
+   already serves) and land it. `mirror.yml` copies STYX main to styx-app within minutes; CI runs there.
+2. **Start the release**: `gh workflow run release.yml -R NicholasFlemmer/styx-app -f version=X.Y.Z`
+   (or push a `vX.Y.Z` tag to styx-app). `verify` checks the version, waits for CI on that exact commit to pass,
+   and tags it. Mac (signed + notarized, retried on network errors), Windows and Linux build in parallel; `draft`
+   attaches every installer and feed file to a **draft** release.
+3. **Review the draft** on styx-app › Releases. Only the owner presses **Publish release**: that is the gate.
+4. **Publishing** runs `publish.yml`: the update feed (installers first, feed files last, keyless upload through
+   Workload Identity), a check that all three feeds serve the new version, then the Homebrew cask bump in
+   NicholasFlemmer/homebrew-styx.
+5. **Check**: `curl -s https://storage.googleapis.com/styx-desktop-releases/mac/latest-mac.yml | head -1`, and an
+   installed copy shows "Update available" within 30 minutes.
+
+If a step fails, fix the cause, bump nothing, and re-run the failed jobs (a draft can be deleted and `release.yml`
+re-run for the same version until it is published).
+
+## Local builds (debugging only)
+
+`pnpm release:preflight`, then `pnpm package:mac` (notarizes with the `styx-notary` keychain profile) or
+`pnpm -F @styx/desktop package:mac:dir && pnpm -F @styx/desktop package:smoke` for an unsigned check.
+`pnpm release:publish` still uploads a local `release/` folder through the `gcloud` shim, for emergencies only.
 
 ## Packaging notes (learned 2026-09-05)
+
 - Only native modules (`better-sqlite3`, `node-pty`, `@napi-rs/keyring`, `ssh2`) stay external in `electron.vite.config.ts`; every other main-process dependency is bundled. A packaged app that `require()`s ESM-only packages (execa, chokidar) at runtime hangs before `app.whenReady`.
 - `apps/desktop/package.json` declares `packageManager: pnpm@…` so electron-builder resolves the hoisted workspace `node_modules`; workspace packages are devDependencies (bundled by electron-vite), which keeps Storybook/Jest out of the bundle.
 - Without a signing identity electron-builder ad-hoc signs; never pass `CSC_IDENTITY_AUTO_DISCOVERY=false` on Apple Silicon (an unsigned bundle inherits a broken `Electron` signature).
-- Validate a build with `pnpm -F @styx/desktop package:mac:dir && pnpm -F @styx/desktop package:smoke` (Playwright boots `release/mac-arm64/Styx.app` with the demo fixture).
-- Windows builds (NSIS, signtool, Windows Hello, named-pipe broker) are untested on this Mac host.
+- Windows installers are named `Styx-Setup-<version>.exe` (no spaces: GitHub renames spaces in release assets).

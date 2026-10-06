@@ -1,0 +1,69 @@
+name: publish
+# Runs when a drafted release (release.yml) is published: puts its files on the update feed, installers first and the
+# feed files last (apps/desktop/scripts/release-publish.sh), checks the feed serves the new version, then updates the
+# Homebrew cask in NicholasFlemmer/homebrew-styx.
+#
+# The bucket is reached without a stored key: Workload Identity Federation lets only this workflow, on a v* tag of
+# styx-app, act as the publisher service account (variables GCP_WIF_PROVIDER, GCP_RELEASE_SA). TAP_DEPLOY_KEY is a
+# write deploy key on the tap repo.
+on:
+  release:
+    types: [published]
+permissions: { contents: read }
+concurrency: { group: publish, cancel-in-progress: false }
+jobs:
+  feed:
+    if: github.repository == 'NicholasFlemmer/styx-app' && startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ github.event.release.tag_name }}' }
+      - name: Download the release files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release download "$TAG" -R "$GITHUB_REPOSITORY" -D apps/desktop/release
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_RELEASE_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Publish to the update feed
+        run: bash apps/desktop/scripts/release-publish.sh
+      - name: Check the feed serves the new version
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./apps/desktop/package.json').version")
+          for feed in mac/latest-mac.yml win/latest.yml linux/latest-linux.yml; do
+            live=$(curl -fsS -H 'Cache-Control: no-cache' "https://storage.googleapis.com/styx-desktop-releases/$feed?t=$(date +%s)" | sed -n 's/^version: //p')
+            [ "$live" = "$version" ] || { echo "::error::$feed serves $live, not $version"; exit 1; }
+            echo "$feed serves $version" >> "$GITHUB_STEP_SUMMARY"
+          done
+  homebrew:
+    needs: feed
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Update the cask
+        env:
+          TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          dmg="https://storage.googleapis.com/styx-desktop-releases/mac/Styx-$version-arm64.dmg"
+          sha=$(curl -fsSL "$dmg" | sha256sum | cut -d' ' -f1)
+          umask 077
+          printf '%s\n' "$TAP_DEPLOY_KEY" > "$RUNNER_TEMP/tap_key"
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/tap_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git clone -q git@github.com:NicholasFlemmer/homebrew-styx.git tap
+          cd tap
+          sed -i -E "s/^  version \".*\"/  version \"$version\"/; s/^  sha256 \".*\"/  sha256 \"$sha\"/" Casks/styx.rb
+          grep -q "version \"$version\"" Casks/styx.rb && grep -q "sha256 \"$sha\"" Casks/styx.rb
+          if git diff --quiet; then echo "Cask already at $version"; exit 0; fi
+          git -c user.name="Nic Flemmer" -c user.email="176575528+NicholasFlemmer@users.noreply.github.com" \
+            commit -qam "styx $version"
+          git push -q origin HEAD:main
+          echo "Homebrew cask updated to $version" >> "$GITHUB_STEP_SUMMARY"

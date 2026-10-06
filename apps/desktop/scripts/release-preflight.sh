@@ -17,7 +17,26 @@ fi
 
 # 1. Developer ID Application certificate (electron-builder picks it up automatically).
 identity=$(security find-identity -v -p codesigning 2>/dev/null | grep 'Developer ID Application' | head -1)
-if [ -n "$identity" ]; then
+if [ -n "${CSC_LINK:-}" ]; then
+  # CI: the certificate comes from the CSC_LINK secret (base64 .p12) and electron-builder imports it at build time.
+  # A Keychain export may use legacy ciphers, which OpenSSL 3 only reads with -legacy (LibreSSL reads them as is).
+  p12=$(mktemp)
+  printf '%s' "$CSC_LINK" | base64 --decode > "$p12" 2>/dev/null || true
+  subject=$({ openssl pkcs12 -in "$p12" -nokeys -passin "pass:${CSC_KEY_PASSWORD:-}" 2>/dev/null \
+    || openssl pkcs12 -in "$p12" -nokeys -legacy -passin "pass:${CSC_KEY_PASSWORD:-}" 2>/dev/null; } \
+    | sed -n 's/^subject=.*CN *= *//p' | grep -m1 '^Developer ID Application' || true)
+  rm -f "$p12"
+  case "$subject" in
+    "Developer ID Application"*)
+      pass "signing certificate: ${subject%%,*} (CSC_LINK)"
+      team=$(echo "$subject" | sed -nE 's/.*\(([A-Z0-9]{10})\).*/\1/p')
+      ;;
+    *)
+      fail "CSC_LINK is not a readable Developer ID Application certificate (check CSC_LINK / CSC_KEY_PASSWORD)"
+      team=""
+      ;;
+  esac
+elif [ -n "$identity" ]; then
   pass "signing identity: $(echo "$identity" | sed -E 's/^ *[0-9]+\) [0-9A-F]+ //')"
   team=$(echo "$identity" | sed -nE 's/.*\(([A-Z0-9]{10})\).*/\1/p')
 else

@@ -36,6 +36,8 @@ mac:
 win:
   target: [nsis]
 nsis:
+  # No spaces: GitHub renames spaces in release assets, and the feed (latest.yml) must name the file as uploaded.
+  artifactName: Styx-Setup-${version}.${ext}
   oneClick: false
   perMachine: false
 # The Microsoft Store package (`pnpm package:win:store`, Windows only). Microsoft signs it on submission, so Windows

@@ -34,7 +34,7 @@ publish() {
     exit 1
   fi
   local f
-  # Line by line: the Windows installer's name has spaces ("Styx Setup 0.4.2.exe").
+  # Line by line: installers before 0.4.7 had spaces in their names ("Styx Setup 0.4.2.exe").
   while IFS= read -r f; do
     upload "$rel/$f" "gs://$BUCKET/$os/$f"
     if [ -f "$rel/$f.blockmap" ]; then upload "$rel/$f.blockmap" "gs://$BUCKET/$os/$f.blockmap"; fi
