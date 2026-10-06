@@ -1,5 +1,6 @@
-import { DEFAULT_PROJECT_SETTINGS, type ProjectSettings, type SessionId } from '@styx/core';
+import { copy, DEFAULT_PROJECT_SETTINGS, type ProjectSettings, type SessionId } from '@styx/core';
 import type { Container } from '../../container';
+import { commandCarriesSecret } from '../../services/logger';
 import { projectSettingsFor } from '../../store/projection';
 import { type CommandBus, fail } from '../bus';
 
@@ -98,7 +99,15 @@ export function registerProjectCommands(bus: CommandBus, app: Container): void {
   });
 
   bus.register('project.settings.set', async ({ projectId, patch }) => {
-    await projects.setSettings(projectId, patch as Partial<ProjectSettings>);
+    const next = { ...patch } as Partial<ProjectSettings>;
+    // Settings › Agent defaults › Checks (issue #2): typed by the person, so blank means "clear it" rather than a
+    // command that always passes; and like a learned one it is committed, so a secret in it is refused.
+    if (typeof next.checksCommand === 'string') {
+      const cmd = next.checksCommand.trim();
+      if (commandCarriesSecret(cmd)) fail('invalid-input', copy.abilities.secretInCommand);
+      next.checksCommand = cmd === '' ? null : cmd;
+    }
+    await projects.setSettings(projectId, next);
     return {};
   });
 

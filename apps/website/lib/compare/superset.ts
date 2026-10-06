@@ -52,7 +52,7 @@ export const superset: Competitor = {
   faq: [
     {
       q: 'Is Styx a Superset alternative?',
-      a: 'Yes. Both run coding agents in parallel, each in its own git worktree, on your Mac. Superset adds automations, remote machines and team plans; Styx adds a gate on production access and an append-only audit log.',
+      a: 'Yes. Both run coding agents in parallel, each in its own git worktree, on your computer. Superset adds automations, remote machines and team plans; Styx adds a gate on production access and an append-only audit log.',
     },
     {
       q: 'Is this Apache Superset?',

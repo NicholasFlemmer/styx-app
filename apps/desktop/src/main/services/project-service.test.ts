@@ -1138,6 +1138,35 @@ describe('project settings file', () => {
     expect(again.agents).toMatchObject({ permissionMode: 'acceptEdits' });
   });
 
+  it('issue #2: project.settings.set keeps the checks command as checks.command in .styx/project.json (trimmed), blank clears it, a secret is refused; it reads back', async () => {
+    const t = makeTestApp({ fixture: 'empty' });
+    const dir = mkdtempSync(join(tmpdir(), 'styx-checks-file-'));
+    const project = await t.app.projects.add(dir, 'checked');
+    const set = (checksCommand: string | null) =>
+      t.app.bus.dispatch(t.sender, 'project.settings.set', {
+        projectId: project.id,
+        patch: { checksCommand },
+      });
+    const fileOf = () =>
+      JSON.parse(readFileSync(join(dir, '.styx', 'project.json'), 'utf8')) as {
+        checks?: Record<string, unknown>;
+      };
+    expect(await set('  pnpm typecheck && pnpm test ')).toEqual({ ok: true, value: {} });
+    expect(fileOf().checks).toEqual({ command: 'pnpm typecheck && pnpm test' });
+    expect(t.app.repos.projects.settings(project.id).checksCommand).toBe('pnpm typecheck && pnpm test');
+    // Read back from the file (another clone, or Styx restarted): the value is the project's.
+    await t.app.projects.reconcileProjectFile(project.id);
+    expect(t.app.repos.projects.settings(project.id).checksCommand).toBe('pnpm typecheck && pnpm test');
+    expect(await set('TOKEN=abc123secretvalue pnpm test')).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-input', message: copy.abilities.secretInCommand },
+    });
+    expect(fileOf().checks).toEqual({ command: 'pnpm typecheck && pnpm test' });
+    expect(await set('   ')).toEqual({ ok: true, value: {} });
+    expect(fileOf()).not.toHaveProperty('checks');
+    expect(t.app.repos.projects.settings(project.id).checksCommand ?? null).toBeNull();
+  });
+
   it('a project whose path is not absolute (a fixture display path) keeps its settings in the store but never gets a file written under the working directory', async () => {
     const t = makeTestApp();
     const acme = fixtures.ids.project.acmeShop;

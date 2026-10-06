@@ -11,6 +11,7 @@ import { Hero } from '@/components/Hero';
 import { Invariants } from '@/components/Invariants';
 import { Keyboard } from '@/components/Keyboard';
 import { Nav } from '@/components/Nav';
+import { OpenSource } from '@/components/OpenSource';
 import { Pillars } from '@/components/Pillars';
 import { Ship } from '@/components/Ship';
 import { Worktrees } from '@/components/Worktrees';
@@ -40,6 +41,7 @@ export default function Page() {
         <Invariants />
         <Keyboard />
         <Download />
+        <OpenSource />
       </main>
       <Footer />
     </>

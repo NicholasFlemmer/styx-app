@@ -106,7 +106,7 @@ export type TranscriptItem =
       files: number;
       added: number;
       removed: number;
-      /** The workspace was restored to before this turn (by reverting it or an earlier one). */
+      /** This turn's changes were taken back (Undo this turn; later turns are unaffected). */
       reverted: boolean;
     };
 

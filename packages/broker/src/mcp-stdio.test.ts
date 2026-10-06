@@ -95,4 +95,49 @@ describe('styx MCP server', () => {
     broker.close();
     await client.close();
   });
+
+  it('remember_command takes kind "checks" (issue #2: the tool once accepted only run / deploy) and passes it on', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'styx-mcp-'));
+    const path = process.platform === 'win32' ? `\\\\.\\pipe\\${basename(dir)}` : join(dir, 'b.sock');
+    server = new BrokerServer({
+      authenticate: async () => ({
+        sessionId: 's1',
+        projectId: 'p',
+        projectName: 'acme-shop',
+        worktreePath: null,
+        branch: null,
+        agent: 'claude',
+      }),
+    });
+    const seen: unknown[] = [];
+    server.on('remember_command', async (p) => {
+      seen.push(p);
+      return { ok: true };
+    });
+    await server.listen(path);
+    const broker = new BrokerClient({ endpoint: path, sessionId: 's1', token: TOKEN, client: 'mcp', pid: 1 });
+    await broker.connect();
+    const mcp = createStyxMcpServer(broker);
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    await mcp.connect(st);
+    const client = new Client({ name: 'test', version: '0' });
+    await client.connect(ct);
+
+    const tool = (await client.listTools()).tools.find((t) => t.name === 'remember_command');
+    expect(JSON.stringify(tool?.inputSchema)).toContain('checks');
+    const r = await client.callTool({
+      name: 'remember_command',
+      arguments: { kind: 'checks', command: 'pnpm typecheck && pnpm test' },
+    });
+    expect(r.isError).not.toBe(true);
+    expect(seen).toEqual([{ kind: 'checks', command: 'pnpm typecheck && pnpm test' }]);
+    const bad = await client.callTool({
+      name: 'remember_command',
+      arguments: { kind: 'lint', command: 'x' },
+    });
+    expect(bad.isError).toBe(true);
+    expect(seen).toHaveLength(1);
+    broker.close();
+    await client.close();
+  });
 });

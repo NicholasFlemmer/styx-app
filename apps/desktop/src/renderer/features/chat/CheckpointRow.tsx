@@ -8,7 +8,7 @@ export interface CheckpointRowProps {
   files: number;
   added: number;
   removed: number;
-  /** The workspace was restored to before this turn: no actions, a `Reverted` tag. */
+  /** This turn's changes were taken back: no actions, a `Reverted` tag. */
   reverted: boolean;
   /** The agent is mid-turn: Revert is disabled (main refuses it anyway). */
   busy: boolean;

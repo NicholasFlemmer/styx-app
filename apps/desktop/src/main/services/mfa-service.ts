@@ -11,17 +11,49 @@ export interface MfaProvider {
   label: string; // "Touch ID" | "Windows Hello" | "system password"
 }
 
-/** macOS: Touch ID via Electron's systemPreferences (LocalAuthentication); the OS handles the password fallback. */
+export type OsaRunner = (args: string[]) => Promise<{ exitCode: number; stderr: string }>;
+
+const defaultOsaRunner: OsaRunner = async (args) => {
+  const r = await execa('/usr/bin/osascript', args, { reject: false, timeout: 120_000 });
+  return { exitCode: typeof r.exitCode === 'number' ? r.exitCode : -1, stderr: String(r.stderr ?? '') };
+};
+
+/**
+ * The macOS password prompt, for a Mac that can't use Touch ID (no sensor, lid closed, not enrolled): the system's
+ * own authentication dialog, showing `reason`. The reason is passed as an argument, never spliced into the script, so
+ * a target or agent name can't inject AppleScript.
+ */
+export const macPasswordArgs = (reason: string): string[] => [
+  '-e',
+  'on run argv',
+  '-e',
+  'do shell script "/usr/bin/true" with prompt (item 1 of argv) with administrator privileges',
+  '-e',
+  'end run',
+  reason.replace(/[\u0000-\u001f\u007f]/g, ' ').trim() || 'Styx',
+];
+
+/**
+ * macOS: Touch ID via Electron's systemPreferences (LocalAuthentication; the OS offers the password itself). Without
+ * Touch ID it falls back to the system password prompt, so a production grant can still be approved by the person
+ * at the keyboard instead of being refused outright.
+ */
 export class TouchIdProvider implements MfaProvider {
   label = 'Touch ID';
   constructor(
     private readonly sp: { canPromptTouchID(): boolean; promptTouchID(reason: string): Promise<void> },
+    private readonly osa: OsaRunner = defaultOsaRunner,
   ) {}
   async available(): Promise<boolean> {
-    return this.sp.canPromptTouchID();
+    return true;
   }
   async verify(reason: string): Promise<MfaResult> {
-    if (!this.sp.canPromptTouchID()) return 'unavailable';
+    if (!this.sp.canPromptTouchID()) {
+      const r = await this.osa(macPasswordArgs(reason));
+      if (r.exitCode === 0) return 'ok';
+      // -128: the person pressed Cancel.
+      return /-128|cancel/i.test(r.stderr) ? 'cancelled' : 'failed';
+    }
     try {
       await this.sp.promptTouchID(reason);
       return 'ok';

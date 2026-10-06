@@ -103,7 +103,7 @@ The same message names **Windows Hello** or the **system password** on Windows a
 
 **Fix:**
 
-- **Mac:** Touch ID must be available and have a fingerprint set up. A Mac without Touch ID (or a keyboard with it) can't approve production writes today.
+- **Mac:** with Touch ID, a fingerprint must be set up. Without it (no sensor, or the lid closed), Styx shows the macOS password prompt instead; that needs an administrator account.
 - **Windows:** set up Windows Hello (a PIN is enough) in Windows **Settings › Accounts › Sign-in options**.
 - **Linux:** polkit and an authentication agent must be running in a graphical session. The .deb installs Styx's polkit action; the AppImage uses `pkexec`, so `pkexec` must be installed.
 

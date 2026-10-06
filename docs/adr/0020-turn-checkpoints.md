@@ -42,13 +42,16 @@ folders (no git) are skipped.
 against the live worktree through the same temporary index (`diff --cached`), so untracked files show.
 
 **Revert.** `checkpoint.revert {checkpointId}` is refused with `invalid-transition` while the session is
-`working` or `needs-you`. It computes `diff --cached --name-status --no-renames` of the live tree (temp index)
-against `base`: paths that are `A` (not in base) are deleted (each one `confine`d to the worktree first), every
-other differing path is written back with `git --literal-pathspecs restore --source=<base> --worktree
---no-overlay --pathspec-from-file=-`. Only paths that differ are touched, ignored files are never touched, and
-the index and HEAD stay as they are — a staged file the agent added shows up staged-but-deleted afterwards,
-which is the honest picture. This turn and every later one get `revertedAt`; the chat gets
-`copy.checkpoints.revertDone`; the hunks are re-scanned so the editor's decorations follow the tree.
+`working` or `needs-you`. _Amended for GitHub issue #1 (handoff-discrepancies row 153):_ it takes back only this
+turn's change. `git diff --binary --full-index <after> <base>` (written to a file by git) is applied with
+`git apply --cached --3way` to a temporary index holding the live worktree; when it applies, the resulting tree is
+written back by `restore` — `diff --cached --name-status --no-renames` of the live tree against that tree: `A`
+paths are deleted (each one `confine`d first), every other differing path is written back with
+`git --literal-pathspecs restore --source=<tree> --worktree --no-overlay --pathspec-from-file=-`. A conflict with a
+later turn or the person's own edits refuses (`invalid-transition`, detail `{ reason: 'conflict', files }`) and
+changes nothing. Ignored files are never touched and the index and HEAD stay as they are. Only this turn gets
+`revertedAt`; `copy.checkpoints.revertDone` goes through `SessionService.tell` (chat line, and owed to the agent
+ahead of its next turn); the hunks are re-scanned so the editor's decorations follow the tree.
 
 **Retention.** `prune()` at startup and hourly: refs (`for-each-ref refs/styx/checkpoints/` in each project's
 repo, since a linked worktree shares its refs with the main checkout) and rows of sessions that are gone or

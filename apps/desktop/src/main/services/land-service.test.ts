@@ -2,10 +2,13 @@ import { execa } from 'execa';
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fixtures } from '@styx/core';
+import { randomBytes } from 'node:crypto';
+import { BrokerClient } from '@styx/broker';
+import { copy, fill, fixtures } from '@styx/core';
 import { describe, expect, it, vi } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
 import { slow } from '../test-timeouts';
+import { sha256 } from './session-service';
 
 const { ids } = fixtures;
 const acme = ids.project.acmeShop;
@@ -48,7 +51,7 @@ interface Rig {
  * user's own git would.
  */
 async function rig(
-  opts: { checksCommand?: string | null; remote?: boolean; autoLand?: boolean } = {},
+  opts: { checksCommand?: string | null; remote?: boolean; autoLand?: boolean; askForChecks?: boolean } = {},
 ): Promise<Rig> {
   const checks = vi.fn(async (_cwd: string, _command: string) => ({ exitCode: 0, output: '' }));
   const t = makeTestApp({ runChecks: checks });
@@ -89,6 +92,9 @@ async function rig(
     },
     null,
   );
+  // With no checks, a first landing asks the agent for them (issue #2); cases about something else start past that
+  // ask, where a landing goes without checks and says so.
+  if (opts.checksCommand === null && opts.askForChecks !== true) t.app.land.checksLearned(acme);
   for (const target of t.app.repos.targets.all())
     if (target.projectId === acme) t.app.repos.targets.upsert({ ...target, credentialRef: null });
   const rows = t.app.repos.worktrees;
@@ -381,6 +387,102 @@ describe('LandService (ADR-0025 phase C)', { timeout: slow(30_000) }, () => {
     expect(await sh(['rev-parse', 'HEAD'], repo)).toBe(r.commit);
   });
 
+  it("issue #2: the first landing with no checks asks the lane's agent to work them out; it alone may teach them, and the next landing runs them", async () => {
+    const { t, checks, repo } = await rig({ checksCommand: null, askForChecks: true });
+    const ask = vi.spyOn(t.app.sessions, 'sendMessage').mockResolvedValue(undefined);
+    const before = await sh(['rev-parse', 'HEAD'], repo);
+    await expect(t.app.land.land(fixCheckout, { title: 'Fix the checkout total', body: '' })).rejects.toThrow(
+      fill(copy.land.learningChecks, { branch: 'fix/checkout', agent: copy.agentProducts.claude }),
+    );
+    expect(await sh(['rev-parse', 'HEAD'], repo)).toBe(before);
+    expect(checks).not.toHaveBeenCalled();
+    expect(ask).toHaveBeenCalledWith(
+      claude,
+      fill(copy.agentPrompt.learnChecks, {
+        branch: 'fix/checkout',
+        base: 'main',
+        then: copy.agentPrompt.learnChecksThenLand,
+      }),
+      [],
+      { now: true, from: 'styx' },
+    );
+    expect(t.app.land.askedForChecks(claude)).toBe(true);
+    expect(t.app.land.askedForChecks(codex)).toBe(false);
+
+    // The agent teaches them through the broker: accepted from it, refused from a session nobody asked.
+    await t.app.broker.listen();
+    const connect = async (sessionId: string) => {
+      const token = randomBytes(32).toString('hex');
+      t.app.repos.sessions.setBrokerTokenHash(sessionId, sha256(token));
+      const c = new BrokerClient({ endpoint: t.app.runtime.brokerEndpoint, sessionId, token, client: 'mcp' });
+      await c.connect();
+      return c;
+    };
+    const other = await connect(codex);
+    await expect(other.call('remember_command', { kind: 'checks', command: 'pnpm test' })).rejects.toThrow(
+      copy.abilities.checksNotResolving,
+    );
+    other.close();
+    const agent = await connect(claude);
+    expect(
+      await agent.call('remember_command', { kind: 'checks', command: '  pnpm typecheck && pnpm test ' }),
+    ).toEqual({ ok: true });
+    agent.close();
+    expect(t.app.repos.projects.settings(acme).checksCommand).toBe('pnpm typecheck && pnpm test');
+    expect(systemLines(t, claude)).toContain(
+      fill(copy.abilities.learnedChecks, { command: 'pnpm typecheck && pnpm test' }),
+    );
+    expect(t.app.repos.activity.recent(20).map((a) => a.what)).toContain(
+      fill(copy.abilities.activityChecks, { agent: copy.agentProducts.claude, project: 'acme-shop' }),
+    );
+    // The ask is spent once answered.
+    expect(t.app.land.askedForChecks(claude)).toBe(false);
+    await t.app.broker.close();
+
+    const r = await t.app.land.land(fixCheckout, { title: 'Fix the checkout total', body: '' });
+    expect(checks).toHaveBeenCalledWith(expect.any(String), 'pnpm typecheck && pnpm test');
+    expect(r.steps).toContain(copy.land.steps.checks);
+    expect(ask).toHaveBeenCalledTimes(1);
+  });
+
+  it('issue #2: asked once — the next landing goes without checks and says so; review mode asks the agent to report, not land; no agent to ask lands without', async () => {
+    const { t } = await rig({ checksCommand: null, askForChecks: true });
+    const ask = vi.spyOn(t.app.sessions, 'sendMessage').mockResolvedValue(undefined);
+    await t.app.projects.setSettings(acme, { integration: 'review' });
+    await expect(t.app.land.land(fixCheckout, { title: 'x', body: '' })).rejects.toThrow(
+      fill(copy.land.learningChecksReview, { branch: 'fix/checkout', agent: copy.agentProducts.claude }),
+    );
+    expect(ask.mock.calls[0]?.[1]).toContain(copy.agentPrompt.learnChecksThenTell);
+    // The agent did not teach them (or could not): Land again goes ahead, saying none ran.
+    const r = await t.app.land.land(fixCheckout, { title: 'x', body: '' });
+    expect(r.steps).toContain(copy.land.steps.noChecks);
+    expect(ask).toHaveBeenCalledTimes(1);
+
+    // A lane whose agent is a shell has nobody to ask: it lands without, at once.
+    const fresh = await rig({ checksCommand: null, askForChecks: true });
+    const ask2 = vi.spyOn(fresh.t.app.sessions, 'sendMessage').mockResolvedValue(undefined);
+    const s = fresh.t.app.repos.sessions.get(claude);
+    if (!s) throw new Error('session');
+    fresh.t.app.repos.sessions.upsert({ ...s, agent: 'shell' });
+    const r2 = await fresh.t.app.land.land(fixCheckout, { title: 'x', body: '' });
+    expect(r2.steps).toContain(copy.land.steps.noChecks);
+    expect(ask2).not.toHaveBeenCalled();
+  });
+
+  it('issue #2: the agent calling land from its own turn is told, in the refusal, to work out the checks and land again', async () => {
+    const { t } = await rig({ checksCommand: null, askForChecks: true });
+    const ask = vi.spyOn(t.app.sessions, 'sendMessage').mockResolvedValue(undefined);
+    await expect(t.app.land.land(fixCheckout, { title: 'x', body: '' }, { caller: claude })).rejects.toThrow(
+      fill(copy.agentPrompt.learnChecks, {
+        branch: 'fix/checkout',
+        base: 'main',
+        then: copy.agentPrompt.learnChecksThenLand,
+      }),
+    );
+    expect(ask).not.toHaveBeenCalled();
+    expect(t.app.land.askedForChecks(claude)).toBe(true);
+  });
+
   it("landings of one project run one after another: the second brings the first's landing in before it merges", async () => {
     const { t, repo, wt2 } = await rig({ checksCommand: null });
     writeFileSync(join(wt2, 'd.ts'), 'd\n');
@@ -389,6 +491,9 @@ describe('LandService (ADR-0025 phase C)', { timeout: slow(30_000) }, () => {
       t.app.land.land(testFlaky, { title: 'flaky', body: '' }),
     ]);
     expect(one.steps).toContain('brought in main (1)');
+    // Issue #2: no checks known (and the agent asked already): said plainly, not implied by a missing line.
+    expect(one.steps).toContain(copy.land.steps.noChecks);
+    expect(one.steps).not.toContain(copy.land.steps.checks);
     // The second lane is behind by main's own commit plus everything the first landing brought.
     expect(two.steps).toContainEqual(expect.stringMatching(/^brought in main \([2-9]\)$/));
     expect(await sh(['rev-parse', 'HEAD'], repo)).toBe(two.commit);

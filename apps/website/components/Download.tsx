@@ -3,11 +3,19 @@ import { Section } from './Section';
 import styles from './Download.module.css';
 
 export const Download = () => (
-  <Section tone="panel" id="download" title="Download" lede={`Beta ${site.version} for Mac and Windows.`}>
+  <Section
+    tone="panel"
+    id="download"
+    title="Download"
+    lede={`Version ${site.version}, free and open source. For Mac, with Windows and Linux in beta.`}
+  >
     <div className={styles.cards}>
       <div className={styles.card}>
         <h3>Mac</h3>
-        <p className={styles.meta}>Touch ID for anything that touches production</p>
+        <p className={styles.meta}>
+          Touch ID for anything that touches production, or your Mac&apos;s password on one without it. Apple
+          silicon.
+        </p>
         <a className="btn" data-on="true" href={site.links.downloadMac}>
           Download
         </a>
@@ -21,10 +29,27 @@ export const Download = () => (
           Download
         </a>
       </div>
+      <div className={styles.card}>
+        <h3>Linux</h3>
+        <p className={styles.meta}>
+          Your system password for anything that touches production. An AppImage for any distribution, or a
+          .deb for Debian and Ubuntu. x64.
+        </p>
+        <a
+          className="btn"
+          data-on="true"
+          href={site.links.downloadLinux}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Download on GitHub ↗
+        </a>
+      </div>
     </div>
     <p className={styles.note}>
-      Styx works with the agents already installed on your computer. If one is missing, it tells you and
-      points you to the install guide.
+      Styx works with the agents already installed on your computer, and can install the ones you&apos;re
+      missing. <a href="/docs/getting-started/install">Installing Styx</a> covers each platform, including
+      what Linux needs.
     </p>
   </Section>
 );

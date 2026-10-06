@@ -201,6 +201,23 @@ export class VercelAdapter implements ProviderAdapter {
 
   async revoke(): Promise<void> {}
 
+  /**
+   * A Vercel command without a production signal acts on a preview: `vercel deploy` builds a preview unless it's
+   * given `--prod` (or `--target production`). `promote` and `rollback` change what production serves.
+   */
+  envOfCommand(argv: string[]): 'prod' | 'non-prod' {
+    const [cmd] = commandHead(argv);
+    const target = argv.findIndex((a) => a === '--target');
+    const prod =
+      argv.includes('--prod') ||
+      argv.includes('--production') ||
+      argv.includes('--target=production') ||
+      (target !== -1 && argv[target + 1] === 'production') ||
+      cmd === 'promote' ||
+      cmd === 'rollback';
+    return prod ? 'prod' : 'non-prod';
+  }
+
   scopeOfCommand(argv: string[]): Scope[] {
     const [cmd, sub] = commandHead(argv);
     if (isHelp(argv)) return ['read']; // before the bare-`vercel`-deploys rule

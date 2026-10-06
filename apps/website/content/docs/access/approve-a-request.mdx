@@ -48,7 +48,7 @@ Styx decides whether a grant needs verification itself, from its own records. No
 
 So on a production target you may be asked to verify even when the button doesn't name Touch ID.
 
-The prompt comes from the operating system: Touch ID on macOS, Windows Hello on Windows, and on Linux the desktop's polkit dialog for your own password (or fingerprint, where that's set up). If you cancel or it fails, the sheet comes back with the reason and nothing is granted. If the machine can't verify at all (a Mac without Touch ID, Windows without Hello set up, or Linux with no graphical session or polkit agent), Styx refuses the grant rather than skipping the check.
+The prompt comes from the operating system: Touch ID on macOS, Windows Hello on Windows, and on Linux the desktop's polkit dialog for your own password (or fingerprint, where that's set up). If you cancel or it fails, the sheet comes back with the reason and nothing is granted. A Mac without Touch ID (no sensor, or the lid closed) shows the macOS password prompt instead. If the machine can't verify at all (Windows without Hello set up, or Linux with no graphical session or polkit agent), Styx refuses the grant rather than skipping the check.
 
 ## What the agent gets
 

@@ -7,12 +7,12 @@ export const vibeKanban: Competitor = {
   what: 'An open-source kanban board for running coding agents, community-maintained since its company shut down in 2026.',
   title: 'Styx vs Vibe Kanban: a Vibe Kanban alternative',
   description:
-    'Vibe Kanban is now community-maintained. How Styx compares: parallel agents in worktrees, a native Mac app, and approvals before production.',
+    'Vibe Kanban is now community-maintained. How Styx compares: parallel agents in worktrees, a desktop app, and approvals before production.',
   intro:
-    'Vibe Kanban is an open-source board for planning coding work as issues and handing each to an agent in its own worktree. Its company, Bloop, shut down in April 2026 and the project is now kept going by its community. Styx covers the same core, parallel agents in worktrees with review, as a native Mac app that is actively developed.',
+    'Vibe Kanban is an open-source board for planning coding work as issues and handing each to an agent in its own worktree. Its company, Bloop, shut down in April 2026 and the project is now kept going by its community. Styx covers the same core, parallel agents in worktrees with review, as a desktop app that is open source too and actively developed.',
   summary: [
     'Both run coding agents in parallel, one git worktree each, with diff review.',
-    'Vibe Kanban is open source and board-first, with the widest agent list.',
+    'Both are open source under Apache 2.0. Vibe Kanban is board-first, with a longer agent list.',
     'Its company closed in April 2026; it is community-maintained and fully local now.',
     'Styx is actively developed and gates agents’ production access.',
   ],
@@ -33,14 +33,14 @@ export const vibeKanban: Competitor = {
     issues: 'Its own issues and sub-issues',
   },
   ahead: [
-    { title: 'Open source', text: 'Apache 2.0 and self-hostable, so you can change or fork it.' },
+    { title: 'Self-hosting', text: 'It runs as a local web page or self-hosted with Docker.' },
     { title: 'More agents', text: 'It runs more agent CLIs, including Amp, Copilot and Qwen Code.' },
     { title: 'Board planning', text: 'Break work into issues and sub-issues before handing them out.' },
   ],
   styxPoints: ['keys', 'projects', 'editor'],
   choose: {
-    them: 'you want free, open-source, board-first planning and are comfortable with community maintenance',
-    styx: 'you want an actively developed Mac app for parallel agents, with production kept behind an approval',
+    them: 'you want board-first planning in the browser and are comfortable with community maintenance',
+    styx: 'you want an actively developed desktop app for parallel agents, with production kept behind an approval',
   },
   faq: [
     {
@@ -49,7 +49,7 @@ export const vibeKanban: Competitor = {
     },
     {
       q: 'What is a good Vibe Kanban alternative?',
-      a: 'If you used Vibe Kanban to run agents in parallel worktrees, Styx does that as a native Mac app, with every project in one window and approvals before agents touch production.',
+      a: 'If you used Vibe Kanban to run agents in parallel worktrees, Styx does that as a free, open-source desktop app, with every project in one window and approvals before agents touch production.',
     },
   ],
   sources: [

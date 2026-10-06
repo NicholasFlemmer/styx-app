@@ -17,6 +17,9 @@ export const Hero = () => (
           it&apos;s named after, nothing crosses over without you. Deploying, or touching live data, asks you
           first.
         </p>
+        <p className={styles.oss}>
+          Free and open source under Apache-2.0. <a href={site.links.github}>Read the code on GitHub</a>.
+        </p>
         <div className={styles.ctas}>
           <DownloadButton />
           <a href="#access" className={styles.secondary}>
@@ -51,8 +54,8 @@ export const Hero = () => (
           />
         </a>
         <p className={styles.micro}>
-          An agentic development environment (ADE) for Mac, and in beta for Windows. Your keys never leave
-          your computer.
+          An agentic development environment (ADE) for Mac, with Windows and Linux in beta. Your keys never
+          leave your computer.
         </p>
       </div>
       <div className={styles.demo} data-load="fade">

@@ -7,12 +7,12 @@ export const orca: Competitor = {
   what: 'An open-source (MIT) environment for running a fleet of CLI coding agents in parallel, on any OS.',
   title: 'Styx vs Orca: comparing two ADEs for coding agents',
   description:
-    'Styx and Orca both run coding agents in parallel git worktrees. How they differ: open source, platforms, mobile, diff comments and production access.',
+    'Styx and Orca both run coding agents in parallel git worktrees. How they differ: phone apps, diff comments, servers and production access.',
   intro:
     'Styx and Orca are both agentic development environments: a fleet of coding agents, one git worktree each, with a place to review what they changed. Orca is MIT-licensed, cross-platform and strong on the review loop; Styx focuses on every project in one window and on what agents are allowed to reach.',
   summary: [
     'Both run coding agents in parallel, one git worktree per task.',
-    'Orca is MIT-licensed and runs on Mac, Windows and Linux, with phone apps.',
+    'Both are open source: Orca under MIT, Styx under Apache 2.0. Orca adds phone apps.',
     'Orca sends line-by-line diff comments back to the agent.',
     'Styx gates production access and keeps an append-only log of every approval.',
   ],
@@ -33,7 +33,6 @@ export const orca: Competitor = {
     issues: 'GitHub, Linear, Jira',
   },
   ahead: [
-    { title: 'Open source', text: 'Orca is MIT-licensed. Styx is not open source.' },
     {
       title: 'Diff comments',
       text: 'Comment on a line of the diff and the agent gets it as its next instruction.',
@@ -49,13 +48,13 @@ export const orca: Competitor = {
   ],
   styxPoints: ['keys', 'projects', 'editor'],
   choose: {
-    them: 'you want open source, Windows or Linux, a phone app, or agents running on a server',
-    styx: 'you are on a Mac and want agents working near production without holding your credentials',
+    them: 'you want a phone app, comments on the diff that go straight to the agent, or agents running on a server',
+    styx: 'you want agents working near production without holding your credentials',
   },
   faq: [
     {
       q: 'Is Styx an Orca alternative?',
-      a: 'Yes. Both run coding agents in parallel, each in its own git worktree. Orca is open source and cross-platform with a strong review loop; Styx adds a gate on production access and an append-only audit log.',
+      a: 'Yes. Both run coding agents in parallel, each in its own git worktree. Both are open source. Orca is strong on the review loop and has phone apps; Styx adds a gate on production access and an append-only audit log.',
     },
   ],
   sources: [

@@ -32,7 +32,7 @@ There are two ways, and both end at the same place.
 
 Either way, the request appears in the agent's chat, on its task, in **Access** and as a notification. Approving it in one place resolves it everywhere. [Approve a request](/docs/access/approve-a-request) walks through the sheet.
 
-If the project has both a prod and a non-prod target for the same provider, a shimmed command goes to the non-prod one unless it says `--prod`, `--production` or `production`.
+If the project has both a prod and a non-prod target for the same provider, Styx decides which one a command means before it looks at any grant. A command that says `--prod`, `--production` or `production` is production. Vercel says what it means: a deploy without `--prod` (or `--target production`) is a preview, and `promote` and `rollback` are production. For every other CLI, a command that doesn't name an environment (`supabase db push`, most `aws` and `gcloud` commands) is treated as production, because Styx can't tell, and a staging target's looser rules must never decide a command that might change production. An open staging grant doesn't cover such a command either.
 
 ## Scopes
 

@@ -17,7 +17,7 @@ Press **Land**, and Styx:
 
 1. **commits** anything the agent left uncommitted (files that look like secrets, such as `.env` or key files, are left out);
 2. **brings `main` into the lane**, so the work is tested against the latest base;
-3. **runs the project's checks**, if Styx knows a checks command;
+3. **runs the project's checks** (see [The checks command](#the-checks-command) for the first landing, before Styx knows them);
 4. **merges** the lane into `main` in your project folder, as a merge commit (`--no-ff`) with your summary;
 5. **pushes** `main`, if the project has a remote.
 
@@ -32,6 +32,7 @@ Land stops before anything reaches `main`, with a reason, when:
 - **your project folder has uncommitted changes**, or isn't on `main`. Landing happens in that folder, so it has to be clean and on the base branch.
 - **the agent is mid-turn or waiting on you.** Wait for it, answer it or stop it, then land.
 - **the checks fail.** The message names the command and its exit code, and the branch isn't landed.
+- **no checks are known yet, the first time.** The task's agent is asked to work them out first (see below).
 - **there is nothing to land**: the branch has no changes `main` doesn't already have.
 - **`main` on your machine and on the remote have both moved on.** Bring the remote into `main` in your project folder first.
 
@@ -43,11 +44,17 @@ While the landing is still the newest commit on `main`, its row in **Lanes and b
 
 ### The checks command
 
-Styx learns how to check your project the first time one of its agents resolves a merge: the agent works out the project's typecheck, test and lint command, runs it, and tells Styx with the `remember_command` tool. From then on Styx runs that command before every landing and after every merge it resolves. Until it has been learned, Land runs no checks. The command is kept by Styx on this machine.
+The first time you land a task in a project whose checks Styx doesn't know, nothing is landed yet. Instead the task's agent gets a turn from Styx: work out how this project checks itself (typecheck, tests, lint, usually from its package scripts), run that command in the lane until it passes, and tell Styx with the `remember_command` tool. Then the agent lands the task itself, the checks running first. With **I review and merge myself** it tells you the checks pass instead, and you press **Land** again. The Land dialog says this happened, in place of landing.
+
+An agent finishing a merge conflict for Styx can also teach it the checks the same way. From then on Styx runs that command before every landing and after every merge it resolves.
+
+Styx asks only once. If the agent couldn't work the checks out, or the task's agent is a shell, finished, or not idle, Land goes ahead without checks, and its result says so: "no checks ran: none are known for this project". The chat and Home say when the agent teaches Styx a command.
+
+To see, change or clear the command, use **Settings › Agent defaults › Checks before landing**. Leave it blank to clear it (the next landing asks the agent again). It is kept in `.styx/project.json` as `checks.command`, so everyone on the project shares it. A command that looks like it carries a secret is refused.
 
 ### Landing on its own
 
-**Agent defaults** has a setting, **Land on its own when the agent goes quiet and the checks pass**, off by default. With it on, Styx tries to land a task each time its agent finishes a turn with changes, using a summary listing the files. If Styx doesn't know a checks command yet, nothing is checked first. If a landing is refused, the chat says why, once.
+**Agent defaults** has a setting, **Land on its own when the agent goes quiet and the checks pass**, off by default. With it on, Styx tries to land a task each time its agent finishes a turn with changes, using a summary listing the files. If Styx doesn't know a checks command yet, the first try asks the agent to work them out, as above, and lands once they pass. If a landing is refused, the chat says why, once.
 
 ## Publish
 

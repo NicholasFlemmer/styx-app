@@ -30,10 +30,10 @@ export const Tracking = () => {
       const label = (a.textContent ?? '').trim().slice(0, 60);
       const dl = classifyDownloadLink(href);
       if (dl?.kind === 'file') {
-        // An actual download, Mac or Windows (GA4 download_click; the Meta pixel's Lead).
+        // An actual download, Mac, Windows or Linux (GA4 download_click; the Meta pixel's Lead).
         track('download_click', { platform: dl.platform, link_text: label, link_url: href, location: placeOf(a) });
       } else if (dl?.kind === 'section') {
-        // A button that only opens the Download section, where the visitor then picks Mac or Windows.
+        // A button that only opens the Download section, where the visitor then picks Mac, Windows or Linux.
         track('download_open', { link_text: label, location: placeOf(a) });
       } else if (/^https?:\/\//.test(href) && !href.includes(location.host)) {
         track('outbound_click', { link_url: href, link_text: label });

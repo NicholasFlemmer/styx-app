@@ -26,8 +26,9 @@ export default function CompareIndex() {
       }
     >
       <p>
-        Styx is an agentic development environment (ADE) for Mac: every project and every coding agent in one
-        window, and nothing reaching production without your OK. Here is how it compares with the other tools
+        Styx is a free, open-source agentic development environment (ADE) for Mac, with Windows and Linux in
+        beta: every project and every coding agent in one window, and nothing reaching production without your
+        OK. Here is how it compares with the other tools
         people weigh it against.
       </p>
       <ul>

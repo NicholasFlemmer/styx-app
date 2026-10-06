@@ -44,7 +44,7 @@ export const nimbalyst: Competitor = {
     },
     {
       title: 'Every platform',
-      text: 'It ships for Windows and Linux as well as the Mac, and is open source.',
+      text: 'It ships for Windows and Linux as well as the Mac.',
     },
   ],
   styxPoints: ['keys', 'agents', 'projects'],

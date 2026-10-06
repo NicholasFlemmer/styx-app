@@ -4,11 +4,11 @@ import styles from './Invariants.module.css';
 const rows = [
   [
     'Keep your passwords anywhere but your computer’s own secure storage.',
-    'Keys live in the Mac keychain or Windows credential store, nowhere else. Not in a file, not in a log, not in the app’s own database.',
+    'Keys live in your system’s keychain (the Mac Keychain, Windows Credential Manager or the Secret Service keyring on Linux), nowhere else. Not in a file, not in a log, not in the app’s own database.',
   ],
   [
     'Let anything reach production without you.',
-    'Deploying, or changing live data, asks for Touch ID or Windows Hello first. Every time.',
+    'Deploying, or changing live data, asks for Touch ID, Windows Hello or your system password first. Every time.',
   ],
   [
     'Give an agent a permanent key.',

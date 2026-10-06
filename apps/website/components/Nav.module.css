@@ -22,6 +22,7 @@
   gap: var(--sp-5);
 }
 .links a {
+  white-space: nowrap;
   font-size: var(--fs-13);
   color: var(--mu);
   text-decoration: none;
@@ -38,7 +39,13 @@
   align-items: center;
   gap: var(--sp-3);
 }
-@media (max-width: 900px) {
+/* Twelve links: tighten before they would crowd the Download button, then hand off to the page. */
+@media (max-width: 1240px) {
+  .links {
+    gap: var(--sp-3);
+  }
+}
+@media (max-width: 1100px) {
   .links {
     display: none;
   }

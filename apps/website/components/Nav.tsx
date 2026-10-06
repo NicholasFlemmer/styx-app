@@ -1,4 +1,4 @@
-import { sections } from '@/lib/site';
+import { sections, site } from '@/lib/site';
 import { DownloadButton } from './DownloadButton';
 import { ThemeToggle } from './ThemeToggle';
 import styles from './Nav.module.css';
@@ -30,6 +30,7 @@ export const Nav = ({ current }: { current?: 'launch' | 'story' | 'compare' } = 
           Compare
         </a>
         <a href="/docs">Docs</a>
+        <a href={site.links.github}>GitHub</a>
       </nav>
       <div className={styles.right}>
         <ThemeToggle />

@@ -178,7 +178,7 @@ export const copy = {
       undo: 'Undo this turn',
       undoConfirm: 'Undo it',
       undoCancel: 'Keep it',
-      undoAsk: 'Put the files back as they were before this turn?',
+      undoAsk: 'Take back the changes this turn made? Later turns and your own edits stay.',
       kept: 'Kept when you carry on',
       undone: 'Undone',
       busy: 'Wait for the agent to finish before undoing',
@@ -527,6 +527,14 @@ export const copy = {
     resolveChecksKnown: "Then run the project's checks: `{command}` — they must pass.",
     resolveChecksUnknown:
       'Then work out how this project checks itself (typecheck, tests, lint — read its package scripts), call the styx `remember_command` tool with kind "checks" and the exact command so Styx can run it from now on, and run it — it must pass.',
+    /**
+     * Issue #2: the first landing in a project with no checks command asks the lane's agent to work them out (the
+     * way Run locally / Deploy hand the first attempt to an agent). Also the `land` tool's refusal to its own agent.
+     */
+    learnChecks:
+      'Before {branch} lands in {base}, Styx runs the project\u2019s checks, and none are known for this project yet. Work out how this project checks itself (typecheck, tests, lint — read its package scripts, Makefile or CI config) and run that command from the root of this worktree: it must pass, and if it fails because of this lane\u2019s changes, fix them. Then call the styx `remember_command` tool with kind "checks" and the exact command, so Styx runs it before every landing from now on. {then}',
+    learnChecksThenLand: 'Then call the styx `land` tool again to land this lane.',
+    learnChecksThenTell: 'Then tell me in one line that the checks pass; I merge it from the Repo lane.',
     resolveRetry:
       'Not finished yet: {reason}. Fix that and finish the merge as before — do not abort or commit it; Styx commits once the checks pass.',
   },
@@ -784,9 +792,11 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     learnedRunDeviceName: ' ({device})',
     learnedDeploy: 'Styx will deploy to {target} with `{command}` from now on.',
     /** ADR-0025 phase B: the checks a resolved merge must pass, learned once. */
-    learnedChecks: 'Styx will check merges with `{command}` from now on.',
-    checksNotResolving: 'A checks command is accepted only from the agent finishing a merge.',
+    learnedChecks: 'Styx will check landings and merges with `{command}` from now on.',
+    checksNotResolving:
+      'A checks command is accepted only from an agent Styx asked for it (finishing a merge, or before a first landing); tell the user the command instead.',
     activityRun: '{agent} worked out how to run {project}',
+    activityChecks: '{agent} worked out how to check {project}',
     activityDeploy: '{agent} worked out how to deploy {project} to {target}',
     secretInCommand:
       'That command carries something that looks like a secret; put it in an env file and remember the command without it.',
@@ -1774,6 +1784,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       autoSync: 'Bring in the base branch',
       integration: 'Merging',
       autoLand: 'Land on its own when the agent goes quiet and the checks pass',
+      /** Issue #2: what Land and a finished merge run first; learned by the agent, editable here. */
+      checksCommand: 'Checks before landing',
     },
     values: {
       theme: { system: 'System', dark: 'Dark', light: 'Light' },
@@ -1795,6 +1807,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       cliAutoDetect: 'Detected automatically',
       autoSync: { turn: 'After every turn', publish: 'Before publishing', off: 'Only when I ask' },
       integration: { auto: 'Keep my project up to date for me', review: 'I review and merge myself' },
+      /** The checks row's placeholder: empty = not known yet (the agent works them out at the first landing). */
+      checksNone: 'Not known yet · e.g. pnpm typecheck && pnpm test',
     },
     reset: 'Reset',
   },
@@ -1966,9 +1980,12 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     noChanges: 'no file changes',
     revert: 'Revert this turn',
     reverted: 'Reverted',
-    revertConfirm:
-      'Restore the workspace to before turn {n}? Later turns are undone too, along with any edits you made since, and files created since then are deleted.',
-    revertDone: 'Workspace restored to before turn {n}.',
+    revertConfirm: 'Take back the changes turn {n} made? Later turns and your own edits stay.',
+    /** Shown in the chat and told to the agent ahead of its next turn (issue #1). */
+    revertDone: 'Turn {n} was undone: the changes it made were taken back. Later changes stay.',
+    /** Undo refused: later changes touched the same lines; nothing was changed (issue #1). */
+    revertConflict:
+      'Could not undo turn {n} on its own: later changes touched the same lines in {files}. Nothing was changed. Ask the agent to undo it instead.',
     revertFailed: 'Could not revert: {error}',
     review: 'Review',
     settling: 'capturing…',
@@ -2229,6 +2246,11 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     resolving:
       'Bringing {base} in first hit a conflict; {agent} is merging it now. Land again when the lane says it is done.',
     checksFailed: 'The checks failed (`{command}` exited {code}); {branch} was not landed.',
+    /** Issue #2: no checks known at the first landing; the lane's agent was asked to work them out. */
+    learningChecks:
+      'No checks are known for this project yet, so {branch} was not landed: {agent} is working them out and lands it once they pass. Land again to go without them this time, or set them in Settings › Agent defaults.',
+    learningChecksReview:
+      'No checks are known for this project yet, so {branch} was not landed: {agent} is working them out and says when they pass. Land again to go without them this time, or set them in Settings › Agent defaults.',
     conflict:
       'Landing {branch} hit a conflict in {file}. The merge was undone; bring {base} in first, then land again.',
     nothing: 'Nothing to land: {branch} has no changes {base} does not already have.',
@@ -2250,6 +2272,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       reapply: 'reapplied the undone landing on {base} ({commit})',
       sync: 'brought in {base} ({n})',
       checks: 'checks passed',
+      /** Issue #2: said plainly rather than implied by a missing "checks passed". */
+      noChecks: 'no checks ran: none are known for this project (set them in Settings › Agent defaults)',
       merge: 'merged into {base} ({commit})',
       push: 'pushed {base}',
     },

@@ -11,11 +11,12 @@ import styles from './Launch.module.css';
  */
 const PUBLISHED = '2026-09-30';
 const PUBLISHED_WORDS = '30 September 2026';
+const UPDATED = '2026-10-06';
 
 export const metadata: Metadata = {
   title: { absolute: 'Introducing Styx: every project, every agent, every key, one window' },
   description:
-    'Why I built Styx, a free Mac app for running Claude Code, Codex, Gemini and Cursor across all your projects, with agents that ask before they touch production.',
+    'Why I built Styx, a free, open-source app for running Claude Code, Codex, Gemini and Cursor across all your projects, with agents that ask before they touch production.',
   alternates: { canonical: '/launch' },
   openGraph: {
     title: 'Introducing Styx',
@@ -23,6 +24,7 @@ export const metadata: Metadata = {
     url: '/launch',
     type: 'article',
     publishedTime: PUBLISHED,
+    modifiedTime: UPDATED,
     images: [
       { url: '/story/poster.jpg', width: 1920, height: 1080, alt: 'Nic, next to a Styx access request' },
     ],
@@ -34,9 +36,9 @@ const schema = {
   '@type': 'BlogPosting',
   headline: 'Introducing Styx',
   description:
-    'Why I built Styx, a free Mac app for running AI coding agents across every project, with agents that ask before they touch production.',
+    'Why I built Styx, a free, open-source app for running AI coding agents across every project, with agents that ask before they touch production.',
   datePublished: PUBLISHED,
-  dateModified: PUBLISHED,
+  dateModified: UPDATED,
   author: { '@type': 'Person', name: 'Nic', jobTitle: 'Maker of Styx' },
   publisher: { '@type': 'Organization', name: site.name, url: `${site.url}/` },
   image: `${site.url}/story/poster.jpg`,
@@ -108,6 +110,11 @@ export default function LaunchPage() {
 
           <div className={styles.main}>
             <div className={styles.body}>
+              <p>
+                <strong>Update, 6 October 2026:</strong> Styx is now open source under the Apache License 2.0,
+                with the code on <a href={site.links.github}>GitHub</a>, and runs on Windows and Linux in beta
+                as well as the Mac.
+              </p>
               <p>
                 A few months ago I had four coding agents running across five projects. One of them had been
                 waiting on me for twenty minutes, and I had no idea which one. It was sitting in a terminal,

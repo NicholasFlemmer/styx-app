@@ -122,4 +122,8 @@
     gap: var(--sp-3);
     padding: 14px 20px;
   }
+  /* A typed setting (issue #2: the checks command): wide enough for `pnpm typecheck && pnpm test`. */
+  .textControl {
+    width: var(--w-chat);
+  }
 }

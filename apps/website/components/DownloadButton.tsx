@@ -11,7 +11,7 @@ export const usePlatform = (): Platform =>
 
 type Props = { primary?: boolean; small?: boolean; className?: string };
 
-/** Every Download button opens the Download section, where the visitor picks Mac or Windows. */
+/** Every Download button opens the Download section, where the visitor picks Mac, Windows or Linux. */
 export const DownloadButton = ({ primary = true, small = false, className }: Props) => (
   <a
     className={['btn', small ? 'btnSm' : '', className ?? ''].join(' ').trim()}

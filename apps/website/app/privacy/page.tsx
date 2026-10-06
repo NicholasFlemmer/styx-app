@@ -16,8 +16,8 @@ const Summary = () => (
       credentials never reach us.
     </li>
     <li>
-      Your keys stay in your Mac&apos;s Keychain. Your agents talk to their own providers directly, under your
-      accounts.
+      Your keys stay in your computer&apos;s own keychain. Your agents talk to their own providers directly,
+      under your accounts.
     </li>
     <li>
       If you sign in, we keep a small account: your email, name, picture, plan, and when you signed up and
@@ -59,7 +59,8 @@ export default function PrivacyPage() {
         <li>your agent sessions and conversations;</li>
         <li>
           the credentials you connect for deploy and server targets (Vercel, AWS, Google Cloud, Supabase,
-          GitHub, SSH). These are kept in your operating system&apos;s keychain;
+          GitHub, SSH). These are kept in your operating system&apos;s keychain (the macOS Keychain, Windows
+          Credential Manager, or the Secret Service keyring on Linux);
         </li>
         <li>the approvals and audit log that record what your agents asked for and what you allowed;</li>
         <li>your settings and preferences.</li>
@@ -83,9 +84,10 @@ export default function PrivacyPage() {
         <li>when your account was created and when you last used Styx.</li>
       </ul>
       <p>
-        We never see your GitHub or Google password. We use this information to sign you in, to apply your
-        plan on every computer you use, and to contact you about your account. Keeping it is necessary to
-        provide the account you asked for.
+        We never see your GitHub or Google password. We use this information to sign you in, to tie your usage
+        counts to your account (see below), and to contact you about your account. An account doesn&apos;t
+        unlock or limit anything in the app. Keeping this information is necessary to provide the account you
+        asked for.
       </p>
       <p>
         When git on your computer has no name and email set, Styx uses your account name and email to sign the
@@ -97,20 +99,40 @@ export default function PrivacyPage() {
       </p>
 
       <h2>4. Usage counts</h2>
-      <p>Styx sends a daily count of these events, and nothing else:</p>
+      <p>
+        Styx counts a fixed list of events, and nothing else. Each count is only the event&apos;s name and how
+        many times it happened. The list is fixed in{' '}
+        <a href="https://github.com/NicholasFlemmer/styx-app/blob/main/packages/core/src/model/usage-report.ts">
+          the app&apos;s source code
+        </a>
+        , and these are all of them:
+      </p>
+      <h3>Using the app</h3>
       <ul>
-        <li>the app was opened;</li>
-        <li>setup was finished;</li>
+        <li>a Styx window was opened;</li>
+        <li>first-run setup was finished;</li>
         <li>a project was added;</li>
+        <li>the first-run walkthrough was shown, played to the end, or closed early.</li>
+      </ul>
+      <h3>Working with agents</h3>
+      <ul>
         <li>an agent was started;</li>
         <li>a message was sent to an agent;</li>
+        <li>an agent finished its first piece of work in a session (counted once per session);</li>
+        <li>an agent&apos;s work was landed on the main branch.</li>
+      </ul>
+      <h3>Access and deploys</h3>
+      <ul>
         <li>an access request was approved;</li>
-        <li>a deploy was run;</li>
-        <li>an agent&apos;s work was landed on the main branch;</li>
-        <li>the walkthrough was shown, finished or skipped;</li>
+        <li>a deploy was started.</li>
+      </ul>
+      <h3>When something goes wrong</h3>
+      <ul>
         <li>
-          an agent could not start, with one of six fixed reasons: its program is not installed, it would not
-          launch, it is not signed in, it is out of date, it reported an error, or it closed straight away;
+          an agent could not start or stopped straight away, with one of seven fixed reasons: its program is
+          not installed, it would not launch, it is not signed in, it is out of date, its account hit a usage
+          or rate limit or ran out of credit, it reported another error, or it closed with an error within its
+          first seconds;
         </li>
         <li>
           Styx crashed: a window, one of its helper processes, or the app itself (noticed the next time you
@@ -118,19 +140,25 @@ export default function PrivacyPage() {
         </li>
       </ul>
       <p>
-        With the counts, Styx sends its version number, your operating system (macOS or Windows), and an
-        install id: a random code your copy of Styx makes the first time it runs. The install id is not made
-        from your computer, your name or anything else about you, and on its own we cannot tell who it belongs
-        to. While you are signed in, the counts are also tied to your account.
+        With the counts, Styx sends its version number, your operating system (macOS, Windows or Linux), and
+        an install id: a random code your copy of Styx makes the first time it runs. The install id is not
+        made from your computer, your name or anything else about you, and on its own we cannot tell who it
+        belongs to. While you are signed in, the counts are also tied to your account.
       </p>
       <p>
         This lets us see how many people use Styx and which parts they reach. The counts never include a
         project, file, path, branch, command, prompt, the text of a message or anything your agents produce:
         the app is built so that it cannot attach them. Our server does not store your IP address with them.
-        You can turn counts off at any time in Styx under{' '}
-        <strong>Settings › Account › Send usage counts</strong>. We keep them for six months and then delete
-        them, and an install we have not heard from in six months is forgotten. We rely on our legitimate
-        interest in understanding how Styx is used; you can object by turning them off.
+        Repeats are added together, and Styx sends what it has every few minutes and when it quits. You can
+        turn counts off at any time in Styx under <strong>Settings › Account › Send usage counts</strong>. We
+        keep them for six months and then delete them, and an install we have not heard from in six months is
+        forgotten. We rely on our legitimate interest in understanding how Styx is used; you can object by
+        turning them off.
+      </p>
+      <p>
+        Styx is open source, so you can also run it yourself. Running it from the source code with{' '}
+        <code>pnpm dev</code> never sends counts. A build you package yourself sends them to us like a release
+        does, unless you point it at a different server (with <code>STYX_API</code>) or turn the setting off.
       </p>
 
       <h3>Feedback</h3>
@@ -156,10 +184,11 @@ export default function PrivacyPage() {
       </p>
       <h3>Download counts</h3>
       <p>
-        The Download button goes through our server, which adds one to a daily count and sends you on to the
-        file. The count records only where the click came from: a short tag in the link (such as{' '}
+        The Mac and Windows Download buttons go through our server, which adds one to a daily count and sends
+        you on to the file. The count records only where the click came from: a short tag in the link (such as{' '}
         <code>?from=hn</code>) or the name of the website you came from. No cookie is set, and your IP address
-        and browser are not stored with it.
+        and browser are not stored with it. The Linux download is on GitHub, so that link goes straight there
+        and our server doesn&apos;t count it.
       </p>
       <h3>Analytics and cookies</h3>
       <p>
@@ -221,8 +250,8 @@ export default function PrivacyPage() {
           <tr>
             <td>GitHub</td>
             <td>
-              The skills catalogue in the app is fetched from GitHub, which sees your IP address when it is
-              loaded
+              Styx&apos;s source code and the Linux downloads are on GitHub, and the skills catalogue in the
+              app is fetched from it. GitHub sees your IP address when you visit or the catalogue loads
             </td>
             <td>United States</td>
           </tr>
@@ -311,7 +340,8 @@ export default function PrivacyPage() {
       <h2>13. Contact</h2>
       <p>
         {legal.entity}
-        {legal.address ? `, ${legal.address}` : ''}. <a href={`mailto:${legal.email}`}>{legal.email}</a>
+        {legal.address ? `, ${legal.address}` : ''}. Email <a href={`mailto:${legal.email}`}>{legal.email}</a>
+        .
       </p>
     </LegalPage>
   );

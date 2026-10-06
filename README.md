@@ -189,6 +189,9 @@ If Electron starts as plain Node, your shell has `ELECTRON_RUN_AS_NODE` set; the
 
 ## Contributing
 
+Questions and ideas go in [Discussions](https://github.com/NicholasFlemmer/styx-app/discussions); new issues and pull
+requests get a first reply within 2 working days.
+
 Bug reports, ideas and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); the
 [docs](https://heystyx.com/docs/contributing/how-styx-is-built) explain how Styx is built. To report a security
 problem, please follow [SECURITY.md](SECURITY.md) instead of opening an issue.

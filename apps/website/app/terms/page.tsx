@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 const Summary = () => (
   <ul>
     <li>You can use Styx for personal and commercial work. Your code stays yours.</li>
-    <li>Styx is free, and an account is optional.</li>
+    <li>Styx is free and open source (Apache-2.0), and an account is optional.</li>
     <li>
       You&apos;re responsible for what your agents do and for the services you connect. Styx&apos;s approvals
       help you control that; they aren&apos;t a sandbox.
@@ -35,10 +35,16 @@ export default function TermsPage() {
 
       <h2>2. Using Styx</h2>
       <p>
-        We give you a personal, non-exclusive, non-transferable right to install and use Styx on the computers
-        you use, for personal or commercial work, while you follow these terms. You may not sell, rent or
-        redistribute Styx itself, remove its notices, or reverse-engineer it except where the law allows you
-        to.
+        You may install and use Styx on the computers you use, for personal or commercial work, while you
+        follow these terms.
+      </p>
+      <p>
+        Styx&apos;s source code is published at{' '}
+        <a href="https://github.com/NicholasFlemmer/styx-app">github.com/NicholasFlemmer/styx-app</a> under
+        the Apache License 2.0. That licence, not these terms, governs what you may do with the code,
+        including copying, changing and redistributing it. These terms cover using the app, a Styx account and
+        this website. The licence doesn&apos;t give you the right to use the Styx name or logo for your own
+        product.
       </p>
 
       <h2>3. Your account</h2>
@@ -86,9 +92,8 @@ export default function TermsPage() {
         <li>access, test or attack systems you don&apos;t own or aren&apos;t authorised to use;</li>
         <li>get around someone else&apos;s security or access controls;</li>
         <li>
-          overload, probe or interfere with the Styx account service, or access it other than through Styx;
+          overload, probe or interfere with the Styx account service, or access it other than through Styx.
         </li>
-        <li>build a competing product by copying Styx.</li>
       </ul>
       <p>We may suspend or close accounts that do.</p>
 
@@ -151,7 +156,8 @@ export default function TermsPage() {
       <h2>16. Contact</h2>
       <p>
         {legal.entity}
-        {legal.address ? `, ${legal.address}` : ''}. <a href={`mailto:${legal.email}`}>{legal.email}</a>
+        {legal.address ? `, ${legal.address}` : ''}. Email <a href={`mailto:${legal.email}`}>{legal.email}</a>
+        .
       </p>
     </LegalPage>
   );

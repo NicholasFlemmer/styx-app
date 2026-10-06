@@ -187,6 +187,17 @@ describe('mergeSettings', () => {
     ).toEqual({ devPlatform: 'android' });
   });
 
+  it('projectSettingsFromFile takes checks.command trimmed; a blank one is "not known yet" (issue #2)', () => {
+    const file = { version: 1 as const, name: 'x' };
+    expect(
+      projectSettingsFromFile({ ...file, checks: { command: ' pnpm typecheck && pnpm test ' } }),
+    ).toEqual({ checksCommand: 'pnpm typecheck && pnpm test' });
+    expect(projectSettingsFromFile({ ...file, checks: { command: '  ' } })).toEqual({});
+    expect(projectSettingsFromFile({ ...file, checks: {} })).toEqual({});
+    const parsed = parseProjectFile('{"version":1,"name":"x","checks":{"command":"make check"}}');
+    expect(parsed.ok && parsed.file.checks).toEqual({ command: 'make check' });
+  });
+
   it('projectSettingsFromFile extracts only the keys the file sets', () => {
     expect(projectSettingsFromFile({ version: 1, name: 'x' })).toEqual({});
     expect(projectSettingsFromFile(SAMPLE)).toEqual({
