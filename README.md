@@ -29,7 +29,7 @@ database or touch anything live, it has to ask you first.
 
 ## Get started
 
-1. **[Download Styx](https://heystyx.com)** for Mac (Apple Silicon) or Windows. It's free.
+1. **[Download Styx](https://heystyx.com)** for Mac (Apple Silicon) or Windows (beta). It's free.
 2. **Add a project.** Styx finds the repos you already have, along with your editor's recent projects.
 3. **Start a task.** Say what you want and pick the agent. It works on its own branch, and you land the result on
    main when you're happy.
@@ -39,6 +39,14 @@ existing subscriptions just work. There are no API keys to paste, and your promp
 through us.
 
 ## What it does
+
+### All your projects, one window
+
+<img src=".github/assets/readme-projects.jpg" alt="Home: five projects in one window, each with its tasks and status, and counters for what needs you, what's working and what's ready to land" width="900" />
+
+Styx is built around switching between everything you work on, not one repository. Each project keeps its own tasks,
+agents, terminal and logins, and they're all one click or one keystroke apart. Home shows every project at once: what
+needs you, what's working and what's ready to land.
 
 ### Many tasks, side by side
 
@@ -79,11 +87,43 @@ yourself or tell the agent what to fix. When it looks right, **Build it** starts
 **Preview** runs your app inside Styx. Use **Select to fix**, click the thing that's off and say what's wrong: the agent
 gets the element, the page and a picture of it.
 
+## And a lot more
+
+**Working with agents**
+
+- **Tasks that know about each other.** Each agent hears when another task changes a file it touched, and they can
+  agree who does what.
+- **Talk to it mid-turn.** Codex takes a message straight away; the others hold it and send it when the turn ends.
+- **Pick the model and effort per task.** Attach images and files, and use `@file` and `/command` as you type.
+- **Agent dock.** An always-on-top column of every agent that needs you, across all your projects.
+- **Notifications** in the Dock or system tray when an agent is waiting on you.
+- **Skills.** Install instruction files for each agent, or commit them with the project.
+
+**Reviewing and shipping**
+
+- **Changes** shows what the agent did, turn by turn, with each diff: undo a turn, revert a single change, or ask
+  for changes.
+- **Merge conflicts go back to the agent** that made them, with both sides' intent; Styx checks the result before
+  committing it.
+- **Tasks stay current.** Main is brought in before you publish, so nothing lands on a stale base.
+- **Publish** commits, pushes and opens a pull request. **Deploy to** runs your deploy under the same access rules.
+- **Run locally** works out how to start your app and runs it in Preview.
+
+**Your setup**
+
+- **Command palette** (⌘K / Ctrl+K) to switch projects, start agents, deploy and grant from the keyboard.
+- **Policies.** Auto-approve the safe things (say, GitHub reads) and set how long access lasts.
+- **Usage.** Tokens, cost and turns across every agent and project.
+- **Tech debt audit.** An agent reviews the repo in the background and reports what will slow the next person down.
+- **Brings your editor along.** Recent projects, keybindings and theme come in, and any file opens back in your editor.
+- **Env and secrets per project**, with the secrets in your keychain, not the repo.
+- Light and dark themes, and it keeps itself up to date.
+
 ## Works with
 
 - **Agents:** Claude Code · Codex · Gemini CLI · Cursor agent · any shell
 - **Targets agents can ask for:** Vercel · AWS · Google Cloud · Supabase · GitHub · SSH
-- **Platforms:** macOS (Apple Silicon) · Windows
+- **Platforms:** macOS (Apple Silicon) · Windows 10 and 11 (beta)
 - **Editors:** the built-in editor and terminal, or open any task in VS Code, Cursor, Zed or JetBrains
 
 ## Free, open, and private
@@ -95,6 +135,10 @@ an account. Signing in (with GitHub or Google) is optional.
 (how often the app opens, a task starts, an agent fails to start and why) so we know what to fix. The complete, fixed
 list is [`usageEventSchema`](packages/core/src/model/usage-report.ts), with no field that could carry a name, path or
 text. Turn it off in **Settings › Styx account**. Builds you make from source never send anything.
+
+**Is it a sandbox?** No, and we'd rather say so. Styx is a guardrail: agents run as you, on your machine, and an agent
+that deliberately goes around Styx's tools isn't stopped by them. What Styx guarantees is that it never hands an agent
+your keys, and that every grant it gives is scoped, timed and written down.
 
 **How does an agent ask?** Agents talk to Styx through a local broker (`styx mcp`) and small wrappers around the
 `gh`, `vercel`, `aws`, `gcloud`, `supabase` and `ssh` commands. A request shows up in the chat, on the task and as a
