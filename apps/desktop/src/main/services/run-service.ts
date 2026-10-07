@@ -21,8 +21,11 @@ export interface RunServiceDeps {
   terminals: TerminalService;
   pty: PtyService;
   projects: ProjectService;
-  /** The login shell used to run the command string (`$SHELL -lc`); injectable for tests. */
-  shell: () => string;
+  /**
+   * The login shell used to run the command string (`$SHELL -lc`; on Windows the project's Shell (Windows) setting);
+   * injectable for tests.
+   */
+  shell: (projectId: ProjectId) => string;
   platform: NodeJS.Platform;
   /**
    * Does a URL answer, and with a page? Defaults to an HTTP GET with a short timeout; injectable for tests (a
@@ -477,7 +480,7 @@ export class RunService {
     // A known URL is probed from the start, whether or not the process ever prints it.
     if (candidates.length > 0) schedule();
 
-    const { file, args } = this.shellArgs(cmd);
+    const { file, args } = this.shellArgs(cmd, projectId);
     try {
       await terminals.spawnCommand({
         id: terminalId,
@@ -540,11 +543,11 @@ export class RunService {
 
   /**
    * The command string goes through the user's login shell so `pnpm dev` resolves like it would in their terminal.
-   * Windows: PowerShell (`-Command`), or the WSL distro's `sh -lc` when `STYX_WIN_SHELL=wsl` — never `cmd.exe`,
-   * which re-parses its command line.
+   * Windows: PowerShell (`-Command`), or the WSL distro's `sh -lc` when the project's Shell (Windows) is WSL (or
+   * `STYX_WIN_SHELL=wsl`) — never `cmd.exe`, which re-parses its command line.
    */
-  private shellArgs(command: string): { file: string; args: string[] } {
-    const shell = this.deps.shell();
+  private shellArgs(command: string, projectId: ProjectId): { file: string; args: string[] } {
+    const shell = this.deps.shell(projectId);
     if (this.deps.platform === 'win32') {
       if (/wsl(\.exe)?$/i.test(shell)) return { file: shell, args: ['-e', 'sh', '-lc', command] };
       // Process-scoped Bypass: npm/pnpm/yarn's .ps1 shims are blocked by Windows' default policy otherwise.

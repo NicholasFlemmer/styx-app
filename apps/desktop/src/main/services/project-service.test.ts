@@ -1,7 +1,18 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
-import { fixtures, type ProjectFileV1, copy } from '@styx/core';
+import {
+  DEFAULT_PROJECT_SETTINGS,
+  MACHINE_PROJECT_SETTINGS,
+  fixtures,
+  isMachineProjectSetting,
+  parseProjectFile,
+  projectSettingsFromFile,
+  projectSettingsSchema,
+  type ProjectFileV1,
+  type ProjectSettings,
+  copy,
+} from '@styx/core';
 import { describe, expect, it } from 'vitest';
 import { makeTestApp } from '../test-support';
 import { ExecaGitRunner, GitService } from './git';
@@ -13,7 +24,9 @@ import {
   ROOT_DEPTH,
   STALE_MS,
   advisoryRules,
+  applySettingsToFile,
   byLastActivity,
+  fileSettings,
   isSuggested,
   isTransientPath,
   mergeCandidates,
@@ -1174,6 +1187,184 @@ describe('project settings file', () => {
     await t.app.projects.setSettings(acme, { devCommand: 'pnpm dev' });
     expect(t.app.repos.projects.settings(acme).devCommand).toBe('pnpm dev');
     expect(existsSync(join(process.cwd(), '~'))).toBe(false);
+  });
+});
+
+describe('project settings: file vs this machine, re-reads and hand edits (issue #10)', () => {
+  /** A value for every setting that differs from the default and survives the file's own filters. */
+  const SAMPLE: ProjectSettings = {
+    defaultAgent: 'codex',
+    model: 'gpt-5',
+    permissionMode: 'acceptEdits',
+    taskPermissionMode: 'plan',
+    effort: 'high',
+    autoApproveEdits: true,
+    mayRequestTargets: false,
+    notifyWhenNeedsMe: false,
+    baseBranch: 'develop',
+    syncOnSpawn: false,
+    syncBeforePublish: false,
+    autoSync: 'off',
+    hotspots: ['pnpm-lock.yaml'],
+    integration: 'review',
+    autoLand: true,
+    checksCommand: 'make check',
+    branchPrefix: 'lane/',
+    worktreeLocation: 'inside',
+    shellWindows: 'wsl',
+    lineEndings: 'lf',
+    envFiles: ['.env'],
+    envShareWithAgents: 'never',
+    devUrl: 'http://localhost:4000',
+    devCommand: 'pnpm dev',
+    devPlatform: 'ios',
+    devDevice: 'iPhone 17 Pro',
+    devAppId: 'com.acme.shop',
+  };
+  const MACHINE: Partial<ProjectSettings> = {
+    syncOnSpawn: false,
+    syncBeforePublish: false,
+    autoSync: 'off',
+    integration: 'review',
+    autoLand: true,
+  };
+
+  it('every setting is either written to project.json and read back, or machine-only and never written', () => {
+    expect(Object.keys(SAMPLE).sort()).toEqual(Object.keys(projectSettingsSchema.shape).sort());
+    const file = applySettingsToFile({ version: 1, name: 'x' }, fileSettings(SAMPLE));
+    const parsed = parseProjectFile(JSON.stringify(file));
+    expect(parsed.ok).toBe(true);
+    const back = parsed.ok ? projectSettingsFromFile(parsed.file) : {};
+    for (const key of Object.keys(SAMPLE) as (keyof ProjectSettings)[]) {
+      expect(SAMPLE[key]).not.toEqual(DEFAULT_PROJECT_SETTINGS[key]);
+      if (isMachineProjectSetting(key)) expect(back).not.toHaveProperty(key);
+      else expect(back[key]).toEqual(SAMPLE[key]);
+    }
+    // Even handed every key, the writer puts no machine key in the file.
+    const raw = JSON.stringify(applySettingsToFile({ version: 1, name: 'x' }, SAMPLE));
+    for (const key of MACHINE_PROJECT_SETTINGS) expect(raw).not.toContain(`"${key}"`);
+  });
+
+  const addProject = async (t: ReturnType<typeof makeTestApp>) => {
+    const dir = mkdtempSync(join(tmpdir(), 'styx-issue10-'));
+    const project = await t.app.projects.add(dir, 'tenth');
+    const path = join(dir, '.styx', 'project.json');
+    const readFile = () => JSON.parse(readFileSync(path, 'utf8')) as ProjectFileV1;
+    let edits = 0;
+    /** A hand edit: rewrite the file and move its mtime on (same-millisecond writes would look unchanged). */
+    const handEdit = (edit: (f: ProjectFileV1) => ProjectFileV1) => {
+      writeFileSync(path, JSON.stringify(edit(readFile())));
+      edits += 1;
+      const later = new Date(Date.now() + edits * 60_000);
+      utimesSync(path, later, later);
+    };
+    return { dir, project, path, readFile, handEdit };
+  };
+
+  it('machine settings are stored on this machine, never in the file, and survive Accept project policies and re-adding the project', async () => {
+    const t = makeTestApp({ fixture: 'empty' });
+    const { project, readFile, handEdit } = await addProject(t);
+    await t.app.projects.setSettings(project.id, { ...MACHINE, baseBranch: 'develop' });
+    const file = readFile();
+    expect(file.worktrees).toEqual({ baseBranch: 'develop' });
+    for (const key of MACHINE_PROJECT_SETTINGS) expect(JSON.stringify(file)).not.toContain(`"${key}"`);
+    expect(t.app.repos.projects.settings(project.id)).toMatchObject(MACHINE);
+
+    // Accept project policies re-reads the file.
+    handEdit((f) => ({
+      ...f,
+      policies: {
+        extra: [
+          {
+            id: 'preview',
+            rule: { kind: 'ask', match: {}, scopes: ['deploy'], requireMfa: false },
+            ruleText: 'Ask before deploys',
+          },
+        ],
+      },
+    }));
+    const pending = await t.app.projects.pendingPolicy(project.id);
+    expect(
+      await t.app.bus.dispatch(t.sender, 'project.policy.accept', {
+        projectId: project.id,
+        hash: pending.hash,
+      }),
+    ).toEqual({ ok: true, value: {} });
+    expect(t.app.repos.projects.settings(project.id)).toMatchObject({ ...MACHINE, baseBranch: 'develop' });
+
+    // Remove and add again re-reads it too.
+    await t.app.projects.remove(project.id, false);
+    const back = await t.app.projects.add(project.path);
+    expect(back.id).toBe(project.id);
+    expect(t.app.repos.projects.settings(project.id)).toMatchObject({ ...MACHINE, baseBranch: 'develop' });
+    const effective = await t.app.bus.dispatch(t.sender, 'store.snapshot', {});
+    expect(effective.ok && effective.value.settings.project[project.id]?.autoLand.value).toBe(true);
+  });
+
+  it('a hand edit to project.json is picked up without re-adding: on select, on focus refresh and before a write; machine keys stay', async () => {
+    const t = makeTestApp({ fixture: 'empty' });
+    const { project, readFile, handEdit } = await addProject(t);
+    await t.app.projects.setSettings(project.id, { ...MACHINE, checksCommand: 'pnpm test' });
+
+    handEdit((f) => ({ ...f, worktrees: { baseBranch: 'develop' }, checks: { command: 'make check' } }));
+    expect(await t.app.bus.dispatch(t.sender, 'project.select', { projectId: project.id })).toEqual({
+      ok: true,
+      value: {},
+    });
+    expect(t.app.repos.projects.settings(project.id)).toMatchObject({
+      ...MACHINE,
+      baseBranch: 'develop',
+      checksCommand: 'make check',
+    });
+    const snap = await t.app.bus.dispatch(t.sender, 'store.snapshot', {});
+    expect(snap.ok && snap.value.settings.project[project.id]?.baseBranch.value).toBe('develop');
+
+    // The window-focus refresh (no project id) re-reads every project; a key taken out of the file goes back to its default.
+    handEdit((f) => ({ ...f, checks: {} }));
+    t.app.projects.refreshFromFile();
+    expect(t.app.repos.projects.settings(project.id).checksCommand).toBeUndefined();
+    expect(t.app.repos.projects.settings(project.id)).toMatchObject(MACHINE);
+
+    // Changing one setting in the app never undoes a hand edit made since the last read.
+    handEdit((f) => ({ ...f, dev: { command: 'pnpm start' } }));
+    await t.app.projects.setSettings(project.id, { autoSync: 'publish' });
+    expect(readFile()).toMatchObject({
+      worktrees: { baseBranch: 'develop' },
+      dev: { command: 'pnpm start' },
+    });
+    expect(t.app.repos.projects.settings(project.id)).toMatchObject({
+      autoSync: 'publish',
+      autoLand: true,
+      devCommand: 'pnpm start',
+      baseBranch: 'develop',
+    });
+  });
+
+  it('an invalid hand edit changes nothing; a deleted file leaves only the machine settings', async () => {
+    const t = makeTestApp({ fixture: 'empty' });
+    const { project, path } = await addProject(t);
+    await t.app.projects.setSettings(project.id, { ...MACHINE, baseBranch: 'develop' });
+    t.app.projects.refreshFromFile(project.id);
+
+    writeFileSync(path, '{ not json');
+    const later = new Date(Date.now() + 60_000);
+    utimesSync(path, later, later);
+    t.app.projects.refreshFromFile(project.id);
+    expect(t.app.repos.projects.settings(project.id)).toMatchObject({ ...MACHINE, baseBranch: 'develop' });
+
+    rmSync(path);
+    t.app.projects.refreshFromFile(project.id);
+    expect(t.app.repos.projects.settings(project.id)).toEqual(MACHINE);
+    expect(t.app.repos.projects.get(project.id)?.hasProjectFile).toBe(false);
+  });
+
+  it('reconcile without a file (it was deleted) keeps the machine settings', async () => {
+    const t = makeTestApp({ fixture: 'empty' });
+    const { project, path } = await addProject(t);
+    await t.app.projects.setSettings(project.id, { ...MACHINE, baseBranch: 'develop' });
+    rmSync(path);
+    expect(await t.app.projects.reconcileProjectFile(project.id)).toEqual({ ok: true, error: null });
+    expect(t.app.repos.projects.settings(project.id)).toEqual(MACHINE);
   });
 });
 

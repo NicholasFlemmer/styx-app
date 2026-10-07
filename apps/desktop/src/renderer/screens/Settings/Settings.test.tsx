@@ -397,14 +397,10 @@ describe('sectionRows', () => {
       // The walkthrough row (#124): the demo machine has seen it.
       'Seen',
     ]);
-    expect(values('app:editor')).toEqual(['Monaco (embedded)', 'Styx', 'VS Code', 'Per repo', 'Off', 'On']);
-    expect(values('app:agents')).toEqual([
-      'Claude Code',
-      'On',
-      'PowerShell',
-      'claude, codex, gemini, cursor',
-    ]);
-    expect(values('app:keychain')).toEqual(['macOS Keychain', 'Touch ID', 'Scoped token, else env']);
+    // Line endings, Auto-create worktree, Inject as and Share with agents were stored but never applied (issue #4).
+    expect(values('app:editor')).toEqual(['Monaco (embedded)', 'Styx', 'VS Code', 'Off', 'On']);
+    expect(values('app:agents')).toEqual(['Claude Code', 'PowerShell', 'claude, codex, gemini, cursor']);
+    expect(values('app:keychain')).toEqual(['macOS Keychain', 'Touch ID']);
     // Demo fixture mirrors the prototype policies strip (`[false, true, true]`): staging reads are off.
     expect(values('app:policies')).toEqual(['Off', '1 hour', 'JSON']);
     expect(values('project:agent-defaults')).toEqual([
@@ -422,7 +418,19 @@ describe('sectionRows', () => {
       // The checks command is typed, not picked (issue #2): no option label.
       undefined,
     ]);
-    expect(values('project:env')).toEqual(['Keychain', 'Per grant', '.styx/project.json']);
+    expect(values('project:env')).toEqual(['Keychain', '.styx/project.json']);
+  });
+
+  it('issue #4: rows that were stored but changed nothing are gone; every row left is one main reads', () => {
+    const ids = (['app:editor', 'app:agents', 'app:keychain', 'project:env'] as const).flatMap((section) =>
+      sectionRows(model, section, ctx).map((r) => r.id),
+    );
+    for (const gone of ['lineEndings', 'autoWorktree', 'injectAs', 'shareWithAgents'])
+      expect(ids).not.toContain(gone);
+    // Wired instead: Notify (badge, tray, OS and in-app toasts), Open files in, Shell (Windows).
+    expect(ids).toEqual(expect.arrayContaining(['openFilesIn', 'shellWindows']));
+    const notify = sectionRows(model, 'app:general', ctx).find((r) => r.id === 'notify');
+    expect(notify?.options.map((o) => o.value)).toEqual(['badge-sound', 'badge', 'off']);
   });
 });
 
@@ -663,10 +671,14 @@ describe('<Settings />', () => {
     expect(codexAccount?.getAttribute('title')).toBe('nic@acme.dev · team');
     expect(screen.getByText(copy.agentsPage.preferences)).toBeTruthy();
     expect(screen.getByRole('combobox', { name: copy.settings.rows.defaultAgent })).toBeTruthy();
-    fireEvent.change(screen.getByRole('combobox', { name: copy.settings.rows.autoWorktree }), {
-      target: { value: 'off' },
+    // Shell (Windows) is the current project's (issue #4): it patches the project settings.
+    fireEvent.change(screen.getByRole('combobox', { name: copy.settings.rows.shellWindows }), {
+      target: { value: 'wsl' },
     });
-    expect(commandMock).toHaveBeenCalledWith('settings.set', { patch: { autoWorktreePerAgent: false } });
+    expect(commandMock).toHaveBeenCalledWith('project.settings.set', {
+      projectId: acme,
+      patch: { shellWindows: 'wsl' },
+    });
     fireEvent.click(screen.getByRole('button', { name: /^Connect · Gemini CLI/ }));
     expect(useUiStore.getState().overlays).toMatchObject([
       { kind: 'modal', modal: 'connect-agent', agent: 'gemini' },

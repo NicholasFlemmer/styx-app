@@ -396,7 +396,7 @@ async function boot(): Promise<void> {
         container?.publisher.sendEvent('nav.go', { screen: 'agents' });
       },
     },
-    () => repos.settings.app().notify === 'badge-sound',
+    () => repos.settings.app().notify,
   );
   // DND is persisted in app_settings (`dnd`) and mirrored into ui_state for the service; settings win after a restart.
   notifications.setDnd(repos.settings.app().dnd);
@@ -404,6 +404,8 @@ async function boot(): Promise<void> {
   const applyAppSettings = (s: AppSettings) => {
     if (!env['STYX_THEME']) nativeTheme.themeSource = s.theme;
     if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: s.launchAtLogin });
+    // Notify › Off takes the badge and tray dot away at once; turning it back on puts them back.
+    notifications.refresh();
   };
 
   installAppMenu();
@@ -546,6 +548,8 @@ async function boot(): Promise<void> {
   });
   app.on('browser-window-focus', () => {
     void container?.refresh.runNow('focus');
+    // Hand edits to a project's .styx/project.json show when the person comes back from their editor (issue #10).
+    container?.projects.refreshFromFile();
     // A release published while Styx was open is found when the person comes back to it (#119).
     void container?.updates.onFocus();
   });

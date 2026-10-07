@@ -5,7 +5,7 @@ description: Every field of `.styx/project.json`, the project settings file you 
 
 `.styx/project.json` holds the project settings everyone working on the repo should share: the default agent and model, the base branch, the targets, extra access rules, and how to run the app. You commit it. It never holds a secret.
 
-Styx writes the file whenever you change one of these settings in the app, and reads it when you add the project. You can also edit it by hand.
+Styx writes the file whenever you change one of these settings in the app. You can also edit it by hand: Styx reads it again when you come back to the Styx window, open the project, or start a task, a run or a landing, so there's no need to re-add the project. Settings that are about this machine stay on this machine when it does (see [What is never in the file](#what-is-never-in-the-file)).
 
 ## Example
 
@@ -94,7 +94,7 @@ Object. Defaults for new tasks (**Settings › Agent defaults**).
 | `autoApproveEdits`   | boolean                                                                                  | `false`                          |
 | `mayRequestTargets`  | boolean: **May request targets** starts on in **New task**                               | `true`                           |
 | `notifyWhenNeedsMe`  | boolean: **Notify when it needs me** starts on in **New task**                           | `true`                           |
-| `perAgent`           | object keyed by agent, each `{ "model" }`                                                | Read but not used yet.           |
+| `perAgent`           | object keyed by agent, each `{ "model" }`                                                | Accepted but ignored.            |
 
 `permissionMode` values are shown in the app as **Ask each time**, **Accept edits**, **Plan mode**, **Bypass permissions**, **Don't ask** and **Auto**.
 
@@ -102,10 +102,10 @@ Object. Defaults for new tasks (**Settings › Agent defaults**).
 
 Object. Extra access rules for the project.
 
-| Field              | Type             | Notes                  |
-| ------------------ | ---------------- | ---------------------- |
-| `extra`            | array of rules   | See below.             |
-| `disabledBuiltins` | array of strings | Read but not used yet. |
+| Field              | Type             | Notes                 |
+| ------------------ | ---------------- | --------------------- |
+| `extra`            | array of rules   | See below.            |
+| `disabledBuiltins` | array of strings | Accepted but ignored. |
 
 Each rule in `extra`:
 
@@ -140,13 +140,13 @@ Each rule in `extra`:
 
 ### `shell`
 
-| Field     | Type                  | Default      | Notes            |
-| --------- | --------------------- | ------------ | ---------------- |
-| `windows` | `powershell` or `wsl` | `powershell` | Not applied yet. |
+| Field     | Type                  | Default      | Notes                                                                                                                                                                                                       |
+| --------- | --------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `windows` | `powershell` or `wsl` | `powershell` | Windows only. The shell this project's terminals, shell tasks, **Run locally** and deploy commands use. `STYX_WIN_SHELL` overrides it (see [Environment variables](/docs/reference/environment-variables)). |
 
 ### `lineEndings`
 
-`auto`, `lf` or `crlf`. Default `auto`. Not applied yet.
+`auto`, `lf` or `crlf`. Accepted but ignored.
 
 ### `dev`
 
@@ -172,15 +172,18 @@ What proves the work is good. **Land** runs it in the lane before merging, and S
 
 ### `env`
 
-| Field             | Type                           | Default          | Notes            |
-| ----------------- | ------------------------------ | ---------------- | ---------------- |
-| `files`           | array of strings               | `[".env.local"]` | Not applied yet. |
-| `shareWithAgents` | `per-grant`, `always`, `never` | `per-grant`      | Not applied yet. |
+| Field             | Type                           | Default          | Notes                 |
+| ----------------- | ------------------------------ | ---------------- | --------------------- |
+| `files`           | array of strings               | `[".env.local"]` | Accepted but ignored. |
+| `shareWithAgents` | `per-grant`, `always`, `never` | `per-grant`      | Accepted but ignored. |
+
+Styx doesn't read `.env` files or hand them to agents. Agents reach targets only through grants; see [How access works](/docs/access/how-access-works).
 
 ## What is never in the file
 
 - **Secrets.** A key whose name contains `secret`, `token`, `password`, `passphrase`, `private_key` / `private-key` / `privatekey` or `credential`, at any depth, makes the whole file invalid (`credentialRef` is the one exception). Credentials live in the keychain.
-- **Settings that are about this machine or this person**: the target **Policy** you choose in Settings, deploy commands, the lane settings in **Agent defaults** (fetch before cutting a lane, bringing in the base branch, merging, landing on its own), and every App setting.
+- **Settings that are about this machine or this person**: the target **Policy** you choose in Settings, deploy commands, the lane settings in **Agent defaults** (fetch before cutting a lane, bringing in the base branch, merging, landing on its own), and every App setting. They're kept in Styx's local database, so a teammate's commit can't turn on landing by itself for you, and reading the file again never changes them.
+- **Built-in access rules and per-agent models.** `policies.disabledBuiltins` and `agents.perAgent` are accepted so older files still load, but Styx ignores them: built-in rules are switched on and off in **Settings › Policies** on each machine, and a new task's model is `agents.model`.
 
 ## Validation and versioning
 

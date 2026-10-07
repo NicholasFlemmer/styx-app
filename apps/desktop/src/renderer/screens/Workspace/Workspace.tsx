@@ -1,6 +1,7 @@
 import {
   AGENT_LABEL,
   copy,
+  opensFilesInFallback,
   projectWorktreeOf,
   rows,
   activeLaneOf,
@@ -192,6 +193,18 @@ export function Workspace() {
     setEditorFile(path);
   };
 
+  /**
+   * A file picked in the tree: Settings › Open files in › Fallback editor hands it to that editor (issue #4);
+   * otherwise, or with no fallback editor found, it opens in a tab here. Switching tabs never leaves Styx.
+   */
+  const pickFile = (path: string) => {
+    if (worktreeId !== null && opensFilesInFallback(model.settings.app, model.discovery.ides)) {
+      void command('worktree.openInIde', { worktreeId, file: path });
+      return;
+    }
+    openFile(path);
+  };
+
   /** Closing the current file falls back to its neighbour, so the editor never lands on nothing while tabs remain. */
   const closeFile = (path: string) => {
     setOpen((prev) => {
@@ -280,7 +293,7 @@ export function Workspace() {
         <FilesPane
           nodes={tree.nodes}
           activePath={activePath}
-          onOpen={openFile}
+          onOpen={pickFile}
           changes={tree.changes}
           ideName={ide}
           onOpenInIde={() =>

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { devPlatformSchema } from './run';
 import { effortSchema, permissionModeSchema } from './session';
 import { agentSchema } from './common';
-import { ideKindSchema } from './discovery';
+import { ideKindSchema, type IdeInstall } from './discovery';
 import { lineEndingsSchema } from './project';
 
 export const themePreferenceSchema = z.enum(['dark', 'light', 'system']);
@@ -54,10 +54,16 @@ export const instrumentOrderOf = (order: readonly string[]): Instrument[] => {
 
 export const appSettingsSchema = z.object({
   theme: themePreferenceSchema,
+  /** Badge, tray dot, OS and in-app toasts for an agent that needs the person (`notifiesOnAsk`; issue #4 wired Off). */
   notify: notifyModeSchema,
   launchAtLogin: z.boolean(),
+  /** Where a file picked in the file tree opens (`opensFilesInFallback`, issue #4). */
   openFilesIn: z.enum(['styx', 'fallback']),
   fallbackIde: ideKindSchema.nullable(),
+  /**
+   * Kept so stored settings still parse; nothing reads them and Settings no longer shows them (issue #4): every git
+   * task gets its own worktree, and credentials reach agents only through grants.
+   */
   autoWorktreePerAgent: z.boolean(),
   injectAs: z.enum(['scoped-else-env', 'env']),
   screenReader: z.boolean(),
@@ -103,6 +109,27 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   tourDone: false,
   tourVersion: 0,
   instrumentOrder: [],
+};
+
+/**
+ * Whether an agent waiting on the person pops up (issue #4): Do Not Disturb or Settings › Notify when an agent
+ * needs me › Off keep it quiet. The board, the inbox and the lane still show the ask either way.
+ */
+export const notifiesOnAsk = (app: Pick<AppSettings, 'notify' | 'dnd'>): boolean =>
+  !app.dnd && app.notify !== 'off';
+
+/**
+ * Settings › Open files in (issue #4): whether a file picked in the file tree opens in the fallback editor rather
+ * than Styx's own. Only when the setting says so and that editor is found with a launcher (the same pick main's
+ * `worktree.openInIde` makes); otherwise the file opens in Styx, so a click never does nothing.
+ */
+export const opensFilesInFallback = (
+  app: Pick<AppSettings, 'openFilesIn' | 'fallbackIde'>,
+  ides: readonly IdeInstall[],
+): boolean => {
+  if (app.openFilesIn !== 'fallback') return false;
+  const ide = ides.find((i) => i.isFallback) ?? ides.find((i) => i.kind === app.fallbackIde);
+  return ide !== undefined && ide.launcher !== null;
 };
 
 /** The walkthrough for the current layout (ADR-0027: 2, organised around the lane). */
@@ -152,7 +179,12 @@ export const projectSettingsSchema = z.object({
   checksCommand: z.string().nullable(),
   branchPrefix: z.string(),
   worktreeLocation: worktreeLocationSchema,
+  /** Windows: the shell terminals, shell tasks, Run locally and deploy commands use; `STYX_WIN_SHELL` overrides it. */
   shellWindows: windowsShellSchema,
+  /**
+   * Kept so `.styx/project.json` files that set them still parse and round-trip; nothing applies them and Settings
+   * no longer shows them (issue #4).
+   */
   lineEndings: lineEndingsSchema,
   envFiles: z.array(z.string()),
   envShareWithAgents: envShareSchema,

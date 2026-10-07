@@ -244,7 +244,7 @@ const updatesRow = (model: ReadModel, now: number): SettingsRow => {
   };
 };
 
-const editorRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
+const editorRows = (model: ReadModel): SettingsRow[] => {
   const app = model.settings.app;
   const r = copy.settings.rows;
   const v = copy.settings.values;
@@ -280,17 +280,6 @@ const editorRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
       },
       overridden: false,
     },
-    projectRow(
-      model,
-      ctx,
-      'lineEndings',
-      r.lineEndings,
-      'lineEndings',
-      (x) => x,
-      (x) => x as ProjectSettings['lineEndings'],
-      optionsOf(v.lineEndings, ['auto', 'lf', 'crlf']),
-      false,
-    ),
     // Spec §9: Monaco screen-reader mode + xterm accessibility tree (settings.app.screenReader).
     {
       id: 'screenReader',
@@ -313,7 +302,6 @@ const editorRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
 };
 
 const agentsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
-  const app = model.settings.app;
   const r = copy.settings.rows;
   const v = copy.settings.values;
   const clis = model.discovery.clis.filter((c) => c.found && c.agent !== 'shell');
@@ -351,14 +339,6 @@ const agentsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
       AGENT_OPTIONS,
       false,
     ),
-    {
-      id: 'autoWorktree',
-      label: r.autoWorktree,
-      value: onOff(app.autoWorktreePerAgent),
-      options: ON_OFF,
-      change: { kind: 'app', patch: (b) => ({ autoWorktreePerAgent: isOn(b) }) },
-      overridden: false,
-    },
     projectRow(
       model,
       ctx,
@@ -383,22 +363,13 @@ const agentsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
   ];
 };
 
-const keychainRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
-  const app = model.settings.app;
+/** Store and MFA are read-only facts. (Inject as was stored but never applied: removed in issue #4.) */
+const keychainRows = (ctx: RowContext): SettingsRow[] => {
   const r = copy.settings.rows;
-  const v = copy.settings.values;
   const pc = platformCopy(ctx.copyPlatform);
   return [
     fixed('store', r.store, pc.keychainName),
     fixed('mfaProdWrite', r.mfaProdWrite, pc.mfa),
-    {
-      id: 'injectAs',
-      label: r.injectAs,
-      value: app.injectAs,
-      options: optionsOf(v.injectAs, ['scoped-else-env', 'env']),
-      change: { kind: 'app', patch: (i) => ({ injectAs: i as AppSettings['injectAs'] }) },
-      overridden: false,
-    },
   ];
 };
 
@@ -608,22 +579,12 @@ const checksRow = (model: ReadModel, ctx: RowContext): SettingsRow => {
   };
 };
 
-const envRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
+/** Read-only facts. (Share with agents was stored but never applied: removed in issue #4.) */
+const envRows = (): SettingsRow[] => {
   const r = copy.settings.rows;
   const v = copy.settings.values;
   return [
     fixed('envSource', r.envSource, v.envSource),
-    projectRow(
-      model,
-      ctx,
-      'shareWithAgents',
-      r.shareWithAgents,
-      'envShareWithAgents',
-      (s) => s,
-      (s) => s as ProjectSettings['envShareWithAgents'],
-      optionsOf(v.shareWithAgents, ['per-grant', 'always', 'never']),
-      true,
-    ),
     fixed('committedFile', r.committedFile, v.committedFile),
   ];
 };
@@ -634,14 +595,14 @@ export const sectionRows = (model: ReadModel, section: SettingsSection, ctx: Row
     case 'app:general':
       return generalRows(model, ctx.now ?? Date.now());
     case 'app:editor':
-      return editorRows(model, ctx);
+      return editorRows(model);
     case 'app:agents':
       return agentsRows(model, ctx);
     // Skills render their own pane, not label/value rows.
     case 'app:skills':
       return [];
     case 'app:keychain':
-      return keychainRows(model, ctx);
+      return keychainRows(ctx);
     case 'app:policies':
       return policiesRows(model);
     case 'app:shortcuts':
@@ -649,7 +610,7 @@ export const sectionRows = (model: ReadModel, section: SettingsSection, ctx: Row
     case 'project:agent-defaults':
       return agentDefaultsRows(model, ctx);
     case 'project:env':
-      return envRows(model, ctx);
+      return envRows();
     case 'project:targets':
     // Both are panes of their own, not label/value rows.
     case 'app:account':

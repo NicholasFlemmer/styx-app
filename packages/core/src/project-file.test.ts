@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PROJECT_SETTINGS } from './model/settings';
+import { DEFAULT_PROJECT_SETTINGS, type ProjectSettings } from './model/settings';
 import {
+  MACHINE_PROJECT_SETTINGS,
   PROJECT_FILE_SCHEMA_URL,
+  isMachineProjectSetting,
+  machineProjectSettings,
   mergeSettings,
   parseProjectFile,
   projectSettingsFromFile,
   serializeProjectFile,
+  settingsAfterFileRead,
   targetNameSchema,
 } from './project-file';
 import { commands } from './ipc/contract';
@@ -214,6 +218,86 @@ describe('mergeSettings', () => {
       envFiles: ['.env.local'],
       envShareWithAgents: 'per-grant',
     });
+  });
+});
+
+describe('where project settings live (issue #10)', () => {
+  const MACHINE: Partial<ProjectSettings> = {
+    syncOnSpawn: false,
+    syncBeforePublish: false,
+    autoSync: 'off',
+    hotspots: ['pnpm-lock.yaml'],
+    integration: 'review',
+    autoLand: true,
+  };
+
+  it('the machine-only keys are exactly the lane upkeep settings', () => {
+    expect([...MACHINE_PROJECT_SETTINGS].sort()).toEqual(Object.keys(MACHINE).sort());
+    for (const k of MACHINE_PROJECT_SETTINGS) expect(k in DEFAULT_PROJECT_SETTINGS).toBe(true);
+  });
+
+  it.each([
+    ['syncOnSpawn', true],
+    ['autoLand', true],
+    ['hotspots', true],
+    ['baseBranch', false],
+    ['checksCommand', false],
+    ['devCommand', false],
+    ['defaultAgent', false],
+    ['notAKey', false],
+  ] as const)('isMachineProjectSetting(%s) = %s', (key, expected) => {
+    expect(isMachineProjectSetting(key)).toBe(expected);
+  });
+
+  it('machineProjectSettings keeps only the machine keys that are set', () => {
+    expect(machineProjectSettings({})).toEqual({});
+    expect(machineProjectSettings({ ...MACHINE, baseBranch: 'dev', checksCommand: 'make check' })).toEqual(
+      MACHINE,
+    );
+    expect(machineProjectSettings({ autoLand: false, devCommand: 'pnpm dev' })).toEqual({ autoLand: false });
+  });
+
+  const handEdited: ProjectFileV1 = {
+    version: 1,
+    name: 'x',
+    worktrees: { baseBranch: 'develop' },
+    checks: { command: 'make check' },
+    dev: { command: 'pnpm dev' },
+  };
+
+  it.each<[string, Partial<ProjectSettings>, ProjectFileV1 | null, Partial<ProjectSettings>]>([
+    ['nothing stored, empty file', {}, { version: 1, name: 'x' }, {}],
+    [
+      'machine keys survive a re-read of a file that sets nothing',
+      MACHINE,
+      { version: 1, name: 'x' },
+      MACHINE,
+    ],
+    [
+      'machine keys survive; the file decides its own keys',
+      { ...MACHINE, baseBranch: 'main', checksCommand: 'pnpm test' },
+      handEdited,
+      { ...MACHINE, baseBranch: 'develop', checksCommand: 'make check', devCommand: 'pnpm dev' },
+    ],
+    [
+      'a file key the file no longer sets falls back to the default (the file is its source)',
+      { baseBranch: 'main', devCommand: 'pnpm start', autoLand: true },
+      { version: 1, name: 'x', dev: { command: 'pnpm dev' } },
+      { devCommand: 'pnpm dev', autoLand: true },
+    ],
+    [
+      'the file cannot set a machine key (it has no field for one)',
+      { autoSync: 'publish' },
+      {
+        version: 1,
+        name: 'x',
+        worktrees: { baseBranch: 'main', autoLand: true } as ProjectFileV1['worktrees'],
+      },
+      { baseBranch: 'main', autoSync: 'publish' },
+    ],
+    ['the file is gone: only the machine keys stay', { ...MACHINE, baseBranch: 'develop' }, null, MACHINE],
+  ])('settingsAfterFileRead: %s', (_name, stored, file, expected) => {
+    expect(settingsAfterFileRead(stored, file)).toEqual(expected);
   });
 });
 

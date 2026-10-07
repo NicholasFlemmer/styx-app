@@ -7,10 +7,10 @@ Styx needs no environment variables to run. The ones below are for a few user ch
 
 ## For users
 
-| Variable                | Read by                          | What it does                                                                                                                                                       |
-| ----------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `STYX_WIN_SHELL`        | App (terminals, **Run locally**) | Windows only. `wsl` makes terminals and the local run use `wsl.exe`; anything else, or unset, uses PowerShell.                                                     |
-| `STYX_GITHUB_CLIENT_ID` | App (GitHub target)              | A GitHub OAuth app client id for connecting a GitHub target through the browser (device flow). Without it, connect GitHub with your `gh` login or a token instead. |
+| Variable                | Read by                          | What it does                                                                                                                                                                                      |
+| ----------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STYX_WIN_SHELL`        | App (terminals, **Run locally**) | Windows only. `wsl` or `powershell` overrides every project's **Shell (Windows)** setting for terminals, shell tasks, **Run locally** and deploy commands; unset, each project's setting applies. |
+| `STYX_GITHUB_CLIENT_ID` | App (GitHub target)              | A GitHub OAuth app client id for connecting a GitHub target through the browser (device flow). Without it, connect GitHub with your `gh` login or a token instead.                                |
 
 ## Set by Styx for each task
 

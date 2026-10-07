@@ -57,6 +57,7 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
     repos.worktrees.get(id) ?? fail('not-found', `worktree ${id} not found`);
 
   bus.register('worktree.create', async ({ projectId, branch, base }) => {
+    app.projects.refreshFromFile(projectId);
     const project = repos.projects.get(projectId) ?? fail('not-found', `project ${projectId} not found`);
     const repo = repos.repos.byProject(project.id) ?? fail('not-found', 'project has no repo');
     if (!repoHasGit(repo)) fail('git-error', `${project.name} is not a git repository`);
@@ -109,7 +110,12 @@ export function registerWorktreeCommands(bus: CommandBus, app: Container): void 
   });
   // Landing (ADR-0025 phase C).
   bus.register('worktree.landPreview', ({ worktreeId }) => app.land.preview(worktreeId));
-  bus.register('worktree.land', ({ worktreeId, message }) => app.land.land(worktreeId, message));
+  bus.register('worktree.land', ({ worktreeId, message }) => {
+    // The checks command and base branch as the file says now, hand edits included (issue #10).
+    const wt = repos.worktrees.get(worktreeId);
+    if (wt) app.projects.refreshFromFile(wt.projectId);
+    return app.land.land(worktreeId, message);
+  });
   bus.register('worktree.undoLand', async ({ worktreeId }) => {
     await app.land.undo(worktreeId);
     return {};

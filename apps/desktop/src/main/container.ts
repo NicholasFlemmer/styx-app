@@ -490,7 +490,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     terminals,
     pty,
     cli,
-    shell: () => pty.defaultShell(),
+    shell: (projectId) => pty.defaultShell(repos.projects.settings(projectId).shellWindows),
     platform: runtime.platform,
   });
   const laneSync = new LaneSyncService({
@@ -623,7 +623,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     terminals,
     pty,
     projects,
-    shell: () => pty.defaultShell(),
+    shell: (projectId) => pty.defaultShell(repos.projects.settings(projectId).shellWindows),
     platform: runtime.platform,
     ...(opts.probe !== undefined ? { probe: opts.probe } : {}),
   });

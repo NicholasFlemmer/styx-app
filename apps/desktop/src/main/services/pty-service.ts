@@ -1,4 +1,5 @@
 import type { IPty } from 'node-pty';
+import type { WindowsShell } from '@styx/core';
 import { execa } from 'execa';
 import { EventEmitter } from 'node:events';
 import { existsSync } from 'node:fs';
@@ -38,6 +39,15 @@ export function fallbackShell(
 ): string {
   if (platform === 'darwin') return '/bin/zsh';
   return ['/bin/bash', '/usr/bin/bash'].find(exists) ?? '/bin/sh';
+}
+
+/**
+ * The Windows shell for a project's terminals, shell tasks, Run locally and deploy commands: Settings › Shell
+ * (Windows) (issue #4), with `STYX_WIN_SHELL=wsl|powershell` still overriding it for the whole app.
+ */
+export function windowsShellFile(env: string | undefined, setting: WindowsShell = 'powershell'): string {
+  const pick = env === 'wsl' || env === 'powershell' ? env : setting;
+  return pick === 'wsl' ? 'wsl.exe' : 'powershell.exe';
 }
 
 export const SHELL_WHICH_NAMES: readonly string[] = ['claude', 'codex', 'gemini', 'agent', 'cursor-agent'];
@@ -181,9 +191,12 @@ export class PtyService extends EventEmitter<PtyEvents> {
     return this.extraDirs.length === 0 ? path : mergePaths(path, this.extraDirs.join(sep), this.platform);
   }
 
-  defaultShell(): string {
-    if (this.platform === 'win32')
-      return process.env['STYX_WIN_SHELL'] === 'wsl' ? 'wsl.exe' : 'powershell.exe';
+  /**
+   * The login shell: `$SHELL` on macOS and Linux; on Windows the project's Shell (Windows) setting when one is given
+   * (callers pass `repos.projects.settings(id).shellWindows`), PowerShell otherwise, `STYX_WIN_SHELL` over both.
+   */
+  defaultShell(windows?: WindowsShell): string {
+    if (this.platform === 'win32') return windowsShellFile(process.env['STYX_WIN_SHELL'], windows);
     return process.env['SHELL'] || fallbackShell(this.platform);
   }
 

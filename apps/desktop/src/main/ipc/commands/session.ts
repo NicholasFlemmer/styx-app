@@ -6,6 +6,8 @@ export function registerSessionCommands(bus: CommandBus, app: Container): void {
   const { sessions, repos, terminals } = app;
 
   bus.register('session.spawn', async (input) => {
+    // A hand edit to .styx/project.json (base branch, branch prefix …) applies to the task about to start (issue #10).
+    app.projects.refreshFromFile(input.projectId);
     const result = await sessions.start(input);
     app.usageReports.record('agent.spawned');
     // #127: the spawn dialog's first message is a message sent, the same as one from the composer.
