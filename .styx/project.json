@@ -2,7 +2,7 @@
   "$schema": "https://styx.dev/schema/project.v1.json",
   "version": 1,
   "name": "STYX",
-  "dev": {
-    "url": "http://localhost:3100"
+  "checks": {
+    "command": "pnpm typecheck && pnpm lint && pnpm test"
   }
 }
