@@ -109,7 +109,7 @@ const GH_LOGIN = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
 export class GitHubAdapter implements ProviderAdapter, GitHubRepoApi {
   readonly provider = 'github' as const;
   readonly authMethod = 'oauth' as const;
-  readonly tools = ['gh', 'git-credential-styx'];
+  readonly tools = ['gh'];
 
   constructor(
     private readonly deps: AdapterDeps,
