@@ -72,11 +72,10 @@ Otherwise `styx wrap` exits with the real tool's own code.
 
 At startup Styx writes small scripts to a `bin` folder inside its app data directory (on macOS, `~/Library/Application Support/Styx/bin`):
 
-| Script                                             | Runs                                                                |
-| -------------------------------------------------- | ------------------------------------------------------------------- |
-| `styx`                                             | the session CLI                                                     |
-| `vercel`, `gh`, `aws`, `gcloud`, `supabase`, `ssh` | `styx wrap <the same name> "$@"`                                    |
-| `git-credential-styx`                              | `styx credential`, which doesn't exist yet: it does nothing for now |
+| Script                                             | Runs                             |
+| -------------------------------------------------- | -------------------------------- |
+| `styx`                                             | the session CLI                  |
+| `vercel`, `gh`, `aws`, `gcloud`, `supabase`, `ssh` | `styx wrap <the same name> "$@"` |
 
 On Windows they are `.cmd` files. The scripts run the CLI with the Styx app's own executable (`STYX_EXE`, with `ELECTRON_RUN_AS_NODE=1`) and the bundled `styx.js` (`STYX_CLI`), so nothing else needs to be installed.
 

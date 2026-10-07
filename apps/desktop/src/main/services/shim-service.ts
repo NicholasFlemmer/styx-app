@@ -1,7 +1,7 @@
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** Provider CLIs that route through `styx wrap <name>` (plan §6). `styx` itself and the git credential helper are special. */
+/** Provider CLIs that route through `styx wrap <name>` (plan §6). `styx` itself is the session CLI. */
 export const SHIM_TOOLS = ['vercel', 'gh', 'aws', 'gcloud', 'supabase', 'ssh'] as const;
 
 export interface ShimPaths {
@@ -18,18 +18,12 @@ const posixStyx = `#!/bin/sh
 exec env ELECTRON_RUN_AS_NODE=1 "$STYX_EXE" "$STYX_CLI" "$@"
 `;
 
-// TODO(git-credential): the CLI has no \`credential\` subcommand yet; git ignores helper failures, so this is inert until Phase 8.
-const posixGitCredential = `#!/bin/sh
-exec env ELECTRON_RUN_AS_NODE=1 "$STYX_EXE" "$STYX_CLI" credential "$@"
-`;
-
 const winWrap = (tool: string) =>
   `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"%STYX_EXE%" "%STYX_CLI%" wrap ${tool} %*\r\n`;
 const winStyx = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"%STYX_EXE%" "%STYX_CLI%" %*\r\n`;
-const winGitCredential = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"%STYX_EXE%" "%STYX_CLI%" credential %*\r\n`;
 
 /**
- * Writes `<userData>/bin/{styx,vercel,gh,aws,gcloud,supabase,ssh,git-credential-styx}` on startup. The scripts
+ * Writes `<userData>/bin/{styx,vercel,gh,aws,gcloud,supabase,ssh}` on startup. The scripts
  * read STYX_EXE / STYX_CLI from the session env, so the same dir serves dev and packaged builds.
  */
 export function writeShims(userData: string, platform: NodeJS.Platform): ShimPaths {
@@ -44,6 +38,8 @@ export function writeShims(userData: string, platform: NodeJS.Platform): ShimPat
   };
   const styx = write('styx', win ? winStyx : posixStyx);
   for (const t of SHIM_TOOLS) write(t, win ? winWrap(t) : posixWrap(t));
-  write('git-credential-styx', win ? winGitCredential : posixGitCredential);
+  // Earlier versions also wrote `git-credential-styx`, which called a `styx credential` command that never existed
+  // and that nothing configured git to use (issue 13). Remove it from existing installs.
+  rmSync(join(dir, win ? 'git-credential-styx.cmd' : 'git-credential-styx'), { force: true });
   return { dir, styx };
 }
