@@ -23,7 +23,7 @@ import {
 } from '@styx/ui';
 import { useEffect, useState } from 'react';
 import { PROJECT_POLICY_BANNER } from '../../features/banners/BannerStack';
-import { cliTargetMeta } from '../../features/modals/modals';
+import { cliTargetMeta, projectTargetMeta } from '../../features/modals/modals';
 import { AccountPane } from './AccountPane';
 import { AgentsPane } from './AgentsPane';
 import { SkillsPane } from './SkillsPane';
@@ -157,6 +157,23 @@ function Targets({ model, projectId }: { model: ReadModel; projectId: ProjectId 
     const target = model.targets.byId[t.targetId];
     return target === undefined ? null : cliTargetMeta(target);
   };
+  /** `project <ref>` / `no project chosen` for connected Supabase targets (issue #5), null otherwise. */
+  const projectMeta = (t: TargetRow): string | null => {
+    const target = model.targets.byId[t.targetId];
+    return target === undefined ? null : projectTargetMeta(target);
+  };
+  const chooseProject = (t: TargetRow) => {
+    const target = model.targets.byId[t.targetId];
+    if (projectId === null || target === undefined) return;
+    pushOverlay({
+      kind: 'modal',
+      modal: 'connect',
+      projectId,
+      provider: target.provider,
+      targetId: target.id,
+      chooseProject: true,
+    });
+  };
   const onAction = (t: TargetRow) => {
     const grantId = 'grantId' in t.state ? t.state.grantId : undefined;
     if (t.action === copy.targets.actions.revoke && grantId !== undefined) {
@@ -209,12 +226,31 @@ function Targets({ model, projectId }: { model: ReadModel; projectId: ProjectId 
               />
             </TableCell>
             <TableCell mono muted className={s['state']}>
-              {t.state.label}
-              {cliMeta(t) !== null ? (
-                <span className={s['meta']} data-target-meta="cli">
-                  {cliMeta(t)}
-                </span>
-              ) : null}
+              {/* A column: the state, then the CLI / project meta lines and Choose project under it. */}
+              <span className={s['stateStack']}>
+                <span data-target-state="true">{t.state.label}</span>
+                {cliMeta(t) !== null ? (
+                  <span className={s['meta']} data-target-meta="cli">
+                    {cliMeta(t)}
+                  </span>
+                ) : null}
+                {projectMeta(t) !== null ? (
+                  <>
+                    <span className={s['meta']} data-target-meta="project">
+                      {projectMeta(t)}
+                    </span>
+                    <button
+                      type="button"
+                      className={`${s['action']} ${s['stateAction']}`}
+                      aria-label={`${copy.connect.project.action} · ${t.name} ${t.env}`}
+                      data-choose-project="true"
+                      onClick={() => chooseProject(t)}
+                    >
+                      {copy.connect.project.action}
+                    </button>
+                  </>
+                ) : null}
+              </span>
             </TableCell>
             <TableCell label muted align="end" className={s['actions']}>
               {cliMeta(t) !== null ? (

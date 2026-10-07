@@ -85,6 +85,8 @@ export const cliSavePayload = (
   status: CliStatus,
   accountId: string,
   name: string,
+  /** The project picked for providers whose login reaches several (Supabase `ref`). */
+  project: string | null = null,
 ): CommandInput<'target.connect.cliSave'> => ({
   projectId,
   provider,
@@ -95,8 +97,47 @@ export const cliSavePayload = (
     name,
   ),
   account: accountId,
-  config: {},
+  config: project === null ? {} : { [PROJECT_KEY_OF[provider] ?? 'ref']: project },
 });
+
+// --- Project per target (issue #5) -------------------------------------------
+
+/**
+ * Providers whose login reaches several projects, and the `config` key naming the one a target acts on (main's
+ * `ProviderAdapter.projectKey`). The connect flow requires a pick for these; nothing falls back to "the first".
+ */
+export const PROJECT_KEY_OF: Readonly<Partial<Record<Provider, string>>> = { supabase: 'ref' };
+
+export const needsProjectPick = (provider: Provider): boolean => PROJECT_KEY_OF[provider] !== undefined;
+
+export type ProviderProject = CommandOutput<'target.connect.projects'>['projects'][number];
+
+/** The project a target is pointed at, or null when it names none. */
+export const targetProject = (target: Target): string | null => {
+  const key = PROJECT_KEY_OF[target.provider];
+  const v = key === undefined ? undefined : target.config[key];
+  return typeof v === 'string' && v !== '' ? v : null;
+};
+
+/** The picker's starting choice: the current one if still listed, else the only project, else none. */
+export const defaultProject = (
+  projects: readonly ProviderProject[],
+  current: string | null,
+): string | null => {
+  if (current !== null && projects.some((p) => p.id === current)) return current;
+  return projects.length === 1 ? (projects[0]?.id ?? null) : null;
+};
+
+/** Row detail: `abcdefghijklmnopqrst · eu-west-1` (the ref alone when the region is unknown). */
+export const projectDetail = (p: ProviderProject): string =>
+  p.region === null ? p.id : fill(copy.connect.project.detail, { ref: p.id, region: p.region });
+
+/** Settings › Targets meta for connected project targets: `project <ref>` · `no project chosen`. */
+export const projectTargetMeta = (target: Target): string | null => {
+  if (!needsProjectPick(target.provider) || target.credentialRef === null) return null;
+  const ref = targetProject(target);
+  return ref === null ? copy.connect.project.notChosen : fill(copy.connect.project.meta, { ref });
+};
 
 export const isCliTarget = (target: Target): boolean => target.authMethod === 'cli';
 

@@ -37,6 +37,11 @@
     color: var(--mu);
     white-space: nowrap;
   }
+  /* Between the non-prod rows and the prod ones. */
+  .menuRule {
+    border-top: 1px solid var(--ln);
+    margin: 4px 0;
+  }
   .menuItem {
     display: flex;
     align-items: center;

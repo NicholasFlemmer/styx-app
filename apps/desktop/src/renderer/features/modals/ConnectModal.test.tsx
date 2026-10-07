@@ -33,6 +33,19 @@ const gcloudStatus = (): CliStatus => ({
   ],
 });
 let cliStatus: CliStatus = gcloudStatus();
+const supabaseStatus = (): CliStatus => ({
+  installed: true,
+  binary: 'supabase',
+  version: '2.40.0',
+  loginCommand: 'supabase login',
+  accounts: [{ id: 'cli', label: 'supabase CLI login', active: true, detail: '2 projects' }],
+});
+type Projects = CommandOutput<'target.connect.projects'>['projects'];
+const TWO_PROJECTS: Projects = [
+  { id: 'prodrefaaaaaaaaaaaaa', name: 'acme', region: 'eu-west-1' },
+  { id: 'stagingrefbbbbbbbbbb', name: 'acme-staging', region: null },
+];
+let projects: Projects = TWO_PROJECTS;
 
 const listeners = new Map<string, Set<(payload: unknown) => void>>();
 const emit = (name: string, payload: unknown) => {
@@ -60,6 +73,8 @@ const commandMock = vi.fn(async (name: string, _input?: unknown) => {
       return { ok: true as const, value: { targetId: 'target-cli' } };
     case 'target.test':
       return { ok: true as const, value: { ok: true, message: null } };
+    case 'target.connect.projects':
+      return { ok: true as const, value: { projects } };
     case 'dialog.pickFile':
       return { ok: true as const, value: { path: '/Users/me/.ssh/deploy_key' } };
     default:
@@ -97,6 +112,7 @@ describe('ConnectModal', () => {
     listeners.clear();
     browserUrl = 'https://vercel.com/oauth';
     cliStatus = gcloudStatus();
+    projects = TWO_PROJECTS;
     Object.assign(window, {
       styx: {
         platform: 'darwin',
@@ -482,6 +498,133 @@ describe('ConnectModal', () => {
     expect(commandMock).toHaveBeenCalledWith('target.connect.saveToken', {
       targetId: 'tgt-placeholder',
       token: 'ghp_abc',
+    });
+  });
+
+  // Issue #5: a Supabase target names its project; nothing falls back to the account's first one.
+  describe('supabase: choose the project per target', () => {
+    const projectGroup = () => screen.getByRole('radiogroup', { name: copy.connect.project.label });
+
+    it("cli path lists the login's projects (name, ref · region); Connect waits for a pick, which is saved as config.ref", async () => {
+      cliStatus = supabaseStatus();
+      render(<ConnectModal id="modal-1" projectId={acme} provider="supabase" />);
+      await waitFor(() =>
+        expect(commandMock).toHaveBeenCalledWith('target.connect.projects', {
+          provider: 'supabase',
+          source: { kind: 'cli', account: 'cli' },
+        }),
+      );
+      const rows = await waitFor(() => within(projectGroup()).getAllByRole('radio'));
+      expect(rows.map((r) => r.textContent)).toEqual([
+        'acmeprodrefaaaaaaaaaaaaa · eu-west-1',
+        'acme-stagingstagingrefbbbbbbbbbb',
+      ]);
+      // Several projects: none is preselected and Connect stays off until one is picked.
+      expect(rows.every((r) => r.getAttribute('aria-checked') === 'false')).toBe(true);
+      expect(screen.getByText(copy.connect.project.required)).toBeTruthy();
+      const connect = screen.getByRole('button', { name: copy.connect.cli.connect });
+      expect(connect.hasAttribute('disabled')).toBe(true);
+
+      // Keyboard reachable: native buttons in tab order, before Connect.
+      for (const r of rows) {
+        expect(r.tagName).toBe('BUTTON');
+        expect(r.hasAttribute('disabled')).toBe(false);
+        expect(r.getAttribute('tabindex')).not.toBe('-1');
+        expect(r.compareDocumentPosition(connect) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      }
+      (rows[1] as HTMLElement).focus();
+      expect(document.activeElement).toBe(rows[1]);
+      fireEvent.click(rows[1] as HTMLElement);
+      expect(rows[1]?.getAttribute('aria-checked')).toBe('true');
+      expect(rows[1]?.getAttribute('data-inv')).toBe('true');
+      expect(connect.hasAttribute('disabled')).toBe(false);
+
+      fireEvent.click(screen.getByRole('radio', { name: 'staging' }));
+      fireEvent.click(connect);
+      await waitFor(() => expect(useUiStore.getState().overlays).toHaveLength(0));
+      expect(commandMock).toHaveBeenCalledWith('target.connect.cliSave', {
+        projectId: acme,
+        provider: 'supabase',
+        env: 'staging',
+        name: 'Supabase supabase CLI login',
+        account: 'cli',
+        config: { ref: 'stagingrefbbbbbbbbbb' },
+      });
+    });
+
+    it('one project is preselected; none says so and keeps Connect off', async () => {
+      cliStatus = supabaseStatus();
+      projects = [{ id: 'onlyrefddddddddddddd', name: 'solo', region: 'eu-west-1' }];
+      const { unmount } = render(<ConnectModal id="modal-1" projectId={acme} provider="supabase" />);
+      const row = await waitFor(() => within(projectGroup()).getByRole('radio'));
+      expect(row.getAttribute('aria-checked')).toBe('true');
+      expect(screen.getByRole('button', { name: copy.connect.cli.connect }).hasAttribute('disabled')).toBe(
+        false,
+      );
+      unmount();
+
+      projects = [];
+      render(<ConnectModal id="modal-1" projectId={acme} provider="supabase" />);
+      expect(await screen.findByText(copy.connect.project.none)).toBeTruthy();
+      expect(screen.getByRole('button', { name: copy.connect.cli.connect }).hasAttribute('disabled')).toBe(
+        true,
+      );
+    });
+
+    it('token path (Advanced): the pasted token lists projects first; Save sends the pick with saveToken', async () => {
+      browserUrl = 'https://supabase.com/dashboard/account/tokens';
+      render(<ConnectModal id="modal-1" projectId={acme} provider="supabase" />);
+      expandAdvanced();
+      fireEvent.click(screen.getByRole('button', { name: copy.connect.oauth.open }));
+      const token = await screen.findByLabelText(copy.connect.key.secret);
+      const list = screen.getByRole('button', { name: copy.connect.project.list });
+      expect(list.hasAttribute('disabled')).toBe(true);
+      fireEvent.change(token, { target: { value: 'sbp_FIXTURE' } });
+      fireEvent.click(list);
+      await waitFor(() =>
+        expect(commandMock).toHaveBeenCalledWith('target.connect.projects', {
+          provider: 'supabase',
+          source: { kind: 'token', token: 'sbp_FIXTURE' },
+        }),
+      );
+      const rows = await waitFor(() => within(projectGroup()).getAllByRole('radio'));
+      const save = screen.getByRole('button', { name: 'Save to Keychain' });
+      expect(save.hasAttribute('disabled')).toBe(true);
+      fireEvent.click(rows[0] as HTMLElement);
+      fireEvent.click(save);
+      await waitFor(() => expect(useUiStore.getState().overlays).toHaveLength(0));
+      expect(commandMock).toHaveBeenCalledWith('target.connect.saveToken', {
+        targetId: 'tgt-placeholder',
+        token: 'sbp_FIXTURE',
+        project: 'prodrefaaaaaaaaaaaaa',
+      });
+    });
+
+    it("Settings › Choose project: lists with the target's credential, preselects its project, saves via target.setProject", async () => {
+      const id = fixtures.ids.target.supabaseProd;
+      projects = [...TWO_PROJECTS, { id: 'acme-shop-prod', name: 'acme-shop', region: 'us-east-1' }];
+      render(<ConnectModal id="modal-1" projectId={acme} targetId={id} chooseProject />);
+      expect(screen.getByRole('dialog').textContent).toContain(
+        copy.connect.project.heading.replace('{target}', 'Supabase'),
+      );
+      await waitFor(() =>
+        expect(commandMock).toHaveBeenCalledWith('target.connect.projects', {
+          provider: 'supabase',
+          source: { kind: 'target', targetId: id },
+        }),
+      );
+      const rows = await waitFor(() => within(projectGroup()).getAllByRole('radio'));
+      expect(rows[2]?.getAttribute('aria-checked')).toBe('true'); // the fixture's current ref
+      // Nothing else runs: no CLI status, no login terminal.
+      expect(calls('target.connect.cliStatus')).toHaveLength(0);
+      expect(calls('target.connect.cliLogin')).toHaveLength(0);
+      fireEvent.click(rows[1] as HTMLElement);
+      fireEvent.click(screen.getByRole('button', { name: copy.connect.project.save }));
+      await waitFor(() => expect(useUiStore.getState().overlays).toHaveLength(0));
+      expect(commandMock).toHaveBeenCalledWith('target.setProject', {
+        targetId: id,
+        project: 'stagingrefbbbbbbbbbb',
+      });
     });
   });
 

@@ -1,7 +1,7 @@
-import { copy, fixtures, removeRows, type Deploy, type ReadModel } from '@styx/core';
+import { copy, deployTargetLabel, fixtures, removeRows, type Deploy, type ReadModel } from '@styx/core';
 import { describe, expect, it } from 'vitest';
 import { learnKey } from '../abilities/learn';
-import { deployButtonState, deployTargetLabel } from './deploy-button';
+import { deployButtonState } from './deploy-button';
 
 const { ids, DEMO_NOW } = fixtures;
 const acme = ids.project.acmeShop;
@@ -26,12 +26,28 @@ describe('deployButtonState', () => {
     expect(deployTargetLabel({ name: 'Vercel', env: 'prod' })).toBe('Vercel prod');
   });
 
-  it('acme-shop: three prod targets → the accent picker; the ones Styx has no command for are flagged to learn', () => {
+  it('acme-shop: every target, non-prod first and the three prod ones last; the ones without a command learn', () => {
     expect(deployButtonState(model, acme)).toEqual({
       kind: 'menu',
       live: true,
       label: copy.deploy.pick,
       options: [
+        {
+          targetId: ids.target.vercelPreview,
+          label: 'Vercel preview',
+          name: 'Vercel',
+          env: 'preview',
+          prod: false,
+          learn: false,
+        },
+        {
+          targetId: ids.target.github,
+          label: 'GitHub acme/shop scm',
+          name: 'GitHub acme/shop',
+          env: 'scm',
+          prod: false,
+          learn: true,
+        },
         {
           targetId: ids.target.vercelProd,
           label: 'Vercel prod',
@@ -60,8 +76,21 @@ describe('deployButtonState', () => {
     });
   });
 
-  it('infra-tools: one prod target with no deploy command → "Deploy to live" that hands the first deploy to the agent', () => {
+  it('infra-tools (issue #9): AWS prod + GCP staging → a picker with staging first, not a one-click prod deploy', () => {
     expect(deployButtonState(model, ids.project.infraTools)).toEqual({
+      kind: 'menu',
+      live: true,
+      label: copy.deploy.pick,
+      options: [
+        expect.objectContaining({ targetId: ids.target.infraGcp, label: 'GCP infra staging', prod: false }),
+        expect.objectContaining({ targetId: ids.target.infraAws, label: 'AWS acme-prod prod', prod: true }),
+      ],
+    });
+  });
+
+  it('one prod target with no deploy command → "Deploy to live" that hands the first deploy to the agent', () => {
+    const awsOnly: ReadModel = { ...model, targets: removeRows(model.targets, [ids.target.infraGcp]) };
+    expect(deployButtonState(awsOnly, ids.project.infraTools)).toEqual({
       kind: 'single',
       targetId: ids.target.infraAws,
       live: true,
@@ -126,34 +155,25 @@ describe('deployButtonState', () => {
     });
   });
 
-  it('several prod targets → a picker with the prod rows only', () => {
+  it('several prod targets and a preview → a picker with all of them, the preview first', () => {
     const prod = model.targets.byId[ids.target.blogVercel];
     if (prod === undefined) throw new Error('fixture');
     const second = { ...prod, id: 'target:second' as typeof prod.id, name: 'Vercel EU' };
-    const preview = { ...prod, id: 'target:preview' as typeof prod.id, env: 'preview' as const };
     const two: ReadModel = {
       ...model,
       targets: {
-        byId: { ...model.targets.byId, [second.id]: second, [preview.id]: preview },
-        ids: [...model.targets.ids, second.id, preview.id],
+        byId: { ...model.targets.byId, [second.id]: second },
+        ids: [...model.targets.ids, second.id],
       },
     };
-    expect(deployButtonState(two, ids.project.blogV2)).toEqual({
-      kind: 'menu',
-      live: true,
-      label: copy.deploy.pick,
-      options: [
-        { targetId: prod.id, label: 'Vercel prod', name: 'Vercel', env: 'prod', prod: true, learn: false },
-        {
-          targetId: second.id,
-          label: 'Vercel EU prod',
-          name: 'Vercel EU',
-          env: 'prod',
-          prod: true,
-          learn: false,
-        },
-      ],
-    });
+    const state = deployButtonState(two, ids.project.blogV2);
+    expect(state).toMatchObject({ kind: 'menu', live: true, label: copy.deploy.pick });
+    expect(state.kind === 'menu' ? state.options.map((o) => o.label) : []).toEqual([
+      'Vercel preview',
+      'GitHub acme/blog-v2 scm',
+      'Vercel prod',
+      'Vercel EU prod',
+    ]);
   });
 
   it('while the agent works a first deploy out, the button reports it and opens that chat', () => {
@@ -174,8 +194,8 @@ describe('deployButtonState', () => {
         byId: { ...model.sessions.byId, [learner.id]: { ...learner, state: 'done', endedAt: DEMO_NOW } },
       },
     };
-    expect(deployButtonState(finished, ids.project.infraTools, learning).kind).toBe('single');
-    expect(deployButtonState(model, ids.project.infraTools, { 'deploy:x': learner.id }).kind).toBe('single');
+    expect(deployButtonState(finished, ids.project.infraTools, learning).kind).toBe('menu');
+    expect(deployButtonState(model, ids.project.infraTools, { 'deploy:x': learner.id }).kind).toBe('menu');
     // A deploy in flight outranks a learning session.
     const inFlight: ReadModel = {
       ...model,

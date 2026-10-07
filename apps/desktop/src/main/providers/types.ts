@@ -56,7 +56,25 @@ export type IssuedCredential =
       handle: string;
     };
 
-export type TestResult = { ok: true; identity: string } | { ok: false; error: string };
+/**
+ * `needsProject`: the credential works but the target does not say which of the account's projects it acts on (or
+ * names one the account no longer has). Not an expiry: the row keeps its health and offers the project picker.
+ */
+export type TestResult =
+  { ok: true; identity: string } | { ok: false; error: string; needsProject?: boolean };
+
+/** One project a credential can reach (`target.connect.projects`); ids only, never secrets. */
+export interface ProviderProject {
+  id: string;
+  name: string;
+  region: string | null;
+}
+
+/** Whose login lists the projects: a pasted token (not saved yet), the CLI login, or a saved target's credential. */
+export type ProjectSource =
+  | { kind: 'token'; token: string }
+  | { kind: 'cli'; account: string }
+  | { kind: 'target'; target: TargetInfo };
 
 /**
  * Periodic health probe (RefreshScheduler). `expired: true` means minting actually failed for an auth reason
@@ -125,6 +143,12 @@ export interface ProviderAdapter {
   deployCommand?(target: TargetInfo): CliCommand;
   /** Health probe that distinguishes auth expiry from transient failure; falls back to `test()` when absent. */
   health?(target: TargetInfo): Promise<HealthResult>;
+  /**
+   * Providers whose login reaches several projects (Supabase): the `config` key that names the one a target acts on,
+   * and the projects to choose from. Present together; a target must never fall back to "the first project".
+   */
+  readonly projectKey?: string;
+  listProjects?(source: ProjectSource): Promise<ProviderProject[]>;
 }
 
 export type Fetch = typeof fetch;

@@ -10,6 +10,7 @@ import {
   events,
   isCommandName,
   isEventName,
+  PROVIDER_PROJECT_REF,
 } from './contract';
 
 describe('ipc contract', () => {
@@ -99,6 +100,63 @@ describe('ipc contract', () => {
       }).success,
     ).toBe(false);
     expect(commands['target.refresh'].input.parse({})).toEqual({});
+    // Issue #5: a Supabase target names its project; the picker lists them, Settings re-points a target.
+    expect(isCommandName('target.connect.projects')).toBe(true);
+    expect(isCommandName('target.setProject')).toBe(true);
+    for (const source of [
+      { kind: 'token', token: 'sbp_FIXTURE' },
+      { kind: 'cli', account: 'cli' },
+      { kind: 'target', targetId: ids.target.supabaseProd },
+    ])
+      expect(
+        commands['target.connect.projects'].input.safeParse({ provider: 'supabase', source }).success,
+        source.kind,
+      ).toBe(true);
+    expect(
+      commands['target.connect.projects'].input.safeParse({
+        provider: 'supabase',
+        source: { kind: 'token', token: '' },
+      }).success,
+    ).toBe(false);
+    expect(
+      commands['target.connect.projects'].output.safeParse({
+        projects: [{ id: 'abcdefghijklmnopqrst', name: 'acme', region: null }],
+      }).success,
+    ).toBe(true);
+    // Project ids travel into env and argv: nothing that could pose as a flag or carry shell characters.
+    for (const project of ['-x', '--project-ref=x', 'a b', 'a;b', ''])
+      expect(
+        commands['target.setProject'].input.safeParse({ targetId: ids.target.supabaseProd, project }).success,
+        project,
+      ).toBe(false);
+    expect(
+      commands['target.setProject'].input.safeParse({
+        targetId: ids.target.supabaseProd,
+        project: 'acme-shop-prod',
+      }).success,
+    ).toBe(true);
+    expect(
+      commands['target.connect.saveToken'].input.safeParse({
+        targetId: ids.target.supabaseProd,
+        token: 'sbp_FIXTURE',
+        project: '-x',
+      }).success,
+    ).toBe(false);
+    // Pasted tokens: printable ASCII, no spaces; the paste's surrounding whitespace is trimmed.
+    for (const token of ['a b', 'a\u0000b', 'é', ' '])
+      expect(
+        commands['target.connect.saveToken'].input.safeParse({ targetId: ids.target.supabaseProd, token })
+          .success,
+        JSON.stringify(token),
+      ).toBe(false);
+    expect(
+      commands['target.connect.saveToken'].input.parse({
+        targetId: ids.target.supabaseProd,
+        token: ' ghp_x\n',
+      }).token,
+    ).toBe('ghp_x');
+    expect(PROVIDER_PROJECT_REF.test('abcdefghijklmnopqrst')).toBe(true);
+    expect(PROVIDER_PROJECT_REF.test('-abc')).toBe(false);
     expect(
       events['connect.cliLogin'].safeParse({ terminalId: 'term:1', provider: 'gh', status: 'running' })
         .success,

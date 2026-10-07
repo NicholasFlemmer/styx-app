@@ -18,9 +18,16 @@ export function registerTargetCommands(bus: CommandBus, app: Container): void {
 
   bus.register('target.connect.saveKey', async (input) => ({ targetId: (await targets.saveKey(input)).id }));
 
-  bus.register('target.connect.saveToken', async ({ targetId, token }) => ({
-    targetId: (await targets.saveToken(targetId, token)).id,
+  bus.register('target.connect.saveToken', async ({ targetId, token, project }) => ({
+    targetId: (await targets.saveToken(targetId, token, project)).id,
   }));
+
+  bus.register('target.connect.projects', ({ provider, source }) => targets.projects(provider, source));
+
+  bus.register('target.setProject', async ({ targetId, project }) => {
+    await targets.setProject(targetId, project);
+    return {};
+  });
 
   bus.register('target.connect.saveSsh', async ({ passphrase, ...rest }) => ({
     // exactOptionalPropertyTypes: an absent passphrase must be absent, not `undefined`.

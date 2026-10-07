@@ -1,4 +1,4 @@
-import { fixtures } from '@styx/core';
+import { copy, fixtures } from '@styx/core';
 import { describe, expect, it } from 'vitest';
 import {
   autoBranch,
@@ -12,6 +12,9 @@ import {
   cliVersionLabel,
   createLabel,
   defaultAccount,
+  defaultProject,
+  projectDetail,
+  projectTargetMeta,
   githubNote,
   githubTargetOf,
   keyFormValid,
@@ -95,6 +98,38 @@ describe('connect helpers', () => {
       account: 'nic@acme.dev',
       config: {},
     });
+  });
+
+  it('cliSave carries the picked project as config.ref (Supabase, issue #5)', () => {
+    expect(
+      cliSavePayload(acme, 'supabase', 'prod', gcloud, 'nic@acme.dev', 'Supabase prod', 'abc'),
+    ).toMatchObject({
+      name: 'Supabase prod',
+      config: { ref: 'abc' },
+    });
+  });
+
+  it('project picker: keeps the current project if listed, else the only one, never the first of several', () => {
+    const a = { id: 'aaa', name: 'a', region: 'eu-west-1' };
+    const b = { id: 'bbb', name: 'b', region: null };
+    expect(defaultProject([a, b], null)).toBeNull();
+    expect(defaultProject([a, b], 'bbb')).toBe('bbb');
+    expect(defaultProject([a, b], 'gone')).toBeNull();
+    expect(defaultProject([a], null)).toBe('aaa');
+    expect(defaultProject([], null)).toBeNull();
+    expect(projectDetail(a)).toBe('aaa · eu-west-1');
+    expect(projectDetail(b)).toBe('bbb');
+  });
+
+  it('project meta: connected Supabase targets only', () => {
+    const m = fixtures.demoReadModel();
+    const sb = m.targets.byId[fixtures.ids.target.supabaseProd];
+    const aws = m.targets.byId[fixtures.ids.target.awsProd];
+    if (sb === undefined || aws === undefined) throw new Error('fixture');
+    expect(projectTargetMeta(sb)).toBe('project acme-shop-prod');
+    expect(projectTargetMeta({ ...sb, config: {} })).toBe(copy.connect.project.notChosen);
+    expect(projectTargetMeta({ ...sb, credentialRef: null })).toBeNull();
+    expect(projectTargetMeta(aws)).toBeNull();
   });
 
   it('cli target meta reads `via <cli> · <account>` only for cli targets', () => {

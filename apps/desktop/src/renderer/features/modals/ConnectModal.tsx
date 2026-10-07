@@ -2,6 +2,7 @@ import {
   copy,
   fill,
   platformCopy,
+  type CommandResult,
   type EventPayload,
   type ProjectId,
   type Provider,
@@ -22,6 +23,11 @@ import {
   cliSavePayload,
   cliStatusLine,
   defaultAccount,
+  defaultProject,
+  needsProjectPick,
+  projectDetail,
+  targetProject,
+  type ProviderProject,
   keyFormValid,
   methodLabel,
   methodOf,
@@ -44,7 +50,17 @@ export interface ConnectModalProps {
   provider?: Provider;
   /** Reconnect an existing target (its provider/env are pre-filled when the row is in the model). */
   targetId?: TargetId;
+  /** Only the project picker for `targetId` (Settings › Targets "Choose project", issue #5). */
+  chooseProject?: boolean;
 }
+
+/** The project list behind the picker: null until loaded. */
+interface ProjectList {
+  projects: ProviderProject[] | null;
+  loading: boolean;
+  error: string | null;
+}
+const NO_PROJECTS: ProjectList = { projects: null, loading: false, error: null };
 
 interface OAuthFlow {
   flowId: string;
@@ -75,6 +91,7 @@ export function ConnectModal({
   projectId: projectIdProp,
   provider: providerProp,
   targetId,
+  chooseProject = false,
 }: ConnectModalProps) {
   const popOverlay = useUi((u) => u.popOverlay);
   const platform = useCopyPlatform();
@@ -85,7 +102,7 @@ export function ConnectModal({
   const projectId: ProjectId | null = projectIdProp ?? target?.projectId ?? activeProject;
   const initialProvider = target?.provider ?? providerProp ?? null;
   /** Reconnecting a CLI-backed target: the login terminal starts as the modal opens. */
-  const reconnectCli = target !== undefined && target.authMethod === 'cli';
+  const reconnectCli = target !== undefined && target.authMethod === 'cli' && !chooseProject;
   const reconnectAccount = typeof target?.config['account'] === 'string' ? target.config['account'] : null;
 
   const [provider, setProvider] = useState<Provider>(initialProvider ?? 'vercel');
@@ -114,6 +131,11 @@ export function ConnectModal({
   const [savedTargetId, setSavedTargetId] = useState<TargetId | null>(targetId ?? null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Which of the login's projects the target acts on (Supabase). Required before save; never "the first".
+  const [projectList, setProjectList] = useState<ProjectList>(NO_PROJECTS);
+  const [project, setProject] = useState<string | null>(null);
+  const currentProject = target === undefined ? null : targetProject(target);
+  const pickProject = needsProjectPick(provider);
   const firstTile = useRef<HTMLButtonElement>(null);
   const heading = useRef<HTMLDivElement>(null);
   const firstInput = useRef<HTMLInputElement>(null);
@@ -122,12 +144,26 @@ export function ConnectModal({
   const loginCommand = cliStatus?.loginCommand ?? `${cli} auth login`;
 
   const close = () => popOverlay(id);
+  const resetProjects = () => {
+    setProjectList(NO_PROJECTS);
+    setProject(null);
+  };
+  const applyProjects = (r: CommandResult<'target.connect.projects'>) => {
+    if (!r.ok) {
+      setProjectList({ projects: null, loading: false, error: r.error.message });
+      setProject(null);
+      return;
+    }
+    setProjectList({ projects: r.value.projects, loading: false, error: null });
+    setProject((cur) => defaultProject(r.value.projects, cur ?? currentProject));
+  };
   const back = () => {
     setStep('pick');
     setFlow(null);
     setLogin(null);
     setAdvanced(false);
     setStatus(null);
+    resetProjects();
   };
   const pick = (p: Provider) => {
     setProvider(p);
@@ -136,6 +172,7 @@ export function ConnectModal({
     setLogin(null);
     setAdvanced(false);
     setStatus(null);
+    resetProjects();
     // What was typed for one provider must not sit in the next one's form (an AWS key in the GCP form).
     setToken('');
     setKey({ name: '', accessKey: '', secret: '' });
@@ -171,7 +208,7 @@ export function ConnectModal({
   };
 
   useEffect(() => {
-    if (step !== 'cli') return;
+    if (step !== 'cli' || chooseProject) return;
     let live = true;
     void (async () => {
       const r = await command('target.connect.cliStatus', { provider });
@@ -188,7 +225,55 @@ export function ConnectModal({
     return () => {
       live = false;
     };
-  }, [step, provider]);
+  }, [step, provider, chooseProject]);
+
+  // CLI path for project providers: once the CLI's login is known, list what it reaches (again after a re-login).
+  const cliAccountReady =
+    cliStatus !== null && account !== null && cliStatus.accounts.some((a) => a.id === account);
+  useEffect(() => {
+    if (chooseProject || step !== 'cli' || advanced || !pickProject || !cliAccountReady || account === null)
+      return;
+    let live = true;
+    void command('target.connect.projects', { provider, source: { kind: 'cli', account } }).then((r) => {
+      if (live) applyProjects(r);
+    });
+    return () => {
+      live = false;
+    };
+    // `applyProjects` only reads state setters and the target's current project.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chooseProject, step, advanced, provider, account, cliStatus]);
+
+  // Settings › "Choose project": list with the saved target's own credential.
+  useEffect(() => {
+    if (!chooseProject || targetId === undefined) return;
+    let live = true;
+    void command('target.connect.projects', { provider, source: { kind: 'target', targetId } }).then((r) => {
+      if (live) applyProjects(r);
+    });
+    return () => {
+      live = false;
+    };
+    // Once, on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Advanced token path: the pasted token lists its projects before anything is saved. */
+  const listTokenProjects = async () => {
+    if (token === '' || busy) return;
+    setBusy(true);
+    setProjectList({ projects: null, loading: true, error: null });
+    applyProjects(await command('target.connect.projects', { provider, source: { kind: 'token', token } }));
+    setBusy(false);
+  };
+
+  const saveProject = async () => {
+    if (targetId === undefined || project === null || busy) return;
+    setBusy(true);
+    const r = await command('target.setProject', { targetId, project });
+    setBusy(false);
+    if (r.ok) close();
+  };
 
   const startLogin = async (forAccount: string | null): Promise<void> => {
     if (projectId === null || busy || provider === 'ssh') return;
@@ -240,10 +325,12 @@ export function ConnectModal({
 
   const connectCli = async () => {
     if (projectId === null || cliStatus === null || account === null || busy) return;
+    // Checked before `busy` is set: returning after it would leave every button disabled.
+    if (pickProject && project === null) return;
     setBusy(true);
     const r = await command(
       'target.connect.cliSave',
-      cliSavePayload(projectId, provider, env, cliStatus, account, name),
+      cliSavePayload(projectId, provider, env, cliStatus, account, name, pickProject ? project : null),
     );
     setBusy(false);
     if (r.ok) close();
@@ -267,8 +354,13 @@ export function ConnectModal({
 
   const saveToken = async () => {
     if (flow === null || token === '' || busy) return;
+    if (pickProject && project === null) return;
     setBusy(true);
-    const r = await command('target.connect.saveToken', { targetId: flow.targetId, token });
+    const r = await command('target.connect.saveToken', {
+      targetId: flow.targetId,
+      token,
+      ...(pickProject && project !== null ? { project } : {}),
+    });
     setBusy(false);
     if (r.ok) close();
   };
@@ -355,7 +447,20 @@ export function ConnectModal({
     const keyPath = r.value.path;
     setSsh((f) => ({ ...f, keyPath }));
   };
-  const canConnectCli = projectId !== null && cliStatus !== null && account !== null && !busy;
+  const projectChosen = !pickProject || project !== null;
+  const canConnectCli =
+    projectId !== null && cliStatus !== null && account !== null && projectChosen && !busy;
+  // The effects above list on their own (no synchronous "loading" state in an effect): until a result lands, a
+  // picker the context asked for reads as loading.
+  const projectsRequested =
+    pickProject && (chooseProject || (step === 'cli' && !advanced && cliAccountReady));
+  const shownProjects: ProjectList =
+    projectsRequested && projectList.projects === null && projectList.error === null
+      ? { ...projectList, loading: true }
+      : projectList;
+  const projectPicker = (
+    <ProjectPicker id={`${id}-projects`} list={shownProjects} value={project} onChange={setProject} />
+  );
   // GitHub runs the device flow by itself; every other provider's page opens in the browser and the token is
   // pasted here, so the field shows for them from the start of the flow.
   const tokenMode = flow !== null && (flow.browserUrl === null || provider !== 'github');
@@ -387,6 +492,41 @@ export function ConnectModal({
     </Button>
   );
 
+  if (chooseProject && target !== undefined) {
+    return (
+      <Modal
+        width={560}
+        title={fill(copy.connect.project.heading, { target: target.name })}
+        onClose={close}
+        escapeEnabled={false}
+        bodyPad="20px 16px"
+        initialFocus={heading}
+        footer={
+          <>
+            <Button size="footer" variant="ghost" className={s['back']} onClick={close}>
+              {copy.connect.project.cancel}
+            </Button>
+            <Button
+              size="footer"
+              variant="primary"
+              disabled={project === null || busy}
+              onClick={() => void saveProject()}
+              data-save-project="true"
+            >
+              {copy.connect.project.save}
+            </Button>
+          </>
+        }
+      >
+        <div ref={heading} tabIndex={-1} className={s['providerName']}>
+          {copy.providers[target.provider]} · {target.env}
+        </div>
+        <div className={s['body']}>{copy.connect.project.body}</div>
+        {projectPicker}
+      </Modal>
+    );
+  }
+
   if (step === 'pick') {
     return (
       <Modal width={560} title={title} onClose={close} escapeEnabled={false} initialFocus={firstTile}>
@@ -411,9 +551,26 @@ export function ConnectModal({
 
   // --- Advanced (legacy) forms: OAuth / token for Vercel · Supabase · GitHub, IAM key for AWS · GCP -----------
   const oauthFooter = tokenMode ? (
-    <Button size="footer" variant="primary" disabled={token === '' || busy} onClick={() => void saveToken()}>
-      {saveLabel}
-    </Button>
+    pickProject && projectList.projects === null ? (
+      <Button
+        size="footer"
+        variant="primary"
+        disabled={token === '' || busy}
+        onClick={() => void listTokenProjects()}
+        data-list-projects="true"
+      >
+        {copy.connect.project.list}
+      </Button>
+    ) : (
+      <Button
+        size="footer"
+        variant="primary"
+        disabled={token === '' || !projectChosen || busy}
+        onClick={() => void saveToken()}
+      >
+        {saveLabel}
+      </Button>
+    )
   ) : (
     <Button
       size="footer"
@@ -428,7 +585,19 @@ export function ConnectModal({
     <>
       <div className={s['body']}>{fill(copy.connect.oauth.body, { keychainName: words.keychainName })}</div>
       {tokenMode ? (
-        <TokenField value={token} onChange={setToken} />
+        <>
+          <TokenField
+            value={token}
+            onChange={(v) => {
+              setToken(v);
+              // A different token reaches different projects: the list is re-read before save.
+              if (pickProject) resetProjects();
+            }}
+          />
+          {pickProject && (projectList.projects !== null || projectList.loading || projectList.error !== null)
+            ? projectPicker
+            : null}
+        </>
       ) : (
         <div className={s['waiting']} aria-live="polite">
           <span>{copy.connect.oauth.waiting}</span>
@@ -567,6 +736,7 @@ export function ConnectModal({
         {login !== null && loginLabel !== null ? (
           <LoginTerminal terminalId={login.terminalId} label={loginLabel} />
         ) : null}
+        {pickProject && !advanced && cliAccountReady ? projectPicker : null}
         {envRow}
         {advanced ? null : (
           <TextField
@@ -581,7 +751,10 @@ export function ConnectModal({
           className={s['disclosure']}
           aria-expanded={advanced}
           aria-controls={`${id}-advanced`}
-          onClick={() => setAdvanced((a) => !a)}
+          onClick={() => {
+            setAdvanced((a) => !a);
+            resetProjects();
+          }}
         >
           <span className={s['disclosureLabel']}>{copy.connect.cli.advanced}</span>
           <Icon name="chevron" size={10} className={advanced ? s['chevronOpen'] : undefined} />
@@ -702,6 +875,66 @@ function TextField({
         onChange={(e) => onChange(e.currentTarget.value)}
       />
     </Field>
+  );
+}
+
+/**
+ * Which of the login's projects the target acts on: the account list's radio rows (`data-inv` = chosen), so it
+ * reads like the step above it. Loading, empty and error states sit in the same place.
+ */
+function ProjectPicker({
+  id,
+  list,
+  value,
+  onChange,
+}: {
+  id: string;
+  list: ProjectList;
+  value: string | null;
+  onChange: (id: string) => void;
+}) {
+  const labelId = `${id}-label`;
+  const { projects, loading, error } = list;
+  return (
+    <div className={s['accounts']} data-project-picker="true">
+      <Label as="div" id={labelId}>
+        {copy.connect.project.label}
+      </Label>
+      {loading ? (
+        <div className={s['body']} role="status">
+          {copy.connect.project.loading}
+        </div>
+      ) : error !== null ? (
+        <div className={s['body']} role="status">
+          {error}
+        </div>
+      ) : projects !== null && projects.length === 0 ? (
+        <div className={s['body']} role="status">
+          {copy.connect.project.none}
+        </div>
+      ) : projects !== null ? (
+        <>
+          <div role="radiogroup" aria-labelledby={labelId} aria-required="true" className={s['accountList']}>
+            {projects.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                role="radio"
+                aria-checked={value === p.id}
+                data-inv={value === p.id ? 'true' : undefined}
+                data-project={p.id}
+                className={s['account']}
+                onClick={() => onChange(p.id)}
+              >
+                <span className={s['accountLabel']}>{p.name}</span>
+                <span className={s['accountDetail']}>{projectDetail(p)}</span>
+              </button>
+            ))}
+          </div>
+          {value === null ? <div className={s['body']}>{copy.connect.project.required}</div> : null}
+        </>
+      ) : null}
+    </div>
   );
 }
 

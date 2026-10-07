@@ -76,7 +76,7 @@ The dialog drafts the commit message from the diff (the agent writes it); edit i
 
 ## Deploy
 
-The **Deploy** button sits next to Publish and always names the target, for example **Deploy to live · Vercel prod**. Production targets win: with one, the button deploys there. With several production targets, or none and several others, it opens a **Deploy to** menu. With no targets it reads **Connect a deploy target**. Every target, staging and preview included, is also in the palette as **Deploy** project **→** target.
+The **Deploy** button sits next to Publish. With one target it names it, for example **Deploy to live · Vercel prod** or **Deploy · Vercel preview**, and deploys there. With several, it opens a **Deploy to** menu that lists every target: preview and staging first, production last, below a line and tagged in the accent colour. Opening the menu never deploys anything; you pick the target. With no targets it reads **Connect a deploy target**. Every target is also in the palette as **Deploy** project **→** target.
 
 **The first deploy** to a target is handed to an agent, the same way [Run locally](/docs/using/preview#run-locally) is. It works out the exact deploy command for your project and that target, tells you what it will do and waits for your go-ahead before changing anything in that environment, runs it under a grant, and, once it has succeeded, tells Styx the command. Vercel targets have a deploy command built in, so they skip this step.
 

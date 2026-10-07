@@ -61,6 +61,11 @@ export interface ProjectServiceDeps {
   ideRecents?: () => RecentFolder[] | Promise<RecentFolder[]>;
   /** Walker budget override (tests). */
   scanBudget?: Partial<WalkBudget>;
+  /**
+   * An accepted `.styx/project.json` changed a connected target's config (TargetService.fileConfigChanged): a new
+   * project is audited and ends the grants approved for the old one.
+   */
+  onTargetConfigChanged?: (before: Target, after: Target) => void;
 }
 
 /** Built-in template names shipped in `resources/templates` (spec §4.12). */
@@ -1190,6 +1195,7 @@ export class ProjectService {
           };
       repos.targets.upsert(target);
       targetIds.push(target.id);
+      if (match && match.credentialRef !== null) this.deps.onTargetConfigChanged?.(match, target);
     }
     publisher.upsert('targets', targetIds);
     publisher.upsert('projects', [project.id]);
