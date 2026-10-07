@@ -37,7 +37,8 @@ export const SCOPE_ATTR = 'data-keyscope';
 
 /**
  * Innermost-first chain of scopes for a target, always ending in `global`. When an overlay is open and the
- * chain does not already pass through one, `overlay` is prepended so Esc reaches the stack even from `body`.
+ * chain does not already pass through one, `overlay` is prepended so Esc reaches the stack even from `body`, unless
+ * focus is in an inline menu, which handles its own Esc.
  */
 export const scopeChain = (target: EventTarget | null, overlayOpen: boolean): KeyScope[] => {
   const chain: KeyScope[] = [];
@@ -49,7 +50,10 @@ export const scopeChain = (target: EventTarget | null, overlayOpen: boolean): Ke
     if (isKeyScope(raw) && !chain.includes(raw)) chain.push(raw);
     el = scoped.parentElement;
   }
-  if (overlayOpen && !chain.includes('overlay') && !chain.includes('palette')) chain.unshift('overlay');
+  // A focused inline menu (the Deploy picker, the rail's add menu) closes itself on Esc: an overlay elsewhere, such as
+  // a toast, must not take the key first. Menus inside an overlay already have `overlay` in their chain.
+  const inMenu = target instanceof Element && target.closest('[role="menu"]') !== null;
+  if (overlayOpen && !inMenu && !chain.includes('overlay') && !chain.includes('palette')) chain.unshift('overlay');
   if (overlayOpen && chain.includes('palette') && !chain.includes('overlay')) {
     chain.splice(chain.indexOf('palette') + 1, 0, 'overlay');
   }

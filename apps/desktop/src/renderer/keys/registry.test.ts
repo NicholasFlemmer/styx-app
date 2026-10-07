@@ -55,6 +55,14 @@ describe('scopeChain', () => {
     expect(scopeChain(document.querySelector('button'), true)).toEqual(['overlay', 'workspace', 'global']);
     expect(scopeChain(document.body, true)).toEqual(['overlay', 'global']);
   });
+  it('leaves Esc to a focused inline menu while an overlay (a toast) is open elsewhere', () => {
+    mount('<div data-keyscope="workspace"><div role="menu"><button role="menuitem"></button></div></div>');
+    expect(scopeChain(document.querySelector('[role="menuitem"]'), true)).toEqual(['workspace', 'global']);
+  });
+  it('keeps overlay for a menu inside an overlay', () => {
+    mount('<div data-keyscope="overlay"><div role="menu"><button role="menuitem"></button></div></div>');
+    expect(scopeChain(document.querySelector('[role="menuitem"]'), true)).toEqual(['overlay', 'global']);
+  });
 });
 
 describe.each<Platform>(['darwin', 'win32'])('KeyRegistry on %s', (platform) => {
