@@ -117,7 +117,7 @@ gets the element, the page and a picture of it.
 - **Policies.** Auto-approve the safe things (say, GitHub reads) and set how long access lasts.
 - **Usage.** Tokens, cost and turns across every agent and project.
 - **Tech debt audit.** An agent reviews the repo in the background and reports what will slow the next person down.
-- **Brings your editor along.** Recent projects, keybindings and theme come in, and any file opens back in your editor.
+- **Works with your editor.** Your editor's recent projects come in, and any file or task opens back in your editor.
 - **Env and secrets per project**, with the secrets in your keychain, not the repo.
 - Light and dark themes, and it keeps itself up to date.
 

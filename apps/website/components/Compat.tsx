@@ -10,9 +10,9 @@ const agents = [
 ] as const;
 
 const editors = [
-  ['VS Code', 'Recent folders, keybindings, theme and font come along.'],
-  ['Cursor', 'Same as VS Code: recents, keybindings, theme and font.'],
-  ['Windsurf', 'Same as VS Code: recents, keybindings, theme and font.'],
+  ['VS Code', 'Recent folders come along, and anything opens back in VS Code.'],
+  ['Cursor', 'Same as VS Code: recent folders, and Open in Cursor.'],
+  ['Windsurf', 'Same as VS Code: recent folders, and Open in Windsurf.'],
   ['JetBrains IDEs', 'WebStorm, IntelliJ IDEA, PyCharm, GoLand, RustRover. Recent projects come along.'],
   ['Zed', 'Detected and ready under “Open in”.'],
   ['Neovim', 'Detected and ready under “Open in”.'],
@@ -32,7 +32,7 @@ export const Compat = () => (
     tone="panel"
     id="agents"
     title="Everything you already use, in one place."
-    lede="Styx runs the agents you have installed and signs them in for you, connects to the services you are already logged into, and picks up your editor on first launch: recent folders, keybindings and theme come along, and anything can be opened back in it with one key. Nothing in your editor changes."
+    lede="Styx runs the agents you have installed and signs them in for you, connects to the services you are already logged into, and picks up your editor on first launch: recent folders come along, and anything can be opened back in it with one key. Nothing in your editor changes."
   >
     <div className={styles.cols}>
       <div className={styles.col}>

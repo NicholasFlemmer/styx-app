@@ -55,7 +55,7 @@ const graph = () => {
           'Run Claude Code, Codex, Gemini CLI and Cursor agents side by side',
           'Every project and agent in one window, with the ones that need you first',
           'Each agent in its own git worktree and branch',
-          'Works on top of your existing editor, with your recents, keybindings and theme',
+          'Works on top of your existing editor: your recent projects come in, and anything opens back in it',
           'Agents ask before touching production; you approve for a set time, with Touch ID, Windows Hello or your system password for live systems',
           'An append-only log of every request, approval and use',
           'Free and open source under the Apache License 2.0',
