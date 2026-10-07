@@ -57,13 +57,18 @@ jobs:
           sha=$(git rev-parse HEAD)
           # CI must have passed for exactly this commit. Wait for a run still in progress.
           for i in $(seq 1 90); do
+            # GitHub's API has transient 5xx errors; a failed lookup is retried next minute, never fatal.
             state=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci --commit "$sha" --json status,conclusion \
               --jq 'if length == 0 then "none" elif any(.[]; .conclusion == "success") then "success"
-                    elif any(.[]; .status != "completed") then "running" else "failed" end')
+                    elif any(.[]; .status != "completed") then "running" else "failed" end') || state=unreachable
             case "$state" in
+              unreachable) echo "GitHub API did not answer ($i min); trying again"; sleep 60 ;;
               success) break ;;
               running) echo "CI is still running for $sha ($i min)"; sleep 60 ;;
-              none) echo "::error::No CI run for $sha. Push it to main and let CI pass first."; exit 1 ;;
+              none)
+                # A push seconds ago may not have a CI run listed yet.
+                if [ "$i" -le 5 ]; then echo "No CI run for $sha yet ($i min)"; sleep 60; continue; fi
+                echo "::error::No CI run for $sha. Push it to main and let CI pass first."; exit 1 ;;
               *) echo "::error::CI failed for $sha. Fix it, then release again."; exit 1 ;;
             esac
           done
