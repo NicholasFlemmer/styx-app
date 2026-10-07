@@ -1693,7 +1693,7 @@ test('sim: design-deploy', async () => {
       });
 
       await sim.step(
-        'Env & secrets: source, share with agents (change + reset), committed file',
+        'Env & secrets: source and committed file (Share with agents was removed, issue #4)',
         async () => {
           await page().locator('[data-nav-item="project:env"]').click();
           const rows = page().locator('[data-settings-row]');
@@ -1701,29 +1701,11 @@ test('sim: design-deploy', async () => {
           const idsSeen = await rows.evaluateAll((els) =>
             els.map((e) => e.getAttribute('data-settings-row')),
           );
-          for (const id of ['envSource', 'shareWithAgents', 'committedFile'])
+          for (const id of ['envSource', 'committedFile'])
             expect(idsSeen.includes(id), `row ${id} missing: ${idsSeen.join(',')}`);
-          const share = page().locator('[data-settings-row="shareWithAgents"]');
-          const select = share.locator('select');
-          const before = await select.inputValue();
-          const options = await select.locator('option').allInnerTexts();
-          await select.selectOption('never');
-          const saved = await until(
-            async () => ((await settingsOf(acme))['envShareWithAgents'] === 'never' ? true : null),
-            5000,
-          );
-          expect(saved, 'envShareWithAgents not saved');
-          const reset = share.locator('button');
-          const resettable = await until(async () => ((await reset.count()) > 0 ? true : null), 5000);
-          expect(resettable, 'no reset control after overriding');
-          await reset.first().click();
-          const back = await until(async () => {
-            const v = (await settingsOf(acme))['envShareWithAgents'];
-            return v === undefined || v === null || v === before ? true : null;
-          }, 5000);
-          expect(back, `not reset: ${String((await settingsOf(acme))['envShareWithAgents'])}`);
+          expect(!idsSeen.includes('shareWithAgents'), 'Share with agents is back, but nothing applies it');
           const texts = await rows.allInnerTexts();
-          return `options ${options.join('/')} · rows: ${texts.map((t) => t.replace(/\n/g, ' ')).join(' | ')}`;
+          return `rows: ${texts.map((t) => t.replace(/\n/g, ' ')).join(' | ')}`;
         },
       );
 

@@ -1737,7 +1737,11 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       shortcuts: 'Shortcuts',
     },
     project: { targets: 'Targets', agentDefaults: 'Agent defaults', env: 'Env & secrets' },
-    footer: { file: '.styx/project.json', note: 'committed · secrets excluded' },
+    /**
+     * Issue #10: the lane rows of Agent defaults (fetch first, bring in the base, merging, land on its own) are kept on
+     * this machine, not in the file, so the header no longer calls the whole page committed.
+     */
+    footer: { file: '.styx/project.json', note: 'committed, lane rows excepted · secrets excluded' },
     scope: { app: 'app', project: 'project · {project}' },
     rows: {
       theme: 'Theme',
@@ -1746,20 +1750,17 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       engine: 'Engine',
       openFilesIn: 'Open files in',
       fallbackEditor: 'Fallback editor',
-      lineEndings: 'Line endings',
       /** Spec §9: Monaco screen-reader mode + xterm accessibility tree; not a §10 string. */
       screenReader: 'Screen reader mode',
       /** Owner decision: the hunk watcher is opt-in (it slowed the app at ~100 hunks); not a §10 string. */
       trackAgentEdits: 'Track agent edits (diff review)',
       defaultAgent: 'Default agent',
-      autoWorktree: 'Auto-create worktree per agent',
       shellWindows: 'Shell (Windows)',
       detectedClis: 'Detected CLIs',
       /** One row per CLI with more than one runnable binary (PATH vs an IDE extension bundle …). */
       cliBinary: '{cli} binary',
       store: 'Store',
       mfaProdWrite: 'MFA for prod write',
-      injectAs: 'Inject as',
       autoApproveStagingReads: 'Auto-approve staging reads',
       grantIdleExpiry: 'Grant idle expiry',
       export: 'Export',
@@ -1775,7 +1776,6 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       taskPermissionMode: 'Styx tasks · Run locally, Deploy, Tech debt audit, merges',
       effort: 'Effort',
       envSource: '.env source',
-      shareWithAgents: 'Share with agents',
       committedFile: 'Committed file',
       /** Keep lanes current (owner addition, ADR-0023). */
       syncOnSpawn: 'Fetch before cutting a lane',
@@ -1794,14 +1794,11 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       off: 'Off',
       engine: 'Monaco (embedded)',
       openFilesIn: { styx: 'Styx', fallback: 'Fallback editor' },
-      lineEndings: { auto: 'Per repo', lf: 'LF', crlf: 'CRLF' },
       shellWindows: { powershell: 'PowerShell', wsl: 'WSL' },
-      injectAs: { 'scoped-else-env': 'Scoped token, else env', env: 'Env' },
       idleExpiry: '1 hour',
       exportJson: 'JSON',
       modelDefault: 'Default',
       envSource: 'Keychain',
-      shareWithAgents: { 'per-grant': 'Per grant', always: 'Always', never: 'Never' },
       committedFile: '.styx/project.json',
       /** `{cli} binary` Select: drop a manual "Locate binary" pick and trust detection again. */
       cliAutoDetect: 'Detected automatically',

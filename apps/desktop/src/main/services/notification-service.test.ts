@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { fixtures } from '@styx/core';
+import { fixtures, type NotifyMode } from '@styx/core';
 import { describe, expect, it, vi } from 'vitest';
 import { migrate } from '../db/migrate';
 import { KvStore } from '../db/kv';
@@ -26,12 +26,13 @@ function make(platform: NodeJS.Platform) {
   migrate(db);
   const os: OsNotifier = { setBadge: vi.fn(), bounceOnce: vi.fn(), toast: vi.fn(), setTray: vi.fn() };
   const actions = { review: vi.fn(), later: vi.fn(), openBoard: vi.fn() };
-  let sound = false;
+  let mode: NotifyMode = 'badge';
   return {
     os,
     actions,
-    setSound: (v: boolean) => (sound = v),
-    svc: new NotificationService(os, new KvStore(db, 'ui_state'), platform, actions, () => sound),
+    setSound: (v: boolean) => (mode = v ? 'badge-sound' : 'badge'),
+    setMode: (m: NotifyMode) => (mode = m),
+    svc: new NotificationService(os, new KvStore(db, 'ui_state'), platform, actions, () => mode),
   };
 }
 
@@ -79,6 +80,36 @@ describe('NotificationService', () => {
     svc.onAskResolved('a1', 0);
     expect(os.setBadge).toHaveBeenLastCalledWith(0);
   });
+
+  it.each(['darwin', 'win32', 'linux'] as const)(
+    'notify Off (%s): no badge, bounce, tray dot or OS toast; the tray menu still counts; back on restores the badge',
+    (platform) => {
+      const { os, svc, setMode } = make(platform);
+      setMode('off');
+      svc.start(2);
+      expect(os.setBadge).toHaveBeenLastCalledWith(0);
+      svc.onAskOpened(ask, 3);
+      expect(os.setBadge).toHaveBeenLastCalledWith(0);
+      expect(os.bounceOnce).not.toHaveBeenCalled();
+      expect(os.toast).not.toHaveBeenCalled();
+      expect(svc.delivers).toBe(false);
+      const tray = (os.setTray as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as {
+        attention: boolean;
+        menu: { label: string }[];
+      };
+      expect(tray.attention).toBe(false);
+      expect(tray.menu[0]?.label).toBe('3 need you');
+      svc.onAskResolved('a1', 2);
+      expect(os.setBadge).toHaveBeenLastCalledWith(0);
+      setMode('badge');
+      svc.refresh();
+      expect(os.setBadge).toHaveBeenLastCalledWith(2);
+      expect(os.setTray).toHaveBeenLastCalledWith(expect.objectContaining({ attention: true }));
+      expect(svc.delivers).toBe(true);
+      svc.onAskOpened({ ...ask, askId: 'a2' }, 3);
+      expect(os.toast).toHaveBeenLastCalledWith(expect.objectContaining({ sound: false }));
+    },
+  );
 });
 
 describe('bannersToReemit', () => {

@@ -191,4 +191,35 @@ describe('ToastHost · one needs-you toast per ask', () => {
     cleanup();
     Object.assign(window, { styx: undefined });
   });
+
+  it('Notify when an agent needs me › Off (issue #4) shows no needs-you toast', () => {
+    const listeners = new Map<string, (payload: unknown) => void>();
+    Object.assign(window, {
+      styx: {
+        platform: 'darwin',
+        env: { now: DEMO_NOW },
+        command: vi.fn(async () => ({ ok: true, value: {} })),
+        onEvent: (name: string, cb: (payload: unknown) => void) => {
+          listeners.set(name, cb);
+          return () => listeners.delete(name);
+        },
+      },
+    });
+    const m = fixtures.demoReadModel();
+    useReadModel
+      .getState()
+      .replaceModel({ ...m, settings: { ...m.settings, app: { ...m.settings.app, notify: 'off' } } }, 'connected');
+    useUiStore.setState({ overlays: [], screen: 'workspace', platform: 'darwin', projectId: acme });
+    render(<ToastHost />);
+    act(() =>
+      listeners.get('ask.opened')?.({
+        askId: fixtures.ids.ask.codexGrant,
+        sessionId: fixtures.ids.session.codex,
+        projectId: acme,
+      }),
+    );
+    expect(toasts()).toEqual([]);
+    cleanup();
+    Object.assign(window, { styx: undefined });
+  });
 });

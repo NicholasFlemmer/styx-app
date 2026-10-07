@@ -670,12 +670,18 @@ describe('RunService', () => {
       file: 'powershell.exe',
       args: ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-Command', 'npm run dev'],
     });
+    // The shell is the project's (Settings › Shell (Windows), issue #4): asked for by project id.
+    const askedFor: string[] = [];
     const wsl = new RunService({
       ...(fake as unknown as ConstructorParameters<typeof RunService>[0]),
-      shell: () => 'wsl.exe',
+      shell: (projectId) => {
+        askedFor.push(projectId);
+        return 'wsl.exe';
+      },
       platform: 'win32',
     });
     await wsl.start(acme, 'npm run dev');
     expect(calls.at(-1)).toEqual({ file: 'wsl.exe', args: ['-e', 'sh', '-lc', 'npm run dev'] });
+    expect(askedFor).toEqual([acme]);
   });
 });

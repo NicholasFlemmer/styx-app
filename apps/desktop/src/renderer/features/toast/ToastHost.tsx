@@ -3,6 +3,7 @@ import {
   copy,
   fill,
   isDeployActive,
+  notifiesOnAsk,
   projectNameOf,
   rows,
   toastFor,
@@ -196,7 +197,10 @@ function ToastSlot({ overlay, offset, onHeight }: ToastSlotProps) {
   );
 }
 
-/** Listens for `ask.opened` and stacks toasts top-right (340px, right 16, top 52), each below the previous one. Respects DND. */
+/**
+ * Listens for `ask.opened` and stacks toasts top-right (340px, right 16, top 52), each below the previous one.
+ * Respects DND and Notify › Off.
+ */
 export function ToastHost() {
   const toasts = useUiShallow((st) => st.overlays.filter((o) => o.kind === 'toast'));
   const [heights, setHeights] = useState<Record<string, number>>({});
@@ -209,7 +213,8 @@ export function ToastHost() {
     () =>
       onEvent('ask.opened', ({ askId, sessionId, projectId }) => {
         const ui = useUiStore.getState();
-        if (useReadModel.getState().model.settings.app.dnd) return;
+        // Do Not Disturb, or Notify when an agent needs me › Off (issue #4): the board and inbox still show the ask.
+        if (!notifiesOnAsk(useReadModel.getState().model.settings.app)) return;
         // One toast per ask: `ask.opened` can arrive more than once (a window reconnect, a re-published ask),
         // and only the newest toast was checked before, so a second copy stacked under any other toast.
         const already = ui.overlays.some(

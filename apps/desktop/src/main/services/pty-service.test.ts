@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergePaths, parseLoginEnv, PtyService, fallbackShell } from './pty-service';
+import { mergePaths, parseLoginEnv, PtyService, fallbackShell, windowsShellFile } from './pty-service';
 
 let available = true;
 try {
@@ -109,5 +109,19 @@ describe('fallbackShell (no $SHELL)', () => {
     expect(fallbackShell('linux', (p) => p === '/bin/bash')).toBe('/bin/bash');
     expect(fallbackShell('linux', (p) => p === '/usr/bin/bash')).toBe('/usr/bin/bash');
     expect(fallbackShell('linux', () => false)).toBe('/bin/sh');
+  });
+});
+
+describe('windowsShellFile (Settings › Shell (Windows), issue #4)', () => {
+  it.each([
+    [undefined, undefined, 'powershell.exe'],
+    [undefined, 'powershell', 'powershell.exe'],
+    [undefined, 'wsl', 'wsl.exe'],
+    ['', 'wsl', 'wsl.exe'],
+    ['something-else', 'wsl', 'wsl.exe'],
+    ['wsl', 'powershell', 'wsl.exe'],
+    ['powershell', 'wsl', 'powershell.exe'],
+  ] as const)('STYX_WIN_SHELL=%s, setting %s → %s', (env, setting, file) => {
+    expect(windowsShellFile(env, setting)).toBe(file);
   });
 });

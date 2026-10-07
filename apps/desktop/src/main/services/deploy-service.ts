@@ -27,8 +27,11 @@ export interface DeployServiceDeps {
   terminals: TerminalService;
   pty: PtyService;
   cli: CliRunner;
-  /** The login shell a user-written deploy command runs through (`$SHELL -lc`); injectable for tests. */
-  shell?: () => string;
+  /**
+   * The login shell a user-written deploy command runs through (`$SHELL -lc`; on Windows the project's Shell
+   * (Windows) setting); injectable for tests.
+   */
+  shell?: (projectId: string) => string;
   platform?: NodeJS.Platform;
   /** Timestamps for the `model.deploys` rows; the wall clock unless a test injects one. */
   now?: () => number;
@@ -158,7 +161,7 @@ export class DeployService {
     if (custom !== null && customLabel !== null) {
       // The command string goes through the login shell so it resolves exactly as in the user's terminal. The
       // label (grant use, logs) is the redacted form; the shell gets the text as written.
-      const shell = this.deps.shell?.() ?? '/bin/sh';
+      const shell = this.deps.shell?.(target.projectId) ?? '/bin/sh';
       const args =
         this.deps.platform === 'win32'
           ? /wsl(\.exe)?$/i.test(shell)

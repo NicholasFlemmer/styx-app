@@ -11,8 +11,10 @@ import {
   newId,
   parseProjectFile,
   PROJECT_FILE_PATH,
-  projectSettingsFromFile,
+  isMachineProjectSetting,
+  machineProjectSettings,
   serializeProjectFile,
+  settingsAfterFileRead,
   type Policy,
   type Project,
   type ProjectFileV1,
@@ -382,6 +384,12 @@ export class ProjectService {
     return this.acceptedPolicy(projectId)?.hash === hash;
   }
 
+  /**
+   * The one read of `.styx/project.json` outside add / accept: stat, and re-parse only when the mtime moved. Policy
+   * rules and (issue #10) the project settings both follow it, so a hand edit to either takes effect at the next
+   * read without re-adding the project. A changed, valid file merges its settings into the stored ones (machine-only
+   * keys kept); an invalid one changes nothing; a file that disappears while Styx runs leaves the machine keys only.
+   */
   private cachedFile(projectId: string): CachedProjectFile | null {
     const project = this.deps.repos.projects.get(projectId);
     if (!project) return null;
@@ -391,6 +399,8 @@ export class ProjectService {
       mtime = statSync(file).mtimeMs;
     } catch {
       this.fileCache.delete(projectId);
+      // Gone since it was last read (the row still says it has one): its keys go back to the defaults.
+      if (project.hasProjectFile && isAbsolute(project.path)) this.applyFileSettings(project, null, null);
       return null;
     }
     const cached = this.fileCache.get(projectId);
@@ -399,9 +409,11 @@ export class ProjectService {
     try {
       const parsed = parseProjectFile(readFileSync(file, 'utf8'));
       if (parsed.ok) parsedFile = parsed.file;
+      else logger.warn('project.json invalid', { project: project.name, error: parsed.error.message });
     } catch (e) {
       logger.warn('project.json rules unreadable', { project: project.name, error: (e as Error).message });
     }
+    if (parsedFile) this.applyFileSettings(project, parsedFile, Math.round(mtime) || this.deps.clock.now());
     const summary = parsedFile ? policySummaryOf(parsedFile) : { rules: [], targets: [] };
     const trustedRules = parsedFile ? projectFileRules(parsedFile, this.deps.clock.now()) : [];
     const entry: CachedProjectFile = {
@@ -414,6 +426,42 @@ export class ProjectService {
     };
     this.fileCache.set(projectId, entry);
     return entry;
+  }
+
+  /**
+   * Picks up hand edits to `.styx/project.json` (issue #10) through the same mtime-keyed read the policy rules use;
+   * no watcher. Called where a setting is about to matter or be shown: the window gaining focus (the person comes
+   * back from their editor), choosing a project, starting a task, a run or a landing, and before Settings writes the
+   * file (so a stale row never overwrites a hand edit). One `stat` per project when nothing changed.
+   */
+  refreshFromFile(projectId?: string): void {
+    const ids =
+      projectId === undefined
+        ? this.deps.repos.projects
+            .all()
+            .filter((p) => p.removedAt === null)
+            .map((p) => p.id)
+        : [projectId];
+    for (const id of ids) {
+      const project = this.deps.repos.projects.get(id);
+      // A relative path is a fixture's display path (`~/code/acme-shop`): there is no file to read for it.
+      if (project && isAbsolute(project.path)) this.cachedFile(id);
+    }
+  }
+
+  /**
+   * Stores the settings a (re-)read of the file gives (`settingsAfterFileRead`: file keys from the file, machine keys
+   * kept) and publishes them when they or the has-a-file flag changed. `mtime` null = the file is gone.
+   */
+  private applyFileSettings(project: Project, file: ProjectFileV1 | null, mtime: number | null): void {
+    const { repos, publisher } = this.deps;
+    const before = repos.projects.settings(project.id);
+    const next = settingsAfterFileRead(before, file);
+    const flagChanged = project.hasProjectFile !== (mtime !== null);
+    if (!flagChanged && JSON.stringify(before) === JSON.stringify(next)) return;
+    repos.projects.setSettings(project.id, next, mtime);
+    if (flagChanged) publisher.upsert('projects', [project.id]);
+    publisher.settingsSet(undefined, { [project.id]: projectSettingsFor(repos, project.id) });
   }
 
   private get home(): string {
@@ -1056,6 +1104,9 @@ export class ProjectService {
   }
 
   select(projectId: string): void {
+    // Hand edits to the file show as soon as the project is opened (issue #10); read the row after, as the refresh
+    // may have changed whether it has a file.
+    this.refreshFromFile(this.require(projectId).id);
     const project = this.require(projectId);
     this.deps.repos.uiState.set('projectId', project.id);
     this.deps.repos.projects.upsert({ ...project, lastActivityAt: this.deps.clock.now() });
@@ -1071,7 +1122,12 @@ export class ProjectService {
     const file = join(project.path, PROJECT_FILE_PATH);
     if (!existsSync(file)) {
       if (project.hasProjectFile) {
-        repos.projects.setSettings(project.id, {}, null);
+        // The file is gone: its keys go back to the defaults; what lives only on this machine stays (issue #10).
+        repos.projects.setSettings(
+          project.id,
+          machineProjectSettings(repos.projects.settings(project.id)),
+          null,
+        );
         publisher.upsert('projects', [project.id]);
         publisher.settingsSet(undefined, { [project.id]: projectSettingsFor(repos, project.id) });
       }
@@ -1085,7 +1141,13 @@ export class ProjectService {
       return { ok: false, error: parsed.error.message };
     }
     const mtime = Math.round((await stat(file)).mtimeMs) || clock.now();
-    repos.projects.setSettings(project.id, projectSettingsFromFile(parsed.file), mtime);
+    // Merge, never replace (issue #10): re-adding a project or accepting its policies re-reads the file, and the
+    // lane settings that live only on this machine (`MACHINE_PROJECT_SETTINGS`) must survive that.
+    repos.projects.setSettings(
+      project.id,
+      settingsAfterFileRead(repos.projects.settings(project.id), parsed.file),
+      mtime,
+    );
     // Repo-authored grant policy is advisory until accepted on this machine: an unaccepted `targets[].policy` never
     // lands on the row (the app value and `policySource: 'app'` stay), and the banner asks the user to review (H-1).
     const summary = policySummaryOf(parsed.file);
@@ -1242,6 +1304,8 @@ export class ProjectService {
 
   async setSettings(projectId: string, patch: Partial<ProjectSettings>): Promise<void> {
     const project = this.require(projectId);
+    // A hand edit made since the last read is taken in first, so writing one setting never undoes it.
+    this.refreshFromFile(project.id);
     const current = this.deps.repos.projects.settings(project.id);
     const next: Partial<ProjectSettings> = { ...current };
     for (const k of PROJECT_KEYS) if (patch[k] !== undefined) (next as Record<string, unknown>)[k] = patch[k];
@@ -1250,6 +1314,7 @@ export class ProjectService {
 
   async resetSetting(projectId: string, key: keyof ProjectSettings): Promise<void> {
     const project = this.require(projectId);
+    this.refreshFromFile(project.id);
     const next = { ...this.deps.repos.projects.settings(project.id) };
     delete next[key];
     await this.writeSettings(project, next);
@@ -1266,7 +1331,7 @@ export class ProjectService {
         const parsed = parseProjectFile(await readFile(file, 'utf8'));
         if (parsed.ok) base = parsed.file;
       }
-      const out = applySettingsToFile(base, next);
+      const out = applySettingsToFile(base, fileSettings(next));
       try {
         await mkdir(dirname(file), { recursive: true });
         await writeFile(file, serializeProjectFile(out));
@@ -1280,7 +1345,18 @@ export class ProjectService {
   }
 }
 
-/** Writes the flattened settings back into the file's nested shape; absent keys are removed from the file. */
+/** Stored settings minus the machine-only keys: what `.styx/project.json` carries (issue #10). */
+export const fileSettings = (s: Partial<ProjectSettings>): Partial<ProjectSettings> => {
+  const out: Partial<ProjectSettings> = {};
+  for (const [k, v] of Object.entries(s))
+    if (!isMachineProjectSetting(k)) (out as Record<string, unknown>)[k] = v;
+  return out;
+};
+
+/**
+ * Writes the flattened settings back into the file's nested shape; absent keys are removed from the file. The
+ * machine-only keys (`MACHINE_PROJECT_SETTINGS`) have no place in it and are never written.
+ */
 export const applySettingsToFile = (file: ProjectFileV1, s: Partial<ProjectSettings>): ProjectFileV1 => {
   const out: ProjectFileV1 = { ...file };
   const agents: Record<string, unknown> = { ...(file.agents ?? {}) };

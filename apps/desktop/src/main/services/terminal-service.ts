@@ -26,7 +26,9 @@ export class TerminalService {
   async spawn(worktreeId: string): Promise<string> {
     const wt = this.repos.worktrees.get(worktreeId) ?? fail('not-found', `worktree ${worktreeId} not found`);
     const id = `term:${ulid()}`;
-    await this.pty.spawn({ id, cwd: wt.path, env: this.env() });
+    // The project's Shell (Windows) on Windows (issue #4); `$SHELL` elsewhere.
+    const shell = this.pty.defaultShell(this.repos.projects.settings(wt.projectId).shellWindows);
+    await this.pty.spawn({ id, cwd: wt.path, shell, env: this.env() });
     this.owners.set(id, worktreeId);
     return id;
   }

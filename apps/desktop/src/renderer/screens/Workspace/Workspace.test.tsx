@@ -108,6 +108,32 @@ describe('Workspace screen', () => {
     expect(document.querySelector('[data-workspace]')?.getAttribute('data-workspace')).toBe('main');
   });
 
+  it('Open files in › Fallback editor (issue #4): a file picked in the tree goes to that editor; Styx opens it here', async () => {
+    const m = fixtures.demoReadModel();
+    useReadModel
+      .getState()
+      .replaceModel(
+        { ...m, settings: { ...m.settings, app: { ...m.settings.app, openFilesIn: 'fallback' } } },
+        'connected',
+      );
+    render(<Workspace />);
+    const readme = await screen.findByRole('treeitem', { name: 'README.md' });
+    fireEvent.click(readme);
+    expect(commandMock).toHaveBeenCalledWith('worktree.openInIde', {
+      worktreeId: sideMain,
+      file: 'README.md',
+    });
+    expect(useUiStore.getState().editorFile).toBeNull();
+
+    cleanup();
+    commandMock.mockClear();
+    useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected'); // openFilesIn: styx
+    render(<Workspace />);
+    fireEvent.click(await screen.findByRole('treeitem', { name: 'README.md' }));
+    expect(commandMock).not.toHaveBeenCalledWith('worktree.openInIde', expect.anything());
+    expect(useUiStore.getState().editorFile).toBe('README.md');
+  });
+
   it('six instruments on the lane (ADR-0027 §2, #138, #140): Tasks the other lanes, Code the files and editor, Changes the page, Terminal fills, Preview the design window; the pick persists', async () => {
     useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
     useUiStore.setState({ projectId: acme, paneSizes: {} });

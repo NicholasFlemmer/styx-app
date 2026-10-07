@@ -1,4 +1,4 @@
-import { agentSchema, copy, idFrom, policyHashSchema, type EventPayload } from '@styx/core';
+import { agentSchema, copy, idFrom, policyHashSchema, type EventPayload, type NotifyMode } from '@styx/core';
 import type { KvStore } from '../db/kv';
 import type { Repos } from '../db/repos';
 
@@ -51,8 +51,12 @@ export class NotificationService {
       later: (ask: AskSummary) => void;
       openBoard: () => void;
     },
-    /** "Badge + sound" app setting; badge-only by default. */
-    private readonly soundEnabled: () => boolean = () => false,
+    /**
+     * Settings › Notify when an agent needs me (issue #4): `badge-sound` adds the toast's sound, `badge` is silent,
+     * `off` shows no badge, bounce, tray dot or OS notification (the board, inbox and tray menu still list what
+     * waits). Read on every call, so a change applies at once. Badge-only by default.
+     */
+    private readonly mode: () => NotifyMode = () => 'badge',
   ) {}
 
   get dnd(): boolean {
@@ -65,26 +69,45 @@ export class NotificationService {
   }
 
   get sound(): boolean {
-    return this.soundEnabled();
+    return this.mode() === 'badge-sound';
+  }
+
+  /** Notify › Off: nothing on the dock, taskbar or tray icon and no OS notification. */
+  get off(): boolean {
+    return this.mode() === 'off';
+  }
+
+  /** Whether a new ask reaches the OS as a notification: not in Do Not Disturb and notify is not Off. */
+  get delivers(): boolean {
+    return !this.dnd && !this.off;
   }
 
   /** Puts the tray / dock menu up at launch with the persisted open-ask count and DND state. */
   start(openCount: number): void {
     this.openCount = openCount;
-    this.os.setBadge(openCount);
+    this.refresh();
+  }
+
+  /** Re-applies the badge and tray for the current count; called when the notify setting changes. */
+  refresh(): void {
+    this.setBadge();
     this.refreshTray();
+  }
+
+  private setBadge(): void {
+    this.os.setBadge(this.off ? 0 : this.openCount);
   }
 
   onAskOpened(ask: AskSummary, openCount: number): void {
     this.openCount = openCount;
     this.recent = [ask, ...this.recent.filter((a) => a.askId !== ask.askId)].slice(0, 5);
-    this.os.setBadge(openCount);
-    if (!this.bounced && this.platform === 'darwin') {
+    this.setBadge();
+    if (!this.bounced && this.platform === 'darwin' && !this.off) {
       this.os.bounceOnce();
       this.bounced = true; // never repeatedly
     }
     this.refreshTray();
-    if (!this.dnd)
+    if (this.delivers)
       this.os.toast({
         id: ask.askId,
         title: ask.title,
@@ -98,14 +121,14 @@ export class NotificationService {
   onAskResolved(askId: string, openCount: number): void {
     this.openCount = openCount;
     this.recent = this.recent.filter((a) => a.askId !== askId);
-    this.os.setBadge(openCount);
+    this.setBadge();
     if (openCount === 0) this.bounced = false;
     this.refreshTray();
   }
 
   private refreshTray(): void {
     this.os.setTray({
-      attention: this.openCount > 0,
+      attention: this.openCount > 0 && !this.off,
       onClick: this.actions.openBoard,
       menu: [
         {

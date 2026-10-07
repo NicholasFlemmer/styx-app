@@ -368,7 +368,7 @@ test('sim: home-settings', async () => {
     );
 
     await sim.step(
-      'Editor: Open files in · Fallback editor · Line endings · Screen reader · Track agent edits',
+      'Editor: Open files in · Fallback editor · Screen reader · Track agent edits',
       async () => {
         await openAppSection('app:editor');
         const engine = await rowSelect('engine').locator('option').first().innerText();
@@ -378,7 +378,6 @@ test('sim: home-settings', async () => {
           throw new Error(`fallback editor options: ${ideOptions.join(', ')}`);
         await setRow('openFilesIn', 'fallback');
         await setRow('fallbackEditor', 'cursor');
-        await setRow('lineEndings', 'lf');
         await setRow('screenReader', 'on');
         await setRow('trackAgentEdits', 'off');
         const app = await appSettings();
@@ -387,13 +386,11 @@ test('sim: home-settings', async () => {
         if (app['fallbackIde'] !== 'cursor') bad.push(`fallbackIde=${app['fallbackIde']}`);
         if (app['screenReader'] !== true) bad.push(`screenReader=${app['screenReader']}`);
         if (app['trackAgentEdits'] !== false) bad.push(`trackAgentEdits=${app['trackAgentEdits']}`);
-        // Line endings is a per-project value on an App page: it lands in acme-shop's .styx/project.json.
-        const file = projectFile(await acmePath());
-        if (file?.['lineEndings'] !== 'lf')
-          bad.push(`project.json lineEndings=${String(file?.['lineEndings'])}`);
+        // Line endings was stored but never applied (issue #4): the row is gone.
+        if ((await page().locator('[data-settings-row="lineEndings"]').count()) > 0)
+          bad.push('Line endings row is back');
         if (bad.length > 0) throw new Error(bad.join('; '));
-        const scope = (await page().locator('[data-settings-scope]').innerText()).trim();
-        return `Line endings wrote project.json of acme-shop while the page scope reads "${scope}"`;
+        return 'Open files in: Fallback editor (Cursor)';
       },
     );
 
@@ -486,15 +483,12 @@ test('sim: home-settings', async () => {
     );
 
     await sim.step(
-      'Agent connections: the preference rows (default agent, worktree per agent, shell, detected CLIs, binaries)',
+      'Agent connections: the preference rows (default agent, shell, detected CLIs, binaries)',
       async () => {
         const detected = await rowSelect('detectedClis').locator('option').first().innerText();
         if (!detected.includes('claude') || !detected.includes('codex'))
           throw new Error(`Detected CLIs reads "${detected}"`);
-        await setRow('autoWorktree', 'off');
         await setRow('shellWindows', 'wsl');
-        const app = await appSettings();
-        if (app['autoWorktreePerAgent'] !== false) throw new Error('autoWorktreePerAgent did not turn off');
         const file = projectFile(await acmePath());
         const shell = (file?.['shell'] as { windows?: string } | undefined)?.windows;
         if (shell !== 'wsl') throw new Error(`project.json shell.windows=${String(shell)}`);
@@ -725,15 +719,15 @@ test('sim: home-settings', async () => {
 
     // --- Keychain, Policies, Shortcuts -----------------------------------------------------------------------
     await sim.step(
-      'Keychain & secrets: Store · MFA words follow the platform; Inject as takes a value',
+      'Keychain & secrets: Store · MFA words follow the platform (read-only)',
       async () => {
         await openAppSection('app:keychain');
         const store = await rowSelect('store').locator('option').first().innerText();
         const mfa = await rowSelect('mfaProdWrite').locator('option').first().innerText();
         if (store !== 'macOS Keychain' || mfa !== 'Touch ID')
           throw new Error(`store "${store}", mfa "${mfa}"`);
-        await setRow('injectAs', 'env');
-        if ((await appSettings())['injectAs'] !== 'env') throw new Error('injectAs not stored');
+        if ((await page().locator('[data-settings-row="injectAs"]').count()) > 0)
+          throw new Error('Inject as is back, but nothing applies it (issue #4)');
         return `${store} · ${mfa}`;
       },
     );
@@ -939,30 +933,16 @@ test('sim: home-settings', async () => {
       },
     );
 
-    await sim.step(
-      'Env & secrets: .env source · Share with agents (→ project.json, Reset) · Committed file',
-      async () => {
-        await openProjectSection('project:env');
-        const source = await rowSelect('envSource').locator('option').first().innerText();
-        const committed = await rowSelect('committedFile').locator('option').first().innerText();
-        if (source !== copy.settings.values.envSource || committed !== copy.settings.values.committedFile)
-          throw new Error(`source "${source}", committed "${committed}"`);
-        await setRow('shareWithAgents', 'always');
-        await sleep(300);
-        const path = await acmePath();
-        const env = (projectFile(path)?.['env'] ?? {}) as Record<string, unknown>;
-        if (env['shareWithAgents'] !== 'always')
-          throw new Error(`project.json env.shareWithAgents=${String(env['shareWithAgents'])}`);
-        const row = page().locator('[data-settings-row="shareWithAgents"]');
-        await row.getByRole('button', { name: copy.settings.reset }).click();
-        await sleep(300);
-        const after = (projectFile(path)?.['env'] ?? {}) as Record<string, unknown>;
-        if (after['shareWithAgents'] !== undefined)
-          throw new Error('Reset left env.shareWithAgents in the file');
-        if ((await rowSelect('shareWithAgents').inputValue()) !== 'per-grant')
-          throw new Error('row did not return to Per grant');
-      },
-    );
+    await sim.step('Env & secrets: .env source · Committed file (read-only)', async () => {
+      await openProjectSection('project:env');
+      const source = await rowSelect('envSource').locator('option').first().innerText();
+      const committed = await rowSelect('committedFile').locator('option').first().innerText();
+      if (source !== copy.settings.values.envSource || committed !== copy.settings.values.committedFile)
+        throw new Error(`source "${source}", committed "${committed}"`);
+      // Share with agents was stored but never applied (issue #4): the row is gone.
+      if ((await page().locator('[data-settings-row="shareWithAgents"]').count()) > 0)
+        throw new Error('Share with agents is back, but nothing applies it');
+    });
 
     // =========================================================================================================
     // 4. Relaunch the same profile: App and Project settings persisted
@@ -985,8 +965,6 @@ test('sim: home-settings', async () => {
           fallbackIde: 'cursor',
           screenReader: true,
           trackAgentEdits: false,
-          autoWorktreePerAgent: false,
-          injectAs: 'env',
         };
         for (const [k, v] of Object.entries(wantApp)) if (app[k] !== v) bad.push(`${k}=${String(app[k])}`);
         await openAppSection('app:general');

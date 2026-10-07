@@ -632,7 +632,11 @@ export class SessionService {
     const cli = repos.discovery.cli(session.agent);
     // A relaunch (process gone, user sent another message) replays nothing: the CLI starts clean at the next turn.
     const firstMessage = opts.replayFirstMessage ? session.firstMessage : null;
-    const binary = session.agent === 'shell' ? this.deps.pty.defaultShell() : (cli?.binary ?? null);
+    // A shell task runs the project's Shell (Windows) on Windows (issue #4); `$SHELL` elsewhere.
+    const binary =
+      session.agent === 'shell'
+        ? this.deps.pty.defaultShell(repos.projects.settings(session.projectId).shellWindows)
+        : (cli?.binary ?? null);
     if (session.agent !== 'shell' && (binary === null || cli?.found === false)) {
       this.noteProblem(session.id, 'cli-missing');
       this.applyEvent(session.id, { type: 'error', reason: 'cli-missing' });
@@ -2402,7 +2406,7 @@ export class SessionService {
         title,
         body: meta,
         meta: null,
-        osDelivered: this.deps.notifications !== null && !this.deps.notifications.dnd,
+        osDelivered: this.deps.notifications?.delivers ?? false,
         state: 'shown',
         bannerKey: null,
         createdAt: this.deps.clock.now(),

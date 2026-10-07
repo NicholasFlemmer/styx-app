@@ -49,6 +49,10 @@ export const projectFileAgentsSchema = z
     autoApproveEdits: z.boolean().optional(),
     mayRequestTargets: z.boolean().optional(),
     notifyWhenNeedsMe: z.boolean().optional(),
+    /**
+     * Ignored (issue #10): accepted so files that carry it still parse and keep it on a rewrite, but nothing reads
+     * it. The model a task starts with is `model` above, whatever the agent.
+     */
     perAgent: z
       .partialRecord(agentSchema, z.object({ model: z.string().nullable().optional() }).passthrough())
       .optional(),
@@ -80,6 +84,11 @@ export const projectFileV1Schema = z
     agents: projectFileAgentsSchema.optional(),
     policies: z
       .object({
+        /**
+         * Ignored (issue #10): accepted so files that carry it still parse, but the built-in rules are switched on and
+         * off per machine (Settings › Policies). A committed file turning off a built-in rule would loosen access
+         * for everyone who clones the repo, which the trust gate on `extra` exists to prevent.
+         */
         disabledBuiltins: z.array(z.string()).optional(),
         extra: z.array(projectFilePolicySchema).optional(),
       })
@@ -257,6 +266,48 @@ export const projectSettingsFromFile = (file: ProjectFileV1): Partial<ProjectSet
   if (file.env?.shareWithAgents !== undefined) out.envShareWithAgents = file.env.shareWithAgents;
   return out;
 };
+
+/**
+ * Where each project setting lives (issue #10). Most describe the project and travel with the repo in
+ * `.styx/project.json`: agent defaults, base branch and branch prefix, worktree location, dev command / URL, checks,
+ * env. These six are how this person wants Styx to keep their lanes current and land them (ADR-0023, ADR-0025):
+ * whether to fetch first, when to bring the base in, whether Styx merges and lands by itself. They are a matter of
+ * trust and habit, not a fact about the repo, so a teammate's commit must not switch on auto-landing for everyone;
+ * they stay in this machine's database and never reach the file. Every other `ProjectSettings` key is a file key.
+ */
+export const MACHINE_PROJECT_SETTINGS = [
+  'syncOnSpawn',
+  'syncBeforePublish',
+  'autoSync',
+  'hotspots',
+  'integration',
+  'autoLand',
+] as const satisfies readonly (keyof ProjectSettings)[];
+export type MachineProjectSetting = (typeof MACHINE_PROJECT_SETTINGS)[number];
+
+export const isMachineProjectSetting = (key: string): key is MachineProjectSetting =>
+  (MACHINE_PROJECT_SETTINGS as readonly string[]).includes(key);
+
+/** The machine-only part of stored project settings. */
+export const machineProjectSettings = (stored: Partial<ProjectSettings>): Partial<ProjectSettings> => {
+  const out: Partial<ProjectSettings> = {};
+  for (const key of MACHINE_PROJECT_SETTINGS)
+    if (stored[key] !== undefined) (out as Record<string, unknown>)[key] = stored[key];
+  return out;
+};
+
+/**
+ * Stored project settings after (re-)reading `.styx/project.json`: the file decides every file key (one it leaves
+ * out falls back to the default), and the machine keys are kept as this machine had them. `file` null = the file is
+ * gone, so only the machine keys remain. A re-read merges; it never replaces what lives only on this machine.
+ */
+export const settingsAfterFileRead = (
+  stored: Partial<ProjectSettings>,
+  file: ProjectFileV1 | null,
+): Partial<ProjectSettings> => ({
+  ...(file === null ? {} : projectSettingsFromFile(file)),
+  ...machineProjectSettings(stored),
+});
 
 /**
  * Effective settings = defaults ← app ← project file, each key tagged with where its value came from.
