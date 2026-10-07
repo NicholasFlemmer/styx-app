@@ -1,29 +1,17 @@
 import {
   copy,
+  deployTargetLabel,
+  deployTargetOptions,
   fill,
   isDeployActive,
-  isDeployableTarget,
   rows,
+  type DeployTargetOption,
   type ProjectId,
   type ReadModel,
   type SessionId,
-  type Target,
   type TargetId,
 } from '@styx/core';
 import { learnKey, learningSession } from '../abilities/learn';
-
-/** How a target is named wherever the deploy button, toast and status bar mention it: `Vercel prod`. */
-export const deployTargetLabel = (t: Pick<Target, 'name' | 'env'>): string => `${t.name} ${t.env}`;
-
-export interface DeployOption {
-  targetId: TargetId;
-  label: string;
-  name: string;
-  env: string;
-  prod: boolean;
-  /** Styx has no command for this target yet: choosing it hands the first deploy to the agent. */
-  learn: boolean;
-}
 
 export type DeployButtonState =
   /** No target in the project: the button connects one. */
@@ -35,17 +23,20 @@ export type DeployButtonState =
   /** One candidate: click deploys (`learn` = the agent does it first and teaches Styx). `live` = prod → accent. */
   | { kind: 'single'; targetId: TargetId; label: string; live: boolean; learn: boolean }
   /** Several candidates: click opens the picker. */
-  | { kind: 'menu'; label: string; live: boolean; options: DeployOption[] };
+  | { kind: 'menu'; label: string; live: boolean; options: DeployTargetOption[] };
 
 /**
  * What the workspace deploy button shows for a project (owner request: "clearly shows which target", and it works
  * the way asking an agent to deploy works).
  *
- * Every target of the project is a candidate. Prod targets win: with one, the button is `Deploy to live · Vercel
- * prod`; with several, a picker. Only non-prod targets → `Deploy · Vercel preview`. A target Styx can already
- * deploy to (built-in verb or remembered command, `isDeployableTarget`) deploys directly; any other hands the
- * first deploy to the agent, which teaches Styx the command for next time. While a deploy runs, or the agent is
- * working one out, the button reports that instead, so the state survives the modal or chat being closed.
+ * Every target of the project is a candidate (`deployTargetOptions`, the same set the palette offers). With one,
+ * the button names it: `Deploy to live · Vercel prod` for prod, `Deploy · Vercel preview` otherwise. With several,
+ * the click opens a picker listing all of them, non-prod first and prod last (issue #9: it used to list only the
+ * prod targets whenever there was one, hiding staging and preview). The picker has no default: a click never
+ * deploys anywhere until a target is chosen. A target Styx can already deploy to (built-in verb or remembered
+ * command) deploys directly; any other hands the first deploy to the agent, which teaches Styx the command for
+ * next time. While a deploy runs, or the agent is working one out, the button reports that instead, so the state
+ * survives the modal or chat being closed.
  */
 export const deployButtonState = (
   model: ReadModel,
@@ -81,30 +72,17 @@ export const deployButtonState = (
     };
   }
 
-  const prod = own.filter((t) => t.env === 'prod');
-  const live = prod.length > 0;
-  const candidates = live ? prod : own;
-  const first = candidates[0];
-  if (candidates.length === 1 && first !== undefined) {
+  const options = deployTargetOptions(model, projectId);
+  const live = options.some((o) => o.prod);
+  const [only] = options;
+  if (options.length === 1 && only !== undefined) {
     return {
       kind: 'single',
-      targetId: first.id,
+      targetId: only.targetId,
       live,
-      learn: !isDeployableTarget(first),
-      label: fill(live ? copy.deploy.toLive : copy.deploy.button, { target: deployTargetLabel(first) }),
+      learn: only.learn,
+      label: fill(live ? copy.deploy.toLive : copy.deploy.button, { target: only.label }),
     };
   }
-  return {
-    kind: 'menu',
-    live,
-    label: copy.deploy.pick,
-    options: candidates.map((t) => ({
-      targetId: t.id,
-      label: deployTargetLabel(t),
-      name: t.name,
-      env: t.env,
-      prod: t.env === 'prod',
-      learn: !isDeployableTarget(t),
-    })),
-  };
+  return { kind: 'menu', live, label: copy.deploy.pick, options };
 };

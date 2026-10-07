@@ -22,7 +22,7 @@ const running = (over: Partial<Deploy> = {}): Deploy => ({
   ...over,
 });
 
-/** Demo model with acme-shop down to Vercel prod + a second prod Vercel target (→ a two-row picker). */
+/** Demo acme-shop down to Vercel prod, a second prod Vercel target, Vercel preview and GitHub (→ a four-row picker). */
 const twoProd = (): ReadModel => {
   const m = fixtures.demoReadModel();
   const prod = m.targets.byId[ids.target.vercelProd];
@@ -85,7 +85,14 @@ describe('DeployButton', () => {
     Object.assign(window, { styx: undefined });
   });
 
-  it('names the prod target and starts a deploy for it', () => {
+  it('one prod target: names it and starts a deploy for it', () => {
+    const m = fixtures.demoReadModel();
+    useReadModel
+      .getState()
+      .replaceModel(
+        { ...m, targets: removeRows(m.targets, [ids.target.blogVercelPreview, ids.target.blogGithub]) },
+        'connected',
+      );
     render(<DeployButton projectId={ids.project.blogV2} />);
     const button = screen.getByRole('button', { name: /Deploy to live · Vercel prod/ });
     expect(button.getAttribute('disabled')).toBeNull();
@@ -99,6 +106,10 @@ describe('DeployButton', () => {
   });
 
   it('a target Styx has no command for: the same button, and the click hands the first deploy to the agent', async () => {
+    const m = fixtures.demoReadModel();
+    useReadModel
+      .getState()
+      .replaceModel({ ...m, targets: removeRows(m.targets, [ids.target.infraGcp]) }, 'connected');
     render(<DeployButton projectId={ids.project.infraTools} />);
     const button = screen.getByRole('button', { name: /Deploy to live · AWS acme-prod prod/ });
     expect(button.hasAttribute('disabled')).toBe(false);
@@ -123,7 +134,14 @@ describe('DeployButton', () => {
     expect(ui.learning[`deploy:${ids.target.infraAws}`]).toBe('s-learn');
     useReadModel
       .getState()
-      .replaceModel(withSession(fixtures.demoReadModel(), 's-learn', ids.project.infraTools), 'connected');
+      .replaceModel(
+        withSession(
+          { ...m, targets: removeRows(m.targets, [ids.target.infraGcp]) },
+          's-learn',
+          ids.project.infraTools,
+        ),
+        'connected',
+      );
     const learning = await screen.findByRole('button', {
       name: 'Deploying · AWS acme-prod prod',
     });
@@ -184,7 +202,33 @@ describe('DeployButton', () => {
     });
   });
 
-  describe('several prod targets → picker', () => {
+  it('issue #9: prod + staging → the click opens a picker (no deploy), staging first, prod below a rule', () => {
+    render(<DeployButton projectId={ids.project.infraTools} />);
+    const button = screen.getByRole('button', { name: /^Deploy to$/ });
+    button.focus();
+    fireEvent.keyDown(button, { key: 'ArrowDown' });
+    expect(modals()).toEqual([]);
+    expect(calls('session.spawn')).toEqual([]);
+    const menu = screen.getByRole('menu', { name: copy.deploy.pick });
+    const items = within(menu).getAllByRole('menuitem');
+    expect(items.map((i) => i.textContent)).toEqual(['GCP infra staging', 'AWS acme-prod prod']);
+    expect(items.map((i) => i.getAttribute('data-prod'))).toEqual([null, 'true']);
+    // The first row a keyboard user lands on is never production.
+    expect(document.activeElement).toBe(items[0]);
+    // The rule sits between the two groups and is skipped by the arrow keys.
+    const rule = within(menu).getByRole('separator');
+    expect(rule.nextElementSibling).toBe(items[1]);
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(items[1]);
+    fireEvent.keyDown(menu, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(items[0]);
+    fireEvent.keyDown(menu, { key: 'Tab' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(button);
+    expect(modals()).toEqual([]);
+  });
+
+  describe('several prod targets plus non-prod → picker with all of them', () => {
     beforeEach(() => useReadModel.getState().replaceModel(twoProd(), 'connected'));
 
     it('opens a menu with a heading and one row per target; choosing starts that target', () => {
@@ -196,9 +240,15 @@ describe('DeployButton', () => {
       const menu = screen.getByRole('menu', { name: copy.deploy.pick });
       expect(menu.textContent?.startsWith(copy.deploy.pick)).toBe(true);
       const items = within(menu).getAllByRole('menuitem');
-      expect(items.map((i) => i.textContent)).toEqual(['Vercel prod', 'Vercel EU prod']);
+      expect(items.map((i) => i.textContent)).toEqual([
+        'Vercel preview',
+        'GitHub acme/shop scm',
+        'Vercel prod',
+        'Vercel EU prod',
+      ]);
+      expect(within(menu).getAllByRole('separator')).toHaveLength(1);
       expect(document.activeElement).toBe(items[0]);
-      fireEvent.click(items[1] as HTMLElement);
+      fireEvent.click(items[3] as HTMLElement);
       expect(screen.queryByRole('menu')).toBeNull();
       expect(modals()[0]).toMatchObject({ modal: 'deploy', targetId: 'target:second' });
       expect(document.activeElement).toBe(button);
@@ -214,10 +264,14 @@ describe('DeployButton', () => {
       expect(document.activeElement).toBe(items[0]);
       fireEvent.keyDown(menu, { key: 'ArrowDown' });
       expect(document.activeElement).toBe(items[1]);
+      fireEvent.keyDown(menu, { key: 'End' });
+      expect(document.activeElement).toBe(items[3]);
       fireEvent.keyDown(menu, { key: 'ArrowDown' });
       expect(document.activeElement).toBe(items[0]);
-      fireEvent.keyDown(menu, { key: 'End' });
-      expect(document.activeElement).toBe(items[1]);
+      fireEvent.keyDown(menu, { key: 'ArrowUp' });
+      expect(document.activeElement).toBe(items[3]);
+      fireEvent.keyDown(menu, { key: 'Home' });
+      expect(document.activeElement).toBe(items[0]);
       fireEvent.keyDown(menu, { key: 'Escape' });
       expect(screen.queryByRole('menu')).toBeNull();
       expect(document.activeElement).toBe(button);

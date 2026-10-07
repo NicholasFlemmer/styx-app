@@ -564,11 +564,14 @@ export class GrantService {
     }
   }
 
-  cancelTargetGrants(targetId: string): void {
+  /**
+   * Ends every open request and live grant on a target, each with its own audited row. `triggeredBy` says why: the
+   * target was removed, or it now points at another project (what the grants were approved for is gone either way).
+   */
+  cancelTargetGrants(targetId: string, triggeredBy = 'target removed'): void {
     for (const g of this.deps.repos.grants.byTarget(targetId)) {
       if (g.state === 'requested') this.apply(g, { type: 'cancel', reason: 'target-removed' });
-      else if (g.state === 'active')
-        this.apply(g, { type: 'revoke', reason: 'target-removed', triggeredBy: 'target removed' });
+      else if (g.state === 'active') this.apply(g, { type: 'revoke', reason: 'target-removed', triggeredBy });
     }
   }
 

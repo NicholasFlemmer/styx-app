@@ -327,7 +327,9 @@ export function buildContainer(opts: ContainerOptions): Container {
   // git is looked up where a terminal would find it, so one installed while Styx runs is found without a restart.
   // Fixture and test containers keep the process PATH, as detection does (no login shell per test app).
   const gitRunner = new ExecaGitRunner({
-    ...((opts.redetectClis ?? true) ? { loginPath: (o: { maxAgeMs?: number }) => pty.resolveLoginPath(o) } : {}),
+    ...((opts.redetectClis ?? true)
+      ? { loginPath: (o: { maxAgeMs?: number }) => pty.resolveLoginPath(o) }
+      : {}),
     platform: runtime.platform,
   });
   const git = new GitService(gitRunner);
@@ -461,6 +463,8 @@ export function buildContainer(opts: ContainerOptions): Container {
       }
       return ideImport.allRecentFoldersWithTime(ides);
     },
+    // `targets` is built below; this only runs on a later project.json read.
+    onTargetConfigChanged: (before, after) => targets.fileConfigChanged(before, after),
   });
   const terminals = new TerminalService(repos, pty, () => ({
     STYX_SHIM_DIR: runtime.shimDir,

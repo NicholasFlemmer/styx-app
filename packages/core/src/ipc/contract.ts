@@ -164,6 +164,24 @@ const windowTarget = z.object({
 });
 
 /**
+ * A provider project id a target can be pointed at (Supabase ref). It travels into env (`SUPABASE_PROJECT_REF`) and
+ * argv (`--project-ref`), so a plain charset whose first character cannot pose as a flag. The one pattern for it:
+ * the contract, the adapter's API-response check and the issue path all use this.
+ */
+export const PROVIDER_PROJECT_REF = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+const providerProjectRefSchema = z.string().regex(PROVIDER_PROJECT_REF);
+/** A pasted provider token: printable ASCII with no spaces (surrounding whitespace from the paste is trimmed). */
+const pastedTokenSchema = z
+  .string()
+  .trim()
+  .regex(/^[\x21-\x7E]+$/, 'token: printable characters only, no spaces');
+const providerProjectSchema = z.object({
+  id: providerProjectRefSchema,
+  name: z.string(),
+  region: z.string().nullable(),
+});
+
+/**
  * Every mutation and query the renderer can make (plan §7). Outputs never contain secrets; credentials
  * go in via `target.connect.*` inputs and are consumed by main before anything is echoed back.
  */
@@ -808,8 +826,15 @@ export const commands = {
     output: idOut('targetId', targetIdSchema),
   },
   'target.connect.saveToken': {
-    /** Pasted token for Vercel / Supabase / GitHub PAT flows started by target.connect.start. */
-    input: z.object({ targetId: targetIdSchema, token: z.string().min(1) }),
+    /**
+     * Pasted token for Vercel / Supabase / GitHub PAT flows started by target.connect.start. `project`: the project
+     * picked from `target.connect.projects` (Supabase); main checks the token can reach it.
+     */
+    input: z.object({
+      targetId: targetIdSchema,
+      token: pastedTokenSchema,
+      project: providerProjectRefSchema.optional(),
+    }),
     output: idOut('targetId', targetIdSchema),
   },
   'target.connect.saveSsh': {
@@ -859,6 +884,27 @@ export const commands = {
       config: jsonObjectSchema.default({}),
     }),
     output: idOut('targetId', targetIdSchema),
+  },
+  /**
+   * The projects a login reaches (Supabase, issue #5), so each target names the one it acts on instead of whichever
+   * the account lists first. `token` is the Advanced paste (consumed here, never stored or echoed), `cli` the CLI
+   * login, `target` a saved target's own credential. Ids, names and regions only.
+   */
+  'target.connect.projects': {
+    input: z.object({
+      provider: providerSchema,
+      source: z.discriminatedUnion('kind', [
+        z.object({ kind: z.literal('token'), token: pastedTokenSchema }),
+        z.object({ kind: z.literal('cli'), account: z.string().min(1) }),
+        z.object({ kind: z.literal('target'), targetId: targetIdSchema }),
+      ]),
+    }),
+    output: z.object({ projects: z.array(providerProjectSchema) }),
+  },
+  /** Points a connected target at one of its login's projects (`config.ref` for Supabase); audited, live grants re-mint. */
+  'target.setProject': {
+    input: z.object({ targetId: targetIdSchema, project: providerProjectRefSchema }),
+    output: ok,
   },
   'target.test': {
     input: z.object({ targetId: targetIdSchema }),

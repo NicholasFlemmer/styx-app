@@ -416,7 +416,7 @@ export const demoAcmeTargets = (): Target[] => [
     project: 'shop',
   }),
   target(ids.target.supabaseProd, ids.project.acmeShop, 'supabase', 'Supabase', 'prod', 'ask', {
-    projectRef: 'acme-shop-prod',
+    ref: 'acme-shop-prod',
   }),
   target(ids.target.awsProd, ids.project.acmeShop, 'aws', 'AWS acme-prod', 'prod', 'ask-mfa', {
     region: 'us-east-1',
@@ -456,7 +456,7 @@ export const demoOtherTargets = (): Target[] => [
     repo: 'app',
   }),
   target(ids.target.sideSupabase, ids.project.sideApi, 'supabase', 'Supabase', 'staging', 'ask', {
-    projectRef: 'side-api',
+    ref: 'side-api',
   }),
 ];
 

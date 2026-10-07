@@ -27,8 +27,17 @@ export type ModalPayload =
   | { modal: 'new-project'; mode?: 'new' | 'clone' }
   /** Recents + scanned repos with checkboxes → `project.add` each (rail menu, Home, palette; discrepancies #53). */
   | { modal: 'add-existing' }
-  /** projectId is null during onboarding (no project yet); provider/targetId preselect the flow (Reconnect, step 4). */
-  | { modal: 'connect'; projectId: ProjectId | null; provider?: Provider; targetId?: TargetId }
+  /**
+   * projectId is null during onboarding (no project yet); provider/targetId preselect the flow (Reconnect, step 4).
+   * `chooseProject` opens only the project picker for `targetId` (Settings › Targets "Choose project", issue #5).
+   */
+  | {
+      modal: 'connect';
+      projectId: ProjectId | null;
+      provider?: Provider;
+      targetId?: TargetId;
+      chooseProject?: true;
+    }
   /** Deploy progress: starts a deploy for `targetId`, or attaches to a running one when `deployId` is given. */
   | { modal: 'deploy'; targetId: TargetId; deployId?: string }
   /** Per-target deploy commands for a project (targets without a built-in verb). */

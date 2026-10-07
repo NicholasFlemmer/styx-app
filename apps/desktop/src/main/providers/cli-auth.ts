@@ -93,9 +93,12 @@ export function cliFailure(bin: string, r: CliRunResult): CliAuthError {
 
 /** `health()` fallback for the Advanced modes: a `test()` failure is an expiry only when the provider said so. */
 export const testToHealth = (
-  t: { ok: true; identity: string } | { ok: false; error: string },
+  t: { ok: true; identity: string } | { ok: false; error: string; needsProject?: boolean },
 ): { ok: true; identity: string } | { ok: false; expired: boolean; error: string } =>
-  t.ok ? t : { ok: false, expired: isAuthFailure(t.error), error: t.error };
+  t.ok
+    ? t
+    : // A target that only needs its project chosen is never an expiry (no Reconnect banner).
+      { ok: false, expired: t.needsProject === true ? false : isAuthFailure(t.error), error: t.error };
 
 /** Accounts / profiles / logins travel into argv: plain charset, first char alphanumeric so none can pose as a flag. */
 export const ACCOUNT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ._@+:/-]{0,127}$/;

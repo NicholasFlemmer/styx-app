@@ -1,6 +1,6 @@
 import { copy, type ProjectId, type TargetId } from '@styx/core';
 import { Button, Icon, StatusDot, Tag } from '@styx/ui';
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useModel, useUi } from '../../state/hooks';
 import { useFloatingMenu } from '../../state/use-floating-menu';
 import { useReadModel } from '../../state/read-model';
@@ -16,9 +16,10 @@ export interface DeployButtonProps {
 
 /**
  * "Deploy to live · Vercel prod" at the right end of the workspace mode strip (owner request: a deploy button
- * that says where it deploys). One prod target → the accent button starts it; several → a small picker (the
- * rail "+" menu recipe); a deploy in flight → the label reports it with a blinking dot and click re-opens its
- * output. Everything it shows comes from `model.deploys`, so closing the modal loses nothing.
+ * that says where it deploys). One target → the button names and starts it (accent when it is prod); several →
+ * a small picker (the rail "+" menu recipe) listing every target, non-prod first and prod last below a rule
+ * (issue #9); a deploy in flight → the label reports it with a blinking dot and click re-opens its output.
+ * Everything it shows comes from `model.deploys`, so closing the modal loses nothing.
  *
  * A target Styx has no command for yet is not greyed out (owner principle, AI-native): the click hands the first
  * deploy to a background task, which deploys under a grant and teaches Styx the command for next time.
@@ -156,20 +157,26 @@ export function DeployButton({ projectId }: DeployButtonProps) {
           <div className={['t-label', s['menuHead']].join(' ')} role="presentation">
             {copy.deploy.pick}
           </div>
-          {state.options.map((o) => (
-            <button
-              key={o.targetId}
-              type="button"
-              role="menuitem"
-              className={s['menuItem']}
-              onClick={() => choose(o)}
-              data-learn={o.learn ? 'true' : undefined}
-            >
-              {o.name}{' '}
-              <Tag tone={o.prod ? 'accent' : 'neutral'} size="sm">
-                {o.env}
-              </Tag>
-            </button>
+          {state.options.map((o, i) => (
+            <Fragment key={o.targetId}>
+              {/* Prod rows come last; a rule sets them apart from the staging / preview rows above. */}
+              {o.prod && i > 0 && state.options[i - 1]?.prod === false ? (
+                <div role="separator" className={s['menuRule']} data-deploy-menu-rule="true" />
+              ) : null}
+              <button
+                type="button"
+                role="menuitem"
+                className={s['menuItem']}
+                onClick={() => choose(o)}
+                data-learn={o.learn ? 'true' : undefined}
+                data-prod={o.prod ? 'true' : undefined}
+              >
+                {o.name}{' '}
+                <Tag tone={o.prod ? 'accent' : 'neutral'} size="sm">
+                  {o.env}
+                </Tag>
+              </button>
+            </Fragment>
           ))}
         </div>
       ) : null}

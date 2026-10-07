@@ -94,6 +94,7 @@ const render = (o: Overlay) => {
               projectId={o.projectId}
               {...(o.provider !== undefined ? { provider: o.provider } : {})}
               {...(o.targetId !== undefined ? { targetId: o.targetId } : {})}
+              {...(o.chooseProject === true ? { chooseProject: true } : {})}
             />
           );
       }

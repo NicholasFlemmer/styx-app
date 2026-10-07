@@ -566,6 +566,40 @@ describe('<Settings />', () => {
     expect(screen.getByRole('button', { name: /^Edit · AWS acme-prod/ })).toBeTruthy();
   });
 
+  it('supabase targets show their project (or that none is chosen) and Choose project opens the picker', () => {
+    const m = fixtures.demoReadModel();
+    const sb = m.targets.byId[fixtures.ids.target.supabaseProd];
+    if (sb === undefined) throw new Error('no supabase target');
+    render(<Settings />);
+    const table = screen.getByRole('table', { name: 'Targets' });
+    const meta = () => table.querySelector(`[data-target-id="${sb.id}"] [data-target-meta="project"]`);
+    expect(meta()?.textContent).toBe('project acme-shop-prod');
+    // Only project providers get it.
+    expect(screen.getAllByRole('button', { name: /^Choose project · / })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /^Choose project · Supabase prod/ }));
+    expect(useUiStore.getState().overlays).toMatchObject([
+      {
+        kind: 'modal',
+        modal: 'connect',
+        projectId: acme,
+        provider: 'supabase',
+        targetId: sb.id,
+        chooseProject: true,
+      },
+    ]);
+    cleanup();
+    seed({
+      ...m,
+      targets: { ...m.targets, byId: { ...m.targets.byId, [sb.id]: { ...sb, config: {} } } },
+    });
+    render(<Settings />);
+    expect(
+      screen
+        .getByRole('table', { name: 'Targets' })
+        .querySelector(`[data-target-id="${sb.id}"] [data-target-meta="project"]`)?.textContent,
+    ).toBe(copy.connect.project.notChosen);
+  });
+
   it('Deploy commands… opens the per-target deploy setup modal for the project', () => {
     render(<Settings />);
     fireEvent.click(screen.getByRole('button', { name: copy.deploy.commands }));

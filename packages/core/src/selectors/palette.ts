@@ -1,6 +1,6 @@
 import type { AskId, ProjectId, SessionId, TargetId, WorktreeId } from '../ids';
 import { copy, fill } from '../copy';
-import type { Provider } from '../model/common';
+import type { Env, Provider } from '../model/common';
 import type { Target } from '../model/target';
 import { isDeployActive } from '../model/run';
 import type { ReadModel } from '../read-model';
@@ -99,6 +99,44 @@ export const deployCommandOf = (t: Pick<Target, 'config'>): string | null => {
 export const isDeployableTarget = (t: Pick<Target, 'provider' | 'config'>): boolean =>
   DEPLOYABLE_PROVIDERS.includes(t.provider) || deployCommandOf(t) !== null;
 
+/** How a target is named wherever a deploy is offered (palette row, deploy button, toast, status bar): `Vercel prod`. */
+export const deployTargetLabel = (t: Pick<Target, 'name' | 'env'>): string => `${t.name} ${t.env}`;
+
+/** One row of the workspace deploy picker. */
+export interface DeployTargetOption {
+  targetId: TargetId;
+  /** `Vercel prod`: the palette's deploy-row label for the target. */
+  label: string;
+  name: string;
+  env: Env;
+  prod: boolean;
+  /** Styx has no command for this target yet: choosing it hands the first deploy to the agent. */
+  learn: boolean;
+}
+
+/** Least to most consequential: production always comes last, so it is never the row a stray Enter lands on. */
+const ENV_ORDER: Readonly<Record<Env, number>> = { preview: 0, staging: 1, scm: 2, prod: 3 };
+
+/**
+ * Every target of a project the deploy button can offer (issue #9: with a prod target it used to offer prod only,
+ * and staging / preview were reachable from the palette alone). Like the palette, every target is a candidate: one
+ * Styx has no command for yet hands the first deploy to the agent (`learn`). Ordered preview → staging → scm →
+ * prod, stable within an env, so production is the last and deliberate choice.
+ */
+export const deployTargetOptions = (model: ReadModel, projectId: ProjectId): DeployTargetOption[] =>
+  rows(model.targets)
+    .filter((t) => t.projectId === projectId)
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => ENV_ORDER[a.t.env] - ENV_ORDER[b.t.env] || a.i - b.i)
+    .map(({ t }) => ({
+      targetId: t.id,
+      label: deployTargetLabel(t),
+      name: t.name,
+      env: t.env,
+      prod: t.env === 'prod',
+      learn: !isDeployableTarget(t),
+    }));
+
 const lockMeta = (model: ReadModel, targetId: TargetId, now: number): string => {
   // A deploy already running for this target is the thing to know before pressing Enter on the row again.
   for (const d of Object.values(model.deploys)) {
@@ -133,7 +171,7 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
       items.push({
         id: `deploy:${t.id}`,
         glyph: '▲',
-        label: fill(copy.palette.actions.deploy, { project, target: `${t.name} ${t.env}` }),
+        label: fill(copy.palette.actions.deploy, { project, target: deployTargetLabel(t) }),
         meta: lockMeta(model, t.id, now),
         first: false,
         action: { kind: 'deploy', projectId, targetId: t.id },

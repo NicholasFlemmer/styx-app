@@ -19,8 +19,9 @@ For every provider except SSH, the first screen is **Connect with** the CLI: `ve
 
 1. **Check the CLI.** Styx shows whether the CLI is installed and lists the accounts it's signed in to (for `aws`, your profiles). If it isn't installed, install it first, or use **Advanced** below.
 2. **Pick an account.** If none is listed, or you want another one, click **Sign in with** the CLI. Styx runs the CLI's own login (for example `gcloud auth login` or `gh auth login`) in a terminal inside the dialog. When it finishes, pick the account.
-3. **Choose the environment.** Pick `prod`, `staging` or `preview`. It defaults to `prod`. This decides how careful Styx is: production writes, deploys and deletes always need Touch ID, Windows Hello or your system password.
-4. **Name it (optional) and click Connect.**
+3. **Supabase: pick the project.** A Supabase login reaches every project in the account, so Styx lists them (name, project ref and region) and you choose the one this target uses. With a single project it's chosen for you; with several, **Connect** waits until you pick. Connect `prod` and `staging` as two targets, each on its own project.
+4. **Choose the environment.** Pick `prod`, `staging` or `preview`. It defaults to `prod`. This decides how careful Styx is: production writes, deploys and deletes always need Touch ID, Windows Hello or your system password.
+5. **Name it (optional) and click Connect.**
 
 </Steps>
 
@@ -32,7 +33,7 @@ The dialog states the important caveat itself, for GCP: "Anything running as you
 
 Under the CLI screen, **Advanced** (key, service account or token) opens the older forms:
 
-- **Vercel and Supabase:** Styx opens the provider's token page in your browser. Create a token there, paste it into **Secret**, and click **Save to Keychain** (**Save to Credential Manager** on Windows, **Save to Keyring** on Linux).
+- **Vercel and Supabase:** Styx opens the provider's token page in your browser. Create a token there, paste it into **Secret**, and click **Save to Keychain** (**Save to Credential Manager** on Windows, **Save to Keyring** on Linux). For Supabase, click **Show projects** first and pick the project this target uses; then save.
 - **GitHub:** Styx runs GitHub's device sign-in. It shows a short code, opens `github.com/login/device`, and saves the token once you approve there.
 - **AWS and GCP:** paste an access key and secret, or a service-account key, then **Test connection** and save. Styx recommends a dedicated IAM role with no delete permissions. With AWS keys, every grant gets temporary STS credentials limited to the granted scopes.
 
@@ -67,6 +68,8 @@ Non-secret settings for a target (a Vercel project id, a Supabase project ref, a
 - **persistent**: an `always` grant is active, or the target's policy is **Always allow**.
 - **expired**: the credential stopped working.
 - **unconnected**: the target exists (for example from `.styx/project.json`) but has no credential on this machine yet.
+
+Supabase targets show the project they act on (`project <ref>`) under the state, with **Choose project** to change it. A Supabase target connected before Styx asked for a project reads **no project chosen**. If its account has one project, it keeps working with that one. If the account has several, Styx won't pick one for you: approving a request for that target fails with "This Supabase account has several projects. Choose the one this target uses.", and the agent gets the same error, until you pick one with **Choose project**. The target is not marked expired, because its login still works. Choosing a project is recorded in the audit log. Pointing a target at a different project ends its open grants and requests (each revoke is logged), since they were approved for the old one; agents ask again. The project only steers the `supabase` CLI (`SUPABASE_PROJECT_REF`); the token an agent receives can still reach every project in the account, which is why prod Supabase grants always need Touch ID, Windows Hello or your system password.
 
 The row's actions change with its state: **Connect**, **Edit** (reopens the connect flow on that target), or **Revoke** while a timed grant is open. CLI-backed targets also have **Refresh**, which checks the login now. **Remove** needs two presses (**Remove?** the second time). It ends the target's grants and deletes its keychain entry. For a CLI-backed target that entry is only the account name, so your CLI login is untouched.
 

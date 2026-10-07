@@ -375,7 +375,7 @@ describe('BrokerHost security regressions', () => {
     const issued = await app.app.grants.approve(grant.id, 'always');
     expect(issued.sessionId).toBeNull(); // detached persistent grant
     const r = await pending;
-    expect(r.env).toEqual({ SUPABASE_ACCESS_TOKEN: 'sbp-prod' });
+    expect(r.env).toEqual({ SUPABASE_ACCESS_TOKEN: 'sbp-prod', SUPABASE_PROJECT_REF: 'acme-shop-prod' });
     expect(app.app.repos.grantUses.get(r.useId)).toMatchObject({
       sessionId: ids.session.gemini,
       via: 'shim',

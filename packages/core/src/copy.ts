@@ -1177,6 +1177,31 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       /** Settings › Targets meta line for CLI-backed targets: `via gcloud · nic@acme.dev`. */
       via: 'via {cli} · {account}',
     },
+    /**
+     * Which of the account's projects a target acts on (Supabase, issue #5): picked after the login works, stored as
+     * `config.ref`. A target never falls back to "the first project" when the account has several.
+     */
+    project: {
+      label: 'Project',
+      loading: 'Loading projects…',
+      /** Advanced token path: the pasted token lists its projects before anything is saved. */
+      list: 'Show projects',
+      /** Row detail: `abcdefghijklmnopqrst · eu-west-1`. */
+      detail: '{ref} · {region}',
+      required: 'Choose a project to connect.',
+      none: 'This Supabase account has no projects yet. Create one in Supabase, then connect.',
+      choose: 'This Supabase account has several projects. Choose the one this target uses.',
+      gone: "Project {ref} isn't in this Supabase account any more. Choose another.",
+      /** Settings › Targets row action and its modal. */
+      heading: 'Choose the project for {target}',
+      body: 'Styx points the supabase CLI at this project when an agent uses this target. The login itself still reaches every project in the account, so keep prod and staging targets on their own projects.',
+      save: 'Save',
+      cancel: 'Cancel',
+      /** Settings › Targets meta line: `project abcdefghijklmnopqrst` · `no project chosen`. */
+      meta: 'project {ref}',
+      notChosen: 'no project chosen',
+      action: 'Choose project',
+    },
     environment: 'Environment',
     oauth: {
       body: 'Styx opens your browser to authorize. The token lands in the {keychainName}; agents receive short-lived scoped tokens derived from it.',

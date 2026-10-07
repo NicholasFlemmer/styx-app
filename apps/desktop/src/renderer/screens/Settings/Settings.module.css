@@ -71,6 +71,24 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* State, then the CLI / project meta lines and "Choose project" (issue #5), stacked under it. */
+  .stateStack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-1);
+    min-width: 0;
+    max-width: 100%;
+  }
+  .stateStack .meta {
+    max-width: 100%;
+  }
+  /* Choose project reads like the row's other actions (Edit, Remove): the Table's trailing label recipe. */
+  .action.stateAction {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+  }
   /* Refresh · Edit side by side in the trailing cell. */
   .actions {
     display: flex;

@@ -130,6 +130,150 @@ describe('Vercel / Supabase', () => {
     expect(s.scopeOfCommand(['functions', 'deploy', 'x'])).toEqual(['deploy']);
     expect(s.scopeOfCommand(['projects', 'list'])).toEqual(['read']);
   });
+
+  // Issue #5: every Supabase target used to land on whichever project the API listed first.
+  describe('supabase: the project a target acts on is chosen, never "the first"', () => {
+    const two = [
+      { id: 'prodrefaaaaaaaaaaaaa', ref: 'prodrefaaaaaaaaaaaaa', name: 'acme', region: 'eu-west-1' },
+      { id: 'stagingrefbbbbbbbbbb', ref: 'stagingrefbbbbbbbbbb', name: 'acme-staging', region: 'us-east-1' },
+    ];
+    const several = () => deps({ 'https://api.supabase.com/v1/projects': () => jsonResponse(two) });
+
+    it('lists projects (zod-validated: ref, name, region) from a pasted token', async () => {
+      const s = new SupabaseAdapter(several());
+      expect(await s.listProjects({ kind: 'token', token: 'sbp_x' })).toEqual([
+        { id: 'prodrefaaaaaaaaaaaaa', name: 'acme', region: 'eu-west-1' },
+        { id: 'stagingrefbbbbbbbbbb', name: 'acme-staging', region: 'us-east-1' },
+      ]);
+      // A row whose ref could pose as a flag or carry shell characters fails the whole list.
+      const bad = new SupabaseAdapter(
+        deps({
+          'https://api.supabase.com/v1/projects': () => jsonResponse([{ id: '-x; rm', name: 'evil' }]),
+        }),
+      );
+      await expect(bad.listProjects({ kind: 'token', token: 'sbp_x' })).rejects.toThrow(/could not read/);
+      const notList = new SupabaseAdapter(
+        deps({ 'https://api.supabase.com/v1/projects': () => jsonResponse({ message: 'nope' }) }),
+      );
+      await expect(notList.listProjects({ kind: 'token', token: 'sbp_x' })).rejects.toThrow(/could not read/);
+    });
+
+    it('connect with several projects needs a pick; the pick is stored as config.ref', async () => {
+      const d = several();
+      const s = new SupabaseAdapter(d);
+      await expect(s.connect({ method: 'token', token: 'sbp_x' }, 't1')).rejects.toThrow(/several projects/);
+      expect(await d.vault.get('styx:v1:supabase:t1:oauth')).toBeNull(); // nothing saved on refusal
+      await expect(
+        s.connect({ method: 'token', token: 'sbp_x', config: { ref: 'notinaccount' } }, 't1'),
+      ).rejects.toThrow(/notinaccount isn't in this Supabase account/);
+      const prod = await s.connect(
+        { method: 'token', token: 'sbp_x', config: { ref: 'prodrefaaaaaaaaaaaaa' } },
+        't1',
+      );
+      const staging = await s.connect(
+        { method: 'token', token: 'sbp_x', config: { ref: 'stagingrefbbbbbbbbbb' } },
+        't2',
+      );
+      expect(prod.config).toEqual({ ref: 'prodrefaaaaaaaaaaaaa' });
+      expect(staging.config).toEqual({ ref: 'stagingrefbbbbbbbbbb' });
+      const t = target({
+        provider: 'supabase',
+        credentialRef: staging.credentialRef,
+        config: staging.config,
+      });
+      expect(await s.test(t)).toEqual({ ok: true, identity: 'acme-staging (stagingrefbbbbbbbbbb)' });
+      expect(await s.issue(grant, t)).toMatchObject({
+        env: { SUPABASE_ACCESS_TOKEN: 'sbp_x', SUPABASE_PROJECT_REF: 'stagingrefbbbbbbbbbb' },
+      });
+    });
+
+    it('an existing target without a ref: several projects → test says so, issue refuses (fail closed)', async () => {
+      const d = several();
+      const s = new SupabaseAdapter(d);
+      await d.vault.set('styx:v1:supabase:t1:oauth', JSON.stringify({ token: 'sbp_x' }));
+      const t = target({ provider: 'supabase', credentialRef: 'styx:v1:supabase:t1:oauth', config: {} });
+      expect(await s.test(t)).toEqual({
+        ok: false,
+        needsProject: true,
+        error: 'This Supabase account has several projects. Choose the one this target uses.',
+      });
+      await expect(s.issue(grant, t)).rejects.toThrow(/several projects/);
+      // A ref the account no longer has is also a pick to make, not an expiry.
+      const gone = { ...t, config: { ref: 'deletedrefcccccccccc' } };
+      expect(await s.test(gone)).toMatchObject({ ok: false, needsProject: true });
+      // Picking one makes it usable.
+      const picked = { ...t, config: { ref: 'prodrefaaaaaaaaaaaaa' } };
+      expect(await s.issue(grant, picked)).toMatchObject({
+        env: { SUPABASE_PROJECT_REF: 'prodrefaaaaaaaaaaaaa' },
+      });
+    });
+
+    it('an existing target without a ref on a one-project account keeps working; zero projects refuses', async () => {
+      const d = deps({
+        'https://api.supabase.com/v1/projects': () =>
+          jsonResponse([{ id: 'onlyrefddddddddddddd', name: 'solo' }]),
+      });
+      const s = new SupabaseAdapter(d);
+      await d.vault.set('styx:v1:supabase:t1:oauth', JSON.stringify({ token: 'sbp_x' }));
+      const t = target({ provider: 'supabase', credentialRef: 'styx:v1:supabase:t1:oauth', config: {} });
+      expect(await s.test(t)).toEqual({ ok: true, identity: 'solo (onlyrefddddddddddddd)' });
+      expect(await s.issue(grant, t)).toMatchObject({
+        env: { SUPABASE_PROJECT_REF: 'onlyrefddddddddddddd' },
+      });
+      const empty = new SupabaseAdapter({
+        ...d,
+        fetch: (async () => jsonResponse([])) as unknown as typeof fetch,
+      });
+      await expect(empty.issue(grant, t)).rejects.toThrow(/no projects yet/);
+      await expect(empty.connect({ method: 'token', token: 'sbp_x' }, 't9')).rejects.toThrow(
+        /no projects yet/,
+      );
+    });
+
+    it('token mode: an unchosen project and a network failure are never an expiry (no Reconnect banner)', async () => {
+      const d = several();
+      const s = new SupabaseAdapter(d);
+      await d.vault.set('styx:v1:supabase:t1:oauth', JSON.stringify({ token: 'sbp_x' }));
+      const t = target({ provider: 'supabase', credentialRef: 'styx:v1:supabase:t1:oauth', config: {} });
+      expect(await s.health(t)).toMatchObject({ ok: false, expired: false });
+      const down = new SupabaseAdapter({
+        ...d,
+        fetch: (async () => {
+          throw new Error('getaddrinfo ENOTFOUND api.supabase.com Bearer sbp_x');
+        }) as unknown as typeof fetch,
+      });
+      expect(await down.health({ ...t, config: { ref: 'prodrefaaaaaaaaaaaaa' } })).toEqual({
+        ok: false,
+        expired: false,
+        error: 'Could not reach Supabase to list projects',
+      });
+      // The issue path with no ref has to list too; its failure is the same fixed message.
+      await expect(down.issue(grant, t)).rejects.toThrow(/^Could not reach Supabase to list projects$/);
+    });
+
+    it('cli mode: health reports an unchosen project without calling it an expiry', async () => {
+      const cli = new FakeCliRunner()
+        .install('supabase')
+        .file('/Users/test/.supabase/access-token', 'sbp_fixture\n');
+      const d = deps({ 'https://api.supabase.com/v1/projects': () => jsonResponse(two) }, cli);
+      const s = new SupabaseAdapter(d);
+      await expect(s.connect({ method: 'cli', account: 'cli' }, 't1')).rejects.toThrow(/several projects/);
+      expect(await s.listProjects({ kind: 'cli', account: 'cli' })).toHaveLength(2);
+      const c = await s.connect(
+        { method: 'cli', account: 'cli', config: { ref: 'prodrefaaaaaaaaaaaaa' } },
+        't1',
+      );
+      expect(c.config).toEqual({ ref: 'prodrefaaaaaaaaaaaaa', account: 'cli' });
+      const t = target({ provider: 'supabase', credentialRef: c.credentialRef, config: c.config });
+      expect(await s.health(t)).toEqual({ ok: true, identity: 'acme (prodrefaaaaaaaaaaaaa)' });
+      expect(await s.listProjects({ kind: 'target', target: t })).toHaveLength(2);
+      expect(await s.health({ ...t, config: { account: 'cli' } })).toEqual({
+        ok: false,
+        expired: false,
+        error: 'This Supabase account has several projects. Choose the one this target uses.',
+      });
+    });
+  });
 });
 
 describe('AwsAdapter', () => {
@@ -970,7 +1114,7 @@ describe('cli mode (connect with the provider CLI)', () => {
       env: { SUPABASE_ACCESS_TOKEN: 'sbp_fixture', SUPABASE_PROJECT_REF: 'abcd1234' },
       scoped: false,
     });
-    expect(await s.health(t)).toEqual({ ok: true, identity: '1 projects' });
+    expect(await s.health(t)).toEqual({ ok: true, identity: 'acme (abcd1234)' });
     cli.files.delete('/Users/test/.supabase/access-token');
     cli.keychain.clear();
     expect(await s.health(t)).toEqual({

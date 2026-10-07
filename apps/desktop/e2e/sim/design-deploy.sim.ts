@@ -1018,7 +1018,7 @@ test('sim: design-deploy', async () => {
       // 5 · Deploy
       // =====================================================================================================
       await sim.step(
-        'the mode strip deploy button names the prod targets; the picker lists all three',
+        'the mode strip deploy button opens a picker listing every target, prod last (issue #9)',
         async () => {
           const wrap = page().locator('[data-deploy-button]');
           await wrap.waitFor({ timeout: 8000 });
@@ -1034,8 +1034,10 @@ test('sim: design-deploy', async () => {
           const names = await items.allInnerTexts();
           const learn = await Promise.all((await items.all()).map((i) => i.getAttribute('data-learn')));
           await page().keyboard.press('Escape');
-          expect(names.length === 3, `items: ${names.join(' | ')}`);
+          const prod = await Promise.all((await items.all()).map((i) => i.getAttribute('data-prod')));
+          expect(names.length === 5, `items: ${names.join(' | ')}`);
           expect(names[0]!.startsWith('Vercel'), `first item ${names[0]}`);
+          expect(prod[0] !== 'true' && prod[4] === 'true', `prod flags ${prod.join(',')}`);
           return `${names.map((n, i) => `${n.replace(/\n/g, ' ')}${learn[i] === 'true' ? ' (learn)' : ''}`).join(' · ')}`;
         },
       );
@@ -1047,7 +1049,7 @@ test('sim: design-deploy', async () => {
           // the picker toggles: an earlier step may have left it open
           if ((await page().locator('[data-deploy-menu]').count()) === 0)
             await page().locator('[data-deploy-button] > button').click();
-          await page().locator('[data-deploy-menu] [role="menuitem"]').first().click();
+          await page().locator('[data-deploy-menu] [role="menuitem"][data-prod="true"]').first().click();
           const dialog = page().getByRole('dialog');
           await dialog.waitFor({ timeout: 8000 });
           const title = await dialog.innerText();
@@ -1116,7 +1118,7 @@ test('sim: design-deploy', async () => {
           // the picker toggles: an earlier step may have left it open
           if ((await page().locator('[data-deploy-menu]').count()) === 0)
             await page().locator('[data-deploy-button] > button').click();
-          await page().locator('[data-deploy-menu] [role="menuitem"]').first().click();
+          await page().locator('[data-deploy-menu] [role="menuitem"][data-prod="true"]').first().click();
           const dialog = page().getByRole('dialog');
           await dialog.waitFor({ timeout: 8000 });
           const phaseEl = page().locator('[data-deploy-phase]');
@@ -1152,7 +1154,7 @@ test('sim: design-deploy', async () => {
         'Deploy · Supabase prod (no command): the first deploy goes to a task; the button reports it',
         async () => {
           await page().locator('[data-deploy-button] > button').click();
-          await page().locator('[data-deploy-menu] [role="menuitem"]').nth(1).click();
+          await page().locator('[data-deploy-menu] [role="menuitem"][data-prod="true"]').nth(1).click();
           const dialog = page().locator('[data-task-dialog]');
           await dialog.waitFor({ timeout: 10_000 });
           const wrap = page().locator('[data-deploy-button]');
@@ -1226,7 +1228,7 @@ test('sim: design-deploy', async () => {
         );
         await page().locator('[data-nav-item="workspace"]').click();
         await page().locator('[data-deploy-button] > button').click();
-        const items = page().locator('[data-deploy-menu] [role="menuitem"]');
+        const items = page().locator('[data-deploy-menu] [role="menuitem"][data-prod="true"]');
         const supaLearn = await items.nth(1).getAttribute('data-learn');
         await page().keyboard.press('Escape');
         expect(supaLearn !== 'true', 'Supabase still flagged to learn after a command was saved');
@@ -1255,7 +1257,7 @@ test('sim: design-deploy', async () => {
           });
           await page().locator('[data-nav-item="workspace"]').click();
           await page().locator('[data-deploy-button] > button').click();
-          await page().locator('[data-deploy-menu] [role="menuitem"]').nth(1).click();
+          await page().locator('[data-deploy-menu] [role="menuitem"][data-prod="true"]').nth(1).click();
           const dialog = page().getByRole('dialog');
           await dialog.waitFor({ timeout: 8000 });
           const shown = page().locator('[data-deploy-command]');

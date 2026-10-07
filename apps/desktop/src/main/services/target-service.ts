@@ -18,6 +18,7 @@ import type {
   CliStatus,
   ConnectInput,
   HealthResult,
+  ProviderProject,
   ProviderRegistry,
   TargetInfo,
 } from '../providers';
@@ -208,20 +209,90 @@ export class TargetService {
     }
   }
 
-  /** Pasted token for token-based providers (Vercel / Supabase / GitHub PAT). */
-  async saveToken(targetId: string, token: string): Promise<Target> {
+  /**
+   * Pasted token for token-based providers (Vercel / Supabase / GitHub PAT). `project` is the pick from
+   * `target.connect.projects`; the adapter refuses one the token cannot reach.
+   */
+  async saveToken(targetId: string, token: string, project?: string): Promise<Target> {
     const target = this.require(targetId);
-    const r = await this.deps.providers
-      .get(target.provider)
-      .connect({ method: 'token', token, name: target.name, config: target.config }, target.id)
+    const adapter = this.deps.providers.get(target.provider);
+    if (project !== undefined && !adapter.projectKey)
+      fail('invalid-input', `${copy.providers[target.provider]} targets have no project to choose`);
+    const config =
+      project !== undefined && adapter.projectKey
+        ? { ...target.config, [adapter.projectKey]: project }
+        : target.config;
+    const r = await adapter
+      .connect({ method: 'token', token, name: target.name, config }, target.id)
       .catch((e: Error) => fail('provider-error', e.message));
     return this.finishConnect(target, r);
   }
 
+  /**
+   * `target.connect.projects`: what a login can reach, so the person picks the project a target acts on (issue #5).
+   * A pasted token is used for this one call and dropped; nothing is stored.
+   */
+  async projects(
+    provider: Provider,
+    source:
+      | { kind: 'token'; token: string }
+      | { kind: 'cli'; account: string }
+      | { kind: 'target'; targetId: string },
+  ): Promise<{ projects: ProviderProject[] }> {
+    const adapter = this.deps.providers.get(provider);
+    if (!adapter.listProjects)
+      fail('invalid-input', `${copy.providers[provider]} targets have no project to choose`);
+    let list: Promise<ProviderProject[]>;
+    if (source.kind === 'target') {
+      const target = this.require(source.targetId);
+      if (target.provider !== provider) fail('invalid-input', 'target belongs to another provider');
+      if (target.credentialRef === null) fail('invalid-input', copy.targets.state.unconnected);
+      list = adapter.listProjects({ kind: 'target', target: this.info(target) });
+    } else if (source.kind === 'cli') {
+      if (!ACCOUNT.test(source.account))
+        fail('invalid-input', 'account: letters, digits, space, . _ @ + : / - only');
+      list = adapter.listProjects({ kind: 'cli', account: source.account });
+    } else {
+      list = adapter.listProjects({ kind: 'token', token: source.token });
+    }
+    const projects = await list.catch((e: Error) => fail('provider-error', e.message));
+    return { projects };
+  }
+
+  /**
+   * Points a connected target at one of its login's projects. Checked against the live list (a ref the login cannot
+   * reach is refused), audited, and live grants drop their cached bundle so the next use carries the new project.
+   */
+  async setProject(targetId: string, project: string): Promise<Target> {
+    const target = this.require(targetId);
+    const adapter = this.deps.providers.get(target.provider);
+    const key = adapter.projectKey;
+    if (!key || !adapter.listProjects)
+      fail('invalid-input', `${copy.providers[target.provider]} targets have no project to choose`);
+    if (target.credentialRef === null) fail('invalid-input', copy.targets.state.unconnected);
+    const projects = await adapter
+      .listProjects({ kind: 'target', target: this.info(target) })
+      .catch((e: Error) => fail('provider-error', e.message));
+    if (!projects.some((p) => p.id === project))
+      fail('invalid-input', fill(copy.connect.project.gone, { ref: project }));
+    if (target.config[key] === project) return target;
+    const next: Target = { ...target, config: { ...target.config, [key]: project } as Target['config'] };
+    this.upsertRow(next);
+    this.deps.grants.invalidate(next.id);
+    this.audit('connected', next, 'project chosen', this.projectMove(target, next));
+    this.revokeIfRepointed(target, next, 'project changed');
+    return next;
+  }
+
+  /**
+   * `before` is the row as it was before this connect (callers that pre-merge input config into `target` pass the
+   * original), so a change of project is seen and audited.
+   */
   private async finishConnect(
     target: Target,
     r: { credentialRef: string; config: Record<string, unknown>; label: string },
     authMethod: AuthMethod = target.authMethod,
+    before: Target = target,
   ): Promise<Target> {
     const now = this.deps.clock.now();
     // Switching modes (key → cli or back) leaves the old keychain entry orphaned unless it goes now.
@@ -241,8 +312,43 @@ export class TargetService {
     // The point of reconnecting is to replace a credential that went stale. Live grants cache their minted
     // bundle, so without this the next shim call still serves the dead one and only an app restart clears it.
     this.deps.grants.invalidate(next.id);
-    this.audit('connected', next, 'connect flow', { authMethod: next.authMethod });
+    const moved = this.projectMove(before, next);
+    this.audit('connected', next, 'connect flow', { authMethod: next.authMethod, ...moved });
+    this.revokeIfRepointed(before, next, 'project changed');
     return next;
+  }
+
+  /** `{ project, from? }` for audit detail when a target's project is set or changes; `{}` otherwise. */
+  private projectMove(before: Target, after: Target): Record<string, string> {
+    const key = this.deps.providers.get(after.provider).projectKey;
+    if (!key) return {};
+    const from = before.config[key];
+    const to = after.config[key];
+    if (typeof to !== 'string' || to === from) return {};
+    return { project: to, ...(typeof from === 'string' ? { from } : {}) };
+  }
+
+  /**
+   * A connected target now points at another project. Its open requests and live grants were approved for where it
+   * pointed before, so they end now, each with an audited revoke row, rather than carrying on against the new
+   * project. A target that named no project counts as moved too (fail closed): its grants resolved one implicitly.
+   */
+  private revokeIfRepointed(before: Target, after: Target, triggeredBy: string): void {
+    if (before.credentialRef === null) return;
+    const key = this.deps.providers.get(after.provider).projectKey;
+    if (!key || before.config[key] === after.config[key]) return;
+    this.deps.grants.cancelTargetGrants(after.id, triggeredBy);
+  }
+
+  /**
+   * `.styx/project.json` changed a connected target's config (ProjectService, accepted file only). A new project is
+   * audited and ends the grants approved for the old one, like the Settings picker.
+   */
+  fileConfigChanged(before: Target, after: Target): void {
+    const moved = this.projectMove(before, after);
+    if (before.credentialRef === null || Object.keys(moved).length === 0) return;
+    this.audit('connected', after, 'project.json', moved);
+    this.revokeIfRepointed(before, after, 'project changed in project.json');
   }
 
   async saveKey(input: {
@@ -277,6 +383,8 @@ export class TargetService {
     return this.finishConnect(
       { ...target, config: { ...target.config, ...input.config } as Target['config'] },
       r,
+      target.authMethod,
+      target,
     );
   }
 
@@ -381,6 +489,7 @@ export class TargetService {
       { ...target, config: { ...target.config, ...input.config } as Target['config'] },
       r,
       'cli',
+      target,
     );
     await this.checkHealth(saved, 'manual');
     // One `gcloud auth login` fixes every row bound to that account, not just the one being connected: the same
@@ -482,6 +591,9 @@ export class TargetService {
     if (r.ok) {
       this.upsertRow({ ...target, health: 'ok', healthCheckedAt: now, expiredAt: null });
       this.clearExpiredBanner(target);
+    } else if (r.needsProject === true) {
+      // The login works; the target just does not say which project. Not an expiry: no Reconnect banner.
+      this.upsertRow({ ...target, healthCheckedAt: now });
     } else {
       this.markExpired(target, r.error);
     }

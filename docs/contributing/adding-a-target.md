@@ -104,12 +104,20 @@ export class SupabaseAdapter implements ProviderAdapter {
 The Advanced path checks the pasted token against the API, writes it to the vault, and returns a reference:
 
 ```ts
-const projects = await this.projects(input.token.trim());
+const picked = pickProject(await this.projects(input.token.trim()), cfg['ref']);
+if (!picked.ok) throw new Error(picked.error);
 const ref = makeCredentialRef('supabase', targetId, 'oauth');
 await this.deps.vault.set(ref, JSON.stringify({ token: input.token.trim() }));
 ```
 
 The returned `config` holds only non-secret settings (the project `ref`). The token never leaves the vault.
+
+A Supabase login reaches every project in the account, so the target has to say which one it acts on. The adapter
+declares `projectKey = 'ref'` and `listProjects(source)` (a pasted token, the CLI login, or a saved target), the
+connect modal lists them through `target.connect.projects` and requires a pick, and Settings › Targets re-points a
+target with `target.setProject`. `pickProject()` accepts the chosen ref or the account's only project, never the first
+of several: connect refuses, `test()` returns `needsProject` (not an expiry), and `issue()` throws. Implement the same
+pair if your provider's login spans several projects.
 
 The CLI path (`connectCli`) stores no secret at all. The vault entry only names the account:
 
@@ -138,8 +146,8 @@ Supabase has no API for minting a narrower token, so `issue()` hands over the st
 
 ```ts
 const token = await this.token(target);
-const env: Record<string, string> = { SUPABASE_ACCESS_TOKEN: token };
-if (typeof target.config['ref'] === 'string') env['SUPABASE_PROJECT_REF'] = target.config['ref'];
+// …the chosen `ref`, or the account's only project; several and none chosen → throw (fail closed)
+const env: Record<string, string> = { SUPABASE_ACCESS_TOKEN: token, SUPABASE_PROJECT_REF: projectRef };
 return { kind: 'env', env, expiresAt: grant.expiresAt, scoped: false };
 ```
 
