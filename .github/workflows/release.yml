@@ -228,8 +228,9 @@ jobs:
           ls -la dist/*
       - uses: softprops/action-gh-release@v2
         with:
+          # The tag already exists (verify pushed it on the CI-green commit). No target_commitish: with an existing tag,
+          # GitHub then also demands `workflows: write`, which GITHUB_TOKEN can't have, and refuses with a 403.
           tag_name: ${{ needs.verify.outputs.tag }}
-          target_commitish: ${{ needs.verify.outputs.sha }}
           name: Styx ${{ needs.verify.outputs.tag }}
           draft: true
           generate_release_notes: true
