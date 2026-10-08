@@ -10,7 +10,8 @@ allowed-tools: Bash(pnpm:*), Bash(gh:*), Bash(git log:*), Read
 Releases are built and published by CI on the public repo (NicholasFlemmer/styx-app), never from a laptop.
 
 1. **Bump** `version` in `apps/desktop/package.json` (every release needs a new number; the feed refuses a version it
-   already serves) and land it. `mirror.yml` copies STYX main to styx-app within minutes; CI runs there.
+   already serves) and land it. `mirror.yml` pushes it to styx-app's `sync` branch; `sync-pr.yml` opens a pull
+   request that merges itself once CI passes (about 35 minutes). Wait for that merge before step 2.
 2. **Start the release**: `gh workflow run release.yml -R NicholasFlemmer/styx-app -f version=X.Y.Z`
    (or push a `vX.Y.Z` tag to styx-app). `verify` checks the version, waits for CI on that exact commit to pass,
    and tags it. Mac (signed + notarized, retried on network errors), Windows and Linux build in parallel; `draft`
