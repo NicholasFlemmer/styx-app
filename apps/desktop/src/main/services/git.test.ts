@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { execa } from 'execa';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ExecaGitRunner, GitService, isGitMissing, isTokenRefusal, worktreeLocation } from './git';
+import { slow } from '../test-timeouts';
 
 const git = new GitService();
 let repo: string;
@@ -356,6 +357,8 @@ describe('a machine without git (owner request: git is never a requirement to st
       expect(await git.available()).toEqual({ installed: true, version: '9.9.9' });
       expect(asked).toEqual([undefined, 0]);
     },
+    // Two process spawns (a miss, then the fake git): over 5s on a loaded machine.
+    slow(20_000),
   );
 
   it.skipIf(process.platform === 'win32')(
