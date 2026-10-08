@@ -55,21 +55,35 @@ jobs:
             exit 1
           fi
           sha=$(git rev-parse HEAD)
-          # CI must have passed for exactly this commit. Wait for a run still in progress.
+          # CI must have passed for exactly these files. main moves through pull requests (rebase merge gives the commit
+          # a new id, and that push runs no CI of its own), so a run counts when the commit it tested has the same tree
+          # as main: the same files, byte for byte. Wait for a run still in progress.
+          tree=$(git rev-parse "$sha^{tree}")
+          ci_state() {
+            local runs hs st co t best=none
+            runs=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci --limit 40 \
+              --json headSha,status,conclusion --jq '.[] | "\(.headSha) \(.status) \(.conclusion)"') || return 1
+            while read -r hs st co; do
+              [ -n "$hs" ] || continue
+              t=$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$hs" --jq .tree.sha) || return 1
+              [ "$t" = "$tree" ] || continue
+              if [ "$co" = success ]; then echo success; return 0; fi
+              if [ "$st" != completed ]; then best=running; elif [ "$best" = none ]; then best=failed; fi
+            done <<< "$runs"
+            echo "$best"
+          }
           for i in $(seq 1 90); do
             # GitHub's API has transient 5xx errors; a failed lookup is retried next minute, never fatal.
-            state=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci --commit "$sha" --json status,conclusion \
-              --jq 'if length == 0 then "none" elif any(.[]; .conclusion == "success") then "success"
-                    elif any(.[]; .status != "completed") then "running" else "failed" end') || state=unreachable
+            state=$(ci_state) || state=unreachable
             case "$state" in
               unreachable) echo "GitHub API did not answer ($i min); trying again"; sleep 60 ;;
               success) break ;;
-              running) echo "CI is still running for $sha ($i min)"; sleep 60 ;;
+              running) echo "CI is still running for these files ($i min)"; sleep 60 ;;
               none)
                 # A push seconds ago may not have a CI run listed yet.
-                if [ "$i" -le 5 ]; then echo "No CI run for $sha yet ($i min)"; sleep 60; continue; fi
-                echo "::error::No CI run for $sha. Push it to main and let CI pass first."; exit 1 ;;
-              *) echo "::error::CI failed for $sha. Fix it, then release again."; exit 1 ;;
+                if [ "$i" -le 5 ]; then echo "No CI run for $sha's files yet ($i min)"; sleep 60; continue; fi
+                echo "::error::No CI run tested main's files ($sha). Let CI pass on the pull request first."; exit 1 ;;
+              *) echo "::error::CI failed for main's files ($sha). Fix it, then release again."; exit 1 ;;
             esac
           done
           [ "$state" = success ] || { echo "::error::CI did not finish within 90 minutes for $sha."; exit 1; }
