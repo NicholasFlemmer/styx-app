@@ -75,6 +75,8 @@ Node ≥ 22, pnpm 10 (`corepack enable`). Run one package with `pnpm -F <name> <
 - Storybook: `pnpm storybook`; `pnpm storybook:test` builds it and runs every story through axe.
 - Package: `pnpm package:mac` / `pnpm package:win` / `pnpm package:linux` (AppImage + .deb; build on Linux). Unsigned
   dir builds: `pnpm -F @styx/desktop package:mac:dir` (also `:win:dir`, `:linux:dir`).
+- Public repo: STYX main reaches NicholasFlemmer/styx-app as a pull request from its `sync` branch (`mirror.yml` here,
+  `sync-pr.yml` there) that merges itself once CI passes; contributors' merged pull requests flow back into STYX.
 - Release: CI only. Bump `apps/desktop/package.json`, then run `release.yml` on styx-app (it waits for green CI,
   builds signed Mac + Windows + Linux into a draft release); publishing the draft runs `publish.yml` (update feed,
   Homebrew cask). See `.claude/skills/release/SKILL.md`.
