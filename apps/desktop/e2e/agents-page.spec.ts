@@ -25,15 +25,18 @@ test('Settings › Agents lists every agent with its account and opens Connect a
     await page.click('[data-settings-nav-item="app:agents"]');
     await expect(page.locator('[data-settings-section="app:agents"]')).toBeVisible();
 
+    // Rows by agent, not position: adding an agent (OpenCode, #17) must not shift every assertion.
     const rows = page.locator('[data-agent-row]');
-    await expect(rows).toHaveCount(5);
-    await expect(rows.nth(0)).toContainText('nic@acme.dev');
-    await expect(rows.nth(0)).toHaveAttribute('data-agent-state', 'connected');
-    await expect(rows.nth(1)).toContainText('ChatGPT');
-    await expect(rows.nth(2)).toHaveAttribute('data-agent-state', 'signed-out');
-    await expect(rows.nth(3)).toContainText('nic@acme.dev');
-    await expect(rows.nth(3)).toHaveAttribute('data-agent-state', 'unverified');
-    await expect(rows.nth(4)).toHaveAttribute('data-agent-state', 'shell');
+    await expect(rows).toHaveCount(6);
+    const row = (agent: string) => page.locator(`[data-agent-row="${agent}"]`);
+    await expect(row('claude')).toContainText('nic@acme.dev');
+    await expect(row('claude')).toHaveAttribute('data-agent-state', 'connected');
+    await expect(row('codex')).toContainText('ChatGPT');
+    await expect(row('gemini')).toHaveAttribute('data-agent-state', 'signed-out');
+    await expect(row('cursor')).toContainText('nic@acme.dev');
+    await expect(row('cursor')).toHaveAttribute('data-agent-state', 'unverified');
+    await expect(row('opencode')).toBeVisible();
+    await expect(row('shell')).toHaveAttribute('data-agent-state', 'shell');
 
     await page.locator('[data-agent-row="gemini"] button', { hasText: 'Connect' }).click();
     const dialog = page.getByRole('dialog');

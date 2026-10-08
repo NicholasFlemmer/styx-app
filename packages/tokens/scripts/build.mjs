@@ -32,6 +32,7 @@ const laneShort = {
   agentCodex: 'agent-codex',
   agentGemini: 'agent-gemini',
   agentCursor: 'agent-cursor',
+  agentOpencode: 'agent-opencode',
   agentShell: 'agent-shell',
   paper: 'paper',
   paperSurface: 'paper-s2',

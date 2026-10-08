@@ -50,7 +50,14 @@ export function windowsShellFile(env: string | undefined, setting: WindowsShell 
   return pick === 'wsl' ? 'wsl.exe' : 'powershell.exe';
 }
 
-export const SHELL_WHICH_NAMES: readonly string[] = ['claude', 'codex', 'gemini', 'agent', 'cursor-agent'];
+export const SHELL_WHICH_NAMES: readonly string[] = [
+  'claude',
+  'codex',
+  'gemini',
+  'agent',
+  'cursor-agent',
+  'opencode',
+];
 
 const PATH_MARK = '__STYX_PATH__';
 const POSIX_LOGIN_SCRIPT = `echo ${PATH_MARK}$PATH; for n in ${SHELL_WHICH_NAMES.join(' ')}; do command -v -- "$n" 2>/dev/null; done`;

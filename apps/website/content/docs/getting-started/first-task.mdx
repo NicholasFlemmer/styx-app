@@ -8,7 +8,7 @@ This tutorial takes one change from a sentence to a commit on main. It takes abo
 ## Before you start
 
 - Styx is [installed](/docs/getting-started/install).
-- One agent is set up: Claude Code, Codex, Gemini CLI or Cursor's agent, installed and signed in. **Settings › Agents** lists every agent Styx found, its version, the account it's signed in as and whether it's ready. If none is, see [Connect your agents](/docs/getting-started/connect-agents).
+- One agent is set up: Claude Code, Codex, Gemini CLI, Cursor's agent or OpenCode, installed and signed in. **Settings › Agents** lists every agent Styx found, its version, the account it's signed in as and whether it's ready. If none is, see [Connect your agents](/docs/getting-started/connect-agents).
 - Your project is a git repository. Without git an agent can still work, but directly in your project folder, with no branch of its own and nothing to land.
 
 ## Add a project
@@ -36,7 +36,7 @@ The same four choices are under the project table on **All projects**.
 
 Styx cuts a new branch for the task, `agent/claude-1` for a first Claude task, in its own copy of the repo, and starts the agent there. Your main folder doesn't change; as the New task screen puts it, main is safe until you land it.
 
-The fields under the box are already filled in and you rarely need them: where the task works (**New from main**), its branch name, **Permissions**, **Model** and **Effort** for agents that take them, and three toggles: **Auto-approve edits**, **May request targets** and **Notify when it needs me**. New tasks start in the **Auto** permission mode. Each agent applies it its own way: Claude Code decides what needs your approval, Codex uses its own reviewer, Gemini CLI makes edits without asking but asks before commands, and Cursor's agent asks for both. The hint under **Permissions** says what the selected mode does for the selected agent.
+The fields under the box are already filled in and you rarely need them: where the task works (**New from main**), its branch name, **Permissions**, **Model** and **Effort** for agents that take them, and three toggles: **Auto-approve edits**, **May request targets** and **Notify when it needs me**. New tasks start in the **Auto** permission mode. Each agent applies it its own way: Claude Code decides what needs your approval, Codex uses its own reviewer, Gemini CLI and OpenCode make edits without asking but ask before commands, and Cursor's agent asks for both. The hint under **Permissions** says what the selected mode does for the selected agent.
 
 ### Design or build
 

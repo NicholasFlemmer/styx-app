@@ -1112,6 +1112,247 @@ describe('AcpRunner: cancel, kill, unsupported client methods', () => {
   });
 });
 
+/**
+ * OpenCode 1.18.35, as captured from a real `opencode acp` run (docs/research/agent-parity.md): modes and models are
+ * config options, the mode list holds OpenCode's primary agents (the `styx-*` ones come from the launch config), and a
+ * tool call is announced before its input is known; the command or path arrives with the permission request.
+ */
+describe('AcpRunner: OpenCode', () => {
+  const OPENCODE_CONFIG = [
+    {
+      id: 'model',
+      name: 'Model',
+      category: 'model',
+      type: 'select',
+      currentValue: 'opencode/big-pickle',
+      options: [
+        { value: 'opencode/big-pickle', name: 'OpenCode Zen/Big Pickle' },
+        { value: 'anthropic/claude-sonnet-4-5', name: 'Anthropic/Claude Sonnet 4.5' },
+      ],
+    },
+    {
+      id: 'mode',
+      name: 'Session Mode',
+      category: 'mode',
+      type: 'select',
+      currentValue: 'build',
+      options: [
+        {
+          value: 'build',
+          name: 'build',
+          description: 'The default agent. Executes tools based on configured permissions.',
+        },
+        { value: 'plan', name: 'plan', description: 'Plan mode. Disallows all edit tools.' },
+        { value: 'styx-accept-edits', name: 'styx-accept-edits' },
+        { value: 'styx-bypass', name: 'styx-bypass' },
+        { value: 'styx-dont-ask', name: 'styx-dont-ask' },
+      ],
+    },
+  ];
+  const OPENCODE_OPTIONS = [
+    { optionId: 'once', kind: 'allow_once', name: 'Allow once' },
+    { optionId: 'always', kind: 'allow_always', name: 'Always allow' },
+    { optionId: 'reject', kind: 'reject_once', name: 'Reject' },
+  ];
+  const start = async (session: Partial<StreamSessionSettings> = {}, firstMessage: string | null = null) => {
+    const h = harness();
+    await h.runner.spawn(
+      opts({
+        command: '/bin/opencode',
+        args: ['acp'],
+        firstMessage,
+        session: { agent: 'opencode', ...session },
+      }),
+    );
+    await handshake(h.agent, { modes: null, configOptions: OPENCODE_CONFIG, sessionId: 'ses_1' });
+    return h;
+  };
+
+  it('default stays on build (no switch); the launch model and later modes go through set_config_option', async () => {
+    const h = await start({ model: 'anthropic/claude-sonnet-4-5' });
+    const model = await h.agent.method('session/set_config_option');
+    expect(params(model)).toEqual({
+      sessionId: 'ses_1',
+      configId: 'model',
+      type: 'id',
+      value: 'anthropic/claude-sonnet-4-5',
+    });
+    h.agent.respond(model['id'], { configOptions: OPENCODE_CONFIG });
+    await h.until(() => h.of('session').some((e) => e.event === 'quiet'), 'ready');
+    expect(h.of('catalogue')[0]?.models.map((m) => m.id)).toEqual([
+      'opencode/big-pickle',
+      'anthropic/claude-sonnet-4-5',
+    ]);
+    for (const [mode, id] of [
+      ['acceptEdits', 'styx-accept-edits'],
+      ['bypassPermissions', 'styx-bypass'],
+      ['dontAsk', 'styx-dont-ask'],
+      ['plan', 'plan'],
+      ['default', 'build'],
+    ] as const) {
+      h.runner.setPermissionMode('s1', mode);
+      const set = await h.agent.method('session/set_config_option');
+      expect(params(set)).toEqual({ sessionId: 'ses_1', configId: 'mode', type: 'id', value: id });
+      h.agent.respond(set['id'], {});
+    }
+    expect(h.agent.received.some((m) => m['method'] === 'session/set_mode')).toBe(false);
+    expect(h.of('transcript')).toEqual([]); // exact mappings are silent
+  });
+
+  it('the Allow/Deny card shows the command and path the permission request carries, not the bare announcement', async () => {
+    const h = await start({}, 'hi');
+    await h.agent.method('session/prompt');
+    h.agent.update('ses_1', {
+      sessionUpdate: 'tool_call',
+      toolCallId: 'call_b',
+      title: 'bash',
+      kind: 'execute',
+      status: 'pending',
+      locations: [{ path: WT }],
+      rawInput: { cwd: WT },
+    });
+    h.agent.request(0, 'session/request_permission', {
+      sessionId: 'ses_1',
+      toolCall: {
+        toolCallId: 'call_b',
+        title: 'echo hi',
+        kind: 'execute',
+        status: 'pending',
+        locations: [],
+        rawInput: { command: 'echo hi' },
+      },
+      options: OPENCODE_OPTIONS,
+    });
+    await h.until(() => h.of('permission').length === 1, 'bash ask');
+    expect(h.of('permission')[0]).toMatchObject({
+      requestId: '0',
+      toolName: 'Bash',
+      input: { command: 'echo hi', cwd: WT, styxEdit: false },
+    });
+    h.runner.respondPermission('s1', '0', false);
+    expect((await h.agent.answer(0))['result']).toEqual({
+      outcome: { outcome: 'selected', optionId: 'reject' },
+    });
+
+    h.agent.update('ses_1', {
+      sessionUpdate: 'tool_call',
+      toolCallId: 'call_w',
+      title: 'write',
+      kind: 'edit',
+      status: 'pending',
+      locations: [],
+      rawInput: {},
+    });
+    h.agent.request(1, 'session/request_permission', {
+      sessionId: 'ses_1',
+      toolCall: {
+        toolCallId: 'call_w',
+        title: `${WT}/a.txt`,
+        kind: 'edit',
+        status: 'pending',
+        locations: [{ path: `${WT}/a.txt` }],
+        rawInput: { filepath: `${WT}/a.txt`, diff: '+hi' },
+      },
+      options: OPENCODE_OPTIONS,
+    });
+    await h.until(() => h.of('permission').length === 2, 'edit ask');
+    expect(h.of('permission')[1]).toMatchObject({
+      requestId: '1',
+      toolName: 'Edit',
+      input: {
+        file_path: `${WT}/a.txt`,
+        filepath: `${WT}/a.txt`,
+        locations: [`${WT}/a.txt`],
+        styxEdit: true,
+      },
+    });
+    h.runner.respondPermission('s1', '1', true);
+    expect((await h.agent.answer(1))['result']).toEqual({
+      outcome: { outcome: 'selected', optionId: 'once' },
+    });
+  });
+
+  it('a command named only in the request’s title, and a path only as `filepath`, still reach the card', async () => {
+    const h = await start({}, 'hi');
+    await h.agent.method('session/prompt');
+    h.agent.update('ses_1', {
+      sessionUpdate: 'tool_call',
+      toolCallId: 'b',
+      title: 'bash',
+      kind: 'execute',
+      rawInput: {},
+    });
+    h.agent.request(3, 'session/request_permission', {
+      sessionId: 'ses_1',
+      toolCall: { toolCallId: 'b', title: 'npm test', kind: 'execute' },
+      options: OPENCODE_OPTIONS,
+    });
+    await h.until(() => h.of('permission').length === 1, 'bash ask');
+    expect(h.of('permission')[0]?.input['command']).toBe('npm test');
+    h.agent.update('ses_1', {
+      sessionUpdate: 'tool_call',
+      toolCallId: 'w',
+      title: 'write',
+      kind: 'edit',
+      rawInput: {},
+    });
+    h.agent.request(4, 'session/request_permission', {
+      sessionId: 'ses_1',
+      toolCall: { toolCallId: 'w', kind: 'edit', rawInput: { filePath: `${WT}/b.txt` } },
+      options: OPENCODE_OPTIONS,
+    });
+    await h.until(() => h.of('permission').length === 2, 'edit ask');
+    expect(h.of('permission')[1]?.input).toMatchObject({ file_path: `${WT}/b.txt`, styxEdit: true });
+  });
+
+  it('a mode its launch config lacks is refused with a system row, not mapped to a look-alike', async () => {
+    const h = harness();
+    await h.runner.spawn(
+      opts({ command: '/bin/opencode', args: ['acp'], firstMessage: null, session: { agent: 'opencode' } }),
+    );
+    const stock = OPENCODE_CONFIG.map((o) =>
+      o.id === 'mode'
+        ? {
+            ...o,
+            options: [
+              ...o.options.filter((m) => !m.value.startsWith('styx-')),
+              { value: 'auto-yes', name: 'auto-yes' },
+            ],
+          }
+        : o,
+    );
+    await handshake(h.agent, { modes: null, configOptions: stock, sessionId: 'ses_1' });
+    await h.until(() => h.of('session').some((e) => e.event === 'quiet'), 'ready');
+    h.runner.setPermissionMode('s1', 'dontAsk');
+    await h.until(() => h.of('transcript').length === 1, 'no-mode row');
+    expect(h.of('transcript')[0]?.body).toBe(
+      fill(copy.acpRunner.noMode, { mode: "Don't ask", current: 'build' }),
+    );
+    expect(h.agent.received.some((m) => m['method'] === 'session/set_config_option')).toBe(false);
+  });
+
+  it('a permission request cannot turn an announced command into an edit', async () => {
+    const h = await start({}, 'hi');
+    await h.agent.method('session/prompt');
+    h.agent.update('ses_1', { sessionUpdate: 'tool_call', toolCallId: 'c', title: 'bash', kind: 'execute' });
+    h.agent.request(2, 'session/request_permission', {
+      sessionId: 'ses_1',
+      toolCall: {
+        toolCallId: 'c',
+        kind: 'edit',
+        locations: [{ path: `${WT}/x` }],
+        rawInput: { command: 'rm -rf /' },
+      },
+      options: OPENCODE_OPTIONS,
+    });
+    await h.until(() => h.of('permission').length === 1, 'ask');
+    expect(h.of('permission')[0]).toMatchObject({
+      toolName: 'Bash',
+      input: { command: 'rm -rf /', styxEdit: false },
+    });
+  });
+});
+
 describe('resolveAcpMode / pickAuthMethod / acpMcpServer', () => {
   const gemini = GEMINI_MODES.availableModes;
   const cursor = CURSOR_MODES.availableModes;
@@ -1139,6 +1380,46 @@ describe('resolveAcpMode / pickAuthMethod / acpMcpServer', () => {
     const r = resolveAcpMode(mode, available);
     expect(r === null ? null : r.id).toBe(id);
     if (r !== null) expect(r.exact).toBe(exact);
+  });
+
+  // OpenCode's modes are its primary agents: a user's own agent named like another CLI's mode never wins.
+  const opencode = [
+    'build',
+    'plan',
+    'agent',
+    'default',
+    'styx-accept-edits',
+    'styx-bypass',
+    'styx-dont-ask',
+  ].map((id) => ({ id }));
+  it.each([
+    ['default', 'build'],
+    ['acceptEdits', 'styx-accept-edits'],
+    ['auto', 'styx-accept-edits'],
+    ['plan', 'plan'],
+    ['bypassPermissions', 'styx-bypass'],
+    ['dontAsk', 'styx-dont-ask'],
+  ] as const)('opencode: %s → %s', (mode, id) => {
+    expect(resolveAcpMode(mode, opencode, 'opencode')).toEqual({ id, exact: true });
+  });
+
+  it('opencode fails closed: a mode its launch config should have defined but did not is null, never a name guess', () => {
+    const stock = [{ id: 'build' }, { id: 'plan' }, { id: 'yolo-auto', name: 'Full auto' }];
+    for (const mode of ['acceptEdits', 'auto', 'bypassPermissions', 'dontAsk'] as const)
+      expect(resolveAcpMode(mode, stock, 'opencode')).toBeNull();
+    // The same list for an agent without its own table still gets the closest name.
+    expect(resolveAcpMode('dontAsk', stock)?.id).toBe('yolo-auto');
+  });
+
+  it('the session agent’s own table only: a Gemini id another agent happens to list is not taken as exact', () => {
+    expect(resolveAcpMode('default', [{ id: 'default' }, { id: 'build' }], 'opencode')).toEqual({
+      id: 'build',
+      exact: true,
+    });
+    expect(resolveAcpMode('default', [{ id: 'build' }, { id: 'default' }], 'gemini')).toEqual({
+      id: 'default',
+      exact: true,
+    });
   });
 
   it.each([

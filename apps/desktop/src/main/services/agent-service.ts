@@ -53,12 +53,16 @@ export interface AgentServiceDeps {
 
 type ConnectableAgent = Exclude<Agent, 'shell'>;
 
-/** The CLI's own sign-in: `claude auth login`, `codex login`, `agent login`; Gemini signs in on its first run. */
+/**
+ * The CLI's own sign-in: `claude auth login`, `codex login`, `agent login`, `opencode auth login` (a provider picker,
+ * then that provider's browser or key prompt); Gemini signs in on its first run.
+ */
 const LOGIN_ARGS: Record<ConnectableAgent, string[]> = {
   claude: ['auth', 'login'],
   codex: ['login'],
   cursor: ['login'],
   gemini: [],
+  opencode: ['auth', 'login'],
 };
 
 /** Who the CLI says it is signed in as. Gemini has no status command (see `probeGemini`). */
@@ -66,6 +70,7 @@ const STATUS_ARGS: Record<Exclude<ConnectableAgent, 'gemini'>, string[]> = {
   claude: ['auth', 'status', '--json'],
   codex: ['login', 'status'],
   cursor: ['status'],
+  opencode: ['auth', 'list'],
 };
 
 const INSTALL_GUIDES: Record<ConnectableAgent, string> = {
@@ -73,6 +78,7 @@ const INSTALL_GUIDES: Record<ConnectableAgent, string> = {
   codex: 'https://github.com/openai/codex',
   gemini: 'https://github.com/google-gemini/gemini-cli',
   cursor: 'https://cursor.com/docs/cli',
+  opencode: 'https://opencode.ai/docs',
 };
 
 /**
@@ -133,6 +139,28 @@ const parseCursor = (stdout: string): Probe => {
   if (/not (logged in|authenticated)/i.test(stdout)) return SIGNED_OUT;
   if (!/logged in|authenticated/i.test(stdout)) throw new Error('unexpected `agent status` output');
   return { authState: 'signed-in', account: stdout.match(EMAIL)?.[0] ?? null };
+};
+
+const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
+const PROVIDER_NAME = /^[A-Za-z0-9][A-Za-z0-9 ._()-]{0,40}$/;
+
+/**
+ * `opencode auth list` (OpenCode 1.18.35) prints a "Credentials" section (one `●  <Provider> <type>` line per stored
+ * login, then `N credentials`) and, when provider keys are set in the environment, an "Environment" section the same
+ * way (`●  <Provider> <ENV_VAR>`). Only the provider names are kept, as the account label; the type and variable
+ * name are dropped. No stored login and no key means signed out, even though OpenCode can still run its free models.
+ */
+export const parseOpenCode = (text: string): Probe => {
+  const plain = text.replace(ANSI, '');
+  if (!/credentials?\b/i.test(plain)) throw new Error('unexpected `opencode auth list` output');
+  const names: string[] = [];
+  for (const line of plain.split('\n')) {
+    const m = /^\s*[●•]\s+(.+?)\s+\S+\s*$/.exec(line);
+    const name = m?.[1]?.trim();
+    if (name !== undefined && PROVIDER_NAME.test(name) && !names.includes(name)) names.push(name);
+  }
+  if (names.length === 0) return SIGNED_OUT;
+  return { authState: 'signed-in', account: names.join(', ') };
 };
 
 /**
@@ -324,6 +352,8 @@ export class AgentService {
         return parseCodex(text);
       case 'cursor':
         return parseCursor(text);
+      case 'opencode':
+        return parseOpenCode(text);
     }
   }
 

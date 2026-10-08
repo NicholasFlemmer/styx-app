@@ -7,7 +7,8 @@ import type { Agent } from './common';
  * and main runs the matching constant.
  *
  * Sources (2026-09): code.claude.com/docs/en/setup · github.com/openai/codex · github.com/google-gemini/gemini-cli ·
- * cursor.com/docs/cli/installation.
+ * cursor.com/docs/cli/installation · opencode.ai/docs (2026-10: `curl -fsSL https://opencode.ai/install | bash`, which
+ * installs to `~/.opencode/bin`, and `npm install -g opencode-ai`).
  */
 export type InstallShell = 'sh' | 'powershell';
 
@@ -56,6 +57,12 @@ const RECIPES: Record<Exclude<Agent, 'shell'>, Record<InstallPlatform, InstallRe
     darwin: [sh('curl https://cursor.com/install -fsS | bash')],
     linux: [sh('curl https://cursor.com/install -fsS | bash')],
     win32: [ps("irm 'https://cursor.com/install?win32=true' | iex")],
+  },
+  // OpenCode's own installer on macOS and Linux; on Windows its npm package (the docs also list Scoop and Chocolatey).
+  opencode: {
+    darwin: [sh('curl -fsSL https://opencode.ai/install | bash')],
+    linux: [sh('curl -fsSL https://opencode.ai/install | bash')],
+    win32: [ps('npm install -g opencode-ai', 'npm')],
   },
 };
 

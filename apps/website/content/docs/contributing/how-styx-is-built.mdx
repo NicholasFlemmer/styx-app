@@ -62,7 +62,7 @@ Each agent CLI is driven in the way that gives Styx the most structure. [`runner
 
 - **Claude Code**: newline-delimited stream-json, in [`stream-runner.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/stream-runner.ts).
 - **Codex**: JSON-RPC over `codex app-server`, in [`app-server-runner.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/app-server-runner.ts). Codex's terminal UI can't take messages through a pty, so it is never routed there.
-- **Gemini CLI and Cursor's agent**: the Agent Client Protocol, in [`acp-runner.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/acp-runner.ts). Cursor falls back to its `--print` stream-json mode when ACP isn't available.
+- **Gemini CLI, Cursor's agent and OpenCode**: the Agent Client Protocol, in [`acp-runner.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/acp-runner.ts). Cursor falls back to its `--print` stream-json mode when ACP isn't available.
 - **Shell**: a pty.
 
 Every backend turns its CLI's events into the same `StreamEffect`s (transcript rows, tool steps, permission asks, usage, end of turn). The launch details for each CLI (arguments, environment, how the first message goes in) are one file per agent in [`src/main/agents/`](https://github.com/NicholasFlemmer/styx-app/tree/main/apps/desktop/src/main/agents). The decisions behind this are ADR-0010, ADR-0016 and ADR-0017.

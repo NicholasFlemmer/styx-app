@@ -29,11 +29,11 @@ Type in the box at the bottom ("Message Claude…") and press Enter.
 
 You don't have to wait for a turn to end. What happens to a message sent mid-turn depends on the agent, and the send hint under the box tells you which:
 
-| Agent                                   | Send hint | What happens                                                                                                                                            |
-| --------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Codex                                   | **Steer** | The message goes into the running turn at once, and Codex adjusts course.                                                                               |
-| Claude Code, Gemini CLI, Cursor's agent | **Queue** | The message waits under the transcript as a dashed bubble ("Sent when the agent finishes this turn.") and goes out as the next turn when this one ends. |
-| Shell                                   | —         | A terminal has no turns, so nothing is held.                                                                                                            |
+| Agent                                             | Send hint | What happens                                                                                                                                            |
+| ------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Codex                                             | **Steer** | The message goes into the running turn at once, and Codex adjusts course.                                                                               |
+| Claude Code, Gemini CLI, Cursor's agent, OpenCode | **Queue** | The message waits under the transcript as a dashed bubble ("Sent when the agent finishes this turn.") and goes out as the next turn when this one ends. |
+| Shell                                             | —         | A terminal has no turns, so nothing is held.                                                                                                            |
 
 A queued message has two buttons. **Send now** hands it to the agent straight away rather than waiting. **Take back** removes it and puts the text back in the box. Queued messages keep their attachments. If you stop the agent, anything still queued returns to the box so nothing is lost.
 
@@ -63,14 +63,16 @@ New tasks take these from the project's **Agent defaults** (in the project nav),
 
 Styx offers the same six modes for every agent and applies each one as closely as that agent allows. New tasks start in **Auto**. Hover a mode in the menu to see what it does for the agent you're talking to.
 
-| Mode                   | Claude Code                                        | Codex                                                                                    | Gemini CLI                                    | Cursor's agent                            |
-| ---------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------- |
-| **Ask each time**      | Every tool call outside the allowlist asks you.    | Edits inside the worktree run; commands that need the network or leave the worktree ask. | Every edit and command asks.                  | Edits and commands ask.                   |
-| **Accept edits**       | File edits run without asking; commands still ask. | Same as Ask each time.                                                                   | Edits run without asking; commands still ask. | No edit-only mode: runs as Ask each time. |
-| **Plan mode**          | Read-only until you approve the plan.              | Read-only sandbox; the plan streams as Codex forms it.                                   | Gemini's plan mode, when enabled.             | Read-only until you approve the plan.     |
-| **Auto**               | Claude decides what needs your approval.           | Codex's own reviewer decides what runs.                                                  | Edits run without asking; commands still ask. | No reviewer: still asks.                  |
-| **Don't ask**          | Anything that would ask is denied.                 | Anything that would ask fails back to Codex.                                             | No such mode: nothing asks.                   | No such mode: still asks.                 |
-| **Bypass permissions** | Nothing asks.                                      | Nothing asks and there's no sandbox.                                                     | Every tool runs without asking.               | No bypass: still asks.                    |
+OpenCode on its own lets every tool run without asking, so for an OpenCode task Styx adds its own rules for that task's process: commands, file edits, web access and folders outside the task ask in **Ask each time**, and the other modes are OpenCode agents Styx defines for the task. In **Accept edits** and **Auto**, edits to `.styx/project.json` and to OpenCode's own config still ask. So that a repository can't switch these rules off, Styx starts OpenCode with the project's own OpenCode config turned off: a project `opencode.json` and its `.opencode/` folder (agents, commands, plugins, MCP servers) aren't loaded in Styx tasks. The project's `AGENTS.md` (or `CLAUDE.md`) is still read. Your own OpenCode config in your home folder is read as usual and never changed; rules you set there can still loosen Styx's. MCP servers you added to OpenCode yourself keep OpenCode's own setting.
+
+| Mode                   | Claude Code                                        | Codex                                                                                    | Gemini CLI                                    | Cursor's agent                            | OpenCode                                                   |
+| ---------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------- |
+| **Ask each time**      | Every tool call outside the allowlist asks you.    | Edits inside the worktree run; commands that need the network or leave the worktree ask. | Every edit and command asks.                  | Edits and commands ask.                   | Edits, commands and web access ask.                        |
+| **Accept edits**       | File edits run without asking; commands still ask. | Same as Ask each time.                                                                   | Edits run without asking; commands still ask. | No edit-only mode: runs as Ask each time. | Edits run without asking; commands still ask.              |
+| **Plan mode**          | Read-only until you approve the plan.              | Read-only sandbox; the plan streams as Codex forms it.                                   | Gemini's plan mode, when enabled.             | Read-only until you approve the plan.     | OpenCode's plan agent: no edits; commands ask.             |
+| **Auto**               | Claude decides what needs your approval.           | Codex's own reviewer decides what runs.                                                  | Edits run without asking; commands still ask. | No reviewer: still asks.                  | No reviewer: edits run without asking; commands still ask. |
+| **Don't ask**          | Anything that would ask is denied.                 | Anything that would ask fails back to Codex.                                             | No such mode: nothing asks.                   | No such mode: still asks.                 | Edits, commands and web access are refused.                |
+| **Bypass permissions** | Nothing asks.                                      | Nothing asks and there's no sandbox.                                                     | Every tool runs without asking.               | No bypass: still asks.                    | Nothing asks.                                              |
 
 <Callout type="warn" title="Bypass means nothing asks">
   **Bypass permissions** (and **Don't ask** on Gemini CLI) lets the agent run any command on your machine
@@ -84,6 +86,7 @@ Styx offers the same six modes for every agent and applies each one as closely a
 - **Claude Code**: Default model, Fable, Opus, Sonnet or Haiku. Effort (Low to Max) is set when the task starts, in New task or Agent defaults, and applies the next time the agent starts.
 - **Codex**: the models your Codex account offers, with the effort levels each model supports. Both can change from one turn to the next.
 - **Gemini CLI and Cursor's agent**: the models the CLI reports, when it reports a list; otherwise the model the CLI is set to. Neither takes an effort setting.
+- **OpenCode**: the models it lists for the providers you're signed in to, plus its free models. The model can change from one turn to the next; there's no effort setting.
 
 ## The Terminal tab
 

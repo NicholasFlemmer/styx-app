@@ -363,6 +363,23 @@ describe('SessionService spawn + stream runner', () => {
     expect(ask('acp2', 'tool', { title: 'Write notes', file_path: `${root}/notes.md`, styxEdit: true })).toBe(
       'auto',
     );
+    // OpenCode's edit input names the file as `filepath` too: it must be inside as well.
+    expect(
+      ask('oc1', 'Edit', { file_path: `${root}/a.txt`, filepath: `${root}/a.txt`, styxEdit: true }),
+    ).toBe('auto');
+    expect(ask('oc2', 'Edit', { file_path: `${root}/a.txt`, filepath: '/etc/hosts', styxEdit: true })).toBe(
+      'asked',
+    );
+    expect(ask('oc3', 'Edit', { locations: [`${root}/a.txt`], filePath: '../x', styxEdit: true })).toBe(
+      'asked',
+    );
+    // A value that may be several paths in one string asks, even when it starts inside the worktree.
+    expect(ask('nl', 'Edit', { file_path: `${root}/a.txt\n/etc/hosts`, styxEdit: true })).toBe('asked');
+    expect(ask('cr', 'Edit', { file_path: `${root}/a.txt\r`, styxEdit: true })).toBe('asked');
+    expect(ask('list', 'Edit', { file_path: `${root}/a.txt, ${root}/b.txt`, styxEdit: true })).toBe('asked');
+    expect(ask('ok', 'Edit', { file_path: `${root}/a, b.txt`.replace(', ', ','), styxEdit: true })).toBe(
+      'auto',
+    );
   });
 
   it('Stop while an approval is open cancels the ask and declines it, so a later Allow cannot run it', async () => {

@@ -1,7 +1,9 @@
 import {
+  agentSetupName,
   copy,
   fill,
   isAgentReady,
+  isSetupAgent,
   readyAgents,
   type Agent,
   type ProjectId,
@@ -37,9 +39,10 @@ export function AgentProblemRow({ agent, problem, text, projectId, retryText }: 
     useCallback((m: ReadModel) => readyAgents(m).find((a) => a !== agent) ?? null, [agent]),
   );
   if (agent === 'shell') return null;
-  const name = copy.agentSetup.names[agent];
+  const name = agentSetupName(agent);
+  // A card agent's setup run signs in by itself; any other agent signs in from the Connect agent modal's tools.
   const signIn = () => {
-    void command('agent.setUp', { agent, update: false });
+    if (isSetupAgent(agent)) void command('agent.setUp', { agent, update: false });
     pushOverlay({ kind: 'modal', modal: 'connect-agent', agent });
   };
   return (

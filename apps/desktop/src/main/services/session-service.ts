@@ -8,6 +8,7 @@ import {
   AGENT_LABEL,
   ATTACHMENTS_DIR,
   MODEL_ALIASES,
+  agentSetupName,
   copy,
   deliveryWhileWorking,
   fill,
@@ -81,7 +82,7 @@ export const STREAM_FLUSH_MS = 33;
 export const STREAM_ACTIVITY_MS = 1000;
 
 /** Hook payloads (`styx hook <agent>` → broker `hook`) are untyped JSON from the CLI. */
-export type HookAgent = 'claude' | 'codex' | 'gemini' | 'cursor' | 'shell';
+export type HookAgent = 'claude' | 'codex' | 'gemini' | 'cursor' | 'opencode' | 'shell';
 
 export interface SessionServiceDeps {
   repos: Repos;
@@ -176,7 +177,9 @@ export const sha256 = (s: string): string => createHash('sha256').update(s).dige
 /** Every path a permission request names: Claude's file_path / notebook_path, Codex's paths, ACP's locations. */
 const editPathsOf = (input: Record<string, unknown>): string[] => {
   const out: string[] = [];
-  for (const key of ['file_path', 'notebook_path']) {
+  // `filepath` / `filePath`: OpenCode's edit input. Every path named must be inside the worktree, so more keys only
+  // ever make auto-approval stricter.
+  for (const key of ['file_path', 'notebook_path', 'filepath', 'filePath']) {
     const v = input[key];
     if (typeof v === 'string' && v !== '') out.push(v);
   }
@@ -335,15 +338,16 @@ export function parseCliOutdated(text: string): { have: string | null; need: str
 
 /**
  * ADR-0010: Claude Code streams when its CLI advertises stream-json (print-only, so that implies `-p`); cursor-agent
- * additionally needs `--print` in its help. Everything else (codex, gemini, shell) is a TUI in xterm.
+ * additionally needs `--print` in its help. Codex, Gemini and OpenCode stream over their structured protocols when
+ * they advertise one; everything else is a TUI in xterm.
  */
 export function runnerFor(agent: Agent, cli: Pick<CliInstall, 'capabilities'> | null): Runner {
   const caps = cli?.capabilities ?? {};
   if (agent === 'claude' && caps['streamJson'] === true) return 'stream';
   // Codex: its JSON-RPC app-server (docs/research/agent-parity.md); older builds without it stay on the TUI.
   if (agent === 'codex' && caps['appServer'] === true) return 'stream';
-  // Gemini and Cursor: the Agent Client Protocol; Cursor's print mode is the fallback (no approvals there).
-  if (agent === 'gemini' && caps['acp'] === true) return 'stream';
+  // Gemini, Cursor and OpenCode: the Agent Client Protocol; Cursor's print mode is the fallback (no approvals there).
+  if ((agent === 'gemini' || agent === 'opencode') && caps['acp'] === true) return 'stream';
   if (
     agent === 'cursor' &&
     (caps['acp'] === true || (caps['streamJson'] === true && caps['printMode'] === true))
@@ -1423,7 +1427,7 @@ export class SessionService {
   async refreshClis(): Promise<CliInstall[]> {
     const { repos, publisher } = this.deps;
     const overrides: Partial<Record<Exclude<Agent, 'shell'>, string>> = {};
-    for (const agent of ['claude', 'codex', 'gemini', 'cursor'] as const) {
+    for (const agent of ['claude', 'codex', 'gemini', 'cursor', 'opencode'] as const) {
       const picked = repos.settings.kv.get<string>(cliBinaryKey(agent));
       if (picked === undefined) continue;
       if (existsSync(picked)) overrides[agent] = picked;
@@ -1749,7 +1753,7 @@ export class SessionService {
         if (outdated !== null) this.raiseOutdatedBanner(s, effect.message, outdated);
         else if (account !== null && s.agent !== 'shell') {
           // The account, not the work: one plain sentence with the fix (Sign in, or another agent), not the CLI's text.
-          const name = copy.agentSetup.names[s.agent];
+          const name = agentSetupName(s.agent);
           this.deps.transcript.append(
             s.id,
             fill(account === 'signed-out' ? copy.agentSetup.chat.signedOut : copy.agentSetup.chat.limit, {
@@ -1992,7 +1996,8 @@ export class SessionService {
     if (s.toggles.autoApproveEdits && isEdit) {
       const root = this.deps.repos.worktrees.get(s.worktreeId)?.path ?? null;
       const paths = editPathsOf(input);
-      const inside = (p: string) => root !== null && isInside(root, p);
+      // A value with a newline or ", " in it may be several paths in one string (or a crafted one): it asks.
+      const inside = (p: string) => root !== null && !/\n|\r|, /.test(p) && isInside(root, p);
       if (paths.length > 0 && paths.every((p) => inside(p) && !isPolicyFile(p))) {
         this.deps.stream.respondPermission(s.id, requestId, true);
         return;

@@ -57,7 +57,7 @@ export interface AgentLaunchContext {
  *   with the id learned from the first turn's `system/init` event (cursor-agent).
  * - `app-server`: Codex `codex app-server`, JSON-RPC 2.0 over stdio (thread/start, turn/start, approvals as
  *   server requests). See docs/research/agent-parity.md.
- * - `acp`: the Agent Client Protocol over stdio (`gemini --acp`, `agent acp`): session/new, session/prompt,
+ * - `acp`: the Agent Client Protocol over stdio (`gemini --acp`, `agent acp`, `opencode acp`): session/new, session/prompt,
  *   session/update, session/request_permission.
  */
 export type StreamInput =
@@ -75,7 +75,7 @@ export interface AgentLaunch {
 }
 
 /** CLIs with no system-prompt flag: what Claude Code gets in `--append-system-prompt` goes ahead of their first turn. */
-export const PREAMBLE_AGENTS: readonly Agent[] = ['codex', 'gemini', 'cursor'];
+export const PREAMBLE_AGENTS: readonly Agent[] = ['codex', 'gemini', 'cursor', 'opencode'];
 
 /**
  * The lines every agent should start with (ADR-0025): the shims, peers, the lane and the other lanes right now —

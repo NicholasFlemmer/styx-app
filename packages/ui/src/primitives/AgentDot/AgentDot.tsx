@@ -1,7 +1,7 @@
 import s from './AgentDot.module.css';
 
 /** The agents Styx runs; each has its own colour token (ADR-0027 §7). */
-export type AgentKind = 'claude' | 'codex' | 'gemini' | 'cursor' | 'shell';
+export type AgentKind = 'claude' | 'codex' | 'gemini' | 'cursor' | 'opencode' | 'shell';
 
 export interface AgentDotProps {
   agent: AgentKind;

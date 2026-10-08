@@ -30,7 +30,7 @@ export interface SpawnModalProps {
 }
 
 /**
- * Spawn agent (spec §4.11, modal 600): five agent tiles, inline CLI-missing row, Worktree / Branch / First message,
+ * Spawn agent (spec §4.11, modal 600): six agent tiles, inline CLI-missing row, Worktree / Branch / First message,
  * three toggles, Cancel / `Spawn · Mod⏎`. Spawning creates the worktree, starts the CLI and opens Workspace on it.
  */
 export function SpawnModal({ id, projectId }: SpawnModalProps) {

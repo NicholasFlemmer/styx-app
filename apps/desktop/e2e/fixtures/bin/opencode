@@ -1,0 +1,266 @@
+#!/usr/bin/env node
+'use strict';
+/**
+ * Fake OpenCode for the e2e suite (shadowed onto PATH by e2e/launch.ts) so a spawned OpenCode session never launches
+ * the real CLI. The shapes follow a real `opencode acp` run of OpenCode 1.18.35 (docs/research/agent-parity.md):
+ *
+ *   --version             → the bare version number, as OpenCode prints it
+ *   --help                → the command list, with the `acp` subcommand DetectService looks for
+ *   auth list             → "0 credentials" (no provider signed in)
+ *   acp                   → a scripted Agent Client Protocol agent over stdio:
+ *     initialize          → v1, loadSession true, image input, the `opencode-login` auth method
+ *     session/new | load  → ses_fake; configOptions `model` and `mode`. The modes are `build`, `plan` and every
+ *                           `mode: "primary"` agent in OPENCODE_CONFIG_CONTENT, so the Styx launch config shows up
+ *                           here exactly as it does in the real CLI
+ *     set_config_option   → remembers the mode / model, answers with the options
+ *     session/prompt      → streams "pong", whether a `styx` MCP server came in session/new and whether project
+ *                           config is off (OPENCODE_DISABLE_PROJECT_CONFIG), then announces a
+ *                           bash call with no command yet (as OpenCode does) and asks permission with the command
+ *                           (request id 100), unless the mode's config allows everything; completed → end_turn
+ *     session/cancel      → the running prompt ends with stopReason cancelled
+ *     anything else       → -32601
+ */
+const args = process.argv.slice(2);
+if (args.includes('--version') || args.includes('-v')) {
+  process.stdout.write('1.18.35\n');
+  process.exit(0);
+}
+if (args.includes('--help') || args.includes('-h')) {
+  process.stdout.write(
+    [
+      'Commands:',
+      '  opencode completion          generate shell completion script',
+      '  opencode acp                 start ACP (Agent Client Protocol) server',
+      '  opencode mcp                 manage MCP (Model Context Protocol) servers',
+      '  opencode [project]           start opencode tui                                          [default]',
+      '  opencode run [message..]     run opencode with a message',
+      '  opencode providers           manage AI providers and credentials                   [aliases: auth]',
+      '',
+      'Options:',
+      '  -h, --help          show help                                                            [boolean]',
+      '  -v, --version       show version number                                                  [boolean]',
+      '  -m, --model         model to use in the format of provider/model                          [string]',
+      '      --agent         agent to use                                                          [string]',
+      '',
+    ].join('\n'),
+  );
+  process.exit(0);
+}
+if (args[0] === 'auth' && args[1] === 'list') {
+  process.stdout.write('┌  Credentials ~/.local/share/opencode/auth.json\n│\n└  0 credentials\n');
+  process.exit(0);
+}
+if (args[0] !== 'acp') {
+  process.stderr.write('fake opencode: only `acp` is scripted here\n');
+  process.exit(2);
+}
+
+let config = {};
+try {
+  config = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT || '{}');
+} catch {
+  config = {};
+}
+const agents = config.agent || {};
+const MODES = [
+  { value: 'build', name: 'build', description: 'The default agent. Executes tools based on configured permissions.' },
+  { value: 'plan', name: 'plan', description: 'Plan mode. Disallows all edit tools.' },
+  ...Object.entries(agents)
+    .filter(([, a]) => a && a.mode === 'primary')
+    .map(([id, a]) => ({ value: id, name: id, description: a.description || '' })),
+];
+const MODELS = [
+  { value: 'opencode/big-pickle', name: 'OpenCode Zen/Big Pickle' },
+  { value: 'anthropic/claude-sonnet-4-5', name: 'Anthropic/Claude Sonnet 4.5' },
+];
+const SESSION = 'ses_fake';
+let mode = 'build';
+let model = 'opencode/big-pickle';
+let styxMcp = false;
+let nextRequestId = 100;
+let turns = 0;
+let cancelled = false;
+const answers = new Map();
+
+/** What OpenCode would do with `bash` in this mode: the agent's own rule, else the top-level one, else allow. */
+const bashRule = () => {
+  const own = (agents[mode] && agents[mode].permission) || {};
+  const top = config.permission || {};
+  return own.bash || own['*'] || top.bash || 'allow';
+};
+const configOptions = () => [
+  { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: model, options: MODELS },
+  { id: 'mode', name: 'Session Mode', category: 'mode', type: 'select', currentValue: mode, options: MODES },
+];
+
+const write = (m) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...m })}\n`);
+const respond = (id, result) => write({ id, result });
+const error = (id, code, message) => write({ id, error: { code, message } });
+const update = (u) => write({ method: 'session/update', params: { sessionId: SESSION, update: u } });
+const ask = (method, params) =>
+  new Promise((resolve) => {
+    const id = nextRequestId++;
+    answers.set(id, resolve);
+    write({ id, method, params });
+  });
+const tick = () => new Promise((r) => setTimeout(r, 15));
+
+async function prompt(msg) {
+  cancelled = false;
+  update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'po' } });
+  await tick();
+  update({
+    sessionUpdate: 'agent_message_chunk',
+    content: {
+      type: 'text',
+      text: `ng (styx tools: ${styxMcp ? 'yes' : 'no'}, project config: ${process.env.OPENCODE_DISABLE_PROJECT_CONFIG === '1' ? 'off' : 'on'})`,
+    },
+  });
+  await tick();
+  if (cancelled) return respond(msg.id, { stopReason: 'cancelled' });
+  turns += 1;
+  const toolCallId = `call_bash_${turns}`;
+  // OpenCode announces the call before the model's input is parsed: title `bash`, only the cwd.
+  update({
+    sessionUpdate: 'tool_call',
+    toolCallId,
+    title: 'bash',
+    kind: 'execute',
+    status: 'pending',
+    locations: [{ path: process.cwd() }],
+    rawInput: { cwd: process.cwd() },
+  });
+  const rule = bashRule();
+  const decision =
+    rule === 'allow'
+      ? { outcome: { outcome: 'selected', optionId: 'once' } }
+      : rule === 'deny'
+        ? null
+        : await ask('session/request_permission', {
+            sessionId: SESSION,
+            toolCall: {
+              toolCallId,
+              title: 'echo pong',
+              kind: 'execute',
+              status: 'pending',
+              locations: [],
+              rawInput: { command: 'echo pong' },
+            },
+            options: [
+              { optionId: 'once', kind: 'allow_once', name: 'Allow once' },
+              { optionId: 'always', kind: 'allow_always', name: 'Always allow' },
+              { optionId: 'reject', kind: 'reject_once', name: 'Reject' },
+            ],
+          });
+  const allowed = decision && decision.outcome && ['once', 'always'].includes(decision.outcome.optionId);
+  if (cancelled) {
+    update({ sessionUpdate: 'tool_call_update', toolCallId, status: 'failed' });
+    return respond(msg.id, { stopReason: 'cancelled' });
+  }
+  if (!allowed) {
+    const text = 'The user rejected permission to use this specific tool call.';
+    update({
+      sessionUpdate: 'tool_call_update',
+      toolCallId,
+      status: 'failed',
+      kind: 'execute',
+      title: 'echo pong',
+      rawInput: { command: 'echo pong' },
+      content: [{ type: 'content', content: { type: 'text', text } }],
+    });
+    update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '\n\nSkipped the command.' } });
+    return respond(msg.id, { stopReason: 'end_turn' });
+  }
+  update({
+    sessionUpdate: 'tool_call_update',
+    toolCallId,
+    status: 'in_progress',
+    kind: 'execute',
+    title: 'echo pong',
+    rawInput: { command: 'echo pong' },
+  });
+  await tick();
+  update({
+    sessionUpdate: 'tool_call_update',
+    toolCallId,
+    status: 'completed',
+    content: [{ type: 'content', content: { type: 'text', text: 'pong\n' } }],
+  });
+  update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '\n\nDone: the command printed pong.' } });
+  update({ sessionUpdate: 'usage_update', used: 15601, size: 200000, cost: { amount: 0, currency: 'USD' } });
+  respond(msg.id, { stopReason: 'end_turn', usage: { inputTokens: 15537, outputTokens: 66, totalTokens: 15675 } });
+}
+
+function handle(msg) {
+  if (msg.method === undefined && msg.id !== undefined) {
+    const resolve = answers.get(msg.id);
+    if (resolve) {
+      answers.delete(msg.id);
+      resolve(msg.error ? null : msg.result);
+    }
+    return;
+  }
+  switch (msg.method) {
+    case 'initialize':
+      return respond(msg.id, {
+        protocolVersion: 1,
+        agentCapabilities: {
+          loadSession: true,
+          mcpCapabilities: { http: true, sse: true },
+          promptCapabilities: { embeddedContext: true, image: true },
+          sessionCapabilities: { close: {}, fork: {}, list: {}, resume: {} },
+        },
+        authMethods: [
+          { description: 'Run `opencode auth login` in the terminal', name: 'Login with opencode', id: 'opencode-login' },
+        ],
+        agentInfo: { name: 'OpenCode', version: '1.18.35' },
+      });
+    case 'session/new':
+    case 'session/load': {
+      styxMcp = (msg.params.mcpServers || []).some((s) => s && s.name === 'styx');
+      const result = { configOptions: configOptions() };
+      respond(msg.id, msg.method === 'session/new' ? { sessionId: SESSION, ...result } : result);
+      return update({
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [
+          { name: 'init', description: 'create/update AGENTS.md' },
+          { name: 'review', description: 'review changes' },
+        ],
+      });
+    }
+    case 'session/set_config_option': {
+      const { configId, value } = msg.params;
+      if (configId === 'mode' && MODES.some((m) => m.value === value)) mode = value;
+      else if (configId === 'model' && MODELS.some((m) => m.value === value)) model = value;
+      else return error(msg.id, -32602, `unknown ${configId} ${value}`);
+      return respond(msg.id, { configOptions: configOptions() });
+    }
+    case 'session/prompt':
+      return void prompt(msg);
+    case 'session/cancel':
+      cancelled = true;
+      return;
+    default:
+      if (msg.id !== undefined) error(msg.id, -32601, 'Method not found');
+  }
+}
+
+let buffer = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => {
+  buffer += chunk;
+  let nl = buffer.indexOf('\n');
+  while (nl >= 0) {
+    const line = buffer.slice(0, nl);
+    buffer = buffer.slice(nl + 1);
+    if (line.trim()) {
+      try {
+        handle(JSON.parse(line));
+      } catch (e) {
+        process.stderr.write(`fake opencode: ${e.message}\n`);
+      }
+    }
+    nl = buffer.indexOf('\n');
+  }
+});
+process.stdin.on('end', () => process.exit(0));

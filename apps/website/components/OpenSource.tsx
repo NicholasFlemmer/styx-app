@@ -12,7 +12,7 @@ const ways = [
   },
   {
     title: 'Add an agent',
-    text: 'Styx runs Claude Code, Codex, Gemini CLI and Cursor’s agent. The guide covers teaching it another one, from finding the CLI to the tests a pull request needs.',
+    text: 'Styx runs Claude Code, Codex, Gemini CLI, Cursor’s agent and OpenCode. The guide covers teaching it another one, from finding the CLI to the tests a pull request needs.',
     href: site.links.addAgent,
     label: 'Read the guide',
     external: false,

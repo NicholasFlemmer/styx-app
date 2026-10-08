@@ -1,6 +1,6 @@
 # Styx
 
-> Styx is an agentic development environment (ADE): a Mac app for developers who run AI coding agents. It puts every project and every agent (Claude Code, OpenAI Codex, Gemini CLI and Cursor's agent) in one window, on top of the editor you already use, and makes agents ask before they touch production.
+> Styx is an agentic development environment (ADE): a Mac app for developers who run AI coding agents. It puts every project and every agent (Claude Code, OpenAI Codex, Gemini CLI, Cursor's agent and OpenCode) in one window, on top of the editor you already use, and makes agents ask before they touch production.
 
 Styx is free and open source (Apache-2.0). It runs on macOS on Apple silicon, and in beta on Windows 10 and 11 (x64) and Linux (AppImage or .deb). It is made by one person in South Africa.
 
@@ -9,7 +9,7 @@ Styx is free and open source (Apache-2.0). It runs on macOS on Apple silicon, an
 - One window for every project and every agent. A board shows which agents are working, which are done, and which are waiting on you; one keystroke opens the one that needs you.
 - Each agent works in its own git worktree and branch, so agents do not collide with each other or with you. Finished work is merged back ("landed") after your project's checks pass.
 - It sits on top of your existing editor: it imports your recent projects, keybindings and theme, and "Open in…" sends any file back to VS Code, Cursor or another IDE.
-- It uses the agent subscriptions and logins you already have (Claude, ChatGPT/Codex, Gemini, Cursor). Styx does not resell model access.
+- It uses the agent subscriptions and logins you already have (Claude, ChatGPT/Codex, Gemini, Cursor, and whichever providers OpenCode is signed in to). Styx does not resell model access.
 - Agents never hold your keys. When an agent wants to deploy or use a database or server (Vercel, AWS, Google Cloud, Supabase, GitHub, SSH), it asks. You approve it for a set time; anything that writes to production needs Touch ID, Windows Hello or your system password. Access expires on its own.
 - Every request, approval, use and revoke goes into an append-only, hash-chained audit log on your computer.
 - Every task is a card on the Tasks tab: its agent, branch, status, whether it needs you and what it changed. Tasks are marked Design or Build when they start.

@@ -2,11 +2,11 @@
 @layer tokens {
   :root, [data-theme="dark"] {
     --page:#181916; --bg:#0d0e0c; --s1:#121411; --s2:#1c1e1a; --ln:#2d302a; --tx:#e9ebe3; --mu:#858a81; --ac:#d6ff3d; --acx:#0d0e0c; --act:#d6ff3d; --add:rgba(214,255,61,.13); --term:#080908; --termtx:#c9cdc2; --dim:rgba(0,0,0,.6);
-    --agent-claude:#e8916a; --agent-codex:#8fb3ff; --agent-gemini:#b79bff; --agent-cursor:#e9ebe3; --agent-shell:#858a81; --paper:#f7f8f3; --paper-s2:#e1e3db; --paper-ln:#b3b7ab; --paper-tx:#14160f; --paper-mu:#5d6259; --paper-act:#6e8f00; --paper-add:rgba(150,200,0,.2); --paper-del:rgba(200,70,40,.13); --del:rgba(255,110,80,.14);
+    --agent-claude:#e8916a; --agent-codex:#8fb3ff; --agent-gemini:#b79bff; --agent-cursor:#e9ebe3; --agent-opencode:#5cc9b8; --agent-shell:#858a81; --paper:#f7f8f3; --paper-s2:#e1e3db; --paper-ln:#b3b7ab; --paper-tx:#14160f; --paper-mu:#5d6259; --paper-act:#6e8f00; --paper-add:rgba(150,200,0,.2); --paper-del:rgba(200,70,40,.13); --del:rgba(255,110,80,.14);
   }
   [data-theme="light"] {
     --page:#d7d8d1; --bg:#eeefe9; --s1:#f7f8f3; --s2:#e1e3db; --ln:#b3b7ab; --tx:#14160f; --mu:#5d6259; --ac:#c6f20f; --acx:#14160f; --act:#6e8f00; --add:rgba(150,200,0,.2); --term:#14160f; --termtx:#d5d8cc; --dim:rgba(20,22,15,.45);
-    --agent-claude:#c4673f; --agent-codex:#3d63d1; --agent-gemini:#7a4fd1; --agent-cursor:#14160f; --agent-shell:#5d6259; --paper:#ffffff; --paper-s2:#eeefe9; --paper-ln:#b3b7ab; --paper-tx:#14160f; --paper-mu:#5d6259; --paper-act:#6e8f00; --paper-add:rgba(150,200,0,.2); --paper-del:rgba(200,70,40,.13); --del:rgba(200,70,40,.13);
+    --agent-claude:#c4673f; --agent-codex:#3d63d1; --agent-gemini:#7a4fd1; --agent-cursor:#14160f; --agent-opencode:#137a6c; --agent-shell:#5d6259; --paper:#ffffff; --paper-s2:#eeefe9; --paper-ln:#b3b7ab; --paper-tx:#14160f; --paper-mu:#5d6259; --paper-act:#6e8f00; --paper-add:rgba(150,200,0,.2); --paper-del:rgba(200,70,40,.13); --del:rgba(200,70,40,.13);
   }
   :root {
     --font-ui: 'Archivo', system-ui, sans-serif;

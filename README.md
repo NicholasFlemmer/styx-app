@@ -4,7 +4,7 @@
 
 <h1>Styx</h1>
 
-**Run Claude Code, Codex, Gemini and Cursor on all your projects at once.<br />They ask before they touch production.**
+**Run Claude Code, Codex, Gemini, Cursor and OpenCode on all your projects at once.<br />They ask before they touch production.**
 
 [**Download for Mac**](https://heystyx.com/download/mac?from=github) &nbsp;·&nbsp; [**Download for Windows**](https://heystyx.com/download/win?from=github) &nbsp;·&nbsp; [**Linux**](https://github.com/NicholasFlemmer/styx-app/releases/latest) &nbsp;·&nbsp; [**Docs**](https://heystyx.com/docs) &nbsp;·&nbsp; [Website](https://heystyx.com) &nbsp;·&nbsp; [Watch the story (1:42)](https://heystyx.com/story)
 
@@ -36,7 +36,7 @@ database or touch anything live, it has to ask you first.
 3. **Start a task.** Say what you want and pick the agent. It works on its own branch, and you land the result on
    main when you're happy.
 
-Styx drives the agent CLIs you already have and are signed in to (Claude Code, Codex, Gemini CLI or Cursor), so your
+Styx drives the agent CLIs you already have and are signed in to (Claude Code, Codex, Gemini CLI, Cursor or OpenCode), so your
 existing subscriptions just work. There are no API keys to paste, and your prompts go straight to the agent, not
 through us.
 
@@ -123,7 +123,7 @@ gets the element, the page and a picture of it.
 
 ## Works with
 
-- **Agents:** Claude Code · Codex · Gemini CLI · Cursor agent · any shell
+- **Agents:** Claude Code · Codex · Gemini CLI · Cursor agent · OpenCode · any shell
 - **Targets agents can ask for:** Vercel · AWS · Google Cloud · Supabase · GitHub · SSH
 - **Platforms:** macOS (Apple Silicon) · Windows 10 and 11 (beta) · Linux, as an AppImage or .deb (beta)
 - **Editors:** the built-in editor and terminal, or open any task in VS Code, Cursor, Zed or JetBrains

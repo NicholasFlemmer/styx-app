@@ -52,7 +52,7 @@ const graph = () => {
           availability: 'https://schema.org/InStock',
         },
         featureList: [
-          'Run Claude Code, Codex, Gemini CLI and Cursor agents side by side',
+          'Run Claude Code, Codex, Gemini CLI, Cursor and OpenCode agents side by side',
           'Every project and agent in one window, with the ones that need you first',
           'Each agent in its own git worktree and branch',
           'Works on top of your existing editor: your recent projects come in, and anything opens back in it',

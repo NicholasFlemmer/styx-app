@@ -64,6 +64,7 @@ export const CLI_INSTALL_URLS: Readonly<Record<Exclude<CliInstall['agent'], 'she
   codex: 'https://developers.openai.com/codex/cli',
   gemini: 'https://github.com/google-gemini/gemini-cli#installation',
   cursor: 'https://cursor.com/docs/cli/installation',
+  opencode: 'https://opencode.ai/docs',
 };
 
 /** `capabilities.source` of a detected CLI, or null for rows written before sources were recorded. */
