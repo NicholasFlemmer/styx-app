@@ -12,6 +12,12 @@ export type SetupAgent = z.infer<typeof setupAgentSchema>;
 export const SETUP_AGENTS: readonly SetupAgent[] = setupAgentSchema.options;
 
 /**
+ * Whether an agent has a one-click setup card. OpenCode does not: its sign-in is a provider picker (`opencode auth
+ * login`) rather than one plan's browser sign-in, so it is set up from the Connect agent modal's own tools.
+ */
+export const isSetupAgent = (agent: string): agent is SetupAgent => setupAgentSchema.safeParse(agent).success;
+
+/**
  * `prepare`: what the agent needs first (Node.js for Gemini, a private copy Styx downloads; git on Windows, for
  * Claude's Bash tool). `install`: the vendor's installer. `signin`: the CLI's own browser sign-in. `test`: one tiny
  * message, so "Ready" means the plan really answers.

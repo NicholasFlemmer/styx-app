@@ -3,7 +3,7 @@ import type { RowKey, StyxPoint } from './types';
 /** Styx's column, the same on every comparison page. Keep it true to the shipped app. */
 export const STYX_CELLS: Record<RowKey, string> = {
   runsOn: 'Mac (Apple silicon); Windows 10 and 11 and Linux (beta)',
-  agents: 'Claude Code, Codex, Gemini CLI, Cursor',
+  agents: 'Claude Code, Codex, Gemini CLI, Cursor, OpenCode',
   price: 'Free and open source (Apache 2.0)',
   isolation: 'Own git worktree and branch',
   scope: 'Every project you work on',
@@ -41,7 +41,7 @@ export const STYX_POINTS: Record<StyxPoint, { title: string; text: string }> = {
   },
   agents: {
     title: 'Every agent, side by side',
-    text: 'Claude Code, Codex, Gemini CLI and Cursor’s agent run next to each other in one board, on the subscriptions you already pay for, so you can pick the right agent per task instead of per tool.',
+    text: 'Claude Code, Codex, Gemini CLI, Cursor’s agent and OpenCode run next to each other in one board, on the subscriptions you already pay for, so you can pick the right agent per task instead of per tool.',
   },
 };
 

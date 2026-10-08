@@ -1,7 +1,7 @@
 # Adding an agent CLI
 
 An agent in Styx is a coding-agent command-line tool that Styx finds on your computer and runs for you: Claude
-Code, Codex, Gemini CLI, Cursor agent, or a plain shell. Styx does not ship its own model. It starts the CLI you
+Code, Codex, Gemini CLI, Cursor agent, OpenCode, or a plain shell. Styx does not ship its own model. It starts the CLI you
 already have and are signed in to, inside a git worktree of the project, with Styx's MCP server and command shims
 wired in. When you add one, users can pick it in the Spawn agent modal and on the Tasks board. Its chat shows in
 the workspace, its permission prompts become Allow / Deny cards, and every attempt it makes to reach a deploy target
@@ -46,7 +46,7 @@ Data flows through these parts in this order.
    - `app-server`: `AppServerRunner` in
      [`app-server-runner.ts`](../../apps/desktop/src/main/services/app-server-runner.ts) (Codex only).
    - `acp`: `AcpRunner` in [`acp-runner.ts`](../../apps/desktop/src/main/services/acp-runner.ts), a generic Agent
-     Client Protocol client (Gemini CLI and Cursor agent today).
+     Client Protocol client (Gemini CLI, Cursor agent and OpenCode today).
 
    Each backend turns the CLI's events into `StreamEffect`s: transcript rows, tool steps, permission asks, usage,
    and the quiet signal that ends a turn. The backends are registered in
@@ -212,7 +212,7 @@ Pick the transport first. In order of preference:
 4. **pty only.** Always works as a fallback. Users get the CLI's own TUI in a terminal, approvals happen inside the
    TUI, and background tasks (`session.purpose`, which need a stream runner) are refused with a note.
 
-Then change these places. Below, `opencode` stands for your agent id. Lowercase, no spaces.
+Then change these places. Below, `myagent` stands for your agent id. Lowercase, no spaces.
 
 The compiler finds some of these for you: anything typed `Record<Agent, …>` or an exhaustive `switch` fails
 `pnpm typecheck` until you add the new key. Plain lists, zod enums outside core, SQL and regexes do not. Work through
@@ -220,7 +220,7 @@ the whole list.
 
 ### Required: the agent exists and runs
 
-1. **Core enum and label.** Add `'opencode'` to `agentSchema` and an entry to `AGENT_LABEL` in
+1. **Core enum and label.** Add `'myagent'` to `agentSchema` and an entry to `AGENT_LABEL` in
    [`packages/core/src/model/common.ts`](../../packages/core/src/model/common.ts).
 2. **Duplicated agent types.** These are separate lists of the same ids. Add yours to each:
    - `AgentKind` in [`detect-service.ts`](../../apps/desktop/src/main/services/detect-service.ts).
@@ -246,7 +246,7 @@ the whole list.
    Optional: `EXTENSION_PREFIXES` if an editor extension bundles the binary.
 5. **Runner choice.** Add a line to `runnerFor()` in `session-service.ts`, and rows to
    [`runner-for.test.ts`](../../apps/desktop/src/main/services/runner-for.test.ts).
-6. **Launch adapter.** Create `apps/desktop/src/main/agents/opencode.ts` exporting `opencodeLaunch(ctx)`, and add a
+6. **Launch adapter.** Create `apps/desktop/src/main/agents/myagent.ts` exporting `myagentLaunch(ctx)`, and add a
    `case` to `buildAgentLaunch()` in [`agents/index.ts`](../../apps/desktop/src/main/agents/index.ts). Rules:
    - Use `ctx.binary`. Never hard-code a path.
    - Any config file written into the worktree goes through `writeWorktreeMcpConfig()` (no env block) and
@@ -256,14 +256,17 @@ the whole list.
    - If the first message cannot be passed as an argument, set `typeFirstMessage: true` and Styx types it into the
      terminal, as [`shell.ts`](../../apps/desktop/src/main/agents/shell.ts) does.
 7. **Runner wiring (ACP).** Nothing is required, since unknown modes fall back to `MODE_HINTS`. For an exact mapping,
-   add a mode table next to `GEMINI_MODES` and include it in the loop in `resolveAcpMode()`. If the CLI has an
-   `authenticate` method that needs no browser, add it to `pickAuthMethod()`. Both are in
-   [`acp-runner.ts`](../../apps/desktop/src/main/services/acp-runner.ts).
+   add a mode table next to `GEMINI_MODES` and register it in `MODE_TABLES` (keyed by agent, so the session's own
+   table is tried first) in `resolveAcpMode()`. If the CLI has an `authenticate` method that needs no browser, add it
+   to `pickAuthMethod()`. Both are in [`acp-runner.ts`](../../apps/desktop/src/main/services/acp-runner.ts). If the
+   CLI's own modes do not ask before edits and commands (OpenCode's `build` allows every tool), give it the rules for
+   that session's process, as [`opencode.ts`](../../apps/desktop/src/main/agents/opencode.ts) does through
+   `OPENCODE_CONFIG_CONTENT`, rather than editing the user's config.
 8. **Sign-in and status.** In [`agent-service.ts`](../../apps/desktop/src/main/services/agent-service.ts): add
    `LOGIN_ARGS`, `INSTALL_GUIDES`, and either `STATUS_ARGS` plus a parser in `probe()`, or a file-based probe like
    `probeGemini()`. Probes return an identity label, never a credential.
-9. **Install.** Add `RECIPES.opencode` (darwin, linux, win32) in
-   [`agent-install.ts`](../../packages/core/src/model/agent-install.ts), and `CLI_INSTALL_URLS.opencode` (https
+9. **Install.** Add `RECIPES.myagent` (darwin, linux, win32) in
+   [`agent-install.ts`](../../packages/core/src/model/agent-install.ts), and `CLI_INSTALL_URLS.myagent` (https
    only) in [`packages/core/src/selectors/discovery.ts`](../../packages/core/src/selectors/discovery.ts).
 10. **Copy.** In [`packages/core/src/copy.ts`](../../packages/core/src/copy.ts): `agents`, `agentProducts` (this also
     adds the row to Settings › Agents), and `session.permissionModeHintsByAgent` when your CLI's modes differ from
@@ -273,10 +276,10 @@ the whole list.
     task form, the Tasks board and the design canvas. Add it to `AGENT_OPTIONS` in
     [`apps/desktop/src/renderer/screens/Settings/rows.ts`](../../apps/desktop/src/renderer/screens/Settings/rows.ts)
     (default agent setting).
-12. **Colour.** Add `agentOpencode` to both `colorLane` themes in
+12. **Colour.** Add `agentMyagent` to both `colorLane` themes in
     [`packages/tokens/tokens.json`](../../packages/tokens/tokens.json), map it in `laneShort` in
     [`packages/tokens/scripts/build.mjs`](../../packages/tokens/scripts/build.mjs), run `pnpm tokens:build`, and add a
-    `.dot[data-agent='opencode']` rule to `AgentDot.module.css` and its story. Without this, the dot falls back to the
+    `.dot[data-agent='myagent']` rule to `AgentDot.module.css` and its story. Without this, the dot falls back to the
     shell colour. A new colour is a design decision, so say so in the PR.
 
 ### Optional: features that are per agent
@@ -292,7 +295,7 @@ the whole list.
 15. **Publish drafts.** `agentInvocation()` in
     [`publish-service.ts`](../../apps/desktop/src/main/services/publish-service.ts) runs the agent headless to draft a
     commit or PR message. Return `null` to use the file-list fallback, or add a one-shot invocation and parser.
-16. **Hooks.** If the CLI has lifecycle hooks, point them at `styx hook opencode` and map the events in
+16. **Hooks.** If the CLI has lifecycle hooks, point them at `styx hook myagent` and map the events in
     `SessionService.onHook()`.
 17. **Images, effort, steering.** `acceptsImages()` in `session-service.ts` and `takesEffort()` in
     [`session-controls.ts`](../../apps/desktop/src/renderer/features/chat/session-controls.ts) name specific agents.
@@ -330,7 +333,7 @@ pnpm lint
 
 Write at least:
 
-- `apps/desktop/src/main/agents/opencode.test.ts`, like `gemini.test.ts`. Cover each launch branch, check the exact
+- `apps/desktop/src/main/agents/myagent.test.ts`, like `gemini.test.ts`. Cover each launch branch, check the exact
   args, and check that nothing in the worktree contains `STYX_TOKEN` and that `cleanup()` removes what it wrote.
 - `runnerFor` rows for every capability combination you rely on.
 - A detection test in
@@ -344,10 +347,10 @@ End-to-end tests drive the built Electron app with Playwright. `pnpm e2e` runs t
 - [`apps/desktop/e2e/launch.ts`](../../apps/desktop/e2e/launch.ts) puts
   [`apps/desktop/e2e/fixtures/bin/`](../../apps/desktop/e2e/fixtures/bin/) first on `PATH`, so a test never starts a
   real agent or spends anyone's usage.
-- Add a fake `fixtures/bin/opencode`: a Node script with a `#!/usr/bin/env node` line, marked executable
+- Add a fake `fixtures/bin/myagent`: a Node script with a `#!/usr/bin/env node` line, marked executable
   (`chmod +x`). It must answer `--version` and `--help`, and the help text must list the flags your capabilities look
   for. For ACP, copy the scripted session in `fixtures/bin/gemini`.
-- Add `fixtures/bin/opencode.cmd` for Windows. Copy `gemini.cmd` and change the script name on its last line.
+- Add `fixtures/bin/myagent.cmd` for Windows. Copy `gemini.cmd` and change the script name on its last line.
 - The demo fixture's CLI rows point at paths like `/opt/homebrew/bin` and are never re-detected on their own. Your
   spec should call `detect.clis` first, as
   [`acp-session.spec.ts`](../../apps/desktop/e2e/acp-session.spec.ts) does, then spawn through the UI.

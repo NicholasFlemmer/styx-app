@@ -588,6 +588,14 @@ export const copy = {
         dontAsk: 'Cursor has no such mode: runs as Agent and still asks you here.',
         auto: 'Cursor has no reviewer: runs as Agent and still asks you here.',
       },
+      opencode: {
+        default: 'Edits, commands and web fetches ask you here.',
+        acceptEdits: 'Edits run without asking; commands and web fetches still ask.',
+        plan: "OpenCode's plan agent: no edits; commands ask you here.",
+        bypassPermissions: 'Nothing asks. Only for sandboxes you trust.',
+        dontAsk: 'Edits, commands and web fetches are refused instead of asking.',
+        auto: 'OpenCode has no reviewer: edits run without asking; commands still ask.',
+      },
     },
     models: { default: 'Default model', fable: 'Fable', opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' },
     efforts: {
@@ -1835,7 +1843,14 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     reset: 'Reset',
   },
 
-  agents: { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', cursor: 'Cursor', shell: 'shell' },
+  agents: {
+    claude: 'Claude',
+    codex: 'Codex',
+    gemini: 'Gemini',
+    cursor: 'Cursor',
+    opencode: 'OpenCode',
+    shell: 'shell',
+  },
   /** Where a detected CLI binary lives (Settings › Agents & CLIs, onboarding step 3). */
   cliSources: {
     path: 'PATH',
@@ -1854,6 +1869,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     codex: 'Codex',
     gemini: 'Gemini CLI',
     cursor: 'Cursor agent',
+    opencode: 'OpenCode',
     shell: 'Shell',
   },
   providers: {

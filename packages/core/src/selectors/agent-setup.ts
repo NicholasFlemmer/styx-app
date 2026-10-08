@@ -1,6 +1,7 @@
 import { copy, fill } from '../copy';
 import type { AgentSetup, SetupAgent, SetupProblem, SetupStep } from '../model/agent-setup';
-import { SETUP_AGENTS, SETUP_STEPS } from '../model/agent-setup';
+import { SETUP_AGENTS, SETUP_STEPS, isSetupAgent } from '../model/agent-setup';
+import type { Agent } from '../model/common';
 import type { CliInstall } from '../model/discovery';
 import type { ReadModel } from '../read-model';
 import { cliSourceOf } from './discovery';
@@ -41,12 +42,16 @@ const cliOf = (model: ReadModel, agent: SetupAgent): CliInstall | null =>
   model.discovery.clis.find((c) => c.agent === agent) ?? null;
 
 /** Installed and signed in, as the CLI last said (a run that ended on a problem is not ready). */
-export const isAgentReady = (model: ReadModel, agent: SetupAgent): boolean => {
-  const cli = cliOf(model, agent);
-  const setup = model.agentSetup[agent];
+export const isAgentReady = (model: ReadModel, agent: Exclude<Agent, 'shell'>): boolean => {
+  const cli = model.discovery.clis.find((c) => c.agent === agent) ?? null;
+  const setup = isSetupAgent(agent) ? model.agentSetup[agent] : undefined;
   if (setup !== undefined && setup.status === 'failed') return false;
   return cli !== null && cli.found && cli.authState === 'signed-in';
 };
+
+/** An agent's name in the setup and sign-in words: the plan's name for a card agent ("ChatGPT"), else its own. */
+export const agentSetupName = (agent: Exclude<Agent, 'shell'>): string =>
+  isSetupAgent(agent) ? copy.agentSetup.names[agent] : copy.agents[agent];
 
 /** The agents that would answer right now, in the cards' order. */
 export const readyAgents = (model: ReadModel): SetupAgent[] =>

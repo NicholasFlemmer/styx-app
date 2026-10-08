@@ -18,6 +18,9 @@
   .dot[data-agent='cursor'] {
     background: var(--agent-cursor);
   }
+  .dot[data-agent='opencode'] {
+    background: var(--agent-opencode);
+  }
   .dot[data-agent='shell'] {
     background: var(--agent-shell);
   }

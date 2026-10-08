@@ -6,6 +6,7 @@ const agents = [
   ['Codex', 'Same chat, same approvals.'],
   ['Gemini CLI', 'Same chat, same approvals.'],
   ['Cursor', 'Same chat, same approvals.'],
+  ['OpenCode', 'Same chat, same approvals, with any provider it supports.'],
   ['Your terminal', 'A plain shell, with the same rules about what it can reach.'],
 ] as const;
 

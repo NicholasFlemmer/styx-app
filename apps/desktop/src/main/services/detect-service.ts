@@ -14,7 +14,7 @@ import { delimiter, dirname, join } from 'node:path';
 import { fallbackShell } from './pty-service';
 import type { CliCandidate, CliInstall, CliSource } from '@styx/core';
 
-export type AgentKind = 'claude' | 'codex' | 'gemini' | 'cursor' | 'shell';
+export type AgentKind = 'claude' | 'codex' | 'gemini' | 'cursor' | 'opencode' | 'shell';
 export type AuthState = 'signed-in' | 'signed-out' | 'unknown' | 'n/a';
 export type { CliCandidate, CliSource };
 
@@ -114,6 +114,7 @@ const CLIS: { agent: AgentKind; label: string; bins: string[] }[] = [
   { agent: 'codex', label: 'Codex', bins: ['codex'] },
   { agent: 'gemini', label: 'Gemini CLI', bins: ['gemini'] },
   { agent: 'cursor', label: 'Cursor agent', bins: ['cursor-agent', 'agent'] },
+  { agent: 'opencode', label: 'OpenCode', bins: ['opencode'] },
   { agent: 'shell', label: 'Shell', bins: [] },
 ];
 
@@ -140,7 +141,22 @@ const AGENT_MARKERS: Readonly<Record<Exclude<AgentKind, 'shell'>, RegExp>> = {
   codex: /codex/i,
   gemini: /gemini/i,
   cursor: /cursor/i,
+  // `opencode --version` prints the bare number (1.18.35), so this only ever matches other output that names it.
+  opencode: /opencode/i,
 };
+
+/** Provider keys OpenCode reads from the environment (a subset: the common providers). */
+export const OPENCODE_KEY_ENV: readonly string[] = [
+  'ANTHROPIC_API_KEY',
+  'OPENAI_API_KEY',
+  'GEMINI_API_KEY',
+  'GOOGLE_GENERATIVE_AI_API_KEY',
+  'OPENROUTER_API_KEY',
+  'GROQ_API_KEY',
+  'XAI_API_KEY',
+  'DEEPSEEK_API_KEY',
+  'MISTRAL_API_KEY',
+];
 
 const otherAgentIn = (
   agent: Exclude<AgentKind, 'shell'>,
@@ -200,7 +216,8 @@ export function defaultDeps(
  * Folders the vendors' installers and the usual package / version managers write CLIs to, whether or not the
  * shell's PATH lists them (#98): Claude's and Cursor's native installers → `~/.local/bin`; the Homebrew casks
  * (claude-code, codex, gemini-cli) → `/opt/homebrew/bin` or `/usr/local/bin`; npm globals under nvm / fnm / volta /
- * bun / pnpm / yarn; asdf and mise shims; the old `claude migrate-installer` dir. Windows: `%USERPROFILE%\.local\bin`
+ * bun / pnpm / yarn; asdf and mise shims; the old `claude migrate-installer` dir; OpenCode's installer →
+ * `~/.opencode/bin`. Windows: `%USERPROFILE%\.local\bin`
  * (the native installers), `%APPDATA%\npm`, WinGet's links, scoop shims, pnpm, bun, volta. Names only — the caller
  * keeps the ones that exist. nvm / fnm versions are listed newest first so a tie on CLI version stays deterministic.
  */
@@ -247,6 +264,7 @@ export function wellKnownBinDirs(
     join(home, '.asdf', 'shims'),
     join(home, '.local', 'share', 'mise', 'shims'),
     join(home, '.claude', 'local'),
+    join(home, '.opencode', 'bin'),
     join(home, 'Library', 'pnpm'),
     join(home, '.local', 'share', 'pnpm'),
     join(home, '.config', 'yarn', 'global', 'node_modules', '.bin'),
@@ -773,6 +791,17 @@ export class DetectService {
           : 'signed-out';
       case 'cursor':
         return exists(h, '.cursor', 'cli-config.json') || exists(h, '.config', 'cursor-agent')
+          ? 'signed-in'
+          : 'unknown';
+      case 'opencode':
+        // Provider logins sit in `$XDG_DATA_HOME/opencode/auth.json` (default `~/.local/share/opencode`, checked
+        // with OpenCode 1.18.35); OpenCode also takes provider keys from the env. With neither it can still run its
+        // free models, so "unknown" rather than "signed-out".
+        return exists(
+          this.deps.env['XDG_DATA_HOME'] ?? join(h, '.local', 'share'),
+          'opencode',
+          'auth.json',
+        ) || OPENCODE_KEY_ENV.some((k) => !!this.deps.env[k])
           ? 'signed-in'
           : 'unknown';
       default:

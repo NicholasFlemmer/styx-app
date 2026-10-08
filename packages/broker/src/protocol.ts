@@ -18,7 +18,7 @@ export const SessionBrief = z.object({
   projectName: z.string(),
   worktreePath: z.string().nullable(),
   branch: z.string().nullable(),
-  agent: z.enum(['claude', 'codex', 'gemini', 'cursor', 'shell']),
+  agent: z.enum(['claude', 'codex', 'gemini', 'cursor', 'opencode', 'shell']),
 });
 export type SessionBrief = z.infer<typeof SessionBrief>;
 
@@ -99,7 +99,7 @@ export const methods = {
   },
   hook: {
     params: z.object({
-      agent: z.enum(['claude', 'codex', 'gemini', 'cursor', 'shell']),
+      agent: z.enum(['claude', 'codex', 'gemini', 'cursor', 'opencode', 'shell']),
       event: z.string(),
       payload: z.unknown(),
     }),

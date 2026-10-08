@@ -3,7 +3,7 @@
  * see launch.ts) speaks ACP over stdio: a spawned session streams `pong`, then a command asks for permission — the
  * ask shows in the chat as needs-you and allowing it completes the turn. Switching the permission mode from the
  * composer goes to the agent as `session/set_mode`: in YOLO the next turn's command runs without an ask.
- * Neither real CLI is installed on the verifying machine; this is the runner's end-to-end proof.
+ * Neither real CLI is installed on the verifying machine; this is the runner's end-to-end proof. OpenCode follows.
  */
 import type { CliInstall } from '@styx/core';
 import { test, expect } from '@playwright/test';
@@ -105,6 +105,95 @@ test('a Gemini session runs over ACP: pong, a permission ask, the allowed comman
       timeout: 20_000,
     });
     await expect(chat.locator('[data-lane-meta]')).not.toContainText('waiting on you');
+  } finally {
+    await app.close();
+  }
+});
+
+/**
+ * OpenCode over ACP. The fake `opencode` mirrors a real OpenCode 1.18.35 run: modes are config options built from the
+ * agents in OPENCODE_CONFIG_CONTENT, and a command is announced before its input, which arrives with the permission
+ * request. So this proves the launch config reaches the CLI (Styx's modes exist, `build` asks before a command), the
+ * styx MCP server is handed over in session/new, and the card names the command that is really being asked about.
+ */
+test('an OpenCode session runs over ACP: the styx tools, a permission ask naming the command, and bypass through its own agent', async () => {
+  const { app, page } = await launchStyx({ screen: 'agents', fixture: 'demo', theme: 'dark', chrome: 'mac' });
+  try {
+    await page.locator('[data-screen-ready="agents"]').waitFor({ state: 'attached', timeout: 20_000 });
+    const detected = await page.evaluate(() =>
+      (window as unknown as StyxWindow).styx.command('detect.clis', {}),
+    );
+    const opencode = ((detected.value as { clis: CliInstall[] }).clis ?? []).find(
+      (c) => c.agent === 'opencode',
+    );
+    expect(opencode?.binary ?? '').toMatch(/e2e[/\\]fixtures[/\\]bin[/\\]opencode(\.cmd)?$/);
+    expect(opencode?.capabilities['acp']).toBe(true);
+    expect(opencode?.version).toBe('1.18.35');
+
+    await page.getByRole('button', { name: '+ Spawn agent' }).click();
+    const modal = page.locator('[data-spawn-modal]');
+    await expect(modal).toBeVisible();
+    await modal.locator('[data-agent="opencode"]').click();
+    await modal.getByLabel('First message').fill('hi');
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: /^Spawn/ })
+      .click();
+
+    const chat = page.locator('[data-chat-pane]');
+    await expect(chat).toBeVisible({ timeout: 20_000 });
+    await expect(
+      chat.locator('[data-kind="agent"]').filter({ hasText: 'pong (styx tools: yes, project config: off)' }),
+    ).toBeVisible({
+      timeout: 20_000,
+    });
+
+    // `build` with Styx's config asks before a command; the card shows the command from the permission request.
+    const decision = chat.locator('[data-kind="decision"]');
+    await expect(decision).toBeVisible({ timeout: 20_000 });
+    await expect(decision).toContainText('Bash: echo pong');
+    await decision.getByRole('button', { name: 'Allow' }).click();
+    await expect(chat.locator('[data-kind="steps"] li[data-status="ok"]')).toBeVisible({ timeout: 20_000 });
+    await expect(
+      chat.locator('[data-kind="agent"]').filter({ hasText: 'the command printed pong' }),
+    ).toBeVisible({ timeout: 20_000 });
+    await expect(chat.locator('[data-lane-meta]')).not.toContainText('waiting on you', { timeout: 20_000 });
+
+    // Bypass → the `styx-bypass` agent from the launch config (set_config_option), where nothing asks.
+    const snapshot = await page.evaluate(() =>
+      (window as unknown as StyxWindow).styx.command('store.snapshot', {}),
+    );
+    const session = (
+      snapshot.value as { sessions: { id: string; agent: string; runner: string; slashCommands: string[] }[] }
+    ).sessions.find((s) => s.agent === 'opencode' && s.runner === 'stream');
+    expect(session?.slashCommands).toEqual(['/init', '/review']);
+    const configured = await page.evaluate(
+      (sessionId) =>
+        (window as unknown as StyxWindow).styx.command('session.configure', {
+          sessionId,
+          permissionMode: 'bypassPermissions',
+        }),
+      session?.id,
+    );
+    expect(configured.ok).toBe(true);
+    await expect(
+      chat.locator('[data-kind="system"]').filter({ hasText: 'permissions: Bypass permissions' }),
+    ).toBeVisible({ timeout: 20_000 });
+    await expect(
+      chat.locator('[data-kind="system"]').filter({ hasText: /error|refused|no equivalent|closest/ }),
+    ).toHaveCount(0);
+
+    const composer = chat.getByRole('textbox', { name: /^Message OpenCode/ });
+    await composer.fill('again');
+    await composer.press('Enter');
+    await expect(chat.locator('[data-kind="user"]').filter({ hasText: 'again' })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(chat.locator('[data-kind="receipt"]')).toHaveCount(1, { timeout: 20_000 });
+    await expect(chat.locator('[data-kind="steps"] li[data-status="ok"]')).toHaveCount(1, {
+      timeout: 20_000,
+    });
+    await expect(chat.locator('[data-kind="decision"]')).toHaveCount(0);
   } finally {
     await app.close();
   }

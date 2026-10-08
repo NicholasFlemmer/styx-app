@@ -1,7 +1,8 @@
-# Agent parity: Codex CLI 0.154.0, with Gemini CLI and Cursor CLI
+# Agent parity: Codex CLI 0.154.0, with Gemini CLI, Cursor CLI and OpenCode 1.18.35
 
 Date: 2026-09-16. Machine: `codex` 0.154.0 (`~/.local/bin/codex` → standalone release), `claude` 2.1.263.
 `gemini` and `agent` (Cursor) are not installed here; their sections rest on vendor docs and are marked unverified.
+OpenCode (§8) was added on 2026-10-08 and probed for real (1.18.35).
 
 The bar is what Styx gives Claude Code today (§3). The question is how close each other CLI can get, through which
 interface, and what it costs. Everything under "verified" was run on this machine; the protocol types come from
@@ -256,3 +257,100 @@ the shell only.
 2. **ACP runner** for Gemini and Cursor, same shape, once either CLI is installed to verify against.
 3. **Now, regardless**: read stderr in the Codex verifier; send text and Enter as two writes for the remaining pty
    sessions (shell, and any CLI too old for a structured mode).
+
+## 8. OpenCode 1.18.35 (verified, issue #17)
+
+Date: 2026-10-08. Installed into a throwaway prefix only (`npm install --prefix /tmp/opencode-probe opencode-ai`,
+which brings the native `opencode-darwin-arm64` binary), run with `XDG_CONFIG_HOME` / `XDG_DATA_HOME` /
+`XDG_STATE_HOME` / `XDG_CACHE_HOME` pointed at a temp dir, so no real config or login was read or written. No
+provider was signed in. One turn was sent to a free OpenCode Zen model (`opencode/big-pickle`, no account needed)
+to see real permission requests; nothing was sent to a paid model.
+
+**How it talks: ACP.** `opencode --help` lists `opencode acp  start ACP (Agent Client Protocol) server`. Over stdio:
+
+- `initialize` → `protocolVersion: 1`, `loadSession: true`, `promptCapabilities: { image: true, embeddedContext:
+true }`, `mcpCapabilities: { http, sse }`, `sessionCapabilities: { close, fork, list, resume }`, one auth method
+  `opencode-login` ("Run `opencode auth login` in the terminal": interactive, so Styx never calls `authenticate`).
+- `session/new { cwd, mcpServers: [stdio entry] }` → `sessionId` and **no `modes` / `models` blocks**: both come as
+  `configOptions`. `model` (category `model`, values `provider/model`) and `mode` (category `mode`, the CLI's
+  primary agents: `build` "The default agent. Executes tools based on configured permissions.", `plan` "Disallows
+  all edit tools.", plus any primary agent the config defines). `session/set_config_option { configId, type: 'id',
+value }` switches either and answers with the options; `session/set_mode` also answered `{}`.
+- The stdio MCP server from `session/new` is started (with its `env` pairs) in the session's cwd and its tools are
+  exposed as `<server>_<tool>`: the model called `styx_request_access`, which reached the server as `tools/call`
+  without a permission ask (kind `other`).
+- Tool calls arrive as `tool_call` (kind `execute` for bash, `edit` for write, `other` for MCP) **before their input
+  is known** (`bash` with `rawInput: { cwd }`), then `tool_call_update`s. A permission request is v1-shaped
+  (`toolCall` at the top level) and carries the real input: `{ title: 'echo hi', kind: 'execute', rawInput:
+{ command: 'echo hi' } }`, or for a write `{ kind: 'edit', locations: [{ path }], rawInput: { filepath, diff } }`.
+  Options are `once` (allow_once), `always` (allow_always), `reject` (reject_once). A reject fails the call with
+  "The user rejected permission to use this specific tool call." and the turn carries on.
+- `available_commands_update` (the CLI's commands and the skills it found), `usage_update { used, size, cost }`,
+  `session/prompt` → `{ stopReason: 'end_turn', usage }`.
+
+**Permissions.** OpenCode's stock `build` agent allows everything (`opencode debug agent build`: `"*": "allow"`, with
+asks only for `doom_loop`, `external_directory` and reading `.env` files). So Styx cannot just pick a mode: it layers
+its own config over the user's for the session's process through `OPENCODE_CONFIG_CONTENT` (the inline config,
+merged after the global and project files). Rules are ordered and the last match wins, and objects merge key by key
+keeping the first file's key order, so a project `opencode.json` whose build rules end in `"*": "allow"` keeps that
+rule after Styx's `edit: ask` and wins (reproduced with `opencode debug agent build`; `.opencode/agent/*.md` and
+plugins can do the same or run code). Styx therefore also sets `OPENCODE_DISABLE_PROJECT_CONFIG=1`, which skips the
+project's `opencode.json` and `.opencode/` folders, and with them the project's `AGENTS.md`; the inline config lists
+the first of `AGENTS.md`, `CLAUDE.md`, `CONTEXT.md` at the worktree root under `instructions` to bring it back
+(checked live: a word only in `AGENTS.md` was unknown with the flag alone and known again with the entry). With the
+flag the hostile file changes nothing. The user's global config is still read and could loosen the rules, as it
+would in a terminal. `external_directory` is pinned to ask, except OpenCode's own tool-output and temp folders.
+In the edits-run modes, `.styx/project.json`, `opencode.json(c)` and `.opencode/*` still ask (checked live: a write
+to `notes.txt` ran, writes to `.opencode/agent/evil.md` and `.styx/project.json` raised permission requests). A
+Styx mode whose OpenCode agent is missing is refused rather than mapped by name. The modes:
+
+| Styx mode     | OpenCode agent (mode) | Rules Styx adds                                                         |
+| ------------- | --------------------- | ----------------------------------------------------------------------- |
+| Ask each time | `build`               | `edit`, `bash`, `webfetch`, `websearch`, `codesearch`: ask              |
+| Accept edits  | `styx-accept-edits`   | as above, `edit`: allow except Styx's policy file and OpenCode config   |
+| Auto          | `styx-accept-edits`   | (OpenCode has no reviewer)                                              |
+| Plan mode     | `plan`                | `edit` pinned back to deny (the top-level ask would land after its own) |
+| Bypass        | `styx-bypass`         | `"*"`: allow                                                            |
+| Don't ask     | `styx-dont-ask`       | those tools plus `external_directory`, `doom_loop`: deny                |
+
+The same asks sit in the top-level `permission`, so subagents started by the `task` tool ask too (also in Bypass,
+where the subagent's ask reaches Styx as a card). Third-party MCP servers the user configured in OpenCode keep
+OpenCode's default (allow), as they would in the TUI.
+
+**Model choice.** `opencode acp` takes no `--model`. Styx sets the session's model through the `model` config option
+right after `session/new`; the catalogue comes from the same option. Without a provider the list holds the free
+OpenCode Zen models only.
+
+**Sign-in.** Credentials live in `$XDG_DATA_HOME/opencode/auth.json` (default `~/.local/share/opencode/auth.json`);
+OpenCode also reads provider keys from the environment. `opencode auth list` (alias of `providers list`) prints the
+provider names, the credential type and, for env keys, the variable name; Styx keeps only the names as the account
+label. `opencode auth login` is an interactive provider picker, run in the Connect agent modal's terminal. A fresh
+install with no provider still answers on the free Zen models; Styx calls that "signed out" after a check, and
+"unknown" from detection alone.
+
+**Install.** `curl -fsSL https://opencode.ai/install | bash` installs to `~/.opencode/bin`; also `npm install -g
+opencode-ai`, Homebrew, Scoop and Chocolatey. `opencode --version` prints the bare number (`1.18.35`).
+
+**Not used / not verified.** `opencode run --format json` (one process per turn, its own event format) and `opencode
+serve` (HTTP) were not needed. The TUI fallback for a build without `acp` (`--agent`, `-m`, the styx server in the
+inline config) was checked against `--help` and `opencode mcp list` only, not run interactively. Effort (`--variant`
+on `run`) has no ACP equivalent here.
+
+| Capability                    | OpenCode via ACP                                                         |
+| ----------------------------- | ------------------------------------------------------------------------ |
+| Send a message, first message | ✓ `session/prompt`                                                       |
+| Streaming text, thinking      | ✓ `agent_message_chunk`, `agent_thought_chunk`                           |
+| Tool rows                     | ✓ (the row is named from the announcement; the command shows on its ask) |
+| Permission asks               | ✓ `session/request_permission`, with Styx's config in place              |
+| Permission mode switch, live  | ✓ `set_config_option mode` onto Styx's agents                            |
+| Model switch, live            | ✓ `set_config_option model`                                              |
+| Effort                        | ✗                                                                        |
+| Interrupt                     | ✓ `session/cancel`                                                       |
+| Resume after relaunch         | ✓ `session/load`                                                         |
+| Usage                         | ◐ tokens, context window and cost from `usage_update`                    |
+| Images                        | ✓ `promptCapabilities.image`                                             |
+| Styx MCP tools + shims        | ✓ `session/new.mcpServers`; shims on PATH                                |
+| Slash commands                | ✓ `available_commands_update`                                            |
+| Agents page identity          | ◐ provider names from `opencode auth list`, no email                     |
+| Publish drafts                | ✗ file-list fallback (`run --format json` not checked)                   |
+| One-click setup card          | ✗ the sign-in is a provider picker, not one plan's browser flow          |

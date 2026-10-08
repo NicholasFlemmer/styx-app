@@ -7,13 +7,14 @@ Styx doesn't come with an AI of its own. It runs the coding agent CLIs on your c
 
 ## Supported agents
 
-| Agent            | The CLI Styx runs                    | Sign in with                     |
-| ---------------- | ------------------------------------ | -------------------------------- |
-| **Claude Code**  | `claude`                             | A Claude Pro or Max plan         |
-| **Codex**        | `codex`                              | A ChatGPT Plus, Pro or Team plan |
-| **Gemini CLI**   | `gemini`                             | A Google account                 |
-| **Cursor agent** | `cursor-agent` (or `agent`)          | A Cursor plan                    |
-| **Shell**        | Your shell (zsh, bash or PowerShell) | Nothing to sign in to            |
+| Agent            | The CLI Styx runs                    | Sign in with                                                |
+| ---------------- | ------------------------------------ | ----------------------------------------------------------- |
+| **Claude Code**  | `claude`                             | A Claude Pro or Max plan                                    |
+| **Codex**        | `codex`                              | A ChatGPT Plus, Pro or Team plan                            |
+| **Gemini CLI**   | `gemini`                             | A Google account                                            |
+| **Cursor agent** | `cursor-agent` (or `agent`)          | A Cursor plan                                               |
+| **OpenCode**     | `opencode`                           | Any provider OpenCode supports, or none for its free models |
+| **Shell**        | Your shell (zsh, bash or PowerShell) | Nothing to sign in to                                       |
 
 You can use any mix. Each task picks its agent, so one project can have Claude Code on one branch and Codex on another.
 
@@ -30,6 +31,8 @@ On the card, **Set up** runs four steps out of sight and ticks each one off:
 
 One ready agent is enough to start. **Show details** shows what the installer or sign-in printed, if you want to see it.
 
+OpenCode has no card: it isn't one plan, and its sign-in asks which provider you want. In **Settings › Agents**, **Connect** on its row opens the tools straight away: **Install opencode…** runs OpenCode's own installer (`curl -fsSL https://opencode.ai/install | bash` on a Mac or Linux, `npm install -g opencode-ai` on Windows) in a terminal you can watch, and **Sign in with opencode…** runs `opencode auth login` there, where you pick a provider and sign in or paste its key.
+
 If a step stops, the card says why in one sentence and offers the fix:
 
 - **Needs a plan**: you're signed in, but that account doesn't include the agent (for example Claude on the free plan). **See plans** opens the vendor's plans.
@@ -39,9 +42,9 @@ If a step stops, the card says why in one sentence and offers the fix:
 
 ## Signing in
 
-Sign-in always happens in the agent's own flow: `claude auth login`, `codex login` or `cursor-agent login`, and Gemini CLI signs in on its first run. Styx never sees your password and never stores a token. It keeps two things: where the CLI lives on disk, and which account it reports being signed in as.
+Sign-in always happens in the agent's own flow: `claude auth login`, `codex login`, `cursor-agent login` or `opencode auth login`, and Gemini CLI signs in on its first run. Styx never sees your password and never stores a token. It keeps two things: where the CLI lives on disk, and which account it reports being signed in as.
 
-To check an agent, select **Verify** on its row in **Settings › Agents**: Styx asks the CLI who it's signed in as and shows the account.
+To check an agent, select **Verify** on its row in **Settings › Agents**: Styx asks the CLI who it's signed in as and shows the account. For OpenCode that's the providers it has a login or a key for (for example `Anthropic, OpenRouter`). With none, OpenCode can still use its free models, but the row says **signed out**.
 
 ## Settings › Agents
 
@@ -58,13 +61,14 @@ What you can pick depends on the agent:
 - **Claude Code:** **Default**, **Fable**, **Opus**, **Sonnet** or **Haiku**, and an effort from **Low** to **Max**.
 - **Codex:** the models your Codex account lists, and the efforts each model supports.
 - **Gemini CLI** and **Cursor agent:** the CLI's own default model. They have no effort setting.
+- **OpenCode:** the models OpenCode lists for the providers you're signed in to (written `provider/model`), plus its free models. No effort setting.
 
 ## How Styx finds agents
 
 Styx looks for each CLI where your terminal would find it, and in the places the vendors install it:
 
 - **Your shell's PATH.** Styx asks your login shell, so a CLI that works when you type its name in a terminal is found, including one behind an alias or a version-manager shim (nvm, fnm, volta, asdf, mise and so on).
-- **The usual install folders**, even when they aren't on your PATH: `~/.local/bin`, Homebrew, npm's global folders, and on Windows `%USERPROFILE%\.local\bin`, `%APPDATA%\npm`, WinGet and Scoop.
+- **The usual install folders**, even when they aren't on your PATH: `~/.local/bin`, `~/.opencode/bin`, Homebrew, npm's global folders, and on Windows `%USERPROFILE%\.local\bin`, `%APPDATA%\npm`, WinGet and Scoop.
 - **Copies bundled with other apps**: the Claude Code and Codex extensions in VS Code, Cursor and Windsurf, and the Claude desktop app.
 
 Styx watches those folders, so an agent you install in a terminal shows up within a second or so. The row's location says where each copy came from (**PATH**, **shell**, **install folder**, **VS Code extension**, **set up by Styx**, **located manually** and so on).
@@ -73,7 +77,7 @@ Styx watches those folders, so an agent you install in a terminal shows up withi
 
 Open **Settings › Agents**, select **Connect** on the agent's row, then **I'll do it myself** for the manual tools:
 
-1. **Check it runs in a terminal.** Open a new terminal and run `claude --version` (or `codex`, `gemini`, `cursor-agent`). If that fails too, the CLI isn't installed or isn't on your PATH: use the dialog's **Install** link, which runs the vendor's installer in a terminal you can watch, or **Install guide** for the vendor's instructions.
+1. **Check it runs in a terminal.** Open a new terminal and run `claude --version` (or `codex`, `gemini`, `cursor-agent`, `opencode`). If that fails too, the CLI isn't installed or isn't on your PATH: use the dialog's **Install** link, which runs the vendor's installer in a terminal you can watch, or **Install guide** for the vendor's instructions.
 2. **Rescan.** If you just installed it, select **Rescan** in Settings › Agents. A CLI installed into a brand new folder may also need you to open a new terminal so your shell picks up the PATH change.
 3. **Point Styx at it.** Type a path or a command name into **Path or command** (for example `~/.local/bin/claude`, or just `claude`) and select **Use**, or **Locate binary** to pick the file. Styx runs it before accepting it, and tells you if you picked a folder, a file that doesn't report a version, or a different agent's CLI.
 4. **See where Styx looked.** **Looked in n folders** and **Show where** list every folder searched, so "not installed" is never a mystery.

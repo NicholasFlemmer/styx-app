@@ -151,6 +151,7 @@ const AGENT_OPTIONS: readonly RowOption[] = optionsOf(copy.agentProducts, [
   'codex',
   'gemini',
   'cursor',
+  'opencode',
   'shell',
 ]);
 
@@ -367,10 +368,7 @@ const agentsRows = (model: ReadModel, ctx: RowContext): SettingsRow[] => {
 const keychainRows = (ctx: RowContext): SettingsRow[] => {
   const r = copy.settings.rows;
   const pc = platformCopy(ctx.copyPlatform);
-  return [
-    fixed('store', r.store, pc.keychainName),
-    fixed('mfaProdWrite', r.mfaProdWrite, pc.mfa),
-  ];
+  return [fixed('store', r.store, pc.keychainName), fixed('mfaProdWrite', r.mfaProdWrite, pc.mfa)];
 };
 
 const policiesRows = (model: ReadModel): SettingsRow[] => {

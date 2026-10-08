@@ -653,6 +653,8 @@ export const agentInvocation = (agent: Agent, binary: string, kind: MessageKind)
     case 'gemini':
       return { file: binary, args: ['-p', prompt, '--output-format', 'json'], parse: parseGeminiJson };
     case 'cursor':
+    // OpenCode's `run --format json` events were not checked against a real run: the file-list fallback drafts.
+    case 'opencode':
     case 'shell':
       return null;
   }

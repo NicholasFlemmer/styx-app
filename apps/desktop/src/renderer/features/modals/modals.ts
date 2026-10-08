@@ -193,7 +193,7 @@ export const sshTargetName = (f: SshForm): string => f.host.trim();
 
 // --- Spawn ---------------------------------------------------------------
 
-export const SPAWN_AGENTS: readonly Agent[] = ['claude', 'codex', 'gemini', 'cursor', 'shell'];
+export const SPAWN_AGENTS: readonly Agent[] = ['claude', 'codex', 'gemini', 'cursor', 'opencode', 'shell'];
 
 /** Tile subtitle: `claude 2.4.1` / `cursor-agent 0.5.2` / `zsh 5.9`; unknown or missing binaries read `not found on PATH`. */
 export const cliVersionLabel = (cli: CliInstall | undefined): string =>

@@ -1,4 +1,5 @@
 import {
+  agentSetupName,
   cliIsManual,
   cliConnectionState,
   cliSearchedDirs,
@@ -6,6 +7,7 @@ import {
   copy,
   fill,
   installRecipes,
+  isSetupAgent,
   type Agent,
   type CliInstall,
   type EventPayload,
@@ -68,8 +70,10 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
   const [login, setLogin] = useState<Run | null>(null);
   const [install, setInstall] = useState<Run | null>(null);
   const [pathText, setPathText] = useState('');
-  // "I'll do it myself": the install command, binary picker and path field, folded under the setup card.
-  const [manual, setManual] = useState(false);
+  // "I'll do it myself": the install command, binary picker and path field, folded under the setup card. An agent
+  // with no setup card (OpenCode) shows them from the start.
+  const card = isSetupAgent(agent);
+  const [manual, setManual] = useState(!card);
   const [showWhere, setShowWhere] = useState(false);
   const [busy, setBusy] = useState(false);
   const heading = useRef<HTMLDivElement>(null);
@@ -239,7 +243,7 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
       title={
         agent === 'shell'
           ? fill(c.title, { agent: product })
-          : fill(copy.agentSetup.actions.setUp, { name: copy.agentSetup.names[agent] })
+          : fill(copy.agentSetup.actions.setUp, { name: agentSetupName(agent) })
       }
       onClose={close}
       escapeEnabled={false}
@@ -269,7 +273,7 @@ export function ConnectAgentModal({ id, agent }: ConnectAgentModalProps) {
       </div>
       {agent === 'shell' ? (
         <div className={s['body']}>{c.shell}</div>
-      ) : (
+      ) : !isSetupAgent(agent) ? null : (
         <>
           {/* One button from nothing to a working agent (owner request); the manual tools fold away below it. */}
           <AgentSetupCard

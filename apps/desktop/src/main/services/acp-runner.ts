@@ -7,9 +7,11 @@ import {
   copy,
   fill,
   permissionModeSchema,
+  type Agent,
   type ModelInfo,
   type PermissionMode,
 } from '@styx/core';
+import { OPENCODE_MODES } from '../agents/opencode';
 import type { McpServerEntry } from '../agents/types';
 import { logger } from './logger';
 import { STRIPPED_ENV } from '../providers/cli-runner';
@@ -28,7 +30,7 @@ import {
 const HANDSHAKE_MS = 30_000;
 
 /**
- * ADR-0017 stream backend for the Agent Client Protocol (`gemini --acp`, `agent acp`): newline-delimited JSON-RPC 2.0
+ * ADR-0017 stream backend for the Agent Client Protocol (`gemini --acp`, `agent acp`, `opencode acp`): newline-delimited JSON-RPC 2.0
  * over child_process pipes, one process per session, registered on the RunnerMux for `acp` launches.
  *
  * Styx is the ACP *client*: it sends `initialize` → `session/new` | `session/load` → `session/prompt`, answers the
@@ -38,10 +40,12 @@ const HANDSHAKE_MS = 30_000;
  * path. File-system and terminal client capabilities are not advertised; a request for them is answered with a
  * JSON-RPC "method not found" so the agent uses its own tools.
  *
- * Protocol version 1 is what the shipping CLIs speak (Gemini CLI 0.39, Cursor agent); v2 shapes that differ only in
- * field names (`capabilities`/`info`, mode as a config option, `plan_update`) are accepted where the cost is a
- * line. Neither CLI was installed on the verifying machine: the mapping is verified against the protocol spec and
- * the fake agent in `acp-runner.test.ts` / `e2e/fixtures/bin/gemini` (see the ADR).
+ * Protocol version 1 is what the shipping CLIs speak (Gemini CLI 0.39, Cursor agent, OpenCode 1.18); v2 shapes that
+ * differ only in field names (`capabilities`/`info`, mode as a config option, `plan_update`) are accepted where the
+ * cost is a line. Gemini and Cursor were not installed on the verifying machine: their mapping is verified against
+ * the protocol spec and the fake agent in `acp-runner.test.ts` / `e2e/fixtures/bin/gemini` (see the ADR). OpenCode
+ * 1.18.35 was run for real (docs/research/agent-parity.md): modes and models as config options, v1 permission
+ * requests.
  */
 
 // --- Wire schemas (compact: method + the fields Styx reads) ----------------
@@ -195,6 +199,12 @@ const CURSOR_MODES: Readonly<Record<PermissionMode, string>> = {
   dontAsk: 'agent',
   auto: 'agent',
 };
+/** Each agent's own table first, so a mode id another CLI happens to share never wins for it. */
+const MODE_TABLES: Readonly<Partial<Record<Agent, Readonly<Record<PermissionMode, string>>>>> = {
+  gemini: GEMINI_MODES,
+  cursor: CURSOR_MODES,
+  opencode: OPENCODE_MODES,
+};
 /** For an agent with its own ids: the closest mode by id or name, tried in priority order. */
 const MODE_HINTS: Readonly<Record<PermissionMode, readonly RegExp[]>> = {
   default: [/default/, /agent/, /normal/, /ask/],
@@ -206,18 +216,25 @@ const MODE_HINTS: Readonly<Record<PermissionMode, readonly RegExp[]>> = {
 };
 
 /**
- * The agent mode a Styx permission mode maps to, from the modes the agent advertised: Gemini's table first, then
- * Cursor's, then the closest by name (`exact: false`, noted in the transcript). Null when nothing fits.
+ * The agent mode a Styx permission mode maps to, from the modes the agent advertised: the session agent's own table
+ * (Gemini, Cursor, OpenCode; every table in turn when the agent is not given), then the closest by name (`exact:
+ * false`, noted in the transcript). Null when nothing fits.
  */
 export const resolveAcpMode = (
   mode: PermissionMode,
   available: readonly AcpMode[],
+  agent?: Agent,
 ): { id: string; exact: boolean } | null => {
   const ids = new Set(available.map((m) => m.id));
-  for (const table of [GEMINI_MODES, CURSOR_MODES]) {
+  const own = agent === undefined ? undefined : MODE_TABLES[agent];
+  const tables = own === undefined ? [GEMINI_MODES, CURSOR_MODES, OPENCODE_MODES] : [own];
+  for (const table of tables) {
     const id = table[mode];
     if (ids.has(id)) return { id, exact: true };
   }
+  // OpenCode's modes are agents Styx defines itself: a missing one means the launch config did not apply, and a
+  // guess by name could land on an agent with looser rules (any user agent called "auto…"). Fail closed.
+  if (agent === 'opencode') return null;
   for (const re of MODE_HINTS[mode]) {
     const hit = available.find((m) => re.test(`${m.id} ${m.name ?? ''}`.toLowerCase()));
     if (hit) return { id: hit.id, exact: false };
@@ -661,7 +678,7 @@ export class AcpRunner extends EventEmitter<StreamEvents> implements StreamRunne
     entry.styxMode = mode;
     if (entry.sessionId === null || entry.modes.length === 0) return; // the agent has no modes to map onto
     const label = copy.session.permissionModes[mode];
-    const resolved = resolveAcpMode(mode, entry.modes);
+    const resolved = resolveAcpMode(mode, entry.modes, entry.opts.session?.agent);
     if (resolved === null) {
       this.system(
         entry,
@@ -903,6 +920,26 @@ export class AcpRunner extends EventEmitter<StreamEvents> implements StreamRunne
     return { name, kindName, input, edit: kind !== null && EDIT_KINDS.has(kind) };
   }
 
+  /**
+   * The input a permission request carries, keyed as `toolRow` keys it, to merge over the announced call's: raw
+   * input, locations (else OpenCode's `filepath` / `filePath`) as the path, and for a command whose request names it
+   * only in the title, that title, so the card never shows the announcement's placeholder (`bash`).
+   */
+  private callInput(u: ToolCallLike, announced: ToolRow): Json {
+    const input: Json = { ...(obj(u.rawInput) ?? {}) };
+    const paths = (u.locations ?? []).map((l) => l.path);
+    if (paths.length > 0) {
+      if (typeof input['file_path'] !== 'string') input['file_path'] = paths[0];
+      input['locations'] = paths;
+    }
+    for (const key of ['filepath', 'filePath'])
+      if (typeof input['file_path'] !== 'string' && typeof input[key] === 'string')
+        input['file_path'] = input[key];
+    if (announced.kindName === 'Bash' && typeof input['command'] !== 'string' && u.title)
+      input['command'] = u.title;
+    return input;
+  }
+
   private hintOf(entry: Entry, row: ToolRow, title: string | undefined): string {
     return toolHint(entry.opts.worktreePath, row.name, row.input) || (title ? firstLine(title, 100) : '');
   }
@@ -970,7 +1007,12 @@ export class AcpRunner extends EventEmitter<StreamEvents> implements StreamRunne
     const p = parsed.data;
     const call: ToolCallLike = p.toolCall ?? p.subject?.toolCall ?? {};
     const known = call.toolCallId !== undefined ? entry.tools.get(call.toolCallId) : undefined;
-    const row = known ?? this.toolRow({ ...call, title: call.title ?? p.title });
+    // An agent may announce a call before its input is known (OpenCode: `bash` with only a cwd) and send the real
+    // command or path with the permission request: that input is merged in so the card shows what is asked. The
+    // name and the edit flag stay those of the announced call.
+    const row = known
+      ? { ...known, input: { ...known.input, ...this.callInput(call, known) } }
+      : this.toolRow({ ...call, title: call.title ?? p.title });
     const requestId = String(rpcId);
     entry.permissions.set(requestId, { rpcId, options: p.options });
     // The permission's tool name is derived from the ACP `kind` only: a title or MCP tool name the agent chose

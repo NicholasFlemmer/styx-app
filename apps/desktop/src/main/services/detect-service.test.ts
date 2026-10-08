@@ -95,6 +95,49 @@ describe('DetectService', () => {
     expect(findOnPath('missing', dir, 'darwin')).toBeNull();
   });
 
+  it('detects OpenCode: the bare version it prints, `acp` from its help, sign-in from its auth.json or a provider key', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'styx-det-'));
+    const home = mkdtempSync(join(tmpdir(), 'styx-home-'));
+    bin(dir, 'opencode');
+    // `opencode --help` as 1.18.35 prints it (abridged): `acp` is a subcommand, there is no stream-json.
+    const help =
+      'Commands:\n  opencode acp                 start ACP (Agent Client Protocol) server\n  opencode run [message..]     run opencode with a message\n';
+    const deps = (env: NodeJS.ProcessEnv): DetectDeps => ({
+      platform: 'darwin',
+      home,
+      pathEnv: dir,
+      env: { SHELL: '/bin/sh', ...env },
+      exec: async (b, args) => ({
+        stdout: args[0] === '--version' ? (b.endsWith('opencode') ? '1.18.35' : 'sh 3.2') : help,
+        exitCode: 0,
+      }),
+    });
+    const opencode = async (env: NodeJS.ProcessEnv = {}) =>
+      (await new DetectService(deps(env)).detectClis()).find((c) => c.agent === 'opencode');
+    const none = await opencode();
+    expect(none).toMatchObject({
+      label: 'OpenCode',
+      found: true,
+      version: '1.18.35',
+      // No login and no key: it can still run OpenCode's free models, so not "signed out".
+      authState: 'unknown',
+      capabilities: { acp: true, streamJson: false, appServer: false },
+    });
+    expect((await opencode({ OPENROUTER_API_KEY: 'x' }))?.authState).toBe('signed-in');
+    const xdg = mkdtempSync(join(tmpdir(), 'styx-xdg-'));
+    mkdirSync(join(xdg, 'opencode'));
+    writeFileSync(join(xdg, 'opencode', 'auth.json'), '{}');
+    expect((await opencode({ XDG_DATA_HOME: xdg }))?.authState).toBe('signed-in');
+    mkdirSync(join(home, '.local', 'share', 'opencode'), { recursive: true });
+    writeFileSync(join(home, '.local', 'share', 'opencode', 'auth.json'), '{}');
+    expect((await opencode())?.authState).toBe('signed-in');
+  });
+
+  it('looks in OpenCode’s installer folder (~/.opencode/bin)', () => {
+    expect(wellKnownBinDirs('/Users/me', 'darwin', {})).toContain(join('/Users/me', '.opencode', 'bin'));
+    expect(wellKnownBinDirs('/home/me', 'linux', {})).toContain(join('/home/me', '.opencode', 'bin'));
+  });
+
   it('compares versions numerically; a missing version sorts lowest', () => {
     expect(compareVersions('2.1.261', '2.1.199')).toBe(1);
     expect(compareVersions('2.1.199', '2.1.261')).toBe(-1);

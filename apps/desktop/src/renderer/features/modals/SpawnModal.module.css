@@ -10,7 +10,7 @@
   }
   .tiles {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
   /* Prototype tile: 14px 12px, hairline right + bottom, name 13/600 over mono 10.5 version at .7. */
   .tile {

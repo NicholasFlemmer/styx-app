@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { makeTestApp } from '../test-support';
-import { AgentService } from './agent-service';
+import { AgentService, parseOpenCode } from './agent-service';
 import type { AppServerIdentity } from './app-server-client';
 import { PtyService } from './pty-service';
 
@@ -604,5 +604,73 @@ describe('AgentService.installGuide', () => {
     ]);
     await expect(agents.installGuide('shell')).rejects.toMatchObject({ code: 'invalid-input' });
     expect(openExternal).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('AgentService: OpenCode (`opencode auth list`, checked with 1.18.35)', () => {
+  // Captured from OpenCode 1.18.35 with a throwaway data dir: colour codes and box glyphs as printed.
+  const LISTED =
+    '\u001b[0m\n┌  Credentials \u001b[90m/home/me/.local/share/opencode/auth.json\n│\n●  Anthropic \u001b[90mapi\n│\n●  OpenAI \u001b[90moauth\n│\n└  2 credentials\n\n┌  Environment\n│\n●  Anthropic \u001b[90mANTHROPIC_API_KEY\n│\n└  1 environment variable\n';
+  const NONE =
+    '\u001b[0m\n┌  Credentials \u001b[90m/home/me/.local/share/opencode/auth.json\n│\n└  0 credentials\n';
+  const ENV_ONLY =
+    '┌  Credentials /home/me/.local/share/opencode/auth.json\n│\n└  0 credentials\n\n┌  Environment\n│\n●  OpenRouter OPENROUTER_API_KEY\n│\n└  1 environment variable\n';
+
+  it.each([
+    ['stored logins and an env key → the provider names, once each', LISTED, 'Anthropic, OpenAI'],
+    ['an env key only → that provider', ENV_ONLY, 'OpenRouter'],
+  ])('%s', (_name, text, account) => {
+    expect(parseOpenCode(text)).toEqual({ authState: 'signed-in', account });
+  });
+
+  it('no stored login and no key → signed out (OpenCode can still run its free models)', () => {
+    expect(parseOpenCode(NONE)).toEqual({ authState: 'signed-out', account: null });
+  });
+
+  it('output that is not the credentials list throws; nothing but provider names ever becomes the account', () => {
+    expect(() => parseOpenCode('1.18.35\n')).toThrow('unexpected `opencode auth list` output');
+    const odd = parseOpenCode(
+      'Credentials\n●  sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH api\n',
+    );
+    expect(odd).toEqual({ authState: 'signed-out', account: null });
+  });
+
+  const withOpenCode = (exec: ExecFake) => {
+    const t = setup(exec);
+    t.app.repos.discovery.saveCli({
+      agent: 'opencode',
+      binary: '/Users/me/.opencode/bin/opencode',
+      version: '1.18.35',
+      found: true,
+      authState: 'unknown',
+      capabilities: { acp: true },
+      checkedAt: t.clock.now(),
+      account: null,
+      verifiedAt: null,
+      verifyError: null,
+    });
+    return t;
+  };
+
+  it('verify runs `opencode auth list` through the row binary and stores the provider names', async () => {
+    const { agents, exec } = withOpenCode(async () => ({ stdout: LISTED, exitCode: 0 }));
+    const out = await agents.verify('opencode');
+    expect(exec.mock.calls).toEqual([['/Users/me/.opencode/bin/opencode', ['auth', 'list']]]);
+    expect(out).toMatchObject({ authState: 'signed-in', account: 'Anthropic, OpenAI', verifyError: null });
+  });
+
+  it('sign-in runs `opencode auth login` in a visible pty from home', async () => {
+    const { agents, pty, home } = withOpenCode(async () => ({ stdout: NONE, exitCode: 0 }));
+    const r = await agents.login('opencode');
+    expect(r.command).toBe('opencode auth login');
+    expect(pty.spawned).toEqual([
+      {
+        id: r.terminalId,
+        shell: '/Users/me/.opencode/bin/opencode',
+        args: ['auth', 'login'],
+        cwd: home,
+        env: {},
+      },
+    ]);
   });
 });

@@ -30,7 +30,7 @@ export const messageIdSchema = z.custom<MessageId>(isId, 'expected id');
 /** Epoch milliseconds. */
 export const timestampSchema = z.number().int().nonnegative();
 
-export const agentSchema = z.enum(['claude', 'codex', 'gemini', 'cursor', 'shell']);
+export const agentSchema = z.enum(['claude', 'codex', 'gemini', 'cursor', 'opencode', 'shell']);
 export type Agent = z.infer<typeof agentSchema>;
 
 export const runnerSchema = z.enum(['pty', 'stream']);
@@ -78,6 +78,7 @@ export const AGENT_LABEL: Record<Agent, string> = {
   codex: 'Codex',
   gemini: 'Gemini',
   cursor: 'Cursor',
+  opencode: 'OpenCode',
   shell: 'shell',
 };
 

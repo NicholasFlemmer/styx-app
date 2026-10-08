@@ -1,4 +1,13 @@
-import { copy, fill, isAgentReady, navLanes, platformCopy, projectNameOf, type ProjectId } from '@styx/core';
+import {
+  agentSetupName,
+  copy,
+  fill,
+  isAgentReady,
+  navLanes,
+  platformCopy,
+  projectNameOf,
+  type ProjectId,
+} from '@styx/core';
 import { AgentDot, Button, Checkbox, Field, Input, Select, StatusDot, Textarea } from '@styx/ui';
 import { useEffect, useId, useRef, type KeyboardEvent } from 'react';
 import { useCopyPlatform, useNow, useUi } from '../../state/hooks';
@@ -170,7 +179,7 @@ export function NewTask({ projectId, initialText = '' }: NewTaskProps) {
             {/* One way in: the agent's setup card installs, signs in and tests (owner request). */}
             {form.agent === 'shell' ? null : (
               <Button variant="accent" onClick={installGuide} data-new-task-set-up={form.agent}>
-                {fill(copy.agentSetup.actions.setUp, { name: copy.agentSetup.names[form.agent] })}
+                {fill(copy.agentSetup.actions.setUp, { name: agentSetupName(form.agent) })}
               </Button>
             )}
           </div>

@@ -13,14 +13,16 @@ export const Claude: Story = {};
 export const Codex: Story = { args: { agent: 'codex' } };
 export const Gemini: Story = { args: { agent: 'gemini' } };
 export const Cursor: Story = { args: { agent: 'cursor' } };
+export const OpenCode: Story = { args: { agent: 'opencode' } };
 export const Shell: Story = { args: { agent: 'shell' } };
 
-const ALL: AgentKind[] = ['claude', 'codex', 'gemini', 'cursor', 'shell'];
+const ALL: AgentKind[] = ['claude', 'codex', 'gemini', 'cursor', 'opencode', 'shell'];
 const NAME: Record<AgentKind, string> = {
   claude: 'Claude',
   codex: 'Codex',
   gemini: 'Gemini',
   cursor: 'Cursor',
+  opencode: 'OpenCode',
   shell: 'Shell',
 };
 

@@ -73,6 +73,7 @@ describe('migrations', () => {
       '0019_lane_resolution',
       '0020_lane_landing',
       '0021_task_kind',
+      '0022_opencode_agent',
     ]);
     // Seed at 0001: a project, two targets and an active grant that cascades on the target.
     migrate(db, all.slice(0, 2));
@@ -171,9 +172,10 @@ describe('migrations', () => {
         '0018_lane_overlaps',
         '0019_lane_resolution',
         '0020_lane_landing',
-      '0021_task_kind',
+        '0021_task_kind',
+        '0022_opencode_agent',
       ],
-      version: 22,
+      version: 23,
     });
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT id, project_id, default_branch, remotes_json FROM repos').all()).toEqual([
@@ -202,6 +204,59 @@ describe('migrations', () => {
     // FK actions are live again: deleting the repo cascades into its worktrees.
     db.prepare("DELETE FROM repos WHERE id = 'r2'").run();
     expect(db.prepare("SELECT count(*) AS n FROM worktrees WHERE id = 'w3'").get()).toEqual({ n: 0 });
+  });
+
+  it('0022 lets sessions and cli_installs name opencode, keeping every row and column (forward from 0021)', () => {
+    const db = new Database(':memory:');
+    const all = listMigrations();
+    migrate(db, all.slice(0, 22));
+    db.prepare(
+      "INSERT INTO projects (id, name, path, initials, created_at, last_activity_at) VALUES ('p', 'x', '/x', 'X', 0, 0)",
+    ).run();
+    db.prepare(
+      "INSERT INTO sessions (id, project_id, agent, state, started_at, last_activity_at, purpose, tokens_used, kind, design_session_id) VALUES ('s', 'p', 'gemini', 'idle', 1, 2, 'design', 7, 'design', 'd')",
+    ).run();
+    db.prepare(
+      "INSERT INTO cli_installs (agent, binary, found, auth_state, checked_at, account) VALUES ('gemini', '/bin/gemini', 1, 'signed-in', 3, 'me@example.com')",
+    ).run();
+    const insertCli = db.prepare('INSERT INTO cli_installs (agent, found, checked_at) VALUES (?, 0, 0)');
+    expect(() => insertCli.run('opencode')).toThrow(/CHECK/);
+
+    expect(migrate(db, all.slice(0, 23))).toEqual({ applied: ['0022_opencode_agent'], version: 23 });
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    expect(
+      db
+        .prepare('SELECT id, agent, purpose, tokens_used, kind, design_session_id, started_at FROM sessions')
+        .all(),
+    ).toEqual([
+      {
+        id: 's',
+        agent: 'gemini',
+        purpose: 'design',
+        tokens_used: 7,
+        kind: 'design',
+        design_session_id: 'd',
+        started_at: 1,
+      },
+    ]);
+    expect(db.prepare('SELECT agent, binary, auth_state, account FROM cli_installs').all()).toEqual([
+      { agent: 'gemini', binary: '/bin/gemini', auth_state: 'signed-in', account: 'me@example.com' },
+    ]);
+    expect(() => insertCli.run('opencode')).not.toThrow();
+    expect(() => insertCli.run('aider')).toThrow(/CHECK/);
+    db.prepare(
+      "INSERT INTO sessions (id, project_id, agent, state, started_at, last_activity_at) VALUES ('s2', 'p', 'opencode', 'idle', 0, 0)",
+    ).run();
+    expect(
+      db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'sessions' AND sql IS NOT NULL ORDER BY name",
+        )
+        .all(),
+    ).toEqual([{ name: 'sessions_archive' }, { name: 'sessions_project_state' }]);
+    // The project FK cascades again.
+    db.prepare("DELETE FROM projects WHERE id = 'p'").run();
+    expect(db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({ n: 0 });
   });
 
   it('enforces state invariants with CHECK constraints', () => {

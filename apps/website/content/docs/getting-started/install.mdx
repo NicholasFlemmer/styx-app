@@ -10,7 +10,7 @@ Styx is a free download for macOS, with Windows and Linux in beta. Installing ta
 - **A Mac with Apple Silicon**, **a 64-bit PC with Windows 10 or 11**, or **a 64-bit Linux desktop**. There is no build for Intel Macs.
 - **A screen that fits a 1100 × 680 window.** That's the smallest the Styx window goes.
 - **git**, so each task gets its own branch. Styx works without it (agents then work in the project folder directly), and offers to install it for you when it's missing.
-- **At least one coding agent and a plan for it**: Claude (Pro or Max), ChatGPT (Plus, Pro or Team, for Codex), a Google account (for Gemini CLI) or a Cursor plan. If the agent isn't installed yet, Styx can install it and sign you in during setup.
+- **At least one coding agent and a plan for it**: Claude (Pro or Max), ChatGPT (Plus, Pro or Team, for Codex), a Google account (for Gemini CLI), a Cursor plan, or OpenCode with any provider it supports. If the agent isn't installed yet, Styx can install it and sign you in during setup.
 
 ## Download and install
 
@@ -67,7 +67,7 @@ Then setup runs through four steps. Each one says why it matters, and **Skip** f
 
 1. **Your editor.** Styx lists the editors it found (VS Code, Cursor, Windsurf, Zed, JetBrains IDEs, Neovim) and picks one as the place **Open in** goes. You can import its keybindings, theme and font, and its recent folders, and let Styx look where Claude Code and Codex have worked. Nothing in your editor changes.
 2. **Your projects.** The repos Styx found on this machine, with your editor's recent folders. Tick the ones you want. The row underneath adds more: **+ new project**, **add folder** or **clone URL**. If git isn't installed, this step says so and offers to install it.
-3. **Your AI.** One card per plan: Claude, ChatGPT (Codex), Gemini and Cursor. **Set up** installs the agent if it's missing, signs you in in your browser, and sends a test message so you know it answers. One is enough to start. See [Connect your agents](/docs/getting-started/connect-agents).
+3. **Your AI.** One card per plan: Claude, ChatGPT (Codex), Gemini and Cursor. **Set up** installs the agent if it's missing, signs you in in your browser, and sends a test message so you know it answers. One is enough to start. OpenCode has no card; set it up from **Settings › Agents**. See [Connect your agents](/docs/getting-started/connect-agents).
 4. **Where you deploy.** Optional. Connect Vercel, AWS, Google Cloud, Supabase, GitHub or an SSH host now, or wait until an agent first asks. Secrets go to your system keychain, never into a repo. See [Connect a target](/docs/access/connect-a-target).
 
 After setup, a short walkthrough points at each part of the window. You can replay it from the command palette (**Show the walkthrough**) or **Settings › General › Walkthrough**.

@@ -24,6 +24,7 @@ export const metadata: Metadata = {
     'OpenAI Codex',
     'Gemini CLI',
     'Cursor agent',
+    'OpenCode',
     'Mac app for developers',
     'git worktrees',
     'AI agent production access',
