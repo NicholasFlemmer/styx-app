@@ -5,11 +5,16 @@ name: sync-pr
 on:
   push:
     branches: [sync]
-permissions: { contents: write, pull-requests: write }
+  # GitHub doesn't close "Fixes #N" issues when its own Actions bot does the merge (auto-merge here), so a sweep
+  # closes the ones a merged sync pull request names.
+  schedule:
+    - cron: '15,45 * * * *'
+  workflow_dispatch:
+permissions: { contents: write, pull-requests: write, issues: write }
 concurrency: { group: sync-pr, cancel-in-progress: false }
 jobs:
   pr:
-    if: github.repository == 'NicholasFlemmer/styx-app'
+    if: github.repository == 'NicholasFlemmer/styx-app' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -38,3 +43,23 @@ jobs:
           fi
           retry gh pr merge "$pr" --auto --rebase
           echo "Pull request #$pr will merge once CI passes." >> "$GITHUB_STEP_SUMMARY"
+  close-fixed:
+    if: github.repository == 'NicholasFlemmer/styx-app' && github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Close issues that merged sync pull requests fix
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016 # $pr belongs to jq, not the shell
+          gh pr list -R "$REPO" --head sync --state merged --limit 20 \
+            --json number,closingIssuesReferences --jq '.[] | .number as $pr | .closingIssuesReferences[] | "\($pr) \(.number)"' |
+          while read -r pr issue; do
+            if [ "$(gh issue view "$issue" -R "$REPO" --json state --jq .state)" = OPEN ]; then
+              gh issue close "$issue" -R "$REPO" -r completed -c "Fixed in #$pr."
+              echo "Closed #$issue (fixed in #$pr)" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
