@@ -2,9 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { idFrom } from '../ids';
 import type { GrantId, PolicyId, TargetId } from '../ids';
 import type { Grant } from '../model/grant';
+import type { Scope } from '../model/common';
 import type { Policy, TargetMatch } from '../model/policy';
+import type { Target } from '../model/target';
 import { BUILTIN_POLICY_IDS, defaultPolicies, policyRuleText } from './defaults';
-import { DEFAULT_IDLE_MS, evaluate, evaluatePolicies, matchesTarget } from './engine';
+import {
+  DEFAULT_IDLE_MS,
+  DURATION_ORDER,
+  allowedDurations,
+  approvalNeedsMfa,
+  clampDuration,
+  evaluate,
+  evaluatePolicies,
+  matchesTarget,
+  maxGrantDuration,
+  onceOnly,
+} from './engine';
 import type { PolicyInput } from './engine';
 
 const NOW = 1_700_000_000_000;
@@ -21,6 +34,7 @@ const target = (over: Partial<PolicyInput['target']> = {}): PolicyInput['target'
 const input = (over: Partial<PolicyInput> = {}): PolicyInput => ({
   target: target(),
   scope: ['read'],
+  credentialScoped: true,
   session: { id: 's1', mayRequestTargets: true },
   appRules: defaultPolicies(),
   projectRules: [],
@@ -115,6 +129,7 @@ describe('evaluate order', () => {
       decidedBy: 'user',
       requireMfa: false,
       maxDuration: 'always',
+      onceOnly: false,
       idleMs: DEFAULT_IDLE_MS,
       policyId: null,
       grantId: null,
@@ -325,6 +340,139 @@ describe('evaluate order', () => {
 
   it('no session (styx CLI outside a session) evaluates normally', () => {
     expect(evaluate(input({ session: null })).decision).toBe('ask');
+  });
+});
+
+describe('once only: prod write on a credential not narrowed per grant (issue #29)', () => {
+  const ENVS = ['prod', 'staging', 'preview', 'scm'] as const;
+  const SCOPES: Scope[][] = [
+    ['read'],
+    ['write'],
+    ['deploy'],
+    ['delete'],
+    ['read', 'write'],
+    ['read', 'deploy'],
+  ];
+  const isWrite = (scope: readonly Scope[]) => scope.some((s) => s !== 'read');
+  const rows = ENVS.flatMap((env) =>
+    SCOPES.flatMap((scope) =>
+      [true, false].map((credentialScoped) => ({
+        env,
+        scope,
+        credentialScoped,
+        once: env === 'prod' && isWrite(scope) && !credentialScoped,
+      })),
+    ),
+  );
+
+  it.each(rows)(
+    '$env $scope scoped=$credentialScoped → once only $once',
+    ({ env, scope, credentialScoped, once }) => {
+      expect(onceOnly(env, scope, credentialScoped)).toBe(once);
+      const max = maxGrantDuration(env, scope, credentialScoped);
+      expect(max).toBe(once ? 'once' : 'always');
+      // Every duration a person can pick, clamped to what the request allows.
+      for (const want of DURATION_ORDER) expect(clampDuration(want, max)).toBe(once ? 'once' : want);
+      expect(allowedDurations(max)).toEqual(once ? ['once'] : [...DURATION_ORDER]);
+      // The default policies never auto-approve it, and the answer the sheet may give is capped.
+      const d = evaluate(input({ target: target({ env }), scope, credentialScoped }));
+      expect(d.onceOnly).toBe(once);
+      if (once) expect(d).toMatchObject({ decision: 'ask', requireMfa: true, maxDuration: 'once' });
+    },
+  );
+
+  it('MFA for approval: prod write, an ask-mfa target, or any prod scope on an unscoped credential', () => {
+    const cases: [Target['env'], Target['policy'], Scope[], boolean, boolean][] = [
+      ['prod', 'ask', ['write'], true, true],
+      ['prod', 'ask', ['read'], true, false],
+      ['prod', 'ask', ['read'], false, true],
+      ['staging', 'ask', ['write'], false, false],
+      ['staging', 'ask-mfa', ['read'], true, true],
+      ['preview', 'always', ['deploy'], false, false],
+    ];
+    for (const [env, policy, scope, credentialScoped, expected] of cases)
+      expect(approvalNeedsMfa({ env, policy }, scope, credentialScoped)).toBe(expected);
+  });
+
+  it('clampDuration keeps shorter picks and cuts longer ones; allowedDurations lists up to the cap', () => {
+    expect(clampDuration('once', '1h')).toBe('once');
+    expect(clampDuration('session', '1h')).toBe('1h');
+    expect(allowedDurations('session')).toEqual(['once', '1h', 'session']);
+  });
+
+  const unscopedProd = (over: Partial<PolicyInput> = {}) =>
+    input({ credentialScoped: false, scope: ['write'], ...over });
+
+  it('a target policy `always` does not make a production write standing: it asks, once, with MFA', () => {
+    expect(evaluate(unscopedProd({ target: target({ policy: 'always' }) }))).toMatchObject({
+      decision: 'ask',
+      decidedBy: 'user',
+      requireMfa: true,
+      maxDuration: 'once',
+      onceOnly: true,
+    });
+  });
+
+  it('an existing `always` grant covering the scope does not carry it', () => {
+    const g = alwaysGrant({ scope: ['read', 'write'] });
+    expect(evaluate(unscopedProd({ persistentGrants: [g] }))).toMatchObject({
+      decision: 'ask',
+      grantId: null,
+      maxDuration: 'once',
+    });
+    // Control: the same grant still covers on a target whose credential is narrowed.
+    expect(evaluate(input({ scope: ['write'], persistentGrants: [g] }))).toMatchObject({
+      decision: 'auto',
+      grantId: 'g-always',
+    });
+  });
+
+  it('auto-approve and ask rules both end in an ask capped at once', () => {
+    const auto = policy('auto', 1, {
+      kind: 'auto-approve',
+      match: {},
+      scopes: ['write'],
+      duration: 'session',
+    });
+    const ask = policy('ask', 1, { kind: 'ask', match: {}, scopes: ['write'], requireMfa: false });
+    expect(evaluate(unscopedProd({ appRules: [auto] }))).toMatchObject({
+      decision: 'ask',
+      requireMfa: true,
+      maxDuration: 'once',
+      policyId: 'auto',
+    });
+    expect(evaluate(unscopedProd({ appRules: [ask] }))).toMatchObject({
+      decision: 'ask',
+      requireMfa: true,
+      maxDuration: 'once',
+      policyId: 'ask',
+    });
+    expect(evaluate(unscopedProd({ appRules: [] }))).toMatchObject({ decision: 'ask', maxDuration: 'once' });
+  });
+
+  it('a production read on an unscoped credential is not capped but still needs MFA and is never auto-approved', () => {
+    const auto = policy('auto', 1, { kind: 'auto-approve', match: {}, scopes: ['read'], duration: '1h' });
+    expect(evaluate(unscopedProd({ scope: ['read'], appRules: [auto] }))).toMatchObject({
+      decision: 'ask',
+      requireMfa: true,
+      maxDuration: 'always',
+      onceOnly: false,
+    });
+    expect(evaluate(unscopedProd({ scope: ['read'], target: target({ policy: 'always' }) }))).toMatchObject({
+      decision: 'ask',
+      requireMfa: true,
+      onceOnly: false,
+    });
+    // An existing `always` read grant still covers a read.
+    expect(
+      evaluate(unscopedProd({ scope: ['read'], persistentGrants: [alwaysGrant({ scope: ['read'] })] })),
+    ).toMatchObject({ decision: 'auto', grantId: 'g-always' });
+  });
+
+  it('non-production writes on an unscoped credential keep the longer durations and auto policies', () => {
+    expect(
+      evaluate(unscopedProd({ target: target({ env: 'preview', policy: 'always' }), scope: ['deploy'] })),
+    ).toMatchObject({ decision: 'auto', maxDuration: 'always', onceOnly: false, requireMfa: false });
   });
 });
 

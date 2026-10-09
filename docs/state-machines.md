@@ -38,12 +38,15 @@ Invalid (→ `null`): `start` from any state but idle; `ask-resolved` from idle/
 ## Grant
 
 Events: `issue · deny · cancel · use · revoke · expire`. MFA predicate: `env = prod ∧ scope ∋ write|deploy|delete`;
-`issue` without `mfaVerified` is invalid when the predicate holds.
+`issue` without `mfaVerified` is invalid when the predicate holds. `issue` with `onceOnly` (the policy engine's cap
+for a production write, deploy or delete on a target whose credential is not narrowed per grant, issue #29) is
+invalid for any duration but `once`; its audit row records `onceOnly` and, when main clamped a longer pick, the
+`requestedDuration`.
 
 ```mermaid
 stateDiagram-v2
   [*] --> requested
-  requested --> active: issue — policy | target policy `always` | persistent grant | user (+MFA when prod ∧ write/deploy/delete)
+  requested --> active: issue — policy | target policy `always` | persistent grant | user (+MFA when prod ∧ write/deploy/delete; once only when the credential is not narrowed per grant)
   requested --> denied: deny (user; agent adapts, no Styx copy)
   requested --> revoked: cancel (session end | target removed)
   active --> active: use — audit `used` with the triggering command, idle timer re-armed

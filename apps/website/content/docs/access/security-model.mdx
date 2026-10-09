@@ -11,7 +11,7 @@ Styx is a guardrail, not a sandbox. Agents run as you, on your machine, with you
 
 **Agents only get access through grants.** A grant names one target, the scopes you allowed and how long it lasts. Credentials go to the granted command for the life of the grant, never into an agent's starting environment. Where the provider supports it (AWS, and GCP for reads), the command gets a new short-lived credential limited to the grant. For SSH, the agent gets a socket to an SSH agent Styx runs, never the key. [How access works](/docs/access/how-access-works) has the details for each provider.
 
-**Production needs you.** Writes, deploys and deletes on a `prod` target always need Touch ID, Windows Hello or your system password (polkit on Linux) before the grant is issued. The same goes for any grant on a `prod` target whose provider can't narrow the credential, reads included. Styx's main process decides this from its own records. No policy, project file, agent or anything in the app's interface can switch it off. If your machine can't verify you, Styx refuses the grant rather than skip the check.
+**Production needs you.** Writes, deploys and deletes on a `prod` target always need Touch ID, Windows Hello or your system password (polkit on Linux) before the grant is issued. The same goes for any grant on a `prod` target whose provider can't narrow the credential, reads included, and there a write, deploy or delete is granted for one command only, so every production change is its own verified decision. Styx's main process decides this from its own records and the provider's own answer. No policy, project file, agent or anything in the app's interface can switch it off. If your machine can't verify you, Styx refuses the grant rather than skip the check.
 
 **Everything is written down.** Every request, grant, denial, use, revoke and expiry is recorded with who did it, which session and worktree it came from, and the command that triggered it. The log is append-only and hash-chained, and secrets are scrubbed from it before anything is written. See [Audit log](/docs/access/audit-log).
 
@@ -31,7 +31,7 @@ Styx is a guardrail, not a sandbox. Agents run as you, on your machine, with you
 
 The connect dialog says the same about CLI logins: "Anything running as you can also use" the CLI, "so prefer scoped roles for prod".
 
-**Un-narrowed tokens are your whole token.** For Vercel, Supabase and GitHub, a granted command receives the token you stored, whatever scope you granted. A command could copy it during the grant, and revoking the grant stops Styx delivering it but doesn't cancel it at the provider. Use dedicated tokens with the least access that works, and rotate them if you suspect one was copied.
+**Un-narrowed tokens are your whole token.** For Vercel, Supabase and GitHub, a granted command receives the token you stored, whatever scope you granted. A command could copy it during the grant, and revoking the grant stops Styx delivering it but doesn't cancel it at the provider. Granting production changes one command at a time limits how often Styx hands the token out; it can't stop a command that already has it. Use dedicated tokens with the least access that works, and rotate them if you suspect one was copied.
 
 **Your SSH key stays where it is.** Styx keeps the key's path, not the key, and agents only get a socket. But the key file is still on your disk, readable by anything running as you.
 

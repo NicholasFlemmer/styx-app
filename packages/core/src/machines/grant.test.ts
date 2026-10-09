@@ -152,6 +152,47 @@ describe('issue', () => {
     });
   });
 
+  describe('onceOnly (issue #29: prod write on a credential not narrowed per grant)', () => {
+    const prodWrite = ctx({ env: 'prod', scope: ['write'] });
+    it.each(['1h', 'session', 'always'] as const)('refuses %s', (duration) => {
+      expect(transition('requested', { ...ISSUE, duration, onceOnly: true }, prodWrite)).toBeNull();
+    });
+    it('issues once and records the cap; a clamped pick is recorded as requestedDuration', () => {
+      const r = transition(
+        'requested',
+        { ...ISSUE, duration: 'once', onceOnly: true, requestedDuration: '1h' },
+        prodWrite,
+      );
+      expect(r?.patch).toMatchObject({ duration: 'once', expiresAt: NOW + HOUR_MS });
+      const audit = r?.effects.find((e) => e.type === 'appendAudit');
+      expect(audit?.type === 'appendAudit' && audit.entry).toMatchObject({
+        duration: 'once',
+        detail: { decidedBy: 'user', mfaVerified: true, onceOnly: true, requestedDuration: '1h' },
+      });
+    });
+    it('a person who already picked once has no requestedDuration in the detail', () => {
+      const r = transition(
+        'requested',
+        { ...ISSUE, duration: 'once', onceOnly: true, requestedDuration: 'once' },
+        prodWrite,
+      );
+      const audit = r?.effects.find((e) => e.type === 'appendAudit');
+      expect(audit?.type === 'appendAudit' && audit.entry.detail).toEqual({
+        decidedBy: 'user',
+        mfaVerified: true,
+        onceOnly: true,
+      });
+    });
+    it('the once grant is revoked by its first use', () => {
+      expect(
+        transition('active', EVENTS.use, ctx({ env: 'prod', scope: ['write'], duration: 'once' })),
+      ).toMatchObject({
+        state: 'revoked',
+        patch: { revokeReason: 'once-used' },
+      });
+    });
+  });
+
   it('prod read needs no MFA', () => {
     expect(
       transition('requested', { ...ISSUE, mfaVerified: false }, ctx({ env: 'prod', scope: ['read'] }))?.state,

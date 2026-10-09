@@ -1,5 +1,7 @@
 import {
   AGENT_LABEL,
+  approvalNeedsMfa,
+  clampDuration,
   copy,
   evaluate,
   fill,
@@ -9,8 +11,8 @@ import {
   isLive,
   newId,
   openUntil,
+  onceOnly,
   platformCopy,
-  requiresMfa,
   shouldExpire,
   covers,
   type AskId,
@@ -85,6 +87,8 @@ export type DecisionListener = (grant: Grant, outcome: GrantListenerOutcome) => 
 
 const HOUR = 3_600_000;
 const SCOPE_SEP = '+';
+/** Audit `triggeredBy` when a standing grant is ended because its target's production writes are once only. */
+const ONCE_ONLY_REVOKE = 'production writes on this target are approved one command at a time';
 
 /**
  * Grant lifecycle (plan §5): request → policy → auto-issue or ask; approve (MFA recomputed here from DB rows),
@@ -107,7 +111,11 @@ export class GrantService {
     return () => this.listeners.delete(fn);
   }
 
-  /** Arms timers for grants that were active at last shutdown and starts the sweep. */
+  /**
+   * Arms timers for grants that were active at last shutdown and starts the sweep. A standing grant that issue #29
+   * would no longer issue is not ended here but at its first use (`credentialFor` refuses and revokes it, `covering`
+   * and `decide` skip it), so it can never hand out the token.
+   */
   start(): void {
     for (const g of this.deps.repos.grants.active()) this.armTimers(g);
     this.sweep = setInterval(() => this.sweepExpired(), this.deps.sweepMs ?? 60_000);
@@ -167,6 +175,12 @@ export class GrantService {
       if (grant.sessionId === null && grant.duration !== 'always')
         fail('forbidden', 'grant belongs to the app, not to a session');
       if (target.projectId !== caller.projectId) fail('forbidden', 'grant belongs to another project');
+    }
+    // Issue #29: a standing grant may not hand out a whole prod token that can write. It is ended, audited, and the
+    // caller refused (whatever scope the caller meant to use it for: the token is the same).
+    if (grant.state === 'active' && this.outlivedOnceOnly(grant, target)) {
+      this.apply(grant, { type: 'revoke', reason: 'policy', triggeredBy: ONCE_ONLY_REVOKE });
+      fail('forbidden', 'a production write on this target is approved one command at a time; ask again');
     }
     const cached = this.issued.get(grantId);
     if (cached && this.fresh(cached)) return cached;
@@ -258,10 +272,13 @@ export class GrantService {
     const d = evaluate({
       target,
       scope,
+      credentialScoped: this.credentialScoped(target, scope),
       session: session ? { id: session.id, mayRequestTargets: session.toggles.mayRequestTargets } : null,
       appRules: repos.policies.all(),
       projectRules: this.deps.projectRules?.(target.projectId) ?? [],
-      persistentGrants: repos.grants.byTarget(target.id).filter((g) => g.state === 'active'),
+      persistentGrants: repos.grants
+        .byTarget(target.id)
+        .filter((g) => g.state === 'active' && !this.outlivedOnceOnly(g, target)),
       now: clock.now(),
     });
     // `.styx/project.json` rules are not `policies` rows (grants.policy_id is an FK): cite them in the audit detail instead.
@@ -271,17 +288,34 @@ export class GrantService {
   }
 
   /**
+   * Whether the adapter hands out a credential narrower than the stored one for `scope`, read from the adapter and
+   * the target row, never from the renderer. No `issuesScoped` = unscoped (fail closed).
+   */
+  private credentialScoped(target: Target, scope: readonly Scope[]): boolean {
+    const adapter = this.deps.providers.get(target.provider);
+    return (
+      adapter.issuesScoped?.(scope, { credentialRef: target.credentialRef, config: target.config }) ?? false
+    );
+  }
+
+  /**
    * Unscoped providers (GitHub, Vercel, Supabase, SSH, GCP non-read) hand the agent the whole stored credential
    * whatever the shim heuristics classified, so on prod the user verifies even for "read" (M2). No hint = unscoped.
    */
   private unscopedProd(target: Target, scope: readonly Scope[]): boolean {
-    const adapter = this.deps.providers.get(target.provider);
-    return (
-      target.env === 'prod' &&
-      !(
-        adapter.issuesScoped?.(scope, { credentialRef: target.credentialRef, config: target.config }) ?? false
-      )
-    );
+    return target.env === 'prod' && !this.credentialScoped(target, scope);
+  }
+
+  /**
+   * A grant longer than `once` whose own scope is once-only on its target as it is now (issue #29): issued before the
+   * cap, or the target became prod or lost its narrowing since. It must not carry anything, reads included, because
+   * the credential it hands out is the whole token either way.
+   */
+  private outlivedOnceOnly(grant: Grant, target?: Target | null): boolean {
+    if (grant.duration === 'once') return false;
+    const t = target ?? this.deps.repos.targets.get(grant.targetId);
+    if (!t) return true; // fail closed: no target row, nothing to vouch for the grant
+    return onceOnly(t.env, grant.scope, this.credentialScoped(t, grant.scope));
   }
 
   /**
@@ -292,6 +326,8 @@ export class GrantService {
    */
   covering(target: Target, sessionId: string | null, scope: readonly Scope[]): Grant | null {
     const now = this.deps.clock.now();
+    // A production write on an unscoped credential is one command per approval (issue #29): a longer grant issued
+    // before that rule (or by any other path) carries nothing, not even a read; only an unused `once` grant does.
     return (
       this.deps.repos.grants
         .byTarget(target.id)
@@ -299,6 +335,7 @@ export class GrantService {
           (g) =>
             isLive(g, now) &&
             covers(g, scope) &&
+            !this.outlivedOnceOnly(g, target) &&
             (g.sessionId === sessionId || (g.sessionId === null && g.duration === 'always')),
         ) ?? null
     );
@@ -322,19 +359,25 @@ export class GrantService {
       if (existing) return { kind: 'active', grant: existing, decidedBy: 'persistent-grant' };
     }
     // Policies and `always` target policies never hand out a prod token the agent gets whole without the user
-    // verifying: prod ∧ unscoped adapter downgrades auto → ask, and approve() then forces MFA (M2).
+    // verifying: prod ∧ unscoped adapter downgrades auto → ask, and approve() then forces MFA (M2). The engine
+    // already decides this from `credentialScoped`; kept here as a second lock.
     if (decision.decision === 'auto' && this.unscopedProd(target, req.scope))
       decision = { ...decision, decision: 'ask', requireMfa: true };
 
     // A duplicate ask (same session, target, scope set) while the first is still open returns the pending grant
     // instead of stacking a second row and a second sheet (L1: prompt-injection spam cannot flood the queue).
+    // A once-only request (issue #29) only collapses onto one for the same command: otherwise a second command
+    // could ride on the approval of the first, and the audit would name the wrong one.
     if (decision.decision === 'ask' && session) {
       const wanted = [...req.scope].sort().join('+');
       const dup = repos.grants
         .bySession(session.id)
         .find(
           (g) =>
-            g.state === 'requested' && g.targetId === target.id && [...g.scope].sort().join('+') === wanted,
+            g.state === 'requested' &&
+            g.targetId === target.id &&
+            [...g.scope].sort().join('+') === wanted &&
+            (!decision.onceOnly || g.reason === req.reason),
         );
       const ask = dup ? repos.pendingAsks.byGrant(dup.id) : null;
       if (dup && ask && ask.state === 'open') return { kind: 'pending', grant: dup, ask };
@@ -346,7 +389,8 @@ export class GrantService {
       targetId: target.id,
       worktreeId: req.worktreeId ?? session?.worktreeId ?? null,
       scope: [...req.scope],
-      duration: decision.decision === 'auto' ? decision.maxDuration : '1h',
+      // An ask carries the duration the sheet starts on: `once` when that is all the person may approve.
+      duration: decision.decision === 'auto' ? decision.maxDuration : decision.onceOnly ? 'once' : '1h',
       reason: req.reason,
       state: 'requested',
       requestedAt: now,
@@ -412,7 +456,13 @@ export class GrantService {
       sessionId: session.id,
       kind: 'grant',
       grantId: grant.id,
-      payload: { kind: 'grant', grantId: grant.id },
+      // The renderer cannot ask the adapter, so the fact the sheet needs to offer only what main will accept rides
+      // on the ask (main re-derives it on approve and never reads it back).
+      payload: {
+        kind: 'grant',
+        grantId: grant.id,
+        credentialScoped: this.credentialScoped(target, grant.scope),
+      },
       state: 'open',
       resolution: null,
       position: repos.pendingAsks.nextPosition(session.id),
@@ -447,7 +497,11 @@ export class GrantService {
 
   // --- user decisions ------------------------------------------------------
 
-  /** `requireMfa` is recomputed from DB rows here; the renderer's opinion is never consulted (rules/security.md). */
+  /**
+   * `requireMfa` and the duration cap are recomputed from DB rows and the adapter here; the renderer's opinion is
+   * never consulted (rules/security.md). A production write on an unscoped credential is clamped to `once` whatever
+   * `duration` asks for (issue #29), and the audit row records what was asked.
+   */
   async approve(
     grantId: string,
     duration: Duration,
@@ -463,11 +517,10 @@ export class GrantService {
     if (scope && scope.length > 0 && !scope.every((s) => grant.scope.includes(s)))
       fail('invalid-input', 'scope must be a subset of the requested scope');
     const decision = this.decide(target, session, scopes);
-    const needMfa =
-      requiresMfa(target.env, scopes) ||
-      target.policy === 'ask-mfa' ||
-      decision.requireMfa ||
-      this.unscopedProd(target, scopes);
+    const scoped = this.credentialScoped(target, scopes);
+    const needMfa = approvalNeedsMfa(target, scopes, scoped) || decision.requireMfa;
+    const once = onceOnly(target.env, scopes, scoped);
+    const granted = once ? clampDuration(duration, 'once') : duration;
     let mfaVerified = false;
     if (needMfa) {
       const reason = `Grant ${session ? AGENT_LABEL[session.agent] : 'access'} ${scopes.join('+')} on ${target.name} ${target.env}`;
@@ -486,11 +539,12 @@ export class GrantService {
     }
     return this.issue(this.require(grant.id), {
       decidedBy: 'user',
-      duration,
+      duration: granted,
       mfaVerified,
       policyId: decision.policyId,
       idleMs: decision.idleMs,
       triggeredBy,
+      ...(once ? { requestedDuration: duration } : {}),
     });
   }
 
@@ -622,11 +676,13 @@ export class GrantService {
       policyId: Grant['policyId'];
       idleMs: number | null;
       triggeredBy: string;
+      requestedDuration?: Duration;
     },
   ): Promise<Grant> {
     const { repos } = this.deps;
     const target = repos.targets.get(grant.targetId) ?? fail('not-found', 'target not found');
     const ctx = this.context(grant);
+    const capped = onceOnly(target.env, grant.scope, this.credentialScoped(target, grant.scope));
     const event: GrantEvent = {
       type: 'issue',
       decidedBy: opts.decidedBy,
@@ -635,9 +691,18 @@ export class GrantService {
       policyId: opts.policyId,
       idleMs: opts.idleMs,
       triggeredBy: opts.triggeredBy,
+      // Recomputed here for every caller (approve, policy auto-issue, app requests), not taken from opts.
+      ...(capped ? { onceOnly: true as const } : {}),
+      ...(opts.requestedDuration ? { requestedDuration: opts.requestedDuration } : {}),
     };
     const t = grantTransition(grant.state, event, ctx);
-    if (t === null) fail('mfa-required', 'prod write requires verification');
+    if (t === null)
+      fail(
+        capped && opts.duration !== 'once' ? 'invalid-input' : 'mfa-required',
+        capped && opts.duration !== 'once'
+          ? 'a production write on this target is approved one command at a time'
+          : 'prod write requires verification',
+      );
     this.idleMs.set(grant.id, opts.idleMs);
     // Credentials are issued before the row flips to active so a provider failure leaves the request open.
     const expiresAt = t.patch.expiresAt ?? null;
@@ -663,16 +728,21 @@ export class GrantService {
     if (next.sessionId ?? grant.sessionId) {
       const until = openUntil(next);
       const body =
-        until === null
-          ? fill(copy.grantResult.linePersistent, {
+        next.duration === 'once'
+          ? fill(copy.grantResult.lineOnce, {
               target: ctx.target.label,
               scopes: next.scope.join(SCOPE_SEP),
             })
-          : fill(copy.grantResult.line, {
-              target: ctx.target.label,
-              scopes: next.scope.join(SCOPE_SEP),
-              t: formatCountdown(until - ctx.now),
-            });
+          : until === null
+            ? fill(copy.grantResult.linePersistent, {
+                target: ctx.target.label,
+                scopes: next.scope.join(SCOPE_SEP),
+              })
+            : fill(copy.grantResult.line, {
+                target: ctx.target.label,
+                scopes: next.scope.join(SCOPE_SEP),
+                t: formatCountdown(until - ctx.now),
+              });
       this.deps.transcript.system((next.sessionId ?? grant.sessionId) as SessionId, body);
       this.deps.sessions.setNote((next.sessionId ?? grant.sessionId) as SessionId, null);
     }

@@ -338,7 +338,16 @@ export const askStateSchema = z.enum(['open', 'resolved', 'cancelled']);
 export type AskState = z.infer<typeof askStateSchema>;
 
 export const askPayloadSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('grant'), grantId: grantIdSchema }),
+  z.object({
+    kind: z.literal('grant'),
+    grantId: grantIdSchema,
+    /**
+     * Whether the target's adapter narrows the credential for the requested scopes, so the grant sheet can offer
+     * only the durations main will accept (issue #29). Display only: main re-derives it from the adapter on approve.
+     * Absent (older rows) reads as unscoped, the safe side.
+     */
+    credentialScoped: z.boolean().optional(),
+  }),
   z.object({ kind: z.literal('plan'), summary: z.string(), files: z.array(z.string()) }),
   z.object({ kind: z.literal('decision'), prompt: z.string(), options: z.array(z.string().min(1)).min(1) }),
   z.object({ kind: z.literal('question'), prompt: z.string() }),

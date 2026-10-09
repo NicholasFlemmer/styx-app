@@ -34,15 +34,18 @@ const modelOf = (snap: ReadModelSnapshot): ReadModel => ({
   settings: { app: snap.settings.app, project: {} },
 });
 
-/** The idle Gemini session on acme-shop asks for Supabase prod (ask + MFA: prod ∧ write). */
-async function requestSupabase(t: TestApp) {
+/**
+ * The idle Gemini session on acme-shop asks for Supabase prod (ask + MFA: prod ∧ write). Supabase's token is not
+ * narrowed per grant, so a write here is approved once only (issue #29).
+ */
+async function requestSupabase(t: TestApp, scope: ('read' | 'write')[] = ['read', 'write']) {
   const target = t.app.repos.targets.get(ids.target.supabaseProd);
   if (!target?.credentialRef) throw new Error('fixture target');
   await t.vault.set(target.credentialRef, JSON.stringify({ token: 'sbp_test' }));
   return t.app.grants.request({
     sessionId: ids.session.gemini,
     targetId: ids.target.supabaseProd,
-    scope: ['read', 'write'],
+    scope,
     reason: 'migration 0042',
     triggeredBy: 'mcp:request_access',
   });
@@ -84,7 +87,7 @@ describe('GrantService', () => {
 
   it('approve with FakeMfa → active, audit granted (mfaVerified), system message, ask resolved, session working, target open', async () => {
     const t = makeTestApp();
-    const out = await requestSupabase(t);
+    const out = await requestSupabase(t, ['read']);
     if (out.kind !== 'pending') throw new Error('expected pending');
     const decisions: string[] = [];
     t.app.grants.onDecision((g, o) => decisions.push(`${g.id}:${o}`));
@@ -113,7 +116,7 @@ describe('GrantService', () => {
     expect(t.app.audit.verifyChain()).toMatchObject({ ok: true }); // seeded rows are re-chained; new rows chain from them
     expect(t.app.repos.transcripts.last(ids.session.gemini).at(-1)).toMatchObject({
       payload: { kind: 'system' },
-      body: 'grant: supabase-prod · read+write · expires in 1h',
+      body: 'grant: supabase-prod · read · expires in 1h',
     });
     expect(t.app.repos.pendingAsks.get(out.ask.id)).toMatchObject({
       state: 'resolved',
@@ -209,7 +212,7 @@ describe('GrantService', () => {
 
   it('revoke → revoked, credential dropped, audit revoked by you, target locked', async () => {
     const t = makeTestApp();
-    const out = await requestSupabase(t);
+    const out = await requestSupabase(t, ['read']);
     if (out.kind !== 'pending') throw new Error('expected pending');
     const g = await t.app.grants.approve(out.grant.id, 'session');
     expect(g.expiresAt).toBeNull();
@@ -617,5 +620,237 @@ describe('GrantService app-minted transient grants (publish / deploy)', () => {
     await expect(
       svc.credentialFor(transient.id, { sessionId: ids.session.gemini, projectId: ids.project.acmeShop }),
     ).rejects.toMatchObject({ code: 'forbidden' });
+  });
+
+  describe('once only: production writes on a target whose token is not narrowed per grant (issue #29)', () => {
+    const grantedRow = (t: TestApp, grantId: string) =>
+      t.app.repos.audit.all().find((e) => e.grantId === grantId && e.action === 'granted');
+
+    it('the ask starts on once and says the credential is unscoped; a 1h pick is clamped to once and audited', async () => {
+      const t = makeTestApp();
+      const out = await requestSupabase(t);
+      if (out.kind !== 'pending') throw new Error('expected pending');
+      expect(out.grant.duration).toBe('once');
+      expect(t.app.repos.pendingAsks.get(out.ask.id)?.payload).toEqual({
+        kind: 'grant',
+        grantId: out.grant.id,
+        credentialScoped: false,
+      });
+      const g = await t.app.grants.approve(out.grant.id, '1h');
+      expect(g).toMatchObject({
+        state: 'active',
+        duration: 'once',
+        mfaVerified: true,
+        sessionId: ids.session.gemini,
+      });
+      expect(grantedRow(t, g.id)).toMatchObject({
+        duration: 'once',
+        detail: { decidedBy: 'user', mfaVerified: true, onceOnly: true, requestedDuration: '1h' },
+      });
+      expect(t.app.audit.verifyChain()).toMatchObject({ ok: true });
+      expect(t.app.repos.transcripts.last(ids.session.gemini).at(-1)).toMatchObject({
+        payload: { kind: 'system' },
+        body: 'grant: supabase-prod · read+write · one command',
+      });
+      // The first use ends it.
+      t.app.grants.use(g.id, {
+        command: '$ supabase db push',
+        scopeUsed: 'write',
+        via: 'shim',
+        sessionId: ids.session.gemini,
+      });
+      expect(t.app.repos.grants.get(g.id)).toMatchObject({ state: 'revoked', revokeReason: 'once-used' });
+      expect(t.app.grants.issuedCredential(g.id)).toBeNull();
+    });
+
+    it.each(['session', 'always'] as const)(
+      'a %s pick is clamped to once too (no detached standing grant)',
+      async (duration) => {
+        const t = makeTestApp();
+        const out = await requestSupabase(t);
+        const g = await t.app.grants.approve(out.grant.id, duration);
+        expect(g).toMatchObject({
+          duration: 'once',
+          sessionId: ids.session.gemini,
+          expiresAt: t.clock.now() + HOUR,
+        });
+        expect(grantedRow(t, g.id)?.detail).toMatchObject({ onceOnly: true, requestedDuration: duration });
+      },
+    );
+
+    it('a once pick is recorded without a requestedDuration; ask.respond (inbox Grant) approves once', async () => {
+      const t = makeTestApp();
+      const out = await requestSupabase(t);
+      if (out.kind !== 'pending') throw new Error('expected pending');
+      const r = await t.app.bus.dispatch(t.sender, 'ask.respond', {
+        askId: out.ask.id,
+        resolution: { kind: 'grant', outcome: 'granted' },
+      });
+      expect(r).toEqual({ ok: true, value: {} });
+      const g = t.app.repos.grants.get(out.grant.id);
+      expect(g?.duration).toBe('once');
+      expect(grantedRow(t, out.grant.id)?.detail).toEqual({
+        decidedBy: 'user',
+        mfaVerified: true,
+        onceOnly: true,
+      });
+    });
+
+    it('the IPC command clamps whatever the renderer sends', async () => {
+      const t = makeTestApp();
+      const out = await requestSupabase(t);
+      const r = await t.app.bus.dispatch(t.sender, 'grant.approve', {
+        grantId: out.grant.id,
+        duration: 'always',
+        scope: ['read', 'write'],
+      });
+      expect(r.ok).toBe(true);
+      expect(t.app.repos.grants.get(out.grant.id)).toMatchObject({
+        duration: 'once',
+        sessionId: ids.session.gemini,
+      });
+    });
+
+    it('a target policy `always` does not auto-approve it: it asks, once, with MFA', async () => {
+      const t = makeTestApp({ mfa: 'failed' });
+      const target = t.app.repos.targets.get(ids.target.supabaseProd);
+      if (!target) throw new Error('fixture target');
+      t.app.repos.targets.upsert({ ...target, policy: 'always' });
+      const out = await requestSupabase(t, ['write']);
+      expect(out.kind).toBe('pending');
+      expect(out.grant.duration).toBe('once');
+      await expect(t.app.grants.approve(out.grant.id, 'once')).rejects.toMatchObject({ code: 'mfa-failed' });
+    });
+
+    it('narrowing the scope to a read lifts the cap (reads keep the longer durations)', async () => {
+      const t = makeTestApp();
+      const out = await requestSupabase(t);
+      const g = await t.app.grants.approve(out.grant.id, '1h', ['read']);
+      expect(g).toMatchObject({ duration: '1h', scope: ['read'], mfaVerified: true });
+      expect(grantedRow(t, g.id)?.detail).toEqual({ decidedBy: 'user', mfaVerified: true });
+    });
+
+    it('a non-production write on the same provider keeps the longer durations', async () => {
+      const t = makeTestApp();
+      const side = t.app.repos.targets.get(ids.target.sideSupabase);
+      if (!side?.credentialRef) throw new Error('fixture target');
+      t.app.repos.targets.upsert({ ...side, projectId: ids.project.acmeShop });
+      await t.vault.set(side.credentialRef, JSON.stringify({ token: 'sbp_side' }));
+      const out = await t.app.grants.request({
+        sessionId: ids.session.gemini,
+        targetId: side.id,
+        scope: ['write'],
+        reason: 'seed staging',
+        triggeredBy: 'mcp:request_access',
+      });
+      if (out.kind !== 'pending') throw new Error('expected pending');
+      expect(out.grant.duration).toBe('1h');
+      const g = await t.app.grants.approve(out.grant.id, 'session');
+      expect(g.duration).toBe('session');
+    });
+
+    it('when the adapter narrows the credential, a production write keeps the duration the person picked', async () => {
+      const t = makeTestApp();
+      Object.assign(t.app.providers.get('supabase'), { issuesScoped: () => true });
+      const out = await requestSupabase(t);
+      if (out.kind !== 'pending') throw new Error('expected pending');
+      expect(out.grant.duration).toBe('1h');
+      expect(t.app.repos.pendingAsks.get(out.ask.id)?.payload).toMatchObject({ credentialScoped: true });
+      const g = await t.app.grants.approve(out.grant.id, 'session');
+      expect(g).toMatchObject({ duration: 'session', mfaVerified: true });
+      expect(grantedRow(t, g.id)?.detail).toEqual({ decidedBy: 'user', mfaVerified: true });
+    });
+
+    /** A live grant on Supabase prod for read+write, as one issued before the cap could look. */
+    const legacyGrant = (t: TestApp, duration: 'once' | '1h' | 'session' | 'always') => {
+      const now = t.clock.now();
+      const g = {
+        ...fixtures.demoGrants()[0]!,
+        id: fixtures.ids.grant.supabaseCodex,
+        sessionId: duration === 'always' ? null : ids.session.gemini,
+        targetId: ids.target.supabaseProd,
+        scope: ['read' as const, 'write' as const],
+        duration,
+        state: 'active' as const,
+        issuedAt: now,
+        expiresAt: duration === '1h' || duration === 'once' ? now + HOUR : null,
+        idleExpiresAt: null,
+      };
+      t.app.repos.grants.upsert(g);
+      return g;
+    };
+    const policyRevoke = (t: TestApp, grantId: string) =>
+      t.app.repos.audit.all().find((e) => e.grantId === grantId && e.action === 'revoked');
+
+    it('a longer grant already on file (from before the cap) carries nothing, reads included; an unused once grant does', async () => {
+      const t = makeTestApp();
+      const target = t.app.repos.targets.get(ids.target.supabaseProd);
+      if (!target) throw new Error('fixture target');
+      for (const duration of ['1h', 'session', 'always'] as const) {
+        legacyGrant(t, duration);
+        expect(t.app.grants.covering(target, ids.session.gemini, ['write'])).toBeNull();
+        // Its token is the whole token either way, so it does not carry a read either.
+        expect(t.app.grants.covering(target, ids.session.gemini, ['read'])).toBeNull();
+      }
+      const once = legacyGrant(t, 'once');
+      expect(t.app.grants.covering(target, ids.session.gemini, ['write'])?.id).toBe(once.id);
+      // ...and a fresh request, a read included, is not short-circuited by a legacy `always` grant.
+      legacyGrant(t, 'always');
+      expect((await requestSupabase(t, ['write'])).kind).toBe('pending');
+      expect((await requestSupabase(t, ['read'])).kind).toBe('pending');
+    });
+
+    it('fetching the credential of such a grant ends it (audited as a policy revoke) and refuses', async () => {
+      const t = makeTestApp();
+      const target = t.app.repos.targets.get(ids.target.supabaseProd);
+      if (!target?.credentialRef) throw new Error('fixture target');
+      await t.vault.set(target.credentialRef, JSON.stringify({ token: 'sbp_test' }));
+      const g = legacyGrant(t, 'always');
+      await expect(
+        t.app.grants.credentialFor(g.id, { sessionId: ids.session.gemini, projectId: ids.project.acmeShop }),
+      ).rejects.toMatchObject({ code: 'forbidden' });
+      expect(t.app.repos.grants.get(g.id)).toMatchObject({ state: 'revoked', revokeReason: 'policy' });
+      expect(policyRevoke(t, g.id)).toMatchObject({
+        actorKind: 'system',
+        triggeredBy: 'production writes on this target are approved one command at a time',
+        detail: { reason: 'policy' },
+      });
+      expect(t.app.audit.verifyChain()).toMatchObject({ ok: true });
+      // A read-only standing grant on the same target is untouched (reads keep the longer durations).
+      const read = {
+        ...legacyGrant(t, 'always'),
+        id: fixtures.ids.grant.awsClaude,
+        scope: ['read' as const],
+      };
+      t.app.repos.grants.upsert(read);
+      await expect(t.app.grants.credentialFor(read.id)).resolves.toMatchObject({ kind: 'env' });
+    });
+
+    it('two different production commands each get their own request; the same command collapses onto one', async () => {
+      const t = makeTestApp();
+      const ask = (reason: string) =>
+        t.app.grants.request({
+          sessionId: ids.session.gemini,
+          targetId: ids.target.supabaseProd,
+          scope: ['write'],
+          reason,
+          triggeredBy: reason,
+        });
+      const a = await ask('$ supabase db push');
+      const b = await ask('$ supabase db reset');
+      const a2 = await ask('$ supabase db push');
+      expect(b.grant.id).not.toBe(a.grant.id);
+      expect(a2.grant.id).toBe(a.grant.id);
+      // Not once-only (a read): different reasons still collapse, as before.
+      const r1 = await requestSupabase(t, ['read']);
+      const r2 = await t.app.grants.request({
+        sessionId: ids.session.gemini,
+        targetId: ids.target.supabaseProd,
+        scope: ['read'],
+        reason: 'something else',
+        triggeredBy: 'mcp:request_access',
+      });
+      expect(r2.grant.id).toBe(r1.grant.id);
+    });
   });
 });

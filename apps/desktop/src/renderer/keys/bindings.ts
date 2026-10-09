@@ -1,8 +1,8 @@
 import {
+  clampDuration,
   copy,
-  fill,
   headAskOf,
-  joinScopes,
+  maxGrantDuration,
   navLanes,
   type Grant,
   type ReadModel,
@@ -16,6 +16,7 @@ import { command } from '../state/commands';
 import { useReadModel } from '../state/read-model';
 import { selectSessionId, useUiStore } from '../state/ui-store';
 import { nextPermissionMode, sessionControls } from '../features/chat/session-controls';
+import { credentialScopedOf, grantAnnouncement } from '../features/grant-sheet/grant-sheet';
 import type { KeyBinding } from './registry';
 
 const model = (): ReadModel => useReadModel.getState().model;
@@ -41,23 +42,27 @@ const focusAgent = (n: number): boolean => {
 };
 
 /**
- * Approves `grant` as requested (its own scope, 1h) and announces the result (spec §9). Shared by the chat /
- * workspace Mod+⏎ chord and the Agents board cards.
+ * Approves `grant` as requested (its own scope, 1h, or once when that is all the request allows: issue #29) and
+ * announces the result (spec §9). Shared by the chat / workspace Mod+⏎ chord and the Agents board cards.
  */
 export const approveGrantAsRequested = (grant: Grant): void => {
   const m = model();
   const target = m.targets.byId[grant.targetId];
   const session = grant.sessionId === null ? undefined : m.sessions.byId[grant.sessionId];
-  const duration = '1h';
+  const ask = Object.values(m.pendingAsks.byId).find((a) => a.grantId === grant.id);
+  const duration =
+    target === undefined
+      ? '1h'
+      : clampDuration('1h', maxGrantDuration(target.env, grant.scope, credentialScopedOf(ask?.payload)));
   void command('grant.approve', { grantId: grant.id, duration, scope: [...grant.scope] }).then((r) => {
     if (!r.ok || target === undefined) return;
     announce(
-      fill(copy.grantResult.announce, {
-        agent: session === undefined ? copy.general.none : copy.agents[session.agent],
-        scopes: joinScopes(grant.scope, ', '),
-        target: `${target.name} ${target.env}`,
-        duration: '1 hour',
-      }),
+      grantAnnouncement(
+        session === undefined ? copy.general.none : copy.agents[session.agent],
+        grant.scope,
+        `${target.name} ${target.env}`,
+        duration,
+      ),
     );
   });
 };

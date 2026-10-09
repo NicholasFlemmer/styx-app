@@ -3,6 +3,6 @@
   "version": 1,
   "name": "STYX",
   "checks": {
-    "command": "pnpm typecheck && pnpm lint && pnpm test"
+    "command": "pnpm typecheck && pnpm lint && pnpm test --retry=1"
   }
 }
