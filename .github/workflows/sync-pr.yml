@@ -19,17 +19,26 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with: { ref: sync, fetch-depth: 2 }
+        with: { ref: sync, fetch-depth: 0 }
       - name: Open or update the pull request, then auto-merge it
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          title=$(git log -1 --format=%s | cut -c1-200)
+          git fetch -q origin main
+          range=origin/main..HEAD
+          count=$(git rev-list --count "$range")
+          if [ "$count" -le 1 ]; then
+            title=$(git log -1 --format=%s | cut -c1-200)
+          else
+            # Several changes in one pull request: say so, and list each one below.
+            title="$(git log --reverse --format=%s "$range" | head -1 | cut -c1-150) (+$((count - 1)) more)"
+          fi
           {
-            git log -1 --format=%b
-            # Titles name their issues as "(#29)"; GitHub only closes an issue on merge for a keyword, so list them.
-            git log -1 --format=%B | grep -oE '\(#[0-9]+(, #[0-9]+)*\)' | grep -oE '#[0-9]+' | sort -u | sed 's/^/Fixes /'
+            if [ "$count" -le 1 ]; then git log -1 --format=%b; else git log --reverse --format='- %s' "$range"; fi
+            # Titles name their issues as "(#29)"; GitHub only closes an issue on merge for a keyword, so list them
+            # for every commit in the pull request.
+            git log --format=%B "$range" | grep -oE '\(#[0-9]+(, #[0-9]+)*\)' | grep -oE '#[0-9]+' | sort -u | sed 's/^/Fixes /' || true
             echo
             echo "---"
             echo "Synced from the maintainers' working repo. It merges itself once CI passes on Mac, Windows and Linux."
