@@ -222,7 +222,7 @@ describe('Agents board', () => {
     });
   });
 
-  it('Mod+⏎ / Mod+⌫ on a focused needs-you card approve (as requested, 1h) / deny (spec §6 "board card")', () => {
+  it('Mod+⏎ / Mod+⌫ on a focused needs-you card approve (as requested; once for a Supabase prod write, issue #29) / deny (spec §6 "board card")', () => {
     const off = keys.install(window);
     try {
       render(<Agents />);
@@ -247,7 +247,7 @@ describe('Agents board', () => {
       const grant = grantId == null ? undefined : model.grants.byId[grantId];
       expect(commandMock).toHaveBeenCalledWith('grant.approve', {
         grantId,
-        duration: '1h',
+        duration: 'once',
         scope: [...(grant?.scope ?? [])],
       });
       press(grantCard, 'Backspace');

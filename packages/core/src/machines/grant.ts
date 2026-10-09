@@ -20,6 +20,13 @@ export type GrantEvent =
       /** Idle expiry from the policy engine; null = no idle expiry. */
       idleMs: number | null;
       triggeredBy: string;
+      /**
+       * Set when the policy engine capped this request at `once` (prod write on a credential that is not narrowed
+       * per grant, issue #29): any other duration is refused, and the audit row records the cap.
+       */
+      onceOnly?: true;
+      /** What the person picked when main clamped it down to `once`; recorded in the audit detail. */
+      requestedDuration?: Duration;
     }
   | { type: 'deny'; triggeredBy: string }
   | { type: 'cancel'; reason: Extract<RevokeReason, 'session-end' | 'target-removed'> }
@@ -155,6 +162,7 @@ const agentActor = (ctx: GrantContext): { kind: AuditDraft['actorKind']; label: 
 
 const issue: Cell<Extract<GrantEvent, { type: 'issue' }>> = (event, ctx) => {
   if (requiresMfa(ctx.target.env, ctx.grant.scope) && !event.mfaVerified) return null;
+  if (event.onceOnly === true && event.duration !== 'once') return null;
   const expiresAt = expiresAtFor(event.duration, ctx.now);
   const idleExpiresAt = idleExpiresAtFor(event.duration, event.idleMs, ctx.now);
   const actor = event.decidedBy === 'user' ? youActor : systemActor;
@@ -168,7 +176,14 @@ const issue: Cell<Extract<GrantEvent, { type: 'issue' }>> = (event, ctx) => {
       duration: event.duration,
       policyId: event.policyId,
       triggeredBy: event.triggeredBy,
-      detail: { decidedBy: event.decidedBy, mfaVerified: event.mfaVerified },
+      detail: {
+        decidedBy: event.decidedBy,
+        mfaVerified: event.mfaVerified,
+        ...(event.onceOnly === true ? { onceOnly: true } : {}),
+        ...(event.requestedDuration !== undefined && event.requestedDuration !== event.duration
+          ? { requestedDuration: event.requestedDuration }
+          : {}),
+      },
     }),
     { type: 'resolveAsk', grantId: ctx.grant.id, outcome: 'granted' },
   );

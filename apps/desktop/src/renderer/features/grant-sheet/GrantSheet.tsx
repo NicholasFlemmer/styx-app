@@ -12,15 +12,26 @@ import {
   type SessionId,
   type Target,
 } from '@styx/core';
-import { Button, Checkbox, ChipGroup, Icon, Label, Sheet, SheetAccentHeader, SheetFooter, Tag } from '@styx/ui';
+import {
+  Button,
+  Checkbox,
+  ChipGroup,
+  Icon,
+  Label,
+  Sheet,
+  SheetAccentHeader,
+  SheetFooter,
+  Tag,
+} from '@styx/ui';
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { announce } from '../../app/announcer';
 import { command } from '../../state/commands';
 import { useCopyPlatform, useModel, useUi } from '../../state/hooks';
 import { useUiStore } from '../../state/ui-store';
 import {
+  credentialScopedOf,
   DEFAULT_DURATION,
-  DURATIONS,
+  durationChoice,
   envTitle,
   grantAnnouncement,
   grantButtonLabel,
@@ -82,6 +93,7 @@ export function GrantSheet({ id, sessionId, askId }: GrantSheetProps) {
       target={target}
       session={session}
       model={model}
+      credentialScoped={credentialScopedOf(ask?.payload)}
     />
   );
 }
@@ -91,9 +103,20 @@ interface GrantFormProps extends GrantSheetProps {
   target: Target;
   session: Session;
   model: ReadModel;
+  /** Whether the target's adapter narrows the credential for the requested scopes (from the ask; main re-checks). */
+  credentialScoped: boolean;
 }
 
-function GrantForm({ id, sessionId, askId, grant, target, session, model }: GrantFormProps) {
+function GrantForm({
+  id,
+  sessionId,
+  askId,
+  grant,
+  target,
+  session,
+  model,
+  credentialScoped,
+}: GrantFormProps) {
   const popOverlay = useUi((u) => u.popOverlay);
   /** Keyboard Mod follows the OS; platform words (Touch ID / Windows Hello) follow the rendered chrome (spec §7). */
   const platform = useUi((u) => u.platform);
@@ -119,7 +142,10 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
     return msg !== undefined && msg.payload.kind === 'access-request' ? msg.payload.reason : grant.reason;
   }, [model.transcripts, sessionId, grant.id, grant.reason]);
 
-  const payload = grantPayload(requested, checked, duration);
+  const scopeNow = requested.filter((s) => checked.includes(s));
+  const choice = durationChoice(target.env, scopeNow, credentialScoped, duration);
+  const payload = grantPayload(requested, checked, choice.value);
+  const noteId = `${id}-duration-note`;
   const agent = copy.agents[session.agent];
   const targetLabel = `${target.name} ${target.env}`;
 
@@ -177,7 +203,13 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
         initialFocus={grantButton}
         footer={
           <SheetFooter>
-            <Button size="footer" grow={1} className={s['footerButton']} onClick={deny} data-grant-deny="true">
+            <Button
+              size="footer"
+              grow={1}
+              className={s['footerButton']}
+              onClick={deny}
+              data-grant-deny="true"
+            >
               {copy.grantSheet.deny}
             </Button>
             <Button
@@ -190,7 +222,7 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
               disabled={payload.scope.length === 0}
               data-grant-approve="true"
             >
-              {grantButtonLabel(target.env, payload.scope, duration, copyPlatform)}
+              {grantButtonLabel(target, payload.scope, payload.duration, copyPlatform, credentialScoped)}
             </Button>
           </SheetFooter>
         }
@@ -234,13 +266,21 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
         </Label>
         <ChipGroup
           aria-label={copy.grantSheet.durationLabel}
-          options={DURATIONS.map((d) => ({ value: d, label: copy.grantSheet.durations[d] }))}
-          value={duration}
+          aria-describedby={target.env === 'prod' ? noteId : undefined}
+          options={choice.options}
+          value={choice.value}
           onChange={(v) => setDuration(v as Duration)}
+          data-once-only={choice.onceOnly ? 'true' : undefined}
         />
         {target.env === 'prod' && (
-          <div className={s['finePrint']}>
-            {fill(copy.grantSheet.prodNote, { mfa: platformCopy(copyPlatform).mfa })}
+          <div
+            className={s['finePrint']}
+            id={noteId}
+            data-grant-note={choice.onceOnly ? 'once-only' : 'prod'}
+          >
+            {fill(choice.onceOnly ? copy.grantSheet.onceOnlyNote : copy.grantSheet.prodNote, {
+              mfa: platformCopy(copyPlatform).mfa,
+            })}
           </div>
         )}
         {error !== null && (

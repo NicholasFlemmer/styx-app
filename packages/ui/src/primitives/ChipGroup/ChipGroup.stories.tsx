@@ -61,11 +61,23 @@ export const WithDisabled: Story = {
   ),
 };
 
+/** The grant sheet's duration chips for a production write on a target whose token can't be narrowed: once only. */
+const onceOnly = durations.map((d) => ({ ...d, disabled: d.value !== 'once' }));
+export const DurationOnceOnly: Story = {
+  args: { options: onceOnly },
+  render: (a) => (
+    <div style={{ width: 332 }}>
+      <Controlled {...a} initial="once" />
+    </div>
+  ),
+};
+
 export const Matrix: Story = {
   render: () => (
     <div style={{ display: 'grid', gap: 16, width: 332 }}>
       <ChipGroup aria-label="d1" options={durations} value="1h" onChange={() => {}} />
       <ChipGroup aria-label="d2" options={durations} value={null} onChange={() => {}} />
+      <ChipGroup aria-label="d3" options={onceOnly} value="once" onChange={() => {}} />
       <ChipGroup aria-label="e1" options={envs} value="prod" onChange={() => {}} layout="inline" size="env" />
       <ChipGroup aria-label="e2" options={envs} value={null} onChange={() => {}} layout="inline" size="env" />
     </div>

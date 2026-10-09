@@ -296,13 +296,11 @@ describe('BrokerHost security regressions', () => {
     for (let i = 0; i < 7; i += 1)
       await client.call('exec_authorize', { tool: 'vercel', argv: ['env', 'ls'], cwd: '/tmp' });
     // Requests that need the user are: the 6th within a minute is refused.
-    const held = Array.from({ length: 5 }, (_, i) =>
+    // The same command five times: a production write on Supabase only collapses onto a request for the same
+    // command (issue #29), so different argv would each open their own.
+    const held = Array.from({ length: 5 }, () =>
       client
-        .call(
-          'exec_authorize',
-          { tool: 'supabase', argv: ['db', 'push', `--n=${i}`], cwd: '/tmp' },
-          { timeoutMs: 5_000 },
-        )
+        .call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' }, { timeoutMs: 5_000 })
         .catch(() => undefined),
     );
     await new Promise((res) => setTimeout(res, 50));
@@ -361,6 +359,8 @@ describe('BrokerHost security regressions', () => {
     const { t: app, client } = await connectedClient(ids.session.gemini);
     const prod = app.app.repos.targets.get(ids.target.supabaseProd);
     if (!prod?.credentialRef) throw new Error('fixture');
+    // Only a credential narrowed per grant may stand for a production write (issue #29); pretend this one is.
+    Object.assign(app.app.providers.get('supabase'), { issuesScoped: () => true });
     await app.vault.set(prod.credentialRef, JSON.stringify({ token: 'sbp-prod' }));
     const pending = client.call(
       'exec_authorize',
@@ -381,6 +381,120 @@ describe('BrokerHost security regressions', () => {
       via: 'shim',
       scopeUsed: 'write',
     });
+    client.close();
+  });
+});
+
+describe('BrokerHost once-only production writes (issue #29)', () => {
+  /** Waits for the held exec's requested grant on Supabase prod, then approves it (the person asked for 1h). */
+  const approveNext = async (app: TestApp, seen: Set<string>) => {
+    let id = '';
+    await vi.waitFor(() => {
+      const g = app.app.repos.grants
+        .bySession(ids.session.gemini)
+        .find((x) => x.state === 'requested' && x.targetId === ids.target.supabaseProd && !seen.has(x.id));
+      expect(g).toBeDefined();
+      id = g?.id ?? '';
+    });
+    seen.add(id);
+    const open = app.app.repos.pendingAsks.byGrant(id);
+    expect(open?.state).toBe('open');
+    await app.app.grants.approve(id, '1h');
+    return id;
+  };
+
+  it('a second production write on an unscoped target asks again, even when the first was approved for 1h', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const prod = app.app.repos.targets.get(ids.target.supabaseProd);
+    if (!prod?.credentialRef) throw new Error('fixture');
+    await app.vault.set(prod.credentialRef, JSON.stringify({ token: 'sbp-prod' }));
+    const seen = new Set<string>();
+    const exec = () =>
+      client.call(
+        'exec_authorize',
+        { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' },
+        { timeoutMs: 5_000 },
+      );
+
+    const first = exec();
+    const firstId = await approveNext(app, seen);
+    const r1 = await first;
+    expect(r1).toMatchObject({ grantId: firstId, env: { SUPABASE_ACCESS_TOKEN: 'sbp-prod' } });
+    expect(app.app.repos.grants.get(firstId)).toMatchObject({
+      duration: 'once',
+      state: 'revoked',
+      revokeReason: 'once-used',
+    });
+    await client.call('exec_report', { useId: r1.useId, exitCode: 0 });
+
+    // The same command again: nothing covers it, so a new request (and a new verification) is needed.
+    const second = exec();
+    const secondId = await approveNext(app, seen);
+    expect(secondId).not.toBe(firstId);
+    const r2 = await second;
+    expect(r2.grantId).toBe(secondId);
+    expect(app.app.repos.grants.get(secondId)).toMatchObject({ duration: 'once', state: 'revoked' });
+
+    const audit = app.app.repos.audit.all();
+    for (const id of [firstId, secondId]) {
+      expect(audit.filter((e) => e.grantId === id).map((e) => e.action)).toEqual([
+        'requested',
+        'granted',
+        'used',
+        'revoked',
+      ]);
+      expect(audit.find((e) => e.grantId === id && e.action === 'granted')).toMatchObject({
+        duration: 'once',
+        detail: { mfaVerified: true, onceOnly: true, requestedDuration: '1h' },
+      });
+    }
+    client.close();
+  });
+
+  it('get_credential on a standing grant from before the cap is refused and ends it', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const prod = app.app.repos.targets.get(ids.target.supabaseProd);
+    if (!prod?.credentialRef) throw new Error('fixture');
+    await app.vault.set(prod.credentialRef, JSON.stringify({ token: 'sbp-prod' }));
+    const now = app.clock.now();
+    const legacy = {
+      ...fixtures.demoGrants()[1]!,
+      targetId: prod.id,
+      scope: ['read' as const, 'write' as const],
+      duration: 'always' as const,
+      sessionId: null,
+      issuedAt: now,
+      state: 'active' as const,
+    };
+    app.app.repos.grants.upsert(legacy);
+    await expect(client.call('get_credential', { grantId: legacy.id })).rejects.toBeDefined();
+    expect(app.app.repos.grants.get(legacy.id)).toMatchObject({ state: 'revoked', revokeReason: 'policy' });
+    expect(app.app.repos.grantUses.byGrant(legacy.id)).toEqual([]);
+    client.close();
+  });
+
+  it('request_access then get_credential spends the once grant; a later shim exec asks again', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const prod = app.app.repos.targets.get(ids.target.supabaseProd);
+    if (!prod?.credentialRef) throw new Error('fixture');
+    await app.vault.set(prod.credentialRef, JSON.stringify({ token: 'sbp-prod' }));
+    const seen = new Set<string>();
+    const pending = client.call('request_access', {
+      target: 'supabase-prod',
+      scope: ['write'],
+      reason: 'migration 0043',
+    });
+    const id = await approveNext(app, seen);
+    expect(await pending).toMatchObject({ status: 'active', grantId: id });
+    await client.call('get_credential', { grantId: id });
+    await expect(client.call('get_credential', { grantId: id })).rejects.toMatchObject({
+      code: ErrorCode.revoked,
+    });
+    void client
+      .call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' }, { timeoutMs: 5_000 })
+      .catch(() => undefined);
+    const again = await approveNext(app, seen);
+    expect(again).not.toBe(id);
     client.close();
   });
 });
@@ -545,7 +659,6 @@ describe('BrokerHost agent-to-agent messaging', () => {
     const { client } = await connectedClient(ids.session.gemini);
     let refused = 0;
     for (let i = 0; i < 25; i += 1) {
-       
       await client.call('send_message', { to: ids.session.claude, body: `m${i}` }).catch(() => {
         refused += 1;
       });

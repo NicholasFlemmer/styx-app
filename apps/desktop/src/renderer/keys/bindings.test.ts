@@ -3,7 +3,7 @@ import { fixtures, navLanes, upsertRows, type ProjectId } from '@styx/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../state/read-model';
 import { selectSessionId, useUiStore } from '../state/ui-store';
-import { boardBindings, popoutBindings, shellBindings } from './bindings';
+import { approveGrantAsRequested, boardBindings, popoutBindings, shellBindings } from './bindings';
 import { KeyRegistry } from './registry';
 
 /** Dispatches from inside the workspace scope (spec §6: approve/deny are chat/workspace chords). */
@@ -112,15 +112,25 @@ describe('shell bindings', () => {
     expect(useUiStore.getState().screen).toBe('workspace');
   });
 
-  it('Mod+Enter approves the head ask of the active session with 1h and its scope', () => {
+  it('Mod+Enter approves the head ask of the active session with its scope, 1h unless the request allows only once', () => {
     const codex = fixtures.ids.session.codex;
     useUiStore.getState().openSession(fixtures.ids.project.acmeShop as ProjectId, codex);
     press({ key: 'Enter', metaKey: true });
     expect(commands).toEqual(['grant.approve']);
     const call = (window as unknown as { styx: { command: ReturnType<typeof vi.fn> } }).styx.command.mock
       .calls[0];
-    expect(call?.[1]).toMatchObject({ duration: '1h' });
+    // The Codex ask is a Supabase prod write and Supabase's token can't be narrowed: once only (issue #29).
+    expect(call?.[1]).toMatchObject({ duration: 'once' });
     expect(Array.isArray(call?.[1]?.scope)).toBe(true);
+  });
+
+  it('approving a request the cap does not touch (a prod read) as requested sends 1h', () => {
+    const grant = useReadModel.getState().model.grants.byId[fixtures.ids.grant.awsClaude];
+    if (grant === undefined) throw new Error('fixture grant');
+    approveGrantAsRequested(grant);
+    const call = (window as unknown as { styx: { command: ReturnType<typeof vi.fn> } }).styx.command.mock
+      .calls[0];
+    expect(call?.[1]).toMatchObject({ grantId: grant.id, duration: '1h', scope: ['read'] });
   });
 
   it('Mod+Backspace denies; nothing happens without a pending grant ask', () => {

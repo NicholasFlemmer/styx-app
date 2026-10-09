@@ -884,6 +884,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     durations: { once: 'once', '1h': '1h', session: 'session', always: 'always' },
     prodNote:
       'Prod write requires {mfa}. Token is scoped to this session and revoked on expiry or when the session ends. Logged to audit.',
+    /** Fine print when only `once` is allowed (issue #29): a prod write on a target whose token can't be narrowed. */
+    onceOnlyNote:
+      "This target's token can't be limited to what you grant here, so each production change is approved on its own: the grant covers one command and asks for {mfa} every time. Logged to audit.",
     deny: 'Deny',
     grant: 'Grant {duration}',
     grantMfa: 'Grant {duration} · {mfa}',
@@ -893,6 +896,8 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     /** Chat system line. */
     line: 'grant: {target} · {scopes} · expires in {t}',
     linePersistent: 'grant: {target} · {scopes} · persistent',
+    /** A `once` grant: it ends with the command that uses it. */
+    lineOnce: 'grant: {target} · {scopes} · one command',
     /** Screen-reader announcement. */
     announce: 'Granted {agent} {scopes} on {target} for {duration}',
     denied: '',

@@ -60,6 +60,12 @@ When you grant, you pick how long it lasts. The default is **1h**.
 
 On top of that, the built-in policy **Expire grants after 1h idle** ends any grant except `always` after an hour without use. Each use restarts that clock. A grant also ends when you revoke it or remove its target.
 
+### Production changes on a token that can't be narrowed: once only
+
+When a provider can't narrow its credential (see [what the agent actually gets](#what-the-agent-actually-gets)), a grant hands the command your whole token. On a `prod` target, a grant that includes `write`, `deploy` or `delete` is therefore always **once**: it covers one command, and the next production change asks you again, with Touch ID, Windows Hello or your system password each time. The sheet only offers **once** for these requests, and Styx's main process enforces it whatever duration is sent, so an `always` target policy, an auto-approve rule or an earlier longer grant can't turn a production change into a standing one. Reads on the same target, and changes on its non-production targets, keep every duration. A longer grant left over from an earlier version of Styx can't be used for anything on such a target: the first time something asks for its credential, Styx ends it (logged as a policy revoke) and the agent has to ask again.
+
+This limits what Styx hands out, not what the token can do. The one command still receives your whole token, and a command that copies it could use it again later without asking, because the provider can't cancel it. That's why these grants need verification every time, and why dedicated, least-privilege tokens matter (see the [security model](/docs/access/security-model)).
+
 ## The grant lifecycle
 
 Every grant moves through the same states, and every move is written to the audit log.
@@ -87,7 +93,7 @@ Styx never puts your stored credentials in an agent's environment. The command t
 | GitHub   | Your stored token, as `GH_TOKEN` and `GITHUB_TOKEN`.                                                                                                                                                                                          | No                                 |
 | SSH host | A private SSH agent socket that lives as long as the grant. The key never leaves Styx.                                                                                                                                                        | No (the socket can sign any login) |
 
-Where a provider can't narrow its credential, the agent's command gets your whole token for that target, whatever scope you granted. That's why, on a `prod` target with an un-narrowed credential, every grant needs Touch ID, Windows Hello or your system password, reads included, and no policy can approve it for you.
+Where a provider can't narrow its credential, the agent's command gets your whole token for that target, whatever scope you granted. That's why, on a `prod` target with an un-narrowed credential, every grant needs Touch ID, Windows Hello or your system password, reads included, and no policy can approve it for you. Writes, deploys and deletes there are also limited to [one command per grant](#production-changes-on-a-token-that-cant-be-narrowed-once-only).
 
 Revoking a grant stops Styx handing out the credential and shuts any SSH socket. For Vercel, Supabase and GitHub there is nothing to revoke upstream: the token you stored stays valid at the provider.
 

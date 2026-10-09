@@ -152,10 +152,19 @@ return { kind: 'env', env, expiresAt: grant.expiresAt, scoped: false };
 ```
 
 `scoped: false`, and no `issuesScoped()` method, is the honest answer. It makes `GrantService` require biometric
-verification for any grant on a prod Supabase target, even "read", because the agent gets the whole token. Adapters
-that can mint narrower credentials implement `issuesScoped()`: AWS (STS session policies) and GCP (for
-read-only grants). `revoke()` is empty because Supabase issued nothing new. An adapter that mints a credential should
-revoke it there when the provider allows it, as GCP does.
+verification for any grant on a prod Supabase target, even "read", because the agent gets the whole token. It also
+caps a prod write, deploy or delete at `once` (issue #29): the policy engine gets `credentialScoped` from
+`issuesScoped()` and returns `maxDuration: 'once'` / `onceOnly: true`, `GrantService.approve()` clamps any longer
+duration to `once` (the audit row records `onceOnly` and the `requestedDuration`), `covering()` lets only an unused
+`once` grant carry such a command (a longer grant left from before is refused and ended at its first credential
+fetch), and the grant sheet offers only **once** (it reads the same fact from the ask's
+`credentialScoped`). Every production change is then its own verified decision. Adapters that can mint narrower
+credentials implement `issuesScoped()`: AWS (STS session policies) and GCP (for read-only grants); for those the
+longer durations stay available. There is no per-target opt-out of the cap yet; one for people who deploy many
+times an hour and accept the risk is possible future work.
+
+`revoke()` is empty because Supabase issued nothing new. An adapter that mints a credential should revoke it there
+when the provider allows it, as GCP does.
 
 ### 6. Scope classification
 
@@ -372,7 +381,8 @@ These apply to every target. They are the reason targets exist.
   names Styx.
 - **Short-lived, scoped credentials.** Prefer minting a credential limited to the granted scopes and the grant's
   lifetime, capped with `expiryFor()`. If the provider cannot do that, return `scoped: false` and do not implement
-  `issuesScoped()`. Styx then forces biometric verification on prod for every scope. Never claim `scoped: true` for
+  `issuesScoped()`. Styx then forces biometric verification on prod for every scope and grants prod writes, deploys
+  and deletes for one command at a time. Never claim `scoped: true` for
   a credential that can do more than the grant says.
 - **Fail closed.** `scopeOfCommand()` returns `['write']` for anything it does not recognise. A misclassified
   deploy or delete is a security bug, not a usability bug.

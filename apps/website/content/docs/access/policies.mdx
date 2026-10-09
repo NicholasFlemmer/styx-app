@@ -65,8 +65,9 @@ New rules go to the bottom of the list. Rules you added have **Edit** and **Remo
 
 Some requests always come to you, whatever your rules and target policies say:
 
-- **Production writes, deploys and deletes.** They always ask, and you always verify. The one exception is an `always` grant you approved earlier (with verification) that covers the request.
+- **Production writes, deploys and deletes.** They always ask, and you always verify. The one exception is an `always` grant you approved earlier (with verification) that covers the request, and only on a target whose credential is narrowed per grant (see the next point).
 - **Anything on a production target whose credential can't be narrowed.** For Vercel, Supabase, GitHub and SSH, and for GCP and AWS in some setups, a grant hands the command your whole credential whatever scope was asked. On a `prod` target Styx turns any auto-approval of those into an ask with verification, reads included. See [what the agent actually gets](/docs/access/how-access-works#what-the-agent-actually-gets).
+- **A standing grant for a production change on such a target.** Writes, deploys and deletes there are approved one command at a time: a target policy of **always**, an auto-approve rule's **Grant for** and an earlier `always` grant don't apply to them, and the request asks you for a **once** grant instead. Reads keep the duration the rule or grant gives.
 - **Anything on a target set to Ask · MFA.**
 
 This means an auto-approve rule for, say, GitHub reads only takes effect on a GitHub target whose environment isn't `prod`.

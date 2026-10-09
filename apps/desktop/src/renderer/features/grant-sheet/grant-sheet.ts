@@ -1,19 +1,56 @@
 import {
+  allowedDurations,
+  approvalNeedsMfa,
+  clampDuration,
   copy,
+  DURATION_ORDER,
   fill,
   joinScopes,
+  maxGrantDuration,
   platformCopy,
   PROVIDER_LABEL,
-  requiresMfa,
+  type AskPayload,
   type Duration,
   type Env,
   type CopyPlatform,
   type Provider,
   type Scope,
+  type TargetPolicy,
 } from '@styx/core';
 
-export const DURATIONS: readonly Duration[] = ['once', '1h', 'session', 'always'];
+export const DURATIONS: readonly Duration[] = DURATION_ORDER;
 export const DEFAULT_DURATION: Duration = '1h';
+
+/** The ask's adapter fact (issue #29); a row without it reads as unscoped, the safe side. Main decides either way. */
+export const credentialScopedOf = (payload: AskPayload | undefined): boolean =>
+  payload?.kind === 'grant' ? (payload.credentialScoped ?? false) : false;
+
+/**
+ * Duration chips for the chosen scope: only what main will accept is enabled (a production write on a target whose
+ * token can't be narrowed is `once` only), and the shown value is the person's pick clamped to that.
+ */
+export const durationChoice = (
+  env: Env,
+  scope: readonly Scope[],
+  credentialScoped: boolean,
+  picked: Duration,
+): {
+  value: Duration;
+  onceOnly: boolean;
+  options: { value: Duration; label: string; disabled: boolean }[];
+} => {
+  const max = maxGrantDuration(env, scope, credentialScoped);
+  const allowed = allowedDurations(max);
+  return {
+    value: clampDuration(picked, max),
+    onceOnly: max === 'once',
+    options: DURATIONS.map((d) => ({
+      value: d,
+      label: copy.grantSheet.durations[d],
+      disabled: !allowed.includes(d),
+    })),
+  };
+};
 
 /** Scopes a provider can be asked for (prototype: Supabase lists Read schema / Write / Delete / drop). */
 const PROVIDER_SCOPES: Record<Provider, readonly Scope[]> = {
@@ -71,27 +108,31 @@ export const grantPayload = (
   duration,
 });
 
-/** "Grant 1h · Touch ID" (prod write) or "Grant 1h". */
+/**
+ * "Grant 1h · Touch ID" or "Grant 1h": the suffix appears whenever main will ask for OS authentication (prod write,
+ * an ask-mfa target, or any prod scope on a target whose token can't be narrowed).
+ */
 export const grantButtonLabel = (
-  env: Env,
+  target: { env: Env; policy: TargetPolicy },
   scope: readonly Scope[],
   duration: Duration,
   platform: CopyPlatform,
+  credentialScoped: boolean,
 ): string => {
   const label = copy.grantSheet.durations[duration];
-  return requiresMfa(env, scope)
+  return approvalNeedsMfa(target, scope, credentialScoped)
     ? fill(copy.grantSheet.grantMfa, { duration: label, mfa: platformCopy(platform).mfa })
     : fill(copy.grantSheet.grant, { duration: label });
 };
 
 const DURATION_SPOKEN: Record<Duration, string> = {
-  once: 'once',
+  once: 'one command',
   '1h': '1 hour',
   session: 'this session',
   always: 'always',
 };
 
-/** "Granted Codex read, write on Supabase prod for 1 hour" (spec §9 live region). */
+/** "Granted Codex read, write on Supabase prod for 1 hour" (spec §9 live region); `once` reads "for one command". */
 export const grantAnnouncement = (
   agent: string,
   scope: readonly Scope[],

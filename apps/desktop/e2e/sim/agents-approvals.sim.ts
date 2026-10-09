@@ -330,15 +330,21 @@ test('sim: agents-approvals', async () => {
         const text = await sheet.innerText();
         for (const s of ['Access request', 'Supabase', 'prod', 'Read schema', 'Write', 'Duration'])
           must(text.includes(s), `sheet lacks "${s}"`);
+        // A Supabase prod write: the token can't be narrowed per grant, so only once is offered (issue #29).
         must(
-          (await sheet.getByRole('radio', { name: '1h' }).getAttribute('aria-checked')) === 'true',
-          '1h chip not preselected',
+          (await sheet.getByRole('radio', { name: 'once' }).getAttribute('aria-checked')) === 'true',
+          'once chip not preselected',
         );
-        for (const d of ['once', 'session', 'always'])
+        for (const d of ['1h', 'session', 'always']) {
           must((await sheet.getByRole('radio', { name: d }).count()) === 1, `duration chip "${d}" missing`);
+          must(await sheet.getByRole('radio', { name: d }).isDisabled(), `duration chip "${d}" not disabled`);
+        }
         must(/Touch ID|Windows Hello/.test(text), 'prod MFA line missing');
         const grantLabel = await sheet.locator('[data-grant-approve]').innerText();
-        must(/^Grant 1h · (Touch ID|Windows Hello)$/.test(grantLabel), `Grant button reads "${grantLabel}"`);
+        must(
+          /^Grant once · (Touch ID|Windows Hello)$/.test(grantLabel),
+          `Grant button reads "${grantLabel}"`,
+        );
         await sim.shot('grant-sheet-from-board');
         await page().keyboard.press('Escape');
         await poll(
@@ -694,7 +700,7 @@ test('sim: agents-approvals', async () => {
 
     let auditBeforeGrant = 0;
     await sim.step(
-      'Review from the inbox opens the Codex chat with the sheet; Grant 1h · MFA (auto) resolves it',
+      'Review from the inbox opens the Codex chat with the sheet; Grant once · MFA (auto) resolves it',
       async () => {
         auditBeforeGrant = await auditCount();
         await page()
@@ -724,10 +730,7 @@ test('sim: agents-approvals', async () => {
           .last();
         await line.waitFor({ timeout: 8000 });
         const text = await line.innerText();
-        must(
-          /grant: supabase-prod · read\+write · expires in (1h|60m|59m|\d+m)/.test(text),
-          `grant line reads "${text}"`,
-        );
+        must(/grant: supabase-prod · read\+write · one command/.test(text), `grant line reads "${text}"`);
         const request = page().locator('[data-kind="accessRequest"]').last();
         const reviewStill = await request
           .getByRole('button', { name: 'Review request' })
@@ -753,7 +756,7 @@ test('sim: agents-approvals', async () => {
     );
 
     await sim.step(
-      'the inbox count dropped and the audit log has "granted read+write to Codex · 1h"',
+      'the inbox count dropped and the audit log has "granted read+write to Codex · once"',
       async () => {
         await goApprovals('inbox');
         const tab = await page().locator('[data-approvals-tab="inbox"]').innerText();
@@ -763,7 +766,7 @@ test('sim: agents-approvals', async () => {
         const rows = page().locator('[data-approvals-panel="audit"] [data-audit-id]');
         const first = await rows.first().innerText();
         must(
-          /granted read\+write to Codex · 1h/.test(first),
+          /granted read\+write to Codex · once/.test(first),
           `newest audit row reads "${first.replace(/\n/g, ' ')}"`,
         );
         must(
@@ -1261,7 +1264,7 @@ test('sim: agents-approvals', async () => {
         const r = await sim.command<{ ok: boolean; brokenAtSeq: number | null }>('audit.verifyChain', {});
         must(r.ok && r.value?.ok === true, `verifyChain: ${JSON.stringify(r.value ?? r.error)}`);
         // A live grant: revoke from the audit drawer → a new row, the old rows untouched. The Codex grant made
-        // earlier in this run (read+write · 1h) is the one that is certainly there; the Cursor "always" row exists
+        // earlier in this run (read+write · once, unused) is the one that is certainly there; the Cursor "always" row exists
         // only when the fixture's done-session ask could be reviewed.
         await goApprovals('audit');
         // A grant that is still live at this point (earlier steps revoked some): its "granted" row's drawer
