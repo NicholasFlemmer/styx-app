@@ -15,8 +15,17 @@ export const policyMeta = (policy: Policy): string =>
 export const autoApprovedToday = (policies: readonly Policy[]): number =>
   policies.filter((p) => p.rule.kind === 'auto-approve').reduce((n, p) => n + p.matchCountToday, 0);
 
-export const inboxFooter = (policies: readonly Policy[]): string =>
-  fill(copy.approvals.footer, { n: autoApprovedToday(policies), detail: copy.approvals.footerDetail });
+/** "auto-approved today: 12, by policy #1": names the auto-approve rules that actually matched today, if any. */
+export const inboxFooter = (policies: readonly Policy[]): string => {
+  const n = autoApprovedToday(policies);
+  const matched = [...policies]
+    .filter((p) => p.rule.kind === 'auto-approve' && p.matchCountToday > 0)
+    .sort((a, b) => a.ord - b.ord)
+    .map((p) => fill(copy.approvals.footerRule, { ord: p.ord }));
+  return matched.length === 0
+    ? fill(copy.approvals.footer, { n })
+    : fill(copy.approvals.footerByRules, { n, rules: matched.join(', ') });
+};
 
 /** The open grant ask behind an inbox row, so Review can open the session with its sheet. */
 export const askForGrant = (model: ReadModel, grantId: GrantId): PendingAsk | null =>

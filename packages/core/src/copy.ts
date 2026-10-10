@@ -534,7 +534,7 @@ export const copy = {
     learnChecks:
       'Before {branch} lands in {base}, Styx runs the project\u2019s checks, and none are known for this project yet. Work out how this project checks itself (typecheck, tests, lint — read its package scripts, Makefile or CI config) and run that command from the root of this worktree: it must pass, and if it fails because of this lane\u2019s changes, fix them. Then call the styx `remember_command` tool with kind "checks" and the exact command, so Styx runs it before every landing from now on. {then}',
     learnChecksThenLand: 'Then call the styx `land` tool again to land this lane.',
-    learnChecksThenTell: 'Then tell me in one line that the checks pass; I merge it from the Repo lane.',
+    learnChecksThenTell: 'Then tell me in one line that the checks pass; I merge it from Lanes.',
     resolveRetry:
       'Not finished yet: {reason}. Fix that and finish the merge as before — do not abort or commit it; Styx commits once the checks pass.',
   },
@@ -702,7 +702,7 @@ export const copy = {
     /** A learn task that ended without telling Styx anything: the run row would be back where it started. */
     nothingLearned: 'Finished, but nothing was learned',
     nothingLearnedRun:
-      'The agent ended without telling Styx how to run this project, so nothing will start next time. Run again, or type the command in the Design tab.',
+      'The agent ended without telling Styx how to run this project, so nothing will start next time. Run again, or type the command in the Preview tab.',
     nothingLearnedDeploy:
       'The agent ended without telling Styx how to deploy to this target. Run again, or set the command under Settings › Targets.',
     failed: 'Could not finish',
@@ -908,7 +908,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     askMfaProdWrite: 'Always ask, require {mfa} for prod write',
     idleExpiry: 'Expire grants after 1h idle',
     intro:
-      'Policies are evaluated top to bottom. Project overrides in Settings win. Export as JSON to share with a team.',
+      "Policies are checked top to bottom: app rules first, then this project's rules, and the first match wins. Export as JSON to share with a team.",
     heading: 'Policies',
     addRule: '+ Rule',
     exportJson: 'Export JSON',
@@ -956,8 +956,10 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     tabs: { inbox: 'Requests', inboxCount: 'Requests · {n}', policies: 'Policies', auditLog: 'Audit log' },
     review: 'Review',
     deny: 'Deny',
-    footer: 'auto-approved today: {n} ({detail})',
-    footerDetail: 'preview deploys, github reads',
+    footer: 'auto-approved today: {n}',
+    /** When rules did approve something today: which ones, as "policy #1, policy #3". */
+    footerByRules: 'auto-approved today: {n}, by {rules}',
+    footerRule: 'policy #{ord}',
   },
 
   audit: {
@@ -2277,9 +2279,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     failed: 'Not landed: {error}',
     pushedSuffix: ' and on {remote}',
     /** The lane's chat and the Home feed. */
-    chat: 'Your work on {branch} is now in {base}{pushed}. Undo is on the Repo lane until {base} moves on; after that the lane is tidied away by itself.',
+    chat: 'Your work on {branch} is now in {base}{pushed}. Undo is in Lanes until {base} moves on; after that the lane is tidied away by itself.',
     chatAuto:
-      'Your work on {branch} is now in {base}{pushed} — landed on its own once the checks passed. Undo is on the Repo lane until {base} moves on; after that the lane is tidied away by itself.',
+      'Your work on {branch} is now in {base}{pushed} — landed on its own once the checks passed. Undo is in Lanes until {base} moves on; after that the lane is tidied away by itself.',
     /** The tidy-up: a landed lane whose base has moved on, with nothing new on it. */
     archived: '{branch} was tidied away: its work is in {base}, and {base} has moved on.',
     dirtyBase: 'The main folder has uncommitted changes on {base}. Commit or discard them first.',
@@ -2303,8 +2305,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     tool: {
       notLane:
         'This session is on the main worktree, not a lane: there is nothing to land. The work is already on {base}.',
-      review:
-        'This project is in review mode: the person merges. Tell them Merge into {base} is on the Repo lane.',
+      review: 'This project is in review mode: the person merges. Tell them Merge into {base} is in Lanes.',
       landed: '{branch} is now in {base}{pushed}.',
     },
     undone: 'Took {branch} back out of {base}{pushed}. The lane is live again.',
@@ -2334,7 +2335,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       '{base} conflicts with this lane in {files}. {agent} is bringing it in now — both sides kept; the checks run before it counts.',
     startedTask: 'Bringing in {base}: {files} conflict. {agent} is resolving them in the background.',
     mechanical: 'Brought in {base}: the conflicts in {files} resolved automatically.',
-    done: 'Brought in {base}. {files} were changed by both sides; both kept, checks pass. Undo is on the Repo lane.',
+    done: 'Brought in {base}. {files} were changed by both sides; both kept, checks pass. Undo is in Lanes.',
     doneReview:
       'Brought in {base}. {files} were changed by both sides; both kept, checks pass. The merge is on this lane — review it on Repo before it lands.',
     doneNoChecks:
@@ -2344,10 +2345,10 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     busy: '{agent} is mid-turn; the merge will be tried when it settles.',
     /** Verifying the merge threw (git busy past the retries, a crash): the lane goes back to resolving, not stuck. */
     verifyError:
-      'Styx could not finish checking the merge: {reason}. It checks again when {agent} next finishes a turn or lands; Stop merging is on the Repo lane.',
+      'Styx could not finish checking the merge: {reason}. It checks again when {agent} next finishes a turn or lands; Stop merging is in Lanes.',
     undone: 'Undid the merge of {base}: the lane is back to how it was before it.',
     stopped:
-      'Stopped bringing in {base}: the merge was undone and the lane is as it was. Resolve is on the Repo lane.',
+      'Stopped bringing in {base}: the merge was undone and the lane is as it was. Resolve is in Lanes.',
     reasons: {
       stopped: 'stopped by you',
       markers: 'conflict markers remain in {files}',
@@ -2458,7 +2459,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     modal: {
       title: 'Sign in to Styx',
       /** First launch. */
-      welcome: 'Sign in to keep your projects, plan and settings with you.',
+      welcome: 'Sign in if you like: it is optional, and everything in Styx works without an account.',
       /** Opened from the Account pane. */
       plain: 'Sign in with the account you already use.',
       later: 'Not now',
@@ -2469,7 +2470,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       switchProvider: 'Use a different provider',
     },
     /** The pane's own line when signed out: the pane is for details, the modal is for signing in. */
-    paneSignedOut: 'You are not signed in. Styx works, but only for one project.',
+    paneSignedOut: 'You are not signed in. Styx works fully without an account.',
     signIn: 'Sign in',
     /** Settings nav row and pane heading. */
     signedOutLead:
