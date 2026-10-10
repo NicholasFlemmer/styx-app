@@ -33,7 +33,15 @@ describe('approvals-data', () => {
 
   it('counts auto-approve matches today even when the rule is off (prototype: 12)', () => {
     expect(autoApprovedToday(policies)).toBe(12);
-    expect(inboxFooter(policies)).toBe('auto-approved today: 12 (preview deploys, github reads)');
+    const matched = policies.filter((p) => p.rule.kind === 'auto-approve' && p.matchCountToday > 0);
+    expect(inboxFooter(policies)).toBe(
+      `auto-approved today: 12, by ${matched.map((p) => `policy #${p.ord}`).join(', ')}`,
+    );
+  });
+
+  it('names no rules when nothing was auto-approved today (issue 11)', () => {
+    const quiet = policies.map((p) => ({ ...p, matchCountToday: 0 }));
+    expect(inboxFooter(quiet)).toBe('auto-approved today: 0');
   });
 
   it('finds the open grant ask behind an inbox row', () => {

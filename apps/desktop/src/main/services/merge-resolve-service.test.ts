@@ -203,7 +203,7 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
       expect(done.behindBase).toBe(0);
       expect((await sh(['log', '-1', '--format=%s'], wt)).trim()).toBe('Bring in main into fix/checkout');
       expect(systemLines(t, claude)).toContain(
-        'Brought in main. a.ts were changed by both sides; both kept, checks pass. Undo is on the Repo lane.',
+        'Brought in main. a.ts were changed by both sides; both kept, checks pass. Undo is in Lanes.',
       );
       expect(app.repos.activity.recent(1)[0]?.what).toBe(
         'acme-shop · brought main into fix/checkout · resolved a.ts',
@@ -360,7 +360,7 @@ describe('MergeResolveService (ADR-0025 phase B)', () => {
         resolution: { state: 'failed', failure: 'stopped by you' },
       });
       expect(systemLines(t, claude)).toContain(
-        'Stopped bringing in main: the merge was undone and the lane is as it was. Resolve is on the Repo lane.',
+        'Stopped bringing in main: the merge was undone and the lane is as it was. Resolve is in Lanes.',
       );
       expect(app.repos.activity.recent(1)[0]?.what).toBe(
         'acme-shop · stopped bringing main into fix/checkout',

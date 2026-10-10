@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtures, type PolicyId, type ProjectId } from '@styx/core';
+import { copy, fixtures, type PolicyId, type ProjectId } from '@styx/core';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
@@ -60,7 +60,7 @@ describe('Approvals', () => {
     expect(within(first).getByText('prod').getAttribute('data-on')).toBe('true');
     expect(within(first).getByText('write').getAttribute('data-on')).toBeNull();
     expect(within(first).getByText('"migration 0042" · 3m')).toBeTruthy();
-    expect(screen.getByText('auto-approved today: 12 (preview deploys, github reads)')).toBeTruthy();
+    expect(screen.getByText(/^auto-approved today: 12, by policy #\d/)).toBeTruthy();
   });
 
   it('Review opens the session in the workspace with the grant sheet; Deny sends grant.deny', () => {
@@ -142,11 +142,7 @@ describe('Approvals', () => {
   it('Policies tab shows the intro copy; Audit log rows open the drawer and read as inverted', () => {
     render(<Approvals />);
     fireEvent.click(screen.getByRole('tab', { name: 'Policies' }));
-    expect(
-      screen.getByText(
-        'Policies are evaluated top to bottom. Project overrides in Settings win. Export as JSON to share with a team.',
-      ),
-    ).toBeTruthy();
+    expect(screen.getByText(copy.policies.intro)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Audit log' }));
     expect(useUiStore.getState().approvalsTab).toBe('audit');

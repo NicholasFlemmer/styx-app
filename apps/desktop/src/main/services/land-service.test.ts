@@ -192,7 +192,7 @@ describe('LandService (ADR-0025 phase C)', { timeout: slow(30_000) }, () => {
     });
     expect(t.app.repos.worktrees.get(acmeMain)?.headCommit).toBe(r.commit);
     expect(systemLines(t, claude).at(-1)).toBe(
-      'Your work on fix/checkout is now in main and on origin. Undo is on the Repo lane until main moves on; after that the lane is tidied away by itself.',
+      'Your work on fix/checkout is now in main and on origin. Undo is in Lanes until main moves on; after that the lane is tidied away by itself.',
     );
     expect(t.app.repos.activity.recent(1)[0]).toMatchObject({
       who: 'you',
@@ -508,7 +508,7 @@ describe('LandService (ADR-0025 phase C)', { timeout: slow(30_000) }, () => {
     expect(t.app.repos.worktrees.get(fixCheckout)?.mergedAt).not.toBeNull();
     expect(await sh(['log', '-1', '--format=%s', 'main'], repo)).toBe('Update a.ts and b.ts');
     expect(systemLines(t, claude).at(-1)).toBe(
-      'Your work on fix/checkout is now in main and on origin — landed on its own once the checks passed. Undo is on the Repo lane until main moves on; after that the lane is tidied away by itself.',
+      'Your work on fix/checkout is now in main and on origin — landed on its own once the checks passed. Undo is in Lanes until main moves on; after that the lane is tidied away by itself.',
     );
     expect(t.app.repos.activity.recent(1)[0]).toMatchObject({
       who: 'Claude Code',
