@@ -22,6 +22,9 @@ export default defineConfig({
     // User simulations (owner request): long, soft-failing walkthroughs that write docs/reports/user-sim/<area>.md.
     // The README GIF (`pnpm -F @styx/desktop readme:gif`): records, never asserts much; not part of `pnpm e2e`.
     { name: 'readme', testMatch: /readme\/.*\.rec\.ts/, timeout: 5 * 60_000 },
+    // Short screen clips (e2e/readme/clips/*.clip.ts): a few scripted moments, recorded as video with their beats
+    // written beside them. Only when asked, like the README media; never part of `pnpm e2e`.
+    { name: 'clips', testMatch: /readme\/clips\/.*\.clip\.ts/, timeout: 5 * 60_000 },
     { name: 'sim', testMatch: /sim\/.*\.sim\.ts/, timeout: 30 * 60_000 },
   ],
 });

@@ -15,6 +15,8 @@ export interface LaunchOptions {
   env?: Record<string, string>;
   /** Record the window as video (the README GIF, e2e/readme/): a directory and the frame size. */
   recordVideo?: { dir: string; size: { width: number; height: number } };
+  /** Device scale factor; default 1 (visual baselines are baked at 1). Screen clips record at 2 for sharp text. */
+  scaleFactor?: number;
 }
 
 /** Drops ELECTRON_RUN_AS_NODE (set by VS Code extension hosts) so Electron boots as an app, not as Node. */
@@ -43,7 +45,7 @@ export async function launchStyx(
       `--user-data-dir=${userData}`,
       // Visual baselines are baked at DPR 1. Chromium rounds font ascent/descent in device pixels, so at DPR 2 every
       // `line-height: normal` box drifts by 0.5px and downsampled screenshots never match; pin the scale factor instead.
-      '--force-device-scale-factor=1',
+      `--force-device-scale-factor=${opts.scaleFactor ?? 1}`,
     ],
     env: {
       ...cleanEnv(),

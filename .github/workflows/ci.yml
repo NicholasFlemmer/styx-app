@@ -28,7 +28,11 @@ jobs:
       - run: pnpm build
       - name: Playwright browsers (Storybook axe + prototype baker)
         run: npx playwright install --with-deps chromium
-      - run: pnpm -F @styx/ui storybook:test
+      # The Storybook test runner sometimes crashes while starting on Windows ("Cannot access
+      # 'StorybookTestRunnerError' before initialization"); one retry, so a startup race can't block a merge.
+      - name: Storybook axe (one retry)
+        shell: bash
+        run: pnpm -F @styx/ui storybook:test || { echo "::warning::Storybook test run failed; retrying once"; pnpm -F @styx/ui storybook:test; }
       - name: Electron e2e (main window, shell, grant flow, a11y)
         if: runner.os == 'macOS'
         run: pnpm e2e
