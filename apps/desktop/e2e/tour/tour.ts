@@ -5,7 +5,7 @@
  *
  * Capture mode: with STYX_TOUR_CAPTURE=<dir>, the window runs at device scale 2 and every `reach` also saves the state:
  * <dir>/<scenario>/<state>.png (the element alone), <state>.window.png (the whole window) and <state>.json (the
- * element's box and the window's size, in CSS px). Tools outside this repo's app code (docs, media) build on these.
+ * element's box, its parts' boxes, fills and text, and the window's size, in CSS px). Tools outside this repo's app code (docs, media) build on these.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -58,6 +58,7 @@ export async function startTour(scenario: string, opts: LaunchOptions = {}): Pro
       const box = await boxOf(target);
       const partBoxes: Record<string, Box | null> = {};
       const partFill: Record<string, string> = {};
+      const partText: Record<string, string> = {};
       for (const [name, l] of Object.entries(parts)) {
         partBoxes[name] = await boxOf(l);
         // The part's own background (the first opaque one up its ancestors), for anyone drawing over it.
@@ -68,6 +69,8 @@ export async function startTour(scenario: string, opts: LaunchOptions = {}): Pro
           }
           return 'rgb(0, 0, 0)';
         });
+        // What the part says, as on screen (a row's cells come one per line).
+        partText[name] = (await l.innerText()).trim();
       }
       await target.screenshot({ path: join(capture, `${state}.png`), animations: 'disabled' });
       await page.screenshot({ path: join(capture, `${state}.window.png`), animations: 'disabled' });
@@ -75,7 +78,7 @@ export async function startTour(scenario: string, opts: LaunchOptions = {}): Pro
         page.viewportSize() ?? (await page.evaluate(() => ({ width: innerWidth, height: innerHeight })));
       writeFileSync(
         join(capture, `${state}.json`),
-        `${JSON.stringify({ state, box, parts: partBoxes, fills: partFill, window: size }, null, 2)}\n`,
+        `${JSON.stringify({ state, box, parts: partBoxes, fills: partFill, texts: partText, window: size }, null, 2)}\n`,
       );
     },
     close: () => app.close(),
@@ -123,13 +126,25 @@ export const steps = {
   },
   /** Press Start on the filled box; resolves when the task's card is on the board. */
   pressStart: async (page: Page, text: string) => {
-    const go = steps.addBox(page).locator('[data-tasks-add-start]');
-    for (let i = 0; i < 10 && (await go.isDisabled()); i++) {
-      await steps.detectClis(page);
-      await page.waitForTimeout(300);
-    }
+    const add = steps.addBox(page);
+    const go = add.locator('[data-tasks-add-start]');
+    const box = add.locator('[data-tasks-add-text]');
+    // Start is disabled while the previous spawn runs and when the box is empty. On a slow machine that spawn can
+    // resolve (and clear the box) after the words were typed, so put them back until Start can be pressed.
+    await expect
+      .poll(
+        async () => {
+          if ((await box.inputValue()) !== text) await box.fill(text);
+          if (await go.isDisabled()) await steps.detectClis(page);
+          return go.isEnabled();
+        },
+        { timeout: STATE_TIMEOUT, intervals: [300] },
+      )
+      .toBe(true);
     await go.click();
     await expect(steps.card(page, text)).toBeVisible({ timeout: STATE_TIMEOUT });
+    // Let this spawn clear the box before anything types the next task into it.
+    await expect(box).toHaveValue('', { timeout: STATE_TIMEOUT });
   },
   /** Start a build task from the board on an agent; resolves when its card is on the board. */
   startTask: async (page: Page, text: string, agent: string) => {

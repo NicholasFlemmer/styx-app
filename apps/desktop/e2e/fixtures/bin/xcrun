@@ -11,6 +11,7 @@
  *   simctl boot FAKE-17PRO                        → creates the marker; exit 149 when already booted, like the real one
  *   simctl bootstatus FAKE-17PRO -b               → exit 0 after 1.5 s (long enough for the pane to show "Booting …")
  *   simctl io FAKE-17PRO screenshot --type=png F  → writes a valid 393×852 PNG to F, a different colour every call
+ *                                                   (or a copy of STYX_FAKE_SIM_SCREEN, a PNG, when that is set)
  *   simctl shutdown FAKE-17PRO                    → removes the marker
  *   anything else                                 → exit 2
  */
@@ -117,8 +118,10 @@ if (sub === 'bootstatus' && args[2] === UDID) {
   n += 1;
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(counter, String(n));
-  // A different colour each time so consecutive frames really differ.
-  fs.writeFileSync(out, png(393, 852, [(n * 37) % 256, (n * 91) % 256, (n * 53) % 256]));
+  // A different colour each time so consecutive frames really differ (unless a fixed screen is asked for).
+  const screen = process.env.STYX_FAKE_SIM_SCREEN;
+  if (screen) fs.copyFileSync(screen, out);
+  else fs.writeFileSync(out, png(393, 852, [(n * 37) % 256, (n * 91) % 256, (n * 53) % 256]));
   process.exit(0);
 } else if (sub === 'shutdown' && args[2] === UDID) {
   fs.rmSync(marker, { force: true });

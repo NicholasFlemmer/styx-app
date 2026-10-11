@@ -55,7 +55,9 @@ test('tour: tasks side by side, one needs you', async () => {
     );
     await steps.restPointer(page);
     await t.reach('card-dark-mode-yours', darkMode, { chip: darkMode.getByText('Your turn') });
-    await t.reach('card-release-notes', notes);
+    // Each task's own branch, named on its card.
+    const branch = (card: typeof notes) => card.getByText(/^agent\/[a-z]+-\d+$/);
+    await t.reach('card-release-notes', notes, { branch: branch(notes) });
     await t.reach('board-five', steps.board(page), { darkMode, notes });
     await t.reach('toast-needs-you', page.locator('[data-toast="needs-you"]').first());
 
@@ -75,7 +77,7 @@ test('tour: tasks side by side, one needs you', async () => {
     await decision.getByRole('button', { name: 'Allow' }).click();
     await expect(darkMode.getByText('Your turn')).toHaveCount(0, { timeout: 20_000 });
     await steps.restPointer(page);
-    await t.reach('card-dark-mode-after', darkMode);
+    await t.reach('card-dark-mode-after', darkMode, { branch: branch(darkMode) });
   } finally {
     await t.close();
   }
