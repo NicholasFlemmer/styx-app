@@ -15,6 +15,9 @@
  *                          turn/completed. `turn/steer` mid-turn answers with an agent message `steered: <text>`.
  *                          A prompt `write <name>` makes the scripted command `echo hi > <name>` and, once
  *                          allowed, really writes the file into the thread's cwd (e2e/checkpoints.spec.ts).
+ *                          STYX_FAKE_CODEX_COMMAND / STYX_FAKE_CODEX_REPLY replace `echo hi` and `pong` (the tours in
+ *                          e2e/tour use a command that fits the task); STYX_FAKE_CODEX_WRITES=<file> (with
+ *                          STYX_FAKE_CODEX_WRITE_TEXT) also writes that file once the command is allowed.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -162,14 +165,16 @@ async function runTurn(m) {
 
   const msgId = `msg_${turnCount}`;
   note('item/started', { item: { type: 'agentMessage', id: msgId, text: '', phase: 'final_answer' }, turnId, startedAtMs: now() });
-  note('item/agentMessage/delta', { turnId, itemId: msgId, delta: 'po' });
-  note('item/agentMessage/delta', { turnId, itemId: msgId, delta: 'ng' });
-  note('item/completed', { item: { type: 'agentMessage', id: msgId, text: 'pong', phase: 'final_answer' }, turnId, completedAtMs: now() });
+  const reply = process.env.STYX_FAKE_CODEX_REPLY || 'pong';
+  const half = Math.ceil(reply.length / 2);
+  note('item/agentMessage/delta', { turnId, itemId: msgId, delta: reply.slice(0, half) });
+  note('item/agentMessage/delta', { turnId, itemId: msgId, delta: reply.slice(half) });
+  note('item/completed', { item: { type: 'agentMessage', id: msgId, text: reply, phase: 'final_answer' }, turnId, completedAtMs: now() });
 
   const cmdId = `cmd_${turnCount}`;
   // Styx sends its lane preamble ahead of the person's message (ADR-0025); the message is the last line.
   const writes = /^write (\S+)$/.exec(text.trim().split('\n').at(-1) ?? '');
-  const command = writes ? `echo hi > ${writes[1]}` : 'echo hi';
+  const command = writes ? `echo hi > ${writes[1]}` : (process.env.STYX_FAKE_CODEX_COMMAND || 'echo hi');
   const cmd = (extra) => ({
     type: 'commandExecution',
     id: cmdId,
@@ -205,9 +210,12 @@ async function runTurn(m) {
   const decision = answer && answer.decision;
   if (decision === 'accept' || decision === 'acceptForSession') {
     if (writes) fs.writeFileSync(path.join(cwd, writes[1]), 'hi\n');
-    note('item/commandExecution/outputDelta', { turnId, itemId: cmdId, delta: 'hi\n' });
+    else if (process.env.STYX_FAKE_CODEX_WRITES)
+      fs.writeFileSync(path.join(cwd, process.env.STYX_FAKE_CODEX_WRITES), `${process.env.STYX_FAKE_CODEX_WRITE_TEXT || 'hi'}\n`);
+    const output = process.env.STYX_FAKE_CODEX_OUTPUT ? `${process.env.STYX_FAKE_CODEX_OUTPUT}\n` : 'hi\n';
+    note('item/commandExecution/outputDelta', { turnId, itemId: cmdId, delta: output });
     note('item/completed', {
-      item: cmd({ status: 'completed', aggregatedOutput: 'hi\n', exitCode: 0, durationMs: 3 }),
+      item: cmd({ status: 'completed', aggregatedOutput: output, exitCode: 0, durationMs: 3 }),
       turnId,
       completedAtMs: now(),
     });

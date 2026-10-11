@@ -38,7 +38,7 @@ export const metadata: Metadata = {
       {
         url: '/launch/access-request.jpg',
         width: 720,
-        height: 964,
+        height: 1284,
         alt: 'A Styx access request for a production Supabase database',
       },
     ],
@@ -147,8 +147,8 @@ export default function KeepingAgentsAwayFromProductionPage() {
               <img
                 src="/launch/access-request.jpg"
                 width={720}
-                height={964}
-                alt="An access request: Codex asks to read and write the Supabase production database for an hour, with Grant 1h · Touch ID and Deny"
+                height={1284}
+                alt="An access request: Codex asks to read and write the Supabase production database, with the reason, the scope, once selected as the duration, and Grant once · Touch ID beside Deny"
               />
               <figcaption>
                 The request an agent’s command turns into. Nothing runs until you answer.

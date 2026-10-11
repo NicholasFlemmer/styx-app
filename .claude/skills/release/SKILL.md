@@ -19,7 +19,8 @@ Releases are built and published by CI on the public repo (NicholasFlemmer/styx-
 3. **Review the draft** on styx-app › Releases. Only the owner presses **Publish release**: that is the gate.
 4. **Publishing** runs `publish.yml`: the update feed (installers first, feed files last, keyless upload through
    Workload Identity), a check that all three feeds serve the new version, then the Homebrew cask bump in
-   NicholasFlemmer/homebrew-styx.
+   NicholasFlemmer/homebrew-styx. When it succeeds, `site.yml` rebuilds and redeploys heystyx.com so its stated
+   version matches (run it by hand after a site-only change).
 5. **Check**: `curl -s https://storage.googleapis.com/styx-desktop-releases/mac/latest-mac.yml | head -1`, and an
    installed copy shows "Update available" within 30 minutes.
 

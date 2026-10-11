@@ -1,5 +1,5 @@
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
-import { mkdtempSync } from 'node:fs';
+import { appendFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -15,6 +15,8 @@ export interface LaunchOptions {
   env?: Record<string, string>;
   /** Record the window as video (the README GIF, e2e/readme/): a directory and the frame size. */
   recordVideo?: { dir: string; size: { width: number; height: number } };
+  /** Append Electron's stdout and stderr (and Chromium's own logging) here, so a launch that hangs explains itself. */
+  logFile?: string;
   /** Device scale factor; default 1 (visual baselines are baked at 1). Screen clips record at 2 for sharp text. */
   scaleFactor?: number;
 }
@@ -58,10 +60,18 @@ export async function launchStyx(
       ...(opts.screen ? { STYX_SCREEN: opts.screen } : {}),
       ...(opts.theme ? { STYX_THEME: opts.theme } : {}),
       ...(opts.chrome ? { STYX_CHROME: opts.chrome } : {}),
+      ...(opts.logFile ? { ELECTRON_ENABLE_LOGGING: '1' } : {}),
       ...opts.env,
     },
     ...(opts.recordVideo ? { recordVideo: opts.recordVideo } : {}),
   });
+  if (opts.logFile) {
+    const file = opts.logFile;
+    appendFileSync(file, `--- launch ${new Date().toISOString()} userData=${userData}\n`);
+    const tee = (chunk: Buffer) => appendFileSync(file, chunk);
+    app.process().stdout?.on('data', tee);
+    app.process().stderr?.on('data', tee);
+  }
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
   return { app, page, userData };

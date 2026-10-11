@@ -1,0 +1,57 @@
+name: site
+# Deploys heystyx.com (apps/website/deploy/deploy.sh, Cloud Run service styx-web) after every published release, so the
+# version the site states and its structured data never lag the update feed. Built from main, labelled with the newest
+# published release: main can carry a version bump that hasn't shipped yet. Run it by hand after a site-only change.
+#
+# Workload Identity Federation (pool github-site, provider styx-app-site) admits only this workflow on main of
+# styx-app, as the styx-site-deployer service account (variables GCP_SITE_WIF_PROVIDER, GCP_SITE_SA), which can
+# deploy styx-web and nothing on the release bucket.
+on:
+  workflow_run:
+    workflows: [publish]
+    types: [completed]
+  workflow_dispatch:
+permissions: { contents: read }
+concurrency: { group: site, cancel-in-progress: false }
+jobs:
+  deploy:
+    if: >-
+      github.repository == 'NicholasFlemmer/styx-app' &&
+      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - name: Label the build with the newest published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(gh release view -R "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          (cd apps/desktop && npm pkg set version="${tag#v}")
+          echo "Site labelled ${tag#v}" >> "$GITHUB_STEP_SUMMARY"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile --filter '@styx/website...'
+      - run: pnpm tokens:build
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_SITE_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SITE_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Build and deploy
+        env:
+          GTM_ID: ${{ vars.GTM_ID }}
+        run: bash apps/website/deploy/deploy.sh
+      - name: Check the site states the release
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./apps/desktop/package.json').version")
+          for _ in 1 2 3 4 5 6; do
+            curl -fsS "https://heystyx.com/?t=$(date +%s)" | grep -q "\"softwareVersion\":\"$version\"" && { echo "heystyx.com states $version" >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+            sleep 20
+          done
+          echo "::error::heystyx.com does not state $version"; exit 1

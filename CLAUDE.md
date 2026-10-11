@@ -79,7 +79,7 @@ Node ≥ 22, pnpm 10 (`corepack enable`). Run one package with `pnpm -F <name> <
   `sync-pr.yml` there) that merges itself once CI passes; contributors' merged pull requests flow back into STYX.
 - Release: CI only. Bump `apps/desktop/package.json`, then run `release.yml` on styx-app (it waits for green CI,
   builds signed Mac + Windows + Linux into a draft release); publishing the draft runs `publish.yml` (update feed,
-  Homebrew cask). See `.claude/skills/release/SKILL.md`.
+  Homebrew cask), and `site.yml` then redeploys heystyx.com. See `.claude/skills/release/SKILL.md`.
 - README media: `pnpm -F @styx/desktop readme:gif` (after `pnpm build`; needs ffmpeg).
 - DB: `pnpm db:generate` (drizzle-kit, then hand-add CHECKs/triggers; see `/db-migration`), `pnpm db:migrate`,
   `pnpm db:seed`. Tokens: `pnpm tokens:build`. Native ABI trouble: `pnpm rebuild:native`.

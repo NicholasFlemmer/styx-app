@@ -100,9 +100,9 @@ export default function LaunchPage() {
               <img
                 src="/launch/access-request.jpg"
                 width={720}
-                height={964}
+                height={1284}
                 loading="lazy"
-                alt="An access request: Codex asks to read and write the Supabase production database for an hour, with Grant 1h · Touch ID and Deny"
+                alt="An access request: Codex asks to read and write the Supabase production database, with the reason, the scope, once selected as the duration, and Grant once · Touch ID beside Deny"
               />
               <figcaption>An agent asks for production. You decide, for how long, with Touch ID.</figcaption>
             </figure>
