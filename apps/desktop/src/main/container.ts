@@ -1093,13 +1093,14 @@ export function buildContainer(opts: ContainerOptions): Container {
       for (const s of repos.sessions.live()) broker.notifyStopping(s.id);
       retention.stop();
       checkpoints.stop();
-      await usageReports.shutdown();
       refresh.stop();
       updates.stop();
       cliWatch.stop();
       sessions.killAll();
       runs.stopAll();
       devices.shutdown();
+      // After agents and runs are stopped, so a slow network never delays that; capped at 2 s inside.
+      await usageReports.shutdown();
       await hunks.closeAll();
       await treeWatch.closeAll();
       await broker.close();

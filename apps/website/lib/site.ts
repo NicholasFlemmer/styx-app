@@ -29,7 +29,7 @@ export const site = {
   /** When the article on keeping agents away from production (/blog/keeping-agents-away-from-production) last changed. */
   productionPostUpdated: '7 October 2026',
   /** When the docs (content/docs) last changed: the sitemap's date for every docs page. Bump with a docs change. */
-  docsUpdated: '6 October 2026',
+  docsUpdated: '12 October 2026',
   url: process.env['NEXT_PUBLIC_SITE_URL'] ?? 'http://localhost:3100',
   version: desktop.version,
   links: {

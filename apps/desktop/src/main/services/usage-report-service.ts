@@ -41,6 +41,10 @@ export const installIdFrom = (kv: {
 
 /** How often the buffer goes out. Long enough that a busy minute is one request. */
 const FLUSH_MS = 5 * 60_000;
+/** How long one send may take, token refresh included. A count is never worth waiting on. */
+export const SEND_TIMEOUT_MS = 10_000;
+/** At quit the limit is shorter: an unreachable API must not hold the app open (a hung quit gets force-killed). */
+export const QUIT_SEND_TIMEOUT_MS = 2_000;
 
 export interface UsageReportDeps {
   fetch: typeof globalThis.fetch;
@@ -83,7 +87,7 @@ export class UsageReportService {
   }
 
   /** Sends what has accumulated. Never throws; a failure drops the batch rather than retrying into a pile. */
-  async flush(): Promise<void> {
+  async flush(timeoutMs = SEND_TIMEOUT_MS): Promise<void> {
     if (this.buffer.size === 0) return;
     if (!this.deps.enabled()) {
       // Turned off since these were recorded: they are not sent, and they are not kept either.
@@ -92,9 +96,14 @@ export class UsageReportService {
     }
     const events = [...this.buffer.values()].slice(0, USAGE_BATCH_MAX);
     this.buffer.clear();
+    const signal = AbortSignal.timeout(timeoutMs);
     try {
       // Signed out, or the API could not be reached to refresh: the counts still go, under the install alone.
-      const token = await this.deps.token().catch(() => null);
+      const token = await Promise.race([
+        this.deps.token().catch(() => null),
+        new Promise<null>((done) => signal.addEventListener('abort', () => done(null), { once: true })),
+      ]);
+      if (signal.aborted) throw new Error('timed out');
       const batch: UsageBatch = {
         installId: this.deps.installId(),
         version: this.deps.version,
@@ -109,6 +118,7 @@ export class UsageReportService {
           ...(token === null ? {} : { Authorization: `Bearer ${token}` }),
         },
         body: JSON.stringify(batch),
+        signal,
       });
     } catch (e) {
       // A count is not worth a retry, a log line at error, or a moment of anyone's attention.
@@ -122,6 +132,6 @@ export class UsageReportService {
       clearInterval(this.timer);
       this.timer = null;
     }
-    await this.flush();
+    await this.flush(QUIT_SEND_TIMEOUT_MS);
   }
 }

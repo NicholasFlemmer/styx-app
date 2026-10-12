@@ -54,6 +54,8 @@ Styx counts a few things you do so we can see how many people use it, which part
 - `app.crashed.window`: a Styx window crashed.
 - `app.crashed.helper`: one of Styx's helper processes (graphics, network) crashed.
 - `app.ended-unexpectedly`: the last run ended without quitting (a crash, a force quit or a power cut), noticed at the next launch.
+- `app.crashed.main`: the last run ended because Styx itself crashed, noticed at the next launch from a crash report on your machine. The report stays on your machine and is never sent; only this count is.
+- `app.ended-while-quitting`: the last run started quitting but never finished (it hung and was closed by force), noticed at the next launch.
 
 ### What's sent with them
 

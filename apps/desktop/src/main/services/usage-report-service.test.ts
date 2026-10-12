@@ -190,3 +190,37 @@ describe('UsageReportService', () => {
     expect(second).toMatch(/^inst_/);
   });
 });
+
+describe('UsageReportService time limits', () => {
+  // Real timers: AbortSignal.timeout runs on the platform clock, which fake timers do not move.
+  const hanging = (over: { tokenHangs?: boolean } = {}) =>
+    new UsageReportService({
+      fetch: ((_input: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) =>
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))),
+        )) as typeof globalThis.fetch,
+      apiBase: () => 'https://api.test/',
+      token: over.tokenHangs ? () => new Promise<string | null>(() => {}) : async () => 'at-1',
+      installId: () => INSTALL,
+      version: '0.2.6',
+      os: 'linux',
+      enabled: () => true,
+      now: () => 1,
+    });
+
+  it('gives up on an API that never answers instead of holding the caller (a quit must not hang on a count)', async () => {
+    const service = hanging();
+    service.record('app.launched');
+    const started = Date.now();
+    await service.flush(50);
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
+
+  it('gives up on a token refresh that never answers, too', async () => {
+    const service = hanging({ tokenHangs: true });
+    service.record('app.launched');
+    const started = Date.now();
+    await service.flush(50);
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
+});

@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  crashReporter,
   desktopCapturer,
   dialog,
   ipcMain,
@@ -32,6 +33,7 @@ import { Repos } from './db/repos';
 import { isFixtureName, loadFixture, seed, seedDefaults } from './db/seed';
 import { seedDemoRepos } from './db/seed-repos';
 import { attachPtyChannel } from './ipc/pty-channel';
+import { crashDumpTimes, previousRunEnding, quittingMarker, runningMarker } from './run-marker';
 import { createVault } from './services/credential-vault';
 import { seedFixtureVault } from './db/seed-vault';
 import { logger } from './services/logger';
@@ -66,6 +68,10 @@ const fixtureName = isFixtureName(env['STYX_FIXTURE']) ? env['STYX_FIXTURE'] : n
 // --- userData: explicit override, else a temp dir whenever a fixture is requested so real data is never touched.
 if (env['STYX_USER_DATA']) app.setPath('userData', env['STYX_USER_DATA']);
 else if (fixtureName) app.setPath('userData', mkdtempSync(join(tmpdir(), `styx-${fixtureName}-`)));
+
+// Crash reports stay on this machine (userData/Crashpad): never uploaded. The next launch only counts that one was
+// written (app.crashed.main, run-marker.ts), and a person can read or send it themselves when reporting a bug.
+crashReporter.start({ uploadToServer: false });
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -520,11 +526,17 @@ async function boot(): Promise<void> {
   }
   // The heartbeat (discrepancy row 114): one count per launch is what daily actives and retention are made of.
   container.usageReports.record('app.launched');
-  // #125: a run that did not quit cleanly (a crash, a force quit, the Mac losing power) leaves this marker behind,
-  // and the next launch counts it. Only the fact is sent; nothing about what was running.
+  // #125: a run that did not quit cleanly (a crash, a force quit, the Mac losing power, a quit that hung) leaves this
+  // marker behind, and the next launch counts how it ended (run-marker.ts). Only the fact is sent; nothing about
+  // what was running, and never the crash report itself.
   runMarker = join(userData, 'running');
-  if (existsSync(runMarker)) container.usageReports.record('app.ended-unexpectedly');
-  writeFileSync(runMarker, String(Date.now()));
+  const previous = existsSync(runMarker) ? readFileSync(runMarker, 'utf8') : null;
+  for (const name of previousRunEnding(
+    previous,
+    previous === null ? [] : crashDumpTimes(app.getPath('crashDumps')),
+  ))
+    container.usageReports.record(name);
+  writeFileSync(runMarker, runningMarker(Date.now()));
   // #125: crashes while running, as counts. A window's page that died for any reason but a clean exit, and a
   // helper process (graphics, network, a utility) that crashed or ran out of memory.
   app.on('render-process-gone', (_e, _wc, details) => {
@@ -621,14 +633,20 @@ app.on('window-all-closed', () => {
 let quitting = false;
 /** `<userData>/running` while the app runs; removed on a clean quit (#125). */
 let runMarker: string | null = null;
+/** Longest a quit may take before Styx exits regardless. */
+const QUIT_DEADLINE_MS = 5_000;
 app.on('before-quit', (e) => {
   if (quitting || !container) return;
   e.preventDefault();
   quitting = true;
   const c = container;
   container = null;
-  void c
-    .shutdown()
+  // The next launch tells a quit that hung and was killed from a crash by this (run-marker.ts).
+  if (runMarker !== null) writeFileSync(runMarker, quittingMarker(Date.now()));
+  // A quit never waits on anything for long: past the deadline Styx exits anyway, still counted as a clean quit.
+  // Hung quits got force-killed (by the person, or by Linux at logout) and looked like crashes.
+  const deadline = new Promise<void>((done) => setTimeout(done, QUIT_DEADLINE_MS).unref());
+  void Promise.race([c.shutdown(), deadline])
     .catch((err: Error) => logger.warn('shutdown error', { error: err.message }))
     .finally(() => {
       osNotifierRef?.dispose();

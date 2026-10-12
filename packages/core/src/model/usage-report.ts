@@ -51,6 +51,10 @@ export const usageEventSchema = z.enum([
   'app.crashed.window',
   'app.crashed.helper',
   'app.ended-unexpectedly',
+  /** Noticed at the next launch, like the one above: the previous run's main process crashed (a crash dump was
+   * written while it ran), or its quit started but never finished (it hung and was killed). */
+  'app.crashed.main',
+  'app.ended-while-quitting',
   /** An agent finished its first piece of work in a session (#127), however it was asked: the composer, the
    * spawn dialog's first message, or typing straight into the agent's terminal. Once per session. */
   'agent.worked',
