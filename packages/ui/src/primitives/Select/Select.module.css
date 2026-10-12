@@ -17,8 +17,9 @@
     border: 1px solid var(--ln);
     background: transparent;
     color: var(--tx);
-    /* 4 top / 6 bottom: Chromium centres option text in the content box; 13px box lands the text on the prototype's rows */
-    padding: 4px 24px 6px 8px;
+    /* 1 top / 3 bottom: Chromium centres option text in the content box, and the 2px difference lands it on the
+       prototype's rows. The 19px box leaves room for descenders: the earlier 13px one cut "y" and "p" at 2× (#44). */
+    padding: 1px 24px 3px 8px;
     font-family: var(--font-ui);
     font-size: 12px;
     cursor: pointer;

@@ -10,6 +10,8 @@ import { windowKind } from './state/bridge';
  * Monaco and the whole screen set before showing a transcript.
  */
 const kind = windowKind();
+// Read by app.css: the shell's minimum size is the main window's; the pop-out and the dock are far smaller.
+document.documentElement.dataset.window = kind;
 const Root = lazy(async () => {
   if (kind === 'popout') return { default: (await import('./app/PopoutRoot')).PopoutRoot };
   if (kind === 'dock') return { default: (await import('./app/DockRoot')).DockRoot };

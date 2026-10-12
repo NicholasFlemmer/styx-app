@@ -1,9 +1,4 @@
 @layer screens {
-  /* The pop-out is 400×500 (min 320×400): the shell's main-window minimum must not apply. */
-  :global(html[data-window='popout'] #root) {
-    min-width: 0;
-    min-height: 0;
-  }
   .popout {
     position: absolute;
     inset: 0;
