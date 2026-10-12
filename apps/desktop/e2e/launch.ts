@@ -1,5 +1,5 @@
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
-import { appendFileSync, mkdtempSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -65,6 +65,16 @@ export async function launchStyx(
     },
     ...(opts.recordVideo ? { recordVideo: opts.recordVideo } : {}),
   });
+  // Each launch gets its own profile folder; without this they piled up in the temp dir (gigabytes over a few weeks).
+  // STYX_E2E_KEEP=1 keeps them for reading a failed run (styx.db, logs/).
+  if (!process.env['STYX_E2E_KEEP'])
+    app.once('close', () => {
+      try {
+        rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      } catch {
+        // Windows can hold a file a moment past exit; a folder left behind is better than a failed test.
+      }
+    });
   if (opts.logFile) {
     const file = opts.logFile;
     appendFileSync(file, `--- launch ${new Date().toISOString()} userData=${userData}\n`);

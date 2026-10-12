@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -9,7 +17,7 @@ import {
   MAX_MESSAGE_UPLOAD_BYTES,
   MAX_UPLOAD_BYTES,
 } from '@styx/core';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import {
   attachmentName,
   composeTurn,
@@ -20,8 +28,15 @@ import {
   type PrepareOptions,
 } from './message-attachments';
 
+// Each setup writes a 50 MB file; remove the folders when the file's tests are done.
+const bases: string[] = [];
+afterAll(() => {
+  for (const base of bases) rmSync(base, { recursive: true, force: true });
+});
+
 const setup = (git = false) => {
   const base = mkdtempSync(join(tmpdir(), 'styx-msg-attach-'));
+  bases.push(base);
   const root = join(base, 'wt');
   const outside = join(base, 'outside');
   mkdirSync(join(root, 'src'), { recursive: true });
