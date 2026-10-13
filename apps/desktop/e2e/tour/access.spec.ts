@@ -25,6 +25,9 @@ test('tour: access request granted once', async () => {
     const sheet = page.getByRole('dialog', { name: /supabase/i });
     await steps.restPointer(page);
     const grant = sheet.getByRole('button', { name: /^grant/i });
+    // The story is a single approval: pick once (the sheet offers once, 1h, session and always).
+    await sheet.getByRole('radio', { name: 'once' }).click();
+    await steps.restPointer(page);
     await t.reach('access-sheet', sheet, {
       reason: sheet.getByText(/to run migration/),
       scope: sheet.getByText('Write', { exact: true }),
