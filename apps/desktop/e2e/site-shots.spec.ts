@@ -214,8 +214,9 @@ test.describe('site shots', () => {
         writeFileSync(join(dir, 'checkout', `${size}.wire.html`), checkout(size, true));
       }
       await expect(page.locator('[data-artboard="checkout/phone.html"]')).toBeVisible({ timeout: 10_000 });
-      // Room for every size: the canvas at 25%.
+      // Room for every size: the hi-fi pass, the canvas at 25%.
       await quiet(page);
+      await page.click('[data-design-fidelity="hi"]');
       await page.getByLabel('Zoom', { exact: true }).selectOption('0.25');
       await page.click('[data-design-select]');
       await page.frameLocator('[data-artboard="checkout/desktop.html"] iframe').locator('#pay').click();

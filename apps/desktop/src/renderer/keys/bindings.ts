@@ -30,6 +30,10 @@ export const pendingGrantOfActiveSession = (): Grant | null => {
   return model().grants.byId[ask.grantId] ?? null;
 };
 
+/** Focus is on the Design canvas, where Mod+1 is 100% (ADR-0030): the lane chord steps aside. */
+const onDesignCanvas = (target: EventTarget | null): boolean =>
+  target instanceof Element && target.closest('[data-design-stage]') !== null;
+
 const focusAgent = (n: number): boolean => {
   const ui = useUiStore.getState();
   if (ui.projectId === null) return false;
@@ -172,7 +176,7 @@ export const shellBindings = (): KeyBinding[] => [
     id: `focusAgent:${i + 1}`,
     chord,
     scope: 'workspace',
-    when: () => useUiStore.getState().screen === 'workspace',
+    when: (ctx) => useUiStore.getState().screen === 'workspace' && !onDesignCanvas(ctx.event.target),
     run: () => focusAgent(i + 1),
   })),
   // Focus-agent also works from global while the Workspace screen is shown (focus may sit on body).
@@ -180,7 +184,7 @@ export const shellBindings = (): KeyBinding[] => [
     id: `focusAgent:global:${i + 1}`,
     chord,
     scope: 'global',
-    when: () => useUiStore.getState().screen === 'workspace',
+    when: (ctx) => useUiStore.getState().screen === 'workspace' && !onDesignCanvas(ctx.event.target),
     run: () => focusAgent(i + 1),
   })),
   { id: 'popoutChat', chord: shortcuts.popoutChat, scope: 'workspace', run: popoutOrDock },

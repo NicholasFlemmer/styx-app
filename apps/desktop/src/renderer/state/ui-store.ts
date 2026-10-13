@@ -1,4 +1,12 @@
-import type { EventPayload, PaletteScope, ProjectId, ReadModel, SessionId, SnakeGame } from '@styx/core';
+import type {
+  CanvasView,
+  EventPayload,
+  PaletteScope,
+  ProjectId,
+  ReadModel,
+  SessionId,
+  SnakeGame,
+} from '@styx/core';
 import { newSnakeGame, pauseSnake, taskKey } from '@styx/core';
 import { useReadModel } from './read-model';
 import type { TaskLaunch } from '../features/tasks/task-launch';
@@ -109,6 +117,11 @@ export interface UiState {
    * gone after a trip to Settings). Kept here, per session, for as long as the window lives.
    */
   composerText: Record<string, string>;
+  /**
+   * The Design canvas's zoom and pan, by worktree (ADR-0030): a person's view, not the project's, so it lives here and
+   * never in `canvas.json`. Kept for as long as the window lives.
+   */
+  designViews: Record<string, CanvasView>;
   arcade: ArcadeState | null;
   /** The first-run walkthrough is on screen (#124): started once after onboarding, or from the palette. */
   tourOpen: boolean;
@@ -159,6 +172,7 @@ export interface UiActions {
   prefillDraft(sessionId: SessionId, text: string): void;
   clearDraft(sessionId: SessionId): void;
   setComposerText(sessionId: SessionId, text: string): void;
+  setDesignView(worktreeId: string, view: CanvasView): void;
   /** Opens Snake in the project's chat pane (a fresh board from `seed`), replacing any game already open. */
   openArcade(projectId: ProjectId, seed: number): void;
   setArcadeGame(game: SnakeGame): void;
@@ -216,6 +230,7 @@ export const useUiStore = create<UiStore>()(
     dismissedBanners: [],
     drafts: {},
     composerText: {},
+    designViews: {},
     arcade: null,
     tourOpen: false,
 
@@ -430,6 +445,10 @@ export const useUiStore = create<UiStore>()(
       set((s) => {
         if (text === '') delete s.composerText[sessionId];
         else if (s.composerText[sessionId] !== text) s.composerText[sessionId] = text;
+      }),
+    setDesignView: (worktreeId, view) =>
+      set((s) => {
+        s.designViews[worktreeId] = { zoom: view.zoom, x: view.x, y: view.y };
       }),
     openArcade: (projectId, seed) =>
       set((s) => {

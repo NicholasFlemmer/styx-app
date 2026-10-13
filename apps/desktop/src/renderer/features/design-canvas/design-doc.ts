@@ -10,8 +10,11 @@ export const UI_STYLE = 'data-styx-ui';
 export const HOVER_ATTR = 'data-styx-hover';
 export const PICKED_ATTR = 'data-styx-picked';
 
-const UI_CSS = `[${HOVER_ATTR}]{outline:1.5px dashed #9fc21c !important;outline-offset:2px !important}
-[${PICKED_ATTR}]{outline:2px solid #d6ff3d !important;outline-offset:3px !important}
+/** The canvas's zoom, set on each frame's root, so the outlines keep their size on screen (ADR-0030). */
+export const ZOOM_VAR = '--styx-z';
+
+const UI_CSS = `[${HOVER_ATTR}]{outline:calc(1.5px / var(${ZOOM_VAR}, 1)) dashed #9fc21c !important;outline-offset:calc(2px / var(${ZOOM_VAR}, 1)) !important}
+[${PICKED_ATTR}]{outline:calc(2px / var(${ZOOM_VAR}, 1)) solid #d6ff3d !important;outline-offset:calc(3px / var(${ZOOM_VAR}, 1)) !important}
 html,body{cursor:default}`;
 
 /**
@@ -48,6 +51,8 @@ const withPolicy = (doctype: string, policy: string, rest: string, css: string):
 /** The file to save from an edited frame: the tokens link back, Styx's styles and outline marks gone. */
 export const serializeForSave = (doc: Document): string => {
   const copyDoc = doc.documentElement.cloneNode(true) as HTMLElement;
+  copyDoc.style.removeProperty(ZOOM_VAR);
+  if (copyDoc.getAttribute('style') === '') copyDoc.removeAttribute('style');
   for (const el of copyDoc.querySelectorAll(`[${UI_STYLE}], meta[http-equiv="Content-Security-Policy"]`))
     el.remove();
   const tokens = copyDoc.querySelector(`[${TOKENS_STYLE}]`);

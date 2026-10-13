@@ -205,4 +205,40 @@ describe('DesignService (#140)', () => {
     await lone.svc.changed('wt-d', ['checkout/desktop.html']);
     expect(lone.sessionsPort.tell).not.toHaveBeenCalled();
   });
+
+  describe('layout (canvas.json, ADR-0030)', () => {
+    it('is null until saved; saved positions come back without files that are gone; bad files are no layout', () => {
+      const { svc, dir } = setup();
+      expect(svc.list('wt-d').layout).toBeNull();
+      svc.setLayout('wt-d', {
+        version: 1,
+        boards: { 'checkout/desktop.html': { x: 8, y: 0 }, 'gone/desktop.html': { x: 0, y: 0 } },
+      });
+      expect(readFileSync(join(dir, 'canvas.json'), 'utf8')).toContain('"checkout/desktop.html"');
+      expect(svc.list('wt-d').layout).toEqual({
+        version: 1,
+        boards: { 'checkout/desktop.html': { x: 8, y: 0 } },
+      });
+      writeFileSync(join(dir, 'canvas.json'), '{"version": 9, "boards": {}}');
+      expect(svc.list('wt-d').layout).toBeNull();
+      writeFileSync(join(dir, 'canvas.json'), 'not json');
+      expect(svc.list('wt-d').layout).toBeNull();
+    });
+
+    it('does not tell build tasks or commit: moving boards is not a design change', () => {
+      const { svc, git, sessionsPort } = setup();
+      svc.setLayout('wt-d', { version: 1, boards: {} });
+      expect(git.commitOwnedPaths).not.toHaveBeenCalled();
+      expect(sessionsPort.tell).not.toHaveBeenCalled();
+    });
+
+    it('refuses to write through a hard link', () => {
+      const { svc, dir, root } = setup();
+      const other = join(root, 'other.json');
+      writeFileSync(other, 'keep');
+      linkSync(other, join(dir, 'canvas.json'));
+      expect(() => svc.setLayout('wt-d', { version: 1, boards: {} })).toThrow();
+      expect(readFileSync(other, 'utf8')).toBe('keep');
+    });
+  });
 });

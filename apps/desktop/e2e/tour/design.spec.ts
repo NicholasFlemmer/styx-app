@@ -115,24 +115,24 @@ test('tour: design screens before building', async () => {
     await page.click('[data-workspace-mode="canvas"]');
     const canvas = page.locator('[data-design-canvas]');
     const board = (size: string) => canvas.locator(`[data-artboard="checkout/${size}.html"]`);
-    const row = canvas.locator('[data-design-row="checkout"]');
+    const stage = canvas.locator('[data-design-stage]');
     for (const size of ['desktop', 'tablet', 'phone'])
       await expect(board(size).locator('iframe')).toBeVisible();
     // Each screen has drawn (its Pay button is there) before the picture.
     for (const size of ['desktop', 'tablet', 'phone'])
       await expect(board(size).frameLocator('iframe').locator('#pay')).toBeVisible();
-    // A quarter size, so the three sizes sit side by side beside the chat.
-    await canvas.getByLabel('Zoom').selectOption('0.25');
+    // Zoom to fit, so the three sizes sit side by side beside the chat (they open in a row, as before).
+    await canvas.locator('[data-design-fit]').click();
     const build = canvas.locator('[data-design-build]');
     await steps.restPointer(page);
-    // The scrolling area the rows sit in: the row itself is narrower than its boards.
-    await t.reach('screens', row.locator('xpath=..'), {
+    // The canvas the boards sit on.
+    await t.reach('screens', stage, {
       desktop: board('desktop'),
       tablet: board('tablet'),
       phone: board('phone'),
     });
     await t.reach('canvas', canvas, {
-      row,
+      stage,
       desktop: board('desktop'),
       tablet: board('tablet'),
       phone: board('phone'),

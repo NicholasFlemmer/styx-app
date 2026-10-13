@@ -1,6 +1,7 @@
-import { AGENT_LABEL, copy, fill, type Agent, type DesignTokens } from '@styx/core';
+import { AGENT_LABEL, copy, fill, screenName, type Agent, type DesignTokens } from '@styx/core';
 import { Button, Textarea } from '@styx/ui';
 import { useId, useState } from 'react';
+import { useUi } from '../../state/hooks';
 import { elementName, type CanvasSelection } from './design-doc';
 import s from './DesignCanvas.module.css';
 
@@ -172,6 +173,7 @@ function ElementFields({
 export function SelectionPanel({ selection, tokens, agent, busy, onEdited, onSend }: SelectionPanelProps) {
   const [text, setText] = useState('');
   const tellId = useId();
+  const mac = useUi((u) => u.platform) === 'darwin';
   const name = AGENT_LABEL[agent];
   const d = copy.chat.design;
   const send = () => {
@@ -185,7 +187,7 @@ export function SelectionPanel({ selection, tokens, agent, busy, onEdited, onSen
         <div className={s['secHead']}>
           <b>{selection.kind === 'element' ? elementName(selection.el) : d.area.title}</b>
           <span>
-            {selection.file.screen} · {d.size[selection.file.size]}
+            {screenName(selection.file.screen)} · {d.size[selection.file.size]}
           </span>
         </div>
         {selection.kind === 'element' ? (
@@ -208,7 +210,7 @@ export function SelectionPanel({ selection, tokens, agent, busy, onEdited, onSen
       <section className={s['sec']}>
         <label className={s['secHead']} htmlFor={tellId}>
           <b>{fill(d.tell, { agent: name })}</b>
-          <span>⌘⏎</span>
+          <span>{mac ? '⌘⏎' : 'Ctrl+Enter'}</span>
         </label>
         <Textarea
           id={tellId}

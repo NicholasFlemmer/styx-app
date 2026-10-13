@@ -109,7 +109,8 @@ test('design task: screens on the canvas, select to edit and to tell the agent, 
     // A dragged area on the phone screen (Escape first: the element's panel goes, the canvas has its width back).
     await page.keyboard.press('Escape');
     await expect(page.locator('[data-design-inspector]')).toHaveCount(0);
-    await page.locator('[data-artboard="checkout/phone.html"]').scrollIntoViewIfNeeded();
+    // Both boards in view (the canvas is freeform now: Zoom to fit, not a scroll).
+    await page.click('[data-design-fit]');
     const phone = page.locator('[data-artboard="checkout/phone.html"] iframe');
     const box = await phone.boundingBox();
     if (box === null) throw new Error('phone screen not drawn');

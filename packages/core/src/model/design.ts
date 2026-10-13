@@ -22,9 +22,7 @@ export type DesignFidelity = z.infer<typeof designFidelitySchema>;
 
 const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 export const designTokensSchema = z.object({
-  colors: z
-    .array(z.object({ name: z.string().regex(/^[a-z][a-z0-9-]{0,31}$/), value: hex }))
-    .max(24),
+  colors: z.array(z.object({ name: z.string().regex(/^[a-z][a-z0-9-]{0,31}$/), value: hex })).max(24),
   fonts: z.object({ heading: z.string().min(1).max(80), body: z.string().min(1).max(80) }),
   scale: z
     .array(
@@ -79,15 +77,84 @@ export const designScreenSchema = z.object({
 });
 export type DesignScreen = z.infer<typeof designScreenSchema>;
 
+const PATH_RE = /^([a-z0-9][a-z0-9-]{0,63})\/(desktop|tablet|phone)(\.wire)?\.html$/;
+/**
+ * Where the boards sit on the Design canvas (ADR-0030): `.styx/designs/canvas.json`, beside the screens it places, so
+ * the layout is committed and landed with them. Positions are canvas pixels at 100%, keyed by screen file path
+ * (relative to `DESIGN_DIR`). Never holds anything but positions.
+ */
+export const DESIGN_CANVAS_FILE = 'canvas.json';
+/** How far from the origin a board may be put (canvas px); keeps a hand-edited file from sending one to infinity. */
+export const CANVAS_EXTENT = 1_000_000;
+
+const canvasCoord = z.number().int().min(-CANVAS_EXTENT).max(CANVAS_EXTENT);
+export const canvasPointSchema = z.object({ x: canvasCoord, y: canvasCoord });
+export type CanvasPoint = z.infer<typeof canvasPointSchema>;
+
+export const designCanvasFileSchema = z.object({
+  version: z.literal(1),
+  boards: z
+    .record(z.string().regex(PATH_RE), canvasPointSchema)
+    .refine((b) => Object.keys(b).length <= 1000, {
+      message: 'at most 1000 boards',
+    }),
+});
+export type DesignCanvasFile = z.infer<typeof designCanvasFileSchema>;
+
+export type DesignCanvasParseResult =
+  | { ok: true; file: DesignCanvasFile }
+  | { ok: false; error: { code: 'invalid-json' | 'invalid-schema' | 'newer-version'; message: string } };
+
+/**
+ * `canvas.json`, validated like `.styx/project.json`: a newer version is refused rather than misread. The canvas
+ * treats any failure as "no layout yet" and opens in the default rows.
+ */
+export const parseDesignCanvasFile = (text: string): DesignCanvasParseResult => {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (e) {
+    return {
+      ok: false,
+      error: { code: 'invalid-json', message: e instanceof Error ? e.message : 'invalid JSON' },
+    };
+  }
+  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
+    const version = (raw as { version?: unknown }).version;
+    if (typeof version === 'number' && version > 1)
+      return {
+        ok: false,
+        error: {
+          code: 'newer-version',
+          message: `canvas.json version ${version} is newer than this Styx supports (1)`,
+        },
+      };
+  }
+  const parsed = designCanvasFileSchema.safeParse(raw);
+  if (!parsed.success)
+    return { ok: false, error: { code: 'invalid-schema', message: z.prettifyError(parsed.error) } };
+  return { ok: true, file: parsed.data };
+};
+
+/** Stable output: boards sorted by path, 2-space indent, trailing newline (quiet diffs in review). */
+export const serializeDesignCanvasFile = (file: DesignCanvasFile): string => {
+  const boards: Record<string, CanvasPoint> = {};
+  for (const path of Object.keys(file.boards).sort()) {
+    const p = file.boards[path];
+    if (p !== undefined) boards[path] = { x: p.x, y: p.y };
+  }
+  return `${JSON.stringify({ version: 1, boards }, null, 2)}\n`;
+};
+
 export const designListSchema = z.object({
   /** The worktree the design lives in (a build task's linked design lives in its design task's worktree). */
   worktreeId: z.string(),
   screens: z.array(designScreenSchema),
   tokens: designTokensSchema.nullable(),
+  /** The saved board positions (`canvas.json`); null until something is moved, or when the file does not parse. */
+  layout: designCanvasFileSchema.nullable(),
 });
 export type DesignList = z.infer<typeof designListSchema>;
-
-const PATH_RE = /^([a-z0-9][a-z0-9-]{0,63})\/(desktop|tablet|phone)(\.wire)?\.html$/;
 
 /** A screen file's place in the design, or null for anything that is not one (tokens, notes, images). */
 export const parseDesignPath = (

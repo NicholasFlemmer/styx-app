@@ -19,6 +19,11 @@ export interface LaunchOptions {
   logFile?: string;
   /** Device scale factor; default 1 (visual baselines are baked at 1). Screen clips record at 2 for sharp text. */
   scaleFactor?: number;
+  /**
+   * Reuse this userData (a relaunch over the same profile, e.g. to check something persisted). The caller owns the
+   * folder: it is not removed when the app closes.
+   */
+  userData?: string;
 }
 
 /** Drops ELECTRON_RUN_AS_NODE (set by VS Code extension hosts) so Electron boots as an app, not as Node. */
@@ -40,7 +45,7 @@ function cleanEnv(): Record<string, string> {
 export async function launchStyx(
   opts: LaunchOptions = {},
 ): Promise<{ app: ElectronApplication; page: Page; userData: string }> {
-  const userData = mkdtempSync(join(tmpdir(), 'styx-e2e-'));
+  const userData = opts.userData ?? mkdtempSync(join(tmpdir(), 'styx-e2e-'));
   const app = await electron.launch({
     args: [
       resolve(__dirname, '../out/main/index.js'),
@@ -67,7 +72,7 @@ export async function launchStyx(
   });
   // Each launch gets its own profile folder; without this they piled up in the temp dir (gigabytes over a few weeks).
   // STYX_E2E_KEEP=1 keeps them for reading a failed run (styx.db, logs/).
-  if (!process.env['STYX_E2E_KEEP'])
+  if (!process.env['STYX_E2E_KEEP'] && opts.userData === undefined)
     app.once('close', () => {
       try {
         rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });

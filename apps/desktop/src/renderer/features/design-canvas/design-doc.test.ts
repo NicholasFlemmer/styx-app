@@ -7,6 +7,7 @@ import {
   describeSelection,
   elementName,
   selectorOf,
+  ZOOM_VAR,
   serializeForSave,
 } from './design-doc';
 
@@ -62,6 +63,17 @@ describe('design-doc (#140)', () => {
     expect(out).toContain('>Pay now</button>');
     expect(out).not.toContain(PICKED_ATTR);
     expect(out).not.toContain('data-styx');
+  });
+
+  it('leaves the canvas’s zoom (ADR-0030) out of the saved file, and keeps a style the agent wrote', () => {
+    const doc = parse(buildSrcdoc('<html style="color: red"><body><p>x</p></body></html>', 'css'));
+    doc.documentElement.style.setProperty(ZOOM_VAR, '0.33');
+    const out = serializeForSave(doc);
+    expect(out).not.toContain(ZOOM_VAR);
+    expect(out).toContain('style="color: red;"');
+    const bare = parse(buildSrcdoc('<p>x</p>', 'css'));
+    bare.documentElement.style.setProperty(ZOOM_VAR, '2');
+    expect(serializeForSave(bare)).not.toContain('style=');
   });
 
   it('names elements in words and finds them again by selector', () => {

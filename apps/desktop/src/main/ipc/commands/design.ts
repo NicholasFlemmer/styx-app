@@ -13,6 +13,10 @@ export function registerDesignCommands(bus: CommandBus, app: Container): void {
     app.design.setTokens(worktreeId, tokens);
     return {};
   });
+  bus.register('design.setLayout', ({ worktreeId, layout }) => {
+    app.design.setLayout(worktreeId, layout);
+    return {};
+  });
   bus.register('design.capture', async ({ rect }, ctx) => {
     const png = await app.captureWindow(ctx.senderId, rect);
     return { image: png === null ? null : png.toString('base64') };

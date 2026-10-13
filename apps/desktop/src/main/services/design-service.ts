@@ -16,16 +16,20 @@ import {
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import {
   DEFAULT_DESIGN_TOKENS,
+  DESIGN_CANVAS_FILE,
   DESIGN_DIR,
   copy,
   designScreens,
   designTokensSchema,
+  parseDesignCanvasFile,
+  serializeDesignCanvasFile,
   fill,
   parseDesignPath,
   screenName,
   taskOf,
   tokensCss,
   type Agent,
+  type DesignCanvasFile,
   type DesignFile,
   type DesignList,
   type DesignTokens,
@@ -128,6 +132,24 @@ const readTokens = (dir: string): DesignTokens | null => {
 };
 
 /**
+ * The saved board positions (ADR-0030), or null: no file, a link, or anything that does not parse is "no layout yet"
+ * and the canvas opens in the default rows. Positions for files that are gone are left out.
+ */
+const readLayout = (dir: string, files: readonly DesignFile[]): DesignCanvasFile | null => {
+  const abs = join(dir, DESIGN_CANVAS_FILE);
+  if (!existsSync(abs) || isLink(abs)) return null;
+  try {
+    const parsed = parseDesignCanvasFile(readOwned(abs));
+    if (!parsed.ok) return null;
+    const present = new Set(files.map((f) => f.path));
+    const boards = Object.fromEntries(Object.entries(parsed.file.boards).filter(([p]) => present.has(p)));
+    return { version: 1, boards };
+  } catch {
+    return null;
+  }
+};
+
+/**
  * Tidies a hand-edited screen: script elements and inline handlers out. Not a security boundary (an agent writes the
  * files directly); no script in a design runs because the canvas draws screens in frames without `allow-scripts`.
  */
@@ -193,11 +215,25 @@ export class DesignService {
 
   list(worktreeId: string): DesignList {
     const dir = this.dirOf(worktreeId);
+    const files = this.files(dir);
     return {
       worktreeId,
-      screens: designScreens(this.files(dir)),
+      screens: designScreens(files),
       tokens: dir === null ? null : readTokens(dir),
+      layout: dir === null ? null : readLayout(dir, files),
     };
+  }
+
+  /**
+   * Where the boards sit (ADR-0030): `canvas.json` in the worktree's design folder, written like a screen (no links
+   * followed, no hard links written through). Not a design change: build tasks are not told about it, but it is
+   * committed with the folder whenever the design is.
+   */
+  setLayout(worktreeId: string, layout: DesignCanvasFile): void {
+    const dir = this.dirOf(worktreeId, true) ?? fail('invalid-input', 'the design folder is linked away');
+    const abs = join(dir, DESIGN_CANVAS_FILE);
+    if (isLink(abs)) fail('invalid-input', 'canvas.json is a link');
+    writeOwned(abs, serializeDesignCanvasFile(layout));
   }
 
   read(worktreeId: string, path: string): { html: string; css: string } {

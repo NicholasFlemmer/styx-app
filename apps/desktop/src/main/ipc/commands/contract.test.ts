@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { COMMAND_NAMES, commandResultSchema, commands, fixtures } from '@styx/core';
@@ -450,5 +450,55 @@ describe('project.remove keeps the threads; adding the folder again brings them 
     expect(refused.ok).toBe(false);
     expect(app.repos.projects.get(projectId)).not.toBeNull();
     expect(app.repos.sessions.byProject(projectId).length).toBeGreaterThan(0);
+  });
+
+  describe('design.setLayout (ADR-0030)', () => {
+    const setup = () => {
+      const t = makeTestApp();
+      const root = mkdtempSync(join(tmpdir(), 'styx-canvas-'));
+      mkdirSync(join(root, '.styx', 'designs', 'checkout'), { recursive: true });
+      writeFileSync(join(root, '.styx', 'designs', 'checkout', 'desktop.html'), '<p>pay</p>');
+      const wt = t.app.repos.worktrees.get(fixtures.ids.worktree.fixCheckout);
+      if (!wt) throw new Error('fixture worktree missing');
+      t.app.repos.worktrees.upsert({ ...wt, path: root });
+      return { ...t, root, worktreeId: wt.id };
+    };
+
+    it('writes canvas.json in the worktree and design.list reads it back', async () => {
+      const { app, sender, root, worktreeId } = setup();
+      const before = await app.bus.dispatch(sender, 'design.list', { worktreeId });
+      expect(before).toMatchObject({ ok: true, value: { layout: null } });
+      const layout = { version: 1 as const, boards: { 'checkout/desktop.html': { x: 1360, y: -8 } } };
+      const r = await app.bus.dispatch(sender, 'design.setLayout', { worktreeId, layout });
+      expect(commandResultSchema('design.setLayout').safeParse(r).success).toBe(true);
+      expect(r).toEqual({ ok: true, value: {} });
+      expect(JSON.parse(readFileSync(join(root, '.styx', 'designs', 'canvas.json'), 'utf8'))).toEqual(layout);
+      const after = await app.bus.dispatch(sender, 'design.list', { worktreeId });
+      expect(commands['design.list'].output.safeParse(after.ok ? after.value : null).success).toBe(true);
+      expect(after).toMatchObject({ ok: true, value: { layout } });
+    });
+
+    it('refuses a layout that is not positions of screen files, and a canvas.json that is a link', async () => {
+      const { app, sender, root, worktreeId } = setup();
+      const bad = await app.bus.dispatch(sender, 'design.setLayout', {
+        worktreeId,
+        layout: { version: 1, boards: { '../../outside.html': { x: 0, y: 0 } } },
+      });
+      expect(bad.ok).toBe(false);
+      const outside = join(mkdtempSync(join(tmpdir(), 'styx-outside-')), 'x.json');
+      writeFileSync(outside, 'keep');
+      symlinkSync(outside, join(root, '.styx', 'designs', 'canvas.json'));
+      const linked = await app.bus.dispatch(sender, 'design.setLayout', {
+        worktreeId,
+        layout: { version: 1, boards: {} },
+      });
+      expect(linked.ok).toBe(false);
+      expect(readFileSync(outside, 'utf8')).toBe('keep');
+      // A linked canvas.json is no layout, not a read through the link.
+      expect(await app.bus.dispatch(sender, 'design.list', { worktreeId })).toMatchObject({
+        ok: true,
+        value: { layout: null },
+      });
+    });
   });
 });

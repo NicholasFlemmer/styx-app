@@ -57,7 +57,7 @@ import {
   taskKindSchema,
   transcriptMessageSchema,
 } from '../model/session';
-import { designListSchema, designTokensSchema } from '../model/design';
+import { designCanvasFileSchema, designListSchema, designTokensSchema } from '../model/design';
 import { appSettingsSchema, previewDeviceSchema, projectSettingsSchema } from '../model/settings';
 import { pendingAskSchema } from '../model/session';
 import { notificationSchema } from '../model/notification';
@@ -511,6 +511,14 @@ export const commands = {
   /** Type and colour: writes tokens.json and tokens.css. */
   'design.setTokens': {
     input: z.object({ worktreeId: worktreeIdSchema, tokens: designTokensSchema }),
+    output: ok,
+  },
+  /**
+   * Where the boards sit (ADR-0030): writes `.styx/designs/canvas.json` in the worktree, positions only. Read back
+   * through `design.list` (`layout`).
+   */
+  'design.setLayout': {
+    input: z.object({ worktreeId: worktreeIdSchema, layout: designCanvasFileSchema }),
     output: ok,
   },
   /** A picture of part of the calling window (a selection on the canvas), PNG base64. */

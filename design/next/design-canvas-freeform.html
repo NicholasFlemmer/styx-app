@@ -1,0 +1,859 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Styx next: the Design tab as a freeform canvas</title>
+<!--
+  MOCKUP: the Design tab as a freeform canvas (owner report, 13 Oct 2026: "all the designs get laid out vertically,
+  you can't move them around, and you can't zoom using a touchpad or mouse").
+
+  Interactive. Open the file in a browser and try it; the notes under the window say the same as this block.
+
+  Interaction model
+  - Zoom toward the pointer: trackpad pinch (wheel + ctrlKey), Ctrl/⌘ + mouse wheel, ⌘+ / ⌘−, ⌘0 zoom to fit,
+    ⌘1 100%. Range 10%–400%. The zoom control in the toolbar shows the percentage and follows every gesture.
+  - Pan: two-finger scroll and the mouse wheel (Shift + wheel pans sideways), Space + drag, middle-button drag, and
+    a left drag on empty canvas. A grab cursor shows while panning.
+  - Move a board by dragging its name above it; positions snap to an 8px grid. A focused name moves its board with
+    the arrow keys: 8px, or 40px with Shift. ⌘Z undoes the last move or tidy.
+  - Zoom to fit and Tidy up in the toolbar. Tidy up lays the boards out as today: one row per screen, variants side by
+    side (desktop, tablet, phone; wireframe before hi-fi).
+  - First open uses today's layout at today's 33%, so nothing looks unfamiliar until something moves.
+
+  What the build has to do (not shown as UI)
+  - Positions persist per project in `.styx/designs/canvas.json` beside the screens: `{ version: 1, boards: { "<screen>/<file>": { x, y } } }`,
+    zod-validated in core (like project.json), written only through a named command (`design.setLayout`, same
+    no-follow write rules as `design.write`, debounced 400ms after a move ends). It lives in the design task's
+    worktree, so it is committed and landed with the screens and the layout travels with the repo. A missing or
+    invalid file means today's layout; entries for files that no longer exist are dropped on the next write.
+    Zoom and pan are a person's view, not the project's: they stay in the ui-store, keyed by session.
+  - A screen an agent adds is placed without overlapping: a new variant goes right of its screen's rightmost board,
+    a new screen starts a row under the lowest board, then it steps right until it overlaps nothing. The view does
+    not jump; a toast offers to show it.
+  - Select (V) and area select work at any zoom: pointer positions are divided by the zoom into board coordinates,
+    so the pick, the area box, the capture rectangle and the element list are the same at 10% or 400%.
+-->
+<style>
+@font-face { font-family: 'Archivo'; src: url('../../packages/tokens/fonts/archivo-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'Archivo'; src: url('../../packages/tokens/fonts/archivo-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+@font-face { font-family: 'Archivo'; src: url('../../packages/tokens/fonts/archivo-latin-600-normal.woff2') format('woff2'); font-weight: 600; }
+@font-face { font-family: 'Archivo'; src: url('../../packages/tokens/fonts/archivo-latin-700-normal.woff2') format('woff2'); font-weight: 700; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+:root {
+  /* Styx tokens, verbatim (packages/tokens/css/tokens.css, dark) */
+  --page:#181916; --bg:#0d0e0c; --s1:#121411; --s2:#1c1e1a; --ln:#2d302a; --tx:#e9ebe3; --mu:#858a81;
+  --ac:#d6ff3d; --acx:#0d0e0c; --act:#d6ff3d; --add:rgba(214,255,61,.13); --dim:rgba(0,0,0,.6);
+  --agent-claude:#e8916a; --paper:#f7f8f3; --paper-mu:#5d6259;
+  --font-ui: 'Archivo', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --motion-toast: 160ms;
+}
+@keyframes styx-toast-in { from { transform: translateY(-8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { @keyframes styx-toast-in { from { opacity: 0; } to { opacity: 1; } } }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+html, body { background: var(--page); color: var(--tx); font: 400 14px/1.5 var(--font-ui); }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
+.mono { font-family: var(--font-mono); font-size: 12px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ============ window chrome (as in styx-next-design.html) ============ */
+.win { height: 100vh; min-height: 640px; display: grid; grid-template-rows: 38px 1fr 26px; background: var(--bg); border-bottom: 1px solid var(--ln); overflow: hidden; position: relative; }
+.title { display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid var(--ln); background: var(--s1); font-size: 13px; }
+.lights { display: flex; gap: 8px; width: 60px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); }
+.word { font: 600 12px/1 var(--font-ui); letter-spacing: .24em; }
+.crumb { display: flex; gap: 8px; color: var(--mu); }
+.crumb b { color: var(--tx); font-weight: 600; }
+.search { margin-left: auto; width: 320px; border: 1px solid var(--ln); padding: 5px 10px; color: var(--mu); display: flex; justify-content: space-between; }
+.search kbd { font: 500 11px var(--font-mono); }
+.me { width: 24px; height: 24px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); font: 600 10px/22px var(--font-ui); text-align: center; }
+.frame { display: grid; grid-template-columns: 56px 1fr 360px; min-height: 0; }
+.rail { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; }
+.rail .pj { width: 36px; height: 36px; border: 1px solid var(--ln); display: grid; place-items: center; font: 700 11px var(--font-ui); }
+.rail .pj[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.rail .pj.add { border-style: dashed; color: var(--mu); }
+.rail hr { width: 24px; border: 0; border-top: 1px solid var(--ln); margin: 4px 0; }
+.rail .ic { width: 36px; height: 36px; display: grid; place-items: center; color: var(--mu); }
+.rail .ic svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.status { display: flex; gap: 20px; align-items: center; padding: 0 14px; border-top: 1px solid var(--ln); background: var(--s1); font-size: 12px; color: var(--mu); }
+.status .tx { color: var(--tx); }
+.status .sp { margin-left: auto; }
+.stagecol { display: grid; grid-template-rows: 40px 1fr; min-width: 0; min-height: 0; border-right: 1px solid var(--ln); }
+.itabs { display: flex; align-items: stretch; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.itabs > span { padding: 0 14px; display: flex; align-items: center; color: var(--mu); border-right: 1px solid var(--ln); }
+.itabs > span[data-inv] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.itabs .acts { margin-left: auto; display: flex; gap: 6px; align-items: center; padding: 0 8px; border: 0; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--ln); font-size: 13px; white-space: nowrap; }
+.btn.sm { padding: 4px 9px; font-size: 12px; }
+.btn.pri { background: var(--ac); color: var(--acx); border-color: var(--ac); font-weight: 700; }
+.btn.line { border-color: var(--tx); font-weight: 600; }
+.chat { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; background: var(--bg); }
+.lanehead { padding: 14px 16px 12px; border-bottom: 1px solid var(--ln); }
+.lanehead .who { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--mu); }
+.lanehead h3 { font: 600 19px/1.2 var(--font-ui); margin-top: 6px; }
+.lanehead .sum { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--mu); }
+.lanehead .sum .btn { margin-left: auto; }
+.dot { display: inline-block; width: 8px; height: 8px; flex: none; background: var(--agent-claude); }
+.feed { overflow: hidden; padding: 14px 16px 0; display: flex; flex-direction: column; gap: 10px; }
+.umsg { align-self: flex-end; max-width: 85%; background: var(--s2); padding: 8px 12px; font-size: 14px; }
+.card-p { background: var(--paper); color: #14160f; padding: 13px 15px 11px; }
+.card-p .top { display: flex; justify-content: space-between; font-size: 12px; color: var(--paper-mu); }
+.card-p .top .ok { color: #6e8f00; font-weight: 600; }
+.card-p h4 { font: 600 16px/1.22 var(--font-ui); margin-top: 5px; }
+.card-p p { font-size: 13px; margin-top: 5px; line-height: 1.45; }
+.compose { padding: 10px 16px 12px; border-top: 1px solid var(--ln); }
+.compose .box { border: 1px solid var(--ln); padding: 9px 12px; color: var(--mu); min-height: 54px; font-size: 14px; }
+.compose .row { display: flex; gap: 14px; margin-top: 7px; font-size: 12px; color: var(--mu); }
+.compose .row .send { margin-left: auto; color: var(--tx); }
+
+/* ============ the Design tab: DesignCanvas.module.css, plus the freeform canvas ============ */
+.root { min-height: 0; display: flex; flex-direction: column; position: relative; background: var(--s1); }
+.bar { flex: none; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-bottom: 1px solid var(--ln); background: var(--bg); font-size: 12px; white-space: nowrap; }
+.seg { display: flex; border: 1px solid var(--ln); }
+.seg > button { padding: 4px 9px; color: var(--mu); font-size: 12px; }
+.seg > button:hover { color: var(--tx); }
+.seg > button[data-inv='true'] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.tool { width: 28px; height: 26px; display: grid; place-items: center; border: 1px solid var(--ln); color: var(--mu); font-size: 13px; text-align: center; }
+.tool:hover { color: var(--tx); }
+.tool[data-on='true'] { background: var(--ac); border-color: var(--ac); color: var(--acx); font-weight: 700; }
+.spacer { flex: 1; }
+.tbtn { height: 26px; padding: 0 9px; border: 1px solid var(--ln); color: var(--mu); font-size: 12px; }
+.tbtn:hover { color: var(--tx); border-color: var(--tx); }
+.zoomGrp { display: flex; border: 1px solid var(--ln); position: relative; }
+.zoomGrp > button { height: 24px; color: var(--mu); font-size: 12px; }
+.zoomGrp > .zstep { width: 24px; text-align: center; }
+.zoomGrp > .zpct { min-width: 58px; padding: 0 6px; text-align: center; color: var(--tx); border-left: 1px solid var(--ln); border-right: 1px solid var(--ln); font-variant-numeric: tabular-nums; }
+.zoomGrp > button:hover { color: var(--tx); }
+.zmenu { position: absolute; top: 30px; right: -1px; z-index: 20; width: 200px; background: var(--bg); border: 1px solid var(--tx); padding: 4px 0; animation: styx-toast-in var(--motion-toast) ease-out; }
+.zmenu button { width: 100%; display: flex; justify-content: space-between; padding: 5px 10px; font-size: 12px; color: var(--tx); }
+.zmenu button:hover, .zmenu button:focus-visible { background: var(--tx); color: var(--bg); outline: 0; }
+.zmenu kbd { font: 500 11px var(--font-mono); color: var(--mu); }
+.zmenu button:hover kbd { color: var(--bg); }
+.zmenu hr { border: 0; border-top: 1px solid var(--ln); margin: 4px 0; }
+
+.main { flex: 1; min-height: 0; display: grid; grid-template-columns: 150px 1fr; }
+.main.withPanel { grid-template-columns: 150px 1fr 248px; }
+.screens { border-right: 1px solid var(--ln); background: var(--bg); padding: 10px 0; overflow-y: auto; font-size: 13px; }
+.screensHead { display: flex; justify-content: space-between; padding: 0 12px 6px; font-size: 12px; color: var(--mu); }
+.screenItem { width: 100%; display: flex; flex-direction: column; padding: 6px 12px; font-size: 13px; }
+.screenItem small { font-size: 11px; color: var(--mu); }
+.screenItem:hover { background: var(--s2); }
+.ask { margin: 8px 12px 0; width: calc(100% - 24px); padding: 6px 8px; border: 1px dashed var(--ln); color: var(--mu); font-size: 12px; }
+.ask:hover { color: var(--tx); border-color: var(--tx); }
+.askBox { margin: 8px 12px 0; }
+.input { width: 100%; padding: 4px 7px; border: 1px solid var(--ln); background: var(--bg); color: var(--tx); font: 400 12px var(--font-ui); }
+.withAgent { margin: 14px 12px 0; padding: 8px; border: 1px solid var(--ln); font-size: 12px; line-height: 1.4; color: var(--mu); }
+.withAgent b { display: block; color: var(--tx); font-weight: 600; margin-bottom: 3px; }
+
+/* The canvas: a viewport over an unbounded world. The world is translated by the pan and scaled by the zoom;
+   --z is the zoom, so labels and outlines divide by it to stay the same size on screen. */
+.canvas { position: relative; min-width: 0; min-height: 0; overflow: hidden; background-color: var(--s1);
+  background-image: radial-gradient(var(--ln) 1px, transparent 1.2px); touch-action: none; user-select: none; }
+.canvas:focus { outline: none; }
+.canvas[data-grab='true'] { cursor: grab; }
+.canvas[data-grab='true'] * { cursor: grab !important; }
+.canvas[data-panning='true'], .canvas[data-panning='true'] * { cursor: grabbing !important; }
+.world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.ab { position: absolute; }
+.ab[data-moving='true'] { z-index: 5; }
+.lbl { position: absolute; left: 0; bottom: 100%; max-width: 100%; display: block; text-overflow: ellipsis;
+  padding: calc(2px / var(--z)) calc(5px / var(--z)) calc(2px / var(--z)) 0; margin-bottom: calc(4px / var(--z));
+  font-size: calc(11px / var(--z)); line-height: 1.3; color: var(--mu); white-space: nowrap; overflow: hidden; cursor: grab; outline: 0;
+  background: var(--s1); z-index: 2; }
+.lbl b { color: var(--tx); font-weight: 600; margin-right: calc(5px / var(--z)); }
+.lbl .pos { margin-left: calc(6px / var(--z)); }
+.lbl .pos { font-family: var(--font-mono); font-size: calc(10px / var(--z)); display: none; }
+.lbl:hover b { text-decoration: underline; text-underline-offset: calc(3px / var(--z)); }
+.lbl:focus-visible, .ab[data-moving='true'] .lbl { background: var(--tx); color: var(--bg); padding-left: calc(5px / var(--z)); }
+.lbl:focus-visible b, .ab[data-moving='true'] .lbl b { color: var(--bg); text-decoration: none; }
+.lbl:focus-visible .pos, .ab[data-moving='true'] .pos { display: inline; }
+.ab[data-moving='true'] .lbl { cursor: grabbing; }
+.fr { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--paper); outline: calc(1px / var(--z)) solid var(--ln); }
+.ab:has(.lbl:focus-visible) .fr, .ab[data-moving='true'] .fr { outline: calc(1px / var(--z)) solid var(--tx); }
+.canvas[data-selecting='true'] .fr { cursor: crosshair; }
+.hov { outline: calc(1px / var(--z)) dashed var(--ac) !important; outline-offset: calc(2px / var(--z)); }
+.picked { outline: calc(2px / var(--z)) solid var(--ac) !important; outline-offset: calc(3px / var(--z)); }
+.area { position: absolute; border: calc(1.5px / var(--z)) dashed var(--ac); background: var(--add); pointer-events: none; z-index: 3; }
+.areaTag, .pickTag { position: absolute; left: calc(-2px / var(--z)); top: calc(-21px / var(--z)); padding: calc(3px / var(--z)) calc(5px / var(--z));
+  background: var(--ac); color: var(--acx); font: 700 calc(10px / var(--z))/1 var(--font-ui); white-space: nowrap; pointer-events: none; z-index: 4; }
+.hint { position: absolute; left: 12px; bottom: 10px; padding: 3px 6px; background: var(--s1); font-size: 12px; color: var(--mu); pointer-events: none; }
+.hint kbd { font: 500 11px var(--font-mono); color: var(--tx); }
+
+/* Inspector (DesignInspector) */
+.inspector { border-left: 1px solid var(--ln); background: var(--bg); overflow-y: auto; display: flex; flex-direction: column; }
+.sec { padding: 10px 12px; border-bottom: 1px solid var(--ln); display: flex; flex-direction: column; gap: 6px; }
+.secHead { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--mu); }
+.secHead b { color: var(--tx); font-weight: 600; }
+.field { display: grid; grid-template-columns: 60px 1fr; gap: 6px; align-items: center; font-size: 12px; }
+.field > span:first-child { color: var(--mu); }
+.value { font-size: 12px; border: 1px solid var(--ln); padding: 4px 7px; }
+.swatches { display: flex; flex-wrap: wrap; gap: 4px; }
+.swatch { width: 20px; height: 20px; border: 1px solid var(--ln); }
+.swatch[data-on='true'] { outline: 2px solid var(--ac); outline-offset: 1px; }
+.tell { border: 1px solid var(--ac); padding: 7px; font-size: 12px; color: var(--mu); min-height: 58px; }
+.sendBtn { width: 100%; justify-content: center; }
+.foot { padding: 10px 12px; font-size: 12px; line-height: 1.45; color: var(--mu); }
+.scaleRow { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; padding: 2px 0; border-bottom: 1px solid var(--ln); }
+.scaleRow small { color: var(--mu); }
+
+/* Toast (floating surface) */
+.toast { position: absolute; right: 16px; bottom: 16px; z-index: 30; display: flex; gap: 12px; align-items: center; padding: 7px 8px 7px 12px; border: 1px solid var(--tx); background: var(--bg); font-size: 12px; animation: styx-toast-in var(--motion-toast) ease-out; }
+.toast button { padding: 3px 8px; border: 1px solid var(--ln); font-size: 12px; }
+.toast button:hover { border-color: var(--tx); }
+
+/* ============ the customer's screens (Acme Shop), drawn at real size: 1280 desktop, 390 phone ============ */
+.acme { width: 100%; height: 100%; background: #fff; color: #1f2430; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; }
+.acme .nav { height: 64px; display: flex; align-items: center; gap: 32px; padding: 0 48px; border-bottom: 1px solid #e7e9ef; font-size: 15px; }
+.acme .nav .logo { font-weight: 800; font-size: 20px; color: #141a2b; }
+.acme .nav .links { display: flex; gap: 28px; color: #6a7184; }
+.acme .nav .cart { margin-left: auto; font-weight: 600; }
+.acme h1 { font-size: 40px; line-height: 1.1; letter-spacing: -.02em; color: #141a2b; }
+.acme p { color: #6a7184; }
+.acme .btn-p { background: #2f5bff; color: #fff; border-radius: 10px; padding: 16px; text-align: center; font-weight: 650; font-size: 17px; }
+.acme .card { border: 1px solid #e7e9ef; border-radius: 14px; }
+.acme .img { background: #dfe4ff; border-radius: 10px; }
+.acme .row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #eef0f4; }
+.acme .tog { width: 44px; height: 26px; border-radius: 13px; background: #2f5bff; position: relative; flex: none; }
+.acme .tog::after { content: ''; position: absolute; top: 3px; left: 21px; width: 20px; height: 20px; border-radius: 50%; background: #fff; }
+.acme .tog.off { background: #c9ced9; } .acme .tog.off::after { left: 3px; }
+/* wireframes: structure before brand */
+.acme.wf { background: #f4f4f1; color: #55574f; }
+.acme.wf .nav, .acme.wf .row, .acme.wf .card { border-color: #d9d9d3; }
+.acme.wf .nav .logo, .acme.wf h1 { color: #55574f; font-weight: 600; }
+.acme.wf p, .acme.wf .nav .links { color: #8a8c84; }
+.acme.wf .btn-p { background: #c9cac3; color: #4a4c45; border-radius: 0; }
+.acme.wf .card, .acme.wf .img { border-radius: 0; }
+.acme.wf .img { background: #dcdcd5; }
+.acme.wf .tog { background: #b9bab2; border-radius: 0; } .acme.wf .tog::after { border-radius: 0; }
+.acme .bar { height: 12px; background: #dcdcd5; margin: 8px 0; }
+
+/* ============ notes below the window ============ */
+.notes { width: 1120px; margin: 64px auto 120px; }
+.notes h1 { font: 600 40px/1.05 var(--font-ui); letter-spacing: -.02em; max-width: 22ch; }
+.notes .lede { margin-top: 14px; max-width: 70ch; color: var(--mu); font-size: 16px; }
+.notes h2 { font: 600 20px/1.2 var(--font-ui); margin: 40px 0 10px; padding-top: 14px; border-top: 1px solid var(--tx); }
+.notes p, .notes li { color: var(--mu); font-size: 14px; max-width: 78ch; }
+.notes li { margin: 4px 0 4px 18px; }
+.notes b { color: var(--tx); font-weight: 600; }
+.notes code, .notes pre { font-family: var(--font-mono); font-size: 12px; color: var(--tx); }
+.notes pre { margin-top: 10px; padding: 12px 14px; background: var(--s1); border: 1px solid var(--ln); max-width: 78ch; overflow-x: auto; }
+.keys { display: grid; grid-template-columns: 260px 1fr; margin-top: 8px; max-width: 78ch; border-top: 1px solid var(--ln); }
+.keys > * { padding: 7px 0; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.keys kbd { font: 500 12px var(--font-mono); color: var(--tx); }
+.keys span { color: var(--mu); }
+</style>
+</head>
+<body>
+
+<div class="win">
+  <div class="title">
+    <span class="lights"><i></i><i></i><i></i></span><span class="word">STYX</span>
+    <span class="crumb"><b>acme-shop</b><span>/</span><span>Design the checkout before we build it</span></span>
+    <span class="search">Ask an agent, switch, deploy…<kbd>⌘K</kbd></span><span class="me">N</span>
+  </div>
+  <div class="frame">
+    <nav class="rail" aria-label="Places">
+      <span class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7"/><rect x="13" y="4" width="7" height="7"/><rect x="4" y="13" width="7" height="7"/><rect x="13" y="13" width="7" height="7"/></svg></span>
+      <span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"/><path d="M7 10l3 2-3 2M12 15h5"/></svg></span>
+      <span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg></span>
+      <hr><span class="pj" data-on>AS</span><span class="pj">BL</span><span class="pj">IN</span><span class="pj add">+</span>
+    </nav>
+    <section class="stagecol">
+      <div class="itabs"><span>Tasks</span><span data-inv>Design</span><span>Preview</span><span>Changes</span><span>Code</span><span>Terminal</span><div class="acts"><span class="btn sm">Publish</span></div></div>
+
+      <div class="root" id="root">
+        <div class="bar" role="toolbar" aria-label="Canvas">
+          <div class="seg" role="radiogroup" aria-label="Fidelity" id="fidelity">
+            <button type="button" role="radio" data-f="wire">Wireframe</button>
+            <button type="button" role="radio" data-f="hi">Hi-fi</button>
+            <button type="button" role="radio" data-f="both" data-inv="true" aria-checked="true">Both</button>
+          </div>
+          <div class="seg" role="radiogroup" aria-label="Sizes" id="sizes">
+            <button type="button" role="radio" data-s="all" data-inv="true" aria-checked="true">All sizes</button>
+            <button type="button" role="radio" data-s="desktop">Desktop</button>
+            <button type="button" role="radio" data-s="tablet">Tablet</button>
+            <button type="button" role="radio" data-s="phone">Phone</button>
+          </div>
+          <button type="button" class="tool" id="selectBtn" aria-pressed="false" title="Select (V): click an element, or drag over an area" aria-label="Select (V): click an element, or drag over an area">↖</button>
+          <button type="button" class="tool" id="tokensBtn" aria-pressed="false" title="Type and colour" aria-label="Type and colour">Aa</button>
+          <span class="spacer"></span>
+          <button type="button" class="tbtn" id="fitBtn" title="Zoom to fit (⌘0)">Zoom to fit</button>
+          <button type="button" class="tbtn" id="tidyBtn" title="Lay the boards out in rows again, one per screen">Tidy up</button>
+          <div class="zoomGrp" role="group" aria-label="Zoom">
+            <button type="button" class="zstep" id="zOut" title="Zoom out (⌘−)" aria-label="Zoom out">−</button>
+            <button type="button" class="zpct" id="zPct" aria-haspopup="menu" aria-expanded="false" aria-label="Zoom, 33%">33%</button>
+            <button type="button" class="zstep" id="zIn" title="Zoom in (⌘+)" aria-label="Zoom in">+</button>
+            <div class="zmenu" id="zMenu" role="menu" hidden>
+              <button type="button" role="menuitem" data-z="in">Zoom in<kbd>⌘+</kbd></button>
+              <button type="button" role="menuitem" data-z="out">Zoom out<kbd>⌘−</kbd></button>
+              <hr>
+              <button type="button" role="menuitem" data-z="fit">Zoom to fit<kbd>⌘0</kbd></button>
+              <button type="button" role="menuitem" data-z="0.5">50%<kbd></kbd></button>
+              <button type="button" role="menuitem" data-z="1">100%<kbd>⌘1</kbd></button>
+              <button type="button" role="menuitem" data-z="2">200%<kbd></kbd></button>
+            </div>
+          </div>
+          <button type="button" class="btn sm pri">Build it →</button>
+        </div>
+
+        <div class="main" id="main">
+          <nav class="screens" aria-label="Screens">
+            <div class="screensHead"><span>Screens</span><span id="screenCount">3</span></div>
+            <div id="screenList"></div>
+            <div id="askWrap"><button type="button" class="ask" id="askBtn">+ Ask for a screen</button></div>
+            <div class="withAgent"><b>Design with Claude</b>Describe a screen or a change. Claude draws it here, in this task, as files you keep.</div>
+          </nav>
+          <div class="canvas" id="canvas" aria-label="Design canvas" tabindex="-1">
+            <div class="world" id="world"></div>
+            <p class="hint" id="hint">Drag a board by its name. Pinch or <kbd>⌘</kbd> + scroll to zoom, scroll to move around, <kbd>Space</kbd> + drag to pan.</p>
+          </div>
+          <aside class="inspector" id="inspector" hidden></aside>
+        </div>
+      </div>
+    </section>
+    <aside class="chat">
+      <div class="lanehead">
+        <div class="who"><span class="dot"></span>Claude <span class="mono">agent/claude-4</span></div>
+        <h3>Design the checkout before we build it</h3>
+        <div class="sum"><span>3 screens · 6 boards</span><span class="btn line sm">Land on main</span></div>
+      </div>
+      <div class="feed">
+        <div class="umsg">Design a checkout, a home page and settings. Wireframes first.</div>
+        <div class="card-p"><div class="top"><span class="ok">Done in 3 min</span><span>3 screens</span></div><h4>Wireframes, then the hi-fi pass</h4><p>Blue #2F5BFF, 10px corners, system type. Pay is the one strong button on checkout.</p></div>
+      </div>
+      <div class="compose"><div class="box">Tell Claude about the design…</div><div class="row"><span>@file</span><span>/command</span><span>Attach</span><span class="send">Send ⏎</span></div></div>
+    </aside>
+  </div>
+  <div class="status"><span class="tx mono">agent/claude-4</span><span id="saved">Layout as today</span><span class="sp">Feedback</span></div>
+</div>
+
+<section class="notes" aria-label="Notes">
+  <h1>The Design tab as a canvas you can move around</h1>
+  <p class="lede">Owner report: “all the designs get laid out vertically, you can't move them around, and you can't zoom using a touchpad or mouse.” This keeps the toolbar, the screens list and the inspector as they are, and turns the column of rows into a canvas: zoom where you point, pan with the gestures you already use, put boards where you want them. It opens in today's layout, so nothing changes until you move something.</p>
+
+  <h2>Try it</h2>
+  <div class="keys">
+    <kbd>Pinch, or ⌘ / Ctrl + scroll</kbd><span>Zoom toward the pointer, 10% to 400%</span>
+    <kbd>⌘+ &nbsp;⌘− &nbsp;⌘0 &nbsp;⌘1</kbd><span>Zoom in, out, to fit, to 100% (Ctrl on Windows and Linux)</span>
+    <kbd>Scroll, two-finger swipe</kbd><span>Pan; Shift + wheel pans sideways</span>
+    <kbd>Space + drag, middle drag</kbd><span>Pan from anywhere, even over a board or with Select on</span>
+    <kbd>Drag on empty canvas</kbd><span>Pan (the board's own drag is on its name)</span>
+    <kbd>Drag a board's name</kbd><span>Move the board; snaps to an 8px grid</span>
+    <kbd>Tab to a name, then ← ↑ → ↓</kbd><span>Move 8px; with Shift, 40px</span>
+    <kbd>⌘Z</kbd><span>Undo the last move or Tidy up</span>
+    <kbd>V</kbd><span>Select: click an element or drag over an area, at any zoom</span>
+    <kbd>Screens list</kbd><span>Zooms to that screen's boards (was: scroll to its row)</span>
+    <kbd>+ Ask for a screen</kbd><span>In the mockup, the agent's new board appears placed beside the others</span>
+  </div>
+
+  <h2>Where the layout lives</h2>
+  <p>Positions persist per project in <code>.styx/designs/canvas.json</code>, next to the screens they place. It is versioned and zod-validated in core, like <code>.styx/project.json</code>, and written only through a named command (<code>design.setLayout</code>, the same no-follow write rules as <code>design.write</code>, debounced after a move ends). Because it sits in the design task's worktree, Styx commits it with the screens and it lands with them: the layout travels with the repo and a teammate opens the same arrangement.</p>
+<pre>{
+  "version": 1,
+  "boards": {
+    "checkout/desktop.wire.html": { "x": 0,    "y": 0 },
+    "checkout/desktop.html":      { "x": 1360, "y": 0 },
+    "checkout/phone.html":        { "x": 2720, "y": 0 }
+  }
+}</pre>
+  <ul>
+    <li>Coordinates are canvas pixels at 100%, multiples of 8. A board with no entry is placed by the rule below; an entry whose file is gone is dropped on the next write.</li>
+    <li>No file, or one that fails validation, means today's layout. It is never an error the person sees.</li>
+    <li>Zoom and pan are a person's view, not the project's: they stay in the ui-store, keyed by session, like drafts.</li>
+    <li>Tidy up rewrites the file with today's layout (and can be undone).</li>
+  </ul>
+
+  <h2>New screens from the agent</h2>
+  <p>A board the agent adds never lands on top of another. A new size or fidelity of an existing screen goes right of that screen's rightmost board; a new screen starts a row under the lowest board, at the left edge. Either way it then steps right in 8px until it overlaps nothing (with the usual gap). The view does not jump: a toast says what arrived and offers <b>Show it</b>. The placement is written to <code>canvas.json</code> so it stays put.</p>
+
+  <h2>Select keeps working at any zoom</h2>
+  <p>Select (V) and area select read the pointer in board coordinates (screen offset divided by the zoom), so a click picks the same element and an area box holds the same elements at 10% or 400%. Outlines, the area box and its tag divide their widths by the zoom so they stay crisp. The picture sent with <i>Tell Claude</i> is captured from the box on screen, as today. Space + drag and middle drag still pan while Select is on; a board's name still moves it.</p>
+
+  <h2>For review</h2>
+  <ul>
+    <li><b>Both</b> is added to Wireframe / Hi-fi and is the default here, so variants can sit side by side. Filters hide boards in place; they never re-flow the layout. If you'd rather keep Hi-fi as the default, the canvas behaves the same.</li>
+    <li>Board names keep their size on screen at every zoom and read “Screen Size · Fidelity”, since a board can leave its row. The row headings go.</li>
+    <li>A plain drag on empty canvas pans. Picking several boards with a box is left for later; it would take this gesture.</li>
+  </ul>
+</section>
+
+<script>
+'use strict';
+/* ---------------- data ---------------- */
+const W = { desktop: 1280, tablet: 834, phone: 390 };
+const SIZE_LABEL = { desktop: 'Desktop', tablet: 'Tablet', phone: 'Phone' };
+const SCREENS = [
+  { slug: 'checkout', name: 'Checkout' },
+  { slug: 'home', name: 'Home' },
+  { slug: 'settings', name: 'Settings' },
+];
+// One board per file: .styx/designs/<screen>/<size>[.wire].html
+let BOARDS = [
+  { screen: 'checkout', size: 'desktop', fid: 'wire', h: 800 },
+  { screen: 'checkout', size: 'desktop', fid: 'hi', h: 800 },
+  { screen: 'checkout', size: 'phone', fid: 'hi', h: 844 },
+  { screen: 'home', size: 'desktop', fid: 'wire', h: 800 },
+  { screen: 'home', size: 'desktop', fid: 'hi', h: 800 },
+  { screen: 'settings', size: 'desktop', fid: 'hi', h: 720 },
+].map(withId);
+function withId(b) { return { ...b, id: `${b.screen}/${b.size}${b.fid === 'wire' ? '.wire' : ''}.html`, w: W[b.size], x: 0, y: 0 }; }
+
+/* ---------------- the customer's screens ---------------- */
+const n = (name) => `data-n="${name}"`;
+const nav = (wf) => `<div class="nav" ${n('Header')}><span class="logo" ${n('Logo')}>Acme Shop</span><span class="links" ${n('Navigation')}><span>New</span><span>Women</span><span>Men</span><span>Home</span></span><span class="cart" ${n('Cart')}>Cart (2)</span></div>`;
+function content(b) {
+  const wf = b.fid === 'wire';
+  const cls = `acme${wf ? ' wf' : ''}`;
+  const txt = (s, bars = 1) => (wf ? Array.from({ length: bars }, (_, i) => `<div class="bar" style="width:${90 - i * 22}%"></div>`).join('') : s);
+  if (b.screen === 'checkout' && b.size === 'desktop') {
+    const item = (t, p) => `<div class="row" ${n('Line item')}><div style="display:flex;gap:16px;align-items:center"><div class="img" style="width:64px;height:64px"></div><div><div style="font-weight:600">${t}</div><p style="font-size:14px">Size M · Qty 1</p></div></div><b>${p}</b></div>`;
+    return `<div class="${cls}">${nav(wf)}<div style="display:grid;grid-template-columns:1fr 400px;gap:48px;padding:48px">
+      <div><h1 ${n('Heading')}>Pay securely</h1><p style="margin:10px 0 24px" ${n('Intro')}>${txt('Free returns for 30 days. Shipping to Lisbon, Portugal.')}</p>${item('Linen shirt', '€48')}${item('Canvas tote', '€22')}
+      <div class="card" style="margin-top:28px;padding:20px" ${n('Delivery')}><b>Delivery</b><p style="margin-top:6px">${txt('Standard, 2–4 days · free over €40', 2)}</p></div></div>
+      <div class="card" style="padding:24px;align-self:start" ${n('Summary')}><b style="font-size:18px">Summary</b><div class="row"><span>Subtotal</span><span>€70</span></div><div class="row"><span>Shipping</span><span>Free</span></div><div class="row" style="border:0"><b>Total</b><b>€70</b></div>
+      <div class="btn-p" style="margin-top:12px" ${n('Pay button')}>Pay €70</div><p style="text-align:center;margin-top:12px;font-size:14px" ${n('Card logos')}>Apple Pay · card · PayPal</p></div></div></div>`;
+  }
+  if (b.screen === 'checkout' && b.size === 'phone') {
+    return `<div class="${cls}"><div class="nav" style="padding:0 20px" ${n('Header')}><span class="logo">Acme</span><span class="cart">Cart (2)</span></div><div style="padding:24px 20px">
+      <h1 style="font-size:30px" ${n('Heading')}>Pay securely</h1><p style="margin:8px 0 16px">Free returns for 30 days.</p>
+      <div class="row" ${n('Line item')}><span>Linen shirt</span><b>€48</b></div><div class="row" ${n('Line item')}><span>Canvas tote</span><b>€22</b></div><div class="row"><b>Total</b><b>€70</b></div>
+      <div class="card" style="margin-top:20px;padding:16px" ${n('Delivery')}><b>Delivery</b><p style="margin-top:4px;font-size:14px">Standard, 2–4 days</p></div></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;padding:16px 20px 28px;border-top:1px solid #e7e9ef;background:#fff"><div class="btn-p" ${n('Pay button')}>Pay €70</div><p style="text-align:center;margin-top:8px;font-size:13px" ${n('Card logos')}>Apple Pay · card · PayPal</p></div></div>`;
+  }
+  if (b.screen === 'home') {
+    const prod = (t, p) => `<div ${n('Product card')}><div class="img" style="height:220px"></div><div style="margin-top:10px;font-weight:600">${txt(t)}</div><p>${p}</p></div>`;
+    return `<div class="${cls}">${nav(wf)}<div style="padding:40px 48px">
+      <div class="img" style="height:280px;display:flex;align-items:flex-end;padding:32px" ${n('Hero')}><div><h1 ${n('Heading')}>New this week</h1><p style="margin-top:8px;color:${wf ? '#8a8c84' : '#3d4560'}">${txt('Fresh picks, shipped free over €40.')}</p></div></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-top:32px" ${n('Product grid')}>${prod('Linen shirt', '€48')}${prod('Canvas tote', '€22')}${prod('Wool socks', '€12')}${prod('Field cap', '€26')}</div></div></div>`;
+  }
+  if (b.screen === 'settings') {
+    const set = (t, s, on) => `<div class="row" ${n('Setting')}><div><div style="font-weight:600">${t}</div><p style="font-size:14px">${s}</p></div><span class="tog${on ? '' : ' off'}" ${n('Toggle')}></span></div>`;
+    return `<div class="${cls}">${nav(wf)}<div style="display:grid;grid-template-columns:240px 1fr;gap:48px;padding:40px 48px">
+      <div ${n('Settings menu')} style="display:flex;flex-direction:column;gap:14px;color:#6a7184"><b style="color:#141a2b">Account</b><span>Orders</span><span>Addresses</span><span>Payment</span></div>
+      <div style="max-width:640px"><h1 ${n('Heading')}>Settings</h1>${set('Email updates', 'New arrivals and offers, weekly', true)}${set('Dark mode', 'Match the system', false)}${set('Order texts', 'When an order ships', true)}
+      <div class="btn-p" style="width:200px;margin-top:28px" ${n('Save button')}>Save changes</div></div></div></div>`;
+  }
+  return `<div class="${cls}">${nav(wf)}<div style="padding:48px"><h1 ${n('Heading')}>${b.title ?? 'Screen'}</h1><p style="margin-top:10px">${txt('Thanks, your order is on its way. We sent the receipt to your email.', 2)}</p><div class="card" style="margin-top:28px;padding:24px;max-width:520px" ${n('Order summary')}><div class="row"><span>Order</span><b>#10482</b></div><div class="row"><span>Arrives</span><b>Thu 16 Oct</b></div></div><div class="btn-p" style="width:240px;margin-top:28px" ${n('Continue button')}>Keep shopping</div></div></div>`;
+}
+
+/* ---------------- state ---------------- */
+const MIN_Z = 0.1, MAX_Z = 4, GRID = 8, GAP = 80, ROW_GAP = 160;
+const STEPS = [0.1, 0.15, 0.25, 0.33, 0.5, 0.75, 1, 1.5, 2, 3, 4];
+const view = { z: 0.33, x: 24, y: 44 };
+const ui = { fid: 'both', size: 'all', selecting: false, panel: null, selection: null, space: false };
+const undo = [];
+const $ = (id) => document.getElementById(id);
+const canvas = $('canvas'), world = $('world');
+const snap = (v) => Math.round(v / GRID) * GRID;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const screenOf = (slug) => SCREENS.find((s) => s.slug === slug);
+const visible = (b) => (ui.fid === 'both' || b.fid === ui.fid) && (ui.size === 'all' || b.size === ui.size);
+const label = (b) => `<b>${screenOf(b.screen).name}</b><span>${SIZE_LABEL[b.size]}${b.fid === 'wire' ? ' · Wireframe' : ''}</span>`;
+
+/* Today's layout: one row per screen in list order; in a row desktop, tablet, phone, wireframe before hi-fi. */
+function tidyLayout(boards) {
+  const order = (b) => ['desktop', 'tablet', 'phone'].indexOf(b.size) * 2 + (b.fid === 'wire' ? 0 : 1);
+  let y = 0;
+  for (const s of SCREENS) {
+    const row = boards.filter((b) => b.screen === s.slug).sort((a, b) => order(a) - order(b));
+    if (row.length === 0) continue;
+    let x = 0;
+    for (const b of row) { b.x = x; b.y = y; x = snap(x + b.w + GAP); }
+    y = snap(y + Math.max(...row.map((b) => b.h)) + ROW_GAP);
+  }
+}
+
+/* A new board never overlaps: right of its screen's rightmost board, or a new row under everything; then step right. */
+function placeNew(b) {
+  const others = BOARDS.filter((o) => o !== b);
+  const mine = others.filter((o) => o.screen === b.screen);
+  if (mine.length > 0) {
+    const r = mine.reduce((a, o) => (o.x + o.w > a.x + a.w ? o : a));
+    b.x = snap(r.x + r.w + GAP); b.y = r.y;
+  } else {
+    b.x = others.length ? Math.min(...others.map((o) => o.x)) : 0;
+    b.y = others.length ? snap(Math.max(...others.map((o) => o.y + o.h)) + ROW_GAP) : 0;
+  }
+  const hits = () => others.some((o) => b.x < o.x + o.w + GAP && b.x + b.w + GAP > o.x && b.y < o.y + o.h + GAP && b.y + b.h + GAP > o.y);
+  while (hits()) b.x += GRID;
+}
+
+/* ---------------- render ---------------- */
+function build() {
+  world.innerHTML = '';
+  for (const b of BOARDS) {
+    const el = document.createElement('div');
+    el.className = 'ab';
+    el.dataset.board = b.id;
+    el.innerHTML = `<div class="lbl" tabindex="0" role="button" aria-roledescription="board" title="${screenOf(b.screen).name} · ${SIZE_LABEL[b.size]}${b.fid === 'wire' ? ' · Wireframe' : ''}" aria-label="${screenOf(b.screen).name}, ${SIZE_LABEL[b.size]}${b.fid === 'wire' ? ', wireframe' : ''}. Drag or use the arrow keys to move it.">${label(b)}<span class="pos"></span></div><div class="fr">${content(b)}</div>`;
+    world.appendChild(el);
+    b.el = el;
+  }
+  place();
+  renderScreens();
+}
+function place() {
+  for (const b of BOARDS) {
+    Object.assign(b.el.style, { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` });
+    b.el.hidden = !visible(b);
+    b.el.querySelector('.pos').textContent = `${b.x}, ${b.y}`;
+  }
+}
+function applyView() {
+  world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.z})`;
+  world.style.setProperty('--z', view.z);
+  // Dot grid on 8px canvas units, coarsened by powers of two so dots stay at least 14px apart on screen.
+  let step = GRID; while (step * view.z < 14) step *= 2;
+  const s = step * view.z;
+  canvas.style.backgroundSize = `${s}px ${s}px`;
+  canvas.style.backgroundPosition = `${view.x - s / 2}px ${view.y - s / 2}px`;
+  const pct = `${Math.round(view.z * 100)}%`;
+  $('zPct').textContent = pct;
+  $('zPct').setAttribute('aria-label', `Zoom, ${pct}`);
+}
+function renderScreens() {
+  $('screenCount').textContent = SCREENS.length;
+  $('screenList').innerHTML = SCREENS.map((s) => {
+    const sizes = [...new Set(BOARDS.filter((b) => b.screen === s.slug).map((b) => SIZE_LABEL[b.size]))].join(' · ');
+    return `<button type="button" class="screenItem" data-screen="${s.slug}"><span>${s.name}</span><small>${sizes}</small></button>`;
+  }).join('');
+}
+
+/* ---------------- zoom ---------------- */
+function zoomAt(z, sx, sy) {
+  z = clamp(z, MIN_Z, MAX_Z);
+  const wx = (sx - view.x) / view.z, wy = (sy - view.y) / view.z;
+  view.z = z; view.x = sx - wx * z; view.y = sy - wy * z;
+  applyView();
+}
+const center = () => ({ x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 });
+function stepZoom(dir) {
+  const next = dir > 0 ? STEPS.find((s) => s > view.z + 1e-3) ?? MAX_Z : [...STEPS].reverse().find((s) => s < view.z - 1e-3) ?? MIN_Z;
+  const c = center(); zoomAt(next, c.x, c.y);
+}
+function setZoom(z) { const c = center(); zoomAt(z, c.x, c.y); }
+function fit(boards = BOARDS.filter(visible), cap = MAX_Z) {
+  if (boards.length === 0) return;
+  const pad = 40, labelRoom = 24;
+  const x0 = Math.min(...boards.map((b) => b.x)), y0 = Math.min(...boards.map((b) => b.y));
+  const x1 = Math.max(...boards.map((b) => b.x + b.w)), y1 = Math.max(...boards.map((b) => b.y + b.h));
+  const cw = canvas.clientWidth - pad * 2, ch = canvas.clientHeight - pad * 2 - labelRoom;
+  view.z = clamp(Math.min(cw / (x1 - x0), ch / (y1 - y0), cap), MIN_Z, MAX_Z);
+  view.x = pad + (cw - (x1 - x0) * view.z) / 2 - x0 * view.z;
+  view.y = pad + labelRoom + (ch - (y1 - y0) * view.z) / 2 - y0 * view.z;
+  applyView();
+}
+
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const k = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 600 : 1;
+  if (e.ctrlKey || e.metaKey) {
+    // Trackpad pinch arrives as small, fractional deltas with ctrlKey; a mouse wheel notch as ~100.
+    const d = e.deltaY * k;
+    const factor = Math.abs(d) < 40 ? Math.exp(-d * 0.012) : d > 0 ? 1 / 1.2 : 1.2;
+    zoomAt(view.z * factor, sx, sy);
+    return;
+  }
+  let dx = e.deltaX * k, dy = e.deltaY * k;
+  if (e.shiftKey && dx === 0) { dx = dy; dy = 0; }
+  view.x -= dx; view.y -= dy;
+  applyView();
+}, { passive: false });
+
+/* ---------------- pan, move, select ---------------- */
+let drag = null; // { kind: 'pan' | 'move' | 'area', ... }
+const isTyping = (t) => t && t.closest && t.closest('input, textarea, select, [contenteditable="true"]');
+
+canvas.addEventListener('pointerdown', (e) => {
+  $('zMenu').hidden = true; $('zPct').setAttribute('aria-expanded', 'false');
+  const lbl = e.target.closest('.lbl');
+  const fr = e.target.closest('.fr');
+  const panGesture = e.button === 1 || (e.button === 0 && (ui.space || (!lbl && !fr) || (!lbl && fr && !ui.selecting)));
+  if (panGesture) {
+    e.preventDefault();
+    if (!lbl && !fr && e.button === 0 && !ui.space && ui.selection) setSelection(null);
+    drag = { kind: 'pan', sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y };
+    canvas.dataset.panning = 'true';
+    canvas.setPointerCapture(e.pointerId);
+    return;
+  }
+  if (e.button !== 0) return;
+  if (lbl) {
+    const b = BOARDS.find((x) => x.el === lbl.parentElement);
+    lbl.focus({ preventScroll: true });
+    drag = { kind: 'move', b, sx: e.clientX, sy: e.clientY, bx: b.x, by: b.y, moved: false };
+    b.el.dataset.moving = 'true';
+    canvas.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    return;
+  }
+  if (fr && ui.selecting) {
+    e.preventDefault();
+    const b = BOARDS.find((x) => x.el === fr.parentElement);
+    const p = boardPoint(fr, e);
+    drag = { kind: 'area', b, fr, x0: p.x, y0: p.y, box: null, el: e.target.closest('[data-n]') };
+    canvas.setPointerCapture(e.pointerId);
+  }
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!drag) { hover(e); return; }
+  if (drag.kind === 'pan') {
+    view.x = drag.vx + (e.clientX - drag.sx); view.y = drag.vy + (e.clientY - drag.sy); applyView();
+  } else if (drag.kind === 'move') {
+    const nx = snap(drag.bx + (e.clientX - drag.sx) / view.z), ny = snap(drag.by + (e.clientY - drag.sy) / view.z);
+    if (nx !== drag.b.x || ny !== drag.b.y) { drag.moved = true; drag.b.x = nx; drag.b.y = ny; place(); }
+  } else if (drag.kind === 'area') {
+    const p = boardPoint(drag.fr, e);
+    const box = { x: Math.min(drag.x0, p.x), y: Math.min(drag.y0, p.y), w: Math.abs(p.x - drag.x0), h: Math.abs(p.y - drag.y0) };
+    if (box.w * view.z < 5 && box.h * view.z < 5) return;
+    drag.box = box;
+    drawArea(drag.fr, box, null);
+  }
+});
+function endDrag(e) {
+  if (!drag) return;
+  const d = drag; drag = null;
+  delete canvas.dataset.panning;
+  if (d.kind === 'move') {
+    delete d.b.el.dataset.moving;
+    if (d.moved) { undo.push([{ b: d.b, x: d.bx, y: d.by }]); saved(); }
+  } else if (d.kind === 'area') {
+    if (d.box === null) {
+      // Pointer capture retargets pointerup to the canvas: the pick is the element under the press.
+      setSelection(d.el && d.fr.contains(d.el) ? { kind: 'element', b: d.b, el: d.el } : null);
+    } else {
+      const els = [...d.fr.querySelectorAll('[data-n]')].filter((el) => { const r = rectIn(d.fr, el); return r.x < d.box.x + d.box.w && r.x + r.w > d.box.x && r.y < d.box.y + d.box.h && r.y + r.h > d.box.y; });
+      setSelection({ kind: 'area', b: d.b, fr: d.fr, box: d.box, els });
+    }
+  }
+}
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('auxclick', (e) => e.preventDefault());
+
+/* Pointer → board coordinates: the screen offset divided by the zoom. Same answer at any zoom. */
+function boardPoint(fr, e) { const r = fr.getBoundingClientRect(); return { x: (e.clientX - r.left) / view.z, y: (e.clientY - r.top) / view.z }; }
+function rectIn(fr, el) { const f = fr.getBoundingClientRect(), r = el.getBoundingClientRect(); return { x: (r.left - f.left) / view.z, y: (r.top - f.top) / view.z, w: r.width / view.z, h: r.height / view.z }; }
+
+let hovered = null;
+function hover(e) {
+  const el = ui.selecting && !ui.space ? e.target.closest && e.target.closest('.fr [data-n]') : null;
+  if (el === hovered) return;
+  hovered?.classList.remove('hov'); hovered = el; el?.classList.add('hov');
+}
+function drawArea(fr, box, tag) {
+  for (const old of world.querySelectorAll('.area')) old.remove();
+  if (!fr) return;
+  const a = document.createElement('div');
+  a.className = 'area';
+  Object.assign(a.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` });
+  if (tag) a.innerHTML = `<span class="areaTag">${tag}</span>`;
+  fr.appendChild(a);
+}
+
+/* ---------------- selection + inspector ---------------- */
+function setSelection(sel) {
+  for (const el of world.querySelectorAll('.picked')) el.classList.remove('picked');
+  for (const el of world.querySelectorAll('.pickTag')) el.remove();
+  drawArea(null);
+  ui.selection = sel;
+  if (sel?.kind === 'element') {
+    sel.el.classList.add('picked');
+    const r = rectIn(sel.b.el.querySelector('.fr'), sel.el);
+    const t = document.createElement('span');
+    t.className = 'pickTag'; t.textContent = sel.el.dataset.n;
+    Object.assign(t.style, { left: `${r.x}px`, top: `calc(${r.y}px - 25px / var(--z))` });
+    sel.b.el.querySelector('.fr').appendChild(t);
+  } else if (sel?.kind === 'area') {
+    drawArea(sel.fr, sel.box, `Area · ${sel.els.length} ${sel.els.length === 1 ? 'element' : 'elements'} · ${Math.round(sel.box.w)} × ${Math.round(sel.box.h)}`);
+  }
+  if (sel) ui.panel = null;
+  $('hint').hidden = ui.selecting || sel !== null;
+  renderPanel();
+}
+function renderPanel() {
+  const ins = $('inspector'), sel = ui.selection;
+  const open = sel !== null || ui.panel === 'tokens';
+  ins.hidden = !open;
+  $('main').classList.toggle('withPanel', open);
+  $('tokensBtn').dataset.on = ui.panel === 'tokens' ? 'true' : '';
+  $('tokensBtn').setAttribute('aria-pressed', ui.panel === 'tokens');
+  if (!open) return;
+  // The inspector takes room from the canvas: if it now covers the selection, slide the view just enough to show it.
+  if (sel) requestAnimationFrame(() => {
+    const target = sel.kind === 'element' ? sel.el : world.querySelector('.area');
+    if (!target) return;
+    const r = target.getBoundingClientRect(), c = canvas.getBoundingClientRect();
+    const over = r.right - (c.right - 24);
+    if (over > 0) { view.x -= Math.min(over, r.left - (c.left + 24)); applyView(); }
+  });
+  const where = (b) => `${screenOf(b.screen).name} · ${SIZE_LABEL[b.size]}${b.fid === 'wire' ? ' · Wireframe' : ''}`;
+  if (sel?.kind === 'element') {
+    ins.innerHTML = `<div class="sec"><div class="secHead"><b>${sel.el.dataset.n}</b><span>${where(sel.b)}</span></div>
+      <div class="field"><span>Text</span><span class="value">${(sel.el.textContent || '—').trim().slice(0, 24)}</span></div>
+      <div class="field"><span>Fill</span><span class="swatches"><i class="swatch" style="background:#2f5bff" data-on="true"></i><i class="swatch" style="background:#141a2b"></i><i class="swatch" style="background:#fff"></i><i class="swatch" style="background:#dfe4ff"></i></span></div>
+      <div class="field"><span>Corners</span><span class="value">10</span></div></div>
+      <div class="sec"><div class="secHead"><b>Tell Claude</b></div><div class="tell">What should change?</div><span class="btn sm pri sendBtn">Send to Claude</span></div>
+      <p class="foot">Change it here and it changes now. Or tell Claude: it gets the screen, this element and a picture of it.</p>`;
+  } else if (sel?.kind === 'area') {
+    ins.innerHTML = `<div class="sec"><div class="secHead"><b>Area</b><span>${where(sel.b)}</span></div>
+      <div class="field"><span>Size</span><span class="value">${Math.round(sel.box.w)} × ${Math.round(sel.box.h)}</span></div>
+      <div class="field"><span>Holds</span><span class="value">${[...new Set(sel.els.map((e) => e.dataset.n))].slice(0, 4).join(', ') || 'Nothing'}</span></div></div>
+      <div class="sec"><div class="secHead"><b>Tell Claude</b></div><div class="tell">What should change?</div><span class="btn sm pri sendBtn">Send to Claude</span></div>
+      <p class="foot">Drag on a screen to select an area: a section, part of one, or across several. Click still picks one element.</p>`;
+  } else {
+    ins.innerHTML = `<div class="sec"><div class="secHead"><b>Type and colour</b><span>every screen</span></div><div class="secHead"><span>Colours</span></div>
+      <div class="swatches"><i class="swatch" style="background:#2f5bff"></i><i class="swatch" style="background:#141a2b"></i><i class="swatch" style="background:#6a7184"></i><i class="swatch" style="background:#ffffff"></i><i class="swatch" style="background:#dfe4ff"></i><i class="swatch" style="background:#e7e9ef"></i></div></div>
+      <div class="sec"><div class="secHead"><span>Type scale</span></div><div class="scaleRow"><span>Display</span><small>40</small></div><div class="scaleRow"><span>Heading</span><small>24</small></div><div class="scaleRow"><span>Body</span><small>16</small></div><div class="scaleRow"><span>Small</span><small>14</small></div></div>
+      <div class="sec"><div class="field"><span>Corners</span><span class="value">10</span></div><div class="field"><span>Spacing</span><span class="value">8</span></div></div>
+      <p class="foot">Applies to every screen at once. Saved as the design’s tokens, which the build uses.</p>`;
+  }
+}
+
+/* ---------------- toolbar ---------------- */
+function seg(id, key, attr) {
+  $(id).addEventListener('click', (e) => {
+    const btn = e.target.closest('button'); if (!btn) return;
+    ui[key] = btn.dataset[attr];
+    for (const b of $(id).children) { const on = b === btn; b.dataset.inv = on ? 'true' : ''; b.setAttribute('aria-checked', on); }
+    place();
+  });
+}
+seg('fidelity', 'fid', 'f');
+seg('sizes', 'size', 's');
+function setSelecting(v) {
+  ui.selecting = v;
+  canvas.dataset.selecting = v ? 'true' : '';
+  $('selectBtn').dataset.on = v ? 'true' : '';
+  $('selectBtn').setAttribute('aria-pressed', v);
+  $('hint').hidden = v || ui.selection !== null;
+  if (!v) { hovered?.classList.remove('hov'); hovered = null; }
+}
+$('selectBtn').addEventListener('click', () => setSelecting(!ui.selecting));
+$('tokensBtn').addEventListener('click', () => { ui.panel = ui.panel === 'tokens' ? null : 'tokens'; setSelection(null); });
+$('fitBtn').addEventListener('click', () => fit());
+$('tidyBtn').addEventListener('click', tidy);
+$('zIn').addEventListener('click', () => stepZoom(1));
+$('zOut').addEventListener('click', () => stepZoom(-1));
+$('zPct').addEventListener('click', () => {
+  const m = $('zMenu'); m.hidden = !m.hidden; $('zPct').setAttribute('aria-expanded', !m.hidden);
+  if (!m.hidden) m.querySelector('button').focus();
+});
+$('zMenu').addEventListener('click', (e) => {
+  const z = e.target.closest('button')?.dataset.z; if (!z) return;
+  if (z === 'in') stepZoom(1); else if (z === 'out') stepZoom(-1); else if (z === 'fit') fit(); else setZoom(Number(z));
+  $('zMenu').hidden = true; $('zPct').setAttribute('aria-expanded', 'false'); $('zPct').focus();
+});
+document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.zoomGrp')) { $('zMenu').hidden = true; $('zPct').setAttribute('aria-expanded', 'false'); } });
+$('screenList').addEventListener('click', (e) => {
+  const slug = e.target.closest('[data-screen]')?.dataset.screen; if (!slug) return;
+  fit(BOARDS.filter((b) => b.screen === slug && visible(b)), 1);
+});
+
+function tidy() {
+  undo.push(BOARDS.map((b) => ({ b, x: b.x, y: b.y })));
+  tidyLayout(BOARDS); place(); fit(); saved();
+  toast('Tidied up: one row per screen.', [['Undo', undoLast]]);
+}
+function undoLast() {
+  const last = undo.pop(); if (!last) return;
+  for (const { b, x, y } of last) { b.x = x; b.y = y; }
+  place(); saved();
+}
+function saved() {
+  $('saved').innerHTML = 'Layout saved to <span class="mono tx">.styx/designs/canvas.json</span>';
+}
+let toastTimer = null;
+function toast(text, actions = []) {
+  document.querySelector('.toast')?.remove();
+  const t = document.createElement('div');
+  t.className = 'toast'; t.setAttribute('role', 'status');
+  t.innerHTML = `<span>${text}</span>`;
+  for (const [name, fn] of actions) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = name;
+    b.addEventListener('click', () => { fn(); t.remove(); }); t.appendChild(b);
+  }
+  $('root').appendChild(t);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.remove(), 6000);
+}
+
+/* + Ask for a screen: in the mockup the agent "draws" it a moment later, placed beside the others. */
+$('askWrap').addEventListener('click', (e) => {
+  if (!e.target.closest('#askBtn')) return;
+  $('askWrap').innerHTML = `<div class="askBox"><label class="visually-hidden" for="askIn">Ask for a screen</label><input id="askIn" class="input" placeholder="order placed" autocomplete="off"></div>`;
+  const input = $('askIn'); input.focus();
+  input.addEventListener('keydown', (k) => {
+    if (k.key === 'Escape') resetAsk();
+    if (k.key !== 'Enter' || input.value.trim() === '') return;
+    const name = input.value.trim(); resetAsk();
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const existing = SCREENS.find((s) => s.slug === slug || s.name.toLowerCase() === name.toLowerCase());
+    setTimeout(() => {
+      let b;
+      if (existing) {
+        const has = new Set(BOARDS.filter((x) => x.screen === existing.slug).map((x) => `${x.size}/${x.fid}`));
+        const pick = [['phone', 'hi', 844], ['tablet', 'hi', 1112], ['phone', 'wire', 844], ['desktop', 'wire', 800]].find(([s, f]) => !has.has(`${s}/${f}`)) ?? ['tablet', 'wire', 1112];
+        b = withId({ screen: existing.slug, size: pick[0], fid: pick[1], h: pick[2] });
+      } else {
+        SCREENS.push({ slug, name: name[0].toUpperCase() + name.slice(1) });
+        b = withId({ screen: slug, size: 'desktop', fid: 'hi', h: 720, title: name[0].toUpperCase() + name.slice(1) });
+      }
+      BOARDS.push(b); placeNew(b); build(); saved();
+      toast(`Claude added ${screenOf(b.screen).name} · ${SIZE_LABEL[b.size]}.`, [['Show it', () => fit([b], 1)]]);
+    }, 700);
+  });
+});
+function resetAsk() { $('askWrap').innerHTML = `<button type="button" class="ask" id="askBtn">+ Ask for a screen</button>`; }
+
+/* ---------------- keys ---------------- */
+window.addEventListener('keydown', (e) => {
+  if (isTyping(e.target)) return;
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); stepZoom(1); return; }
+  if (mod && (e.key === '-' || e.key === '_')) { e.preventDefault(); stepZoom(-1); return; }
+  if (mod && e.key === '0') { e.preventDefault(); fit(); return; }
+  if (mod && e.key === '1') { e.preventDefault(); setZoom(1); return; }
+  if (mod && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) { e.preventDefault(); undoLast(); return; }
+  if (mod || e.altKey) return;
+  if (e.key === ' ' || e.code === 'Space') {
+    e.preventDefault();
+    if (!ui.space) { ui.space = true; canvas.dataset.grab = 'true'; hovered?.classList.remove('hov'); hovered = null; }
+    return;
+  }
+  const lbl = document.activeElement?.closest?.('.lbl');
+  const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+  if (lbl && arrows[e.key]) {
+    e.preventDefault();
+    const b = BOARDS.find((x) => x.el === lbl.parentElement);
+    const step = e.shiftKey ? 40 : GRID;
+    const last = undo[undo.length - 1];
+    if (!(e.repeat && last?.length === 1 && last[0].b === b)) undo.push([{ b, x: b.x, y: b.y }]);
+    b.x = snap(b.x + arrows[e.key][0] * step); b.y = snap(b.y + arrows[e.key][1] * step);
+    place(); saved();
+    return;
+  }
+  if (e.key === 'v' || e.key === 'V') { e.preventDefault(); setSelecting(!ui.selecting); }
+  else if (e.key === 'Escape') {
+    if (!$('zMenu').hidden) { $('zMenu').hidden = true; $('zPct').focus(); }
+    else if (ui.selection) { setSelection(null); $('hint').hidden = ui.selecting; }
+    else if (ui.selecting) setSelecting(false);
+  }
+}, true);
+window.addEventListener('keyup', (e) => {
+  if (e.key === ' ' || e.code === 'Space') { if (!isTyping(e.target)) e.preventDefault(); ui.space = false; delete canvas.dataset.grab; }
+}, true);
+window.addEventListener('blur', () => { ui.space = false; delete canvas.dataset.grab; });
+
+/* ---------------- first open: today's layout, today's 33% ---------------- */
+tidyLayout(BOARDS);
+build();
+applyView();
+// Handles for driving the mockup from a script (screenshots).
+window.mock = { view, BOARDS, applyView, place, zoomAt, fit, tidy, setSelecting, setSelection, saved };
+</script>
+</body>
+</html>

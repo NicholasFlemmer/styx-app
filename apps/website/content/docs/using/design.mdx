@@ -23,17 +23,28 @@ A design task is a task like any other, with its own branch and chat. Before its
 
 The toolbar runs along the top:
 
-- **Wireframe** and **Hi-fi** switch between the two passes. Wireframes are greys, boxes and placeholder text; hi-fi is the real thing.
-- **All sizes**, **Desktop**, **Tablet** and **Phone** choose which sizes to show. Desktop is 1280 pixels wide, tablet 834 and phone 390.
+- **Wireframe**, **Hi-fi** and **Both** choose which passes to show (Both is the default, so a wireframe sits beside its hi-fi). Wireframes are greys, boxes and placeholder text; hi-fi is the real thing.
+- **All sizes**, **Desktop**, **Tablet** and **Phone** choose which sizes to show. Desktop is 1280 pixels wide, tablet 834 and phone 390. Hiding a pass or a size leaves the other boards where they are.
 - The arrow is **Select** (press <Keys k="V" />).
 - **Aa** opens **Type and colour**.
-- A zoom menu (25 to 100 percent), and **Build it** at the right.
+- **Zoom to fit**, **Tidy up**, the zoom control (**−**, the percentage, **+**), and **Build it** at the right.
 
-The list on the left holds the design's **Screens**. **+ Ask for a screen** takes a name and asks the agent to design it. With nothing drawn yet, ask the agent in the chat for a screen, as a wireframe or high fidelity. While the Design tab is open, the project nav steps aside to give the canvas room.
+The list on the left holds the design's **Screens**; clicking one zooms to its boards. **+ Ask for a screen** takes a name and asks the agent to design it. With nothing drawn yet, ask the agent in the chat for a screen, as a wireframe or high fidelity. While the Design tab is open, the project nav steps aside to give the canvas room.
+
+## Move around the canvas
+
+The canvas is a freeform surface: the screens sit on it as boards you can zoom into, move around and arrange.
+
+- **Zoom** toward the pointer: pinch on a trackpad, or hold <Keys k="Mod" /> and scroll the mouse wheel. <Keys k="Mod+=" /> and <Keys k="Mod+-" /> step in and out, <Keys k="Mod+0" /> zooms to fit, and with the canvas focused <Keys k="Mod+1" /> goes to 100%. Zoom runs from 10% to 400%.
+- **Pan** by scrolling with two fingers or the mouse wheel (hold <Keys k="Shift" /> to scroll sideways), by dragging the empty canvas, by holding <Keys k="Space" /> and dragging, or by dragging with the middle mouse button.
+- **Move a board** by dragging its name above it. Boards snap to an 8 pixel grid. Tab to a board's name and the arrow keys move it 8 pixels (40 with <Keys k="Shift" />). <Keys k="Mod+Z" /> undoes the last move.
+- **Tidy up** puts every board back in rows, one row per screen with its sizes and passes side by side, and offers **Undo**.
+
+The first time you open a design, it's laid out in those rows. Once you move something, the arrangement is saved in `.styx/designs/canvas.json` beside the screens, so it's committed and landed with them and a teammate opens the same layout. When the agent draws a new screen or size later, it's placed beside the others without covering anything, and a note offers **Show it**. Zoom and pan are yours alone: they aren't saved to the project.
 
 ## Change a screen by pointing at it
 
-Press <Keys k="V" />, or the arrow, and then either click an element or drag across an area of a screen: a section, part of one, or across several elements. <Keys k="Esc" /> clears the selection.
+Press <Keys k="V" />, or the arrow, and then either click an element or drag across an area of a screen: a section, part of one, or across several elements. This works at any zoom; to pan while Select is on, hold <Keys k="Space" /> or use the middle button. <Keys k="Esc" /> clears the selection.
 
 With one element selected, the inspector on the right lets you change it by hand: its **Text**, **Fill**, **Colour**, **Type** and **Corners**. The change is saved to the screen's file straight away.
 
@@ -64,6 +75,7 @@ Everything lives in the task's worktree under `.styx/designs/`:
 .styx/designs/
   tokens.json            colours, typefaces, type scale, corners, spacing
   tokens.css             written by Styx from tokens.json
+  canvas.json            where the boards sit, once you've moved one
   checkout/
     desktop.html         hi-fi, 1280 px
     phone.html           hi-fi, 390 px
