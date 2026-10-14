@@ -11,6 +11,7 @@ import {
   fill,
   formatAge,
   formatChord,
+  isMachineProjectSetting,
   modelCatalogueFor,
   platformCopy,
   projectSettingsOf,
@@ -22,6 +23,7 @@ import {
   type ProjectId,
   type ProjectSettings,
   type ReadModel,
+  type SettingsValue,
   tourSeen,
 } from '@styx/core';
 import { shortcuts } from '@styx/tokens';
@@ -122,6 +124,21 @@ const fixed = (id: string, label: string, value: string): SettingsRow => ({
 const optionsOf = <T extends string>(labels: Readonly<Record<T, string>>, keys: readonly T[]): RowOption[] =>
   keys.map((value) => ({ value, label: labels[value] }));
 
+/**
+ * Whether a project setting shows as changed (and offers Reset). Settings from `.styx/project.json` are changed when
+ * the file sets them. The machine-only ones (#10: fetch before a lane, bringing in the base, merging, landing) never
+ * come from the file, so they are changed only when this machine's value differs from the default (#35).
+ */
+export const projectSettingChanged = <K extends keyof ProjectSettings>(
+  key: K,
+  entry: SettingsValue<ProjectSettings[K]> | undefined,
+): boolean => {
+  if (entry === undefined) return false;
+  if (isMachineProjectSetting(key))
+    return JSON.stringify(entry.value) !== JSON.stringify(DEFAULT_PROJECT_SETTINGS[key]);
+  return entry.source === 'project';
+};
+
 const projectRow = <K extends keyof ProjectSettings>(
   model: ReadModel,
   ctx: RowContext,
@@ -142,7 +159,7 @@ const projectRow = <K extends keyof ProjectSettings>(
     value: encode(value),
     options,
     change: { kind: 'project', key, patch: (v) => ({ [key]: decode(v) }) as Partial<ProjectSettings> },
-    overridden: showOverride && entry?.source === 'project',
+    overridden: showOverride && projectSettingChanged(key, entry),
   };
 };
 
