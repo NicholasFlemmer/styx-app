@@ -1,4 +1,5 @@
 import {
+  PROJECT_KEY_OF as CORE_PROJECT_KEY_OF,
   cliVersionLabel as coreCliVersionLabel,
   copy,
   fill,
@@ -24,8 +25,18 @@ import {
   type Worktree,
 } from '@styx/core';
 
-/** Prototype order of the provider grid (spec §4.9 / §4.10). */
-export const PROVIDERS: readonly Provider[] = ['vercel', 'aws', 'gcp', 'supabase', 'github', 'ssh'];
+/** Prototype order of the provider grid (spec §4.9 / §4.10), then the deploy platforms added since (issues #23–#25). */
+export const PROVIDERS: readonly Provider[] = [
+  'vercel',
+  'aws',
+  'gcp',
+  'supabase',
+  'github',
+  'ssh',
+  'fly',
+  'railway',
+  'render',
+];
 
 /** `methodOf` in the prototype state script: AWS/GCP → key, SSH host → ssh, everything else → OAuth. */
 export const methodOf = (provider: Provider): AuthMethod =>
@@ -40,6 +51,9 @@ export const CLI_OF: Readonly<Record<Exclude<Provider, 'ssh'>, string>> = {
   gcp: 'gcloud',
   supabase: 'supabase',
   github: 'gh',
+  fly: 'fly',
+  railway: 'railway',
+  render: 'render',
 };
 
 export const providerCli = (provider: Provider): string | null =>
@@ -106,7 +120,7 @@ export const cliSavePayload = (
  * Providers whose login reaches several projects, and the `config` key naming the one a target acts on (main's
  * `ProviderAdapter.projectKey`). The connect flow requires a pick for these; nothing falls back to "the first".
  */
-export const PROJECT_KEY_OF: Readonly<Partial<Record<Provider, string>>> = { supabase: 'ref' };
+export const PROJECT_KEY_OF: Readonly<Partial<Record<Provider, string>>> = CORE_PROJECT_KEY_OF;
 
 export const needsProjectPick = (provider: Provider): boolean => PROJECT_KEY_OF[provider] !== undefined;
 

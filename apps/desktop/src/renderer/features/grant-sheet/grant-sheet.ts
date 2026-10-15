@@ -23,6 +23,9 @@ const PROVIDER_SCOPES: Record<Provider, readonly Scope[]> = {
   ssh: ['read', 'write', 'delete'],
   vercel: ['read', 'deploy'],
   github: ['read', 'write'],
+  fly: ['read', 'write', 'deploy', 'delete'],
+  railway: ['read', 'write', 'deploy', 'delete'],
+  render: ['read', 'write', 'deploy', 'delete'],
 };
 
 /** Provider kind tag next to the ENV tag (prototype: `PROD` `POSTGRES` for Supabase). */
@@ -33,6 +36,9 @@ const PROVIDER_KIND: Record<Provider, string> = {
   gcp: 'IAM',
   github: 'Git',
   ssh: 'SSH',
+  fly: 'Deploy',
+  railway: 'Deploy',
+  render: 'Deploy',
 };
 
 /** Env noun in the title (`Supabase / prod db`); other providers read `Vercel / prod`. */

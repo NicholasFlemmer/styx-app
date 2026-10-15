@@ -4,7 +4,7 @@ import { demoReadModel, ids } from '../fixtures/demo';
 import type { Env } from '../model/common';
 import type { Target } from '../model/target';
 import { rows, tableFrom, type ReadModel } from '../read-model';
-import { deployTargetLabel, deployTargetOptions } from './palette';
+import { builtInDeployCommand, deployTargetLabel, deployTargetOptions } from './palette';
 
 const base = demoReadModel();
 const project = ids.project.acmeShop;
@@ -102,5 +102,50 @@ describe('deployTargetOptions (issue #9: the deploy button offers every target, 
       'Supabase prod',
       'AWS acme-prod prod',
     ]);
+  });
+});
+
+describe('builtInDeployCommand', () => {
+  const at = (provider: Target['provider'], env: Env, config: Record<string, string> = {}) =>
+    builtInDeployCommand({ provider, env, config });
+  it.each([
+    ['vercel prod', at('vercel', 'prod'), { bin: 'vercel', args: ['deploy', '--prod'] }],
+    ['vercel preview', at('vercel', 'preview'), { bin: 'vercel', args: ['deploy'] }],
+    [
+      'fly with an app',
+      at('fly', 'prod', { app: 'acme-web' }),
+      { bin: 'fly', args: ['deploy', '--app', 'acme-web'] },
+    ],
+    ['fly without one (fly.toml names it)', at('fly', 'prod'), { bin: 'fly', args: ['deploy'] }],
+    [
+      'railway with a service',
+      at('railway', 'staging', { service: 'web' }),
+      { bin: 'railway', args: ['up', '--ci', '--service', 'web'] },
+    ],
+    ['railway without one', at('railway', 'prod'), { bin: 'railway', args: ['up', '--ci'] }],
+    [
+      'render with a service',
+      at('render', 'prod', { serviceId: 'srv-abc123' }),
+      { bin: 'render', args: ['deploys', 'create', 'srv-abc123', '--confirm', '--wait'] },
+    ],
+    [
+      'render without one asks in the terminal',
+      at('render', 'prod'),
+      { bin: 'render', args: ['deploys', 'create'] },
+    ],
+    // A committed project.json can seed config: anything that is not a plain id is left out, never passed as a flag.
+    [
+      'fly app that reads as a flag',
+      at('fly', 'prod', { app: '--remote-only' }),
+      { bin: 'fly', args: ['deploy'] },
+    ],
+    [
+      'render id with a space',
+      at('render', 'prod', { serviceId: 'srv x' }),
+      { bin: 'render', args: ['deploys', 'create'] },
+    ],
+    ['gcp has no built-in verb', at('gcp', 'prod'), null],
+  ])('%s', (_name, got, want) => {
+    expect(got).toEqual(want);
   });
 });

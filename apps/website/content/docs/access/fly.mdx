@@ -1,0 +1,47 @@
+---
+title: Fly.io
+description: Let agents deploy and manage your Fly.io apps with a token made for each grant, that ends with it.
+---
+
+A Fly.io target is one app. Agents run `fly` (or `flyctl`) as usual; Styx catches the call, asks you, and hands the command a token made for that grant only.
+
+## Connect
+
+<Steps>
+
+1. Go to **Settings › Targets**, click **+ Connect target** and pick **Fly.io**.
+2. **Connect with fly.** Styx shows whether `fly` is installed and who it's signed in as. If it isn't signed in, click **Sign in with fly**: Styx runs `fly auth login` in a terminal in the dialog.
+3. **Pick the app.** Your Fly.io login reaches every app in every organization you belong to, so Styx lists them and you choose the one this target uses. Connect `prod` and `staging` as two targets on two apps.
+4. **Choose the environment** and click **Connect**.
+
+</Steps>
+
+Styx stores no secret in this mode: the keychain entry only names the account, and `fly` keeps its own login. Under **Advanced** you can paste a Fly.io access token instead (from **Account › Access tokens** on fly.io). It goes to your system keychain and is only ever handed to `fly` itself, to make grant tokens.
+
+## What a granted command gets
+
+Every grant gets a fresh token, made by `fly tokens create`, named `styx-<grant>` and set to expire with the grant, an hour at most (longer grants get a new one each hour):
+
+- **Read** grants get a read-only token for the app's organization. It can't change anything, but it can read every app in that organization (status, config, logs), not only this one. Keep production apps in their own organization if that matters to you.
+- **Write, deploy and delete** grants get a deploy token for the target's app. It can't touch your other apps, but on that app it can do anything, including destroying it.
+
+The command gets it as `FLY_API_TOKEN`, with `FLY_APP` set to the app. Your own login never reaches an agent. When the grant ends, Styx revokes the token at Fly.io (`fly tokens revoke supplied`); if that fails, the token's own expiry still ends it.
+
+Because a deploy token is all-or-nothing on its app, every write, deploy or delete on a `prod` Fly.io target needs Touch ID, Windows Hello or your system password. Production reads don't, since their token is read-only.
+
+## Which commands need what
+
+| Command                                                                                                 | Needs  |
+| ------------------------------------------------------------------------------------------------------- | ------ |
+| `status`, `logs`, `releases`, `apps list`, `machine list`, `secrets list`, `config show`                | read   |
+| `secrets set`, `scale …`, `machine run`, `ssh console`, `ssh sftp`, `console`, `proxy`, `tokens create` | write  |
+| `deploy`, `launch`, `apps restart`, `machine restart`, `image update`, `secrets deploy`                 | deploy |
+| `apps destroy`, `machine destroy`, `volumes delete`, `secrets unset`, `ips release`, `certs remove`     | delete |
+
+Anything Styx doesn't recognise counts as a write. Shells and file transfer into your machines are always writes, whatever runs inside them.
+
+A command that names an app (`fly deploy --app acme-staging`) goes to the target for that app, because the token it gets works on that app only. A command that names none is treated as production when the project has a production Fly.io target. If a staging or preview target uses the same app as a production target, Styx lets you, but says so: the connect dialog warns that access granted there can change production, the access request shows the same line, and the audit log marks the grant.
+
+## Deploy button
+
+Fly.io targets deploy with `fly deploy --app <app>` from the project folder, under a deploy grant. If the repo has a `fly.toml`, Styx reads the app name from it when suggesting a command.

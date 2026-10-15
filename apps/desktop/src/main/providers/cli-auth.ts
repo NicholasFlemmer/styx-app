@@ -77,6 +77,8 @@ const AUTH_FAILURE = [
   /could not be found|Unable to locate credentials|Partial credentials found|credentials missing from keychain|credential missing from keychain/i,
   /rejected the token \(40[13]\)|\b401\b|Unauthorized|Bad credentials/i,
   /Permission denied \(publickey|Host key verification failed|is not logged in/i,
+  // flyctl: "No access token available. Please login with 'flyctl auth login'" / "You must be authenticated".
+  /No access token available|must be authenticated/i,
 ];
 export const isAuthFailure = (message: string): boolean => AUTH_FAILURE.some((re) => re.test(message));
 
@@ -236,3 +238,46 @@ export function vercelAuthPaths(cli: Pick<CliRunner, 'platform' | 'home' | 'env'
 /** `supabase login` writes `~/.supabase/access-token` when no OS keyring is available (else the keyring). */
 export const supabaseTokenPath = (cli: Pick<CliRunner, 'home'>): string =>
   join(cli.home, '.supabase', 'access-token');
+
+// --- railway / render file locations ---------------------------------------
+
+/**
+ * Where `railway login` keeps its login: `~/.railway/config.json` (`user.accessToken` for the OAuth login, else the
+ * legacy `user.token`). `RAILWAY_ENV=staging|dev` points the CLI at a sibling file; read-only for Styx.
+ */
+export function railwayConfigPath(cli: Pick<CliRunner, 'home' | 'env'>): string {
+  const which = cli.env['RAILWAY_ENV'];
+  const file =
+    which === 'staging'
+      ? 'config-staging.json'
+      : which === 'dev' || which === 'develop'
+        ? 'config-dev.json'
+        : 'config.json';
+  return join(cli.home, '.railway', file);
+}
+
+/** Where `render login` keeps its token (`cli.yaml`, `api.key` + `api.expires_at`); `RENDER_CLI_CONFIG_PATH` moves it. */
+export function renderConfigPath(cli: Pick<CliRunner, 'home' | 'env'>): string {
+  const override = cli.env['RENDER_CLI_CONFIG_PATH'];
+  if (override) return override.startsWith('~') ? join(cli.home, override.slice(1)) : override;
+  const dir = cli.env['RENDER_CLI_CONFIG_DIR'];
+  return join(
+    dir ? (dir.startsWith('~') ? join(cli.home, dir.slice(1)) : dir) : join(cli.home, '.render'),
+    'cli.yaml',
+  );
+}
+
+const storedTokenSchema = z.object({ token: z.string().min(1) });
+
+/** A pasted token's vault entry (`{ token }`), checked at the boundary: a malformed entry never yields `undefined`. */
+export function parseStoredToken(raw: string): string {
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    throw new Error('credential in keychain is malformed');
+  }
+  const parsed = storedTokenSchema.safeParse(json);
+  if (!parsed.success) throw new Error('credential in keychain is malformed');
+  return parsed.data.token;
+}

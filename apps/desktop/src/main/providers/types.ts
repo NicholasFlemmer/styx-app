@@ -1,7 +1,8 @@
 import type { CredentialVault } from '../services/credential-vault';
 import type { CliRunner } from './cli-runner';
 
-export type Provider = 'vercel' | 'aws' | 'gcp' | 'supabase' | 'github' | 'ssh';
+export type Provider =
+  'vercel' | 'aws' | 'gcp' | 'supabase' | 'github' | 'ssh' | 'fly' | 'railway' | 'render';
 export type Scope = 'read' | 'write' | 'deploy' | 'delete';
 export type Env = 'prod' | 'staging' | 'preview' | 'scm';
 
@@ -148,6 +149,13 @@ export interface ProviderAdapter {
    * and the projects to choose from. Present together; a target must never fall back to "the first project".
    */
   readonly projectKey?: string;
+  /**
+   * The project a shim command names through the CLI's own flag (`fly … --app acme-staging`), for providers whose
+   * write credential only works on that project (a Fly.io deploy token on one app). The broker then routes a
+   * non-read command to the target with that project: the token it gets can't reach any other. Absent for
+   * account-wide credentials (Render), where naming a project proves nothing.
+   */
+  projectOfCommand?(argv: string[]): string | null;
   listProjects?(source: ProjectSource): Promise<ProviderProject[]>;
 }
 
@@ -225,4 +233,91 @@ export function shortFlags(
     flags.push(c);
   }
   return { flags, value: null, consumedNext: false };
+}
+
+/**
+ * A help or version request, read strictly (for providers whose classifier must not be steered by a stray flag):
+ * a bare invocation, `help …` / `version`, a lone `--version`, or `--help` / `-h` as the last argument when nothing
+ * before it is `--` and the word before it is not a flag (`--name --help` hands `--help` to `--name` as its value).
+ * Unlike `isHelp`, a `-v` or `-h` in the middle (`railway add -v K=V`, psql's `-h host`) is never help.
+ */
+export function strictHelp(argv: readonly string[]): boolean {
+  if (argv.length === 0) return true;
+  const [first] = argv;
+  if (
+    first === 'help' ||
+    (argv.length === 1 && (first === 'version' || first === '--version' || first === '-V'))
+  )
+    return true;
+  if (argv.includes('--')) return false;
+  const last = argv.at(-1);
+  if (last !== '--help' && last !== '-h') return false;
+  const prev = argv.length > 1 ? (argv.at(-2) ?? '') : '';
+  return !prev.startsWith('-');
+}
+
+/**
+ * The command words under both readings of leading flags: `--json up logs` is `up logs` when `--json` is a boolean,
+ * and `logs` when it takes a value. Classifiers judge every reading and keep the widest (`widestScope`), so a
+ * boolean flag in front can't turn `up` into a read.
+ */
+export function commandHeads(argv: readonly string[]): string[][] {
+  const valued = commandHead([...argv]);
+  let i = 0;
+  while (i < argv.length && (argv[i] ?? '').startsWith('-')) i += 1;
+  const boolean: string[] = [];
+  for (; i < argv.length; i += 1) {
+    const a = argv[i] ?? '';
+    if (a.startsWith('-')) break;
+    boolean.push(a);
+  }
+  return valued.join('\u0000') === boolean.join('\u0000') ? [valued] : [valued, boolean];
+}
+
+const SCOPE_RANK: Record<Scope, number> = { read: 0, write: 1, deploy: 2, delete: 3 };
+
+/** The widest of several classifications (delete > deploy > write > read). */
+export function widestScope(scopes: readonly Scope[]): Scope[] {
+  let top: Scope = 'read';
+  for (const s of scopes) if (SCOPE_RANK[s] > SCOPE_RANK[top]) top = s;
+  return [top];
+}
+
+/**
+ * Every command word in argv, under both readings of flags anywhere (each flag takes the next word, or none):
+ * `fly machine --app x destroy id` is `machine destroy id`. Classifiers use these only to escalate (a delete or a
+ * deploy found here wins), never to downgrade, since a flag's value can read as anything.
+ */
+export function wordReadings(argv: readonly string[]): string[][] {
+  const end = argv.indexOf('--');
+  const words = end === -1 ? argv : argv.slice(0, end);
+  const valued: string[] = [];
+  for (let i = 0; i < words.length; i += 1) {
+    const a = words[i] ?? '';
+    if (a.startsWith('-')) {
+      if (!a.includes('=') && !(words[i + 1] ?? '-').startsWith('-')) i += 1;
+      continue;
+    }
+    valued.push(a);
+  }
+  const all = words.filter((a) => !a.startsWith('-'));
+  // Each later word on its own after the first (`machine … destroy`, `secrets … unset`), and after the first two
+  // (`environment … delete`): a mix of valued and boolean flags in between can't hide a verb then.
+  const [first, second] = all;
+  const singles =
+    first === undefined
+      ? []
+      : all
+          .slice(1)
+          .flatMap((w, i) => [[first, w], ...(second !== undefined && i > 0 ? [[first, second, w]] : [])]);
+  return [valued, all, ...singles];
+}
+
+/** `widestScope` of the command-word readings, escalated by a delete or deploy found anywhere (`wordReadings`). */
+export function classifyArgv(argv: readonly string[], classify: (head: string[]) => Scope): Scope[] {
+  const base = commandHeads(argv).map(classify);
+  const escalations = wordReadings(argv)
+    .map(classify)
+    .filter((s) => s === 'delete' || s === 'deploy');
+  return widestScope([...base, ...escalations]);
 }

@@ -1,0 +1,46 @@
+---
+title: Render
+description: Let agents deploy your Render services. Render keys can't be narrowed, so production always asks you to verify.
+---
+
+A Render target is one service. Agents run `render` as usual; Styx catches the call and asks you first.
+
+## Connect
+
+<Steps>
+
+1. Go to **Settings › Targets**, click **+ Connect target** and pick **Render**.
+2. **Connect with render.** If `render` isn't signed in, click **Sign in with render**: Styx runs `render login` in a terminal in the dialog.
+3. **Pick the service** this target deploys.
+4. **Choose the environment** and click **Connect**.
+
+</Steps>
+
+Styx stores no secret in this mode. It reads the token `render login` keeps in `~/.render/cli.yaml` each time it needs it, and never copies it. Under **Advanced** you can paste an API key from your Render account settings instead; it goes to your system keychain.
+
+## What a granted command gets
+
+Render can't make a narrower or shorter-lived key. A Render API key reaches every workspace and service your account belongs to, and can deploy, change environment variables, suspend and delete. So Styx is plain about it:
+
+- the granted command gets your stored key (or the CLI's login token) as `RENDER_API_KEY`;
+- every grant on a `prod` Render target needs Touch ID, Windows Hello or your system password, reads included, and no policy can approve it for you;
+- revoking a grant stops Styx handing the key out, but the key stays valid at Render.
+
+This holds for staging targets too: a grant on a staging Render target hands over the same account-wide key, which can reach your production services. Only production targets make Styx ask for OS authentication, so set staging Render targets to **Ask each time** rather than **Always allow**, use a key from an account with access to only what agents need, and rotate it if you think one was copied. If a staging or preview target uses the same service as a production target, Styx lets you, but says so: the connect dialog warns that access granted there can change production, the access request shows the same line, and the audit log marks the grant.
+
+Styx also sets `RENDER_OUTPUT=text`, so `render` never opens its interactive screens, where a list offers deploy and restart actions.
+
+## Which commands need what
+
+| Command                                                                                                            | Needs  |
+| ------------------------------------------------------------------------------------------------------------------ | ------ |
+| `services`, `deploys list`, `logs`, `workspaces`, `jobs list`, `blueprints validate`                               | read   |
+| `services create`, `deploys cancel`, `jobs create`, `ssh`, `psql`, `workspace set`, anything with `-o interactive` | write  |
+| `deploys create`, `restart`                                                                                        | deploy |
+| `… delete`                                                                                                         | delete |
+
+Anything Styx doesn't recognise counts as a write.
+
+## Deploy button
+
+Render targets deploy with `render deploys create <service> --confirm --wait`, under a deploy grant, and the button waits for Render to finish. Styx suggests it when the repo has a `render.yaml`.

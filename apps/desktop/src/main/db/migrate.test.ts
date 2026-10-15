@@ -74,6 +74,7 @@ describe('migrations', () => {
       '0020_lane_landing',
       '0021_task_kind',
       '0022_opencode_agent',
+      '0023_fly_railway_render',
     ]);
     // Seed at 0001: a project, two targets and an active grant that cascades on the target.
     migrate(db, all.slice(0, 2));
@@ -174,8 +175,9 @@ describe('migrations', () => {
         '0020_lane_landing',
         '0021_task_kind',
         '0022_opencode_agent',
+        '0023_fly_railway_render',
       ],
-      version: 23,
+      version: 24,
     });
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT id, project_id, default_branch, remotes_json FROM repos').all()).toEqual([
@@ -257,6 +259,53 @@ describe('migrations', () => {
     // The project FK cascades again.
     db.prepare("DELETE FROM projects WHERE id = 'p'").run();
     expect(db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({ n: 0 });
+  });
+
+  it('0023 lets targets name fly, railway and render, keeping every row, grant and index (forward from 0022)', () => {
+    const db = new Database(':memory:');
+    const all = listMigrations();
+    migrate(db, all.slice(0, 23));
+    db.prepare(
+      "INSERT INTO projects (id, name, path, initials, created_at, last_activity_at) VALUES ('p', 'x', '/x', 'X', 0, 0)",
+    ).run();
+    const insertTarget = db.prepare(
+      "INSERT INTO targets (id, project_id, provider, name, env, auth_method, credential_ref, config_json, health, created_at) VALUES (?, 'p', ?, ?, 'prod', 'cli', ?, '{\"ref\":\"abc\"}', 'ok', 1)",
+    );
+    insertTarget.run('t1', 'supabase', 'Supabase', 'styx:v1:supabase:t1:cli');
+    db.prepare(
+      "INSERT INTO grants (id, target_id, scope_json, scope_mask, duration, reason, state, requested_at, issued_at) VALUES ('g1', 't1', '[\"read\"]', 1, '1h', 'r', 'active', 1, 1)",
+    ).run();
+    expect(() => insertTarget.run('t2', 'fly', 'Fly.io', null)).toThrow(/CHECK/);
+
+    expect(migrate(db, all.slice(0, 24))).toEqual({ applied: ['0023_fly_railway_render'], version: 24 });
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    expect(db.prepare('SELECT id, provider, credential_ref, config_json, health FROM targets').all()).toEqual(
+      [
+        {
+          id: 't1',
+          provider: 'supabase',
+          credential_ref: 'styx:v1:supabase:t1:cli',
+          config_json: '{"ref":"abc"}',
+          health: 'ok',
+        },
+      ],
+    );
+    expect(db.prepare('SELECT id, target_id, state FROM grants').all()).toEqual([
+      { id: 'g1', target_id: 't1', state: 'active' },
+    ]); // the rebuild did not cascade
+    for (const [id, provider] of [
+      ['t2', 'fly'],
+      ['t3', 'railway'],
+      ['t4', 'render'],
+    ] as const)
+      expect(() => insertTarget.run(id, provider, provider, null)).not.toThrow();
+    expect(() => insertTarget.run('t5', 'netlify', 'Netlify', null)).toThrow(/CHECK/);
+    // UNIQUE (project_id, provider, env, name) came back with the table.
+    expect(() => insertTarget.run('t6', 'fly', 'fly', null)).toThrow(/UNIQUE/);
+    // The project FK cascades again, and through it the grants.
+    db.prepare("DELETE FROM projects WHERE id = 'p'").run();
+    expect(db.prepare('SELECT count(*) AS n FROM targets').get()).toEqual({ n: 0 });
+    expect(db.prepare('SELECT count(*) AS n FROM grants').get()).toEqual({ n: 0 });
   });
 
   it('enforces state invariants with CHECK constraints', () => {

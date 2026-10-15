@@ -23,6 +23,7 @@ import {
   newProjectPayload,
   newProjectValid,
   primaryStepOf,
+  needsProjectPick,
   providerCli,
   defaultSessionSettings,
   sessionSettingsFor,
@@ -106,6 +107,19 @@ describe('connect helpers', () => {
     ).toMatchObject({
       name: 'Supabase prod',
       config: { ref: 'abc' },
+    });
+  });
+
+  it.each([
+    ['fly', 'app', 'acme-web'],
+    ['railway', 'environmentId', '22222222-2222-4222-8222-222222222222'],
+    ['render', 'serviceId', 'srv-web123'],
+  ] as const)('cliSave carries the %s pick as config.%s (issues #23-#25)', (provider, key, pick) => {
+    expect(needsProjectPick(provider)).toBe(true);
+    expect(providerCli(provider)).toBe(provider);
+    expect(cliSavePayload(acme, provider, 'prod', gcloud, 'nic@acme.dev', '', pick)).toMatchObject({
+      provider,
+      config: { [key]: pick },
     });
   });
 

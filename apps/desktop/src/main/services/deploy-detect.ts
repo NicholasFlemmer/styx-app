@@ -159,5 +159,36 @@ export async function detectDeployCommands(
       if (has('deploy.sh')) out.push({ command: './deploy.sh', source: 'deploy.sh' });
       return out;
     }
+    case 'fly': {
+      // `fly.toml` names the app (`app = "acme-web"`); the target's own chosen app wins over the file.
+      if (!has('fly.toml')) return out;
+      const fromFile = /^\s*app\s*=\s*["']([^"']+)["']/m.exec(
+        readText(join(projectPath, 'fly.toml')) ?? '',
+      )?.[1];
+      const app = cfg('app') ?? (fromFile !== undefined && SAFE_ID.test(fromFile) ? fromFile : null);
+      out.push({ command: app === null ? 'fly deploy' : `fly deploy --app ${app}`, source: 'fly.toml' });
+      return out;
+    }
+    case 'railway': {
+      const file = ['railway.json', 'railway.toml'].find(has);
+      if (file === undefined) return out;
+      const service = cfg('service');
+      out.push({
+        command: service === null ? 'railway up --ci' : `railway up --ci --service ${service}`,
+        source: file,
+      });
+      return out;
+    }
+    case 'render': {
+      const file = ['render.yaml', 'render.yml'].find(has);
+      if (file === undefined) return out;
+      const service = cfg('serviceId');
+      out.push({
+        command:
+          service === null ? 'render deploys create' : `render deploys create ${service} --confirm --wait`,
+        source: file,
+      });
+      return out;
+    }
   }
 }

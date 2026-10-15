@@ -1,4 +1,5 @@
 import {
+  builtInDeployCommand,
   DEPLOYABLE_PROVIDERS,
   copy,
   deployCommandOf,
@@ -15,6 +16,12 @@ import { useCallback, useEffect, useId, useState } from 'react';
 import { command } from '../../state/commands';
 import { useModel, useUi } from '../../state/hooks';
 import s from './DeploySetupModal.module.css';
+
+/** `vercel deploy --prod` · `fly deploy --app acme-web`: the argv `adapter.deployCommand` runs for a built-in target. */
+const builtInDeployLabel = (t: Target): string => {
+  const cmd = builtInDeployCommand(t);
+  return cmd === null ? '' : [cmd.bin, ...cmd.args].join(' ');
+};
 
 export interface DeploySetupModalProps {
   id: string;
@@ -119,9 +126,7 @@ export function DeploySetupModal({ id, projectId }: DeploySetupModalProps) {
               </div>
               {builtIn ? (
                 <span className={s['builtIn']}>
-                  {fill(copy.deploy.builtIn, {
-                    command: t.env === 'prod' ? copy.deploy.placeholders.vercel : 'vercel deploy',
-                  })}
+                  {fill(copy.deploy.builtIn, { command: builtInDeployLabel(t) })}
                 </span>
               ) : (
                 <Field

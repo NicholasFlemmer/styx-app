@@ -1,6 +1,9 @@
 import { AwsAdapter } from './aws';
+import { FlyAdapter } from './fly';
 import { GcpAdapter } from './gcp';
 import { GitHubAdapter } from './github';
+import { RailwayAdapter } from './railway';
+import { RenderAdapter } from './render';
 import { SshAdapter, type SshAdapterOptions } from './ssh';
 import { SupabaseAdapter } from './supabase';
 import type { AdapterDeps, Provider, ProviderAdapter } from './types';
@@ -20,6 +23,9 @@ export class ProviderRegistry {
       new AwsAdapter(deps),
       new GcpAdapter(deps),
       new SshAdapter(deps, ssh),
+      new FlyAdapter(deps),
+      new RailwayAdapter(deps),
+      new RenderAdapter(deps),
     ];
     this.adapters = new Map(list.map((a) => [a.provider, a]));
   }

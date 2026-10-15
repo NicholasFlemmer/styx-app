@@ -1,5 +1,14 @@
 // @vitest-environment jsdom
-import { fixtures, type AskId, type ProjectId, type SessionId } from '@styx/core';
+import {
+  copy,
+  fill,
+  fixtures,
+  rows,
+  tableFrom,
+  type AskId,
+  type ProjectId,
+  type SessionId,
+} from '@styx/core';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
@@ -79,6 +88,36 @@ describe('GrantSheet', () => {
     expect(screen.getByRole('radio', { name: '1h' }).getAttribute('aria-checked')).toBe('true');
     const grant = screen.getByRole('button', { name: 'Grant 1h · Touch ID' });
     expect(document.activeElement).toBe(grant);
+  });
+
+  it('row 164: a staging target sharing the production target’s project says so in one line', () => {
+    const m = fixtures.demoReadModel();
+    const sb = m.targets.byId[fixtures.ids.target.supabaseProd];
+    if (sb === undefined) throw new Error('fixture');
+    const prod = {
+      ...sb,
+      id: 'tgt-shared-prod' as typeof sb.id,
+      name: 'Supabase main',
+      env: 'prod' as const,
+    };
+    useReadModel.getState().replaceModel(
+      {
+        ...m,
+        targets: tableFrom([
+          ...rows(m.targets).filter((t) => t.id !== sb.id),
+          { ...sb, env: 'staging' },
+          prod,
+        ]),
+      },
+      'connected',
+    );
+    open();
+    expect(screen.getByText(fill(copy.grantSheet.sharesProd, { target: 'Supabase main prod' }))).toBeTruthy();
+    cleanup();
+    // The usual case: no line.
+    useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'connected');
+    open();
+    expect(document.querySelector('[data-shares-prod]')).toBeNull();
   });
 
   it('scope and duration drive the command payload; the MFA suffix follows the chosen scope', async () => {

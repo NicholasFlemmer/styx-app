@@ -58,6 +58,9 @@ const ACCOUNT = ACCOUNT_PATTERN;
 const TOKEN_PAGES: Partial<Record<Provider, string>> = {
   vercel: 'https://vercel.com/account/settings/tokens',
   supabase: 'https://supabase.com/dashboard/account/tokens',
+  fly: 'https://fly.io/user/personal_access_tokens',
+  railway: 'https://railway.com/account/tokens',
+  render: 'https://dashboard.render.com/u/settings#api-keys',
   github: 'https://github.com/login/device',
 };
 
@@ -68,6 +71,9 @@ const AUTH_METHOD: Record<Provider, AuthMethod> = {
   aws: 'key',
   gcp: 'key',
   ssh: 'ssh',
+  fly: 'oauth',
+  railway: 'oauth',
+  render: 'oauth',
 };
 
 /** Targets + connect flows (plan §5 ProviderAdapters). Secrets go straight to the vault inside `adapter.connect`. */
@@ -274,7 +280,10 @@ export class TargetService {
       .listProjects({ kind: 'target', target: this.info(target) })
       .catch((e: Error) => fail('provider-error', e.message));
     if (!projects.some((p) => p.id === project))
-      fail('invalid-input', fill(copy.connect.project.gone, { ref: project }));
+      fail(
+        'invalid-input',
+        fill(copy.connect.project.gone, { ref: project, provider: copy.providers[target.provider] }),
+      );
     if (target.config[key] === project) return target;
     const next: Target = { ...target, config: { ...target.config, [key]: project } as Target['config'] };
     this.upsertRow(next);

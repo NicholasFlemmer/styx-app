@@ -36,13 +36,23 @@ export type Agent = z.infer<typeof agentSchema>;
 export const runnerSchema = z.enum(['pty', 'stream']);
 export type Runner = z.infer<typeof runnerSchema>;
 
-export const providerSchema = z.enum(['vercel', 'aws', 'gcp', 'supabase', 'github', 'ssh']);
+export const providerSchema = z.enum([
+  'vercel',
+  'aws',
+  'gcp',
+  'supabase',
+  'github',
+  'ssh',
+  'fly',
+  'railway',
+  'render',
+]);
 export type Provider = z.infer<typeof providerSchema>;
 
 export const envSchema = z.enum(['prod', 'staging', 'preview', 'scm']);
 export type Env = z.infer<typeof envSchema>;
 
-/** `cli` = Styx reuses the login the provider's own CLI already holds (`gcloud`/`aws`/`gh`/`vercel`/`supabase`); no secret in the vault. */
+/** `cli` = Styx reuses the login the provider's own CLI already holds (`gcloud`/`aws`/`gh`/`vercel`/`supabase`/`fly`/`railway`/`render`); no secret in the vault. */
 export const authMethodSchema = z.enum(['oauth', 'key', 'ssh', 'cli']);
 export type AuthMethod = z.infer<typeof authMethodSchema>;
 
@@ -89,4 +99,7 @@ export const PROVIDER_LABEL: Record<Provider, string> = {
   supabase: 'Supabase',
   github: 'GitHub',
   ssh: 'SSH host',
+  fly: 'Fly.io',
+  railway: 'Railway',
+  render: 'Render',
 };

@@ -80,9 +80,9 @@ export const Pillars = () => (
       <div className={styles.col}>
         <h3>Every key</h3>
         <p>
-          Log into Vercel, AWS, Google Cloud, Supabase, GitHub and your servers once, in one place. Agents
-          never hold the keys. They borrow access, for an hour, with your fingerprint for anything live. Every
-          borrow is written down.
+          Log into Vercel, AWS, Google Cloud, Supabase, GitHub, Fly.io, Railway, Render and your servers once,
+          in one place. Agents never hold the keys. They borrow access, for an hour, with your fingerprint for
+          anything live. Every borrow is written down.
         </p>
         <div className={styles.art} aria-hidden="true">
           <table className={`${styles.targets} mono`}>

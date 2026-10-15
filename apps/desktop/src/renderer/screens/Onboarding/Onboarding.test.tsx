@@ -356,7 +356,7 @@ describe('Onboarding', () => {
     expect(commandMock.mock.calls.length).toBe(before);
   });
 
-  it('Targets: six provider tiles open the connect modal on that provider; Finish completes onboarding', async () => {
+  it('Targets: nine provider tiles open the connect modal on that provider; Finish completes onboarding', async () => {
     useUiStore.setState({ onboardingStep: 4 });
     render(<Onboarding />);
     expect(screen.getByText(/macOS Keychain/)).toBeTruthy();
@@ -368,6 +368,9 @@ describe('Onboarding', () => {
       'Supabasesupabase CLI · connect →',
       'GitHubgh CLI · connect →',
       'SSH hostSSH · connect →',
+      'Fly.iofly CLI · connect →',
+      'Railwayrailway CLI · connect →',
+      'Renderrender CLI · connect →',
     ]);
     fireEvent.click(screen.getByRole('button', { name: /^AWS/ }));
     expect(useUiStore.getState().overlays).toMatchObject([

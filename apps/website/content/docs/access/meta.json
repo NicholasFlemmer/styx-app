@@ -3,6 +3,9 @@
   "pages": [
     "how-access-works",
     "connect-a-target",
+    "fly",
+    "railway",
+    "render",
     "approve-a-request",
     "policies",
     "audit-log",

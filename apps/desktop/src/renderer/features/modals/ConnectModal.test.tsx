@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { copy, fixtures, type CommandOutput, type ReadModel } from '@styx/core';
+import { copy, fill as fillCopy, fixtures, type CommandOutput, type ReadModel } from '@styx/core';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
@@ -146,6 +146,9 @@ describe('ConnectModal', () => {
       'SupabaseOAuth',
       'GitHubOAuth',
       'SSH hostSSH',
+      'Fly.ioOAuth',
+      'RailwayOAuth',
+      'RenderOAuth',
     ]);
     expect(screen.queryByRole('button', { name: copy.connect.back })).toBeNull();
     expect(calls('target.connect.cliStatus')).toHaveLength(0);
@@ -505,6 +508,35 @@ describe('ConnectModal', () => {
   describe('supabase: choose the project per target', () => {
     const projectGroup = () => screen.getByRole('radiogroup', { name: copy.connect.project.label });
 
+    it('row 164: a staging target on the production target’s project connects, with a plain warning', async () => {
+      const pick = (ref: string) => {
+        const el = projectGroup().querySelector(`[data-project="${ref}"]`);
+        if (el === null) throw new Error(`no row ${ref}`);
+        return el;
+      };
+      cliStatus = supabaseStatus();
+      projects = [
+        { id: 'acme-shop-prod', name: 'acme', region: null },
+        { id: 'stagingrefbbbbbbbbbb', name: 'acme-staging', region: null },
+      ];
+      render(<ConnectModal id="modal-1" projectId={acme} provider="supabase" />);
+      fireEvent.click(screen.getByRole('radio', { name: 'staging' }));
+      await waitFor(() => within(projectGroup()).getAllByRole('radio'));
+      const warning = fillCopy(copy.connect.project.sharesProd, { env: 'staging', target: 'Supabase' });
+      fireEvent.click(pick('acme-shop-prod'));
+      expect(screen.getByText(warning)).toBeTruthy();
+      // Still allowed: Connect is on.
+      expect(screen.getByRole('button', { name: copy.connect.cli.connect }).hasAttribute('disabled')).toBe(
+        false,
+      );
+      fireEvent.click(pick('stagingrefbbbbbbbbbb'));
+      expect(screen.queryByText(warning)).toBeNull();
+      // A prod target on its own project, the usual case: no warning.
+      fireEvent.click(screen.getByRole('radio', { name: 'prod' }));
+      fireEvent.click(pick('acme-shop-prod'));
+      expect(document.querySelector('[data-shares-prod]')).toBeNull();
+    });
+
     it("cli path lists the login's projects (name, ref · region); Connect waits for a pick, which is saved as config.ref", async () => {
       cliStatus = supabaseStatus();
       render(<ConnectModal id="modal-1" projectId={acme} provider="supabase" />);
@@ -565,7 +597,9 @@ describe('ConnectModal', () => {
 
       projects = [];
       render(<ConnectModal id="modal-1" projectId={acme} provider="supabase" />);
-      expect(await screen.findByText(copy.connect.project.none)).toBeTruthy();
+      expect(
+        await screen.findByText(fillCopy(copy.connect.project.none, { provider: 'Supabase' })),
+      ).toBeTruthy();
       expect(screen.getByRole('button', { name: copy.connect.cli.connect }).hasAttribute('disabled')).toBe(
         true,
       );

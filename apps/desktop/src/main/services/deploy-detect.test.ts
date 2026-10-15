@@ -186,4 +186,98 @@ describe('detectDeployCommands', () => {
       }),
     ).toEqual([]);
   });
+
+  describe('fly, railway and render (issues #23-#25)', () => {
+    const detect = (
+      provider: 'fly' | 'railway' | 'render',
+      config: Record<string, string>,
+      files: string[],
+      texts: Record<string, string> = {},
+    ) =>
+      detectDeployCommands({ provider, config }, '/repo', {
+        cli: new FakeCliRunner(),
+        ...fakeFs(files, {}, texts),
+      });
+    it.each([
+      // Fly.io: the target's app wins over the one fly.toml names; fly.toml alone still names it.
+      [
+        'fly, app from the target',
+        'fly',
+        { app: 'acme-web' },
+        ['fly.toml'],
+        { 'fly.toml': 'app = "other"' },
+        [{ command: 'fly deploy --app acme-web', source: 'fly.toml' }],
+      ],
+      [
+        'fly, app from fly.toml',
+        'fly',
+        {},
+        ['fly.toml'],
+        { 'fly.toml': "# comment\napp = 'acme-web'\n" },
+        [{ command: 'fly deploy --app acme-web', source: 'fly.toml' }],
+      ],
+      [
+        'fly, fly.toml without an app',
+        'fly',
+        {},
+        ['fly.toml'],
+        {},
+        [{ command: 'fly deploy', source: 'fly.toml' }],
+      ],
+      // Repo text is hostile: an app name that is not a plain id is never composed into the command.
+      [
+        'fly, fly.toml app with shell text',
+        'fly',
+        {},
+        ['fly.toml'],
+        { 'fly.toml': 'app = "x; rm -rf ~"' },
+        [{ command: 'fly deploy', source: 'fly.toml' }],
+      ],
+      ['fly, no fly.toml', 'fly', { app: 'acme-web' }, ['package.json'], {}, []],
+      [
+        'railway.json',
+        'railway',
+        {},
+        ['railway.json'],
+        {},
+        [{ command: 'railway up --ci', source: 'railway.json' }],
+      ],
+      [
+        'railway.toml with a service',
+        'railway',
+        { service: 'web' },
+        ['railway.toml'],
+        {},
+        [{ command: 'railway up --ci --service web', source: 'railway.toml' }],
+      ],
+      ['railway, no config file', 'railway', {}, ['Dockerfile'], {}, []],
+      [
+        'render.yaml with a service',
+        'render',
+        { serviceId: 'srv-abc123' },
+        ['render.yaml'],
+        {},
+        [{ command: 'render deploys create srv-abc123 --confirm --wait', source: 'render.yaml' }],
+      ],
+      [
+        'render.yaml without one',
+        'render',
+        {},
+        ['render.yaml'],
+        {},
+        [{ command: 'render deploys create', source: 'render.yaml' }],
+      ],
+      [
+        'render service id with shell text',
+        'render',
+        { serviceId: 'srv-1 && rm' },
+        ['render.yml'],
+        {},
+        [{ command: 'render deploys create', source: 'render.yml' }],
+      ],
+      ['render, no blueprint', 'render', { serviceId: 'srv-abc123' }, [], {}, []],
+    ] as const)('%s', async (_name, provider, config, files, texts, want) => {
+      expect(await detect(provider, { ...config }, [...files], { ...texts })).toEqual(want);
+    });
+  });
 });

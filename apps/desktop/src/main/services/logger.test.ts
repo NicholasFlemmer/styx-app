@@ -123,6 +123,57 @@ describe('redactArgv', () => {
   });
 });
 
+describe('redact: Fly.io and Render token shapes (issues #23, #25)', () => {
+  // Assembled at run time so no literal token shape sits in the repo.
+  const fly = ['FlyV1 fm2', '_', 'a'.repeat(40), ',fm2_', 'b'.repeat(30)].join('');
+  const flyOld = ['fo1', '_', 'c'.repeat(43)].join('');
+  const render = ['rnd', '_', 'd'.repeat(32)].join('');
+  it.each([
+    ['a Fly.io macaroon bundle', `FLY_API_TOKEN=x fly deploy -t ${fly}`],
+    ['an older Fly.io personal token', `token ${flyOld} here`],
+    ['a Render API key', `curl -H "Authorization: Bearer ${render}"`],
+  ])('%s', (_name, text) => {
+    const out = redact(text);
+    expect(out).toContain('[redacted]');
+    expect(out).not.toMatch(/fm2_|fo1_|rnd_/);
+  });
+  it.each([
+    ['fly secrets set', ['secrets', 'set', 'SIGNING_SALT=hunter2', 'APP_MODE=x'], undefined],
+    ['fly secrets import', ['secrets', 'import', 'SALT=hunter2'], undefined],
+    ['railway variables --set', ['variables', '--set', 'SESSION_SALT=hunter2'], undefined],
+    ['railway variables --set=', ['variables', '--set=SESSION_SALT=hunter2'], undefined],
+    ['railway variable set', ['variable', 'set', 'SALT=hunter2'], undefined],
+    ['fly -t <opaque token>', ['deploy', '-t', 'hunter2'], 'fly'],
+    ['fly secrets with a flag before set', ['secrets', '-a', 'app', 'set', 'SALT=hunter2'], undefined],
+    ['railway variable --json set', ['variable', '--json', 'set', 'SALT=hunter2'], 'railway'],
+    ['fly deploy --build-secret', ['deploy', '--build-secret', 'NPM_SALT=hunter2'], 'fly'],
+    ['railway add -v', ['add', '-s', 'web', '-v', 'SALT=hunter2'], 'railway'],
+  ] as const)('masks every value a %s command sets', (_name, argv, tool) => {
+    const out = redactArgv([...argv], tool);
+    expect(out.join(' ')).not.toContain('hunter2');
+    expect(out.join(' ')).not.toMatch(/=x\b/);
+  });
+  it('keeps names, and leaves ordinary K=V and ssh -t alone', () => {
+    expect(redactArgv(['secrets', 'set', 'SALT=hunter2'])).toEqual(['secrets', 'set', 'SALT=[redacted]']);
+    expect(redactArgv(['deploy', '--env', 'MODE=fast'])).toEqual(['deploy', '--env', 'MODE=fast']);
+    expect(redactArgv(['-t', 'deploy@host'], 'ssh')).toEqual(['-t', 'deploy@host']);
+    expect(redactArgv(['upgrade', 'web', '--set', 'image.tag=1'], 'helm')).toEqual([
+      'upgrade',
+      'web',
+      '--set',
+      'image.tag=1',
+    ]);
+  });
+  it('drops the value after --access-token', () => {
+    expect(redactArgv(['deploy', '--access-token', 'opaque-value'])).toEqual([
+      'deploy',
+      '--access-token',
+      '[redacted]',
+    ]);
+    expect(redactArgv(['deploy', '--access-token=opaque-value'])).not.toContain('opaque-value');
+  });
+});
+
 describe('commandCarriesSecret', () => {
   it('is token-based: spacing never counts, anything redactArgv masks does', () => {
     expect(commandCarriesSecret('pnpm  dev')).toBe(false);

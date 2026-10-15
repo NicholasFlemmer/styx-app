@@ -84,7 +84,51 @@ export interface PaletteUi {
 }
 
 /** Providers with a built-in deploy verb (`adapter.deployCommand`). */
-export const DEPLOYABLE_PROVIDERS: readonly Provider[] = ['vercel'];
+export const DEPLOYABLE_PROVIDERS: readonly Provider[] = ['vercel', 'fly', 'railway', 'render'];
+
+/** A config value composed into a built-in deploy argv: a plain identifier, never something that reads as a flag. */
+const DEPLOY_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const deployId = (t: { config: Readonly<Record<string, unknown>> }, key: string): string | null => {
+  const v = t.config[key];
+  return typeof v === 'string' && DEPLOY_ID.test(v) ? v : null;
+};
+
+/**
+ * The built-in deploy verb of a provider in `DEPLOYABLE_PROVIDERS`, as argv (main's `adapter.deployCommand` runs
+ * exactly this; Settings shows it). Only plain identifiers from the target's config are composed in, since a
+ * committed `.styx/project.json` can seed that config. Null for providers without one.
+ */
+export const builtInDeployCommand = (t: {
+  provider: Provider;
+  env: Env;
+  config: Readonly<Record<string, unknown>>;
+}): { bin: string; args: string[] } | null => {
+  switch (t.provider) {
+    case 'vercel':
+      return { bin: 'vercel', args: t.env === 'prod' ? ['deploy', '--prod'] : ['deploy'] };
+    case 'fly': {
+      // Each Fly.io target is one app; `fly.toml` in the repo names it too, but the target's own app wins.
+      const app = deployId(t, 'app');
+      return { bin: 'fly', args: ['deploy', ...(app === null ? [] : ['--app', app])] };
+    }
+    case 'railway': {
+      // The grant's project token already names the project and environment; `--ci` streams the build and exits.
+      const service = deployId(t, 'service');
+      return { bin: 'railway', args: ['up', '--ci', ...(service === null ? [] : ['--service', service])] };
+    }
+    case 'render': {
+      const service = deployId(t, 'serviceId');
+      // Without a chosen service the CLI asks which one, in the terminal the deploy runs in.
+      return {
+        bin: 'render',
+        args:
+          service === null ? ['deploys', 'create'] : ['deploys', 'create', service, '--confirm', '--wait'],
+      };
+    }
+    default:
+      return null;
+  }
+};
 
 /** The user's own deploy command for a target (`config.deployCommand`), or null when none is set. */
 export const deployCommandOf = (t: Pick<Target, 'config'>): string | null => {

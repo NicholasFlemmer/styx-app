@@ -1,6 +1,6 @@
 ---
 title: Connect a target
-description: Connect Vercel, AWS, GCP, Supabase, GitHub or an SSH host so agents can ask for access, and keep the connection healthy.
+description: Connect Vercel, AWS, GCP, Supabase, GitHub, Fly.io, Railway, Render or an SSH host so agents can ask for access, and keep the connection healthy.
 ---
 
 A target is a deploy provider or server that agents in one project can ask to use. Connecting one is optional: agents work locally without any. You connect a target once per project and environment, and from then on every agent in that project can request access to it, with you deciding each time (or a [policy](/docs/access/policies) deciding for you).
@@ -9,17 +9,17 @@ Styx prefers to reuse the login your provider's own CLI already has. You don't p
 
 ## Open the connect flow
 
-Go to **Settings**, pick **Targets** under the project, and click **+ Connect target · OAuth / key / SSH**. The onboarding's **Targets** step opens the same flow. Pick a provider from the grid: **Vercel**, **AWS**, **GCP**, **Supabase**, **GitHub** or **SSH host**.
+Go to **Settings**, pick **Targets** under the project, and click **+ Connect target · OAuth / key / SSH**. The onboarding's **Targets** step opens the same flow. Pick a provider from the grid: **Vercel**, **AWS**, **GCP**, **Supabase**, **GitHub**, **SSH host**, **Fly.io**, **Railway** or **Render**.
 
 ## Connect with the provider's CLI
 
-For every provider except SSH, the first screen is **Connect with** the CLI: `vercel`, `aws`, `gcloud`, `supabase` or `gh`.
+For every provider except SSH, the first screen is **Connect with** the CLI: `vercel`, `aws`, `gcloud`, `supabase`, `gh`, `fly`, `railway` or `render`.
 
 <Steps>
 
 1. **Check the CLI.** Styx shows whether the CLI is installed and lists the accounts it's signed in to (for `aws`, your profiles). If it isn't installed, install it first, or use **Advanced** below.
 2. **Pick an account.** If none is listed, or you want another one, click **Sign in with** the CLI. Styx runs the CLI's own login (for example `gcloud auth login` or `gh auth login`) in a terminal inside the dialog. When it finishes, pick the account.
-3. **Supabase: pick the project.** A Supabase login reaches every project in the account, so Styx lists them (name, project ref and region) and you choose the one this target uses. With a single project it's chosen for you; with several, **Connect** waits until you pick. Connect `prod` and `staging` as two targets, each on its own project.
+3. **Supabase: pick the project.** A Supabase login reaches every project in the account, so Styx lists them (name, project ref and region) and you choose the one this target uses. With a single project it's chosen for you; with several, **Connect** waits until you pick. Connect `prod` and `staging` as two targets, each on its own project. If a `staging` or `preview` target uses the same project as a `prod` one, Styx still connects it but warns that access granted there can change production, shows the same line on access requests, and marks such grants in the audit log. Fly.io, Railway and Render ask the same way, for an app, an environment and a service: see [Fly.io](/docs/access/fly), [Railway](/docs/access/railway) and [Render](/docs/access/render).
 4. **Choose the environment.** Pick `prod`, `staging` or `preview`. It defaults to `prod`. This decides how careful Styx is: production writes, deploys and deletes always need Touch ID, Windows Hello or your system password.
 5. **Name it (optional) and click Connect.**
 

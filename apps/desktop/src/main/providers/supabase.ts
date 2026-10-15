@@ -1,4 +1,4 @@
-import { copy, fill, PROVIDER_PROJECT_REF } from '@styx/core';
+import { PROVIDER_PROJECT_REF } from '@styx/core';
 import { z } from 'zod';
 import { makeCredentialRef } from '../services/credential-vault';
 import {
@@ -10,6 +10,7 @@ import {
   testToHealth,
   supabaseTokenPath,
 } from './cli-auth';
+import { pickProjectOf } from './project-pick';
 import type {
   AdapterDeps,
   CliCommand,
@@ -65,25 +66,9 @@ const projectListSchema = z.array(
     }),
 );
 
-type Picked = { ok: true; project: ProviderProject } | { ok: false; error: string };
-
-/**
- * Which project a target acts on: the ref it was given, or the account's only project. Never the first of several
- * (issue #5: prod and staging targets both landed on whichever project the API listed first).
- */
-export function pickProject(projects: readonly ProviderProject[], chosen: unknown): Picked {
-  if (typeof chosen === 'string' && chosen !== '') {
-    const project = projects.find((p) => p.id === chosen);
-    return project
-      ? { ok: true, project }
-      : { ok: false, error: fill(copy.connect.project.gone, { ref: chosen }) };
-  }
-  if (projects.length === 1 && projects[0]) return { ok: true, project: projects[0] };
-  return {
-    ok: false,
-    error: projects.length === 0 ? copy.connect.project.none : copy.connect.project.choose,
-  };
-}
+/** Which project a target acts on: the ref it was given, or the account's only project (`project-pick.ts`). */
+const pickProject = (projects: readonly ProviderProject[], chosen: unknown) =>
+  pickProjectOf('supabase', projects, chosen);
 
 /**
  * Supabase. Primary: the login `supabase login` holds — `~/.supabase/access-token` (the CLI's file store), else the

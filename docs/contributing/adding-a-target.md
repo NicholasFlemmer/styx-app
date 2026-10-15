@@ -80,7 +80,17 @@ is the same shape with one extra: a built-in `deployCommand`.
 ### 1. Name and labels
 
 ```ts
-export const providerSchema = z.enum(['vercel', 'aws', 'gcp', 'supabase', 'github', 'ssh']);
+export const providerSchema = z.enum([
+  'vercel',
+  'aws',
+  'gcp',
+  'supabase',
+  'github',
+  'ssh',
+  'fly',
+  'railway',
+  'render',
+]);
 ```
 
 `PROVIDER_LABEL.supabase` and `copy.providers.supabase` are both `'Supabase'`.
@@ -117,7 +127,8 @@ declares `projectKey = 'ref'` and `listProjects(source)` (a pasted token, the CL
 connect modal lists them through `target.connect.projects` and requires a pick, and Settings › Targets re-points a
 target with `target.setProject`. `pickProject()` accepts the chosen ref or the account's only project, never the first
 of several: connect refuses, `test()` returns `needsProject` (not an expiry), and `issue()` throws. Implement the same
-pair if your provider's login spans several projects.
+pair if your provider's login spans several projects. Fly.io (`app`), Railway (`environmentId`) and Render (`serviceId`) do the same; `pickProjectOf()` in
+[`project-pick.ts`](../../apps/desktop/src/main/providers/project-pick.ts) is the shared picker rule.
 
 The CLI path (`connectCli`) stores no secret at all. The vault entry only names the account:
 
@@ -153,8 +164,9 @@ return { kind: 'env', env, expiresAt: grant.expiresAt, scoped: false };
 
 `scoped: false`, and no `issuesScoped()` method, is the honest answer. It makes `GrantService` require biometric
 verification for any grant on a prod Supabase target, even "read", because the agent gets the whole token. Adapters
-that can mint narrower credentials implement `issuesScoped()`: AWS (STS session policies) and GCP (for
-read-only grants). `revoke()` is empty because Supabase issued nothing new. An adapter that mints a credential should
+that can mint narrower credentials implement `issuesScoped()`: AWS (STS session policies), GCP and Fly.io (for
+read-only grants). Fly.io and Railway mint a fresh token per grant and revoke it in `revoke()` even where it is not
+narrower by scope; Render, like Supabase, can't. `revoke()` is empty because Supabase issued nothing new. An adapter that mints a credential should
 revoke it there when the provider allows it, as GCP does.
 
 ### 6. Scope classification
@@ -323,7 +335,7 @@ Cover at least:
   and tricks like a read-looking word in a flag value. Add your provider to the "fails closed (M2)" block;
 - `health()` returns `expired: true` for a 401 or a logged-out CLI and `expired: false` for a timeout or a missing
   binary;
-- the `ProviderRegistry` test's `toHaveLength(6)` and `forTool()` expectations, updated.
+- the `ProviderRegistry` test's `toHaveLength(9)` and `forTool()` expectations, updated.
 
 End-to-end tests drive the built Electron app with Playwright (`pnpm build`, then `pnpm e2e`).
 [`apps/desktop/e2e/launch.ts`](../../apps/desktop/e2e/launch.ts) puts

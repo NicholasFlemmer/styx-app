@@ -9,6 +9,7 @@ export * from './chat';
 export * from './audit';
 export * from './inbox';
 export * from './palette';
+export * from './shared-project';
 export * from './home';
 export * from './discovery';
 export * from './agent-setup';

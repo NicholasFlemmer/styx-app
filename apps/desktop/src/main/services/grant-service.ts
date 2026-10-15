@@ -1,5 +1,6 @@
 import {
   AGENT_LABEL,
+  prodReachOf,
   copy,
   evaluate,
   fill,
@@ -271,7 +272,7 @@ export class GrantService {
   }
 
   /**
-   * Unscoped providers (GitHub, Vercel, Supabase, SSH, GCP non-read) hand the agent the whole stored credential
+   * Unscoped providers (GitHub, Vercel, Supabase, SSH, Render, Railway, GCP and Fly.io non-read) hand the agent the whole stored credential
    * whatever the shim heuristics classified, so on prod the user verifies even for "read" (M2). No hint = unscoped.
    */
   private unscopedProd(target: Target, scope: readonly Scope[]): boolean {
@@ -658,7 +659,18 @@ export class GrantService {
       fail('provider-error', (e as Error).message);
     }
     this.issued.set(grant.id, cred);
-    const next = this.commit(grant, t.state, t.patch, t.effects);
+    // Row 164 (owner decision): sharing a production target's project is allowed, but the grant row says so.
+    const siblings = this.deps.repos.targets.byProject(target.projectId);
+    // One rule with the sheet's warning (core prodReachOf): shared project, or none picked while prod exists.
+    const shares = prodReachOf(target, siblings) !== null;
+    const effects = shares
+      ? t.effects.map((e) =>
+          e.type === 'appendAudit' && e.entry.action === 'granted'
+            ? { ...e, entry: { ...e.entry, detail: { ...e.entry.detail, sharesProdProject: true } } }
+            : e,
+        )
+      : t.effects;
+    const next = this.commit(grant, t.state, t.patch, effects);
     // Chat system line (spec §10): "grant: supabase-prod · read+write · expires in 59m".
     if (next.sessionId ?? grant.sessionId) {
       const until = openUntil(next);

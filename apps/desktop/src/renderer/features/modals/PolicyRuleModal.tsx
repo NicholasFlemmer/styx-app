@@ -22,7 +22,17 @@ export interface PolicyRuleModalProps {
   policyId?: PolicyId;
 }
 
-const PROVIDERS: readonly Provider[] = ['vercel', 'aws', 'gcp', 'supabase', 'github', 'ssh'];
+const PROVIDERS: readonly Provider[] = [
+  'vercel',
+  'aws',
+  'gcp',
+  'supabase',
+  'github',
+  'ssh',
+  'fly',
+  'railway',
+  'render',
+];
 const ENVS: readonly Env[] = ['prod', 'staging', 'preview', 'scm'];
 const SCOPES: readonly Scope[] = ['read', 'write', 'deploy', 'delete'];
 const DURATIONS: readonly Duration[] = ['once', '1h', 'session', 'always'];

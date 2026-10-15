@@ -31,7 +31,7 @@ export function createStyxMcpServer(client: BrokerClient): McpServer {
     'request_access',
     {
       description:
-        'Ask the user for scoped, expiring access to a deploy/server target (Vercel, AWS, GCP, Supabase, GitHub, SSH). Blocks until the user decides or a policy auto-approves. Prefer running the provider CLI (vercel, gh, aws, gcloud, supabase, ssh) afterwards: it is already wired to use the grant. The reason is shown to the user verbatim: one plain line.',
+        'Ask the user for scoped, expiring access to a deploy/server target (Vercel, AWS, GCP, Supabase, GitHub, SSH, Fly.io, Railway, Render). Blocks until the user decides or a policy auto-approves. Prefer running the provider CLI (vercel, gh, aws, gcloud, supabase, ssh, fly, railway, render) afterwards: it is already wired to use the grant. The reason is shown to the user verbatim: one plain line.',
       inputSchema: {
         target: z
           .string()

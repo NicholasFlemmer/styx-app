@@ -1,4 +1,4 @@
-import { commands, fixtures } from '@styx/core';
+import { commands, fixtures, sharedProdTarget } from '@styx/core';
 import { describe, expect, it } from 'vitest';
 import { makeTestApp } from '../../test-support';
 
@@ -299,5 +299,46 @@ describe('target.connect.projects / target.setProject (Supabase project per targ
       ok: false,
       error: { code: 'provider-error', message: 'Could not reach Supabase to list projects' },
     });
+  });
+
+  it('row 164 (warn, never refuse): a staging target may take the project a prod target uses, either way round', async () => {
+    const { app, sender, vault } = setup();
+    const prod = app.repos.targets.get(ids.target.supabaseProd);
+    if (!prod?.credentialRef) throw new Error('fixture');
+    await vault.set(prod.credentialRef, JSON.stringify({ token: 'sbp_FIXTURE' }));
+    app.repos.targets.upsert({ ...prod, config: { ref: 'prodrefaaaaaaaaaaaaa' } });
+    const start = await app.bus.dispatch(sender, 'target.connect.start', {
+      projectId: ids.project.acmeShop,
+      provider: 'supabase',
+      env: 'staging',
+    });
+    if (!start.ok) throw new Error(start.error.message);
+    const { targetId } = start.value;
+    expect(
+      await app.bus.dispatch(sender, 'target.connect.saveToken', {
+        targetId,
+        token: 'sbp_FIXTURE',
+        project: 'prodrefaaaaaaaaaaaaa',
+      }),
+    ).toMatchObject({ ok: true });
+    const staging = app.repos.targets.get(targetId);
+    expect(staging).toMatchObject({ health: 'ok', config: { ref: 'prodrefaaaaaaaaaaaaa' } });
+    // The pair the connect modal and grant sheet warn about.
+    if (!staging) throw new Error('saved');
+    expect(sharedProdTarget(staging, app.repos.targets.byProject(ids.project.acmeShop))?.id).toBe(prod.id);
+    // Re-pointing either side onto the shared project works too.
+    expect(
+      await app.bus.dispatch(sender, 'target.setProject', { targetId, project: 'stagingrefbbbbbbbbbb' }),
+    ).toMatchObject({ ok: true });
+    expect(
+      await app.bus.dispatch(sender, 'target.setProject', { targetId, project: 'prodrefaaaaaaaaaaaaa' }),
+    ).toMatchObject({ ok: true });
+    app.repos.targets.upsert({ ...prod, config: {} });
+    expect(
+      await app.bus.dispatch(sender, 'target.setProject', {
+        targetId: prod.id,
+        project: 'prodrefaaaaaaaaaaaaa',
+      }),
+    ).toMatchObject({ ok: true });
   });
 });

@@ -19,7 +19,7 @@ const ways = [
   },
   {
     title: 'Add a deploy target',
-    text: 'Vercel, AWS, Google Cloud, Supabase, GitHub and SSH today. The guide shows how a new provider gets the same asks, time limits and record as the rest.',
+    text: 'Vercel, AWS, Google Cloud, Supabase, GitHub, Fly.io, Railway, Render and SSH today. The guide shows how a new provider gets the same asks, time limits and record as the rest.',
     href: site.links.addTarget,
     label: 'Read the guide',
     external: false,

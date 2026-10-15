@@ -94,7 +94,7 @@ const EDIT_TOOLS = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
 
 /** `/Users/me/sdk/bin/gcloud …` or `~/.local/bin/gh …`: a shimmed cloud CLI reached by path, so the shim was skipped. */
 const CLOUD_CLI_BY_PATH =
-  /(?:^|[\s;&|(`])(?:\/|~\/|\.\/)[^\s'"`]*\/(gcloud|aws|gh|vercel|supabase|ssh)(?=[\s;&|)`]|$)/;
+  /(?:^|[\s;&|(`])(?:\/|~\/|\.\/)[^\s'"`]*\/(gcloud|aws|gh|vercel|supabase|ssh|fly|flyctl|railway|render)(?=[\s;&|)`]|$)/;
 export const cloudCliByFullPath = (command: string): string | null => {
   const m = CLOUD_CLI_BY_PATH.exec(command);
   return m?.[1] ?? null;

@@ -2,6 +2,9 @@ import {
   copy,
   fill,
   platformCopy,
+  PROJECT_KEY_OF,
+  rows,
+  sharedProdTarget,
   type CommandResult,
   type EventPayload,
   type ProjectId,
@@ -98,6 +101,7 @@ export function ConnectModal({
   const activeProject = useUi((u) => u.projectId);
   const words = platformCopy(platform);
   const target = useReadModel((st) => (targetId === undefined ? undefined : st.model.targets.byId[targetId]));
+  const allTargets = useReadModel((st) => st.model.targets);
 
   const projectId: ProjectId | null = projectIdProp ?? target?.projectId ?? activeProject;
   const initialProvider = target?.provider ?? providerProp ?? null;
@@ -458,8 +462,39 @@ export function ConnectModal({
     projectsRequested && projectList.projects === null && projectList.error === null
       ? { ...projectList, loading: true }
       : projectList;
+  // Row 164 (owner decision): sharing a production target's project is allowed, with a plain warning.
+  const projectKey = PROJECT_KEY_OF[provider];
+  const sharedWith =
+    projectId === null || project === null || projectKey === undefined
+      ? null
+      : sharedProdTarget(
+          {
+            id: target?.id ?? savedTargetId ?? ('' as TargetId),
+            projectId,
+            provider,
+            env: chooseProject && target !== undefined ? target.env : env,
+            config: { [projectKey]: project },
+          },
+          rows(allTargets),
+        );
+  const sharedEnv = chooseProject && target !== undefined ? target.env : env;
   const projectPicker = (
-    <ProjectPicker id={`${id}-projects`} list={shownProjects} value={project} onChange={setProject} />
+    <>
+      <ProjectPicker
+        id={`${id}-projects`}
+        provider={provider}
+        list={shownProjects}
+        value={project}
+        onChange={setProject}
+      />
+      {sharedWith !== null ? (
+        <div className={s['body']} role="note" data-shares-prod="true">
+          {sharedEnv === 'prod'
+            ? fill(copy.connect.project.sharesProdOther, { env: sharedWith.env, target: sharedWith.name })
+            : fill(copy.connect.project.sharesProd, { env: sharedEnv, target: sharedWith.name })}
+        </div>
+      ) : null}
+    </>
   );
   // GitHub runs the device flow by itself; every other provider's page opens in the browser and the token is
   // pasted here, so the field shows for them from the start of the flow.
@@ -521,7 +556,9 @@ export function ConnectModal({
         <div ref={heading} tabIndex={-1} className={s['providerName']}>
           {copy.providers[target.provider]} · {target.env}
         </div>
-        <div className={s['body']}>{copy.connect.project.body}</div>
+        <div className={s['body']}>
+          {fill(copy.connect.project.body, { cli: providerCli(target.provider) ?? '' })}
+        </div>
         {projectPicker}
       </Modal>
     );
@@ -884,11 +921,13 @@ function TextField({
  */
 function ProjectPicker({
   id,
+  provider,
   list,
   value,
   onChange,
 }: {
   id: string;
+  provider: Provider;
   list: ProjectList;
   value: string | null;
   onChange: (id: string) => void;
@@ -910,7 +949,7 @@ function ProjectPicker({
         </div>
       ) : projects !== null && projects.length === 0 ? (
         <div className={s['body']} role="status">
-          {copy.connect.project.none}
+          {fill(copy.connect.project.none, { provider: copy.providers[provider] })}
         </div>
       ) : projects !== null ? (
         <>

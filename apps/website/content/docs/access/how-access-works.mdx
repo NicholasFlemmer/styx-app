@@ -15,7 +15,7 @@ Agents in Styx can't reach your Vercel project, AWS account, Supabase database o
 
 A **target** is a place outside the repo that an agent can change. Each target belongs to one project and has:
 
-- a **provider**: Vercel, AWS, GCP, Supabase, GitHub or SSH host;
+- a **provider**: Vercel, AWS, GCP, Supabase, GitHub, SSH host, Fly.io, Railway or Render;
 - an **environment**: `prod`, `staging` or `preview` (a fourth, `scm`, marks a source-control target such as a GitHub repo declared in `.styx/project.json`);
 - a **policy**: **Ask · MFA**, **Ask each time** or **Always allow**;
 - a reference to its credential in your OS keychain. The credential itself is never stored anywhere else.
@@ -26,13 +26,15 @@ The environment matters most. Production is treated differently everywhere: writ
 
 There are two ways, and both end at the same place.
 
-**It runs the provider's CLI.** Every agent Styx starts has small wrappers ("shims") first on its `PATH` for `vercel`, `gh`, `aws`, `gcloud`, `supabase` and `ssh`. When the agent runs, say, `vercel deploy --prod`, the shim asks Styx before the real `vercel` runs. Styx works out what the command needs from its verbs: `ls` or `view` is a read, `deploy` is a deploy, `delete` or `drop` is a delete. Anything it doesn't recognise counts as a write, so a misread command is treated as more dangerous, never less. If you approve, the real command runs with the grant's credentials in its environment. If you deny, it fails with `styx: access to vercel was not granted`. The shim waits up to 10 minutes for your answer.
+**It runs the provider's CLI.** Every agent Styx starts has small wrappers ("shims") first on its `PATH` for `vercel`, `gh`, `aws`, `gcloud`, `supabase`, `ssh`, `fly` (and `flyctl`), `railway` and `render`. When the agent runs, say, `vercel deploy --prod`, the shim asks Styx before the real `vercel` runs. Styx works out what the command needs from its verbs: `ls` or `view` is a read, `deploy` is a deploy, `delete` or `drop` is a delete. Anything it doesn't recognise counts as a write, so a misread command is treated as more dangerous, never less. If you approve, the real command runs with the grant's credentials in its environment. If you deny, it fails with `styx: access to vercel was not granted`. The shim waits up to 10 minutes for your answer.
 
 **It asks directly.** Styx also gives each agent an MCP server with a `request_access` tool. The agent names a target, the scopes it wants and a one-line reason, and waits for your decision. See [MCP tools](/docs/reference/mcp-tools).
 
 Either way, the request appears in the agent's chat, on its task, in **Access** and as a notification. Approving it in one place resolves it everywhere. [Approve a request](/docs/access/approve-a-request) walks through the sheet.
 
 If the project has both a prod and a non-prod target for the same provider, Styx decides which one a command means before it looks at any grant. A command that says `--prod`, `--production` or `production` is production. Vercel says what it means, so only a deploy without `--prod` (or `--target production`), an `env` command that names `preview` or `development`, and read-only commands such as `vercel ls` go to the preview target. Everything else (`promote`, `rollback`, `rm`, `alias` …) is production. For every other CLI, a command that doesn't name an environment (`supabase db push`, most `aws` and `gcloud` commands) is treated as production, because Styx can't tell, and a staging target's looser rules must never decide a command that might change production. An open staging grant doesn't cover such a command either.
+
+This decides whose rules apply, not what the credential can reach. If you point a `staging` or `preview` target at the same project as a `prod` one (Styx warns when you do), grants on it can change production without the OS check.
 
 ## Scopes
 
@@ -78,18 +80,21 @@ Some requests never wait for you. If an `always` grant already covers the reques
 
 Styx never puts your stored credentials in an agent's environment. The command that was granted gets credentials for the life of the grant, and nothing else does. What those credentials are depends on what the provider can do:
 
-| Provider | What a granted command gets                                                                                                                                                                                                                   | Narrowed to the grant?             |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| AWS      | Temporary STS credentials (15 minutes to 1 hour) with a session policy limited to the granted scopes. If you connected through the `aws` CLI without a role to assume, your profile's own short-lived credentials are passed through instead. | Yes, except CLI without a role     |
-| GCP      | An access token that lasts at most an hour. A service-account key gets a read-only token for read grants. A `gcloud` login is narrowed for reads only when the target lists its Cloud Storage buckets.                                        | Reads only, in some setups         |
-| Vercel   | Your stored token, as `VERCEL_TOKEN`.                                                                                                                                                                                                         | No                                 |
-| Supabase | Your stored access token, as `SUPABASE_ACCESS_TOKEN`.                                                                                                                                                                                         | No                                 |
-| GitHub   | Your stored token, as `GH_TOKEN` and `GITHUB_TOKEN`.                                                                                                                                                                                          | No                                 |
-| SSH host | A private SSH agent socket that lives as long as the grant. The key never leaves Styx.                                                                                                                                                        | No (the socket can sign any login) |
+| Provider | What a granted command gets                                                                                                                                                                                                                   | Narrowed to the grant?                                |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| AWS      | Temporary STS credentials (15 minutes to 1 hour) with a session policy limited to the granted scopes. If you connected through the `aws` CLI without a role to assume, your profile's own short-lived credentials are passed through instead. | Yes, except CLI without a role                        |
+| GCP      | An access token that lasts at most an hour. A service-account key gets a read-only token for read grants. A `gcloud` login is narrowed for reads only when the target lists its Cloud Storage buckets.                                        | Reads only, in some setups                            |
+| Vercel   | Your stored token, as `VERCEL_TOKEN`.                                                                                                                                                                                                         | No                                                    |
+| Supabase | Your stored access token, as `SUPABASE_ACCESS_TOKEN`.                                                                                                                                                                                         | No                                                    |
+| GitHub   | Your stored token, as `GH_TOKEN` and `GITHUB_TOKEN`.                                                                                                                                                                                          | No                                                    |
+| SSH host | A private SSH agent socket that lives as long as the grant. The key never leaves Styx.                                                                                                                                                        | No (the socket can sign any login)                    |
+| Fly.io   | A token minted for this grant, as `FLY_API_TOKEN`, that expires with it (an hour at most, then re-minted). Read grants get a read-only token for the app's organization; anything else gets a deploy token for the target's app.              | Reads only (deploy tokens can do anything to the app) |
+| Railway  | A project token minted for this grant, as `RAILWAY_TOKEN`, that reaches only the target's environment. Styx deletes it when the grant ends, or after an hour and mints a new one.                                                             | To one environment, not by scope                      |
+| Render   | Your stored API key or CLI token, as `RENDER_API_KEY`. Render can't mint a narrower or shorter-lived key.                                                                                                                                     | No                                                    |
 
 Where a provider can't narrow its credential, the agent's command gets your whole token for that target, whatever scope you granted. That's why, on a `prod` target with an un-narrowed credential, every grant needs Touch ID, Windows Hello or your system password, reads included, and no policy can approve it for you.
 
-Revoking a grant stops Styx handing out the credential and shuts any SSH socket. For Vercel, Supabase and GitHub there is nothing to revoke upstream: the token you stored stays valid at the provider.
+Revoking a grant stops Styx handing out the credential and shuts any SSH socket. For Vercel, Supabase, GitHub and Render there is nothing to revoke upstream: the token you stored stays valid at the provider. Fly.io and Railway tokens minted for a grant are revoked at the provider when the grant ends.
 
 ## SSH
 

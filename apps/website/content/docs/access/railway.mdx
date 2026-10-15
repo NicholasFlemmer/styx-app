@@ -1,0 +1,44 @@
+---
+title: Railway
+description: Let agents deploy to one Railway environment with a project token made for each grant and deleted after.
+---
+
+A Railway target is one environment of one project, for example `acme-shop · production`. Agents run `railway` as usual; Styx catches the call, asks you, and hands the command a project token that only reaches that environment.
+
+## Connect
+
+<Steps>
+
+1. Go to **Settings › Targets**, click **+ Connect target** and pick **Railway**.
+2. **Connect with railway.** If `railway` isn't signed in, click **Sign in with railway**: Styx runs `railway login` in a terminal in the dialog.
+3. **Pick the environment.** Styx lists each project's environments. Choose the one this target uses.
+4. **Choose the environment type** (`prod`, `staging` or `preview`) and click **Connect**. If a staging or preview target uses the same environment as a production target, Styx lets you, but says so: the connect dialog warns that access granted there can change production, the access request shows the same line, and the audit log marks the grant.
+
+</Steps>
+
+Styx stores no secret in this mode. It reads the login `railway` keeps each time it needs it, and never copies it. Under **Advanced** you can paste an account or workspace token from railway.com/account/tokens instead; it goes to your system keychain.
+
+## What a granted command gets
+
+For every grant, Styx asks Railway for a new project token for the target's environment, named `styx-<grant>`, and gives it to the command as `RAILWAY_TOKEN`. Your own login never reaches an agent.
+
+Railway tokens don't expire by themselves, so Styx deletes each one when its grant ends, and replaces it every hour while the grant lasts. If Styx was closed before it could delete one, it deletes its own leftover tokens (named `styx-<grant>-<time>`) older than two hours at the next health check or grant for that project. Tokens you named yourself are never touched.
+
+A project token reaches one environment, but in that environment it can do anything: deploy, change variables, or remove a deployment. So every grant on a `prod` Railway target needs Touch ID, Windows Hello or your system password, reads included.
+
+A command that names its environment (`railway up -e staging`) goes to the matching target. A command that names none is treated as production when the project has a production Railway target.
+
+## Which commands need what
+
+| Command                                                                                                | Needs  |
+| ------------------------------------------------------------------------------------------------------ | ------ |
+| `status`, `whoami`, `logs`, `list`, `variables` (listing), `deployment list`, `domain list`            | read   |
+| `variables --set`, `variable set`, `run`, `shell`, `ssh`, `connect`, `add`, `domain`, `scale`, `api …` | write  |
+| `up`, `redeploy`, `deploy`, `restart`, `functions push`, `config apply`                                | deploy |
+| `down`, `delete`, `environment delete`, `volume delete`, `variable delete`                             | delete |
+
+`railway run` and `railway shell` are writes because they put the environment's variables, secrets included, into a local process. Anything Styx doesn't recognise counts as a write.
+
+## Deploy button
+
+Railway targets deploy with `railway up --ci` (plus `--service <name>` when the target's `config.service` names one), under a deploy grant. Styx suggests it when the repo has a `railway.json` or `railway.toml`.

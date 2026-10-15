@@ -138,7 +138,9 @@ export const targets = sqliteTable(
     projectId: text('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
-    provider: text('provider', { enum: ['vercel', 'aws', 'gcp', 'supabase', 'github', 'ssh'] }).notNull(),
+    provider: text('provider', {
+      enum: ['vercel', 'aws', 'gcp', 'supabase', 'github', 'ssh', 'fly', 'railway', 'render'],
+    }).notNull(),
     name: text('name').notNull(),
     env: text('env', { enum: ['prod', 'staging', 'preview', 'scm'] }).notNull(),
     authMethod: text('auth_method', { enum: ['oauth', 'key', 'ssh', 'cli'] }).notNull(),

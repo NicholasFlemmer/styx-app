@@ -67,7 +67,7 @@ Lists the deploy and server targets connected to this project. No parameters.
 
 Returns an array of `{ "id", "name", "provider", "env", "lockState", "scopes" }`:
 
-- `provider`: `vercel`, `aws`, `gcp`, `supabase`, `github` or `ssh`.
+- `provider`: `vercel`, `aws`, `gcp`, `supabase`, `github`, `ssh`, `fly`, `railway` or `render`.
 - `env`: `prod`, `staging`, `preview` or `scm`.
 - `lockState`: `unconnected`, `expired`, `persistent` (an `always` grant, or the target's policy is **Always allow**), `open` (a live grant for this task) or `locked`.
 - `scopes`: what this task's live grants on the target cover.

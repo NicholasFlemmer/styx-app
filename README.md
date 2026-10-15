@@ -62,7 +62,7 @@ checks and merges it. If a turn went wrong, **Undo this turn** puts the files ba
 
 <img src="apps/website/public/launch/access-request.jpg" alt="An access request: Codex asks to write to the production Supabase database for one hour" width="360" align="right" />
 
-Connect Vercel, AWS, Google Cloud, Supabase, GitHub and SSH once. From then on an agent can't just use them: it asks,
+Connect Vercel, AWS, Google Cloud, Supabase, GitHub, Fly.io, Railway, Render and SSH once. From then on an agent can't just use them: it asks,
 says why, and you choose what it gets and for how long (once, an hour, or the session).
 
 - **Scoped and short-lived.** Agents get a token or an SSH agent socket for that grant only, and it's revoked when
@@ -124,7 +124,7 @@ gets the element, the page and a picture of it.
 ## Works with
 
 - **Agents:** Claude Code · Codex · Gemini CLI · Cursor agent · OpenCode · any shell
-- **Targets agents can ask for:** Vercel · AWS · Google Cloud · Supabase · GitHub · SSH
+- **Targets agents can ask for:** Vercel · AWS · Google Cloud · Supabase · GitHub · Fly.io · Railway · Render · SSH
 - **Platforms:** macOS (Apple Silicon) · Windows 10 and 11 (beta) · Linux, as an AppImage or .deb (beta)
 - **Editors:** the built-in editor and terminal, or open any task in VS Code, Cursor, Zed or JetBrains
 
@@ -144,7 +144,7 @@ that deliberately goes around Styx's tools isn't stopped by them. What Styx guar
 your keys, and that every grant it gives is scoped, timed and written down.
 
 **How does an agent ask?** Agents talk to Styx through a local broker (`styx mcp`) and small wrappers around the
-`gh`, `vercel`, `aws`, `gcloud`, `supabase` and `ssh` commands. A request shows up in the chat, on the task and as a
+`gh`, `vercel`, `aws`, `gcloud`, `supabase`, `fly`, `railway`, `render` and `ssh` commands. A request shows up in the chat, on the task and as a
 notification, and approving it anywhere resolves it everywhere. The design decisions behind this are in
 [`docs/adr`](docs/adr).
 

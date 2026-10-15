@@ -18,6 +18,10 @@ const SECRET_SHAPES = [
   /sk-[A-Za-z0-9-]{20,}/g,
   /sk_(?:live|test)_[A-Za-z0-9]{10,}/g,
   /sbp_[A-Za-z0-9]{20,}/g,
+  // Fly.io macaroons (`FlyV1 fm2_…,fm2_…`) and older personal tokens (`fo1_…`); Render API keys (`rnd_…`).
+  /\bFlyV1 [A-Za-z0-9_+/=,-]{20,}/g,
+  /\bf[mo][12]_[A-Za-z0-9_+/=-]{20,}/g,
+  /\brnd_[A-Za-z0-9]{20,}/g,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
   /xox[bpsa]-[0-9A-Za-z-]+/g,
   /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
@@ -47,7 +51,7 @@ export function redact<T>(value: T): T {
 /** A bare TCP port, the one `-p` value that is never a password. */
 const PORT = /^\d{1,5}$/;
 const SECRET_FLAGS =
-  /^(--token|--with-token|--password|--passphrase|--secret[a-z-]*|--api-key|--body|--value|-p|-b)$/i;
+  /^(--token|--with-token|--access-token|--build-secret|--password|--passphrase|--secret[a-z-]*|--api-key|--body|--value|-p|-b)$/i;
 /**
  * Compound identifiers that name a secret and take the next token as its value (`aws configure set
  * aws_secret_access_key X`, `--set api-token X`). Bare `secret`/`token` are subcommands (`gh secret set`) and stay.
@@ -61,13 +65,46 @@ const SECRET_KV = /^(--?[a-z][a-z0-9_.-]*|[A-Za-z_][A-Za-z0-9_.-]*)=(.*)$/s;
  * values following secret flags are dropped, `key=value` with a secret key is masked, then `redact()` runs over
  * each token for secret-shaped values.
  */
-export function redactArgv(argv: readonly string[]): string[] {
+/** Short secret flags that only mean "token" for one tool: flyctl's `-t` is `--access-token` (ssh's `-t` is a tty). */
+const TOOL_SECRET_FLAGS: Readonly<Record<string, RegExp>> = {
+  fly: /^-t$/,
+  flyctl: /^-t$/,
+  // `railway add -v K=V` / `--variables K=V`: service variables.
+  railway: /^(-v|--variables)$/,
+};
+/** Words that open a "set secrets" command: every `KEY=value` after them is a secret (`fly secrets set K=V`). */
+const SETS_SECRETS = /^(secrets|secret|variables|variable|vars)$/i;
+
+export function redactArgv(argv: readonly string[], tool?: string): string[] {
   const out: string[] = [];
   let dropNext = false;
+  const toolFlag = tool === undefined ? undefined : TOOL_SECRET_FLAGS[tool];
+  // `fly secrets set|import K=V`, `railway variable(s) set K=V`, `railway variables --set K=V`: values are secrets.
+  let setting = false;
+  let secretsWord = false;
   for (const [i, a] of argv.entries()) {
     if (dropNext) {
       out.push('[redacted]');
       dropNext = false;
+      continue;
+    }
+    // `--set` only in a secrets context or for railway: `helm upgrade --set image.tag=1` is not a secret.
+    if (
+      ((a === '--set' || a.startsWith('--set=')) && (secretsWord || tool === 'railway')) ||
+      ((a === 'set' || a === 'import') && secretsWord)
+    )
+      setting = true;
+    if (SETS_SECRETS.test(a)) secretsWord = true;
+    if (setting) {
+      const pair = /^(--set=)?([A-Za-z_][A-Za-z0-9_.-]*)=(.*)$/s.exec(a);
+      if (pair) {
+        out.push(`${pair[1] ?? ''}${pair[2] ?? ''}=[redacted]`);
+        continue;
+      }
+    }
+    if (toolFlag?.test(a)) {
+      out.push(a);
+      dropNext = true;
       continue;
     }
     // `-p` is `--password` for mysql and friends and `--port` for ssh, next, vite…: a value that is nothing but a

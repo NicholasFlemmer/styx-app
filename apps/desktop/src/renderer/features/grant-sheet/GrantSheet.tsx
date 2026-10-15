@@ -2,6 +2,8 @@ import {
   branchOf,
   copy,
   fill,
+  rows as coreRows,
+  prodReachOf,
   platformCopy,
   type AskId,
   type Duration,
@@ -12,7 +14,17 @@ import {
   type SessionId,
   type Target,
 } from '@styx/core';
-import { Button, Checkbox, ChipGroup, Icon, Label, Sheet, SheetAccentHeader, SheetFooter, Tag } from '@styx/ui';
+import {
+  Button,
+  Checkbox,
+  ChipGroup,
+  Icon,
+  Label,
+  Sheet,
+  SheetAccentHeader,
+  SheetFooter,
+  Tag,
+} from '@styx/ui';
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { announce } from '../../app/announcer';
 import { command } from '../../state/commands';
@@ -157,6 +169,8 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
   };
 
   const rows = scopeRows(target.provider, requested);
+  // Row 164: a non-prod target sharing the production target's project is allowed; the sheet says so.
+  const reach = prodReachOf(target, coreRows(model.targets));
 
   return (
     <div onKeyDown={onKeyDown} className={s['root']} data-grant-sheet="true">
@@ -177,7 +191,13 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
         initialFocus={grantButton}
         footer={
           <SheetFooter>
-            <Button size="footer" grow={1} className={s['footerButton']} onClick={deny} data-grant-deny="true">
+            <Button
+              size="footer"
+              grow={1}
+              className={s['footerButton']}
+              onClick={deny}
+              data-grant-deny="true"
+            >
               {copy.grantSheet.deny}
             </Button>
             <Button
@@ -204,6 +224,13 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
           </Tag>
         </div>
         <div className={s['reason']}>&quot;{reason}&quot;</div>
+        {reach !== null ? (
+          <div className={s['finePrint']} role="note" data-shares-prod="true">
+            {fill(reach.kind === 'shared' ? copy.grantSheet.sharesProd : copy.grantSheet.sharesProdUnchosen, {
+              target: `${reach.prod.name} ${reach.prod.env}`,
+            })}
+          </div>
+        ) : null}
         <Label as="div" className={s['sectionLabel']}>
           {copy.grantSheet.scopeLabel}
         </Label>

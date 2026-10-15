@@ -20,7 +20,7 @@ export interface CliRunOptions {
 }
 
 /**
- * Runs provider CLIs (`gcloud`, `aws`, `gh`, `vercel`, `supabase`) for the `cli` auth mode. Output is returned to the
+ * Runs provider CLIs (`gcloud`, `aws`, `gh`, `vercel`, `supabase`, `fly`, `railway`, `render`) for the `cli` auth mode. Output is returned to the
  * adapter and nowhere else: results are never logged (they carry tokens), only the binary, argv and exit code are.
  */
 export interface CliRunner {
@@ -59,6 +59,14 @@ export const STRIPPED_ENV = new Set([
   'AWS_SECRET_ACCESS_KEY',
   'AWS_SESSION_TOKEN',
   'AWS_PROFILE',
+  // Fly.io: `-t` / FLY_ACCESS_TOKEN wins over FLY_API_TOKEN, which wins over `fly auth login`.
+  'FLY_ACCESS_TOKEN',
+  'FLY_API_TOKEN',
+  // Railway: a project token (RAILWAY_TOKEN) and an account / workspace token (RAILWAY_API_TOKEN).
+  'RAILWAY_TOKEN',
+  'RAILWAY_API_TOKEN',
+  // Render: an API key always takes precedence over `render login`.
+  'RENDER_API_KEY',
 ]);
 
 /** Non-interactive defaults so a CLI never waits on a prompt Styx cannot answer. */
@@ -68,6 +76,7 @@ const QUIET_ENV: Record<string, string> = {
   AWS_PAGER: '',
   GH_PROMPT_DISABLED: '1',
   GH_NO_UPDATE_NOTIFIER: '1',
+  RENDER_OUTPUT: 'text',
   CI: '1',
 };
 

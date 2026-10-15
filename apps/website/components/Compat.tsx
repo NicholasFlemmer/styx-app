@@ -25,6 +25,9 @@ const targets = [
   ['Google Cloud', 'Anything you can reach with gcloud.'],
   ['Supabase', 'Your databases, live and staging.'],
   ['GitHub', 'Repos, pull requests, releases.'],
+  ['Fly.io', 'Your apps, with a token made for each grant.'],
+  ['Railway', 'Each environment, with its own short-lived token.'],
+  ['Render', 'Deploys and services.'],
   ['Your servers', 'Over SSH, using the identity already on your computer.'],
 ] as const;
 

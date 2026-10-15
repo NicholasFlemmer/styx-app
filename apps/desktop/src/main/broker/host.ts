@@ -276,7 +276,7 @@ export class BrokerHost {
       if (!adapter) throw new BrokerError(ErrorCode.notAllowed, `${p.tool} is not a Styx-managed tool`);
       const scopes = adapter.scopeOfCommand(p.argv, p.tool) as Scope[];
       // Persisted as grants.reason / grant_uses.command / audit triggered_by: never the raw argv (M1).
-      const command = redact(`$ ${[p.tool, ...redactArgv(p.argv)].join(' ')}`);
+      const command = redact(`$ ${[p.tool, ...redactArgv(p.argv, p.tool)].join(' ')}`);
       const picked = this.pickTarget(ctx, adapter, p.argv, p.tool, scopes);
       if (!picked)
         throw new BrokerError(
@@ -566,13 +566,17 @@ export class BrokerHost {
    * else what the adapter says (`envOfCommand`), else unknown, and an unknown command is production whenever the
    * project has a production target (fail closed: `supabase db push` names no environment, and a staging target's
    * rules must never decide a command that may hit production). Only then does a live covering grant win, and only
-   * among targets in that environment, so a staging grant can't carry a production command.
+   * among targets in that environment, so a staging grant can't carry a production command. All of this is about
+   * which target's rules apply: a staging target the person pointed at a production project (allowed with a warning,
+   * row 164) is production without the OS check, and its grants reach production whichever target is picked.
    */
   private pickTarget(
     ctx: ConnectionContext,
     adapter: {
       provider: Target['provider'];
       envOfCommand?: (argv: string[], tool?: string) => 'prod' | 'non-prod' | null;
+      projectKey?: string;
+      projectOfCommand?: (argv: string[]) => string | null;
     },
     argv: string[],
     tool: string,
@@ -582,6 +586,15 @@ export class BrokerHost {
       .byProject(ctx.session.projectId)
       .filter((t) => t.provider === adapter.provider);
     if (candidates.length === 0) return null;
+    // A write credential bound to one project (Fly.io deploy token on one app): a non-read command whose own app
+    // flag names a target's project goes to that target, since its token works nowhere else. Reads get wider
+    // tokens (Fly.io: org-wide read-only), so they keep the environment rules below, as does anything unnamed.
+    const key = adapter.projectKey;
+    const named = adapter.projectOfCommand?.(argv) ?? null;
+    if (key !== undefined && named !== null && !scopes.every((s) => s === 'read')) {
+      const hit = candidates.filter((t) => t.config[key] === named);
+      if (hit.length === 1 && hit[0]) return hit[0];
+    }
     const flagged = argv.some((a) => a === '--prod' || a === '--production' || a === 'production')
       ? 'prod'
       : null;

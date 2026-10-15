@@ -31,7 +31,7 @@ Runs the `styx` MCP server over stdio and stays up until the agent closes it or 
 3. Runs the real tool with the grant's credentials added to its environment, with its own stdin, stdout and stderr.
 4. Reports the exit code, which goes into the audit log.
 
-Outside a task it just runs the real tool. Tools Styx knows: `vercel`; `aws`, `sam`, `cdk`; `gcloud`, `gsutil`, `bq`; `supabase`; `gh`; `ssh`, `scp`, `rsync`, `sftp`. Any other tool is refused with `<tool> is not a Styx-managed tool`.
+Outside a task it just runs the real tool. Tools Styx knows: `vercel`; `aws`, `sam`, `cdk`; `gcloud`, `gsutil`, `bq`; `supabase`; `gh`; `ssh`, `scp`, `rsync`, `sftp`; `fly`, `flyctl`; `railway`; `render`. Any other tool is refused with `<tool> is not a Styx-managed tool`.
 
 ### styx hook
 
@@ -72,10 +72,10 @@ Otherwise `styx wrap` exits with the real tool's own code.
 
 At startup Styx writes small scripts to a `bin` folder inside its app data directory (on macOS, `~/Library/Application Support/Styx/bin`):
 
-| Script                                             | Runs                             |
-| -------------------------------------------------- | -------------------------------- |
-| `styx`                                             | the session CLI                  |
-| `vercel`, `gh`, `aws`, `gcloud`, `supabase`, `ssh` | `styx wrap <the same name> "$@"` |
+| Script                                                                                   | Runs                             |
+| ---------------------------------------------------------------------------------------- | -------------------------------- |
+| `styx`                                                                                   | the session CLI                  |
+| `vercel`, `gh`, `aws`, `gcloud`, `supabase`, `ssh`, `fly`, `flyctl`, `railway`, `render` | `styx wrap <the same name> "$@"` |
 
 On Windows they are `.cmd` files. The scripts run the CLI with the Styx app's own executable (`STYX_EXE`, with `ELECTRON_RUN_AS_NODE=1`) and the bundled `styx.js` (`STYX_CLI`), so nothing else needs to be installed.
 
