@@ -161,8 +161,8 @@ Node ≥ 22, pnpm 10 (`corepack enable`). Run one package with `pnpm -F <name> <
   keyboard, focus and aria.
 - e2e: `e2e/launch.ts` starts the built app with `STYX_E2E=1`, a temp `STYX_USER_DATA`, `STYX_FIXTURE=demo`,
   `STYX_KEYCHAIN=memory`, a fixed `STYX_NOW`, and fake `claude`/`codex`/`gemini`/`gh`/`adb`/`xcrun` from
-  `e2e/fixtures/bin` first on PATH. Runs are hidden by default (`STYX_E2E_HIDDEN=1`: no window shows or takes focus, no
-  Dock icon), so they don't interrupt your work; `STYX_E2E_SHOW=1` to watch one. Screens set `[data-screen-ready]` (inside the Suspense boundary) when painted.
+  `e2e/fixtures/bin` first on PATH. Local runs are hidden by default (`STYX_E2E_HIDDEN=1`: no window shows or takes focus,
+  no Dock icon), so they don't interrupt your work; `STYX_E2E_SHOW=1` to watch one. CI runs visible windows. Screens set `[data-screen-ready]` (inside the Suspense boundary) when painted.
 - CI (`.github/workflows/ci.yml`) runs on macOS, Windows and Linux (e2e under `xvfb-run`): install, Electron unpack,
   tokens, typecheck, lint, test, build, Storybook axe, e2e, and a packaged-app smoke. Keep all three green.
 - Before calling a task done: `pnpm typecheck && pnpm lint && pnpm -F <package> test`; UI changes also `pnpm e2e`,

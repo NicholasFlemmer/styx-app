@@ -105,6 +105,9 @@ describe('DesignCanvas: the freeform canvas (ADR-0030)', () => {
   const ready = async (layout: DesignList['layout'] = null) => {
     mount(listWith(CHECKOUT, layout));
     await waitFor(() => expect(document.querySelectorAll('[data-artboard]').length).toBe(3));
+    // And every screen has been read into its frame, as the person sees it: on a busy machine (Styx's checks before a
+    // land run every suite at once) the reads land after the boards, and a move made before them was lost.
+    await waitFor(() => expect(calls.filter((c) => c.name === 'design.read').length).toBeGreaterThanOrEqual(3));
   };
 
   it('opens in today’s rows at 33%, both fidelities shown, wireframe first', async () => {

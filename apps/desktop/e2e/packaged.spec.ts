@@ -38,7 +38,7 @@ test.describe('packaged app', () => {
         STYX_FIXTURE: 'demo',
         STYX_KEYCHAIN: 'memory',
         STYX_E2E: '1',
-        ...(process.env['STYX_E2E_SHOW'] === '1' ? {} : { STYX_E2E_HIDDEN: '1' }),
+        ...(process.env['STYX_E2E_SHOW'] === '1' || process.env['CI'] ? {} : { STYX_E2E_HIDDEN: '1' }),
         STYX_DEMO_REPOS: '0',
         STYX_NOW: String(DEMO_NOW),
       },
