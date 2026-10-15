@@ -58,6 +58,8 @@ export async function launchStyx(
       ...cleanEnv(),
       NODE_ENV: 'test',
       STYX_E2E: '1',
+      // Hidden by default: no window shows, takes focus or adds a Dock icon while tests run (STYX_E2E_SHOW=1 to watch).
+      ...(process.env['STYX_E2E_SHOW'] === '1' ? {} : { STYX_E2E_HIDDEN: '1' }),
       STYX_USER_DATA: userData,
       STYX_FIXTURE: opts.fixture ?? 'demo',
       STYX_KEYCHAIN: 'memory',

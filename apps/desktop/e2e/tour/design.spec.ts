@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import type { Session, Worktree } from '@styx/core';
-import { startTour, steps } from './tour';
+import { STATE_TIMEOUT, startTour, steps } from './tour';
 
 type StyxWindow = Window & {
   styx: { command: (name: string, input: unknown) => Promise<{ ok: boolean; value?: unknown }> };
@@ -116,11 +116,15 @@ test('tour: design screens before building', async () => {
     const canvas = page.locator('[data-design-canvas]');
     const board = (size: string) => canvas.locator(`[data-artboard="checkout/${size}.html"]`);
     const stage = canvas.locator('[data-design-stage]');
+    // The files are picked up by the design watcher and read from disk: slow on a busy CI Mac, so the tour's state
+    // timeout rather than the 5 s default.
     for (const size of ['desktop', 'tablet', 'phone'])
-      await expect(board(size).locator('iframe')).toBeVisible();
+      await expect(board(size).locator('iframe')).toBeVisible({ timeout: STATE_TIMEOUT });
     // Each screen has drawn (its Pay button is there) before the picture.
     for (const size of ['desktop', 'tablet', 'phone'])
-      await expect(board(size).frameLocator('iframe').locator('#pay')).toBeVisible();
+      await expect(board(size).frameLocator('iframe').locator('#pay')).toBeVisible({
+        timeout: STATE_TIMEOUT,
+      });
     // Zoom to fit, so the three sizes sit side by side beside the chat (they open in a row, as before).
     await canvas.locator('[data-design-fit]').click();
     const build = canvas.locator('[data-design-build]');

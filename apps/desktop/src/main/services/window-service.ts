@@ -17,6 +17,12 @@ export interface WindowServiceDeps {
    * virtual displays are smaller than the default 1280×800, and a shrunken window changes layout under test.
    */
   largerThanScreen?: boolean;
+  /**
+   * Never show or focus a window (`STYX_E2E_HIDDEN=1`, the e2e harness's default): tests run without a window
+   * popping up or taking focus from whatever the person is doing. Windows still render (no background throttling),
+   * so screenshots and input over the DevTools protocol work as before.
+   */
+  hidden?: boolean;
   /** Window registry hooks (Publisher / CommandBus sender allowlist). */
   onWindowCreated?: (win: BrowserWindow, kind: 'main' | 'popout' | 'dock', sessionId: string | null) => void;
   onWindowClosed?: (webContentsId: number) => void;
@@ -63,8 +69,19 @@ export class WindowService {
         sandbox: true,
         webSecurity: true,
         additionalArguments: this.deps.additionalArguments?.() ?? [],
+        ...(this.deps.hidden ? { backgroundThrottling: false } : {}),
       },
     };
+  }
+
+  /** Shows a window once it's ready, unless the harness runs hidden. */
+  private revealWhenReady(win: BrowserWindow): void {
+    if (!this.deps.hidden) win.once('ready-to-show', () => win.show());
+  }
+
+  /** Brings a window forward, unless the harness runs hidden (it must never take the person's focus). */
+  private bringForward(win: BrowserWindow): void {
+    if (!this.deps.hidden) win.focus();
   }
 
   private harden(win: BrowserWindow): void {
@@ -124,7 +141,7 @@ export class WindowService {
 
   openMain(): BrowserWindow {
     if (this.main && !this.main.isDestroyed()) {
-      this.main.focus();
+      this.bringForward(this.main);
       return this.main;
     }
     const saved = this.deps.windowState.get('main') ?? MAIN_DEFAULT;
@@ -133,7 +150,7 @@ export class WindowService {
     const wcId = win.webContents.id;
     this.deps.onWindowCreated?.(win, 'main', null);
     if (saved.maximized) win.maximize();
-    win.once('ready-to-show', () => win.show());
+    this.revealWhenReady(win);
     this.persist('main', win);
     win.on('closed', () => {
       this.deps.onWindowClosed?.(wcId);
@@ -158,7 +175,7 @@ export class WindowService {
   openPopout(sessionId: string): BrowserWindow {
     const existing = this.popouts.get(sessionId);
     if (existing && !existing.isDestroyed()) {
-      existing.focus();
+      this.bringForward(existing);
       return existing;
     }
     const key = `popout:${sessionId}`;
@@ -174,7 +191,7 @@ export class WindowService {
     this.harden(win);
     const wcId = win.webContents.id;
     this.deps.onWindowCreated?.(win, 'popout', sessionId);
-    win.once('ready-to-show', () => win.show());
+    this.revealWhenReady(win);
     this.persist(key, win);
     win.on('closed', () => {
       this.deps.onWindowClosed?.(wcId);
@@ -192,7 +209,7 @@ export class WindowService {
    */
   openDock(): BrowserWindow {
     if (this.dock !== null && !this.dock.isDestroyed()) {
-      this.dock.focus();
+      this.bringForward(this.dock);
       return this.dock;
     }
     const key = 'dock';
@@ -209,7 +226,7 @@ export class WindowService {
     this.harden(win);
     const wcId = win.webContents.id;
     this.deps.onWindowCreated?.(win, 'dock', null);
-    win.once('ready-to-show', () => win.show());
+    this.revealWhenReady(win);
     this.persist(key, win);
     win.on('closed', () => {
       this.deps.onWindowClosed?.(wcId);

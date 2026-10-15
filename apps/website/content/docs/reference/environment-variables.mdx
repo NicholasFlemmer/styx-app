@@ -52,6 +52,7 @@ These change what Styx does in ways meant for working on Styx itself: fake data,
 | `STYX_SCREEN`        | App     | Open on a screen or state, such as `workspace`, `home`, `onboarding-2`, `palette` or `new-project`.                                                                                   |
 | `STYX_E2E`           | App     | `1`: end-to-end test mode. No confirmation for `styx://open`, no updater, no usage counts, file pickers answered by `STYX_E2E_PICK`, and the prototype's sample data in a few places. |
 | `STYX_E2E_PICK`      | App     | With `STYX_E2E=1`: the path every folder picker returns. Unset means the picker was cancelled.                                                                                        |
+| `STYX_E2E_HIDDEN`    | App     | With `STYX_E2E=1`: never show or focus a window and, on a Mac, keep the Dock icon hidden, so a test run doesn't interrupt your work. The e2e harness sets it by default.              |
 | `STYX_API`           | App     | Base URL of the Styx accounts API, for a local or fake server. Setting it also turns on usage counts in a development build.                                                          |
 | `STYX_UPDATE_URL`    | App     | Installed builds only: check this update feed instead of the built-in one.                                                                                                            |
 

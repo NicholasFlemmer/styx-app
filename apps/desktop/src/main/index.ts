@@ -73,6 +73,14 @@ else if (fixtureName) app.setPath('userData', mkdtempSync(join(tmpdir(), `styx-$
 // written (app.crashed.main, run-marker.ts), and a person can read or send it themselves when reporting a bug.
 crashReporter.start({ uploadToServer: false });
 
+/**
+ * The e2e harness runs hidden by default (`STYX_E2E_HIDDEN=1`, set by `e2e/launch.ts`): no window is shown or
+ * focused and, on a Mac, no Dock icon appears, so a test run never interrupts the person's work. Only with
+ * `STYX_E2E=1`: a real build ignores it.
+ */
+const e2eHidden = env['STYX_E2E'] === '1' && env['STYX_E2E_HIDDEN'] === '1';
+if (e2eHidden && isMac) app.dock?.hide();
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
@@ -334,6 +342,7 @@ async function boot(): Promise<void> {
     platform,
     additionalArguments: bootEnv,
     largerThanScreen: env['STYX_E2E'] === '1',
+    hidden: e2eHidden,
     onWindowCreated: (win) => container?.publisher.register(win.webContents),
     onWindowClosed: (id) => container?.publisher.unregister(id),
   });
@@ -357,7 +366,7 @@ async function boot(): Promise<void> {
     focusMain: () => {
       const w = windowService.openMain();
       if (w.isMinimized()) w.restore();
-      w.focus();
+      if (!e2eHidden) w.focus();
     },
   };
 

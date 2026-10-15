@@ -13,7 +13,7 @@ import { expect, type ElectronApplication, type Locator, type Page } from '@play
 import { launchStyx, type LaunchOptions } from '../launch';
 
 export const CAPTURE_DIR = process.env['STYX_TOUR_CAPTURE'];
-const STATE_TIMEOUT = process.env['CI'] ? 30_000 : 15_000;
+export const STATE_TIMEOUT = process.env['CI'] ? 30_000 : 15_000;
 
 export interface Box {
   x: number;
