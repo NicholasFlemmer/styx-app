@@ -1,7 +1,7 @@
 # Adding a deploy target provider
 
-A target in Styx is a place an agent can change things outside the repo: a Vercel project, an AWS account, a GCP
-project, a Supabase database, a GitHub repo, or an SSH host. Each target belongs to a project and has a provider,
+A target in Styx is a place an agent can change things outside the repo: a Vercel project, a Supabase database, an AWS
+account, a GCP project, a Fly.io app, a Railway environment, a Render service, a GitHub repo, or an SSH host. Each target belongs to a project and has a provider,
 an environment (`prod`, `staging`, `preview` or `scm`), a policy, and a `credentialRef` that points at a secret in the
 OS keychain. Agents never hold the stored credential up front. When an agent runs the provider's CLI (say
 `vercel deploy --prod`), a Styx shim catches the call and works out what it needs (`read`, `write`, `deploy` or

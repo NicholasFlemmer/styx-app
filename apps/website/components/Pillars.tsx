@@ -47,8 +47,9 @@ export const Pillars = () => (
       <div className={styles.col}>
         <h3>Every agent</h3>
         <p>
-          Claude Code, Codex, Gemini and Cursor, side by side, each on its own copy of your code. Read what
-          they did, change by change, keep what you like, or open it in your own editor with one key.
+          Claude Code, Codex, Gemini CLI, Cursor and OpenCode, side by side, each on its own copy of your
+          code. Read what they did, change by change, keep what you like, or open it in your own editor with
+          one key.
         </p>
         <div className={styles.art} aria-hidden="true">
           <div className={styles.board}>
@@ -80,7 +81,7 @@ export const Pillars = () => (
       <div className={styles.col}>
         <h3>Every key</h3>
         <p>
-          Log into Vercel, AWS, Google Cloud, Supabase, GitHub, Fly.io, Railway, Render and your servers once,
+          Log into Vercel, Supabase, AWS, Google Cloud, Fly.io, Railway, Render, GitHub and your servers once,
           in one place. Agents never hold the keys. They borrow access, for an hour, with your fingerprint for
           anything live. Every borrow is written down.
         </p>

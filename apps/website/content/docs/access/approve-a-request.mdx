@@ -43,7 +43,7 @@ Styx decides whether a grant needs verification itself, from its own records. No
 
 - the target is `prod` and the grant includes `write`, `deploy` or `delete`. This can't be disabled;
 - the target's policy is **Ask · MFA**, which is the default for production targets you connect in Styx;
-- the target is `prod` and its provider can't narrow the credential to the grant (Vercel, Supabase, GitHub, SSH, and some GCP and AWS setups), even for a read;
+- the target is `prod` and its provider can't narrow the credential to the grant (Vercel, Supabase, Railway, Render, GitHub, SSH, Fly.io for anything but a read, and some GCP and AWS setups), even for a read;
 - an **Ask** rule in your policies requires it.
 
 So on a production target you may be asked to verify even when the button doesn't name Touch ID.
@@ -75,7 +75,7 @@ You can end an active grant before it runs out:
 - **Access › Audit log:** open the entry for the grant and click **Revoke now**. This works for any grant you approved that's still active, including `always` grants. It's unavailable for grants a policy issued; change the policy or remove the target instead.
 - **Remove the target**, which ends all its grants.
 
-Revoking stops Styx handing out the credential straight away and closes any SSH agent socket. The agent's next command has to ask again. Remember that for Vercel, Supabase and GitHub the stored token itself stays valid at the provider. Revoking stops Styx delivering it, it doesn't cancel it upstream.
+Revoking stops Styx handing out the credential straight away and closes any SSH agent socket. The agent's next command has to ask again. Remember that for Vercel, Supabase, Render and GitHub the stored token itself stays valid at the provider. Revoking stops Styx delivering it, it doesn't cancel it upstream.
 
 Grants also end on their own when their duration runs out, after an hour idle, or when the agent's session ends (except `always` grants).
 

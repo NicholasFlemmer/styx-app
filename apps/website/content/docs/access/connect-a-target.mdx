@@ -1,6 +1,6 @@
 ---
 title: Connect a target
-description: Connect Vercel, AWS, GCP, Supabase, GitHub, Fly.io, Railway, Render or an SSH host so agents can ask for access, and keep the connection healthy.
+description: Connect Vercel, Supabase, AWS, GCP, Fly.io, Railway, Render, GitHub or an SSH host so agents can ask for access, and keep the connection healthy.
 ---
 
 A target is a deploy provider or server that agents in one project can ask to use. Connecting one is optional: agents work locally without any. You connect a target once per project and environment, and from then on every agent in that project can request access to it, with you deciding each time (or a [policy](/docs/access/policies) deciding for you).
@@ -36,6 +36,7 @@ Under the CLI screen, **Advanced** (key, service account or token) opens the old
 - **Vercel and Supabase:** Styx opens the provider's token page in your browser. Create a token there, paste it into **Secret**, and click **Save to Keychain** (**Save to Credential Manager** on Windows, **Save to Keyring** on Linux). For Supabase, click **Show projects** first and pick the project this target uses; then save.
 - **GitHub:** Styx runs GitHub's device sign-in. It shows a short code, opens `github.com/login/device`, and saves the token once you approve there.
 - **AWS and GCP:** paste an access key and secret, or a service-account key, then **Test connection** and save. Styx recommends a dedicated IAM role with no delete permissions. With AWS keys, every grant gets temporary STS credentials limited to the granted scopes.
+- **Fly.io, Railway and Render:** paste a Fly.io access token, a Railway account or workspace token, or a Render API key. Their pages say where to make one: [Fly.io](/docs/access/fly), [Railway](/docs/access/railway), [Render](/docs/access/render).
 
 Styx checks a pasted credential against the provider before it stores it, and never shows it again.
 

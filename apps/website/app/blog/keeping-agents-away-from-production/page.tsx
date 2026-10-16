@@ -13,7 +13,7 @@ import article from './Article.module.css';
  */
 const PUBLISHED = '2026-10-07';
 const PUBLISHED_WORDS = '7 October 2026';
-const UPDATED = '2026-10-07';
+const UPDATED = '2026-10-16';
 const PATH = '/blog/keeping-agents-away-from-production';
 const TITLE = 'How Styx keeps coding agents away from production';
 const DESCRIPTION =
@@ -301,6 +301,15 @@ export default function KeepingAgentsAwayFromProductionPage() {
                 credentials with a session policy limited to the granted scopes (unless you connected a CLI
                 profile with no role to assume). On GCP it’s an access token that lasts at most an hour.
                 Vercel, Supabase and GitHub get the token you stored, because they can’t issue a narrower one.
+              </p>
+              <p>
+                <em>
+                  Update, 16 October 2026: Fly.io, Railway and Render are targets now too. Render can’t issue
+                  a narrower key either, so it joins Vercel, Supabase and GitHub in this post’s lists; Fly.io
+                  and Railway mint a token for each grant. The{' '}
+                  <a href="/docs/access/how-access-works#what-the-agent-actually-gets">access docs</a> have
+                  the current table.
+                </em>
               </p>
               <p>
                 SSH never gets a key file. Styx runs its own SSH agent in-process, holding the key in memory

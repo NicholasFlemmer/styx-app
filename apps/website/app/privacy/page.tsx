@@ -58,18 +58,18 @@ export default function PrivacyPage() {
         <li>your projects, their files, branches and worktrees, and the changes your agents make;</li>
         <li>your agent sessions and conversations;</li>
         <li>
-          the credentials you connect for deploy and server targets (Vercel, AWS, Google Cloud, Supabase,
-          GitHub, SSH). These are kept in your operating system&apos;s keychain (the macOS Keychain, Windows
-          Credential Manager, or the Secret Service keyring on Linux);
+          the credentials you connect for deploy and server targets (Vercel, Supabase, AWS, Google Cloud,
+          Fly.io, Railway, Render, GitHub, SSH). These are kept in your operating system&apos;s keychain (the
+          macOS Keychain, Windows Credential Manager, or the Secret Service keyring on Linux);
         </li>
         <li>the approvals and audit log that record what your agents asked for and what you allowed;</li>
         <li>your settings and preferences.</li>
       </ul>
       <p>
-        When you use an AI coding agent through Styx (Claude Code, Codex, Gemini CLI, Cursor), the agent runs
-        on your computer under your own account with that provider, and talks to that provider directly. What
-        those providers do with your data is governed by your agreement with them, not by this policy. The
-        same applies to the cloud and hosting services your agents deploy to.
+        When you use an AI coding agent through Styx (Claude Code, Codex, Gemini CLI, Cursor, OpenCode), the
+        agent runs on your computer under your own account with that provider, and talks to that provider
+        directly. What those providers do with your data is governed by your agreement with them, not by this
+        policy. The same applies to the cloud and hosting services your agents deploy to.
       </p>
 
       <h2>3. Your Styx account</h2>

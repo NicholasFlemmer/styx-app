@@ -62,8 +62,8 @@ linux:
   artifactName: Styx-${version}-${arch}.${ext}
   synopsis: Run coding agents on every project; they ask before they touch production.
   description: >-
-    Styx runs Claude Code, Codex, Gemini CLI and Cursor's agent across all your projects in one window. Each task
-    gets its own branch, and an agent has to ask before it deploys or touches anything live.
+    Styx runs Claude Code, Codex, Gemini CLI, Cursor and OpenCode across all your projects in one window. Each
+    task gets its own branch, and an agent has to ask before it deploys or touches anything live.
   maintainer: Styx <hello@heystyx.com>
   vendor: Styx
   extraResources:

@@ -7,9 +7,9 @@ export const codex: Competitor = {
   what: 'Codex in the ChatGPT desktop app: OpenAI’s place to run Codex agents in parallel across projects.',
   title: 'Styx vs the Codex app in ChatGPT',
   description:
-    'The Codex app runs parallel Codex agents; Styx runs Codex next to Claude Code, Gemini and Cursor. How they differ on cloud tasks and production access.',
+    'The Codex app runs parallel Codex agents; Styx runs it next to Claude Code, Gemini, Cursor and more. How they differ on cloud tasks and production access.',
   intro:
-    'OpenAI’s Codex app, now part of the ChatGPT desktop app, runs several Codex agents at once across your projects, locally or in OpenAI’s cloud. Styx runs Codex too, under the same ChatGPT login, next to Claude Code, Gemini CLI and Cursor’s agent, with a gate in front of production.',
+    'OpenAI’s Codex app, now part of the ChatGPT desktop app, runs several Codex agents at once across your projects, locally or in OpenAI’s cloud. Styx runs Codex too, under the same ChatGPT login, next to Claude Code, Gemini CLI, Cursor’s agent and OpenCode, with a gate in front of production.',
   summary: [
     'Both run Codex agents in parallel, each in its own git worktree.',
     'The Codex app adds cloud tasks, scheduled automations and careful handling of cloud secrets.',
@@ -44,7 +44,7 @@ export const codex: Competitor = {
   styxPoints: ['agents', 'keys', 'projects'],
   choose: {
     them: 'Codex is the only agent you use and you want OpenAI’s cloud tasks and automations',
-    styx: 'you run Codex alongside Claude Code, Gemini or Cursor, or want production kept behind an approval with a record',
+    styx: 'you run Codex alongside Claude Code, Gemini CLI, Cursor or OpenCode, or want production kept behind an approval with a record',
   },
   faq: [
     {

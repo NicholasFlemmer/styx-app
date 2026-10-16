@@ -25,7 +25,7 @@ Because `remember_command` counts against both its own bucket and the access-req
 
 ### request_access
 
-Asks you for scoped, expiring access to one of the project's targets. The request shows up in the chat, on the board, in Approvals, as a notification and on the dock or tray badge. A policy can decide it without asking you. After a grant, the agent should just run the provider CLI (`vercel`, `gh`, `aws`, `gcloud`, `supabase`, `ssh`): it already uses the grant.
+Asks you for scoped, expiring access to one of the project's targets. The request shows up in the chat, on the board, in Approvals, as a notification and on the dock or tray badge. A policy can decide it without asking you. After a grant, the agent should just run the provider CLI (`vercel`, `supabase`, `aws`, `gcloud`, `fly`, `railway`, `render`, `gh`, `ssh`): it already uses the grant.
 
 | Parameter | Type                                         | Required | Notes                                                                                                                                                                       |
 | --------- | -------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

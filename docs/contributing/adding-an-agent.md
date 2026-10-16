@@ -53,8 +53,8 @@ Data flows through these parts in this order.
    [`apps/desktop/src/main/container.ts`](../../apps/desktop/src/main/container.ts).
 
 6. **Talking back to Styx.** The agent reaches Styx through the `styx mcp` server (tools such as `request_access`,
-   `ask_user`, `report_status`) and through the shims (`gh`, `vercel`, `aws`, `gcloud`, `supabase`, `ssh`) on its
-   `PATH`. Both go over the broker protocol in [`packages/broker/src/protocol.ts`](../../packages/broker/src/protocol.ts)
+   `ask_user`, `report_status`) and through the shims (`vercel`, `supabase`, `aws`, `gcloud`, `fly`, `railway`, `render`, `gh`,
+   `ssh`) on its `PATH`. Both go over the broker protocol in [`packages/broker/src/protocol.ts`](../../packages/broker/src/protocol.ts)
    to the host in [`apps/desktop/src/main/broker/host.ts`](../../apps/desktop/src/main/broker/host.ts). How the MCP
    server reaches the CLI depends on the runner: ACP and app-server hand it over in the protocol; the other launches
    write it into a config file (`writeWorktreeMcpConfig()`, or a file under `configDir` for flags like Claude's

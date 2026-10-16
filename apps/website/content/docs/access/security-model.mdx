@@ -32,7 +32,7 @@ Styx is a guardrail, not a sandbox. Agents run as you, on your machine, with you
 
 The connect dialog says the same about CLI logins: "Anything running as you can also use" the CLI, "so prefer scoped roles for prod".
 
-**Un-narrowed tokens are your whole token.** For Vercel, Supabase, GitHub and Render, a granted command receives the token you stored, whatever scope you granted. A command could copy it during the grant, and revoking the grant stops Styx delivering it but doesn't cancel it at the provider. Use dedicated tokens with the least access that works, and rotate them if you suspect one was copied.
+**Un-narrowed tokens are your whole token.** For Vercel, Supabase, Render and GitHub, a granted command receives the token you stored, whatever scope you granted. A command could copy it during the grant, and revoking the grant stops Styx delivering it but doesn't cancel it at the provider. Use dedicated tokens with the least access that works, and rotate them if you suspect one was copied.
 
 **Your SSH key stays where it is.** Styx keeps the key's path, not the key, and agents only get a socket. But the key file is still on your disk, readable by anything running as you.
 

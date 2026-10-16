@@ -7,13 +7,13 @@ export const cursor: Competitor = {
   what: 'An AI code editor whose Agents Window runs many of its own agents in parallel, locally and in the cloud.',
   title: 'Styx vs Cursor: an ADE next to an AI code editor',
   description:
-    'Cursor is an AI editor with its own agents; Styx runs Claude Code, Codex, Gemini and Cursor side by side. How they differ, and when you want both.',
+    'Cursor is an AI editor with its own agents; Styx runs Claude Code, Codex, Gemini, Cursor and more side by side. How they differ, and when you want both.',
   intro:
-    'Cursor is an AI code editor with its own agent, and its Agents Window runs many of them at once. Styx is not an editor: it runs Claude Code, Codex, Gemini CLI and Cursor’s agent side by side across your projects, and sits on top of whichever editor you use, Cursor included.',
+    'Cursor is an AI code editor with its own agent, and its Agents Window runs many of them at once. Styx is not an editor: it runs Claude Code, Codex, Gemini CLI, Cursor’s agent and OpenCode side by side across your projects, and sits on top of whichever editor you use, Cursor included.',
   summary: [
     'Cursor is a full AI editor; Styx is a place to run and supervise agents from several companies.',
     'Cursor runs its own agent, locally and in cloud VMs, on paid plans.',
-    'Styx runs Claude Code, Codex, Gemini CLI and Cursor’s agent next to each other.',
+    'Styx runs Claude Code, Codex, Gemini CLI, Cursor’s agent and OpenCode next to each other.',
     'Styx gates production access; many people use both.',
   ],
   cells: {
@@ -55,7 +55,7 @@ export const cursor: Competitor = {
   faq: [
     {
       q: 'Can I use Styx with Cursor?',
-      a: 'Yes. Styx runs Cursor’s agent alongside Claude Code, Codex and Gemini CLI, and can import your Cursor recents, keybindings and theme and open files back in Cursor.',
+      a: 'Yes. Styx runs Cursor’s agent alongside Claude Code, Codex, Gemini CLI and OpenCode, and can import your Cursor recents, keybindings and theme and open files back in Cursor.',
     },
     {
       q: 'Is Styx a Cursor alternative?',

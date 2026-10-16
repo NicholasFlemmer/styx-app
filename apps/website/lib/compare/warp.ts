@@ -11,7 +11,7 @@ export const warp: Competitor = {
   intro:
     'Warp coined the term agentic development environment in 2025, and Styx is one too. Warp starts from the terminal and grows into cloud agents and team administration; Styx starts from your projects and the agents working in them, and puts a gate between those agents and production.',
   summary: [
-    'Both run Claude Code, Codex, Gemini CLI and other agents side by side.',
+    'Both run Claude Code, Codex, Gemini CLI, OpenCode and other agents side by side.',
     'Warp is a full terminal, with paid cloud agents, team admin and ticket triggers.',
     'Warp runs on Mac, Linux and Windows.',
     'Styx gives each agent its own worktree automatically and gates production access.',
@@ -55,7 +55,7 @@ export const warp: Competitor = {
   faq: [
     {
       q: 'Is Styx a Warp alternative?',
-      a: 'For running coding agents, yes: both run Claude Code, Codex and Gemini CLI side by side. Warp is also a full terminal with cloud agents and team admin; Styx gives each agent its own worktree and gates production access.',
+      a: 'For running coding agents, yes: both run Claude Code, Codex, Gemini CLI and OpenCode side by side. Warp is also a full terminal with cloud agents and team admin; Styx gives each agent its own worktree and gates production access.',
     },
     {
       q: 'Did Warp invent the term ADE?',

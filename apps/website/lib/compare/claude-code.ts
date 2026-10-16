@@ -7,9 +7,9 @@ export const claudeCode: Competitor = {
   what: 'The Code tab in Anthropic’s Claude desktop app, running parallel Claude Code sessions locally or in the cloud.',
   title: 'Styx vs the Claude Code desktop app',
   description:
-    'The Claude Code desktop app runs parallel Claude sessions; Styx runs Claude Code next to Codex, Gemini and Cursor. How they differ on production access.',
+    'The Claude Code desktop app runs parallel Claude sessions; Styx runs it next to Codex, Gemini, Cursor and more. How they differ on production access.',
   intro:
-    'Anthropic’s Claude desktop app has a Code tab that runs several Claude Code sessions at once, each in its own worktree. Styx runs Claude Code too, through the same login, alongside Codex, Gemini CLI and Cursor’s agent, across every project, with a gate in front of production.',
+    'Anthropic’s Claude desktop app has a Code tab that runs several Claude Code sessions at once, each in its own worktree. Styx runs Claude Code too, through the same login, alongside Codex, Gemini CLI, Cursor’s agent and OpenCode, across every project, with a gate in front of production.',
   summary: [
     'Both run parallel Claude Code sessions, each in its own git worktree.',
     'The Claude app adds cloud and SSH sessions, CI follow-through and a built-in preview.',
@@ -53,7 +53,7 @@ export const claudeCode: Competitor = {
   styxPoints: ['agents', 'keys', 'projects'],
   choose: {
     them: 'Claude is the only agent you use and you want cloud sessions and CI follow-through from Anthropic itself',
-    styx: 'you use Claude Code alongside Codex, Gemini or Cursor, or want production kept behind an approval with a record',
+    styx: 'you use Claude Code alongside Codex, Gemini CLI, Cursor or OpenCode, or want production kept behind an approval with a record',
   },
   faq: [
     {

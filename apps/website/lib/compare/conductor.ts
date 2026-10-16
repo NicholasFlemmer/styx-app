@@ -11,7 +11,7 @@ export const conductor: Competitor = {
   intro:
     'Styx and Conductor are both agentic development environments (ADEs): Mac apps for running several coding agents at once, each on its own branch, without them tripping over each other or you. If that is all you need, either will do it well. They differ in what surrounds the agents.',
   summary: [
-    'Both run Claude Code, Codex and Cursor agents in parallel on a Mac, each in its own worktree.',
+    'Both run Claude Code, Codex, Cursor and OpenCode agents in parallel on a Mac, each in its own worktree.',
     'Styx puts every project in one window and makes agents ask before they touch production.',
     'Conductor has cloud workspaces, team collaboration and a Linear integration; Styx has none of those.',
     'Both are free to start and use your existing agent subscriptions.',
@@ -42,7 +42,6 @@ export const conductor: Competitor = {
       text: 'Conductor has live collaboration and an admin portal. Styx is for one person today.',
     },
     { title: 'Linear', text: 'Conductor can start a workspace straight from a Linear issue.' },
-    { title: 'OpenCode', text: 'Conductor runs it; Styx runs Gemini CLI instead.' },
   ],
   styxPoints: ['projects', 'keys', 'editor'],
   choose: {

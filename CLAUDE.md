@@ -1,10 +1,10 @@
 # Styx
 
-Desktop app (macOS, Windows, and Linux in beta; Electron + React) that runs coding agents (Claude Code, Codex, Gemini CLI, Cursor
-agent, shell) on many projects at once. Each task is a **lane**: one agent session on its own git worktree and branch,
-with its chat, changes, preview, checks and access. Agents reach deploy/server targets (Vercel, AWS, GCP, Supabase,
-GitHub, SSH) only through scoped, expiring grants, and every request, grant, use and revoke goes into an append-only
-audit log.
+Desktop app (macOS, Windows, and Linux in beta; Electron + React) that runs coding agents (Claude Code, Codex, Gemini CLI, Cursor,
+OpenCode, shell) on many projects at once. Each task is a **lane**: one agent session on its own git worktree and
+branch, with its chat, changes, preview, checks and access. Agents reach deploy/server targets (Vercel, Supabase, AWS,
+GCP, Fly.io, Railway, Render, GitHub, SSH) only through scoped, expiring grants, and every request, grant, use and
+revoke goes into an append-only audit log.
 
 Open source under Apache-2.0. The hosted accounts/usage service and the marketing material live in a separate private
 repo and are not part of this tree. The app works fully without them: sign-in is optional and gates nothing, builds
@@ -51,7 +51,8 @@ This file is for coding agents and people alike. [CONTRIBUTING.md](CONTRIBUTING.
 - `packages/ui`: component library (CSS Modules + tokens) with Storybook.
 - `packages/tokens`: `tokens.json` → generated CSS/TS, bundled fonts.
 - `packages/broker`: local broker protocol + `styx mcp` (the tools agents call).
-- `packages/cli`: the `styx` CLI and provider shims (`gh`, `vercel`, `aws`, `gcloud`, `supabase`, `ssh`).
+- `packages/cli`: the `styx` CLI and provider shims (`vercel`, `supabase`, `aws`, `gcloud`, `fly`/`flyctl`,
+  `railway`, `render`, `gh`, `ssh`).
 
 ## Commands
 
@@ -100,7 +101,7 @@ Node ≥ 22, pnpm 10 (`corepack enable`). Run one package with `pnpm -F <name> <
 - `.styx/project.json` is versioned (`version: 1`) and zod-validated (`packages/core/src/project-file.ts`); never
   holds secrets.
 - Agent runners (ADR-0010/0016/0017): Claude Code over `stream-runner.ts`, Codex over `codex app-server`
-  (`app-server-runner.ts`), Gemini and Cursor over ACP (`acp-runner.ts`; Cursor falls back to `--print`
+  (`app-server-runner.ts`), Gemini, Cursor and OpenCode over ACP (`acp-runner.ts`; Cursor falls back to `--print`
   stream-json), shell over a pty; `runner-mux.ts` routes them. Codex's TUI cannot take messages through a pty, so
   never route Codex there. New agent: `docs/contributing/adding-an-agent.md`.
 - Lanes: one session = one worktree on `agent/<name>-<n>` (`branchPrefix`). Lane services: `lane-sync-service`

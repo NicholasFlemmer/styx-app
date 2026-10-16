@@ -17,7 +17,7 @@ Styx is an Electron app in a pnpm monorepo. One rule shapes almost everything: t
 | `packages/ui`     | The component library, with CSS Modules, design tokens and Storybook.                                                                                                                                                           |
 | `packages/tokens` | Colours, sizes and motion as `tokens.json`, generated into CSS and TS, plus the bundled fonts.                                                                                                                                  |
 | `packages/broker` | The local broker protocol agents talk to, and `styx mcp`, the MCP server that exposes it as tools.                                                                                                                              |
-| `packages/cli`    | The `styx` command and the provider shims (`gh`, `vercel`, `aws`, `gcloud`, `supabase`, `ssh`).                                                                                                                                 |
+| `packages/cli`    | The `styx` command and the provider shims (`vercel`, `supabase`, `aws`, `gcloud`, `fly`, `railway`, `render`, `gh`, `ssh`).                                                                                                     |
 
 Inside `apps/desktop/src/main`, [`container.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/container.ts) builds every service once with its dependencies (clock, keychain vault, CLI runners, windows) passed in. Nothing is a singleton at import time, which is what lets tests build the same graph in memory.
 
@@ -85,7 +85,7 @@ Styx merges the base into a lane and never rebases, because a rebase would orpha
 Agents reach Styx through a local broker: newline-delimited JSON-RPC over a Unix socket (a named pipe on Windows), defined and zod-validated in [`packages/broker/src/protocol.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/packages/broker/src/protocol.ts). Main answers every call in [`broker/host.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/broker/host.ts). There are two ways in:
 
 - **`styx mcp`**, an MCP server over stdio that each agent CLI is configured to start. It offers tools such as `request_access`, `check_grant`, `get_credential`, `ask_user`, `report_status` and `land`.
-- **Shims**: small scripts named `gh`, `vercel`, `aws`, `gcloud`, `supabase` and `ssh`, put first on the session's `PATH` ([`shim-service.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/shim-service.ts)). Each runs `styx wrap <tool>` ([`packages/cli/src/wrap.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/packages/cli/src/wrap.ts)), which asks the broker for permission and then runs the real CLI.
+- **Shims**: small scripts named `vercel`, `supabase`, `aws`, `gcloud`, `fly` (and `flyctl`), `railway`, `render`, `gh` and `ssh`, put first on the session's `PATH` ([`shim-service.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/apps/desktop/src/main/services/shim-service.ts)). Each runs `styx wrap <tool>` ([`packages/cli/src/wrap.ts`](https://github.com/NicholasFlemmer/styx-app/blob/main/packages/cli/src/wrap.ts)), which asks the broker for permission and then runs the real CLI.
 
 Every session gets a random token when it starts. Main stores only its hash, and a broker connection is bound to one session after it says hello. The broker itself never holds secrets.
 

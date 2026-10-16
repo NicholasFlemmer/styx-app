@@ -15,7 +15,7 @@ Agents in Styx can't reach your Vercel project, AWS account, Supabase database o
 
 A **target** is a place outside the repo that an agent can change. Each target belongs to one project and has:
 
-- a **provider**: Vercel, AWS, GCP, Supabase, GitHub, SSH host, Fly.io, Railway or Render;
+- a **provider**: Vercel, Supabase, AWS, GCP, Fly.io, Railway, Render, GitHub or SSH host;
 - an **environment**: `prod`, `staging` or `preview` (a fourth, `scm`, marks a source-control target such as a GitHub repo declared in `.styx/project.json`);
 - a **policy**: **Ask · MFA**, **Ask each time** or **Always allow**;
 - a reference to its credential in your OS keychain. The credential itself is never stored anywhere else.
@@ -82,19 +82,19 @@ Styx never puts your stored credentials in an agent's environment. The command t
 
 | Provider | What a granted command gets                                                                                                                                                                                                                   | Narrowed to the grant?                                |
 | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| AWS      | Temporary STS credentials (15 minutes to 1 hour) with a session policy limited to the granted scopes. If you connected through the `aws` CLI without a role to assume, your profile's own short-lived credentials are passed through instead. | Yes, except CLI without a role                        |
-| GCP      | An access token that lasts at most an hour. A service-account key gets a read-only token for read grants. A `gcloud` login is narrowed for reads only when the target lists its Cloud Storage buckets.                                        | Reads only, in some setups                            |
 | Vercel   | Your stored token, as `VERCEL_TOKEN`.                                                                                                                                                                                                         | No                                                    |
 | Supabase | Your stored access token, as `SUPABASE_ACCESS_TOKEN`.                                                                                                                                                                                         | No                                                    |
-| GitHub   | Your stored token, as `GH_TOKEN` and `GITHUB_TOKEN`.                                                                                                                                                                                          | No                                                    |
-| SSH host | A private SSH agent socket that lives as long as the grant. The key never leaves Styx.                                                                                                                                                        | No (the socket can sign any login)                    |
+| AWS      | Temporary STS credentials (15 minutes to 1 hour) with a session policy limited to the granted scopes. If you connected through the `aws` CLI without a role to assume, your profile's own short-lived credentials are passed through instead. | Yes, except CLI without a role                        |
+| GCP      | An access token that lasts at most an hour. A service-account key gets a read-only token for read grants. A `gcloud` login is narrowed for reads only when the target lists its Cloud Storage buckets.                                        | Reads only, in some setups                            |
 | Fly.io   | A token minted for this grant, as `FLY_API_TOKEN`, that expires with it (an hour at most, then re-minted). Read grants get a read-only token for the app's organization; anything else gets a deploy token for the target's app.              | Reads only (deploy tokens can do anything to the app) |
 | Railway  | A project token minted for this grant, as `RAILWAY_TOKEN`, that reaches only the target's environment. Styx deletes it when the grant ends, or after an hour and mints a new one.                                                             | To one environment, not by scope                      |
 | Render   | Your stored API key or CLI token, as `RENDER_API_KEY`. Render can't mint a narrower or shorter-lived key.                                                                                                                                     | No                                                    |
+| GitHub   | Your stored token, as `GH_TOKEN` and `GITHUB_TOKEN`.                                                                                                                                                                                          | No                                                    |
+| SSH host | A private SSH agent socket that lives as long as the grant. The key never leaves Styx.                                                                                                                                                        | No (the socket can sign any login)                    |
 
 Where a provider can't narrow its credential, the agent's command gets your whole token for that target, whatever scope you granted. That's why, on a `prod` target with an un-narrowed credential, every grant needs Touch ID, Windows Hello or your system password, reads included, and no policy can approve it for you.
 
-Revoking a grant stops Styx handing out the credential and shuts any SSH socket. For Vercel, Supabase, GitHub and Render there is nothing to revoke upstream: the token you stored stays valid at the provider. Fly.io and Railway tokens minted for a grant are revoked at the provider when the grant ends.
+Revoking a grant stops Styx handing out the credential and shuts any SSH socket. For Vercel, Supabase, Render and GitHub there is nothing to revoke upstream: the token you stored stays valid at the provider. Fly.io and Railway tokens minted for a grant are revoked at the provider when the grant ends.
 
 ## SSH
 

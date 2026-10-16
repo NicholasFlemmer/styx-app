@@ -21,7 +21,7 @@ Awwwards developer category and 2026 landing-page surveys.
    feature-rich / native. Raycast: Fast / Ergonomic / Personal / Reliable.
 5. **Specific facts beat adjectives.** Ghostty "2ms", Raycast "99.8% crash-free", Vibe Kanban
    "100,000+ PRs". Styx has real ones: 1h default grant, Touch ID for prod, append-only hash-chained
-   audit, one worktree per agent, six targets, five agents.
+   audit, one worktree per agent, nine targets, six agents.
 6. **Honest, measured tone.** Ghostty's writing is the reference: ambition without superlatives.
    Sentence case. Short sections. Linear's copy runs 15–50 words per block.
 7. **One download CTA, platform-detected**, with a quiet secondary (source, docs, or "how it works").
@@ -34,7 +34,7 @@ Awwwards developer category and 2026 landing-page surveys.
 
 ## 2. Design plan
 
-**Brief.** Desktop app for developers who already run Claude Code, Codex, Gemini CLI or Cursor, often
+**Brief.** Desktop app for developers who already run Claude Code, Codex, Gemini CLI, Cursor or OpenCode, often
 several at once, and have felt the fear of an agent holding `vercel --prod` or an AWS key. The site's
 job: explain in ten seconds, prove it with the product itself, get a download.
 

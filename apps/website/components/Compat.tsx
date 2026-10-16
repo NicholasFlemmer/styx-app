@@ -21,13 +21,13 @@ const editors = [
 
 const targets = [
   ['Vercel', 'Deploys and previews.'],
+  ['Supabase', 'Your databases, live and staging.'],
   ['AWS', 'Anything you can reach with the aws command.'],
   ['Google Cloud', 'Anything you can reach with gcloud.'],
-  ['Supabase', 'Your databases, live and staging.'],
-  ['GitHub', 'Repos, pull requests, releases.'],
   ['Fly.io', 'Your apps, with a token made for each grant.'],
   ['Railway', 'Each environment, with its own short-lived token.'],
   ['Render', 'Deploys and services.'],
+  ['GitHub', 'Repos, pull requests, releases.'],
   ['Your servers', 'Over SSH, using the identity already on your computer.'],
 ] as const;
 

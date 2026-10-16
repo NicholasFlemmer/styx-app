@@ -15,7 +15,7 @@ export const STYX_CELLS: Record<RowKey, string> = {
   production:
     'Agents ask; you approve for a set time; Touch ID, Windows Hello or your system password on Linux for live systems',
   audit: 'Every request, approval and use, append-only',
-  deploy: 'Vercel, AWS, Google Cloud, Supabase, GitHub, Fly.io, Railway, Render, SSH',
+  deploy: 'Vercel, Supabase, AWS, Google Cloud, Fly.io, Railway, Render, GitHub, SSH',
   cloud: 'No: everything runs on your computer',
   team: 'No',
   issues: 'No',

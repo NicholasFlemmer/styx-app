@@ -11,7 +11,7 @@ export const kepler: Competitor = {
   intro:
     'GitKraken Kepler and Styx are both agentic development environments: several coding agents in parallel, each in a git worktree, with review before anything merges. Kepler is built around tasks that start in your backlog and span several repositories; Styx around every project in one window and keeping agents away from your keys.',
   summary: [
-    'Both run Claude Code, Codex, Gemini, Cursor and more in parallel worktrees.',
+    'Both run Claude Code, Codex, Gemini, Cursor, OpenCode and more in parallel worktrees.',
     'Kepler lets one task open a worktree in every repository it touches.',
     'Kepler pulls work from Jira, Linear, GitHub, GitLab and others, on any OS.',
     'Styx gates production access and keeps an append-only log. Kepler is in preview.',

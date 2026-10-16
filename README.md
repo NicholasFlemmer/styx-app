@@ -4,7 +4,7 @@
 
 <h1>Styx</h1>
 
-**Run Claude Code, Codex, Gemini, Cursor and OpenCode on all your projects at once.<br />They ask before they touch production.**
+**Run Claude Code, Codex, Gemini CLI, Cursor and OpenCode on all your projects at once.<br />They ask before they touch production.**
 
 [**Download for Mac**](https://heystyx.com/download/mac?from=github) &nbsp;·&nbsp; [**Download for Windows**](https://heystyx.com/download/win?from=github) &nbsp;·&nbsp; [**Linux**](https://github.com/NicholasFlemmer/styx-app/releases/latest) &nbsp;·&nbsp; [**Docs**](https://heystyx.com/docs) &nbsp;·&nbsp; [Website](https://heystyx.com) &nbsp;·&nbsp; [Watch the story (1:42)](https://heystyx.com/story)
 
@@ -62,7 +62,7 @@ checks and merges it. If a turn went wrong, **Undo this turn** puts the files ba
 
 <img src="apps/website/public/launch/access-request.jpg" alt="An access request: Codex asks to write to the production Supabase database for one hour" width="360" align="right" />
 
-Connect Vercel, AWS, Google Cloud, Supabase, GitHub, Fly.io, Railway, Render and SSH once. From then on an agent can't just use them: it asks,
+Connect Vercel, Supabase, AWS, Google Cloud, Fly.io, Railway, Render, GitHub and SSH once. From then on an agent can't just use them: it asks,
 says why, and you choose what it gets and for how long (once, an hour, or the session).
 
 - **Scoped and short-lived.** Agents get a token or an SSH agent socket for that grant only, and it's revoked when
@@ -123,8 +123,8 @@ gets the element, the page and a picture of it.
 
 ## Works with
 
-- **Agents:** Claude Code · Codex · Gemini CLI · Cursor agent · OpenCode · any shell
-- **Targets agents can ask for:** Vercel · AWS · Google Cloud · Supabase · GitHub · Fly.io · Railway · Render · SSH
+- **Agents:** Claude Code · Codex · Gemini CLI · Cursor · OpenCode · any shell
+- **Targets agents can ask for:** Vercel · Supabase · AWS · Google Cloud · Fly.io · Railway · Render · GitHub · SSH
 - **Platforms:** macOS (Apple Silicon) · Windows 10 and 11 (beta) · Linux, as an AppImage or .deb (beta)
 - **Editors:** the built-in editor and terminal, or open any task in VS Code, Cursor, Zed or JetBrains
 
@@ -198,10 +198,10 @@ problem, please follow [SECURITY.md](SECURITY.md) instead of opening an issue.
 
 The two easiest ways in are self-contained, with a worked example and a checklist each:
 
-- **[Add an agent](docs/contributing/adding-an-agent.md):** support another coding agent CLI (OpenCode, Aider, Goose,
-  Amp, …).
+- **[Add an agent](docs/contributing/adding-an-agent.md):** support another coding agent CLI (Aider, Goose, Amp,
+  …).
 - **[Add a deploy target](docs/contributing/adding-a-target.md):** let agents ask for another platform (Netlify,
-  Cloudflare, Fly.io, Railway, Render, Azure, …).
+  Cloudflare, Azure, …).
 
 ## License
 

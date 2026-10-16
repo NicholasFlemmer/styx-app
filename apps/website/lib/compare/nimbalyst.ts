@@ -14,7 +14,7 @@ export const nimbalyst: Competitor = {
     'Both run Claude Code and Codex sessions in parallel with per-edit review.',
     'Nimbalyst adds visual editors for docs, mockups and diagrams, and real-time team editing.',
     'Nimbalyst runs on Mac, Windows and Linux and is open source.',
-    'Styx runs four agents side by side and gates their production access.',
+    'Styx runs five agents side by side and gates their production access.',
   ],
   cells: {
     runsOn: 'Mac, Windows, Linux; iOS companion',
@@ -50,7 +50,7 @@ export const nimbalyst: Competitor = {
   styxPoints: ['keys', 'agents', 'projects'],
   choose: {
     them: 'your agent work centres on documents, mockups and plans, or you want to edit with your team in real time',
-    styx: 'you want four agents side by side across every project and nothing reaching production without your OK',
+    styx: 'you want five agents side by side across every project and nothing reaching production without your OK',
   },
   faq: [
     {
