@@ -48,6 +48,15 @@ jobs:
       - name: Electron e2e on Linux (main window, shell, grant flow, a11y)
         if: runner.os == 'Linux'
         run: xvfb-run -a -s "-screen 0 1920x1080x24" pnpm e2e
+      # A failed e2e leaves its page snapshot and screenshots here: keep them, so a CI-only failure can be read.
+      - name: Keep e2e results when something failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-${{ runner.os }}
+          path: apps/desktop/e2e/test-results
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Packaged app smoke (unsigned)
         if: runner.os == 'macOS'
         run: pnpm -F @styx/desktop package:mac:dir && pnpm -F @styx/desktop package:smoke

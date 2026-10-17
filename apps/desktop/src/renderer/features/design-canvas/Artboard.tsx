@@ -66,6 +66,9 @@ export interface ArtboardProps {
 
 const MIN_HEIGHT = 480;
 const MAX_HEIGHT = 6000;
+/** A screen that fails to read is tried again this many times, this far apart (then left until the file changes). */
+const READ_RETRIES = 5;
+const READ_RETRY_MS = 1000;
 
 /**
  * One screen at one size (row 140) on the freeform canvas (ADR-0030), drawn in a frame with no scripts
@@ -110,11 +113,20 @@ export const Artboard = memo(function Artboard({
 
   useEffect(() => {
     let live = true;
-    void command('design.read', { worktreeId, path: file.path }).then((r) => {
-      if (live && r.ok) setSrcdoc(buildSrcdoc(r.value.html, r.value.css));
-    });
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    // A read can fail while an agent is still writing the file (or replacing it): try again a few times rather than
+    // leave the board blank until the file changes once more.
+    const load = (attempt: number) => {
+      void command('design.read', { worktreeId, path: file.path }).then((r) => {
+        if (!live) return;
+        if (r.ok) setSrcdoc(buildSrcdoc(r.value.html, r.value.css));
+        else if (attempt < READ_RETRIES) retry = setTimeout(() => load(attempt + 1), READ_RETRY_MS);
+      });
+    };
+    load(0);
     return () => {
       live = false;
+      if (retry !== null) clearTimeout(retry);
     };
   }, [worktreeId, file.path, version]);
 
