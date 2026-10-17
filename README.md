@@ -203,6 +203,14 @@ The two easiest ways in are self-contained, with a worked example and a checklis
 - **[Add a deploy target](docs/contributing/adding-a-target.md):** let agents ask for another platform (Netlify,
   Cloudflare, Azure, …).
 
+### Thank you
+
+To the people helping build Styx:
+
+- **[@Kin230k](https://github.com/Kin230k):** the Cloudflare target groundwork, with a careful command classifier and a
+  close look at how far a deploy token should reach ([#22](https://github.com/NicholasFlemmer/styx-app/issues/22),
+  [#58](https://github.com/NicholasFlemmer/styx-app/pull/58)).
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE). The Styx name and logo aren't covered by the licence, so if you ship a fork,
