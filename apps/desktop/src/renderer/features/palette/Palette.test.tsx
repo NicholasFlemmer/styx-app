@@ -137,4 +137,14 @@ describe('Palette', () => {
     );
     expect(useUiStore.getState().overlays).toHaveLength(0);
   });
+
+  it('Do not disturb row (#8) sends notify.setDnd and closes the palette', () => {
+    const id = useUiStore.getState().pushOverlay({ kind: 'palette' });
+    render(<Palette id={id} />);
+    act(() => useUiStore.getState().setPalette({ query: 'disturb', scope: 'actions' }));
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
+    const cmd = (window as unknown as { styx: { command: ReturnType<typeof vi.fn> } }).styx.command;
+    expect(cmd).toHaveBeenCalledWith('notify.setDnd', { dnd: true });
+    expect(useUiStore.getState().overlays).toHaveLength(0);
+  });
 });

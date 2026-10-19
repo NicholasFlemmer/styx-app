@@ -59,6 +59,9 @@ export const runPaletteAction = (action: PaletteAction, opts: RunOptions): void 
     case 'agent-dock':
       void command('window.agentDock', { open: true });
       return;
+    case 'dnd':
+      void command('notify.setDnd', { dnd: action.on });
+      return;
     case 'feedback':
       open({ kind: 'modal', modal: 'feedback' });
       return;

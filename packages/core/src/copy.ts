@@ -35,6 +35,10 @@ export const copy = {
       cloneUrlMeta: 'git clone',
       agentDockMeta: 'all projects · always on top',
       feedbackMeta: 'goes straight to the person who makes Styx',
+      /** #8: Do not disturb from the palette; the label says what pressing it does. */
+      dndOn: 'Turn on do not disturb',
+      dndOff: 'Turn off do not disturb',
+      dndMeta: 'notifications pause · badges keep counting',
       debtAuditMeta: 'review this repo in the background',
       /** Commit, push and PR in one step for the branch the project is on (owner request, ADR-0021). */
       publish: 'Publish {project} · {branch}',
@@ -1819,6 +1823,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     rows: {
       theme: 'Theme',
       notify: 'Notify when an agent needs me',
+      dnd: 'Do not disturb',
       launchAtLogin: 'Launch at login',
       engine: 'Engine',
       openFilesIn: 'Open files in',

@@ -193,6 +193,15 @@ const generalRows = (model: ReadModel, now: number): SettingsRow[] => {
       change: { kind: 'app', patch: (n) => ({ notify: n as AppSettings['notify'] }) },
       overridden: false,
     },
+    // #8: the same switch as the Dock / tray menu's Do not disturb; notifications pause, counts still update.
+    {
+      id: 'dnd',
+      label: r.dnd,
+      value: onOff(app.dnd),
+      options: ON_OFF,
+      change: { kind: 'app', patch: (b) => ({ dnd: isOn(b) }) },
+      overridden: false,
+    },
     {
       id: 'launchAtLogin',
       label: r.launchAtLogin,

@@ -392,6 +392,8 @@ describe('sectionRows', () => {
     expect(values('app:general')).toEqual([
       'System',
       'Badge + sound',
+      // Do not disturb (#8), off in the demo.
+      'Off',
       'On',
       'Updates are off in this build',
       // The walkthrough row (#124): the demo machine has seen it.
@@ -717,6 +719,15 @@ describe('<Settings />', () => {
     expect(useUiStore.getState().overlays).toMatchObject([
       { kind: 'modal', modal: 'connect-agent', agent: 'gemini' },
     ]);
+  });
+
+  it('General · Do not disturb (#8) turns on and off through settings.set { dnd }', () => {
+    render(<Settings />);
+    act(() => useUiStore.getState().setSettingsSection('app:general'));
+    const select = screen.getByRole('combobox', { name: copy.settings.rows.dnd });
+    expect((select as HTMLSelectElement).value).toBe('off');
+    fireEvent.change(select, { target: { value: 'on' } });
+    expect(commandMock).toHaveBeenCalledWith('settings.set', { patch: { dnd: true } });
   });
 
   it('Editor · Screen reader mode dispatches settings.set { screenReader } (spec §9)', () => {

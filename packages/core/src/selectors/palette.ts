@@ -46,6 +46,8 @@ export type PaletteAction =
   | { kind: 'open-folder' }
   | { kind: 'clone-url' }
   | { kind: 'agent-dock' }
+  /** Turn Do not disturb on or off (#8): `on` is the state it sets. */
+  | { kind: 'dnd'; on: boolean }
   /** The feedback dialog (owner request, #123). */
   | { kind: 'feedback' }
   /** Replay the first-run walkthrough (owner request, #124). */
@@ -313,6 +315,14 @@ const actionItems = (model: ReadModel, ui: PaletteUi, now: number): PaletteItem[
     meta: copy.palette.actions.agentDockMeta,
     first: false,
     action: { kind: 'agent-dock' },
+  });
+  items.push({
+    id: 'dnd',
+    glyph: '■',
+    label: model.settings.app.dnd ? copy.palette.actions.dndOff : copy.palette.actions.dndOn,
+    meta: copy.palette.actions.dndMeta,
+    first: false,
+    action: { kind: 'dnd', on: !model.settings.app.dnd },
   });
   items.push({
     id: 'feedback',

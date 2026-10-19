@@ -292,6 +292,8 @@ describe('paletteResults', () => {
       // Commit, push and PR for the branch the project is on (ADR-0021).
       '▲ Publish acme-shop · fix/checkout · commit · push · pull request',
       '■ Open agent dock · all projects · always on top',
+      // #8: Do not disturb from the palette, worded for what pressing it does.
+      '■ Turn on do not disturb · notifications pause · badges keep counting',
       // Feedback to the owner (discrepancy #123).
       '■ Send feedback · goes straight to the person who makes Styx',
       '■ Show the walkthrough · a one-minute tour of the window',
@@ -337,11 +339,12 @@ describe('paletteResults', () => {
       worktreeId: ids.worktree.fixCheckout,
     });
     expect(all[13]?.action).toEqual({ kind: 'agent-dock' });
-    expect(all[14]?.action).toEqual({ kind: 'feedback' });
-    expect(all[15]?.action).toEqual({ kind: 'tour' });
-    expect(all[16]?.action).toEqual({ kind: 'arcade', projectId: ids.project.acmeShop });
-    expect(all[17]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
-    expect(all[23]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
+    expect(all[14]?.action).toEqual({ kind: 'dnd', on: true });
+    expect(all[15]?.action).toEqual({ kind: 'feedback' });
+    expect(all[16]?.action).toEqual({ kind: 'tour' });
+    expect(all[17]?.action).toEqual({ kind: 'arcade', projectId: ids.project.acmeShop });
+    expect(all[18]?.action).toEqual({ kind: 'open-session', sessionId: ids.session.claude });
+    expect(all[24]?.action).toEqual({ kind: 'switch-project', projectId: ids.project.acmeShop });
   });
 
   it('fuzzy on label + meta, best first; the first visible row is flagged; empty groups dropped', () => {
@@ -388,7 +391,7 @@ describe('paletteResults', () => {
   it('scope filtering (⇥) and scope cycling', () => {
     expect(paletteResults(model, ui, '', 'agents', NOW).map((g) => g.label)).toEqual(['Agents']);
     expect(paletteResults(model, ui, '', 'projects', NOW)[0]?.items[0]?.first).toBe(true);
-    expect(flat(model, '', 'actions')).toHaveLength(17);
+    expect(flat(model, '', 'actions')).toHaveLength(18);
     expect(nextPaletteScope('all')).toBe('actions');
     expect(nextPaletteScope('actions')).toBe('agents');
     expect(nextPaletteScope('agents')).toBe('projects');
@@ -405,9 +408,25 @@ describe('paletteResults', () => {
       'Clone URL…',
       // No audit row: it needs a project to audit. The dock and feedback are cross-project, so they stay.
       'Open agent dock',
+      'Turn on do not disturb',
       'Send feedback',
       'Show the walkthrough',
     ]);
+  });
+
+  it('Do not disturb (#8): the row turns it on when off and off when on', () => {
+    const dnd = (on: boolean) =>
+      flattenPalette(
+        paletteResults(
+          { ...model, settings: { ...model.settings, app: { ...model.settings.app, dnd: on } } },
+          ui,
+          '',
+          'actions',
+          NOW,
+        ),
+      ).find((i) => i.id === 'dnd');
+    expect(dnd(false)).toMatchObject({ label: 'Turn on do not disturb', action: { kind: 'dnd', on: true } });
+    expect(dnd(true)).toMatchObject({ label: 'Turn off do not disturb', action: { kind: 'dnd', on: false } });
   });
 
   it('offers Snake for the chat pane unless the tab on screen is waiting on the person (discrepancy #110)', () => {
