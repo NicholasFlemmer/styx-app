@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
 import { DesignCanvas } from './DesignCanvas';
+import { ZOOM_VAR } from './design-doc';
 
 const { ids } = fixtures;
 const acme = ids.project.acmeShop;
@@ -107,7 +108,9 @@ describe('DesignCanvas: the freeform canvas (ADR-0030)', () => {
     await waitFor(() => expect(document.querySelectorAll('[data-artboard]').length).toBe(3));
     // And every screen has been read into its frame, as the person sees it: on a busy machine (Styx's checks before a
     // land run every suite at once) the reads land after the boards, and a move made before them was lost.
-    await waitFor(() => expect(calls.filter((c) => c.name === 'design.read').length).toBeGreaterThanOrEqual(3));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.name === 'design.read').length).toBeGreaterThanOrEqual(3),
+    );
   };
 
   it('opens in today’s rows at 33%, both fidelities shown, wireframe first', async () => {
@@ -117,6 +120,33 @@ describe('DesignCanvas: the freeform canvas (ADR-0030)', () => {
     expect(boardAt('checkout/desktop.html')).toEqual({ left: 1360, top: 0 });
     expect(boardAt('checkout/phone.html')).toEqual({ left: 2720, top: 0 });
     expect((screen.getByLabelText(d.zoom, { selector: 'select' }) as HTMLSelectElement).value).toBe('0.33');
+  });
+
+  it('keeps the workspace mounted while a frame has a document but no HTML root', async () => {
+    await ready();
+    const frames = [...document.querySelectorAll('iframe')];
+    expect(frames).toHaveLength(3);
+    const loadingFrame = frames[0]!;
+    const pendingDoc = document.implementation.createHTMLDocument('');
+    pendingDoc.documentElement.remove();
+    const contentDocument = vi.spyOn(loadingFrame, 'contentDocument', 'get').mockReturnValue(pendingDoc);
+    try {
+      fireEvent.change(screen.getByLabelText(d.zoom, { selector: 'select' }), {
+        target: { value: '0.5' },
+      });
+      expect(stage()).toBeTruthy();
+      expect(viewNow().zoom).toBe(0.5);
+      expect(frames[1]!.contentDocument!.documentElement.style.getPropertyValue(ZOOM_VAR)).toBe('0.5');
+
+      // Once parsing supplies the root, subsequent zoom changes reach this frame too.
+      pendingDoc.appendChild(pendingDoc.createElement('html'));
+      fireEvent.change(screen.getByLabelText(d.zoom, { selector: 'select' }), {
+        target: { value: '1' },
+      });
+      expect(pendingDoc.documentElement.style.getPropertyValue(ZOOM_VAR)).toBe('1');
+    } finally {
+      contentDocument.mockRestore();
+    }
   });
 
   it('a filter hides boards in place: nothing moves', async () => {

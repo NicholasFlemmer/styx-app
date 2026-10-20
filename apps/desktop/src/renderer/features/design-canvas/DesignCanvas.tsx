@@ -660,10 +660,11 @@ function Canvas({ projectId, design, linked }: { projectId: ProjectId; design: S
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlays, handover, selection, selecting, mac, setView, viewNow]);
 
-  // Outlines inside the frames keep their size on screen at any zoom.
+  // Outlines inside the frames keep their size on screen at any zoom. During srcdoc navigation the document
+  // can exist before its HTML root does; skipping that loading frame keeps the workspace mounted.
   useEffect(() => {
     for (const f of stage.current?.querySelectorAll('iframe') ?? [])
-      f.contentDocument?.documentElement.style.setProperty(ZOOM_VAR, String(view.zoom));
+      f.contentDocument?.documentElement?.style.setProperty(ZOOM_VAR, String(view.zoom));
   });
 
   const zoomOptions = useMemo(() => {
