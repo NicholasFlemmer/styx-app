@@ -16,15 +16,15 @@ import {
 describe('onboarding discovery labels', () => {
   it('IDE rows match the prototype ideDefs', () => {
     expect(demoIdes().map((i) => [i.product, ideVersionLabel(i), ideImportsLabel(i)])).toEqual([
-      ['VS Code', '1.98 · /Applications', '14 recents · keybindings · theme'],
-      ['Cursor', '1.4', '6 recents · keybindings'],
+      ['VS Code', '1.98 · /Applications', '14 recents'],
+      ['Cursor', '1.4', '6 recents'],
       ['JetBrains (WebStorm)', '2026.2', '3 recents'],
       ['Neovim', '0.11 · /opt/homebrew', 'recents via shada'],
     ]);
     expect(ideVersionLabel({ version: null, location: null })).toBe('not found on PATH');
     expect(
       ideImportsLabel({ imported: { recents: 0, keybindings: false, theme: true }, recentsSource: null }),
-    ).toBe('theme');
+    ).toBe('—');
     expect(
       ideImportsLabel({
         imported: { recents: 0, keybindings: false, theme: false },

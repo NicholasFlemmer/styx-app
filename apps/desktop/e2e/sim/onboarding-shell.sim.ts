@@ -33,7 +33,7 @@ test('sim: onboarding-shell', async () => {
       const n = await boxes.count();
       if (n === 0) throw new Error('no import toggles');
       // the IDE rows' boxes pick the fallback editor (one is always chosen); the import toggles are the labelled ones
-      const first = page().getByRole('checkbox', { name: copy.onboarding.editor.importKeybindings });
+      const first = page().getByRole('checkbox', { name: copy.onboarding.editor.importRecents });
       const before = await first.isChecked();
       // the native input is visually hidden behind a drawn box; a person clicks the label
       const id = await first.getAttribute('id');

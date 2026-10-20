@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { COMMAND_NAMES, commandResultSchema, commands, fixtures } from '@styx/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { makeTestApp } from '../../test-support';
 
 describe('command contract', () => {
@@ -126,7 +126,7 @@ describe('command contract', () => {
     });
   });
 
-  it('ide.import reads keybindings + theme from the editor config dir and stores them in app_settings', async () => {
+  it('ide.import ignores unsupported preferences, including requests from older clients (#3)', async () => {
     const { app, sender } = makeTestApp();
     const configDir = join(__dirname, '../../services/__fixtures__/vscode/User');
     app.repos.discovery.saveIde({
@@ -139,28 +139,24 @@ describe('command contract', () => {
       launcher: 'code',
       configDir,
       isFallback: false,
-      imported: { recents: 0, keybindings: false, theme: false },
+      imported: { recents: 0, keybindings: true, theme: true },
       detectedAt: app.clock.now(),
     });
+    const importFrom = vi.spyOn(app.ideImport, 'importFrom');
     const r = await app.bus.dispatch(sender, 'ide.import', {
       ideId: 'ide-vscode',
       keybindings: true,
       theme: true,
       recents: true,
     });
-    expect(r).toEqual({ ok: true, value: { recents: [], keybindingsImported: 3, themeImported: true } });
-    expect(app.repos.settings.kv.get('editor.importedKeybindings')).toEqual([
-      { key: 'cmd+shift+p', command: 'workbench.action.showCommands' },
-      { key: 'ctrl+k ctrl+t', command: 'workbench.action.selectTheme', when: 'editorTextFocus' },
-      { key: 'alt+z', command: '-editor.action.toggleWordWrap' },
-    ]);
-    expect(app.repos.settings.kv.get('editor.importedTheme')).toEqual({
-      colorTheme: 'GitHub Dark Default',
-      fontFamily: 'JetBrains Mono, Menlo, monospace',
-      from: 'vscode',
-    });
-    expect(app.repos.discovery.ides()[0]?.imported).toEqual({ recents: 0, keybindings: true, theme: true });
-    expect(app.repos.settings.app()).not.toHaveProperty('editor.importedTheme'); // extra keys never leak into AppSettings
+    expect(r).toEqual({ ok: true, value: { recents: [], keybindingsImported: 0, themeImported: false } });
+    expect(app.repos.settings.kv.get('editor.importedKeybindings')).toBeUndefined();
+    expect(app.repos.settings.kv.get('editor.importedTheme')).toBeUndefined();
+    expect(app.repos.discovery.ides()[0]?.imported).toEqual({ recents: 0, keybindings: false, theme: false });
+    expect(importFrom).toHaveBeenCalledWith(
+      { kind: 'vscode', configDir },
+      { recents: true, keybindings: false, theme: false },
+    );
     expect(
       await app.bus.dispatch(sender, 'ide.import', {
         ideId: 'nope',

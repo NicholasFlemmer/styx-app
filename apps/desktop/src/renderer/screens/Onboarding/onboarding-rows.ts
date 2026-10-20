@@ -29,16 +29,12 @@ export const STEPS: readonly { n: OnboardingStep; label: string; title: string; 
 ];
 
 export interface IdeImports {
-  keybindings: boolean;
-  theme: boolean;
   recents: boolean;
   /** Step 2 also lists where Claude Code and Codex have worked (their session history; #93). */
   agents: boolean;
   installOpenIn: boolean;
 }
 export const DEFAULT_IDE_IMPORTS: IdeImports = {
-  keybindings: true,
-  theme: true,
   recents: true,
   agents: true,
   installOpenIn: false,

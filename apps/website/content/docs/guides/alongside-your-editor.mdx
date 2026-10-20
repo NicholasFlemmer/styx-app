@@ -13,19 +13,16 @@ The first step of onboarding, **Your editor**, lists the editors Styx found on t
 Cursor, Windsurf, Zed, JetBrains IDEs (WebStorm, IntelliJ IDEA, PyCharm, GoLand, Rider and the rest) and Neovim. Tick the one you use and it is marked **Fallback · Open in**: that's where **Open in** sends
 you from then on.
 
-Under the list are five options. Styx only reads your editor's files; nothing in your editor changes.
+Under the list are three options. Styx only reads your editor's files; nothing in your editor changes.
 
 - **Import recent folders (feeds next step):** your editor's recent projects become suggestions on the next step,
   **Your projects**. Styx reads them from VS Code, Cursor and Windsurf (recent folders and workspaces), from JetBrains
   IDEs (recent projects) and from Neovim (the git repos holding your recently opened files). Zed's history isn't read.
 - **Also look where Claude Code and Codex have worked:** adds the folders those agents' own session history mentions.
-- **Import keybindings:** reads `keybindings.json` from VS Code, Cursor or Windsurf.
-- **Import theme & font:** reads the colour theme and editor font from VS Code, Cursor, Windsurf or Zed.
 - **Install "Open in Styx" command:** see [below](#open-a-folder-in-styx-from-your-terminal).
 
-<Callout type="note" title="Keybindings and theme are saved, not applied yet">
-  Styx stores the keybindings and theme it imports, but the built-in editor doesn't use them yet: it keeps
-  Styx's own look and keys. Recent folders and Open in work today.
+<Callout type="note" title="Styx uses its own editor preferences">
+  Editor keybindings, themes and fonts aren't imported. Choose Styx's light, dark or system theme in Settings.
 </Callout>
 
 Skipped the step, or changed editors? Pick a different one under **Settings** › **Editor** › **Fallback editor**.

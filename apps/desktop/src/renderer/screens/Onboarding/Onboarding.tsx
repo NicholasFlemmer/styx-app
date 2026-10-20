@@ -99,11 +99,11 @@ export function Onboarding() {
       if (step === 1) {
         if (ide !== undefined) {
           await command('ide.setFallback', { kind: ide.kind });
-          if (imports.keybindings || imports.theme || imports.recents) {
+          if (imports.recents) {
             await command('ide.import', {
               ideId: ide.id,
-              keybindings: imports.keybindings,
-              theme: imports.theme,
+              keybindings: false,
+              theme: false,
               recents: imports.recents,
             });
           }
@@ -224,16 +224,6 @@ export function Onboarding() {
               </Table>
             </div>
             <div className={s['toggles']}>
-              <Checkbox
-                checked={imports.keybindings}
-                onChange={(v) => setImports({ ...imports, keybindings: v })}
-                label={copy.onboarding.editor.importKeybindings}
-              />
-              <Checkbox
-                checked={imports.theme}
-                onChange={(v) => setImports({ ...imports, theme: v })}
-                label={copy.onboarding.editor.importTheme}
-              />
               <Checkbox
                 checked={imports.recents}
                 onChange={(v) => setImports({ ...imports, recents: v })}

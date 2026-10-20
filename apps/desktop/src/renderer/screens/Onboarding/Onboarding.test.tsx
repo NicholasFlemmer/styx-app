@@ -118,8 +118,8 @@ describe('Onboarding', () => {
           .map((c) => c.textContent),
       ),
     ).toEqual([
-      ['', 'VS Code', '1.98 · /Applications', '14 recents · keybindings · theme', 'Fallback · Open in'],
-      ['', 'Cursor', '1.4', '6 recents · keybindings', 'Detected'],
+      ['', 'VS Code', '1.98 · /Applications', '14 recents', 'Fallback · Open in'],
+      ['', 'Cursor', '1.4', '6 recents', 'Detected'],
       ['', 'JetBrains (WebStorm)', '2026.2', '3 recents', 'Detected'],
       ['', 'Neovim', '0.11 · /opt/homebrew', 'recents via shada', 'Detected'],
     ]);
@@ -139,7 +139,7 @@ describe('Onboarding', () => {
         .getAllByRole('checkbox')
         .slice(4)
         .map((c) => (c as HTMLInputElement).checked),
-    ).toEqual([true, true, true, true, false]);
+    ).toEqual([true, true, false]);
   });
 
   it('Editor: every detected editor kind gets its own row (Windsurf and Zed included)', () => {
@@ -176,21 +176,34 @@ describe('Onboarding', () => {
     ).toEqual(['ide-vscode', 'ide-cursor', 'ide-webstorm', 'ide-neovim', 'ide-windsurf', 'ide-zed']);
   });
 
-  it('Continue on Editor sets the fallback, imports the checked items and installs Open in Styx only when checked', async () => {
+  it('Continue on Editor imports only recents, without offering unsupported preferences (#3)', async () => {
     render(<Onboarding />);
-    fireEvent.click(screen.getByRole('checkbox', { name: copy.onboarding.editor.importTheme }));
+    expect(screen.queryByRole('checkbox', { name: /keybindings|theme|font/i })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: copy.onboarding.footer.continue }));
     await waitFor(() => expect(useUiStore.getState().onboardingStep).toBe(2));
     expect(commandMock).toHaveBeenCalledWith('ide.setFallback', { kind: 'vscode' });
     expect(commandMock).toHaveBeenCalledWith('ide.import', {
       ideId: 'ide-vscode',
-      keybindings: true,
+      keybindings: false,
       theme: false,
       recents: true,
     });
     expect(calls('ide.installOpenIn')).toHaveLength(0);
     expect(commandMock).toHaveBeenCalledWith('project.scan', {
       includeIdeRecents: true,
+      includeAgentHistory: true,
+    });
+  });
+
+  it('skipping recent-folder import still sets the fallback without importing preferences', async () => {
+    render(<Onboarding />);
+    fireEvent.click(screen.getByRole('checkbox', { name: copy.onboarding.editor.importRecents }));
+    fireEvent.click(screen.getByRole('button', { name: copy.onboarding.footer.continue }));
+    await waitFor(() => expect(useUiStore.getState().onboardingStep).toBe(2));
+    expect(commandMock).toHaveBeenCalledWith('ide.setFallback', { kind: 'vscode' });
+    expect(calls('ide.import')).toHaveLength(0);
+    expect(commandMock).toHaveBeenCalledWith('project.scan', {
+      includeIdeRecents: false,
       includeAgentHistory: true,
     });
   });
@@ -209,8 +222,8 @@ describe('Onboarding', () => {
     // It is not an IDE import.
     expect(calls('ide.import')[0]?.[1]).toEqual({
       ideId: 'ide-vscode',
-      keybindings: true,
-      theme: true,
+      keybindings: false,
+      theme: false,
       recents: true,
     });
   });

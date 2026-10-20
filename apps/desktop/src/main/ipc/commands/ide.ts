@@ -10,9 +10,6 @@ import { logger } from '../../services/logger';
 import { cliBinaryKey } from '../../services/session-service';
 import { type CommandBus, fail } from '../bus';
 
-/** app_settings keys for imported editor preferences (read by the renderer's key registry / editor theme). */
-export const IMPORTED_KEYBINDINGS_KEY = 'editor.importedKeybindings';
-export const IMPORTED_THEME_KEY = 'editor.importedTheme';
 export { CLI_BINARY_KEY_PREFIX, cliBinaryKey } from '../../services/session-service';
 
 /** Where each IDE keeps its recent folders (spec §4.9: VS Code/Cursor state.vscdb, JetBrains recentProjects.xml, Neovim shada). */
@@ -53,11 +50,9 @@ export function registerIdeCommands(bus: CommandBus, app: Container): void {
     const found = await detect.detectIdes();
     const now = clock.now();
     const fallback = repos.settings.app().fallbackIde;
-    const prev = new Map(repos.discovery.ides().map((i) => [i.id, i]));
     const ides: IdeInstall[] = found
       .filter((i) => i.found)
       .map((i) => {
-        const before = prev.get(`ide-${i.kind}`);
         const recents = ideImport.recentFolders({ kind: i.kind, configDir: i.configDir }).length;
         return {
           id: `ide-${i.kind}`,
@@ -71,8 +66,8 @@ export function registerIdeCommands(bus: CommandBus, app: Container): void {
           isFallback: i.kind === fallback,
           imported: {
             recents: Math.max(recents, i.imports.recents, 0),
-            keybindings: before?.imported.keybindings ?? false,
-            theme: before?.imported.theme ?? false,
+            keybindings: false,
+            theme: false,
           },
           detectedAt: now,
         };
@@ -132,18 +127,15 @@ export function registerIdeCommands(bus: CommandBus, app: Container): void {
 
   /**
    * Imports from one detected editor (spec §4.9 Editor step). Recents come back as scan rows for the Projects step;
-   * keybindings / theme+font are stored under `editor.imported*` in app_settings. Nothing secret is read.
+   * Preference flags remain in the IPC contract for compatibility, but are ignored until Styx can apply them.
    */
-  bus.register('ide.import', async ({ ideId, keybindings, theme, recents }) => {
+  bus.register('ide.import', async ({ ideId, recents }) => {
     const ide = repos.discovery.ides().find((i) => i.id === ideId);
     if (!ide) return { recents: [], keybindingsImported: 0, themeImported: false };
     const r = ideImport.importFrom(
       { kind: ide.kind, configDir: ide.configDir },
-      { recents, keybindings, theme },
+      { recents, keybindings: false, theme: false },
     );
-    if (r.keybindings) repos.settings.kv.set(IMPORTED_KEYBINDINGS_KEY, r.keybindings);
-    const themeImported = r.theme !== null && (r.theme.colorTheme !== null || r.theme.fontFamily !== null);
-    if (themeImported) repos.settings.kv.set(IMPORTED_THEME_KEY, { ...r.theme, from: ide.kind });
     const rows = await app.projects.describeRepos(
       r.recents.map((path) => ({ path, source: 'ide-recent' as const })),
     );
@@ -151,12 +143,12 @@ export function registerIdeCommands(bus: CommandBus, app: Container): void {
       ...ide,
       imported: {
         recents: recents ? r.recents.length : ide.imported.recents,
-        keybindings: ide.imported.keybindings || (r.keybindings?.length ?? 0) > 0,
-        theme: ide.imported.theme || themeImported,
+        keybindings: false,
+        theme: false,
       },
     });
     publisher.discoverySet(repos.discovery.ides(), repos.discovery.clis());
-    return { recents: rows, keybindingsImported: r.keybindings?.length ?? 0, themeImported };
+    return { recents: rows, keybindingsImported: 0, themeImported: false };
   });
 
   /** `styx` launcher on PATH (+ Windows Explorer verb) → `styx://open?path=`, handled in index.ts. */

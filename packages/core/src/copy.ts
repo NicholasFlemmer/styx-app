@@ -1138,7 +1138,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       targets: 'Where you deploy',
     },
     stepWhy: {
-      editor: 'Where “Open in” goes, and your keybindings',
+      editor: 'Where “Open in” goes, and your recent projects',
       projects: 'The repos agents can work in',
       agents: 'The agent that does the work',
       targets: 'Optional, you can skip it',
@@ -1148,9 +1148,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     stepsLabel: 'Steps',
     editor: {
       headline: 'Connect your editor.',
-      body: 'Styx embeds its own editor for reviewing and editing agent work. Connecting your IDE imports recents, keybindings and theme, and sets where "Open in…" goes. Nothing in your IDE changes.',
-      importKeybindings: 'Import keybindings',
-      importTheme: 'Import theme & font',
+      body: 'Styx embeds its own editor for reviewing and editing agent work. Choose where "Open in…" goes and optionally import recent folders. Styx uses its own keybindings, theme and font. Nothing in your IDE changes.',
       importRecents: 'Import recent folders (feeds next step)',
       /** Owner addition (#93): the next step also lists where the agent CLIs' own session history says they ran. */
       importAgentDirs: 'Also look where Claude Code and Codex have worked',

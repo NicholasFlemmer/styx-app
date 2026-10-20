@@ -210,6 +210,9 @@ To the people helping build Styx:
 - **[@Kin230k](https://github.com/Kin230k):** the Cloudflare target groundwork, with a careful command classifier and a
   close look at how far a deploy token should reach ([#22](https://github.com/NicholasFlemmer/styx-app/issues/22),
   [#58](https://github.com/NicholasFlemmer/styx-app/pull/58)).
+- **[@delusional-whispers](https://github.com/delusional-whispers):** keeping the settings simulation aligned with the
+  app by replacing hardcoded footer text with shared Settings copy
+  ([#62](https://github.com/NicholasFlemmer/styx-app/pull/62)).
 
 ## License
 

@@ -18,13 +18,11 @@ export const ideVersionLabel = (ide: Pick<IdeInstall, 'version' | 'location'>): 
   return ide.location === null ? ide.version : `${ide.version} · ${ide.location}`;
 };
 
-/** Importable items: "14 recents · keybindings · theme", "3 recents", "recents via shada", "—". */
+/** Importable recent folders; legacy preference-import flags do not imply applied settings. */
 export const ideImportsLabel = (ide: Pick<IdeInstall, 'imported' | 'recentsSource'>): string => {
   const parts: string[] = [];
   if (ide.imported.recents > 0) parts.push(`${ide.imported.recents} recents`);
   else if (ide.recentsSource === 'shada') parts.push('recents via shada');
-  if (ide.imported.keybindings) parts.push('keybindings');
-  if (ide.imported.theme) parts.push('theme');
   return parts.length === 0 ? copy.general.none : parts.join(' · ');
 };
 
