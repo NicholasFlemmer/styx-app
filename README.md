@@ -29,6 +29,8 @@ Styx is one window for all of it. Every project you work on, every agent working
 to ship. Each task gets its own branch, so agents never trip over each other. And when one wants to deploy, migrate a
 database or touch anything live, it has to ask you first.
 
+Styx includes [Ponytail](https://github.com/DietrichGebert/ponytail) coding guidance for every supported agent: understand the change, reuse what exists, and finish the task with the least necessary code. It is built in, with no plugin setup required. This embeds the core rules; Ponytail’s plugin commands and dashboard are not included.
+
 ## Get started
 
 1. **[Download Styx](https://heystyx.com)** for Mac (Apple Silicon), Windows or Linux (both beta). It's free.

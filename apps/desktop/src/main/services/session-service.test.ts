@@ -1,3 +1,4 @@
+import { PONYTAIL_PROMPT } from '../agents/ponytail';
 import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -794,6 +795,7 @@ describe('SessionService.tell + the launch preamble (ADR-0025)', () => {
     const typed = pty.writes.find((w) => w.id === session.id && w.data.includes('Start with the flaky test'));
     expect(typed?.data.startsWith('From Styx, the app running this session')).toBe(true);
     expect(typed?.data).toContain('Your worktree is the branch test/flaky, cut from main.');
+    expect(typed?.data).toContain(PONYTAIL_PROMPT);
     expect(typed?.data.endsWith('\n\nStart with the flaky test')).toBe(true);
     // Claude Code gets its lines in the system prompt instead: nothing rides its messages.
     const cursor = a.repos.sessions.get(ids.session.cursor)!;
@@ -970,6 +972,7 @@ describe('SessionService pty runner + CLI hooks', () => {
     const prompt = pty.spawned[0]!.args.at(-1) ?? '';
     expect(prompt.startsWith('From Styx, the app running this session')).toBe(true);
     expect(prompt).toContain(copy.agentPrompt.shims);
+    expect(prompt).toContain(PONYTAIL_PROMPT);
     expect(prompt).toContain('Your worktree is the branch test/flaky, cut from main.');
     expect(prompt.endsWith('\n\nFix it')).toBe(true);
     expect(pty.spawned[0]!.args).toEqual(expect.arrayContaining(['-c']));

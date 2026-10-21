@@ -1,4 +1,5 @@
 import { copy, fill, type Agent, type Effort, type PermissionMode, type Runner } from '@styx/core';
+import { PONYTAIL_PROMPT } from './ponytail';
 
 /** The styx MCP server as an agent protocol takes it in-band (`session/new.mcpServers`, Codex `-c mcp_servers.*`). */
 export interface McpServerEntry {
@@ -78,13 +79,14 @@ export interface AgentLaunch {
 export const PREAMBLE_AGENTS: readonly Agent[] = ['codex', 'gemini', 'cursor', 'opencode'];
 
 /**
- * The lines every agent should start with (ADR-0025): the shims, peers, the lane and the other lanes right now —
+ * The lines every agent should start with (ADR-0025): the shims, peers, the lane, other lanes and built-in coding guidance —
  * for `PREAMBLE_AGENTS`, sent as text ahead of the first message (or the next one, when the session starts blank).
  */
 export const agentPreamble = (lane: AgentLaunchContext['lane']): string => {
   const parts: string[] = [copy.agentPrompt.preamble, copy.agentPrompt.shims, copy.agentPrompt.peers];
   if (lane) parts.push(fill(copy.agentPrompt.lane, { branch: lane.branch, base: lane.base }));
   if (lane?.others) parts.push(lane.others);
+  parts.push(PONYTAIL_PROMPT);
   return parts.join('\n\n');
 };
 

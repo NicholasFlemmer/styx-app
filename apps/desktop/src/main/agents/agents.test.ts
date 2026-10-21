@@ -2,6 +2,7 @@ import { copy, fill } from '@styx/core';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PONYTAIL_PROMPT } from './ponytail';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { claudeLaunch } from './claude';
@@ -144,6 +145,7 @@ describe('claude launch flags (verified against claude 2.1.263)', () => {
       // Shim discipline plus the standing framing for peer messages.
       expect(prompt >= 0 && (args[prompt + 1] ?? '').startsWith(copy.agentPrompt.shims)).toBe(true);
       expect(args[prompt + 1]).toContain(copy.agentPrompt.peers);
+      expect(args[prompt + 1]).toContain(PONYTAIL_PROMPT);
       const display = args.indexOf('--thinking-display');
       expect(display >= 0 && args[display + 1] === 'summarized').toBe(present);
       expect(args.includes('-p')).toBe(runner === 'stream');
@@ -170,25 +172,28 @@ describe('claude launch flags (verified against claude 2.1.263)', () => {
 });
 
 describe('agentPreamble (ADR-0025): CLIs without a system-prompt flag get the same lines ahead of their first turn', () => {
-  it('leads with the Styx line, then shims, peers, the lane and the other lanes; alone on main it is shims and peers', () => {
+  it('keeps Styx instructions first and includes Ponytail with or without a lane', () => {
     const full = agentPreamble({
       branch: 'fix/checkout',
       base: 'main',
       others: 'Other lanes in this project right now:\n- Codex on test/flaky',
     });
-    expect(full.split('\n\n')).toEqual([
-      copy.agentPrompt.preamble,
-      copy.agentPrompt.shims,
-      copy.agentPrompt.peers,
-      fill(copy.agentPrompt.lane, { branch: 'fix/checkout', base: 'main' }),
-      'Other lanes in this project right now:\n- Codex on test/flaky',
-    ]);
-    expect(agentPreamble(undefined).split('\n\n')).toEqual([
-      copy.agentPrompt.preamble,
-      copy.agentPrompt.shims,
-      copy.agentPrompt.peers,
-    ]);
-    expect(agentPreamble({ branch: 'x', base: 'main', others: '' }).split('\n\n')).toHaveLength(4);
+    expect(full).toBe(
+      [
+        copy.agentPrompt.preamble,
+        copy.agentPrompt.shims,
+        copy.agentPrompt.peers,
+        fill(copy.agentPrompt.lane, { branch: 'fix/checkout', base: 'main' }),
+        'Other lanes in this project right now:\n- Codex on test/flaky',
+        PONYTAIL_PROMPT,
+      ].join('\n\n'),
+    );
+    expect(agentPreamble(undefined)).toBe(
+      [copy.agentPrompt.preamble, copy.agentPrompt.shims, copy.agentPrompt.peers, PONYTAIL_PROMPT].join(
+        '\n\n',
+      ),
+    );
+    expect(agentPreamble({ branch: 'x', base: 'main', others: '' })).toContain(PONYTAIL_PROMPT);
     expect(PREAMBLE_AGENTS).toEqual(['codex', 'gemini', 'cursor', 'opencode']);
   });
 });
