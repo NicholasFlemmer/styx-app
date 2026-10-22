@@ -215,6 +215,9 @@ To the people helping build Styx:
 - **[@delusional-whispers](https://github.com/delusional-whispers):** keeping the settings simulation aligned with the
   app by replacing hardcoded footer text with shared Settings copy
   ([#62](https://github.com/NicholasFlemmer/styx-app/pull/62)).
+- **[@BHARTIYAYASH](https://github.com/BHARTIYAYASH):** fixing Supabase project references in deploy suggestions
+  ([#68](https://github.com/NicholasFlemmer/styx-app/pull/68)) and clarifying automatic CLI shims versus explicit
+  wrapping in the docs ([#67](https://github.com/NicholasFlemmer/styx-app/pull/67)).
 
 ## License
 
