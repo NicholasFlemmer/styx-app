@@ -1,0 +1,17 @@
+Generation mode: built-in image_gen
+Official Ponytail logo source: https://github.com/DietrichGebert/ponytail/blob/main/assets/logo-dark.png
+Styx reference: apps/desktop/build/icon.png
+
+Final prompt:
+Use case: ads-marketing.
+Create one polished square 1536x1536 Reddit product announcement graphic for Styx, aimed at coding-agent users. Editorial developer-tool aesthetic: extremely bold clean sans-serif type, disciplined grid, near-black #0d0e0c background, electric lime #d6ff3d, warm white, subtle paper grain only. Highly legible on a phone, generous margins, restrained premium design.
+Input image 1 is the OFFICIAL Ponytail portrait logo, a white and black illustration of a developer with glasses and ponytail. Use this actual logo prominently, preserving its exact silhouette, glasses, facial features and hand-drawn linework; do not invent or restyle the mascot. Input image 2 is the official Styx icon: preserve its lime S on dark square, use small at upper left beside text Styx.
+Composition: small Styx identity and small release label at top. Main headline occupies upper/left two thirds, huge stacked typography with Ponytail in warm white and baked into Styx in lime. Official Ponytail portrait logo dominates the right/lower middle, with comfortable separation from all copy; intentional editorial crop is okay but keep face and ponytail visible. Bottom clear dark information strip separated by a fine lime line. No panels, fake screenshots, no gradients, no 3D, no glowing effects, no partnership X mark.
+Exact headline text: "Ponytail.\nNow baked\ninto Styx."
+Exact supporting copy: "Core coding guidance. Built in for everyone."
+Bottom text: "Claude Code · Codex · Gemini CLI\nCursor · OpenCode"
+Small top release label: "NEW IN 0.4.17"
+Footer CTA text: "heystyx.com"
+Small readable credit: "Ponytail by DietrichGebert"
+Only use the specified text plus the Styx brand name by the icon. Do not add performance statistics, claims of fewer tokens, dashboard UI, badges or fake partnership claims. Deliver a finished professional announcement post, not a mockup of a post on a device.
+

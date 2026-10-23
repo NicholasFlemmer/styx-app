@@ -1,0 +1,9 @@
+Ponytail is now baked into Styx.
+
+Core coding guidance for Claude Code, Codex, Gemini CLI, Cursor and OpenCode. No plugin setup. Included in Styx 0.4.17.
+
+Understand the task. Reuse what exists. Make the smallest complete change.
+
+Ponytail by DietrichGebert. This integration includes the core rules, not the separate plugin commands or dashboard.
+
+Get Styx at heystyx.com.

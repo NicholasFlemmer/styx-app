@@ -1,0 +1,23 @@
+import {chromium} from 'playwright';
+import {spawn,execFileSync} from 'node:child_process';
+import {once} from 'node:events';
+import {resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {clipSoundtrack,writeWav} from '../../marketing/social/src/video/audio.ts';
+const dir=resolve('output/ponytail-social-v2');
+const browser=await chromium.launch({headless:true,channel:'chrome'});
+const page=await browser.newPage({viewport:{width:1080,height:1080}});
+await page.goto(pathToFileURL(dir+'/creative.html').href+'?square');
+await page.evaluate(()=>document.fonts.ready);
+if(!await page.evaluate(()=>document.fonts.check('600 78px Archivo')&&document.fonts.check('22px Mono')))throw Error('Brand fonts missing');
+await page.screenshot({path:dir+'/reddit-ponytail.png'});
+await page.setViewportSize({width:1080,height:1920});
+await page.goto(pathToFileURL(dir+'/creative.html').href);
+await page.evaluate(()=>document.fonts.ready);
+const encoder=spawn('ffmpeg',['-y','-loglevel','error','-f','image2pipe','-framerate','30','-vcodec','png','-i','pipe:0','-c:v','libx264','-preset','fast','-crf','18','-pix_fmt','yuv420p','-movflags','+faststart',dir+'/silent.mp4'],{stdio:['pipe','inherit','inherit']});
+const done=once(encoder,'close');
+for(let i=0;i<300;i++){await page.evaluate(t=>window.seek(t),i/30);const frame=await page.screenshot();if(!encoder.stdin.write(frame))await once(encoder.stdin,'drain');if([30,135,240].includes(i))await page.screenshot({path:dir+`/preview-${i}.png`});if(i%60===0)console.log(`Rendered ${i}/300 frames`)}
+encoder.stdin.end();if((await done)[0]!==0)throw Error('Encoding failed');await browser.close();
+writeWav(dir+'/soundtrack.wav',clipSoundtrack(10,120,[{kind:'click',at:0},{kind:'click',at:3},{kind:'confirm',at:6.5}],.28));
+execFileSync('ffmpeg',['-y','-loglevel','error','-i',dir+'/silent.mp4','-i',dir+'/soundtrack.wav','-c:v','copy','-c:a','aac','-b:a','192k','-af','loudnorm=I=-16:TP=-1.5:LRA=7','-t','10','-movflags','+faststart',dir+'/instagram-ponytail-reel.mp4']);
+console.log('Done');

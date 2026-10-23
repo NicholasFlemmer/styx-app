@@ -264,7 +264,7 @@ function TourCard({ onClose }: { onClose: (finished: boolean) => void }) {
         aria-labelledby={titleId}
         aria-describedby={bodyId}
         tabIndex={-1}
-        style={{ left: pos.x, top: pos.y, width: CARD_W, visibility: found ? 'visible' : 'hidden' }}
+        style={{ left: pos.x, top: pos.y, width: CARD_W }}
         onKeyDown={onKeyDown}
       >
         <p className={s['count']} aria-hidden="true">
@@ -305,10 +305,17 @@ export function Tour() {
   const open = useUi((u) => u.tourOpen);
   const setTourOpen = useUi((u) => u.setTourOpen);
   const tourDone = useModel(selectTourDone);
+  const onboardingDone = useModel(selectOnboardingDone);
+  const screen = useUi((u) => u.screen);
+  const allowed = onboardingDone && screen !== 'onboarding';
+  // Manual requests (including the native Help menu) must not leave unfinished setup.
+  useEffect(() => {
+    if (open && !allowed) setTourOpen(false);
+  }, [open, allowed, setTourOpen]);
   // #125: whether people see the walkthrough, and whether they get to the end of it (counts only).
   useEffect(() => {
-    if (open) void command('usage.note', { event: 'tour.shown' });
-  }, [open]);
+    if (open && allowed) void command('usage.note', { event: 'tour.shown' });
+  }, [open, allowed]);
   const close = useCallback(
     (finished: boolean) => {
       void command('usage.note', { event: finished ? 'tour.finished' : 'tour.skipped' });
@@ -318,7 +325,7 @@ export function Tour() {
     },
     [setTourOpen, tourDone],
   );
-  if (!open) return null;
+  if (!open || !allowed) return null;
   return createPortal(<TourCard onClose={close} />, document.body);
 }
 
@@ -336,9 +343,16 @@ export function useFirstRunTour(): void {
   const overlays = useUi((u) => u.overlays.length);
   const open = useUi((u) => u.tourOpen);
   const setTourOpen = useUi((u) => u.setTourOpen);
+  const composing = useUi((u) => u.screen === 'workspace' && u.newTask !== null);
   const started = useRef(false);
   const ready =
-    onboardingDone && !tourDone && screen !== 'onboarding' && overlays === 0 && !open && env().e2e !== true;
+    onboardingDone &&
+    !tourDone &&
+    screen !== 'onboarding' &&
+    !composing &&
+    overlays === 0 &&
+    !open &&
+    env().e2e !== true;
   useEffect(() => {
     if (!ready || started.current) return;
     // A beat after Home paints, so the anchors exist and the eye has landed.

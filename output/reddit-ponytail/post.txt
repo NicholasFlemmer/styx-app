@@ -1,0 +1,15 @@
+Title: We baked Ponytail into Styx — no plugin setup needed
+
+We just shipped Styx 0.4.17 with Ponytail’s core coding guidance built in for all five supported agents: Claude Code, Codex, Gemini CLI, Cursor and OpenCode.
+
+The idea is simple: understand the task, reuse what’s already there, and make the smallest complete change without cutting validation, security or accessibility.
+
+It’s enabled automatically for new or relaunched agent sessions. This includes the core rules, not Ponytail’s dashboard or plugin commands.
+
+Credit to DietrichGebert for Ponytail: https://github.com/DietrichGebert/ponytail
+
+Try Styx: https://heystyx.com
+Release: https://github.com/NicholasFlemmer/styx-app/releases/tag/v0.4.17
+
+Curious to hear how others are using Ponytail across different agents.
+

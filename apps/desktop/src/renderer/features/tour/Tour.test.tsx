@@ -51,6 +51,7 @@ describe('first-run walkthrough (#124)', () => {
       screen: 'home',
       platform: 'darwin',
       projectId: null,
+      newTask: null,
     });
     // Animation frames on the fake clock, so a step waiting for its anchor can be driven.
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) =>
@@ -240,6 +241,48 @@ describe('first-run walkthrough (#124)', () => {
     arrange();
     render(<Starter />);
     act(() => vi.advanceTimersByTime(2000));
+    expect(useUiStore.getState().tourOpen).toBe(false);
+  });
+
+  it('does not interrupt the first-task composer after onboarding', () => {
+    useUiStore.getState().openNewTask(fixtures.ids.project.acmeShop);
+    render(
+      <>
+        <Starter />
+        <Tour />
+        <Anchors />
+      </>,
+    );
+    act(() => vi.advanceTimersByTime(1000));
+    expect(useUiStore.getState().tourOpen).toBe(false);
+    expect(useUiStore.getState().screen).toBe('workspace');
+  });
+
+  it('cancels a pending automatic tour when the user opens New task', () => {
+    render(<Starter />);
+    act(() => vi.advanceTimersByTime(500));
+    act(() => useUiStore.getState().openNewTask(fixtures.ids.project.acmeShop));
+    act(() => vi.advanceTimersByTime(1000));
+    expect(useUiStore.getState().tourOpen).toBe(false);
+    act(() => useUiStore.setState({ newTask: null, screen: 'home' }));
+    act(() => vi.advanceTimersByTime(800));
+    expect(useUiStore.getState().tourOpen).toBe(true);
+  });
+
+  it('a manual tour request cannot navigate away from unfinished onboarding', () => {
+    useReadModel.getState().replaceModel(withSettings({ onboardingDone: false }), 'connected');
+    useUiStore.setState({ screen: 'onboarding', tourOpen: true });
+    render(<Tour />);
+    act(() => vi.advanceTimersByTime(50));
+    expect(useUiStore.getState().screen).toBe('onboarding');
+    expect(document.querySelector('[data-tour]')).toBeNull();
+  });
+
+  it('keeps Skip available while waiting for an absent anchor', () => {
+    render(<Tour />);
+    act(() => useUiStore.getState().setTourOpen(true));
+    act(() => vi.advanceTimersByTime(50));
+    fireEvent.click(screen.getByRole('button', { name: copy.tour.skip }));
     expect(useUiStore.getState().tourOpen).toBe(false);
   });
 
