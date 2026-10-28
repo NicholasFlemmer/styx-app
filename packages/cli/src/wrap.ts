@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import crossSpawn from 'cross-spawn';
 import { BrokerClient } from '@styx/broker';
 import { resolveRealBinary } from './path-resolve';
@@ -6,12 +6,13 @@ import { resolveRealBinary } from './path-resolve';
 export interface WrapIo {
   env: NodeJS.ProcessEnv;
   stderr: (s: string) => void;
-  spawn?: typeof spawn;
+  spawn?: (command: string, args: readonly string[], options: SpawnOptions) => ChildProcess;
 }
 
 /**
  * Provider shim: `styx wrap <tool> [argv…]`. Asks the broker to authorize the command (which may prompt the user),
  * then execs the real tool with the grant's credentials injected, and reports the exit code for the audit log.
+ * Git supplies operation context instead; its credential helper authorizes only when Git asks for credentials.
  */
 export async function wrap(tool: string, argv: string[], io: WrapIo): Promise<number> {
   const real = resolveRealBinary(tool, io.env);
@@ -22,7 +23,11 @@ export async function wrap(tool: string, argv: string[], io: WrapIo): Promise<nu
   let extraEnv: Record<string, string> = {};
   let useId: string | null = null;
   let client: BrokerClient | null = null;
-  if (io.env['STYX_BROKER'] && io.env['STYX_SESSION_ID'] && io.env['STYX_TOKEN']) {
+  if (tool === 'git') {
+    extraEnv = {
+      STYX_GIT_OPERATION: ['fetch', 'pull', 'clone', 'ls-remote'].includes(argv[0] ?? '') ? 'fetch' : 'push',
+    };
+  } else if (io.env['STYX_BROKER'] && io.env['STYX_SESSION_ID'] && io.env['STYX_TOKEN']) {
     try {
       client = BrokerClient.fromEnv('shim', io.env);
       await client.connect();

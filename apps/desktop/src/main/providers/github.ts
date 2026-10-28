@@ -1,3 +1,4 @@
+import { GIT_CREDENTIAL_TOOL, gitCredentialRequest } from '@styx/broker';
 import { makeCredentialRef } from '../services/credential-vault';
 import {
   ACCOUNT_PATTERN,
@@ -109,7 +110,7 @@ const GH_LOGIN = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
 export class GitHubAdapter implements ProviderAdapter, GitHubRepoApi {
   readonly provider = 'github' as const;
   readonly authMethod = 'oauth' as const;
-  readonly tools = ['gh'];
+  readonly tools = ['gh', GIT_CREDENTIAL_TOOL];
 
   constructor(
     private readonly deps: AdapterDeps,
@@ -379,7 +380,9 @@ export class GitHubAdapter implements ProviderAdapter, GitHubRepoApi {
     /* nothing to revoke server-side; delivery simply stops */
   }
 
-  scopeOfCommand(argv: string[]): Scope[] {
+  scopeOfCommand(argv: string[], tool = 'gh'): Scope[] {
+    if (tool === GIT_CREDENTIAL_TOOL)
+      return gitCredentialRequest(argv)?.operation === 'fetch' ? ['read'] : ['write'];
     const [group, verb] = commandHead(argv);
     if (isHelp(argv) || group === 'auth') return ['read'];
     if (group === 'api') return apiScope(argv.slice(1));

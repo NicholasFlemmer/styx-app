@@ -29,7 +29,9 @@ export async function ampLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch> {
   };
   await checkPaths();
   const git = new ExecaGitRunner({ loginPath: async () => ctx.env['PATH'] ?? process.env['PATH'] ?? '' });
-  const tracked = await git.run(['ls-files', '--cached', '--', '.amp/settings.json'], ctx.worktreePath);
+  const tracked = await git.run(['ls-files', '--cached', '--', '.amp/settings.json'], ctx.worktreePath, {
+    env: ctx.env,
+  });
   if (tracked.stdout.trim() !== '')
     throw new Error('Amp settings.json is tracked by git; Styx cannot safely replace its permission rules');
   let previous: string | null = null;

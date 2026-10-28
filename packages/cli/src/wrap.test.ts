@@ -1,11 +1,43 @@
 import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
-import { describe, expect, it } from 'vitest';
+import { ChildProcess, spawn } from 'node:child_process';
+import { describe, expect, it, vi } from 'vitest';
 import { BrokerServer } from '@styx/broker';
 import { resolveRealBinary } from './path-resolve';
-import { wrap } from './wrap';
+import { wrap, type WrapIo } from './wrap';
+
+describe('Git operation context', () => {
+  it.each([
+    [['fetch', 'origin'], 'fetch'],
+    [['pull'], 'fetch'],
+    [['clone', 'https://github.com/acme/shop.git'], 'fetch'],
+    [['ls-remote', 'origin'], 'fetch'],
+    [['push', 'origin'], 'push'],
+    [['-C', '/repo', 'fetch'], 'push'],
+    [['custom-alias'], 'push'],
+  ])('sets a conservative context for %j', async (argv, operation) => {
+    const real = mkdtempSync(join(tmpdir(), 'styx-git-context-'));
+    const binary = join(real, process.platform === 'win32' ? 'git.exe' : 'git');
+    writeFileSync(binary, '');
+    chmodSync(binary, 0o755);
+    const start = vi.fn<NonNullable<WrapIo['spawn']>>().mockImplementation(() => {
+      const child = new ChildProcess();
+      queueMicrotask(() => child.emit('exit', 0, null));
+      return child;
+    });
+    const code = await wrap('git', argv, {
+      env: { PATH: real, STYX_GIT_OPERATION: 'fetch' },
+      stderr: () => {},
+      spawn: start,
+    });
+    expect(code).toBe(0);
+    expect(start).toHaveBeenCalledWith(binary, argv, {
+      stdio: 'inherit',
+      env: { PATH: real, STYX_GIT_OPERATION: operation },
+    });
+  });
+});
 
 function fakeBin(dir: string, name: string, body: string) {
   const p = join(dir, name);

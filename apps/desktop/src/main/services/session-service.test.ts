@@ -213,6 +213,12 @@ describe('Amp terminal messages', () => {
     expect(pty.spawned[0]?.cwd).toBe(path);
     expect(pty.spawned[0]?.env['STYX_SESSION_ID']).toBe(session.id);
     expect(pty.spawned[0]?.env['STYX_TOKEN']).toBeTruthy();
+    expect(pty.spawned[0]?.env['STYX_GIT_OPERATION']).toBe('push');
+    const gitEnv = pty.spawned[0]?.env ?? {};
+    const helperEntries = Object.entries(gitEnv).filter(
+      ([key, value]) => key.startsWith('GIT_CONFIG_KEY_') && value === 'credential.https://github.com.helper',
+    );
+    expect(helperEntries).toHaveLength(2);
     await vi.waitFor(
       () => expect(pty.writes.some((w) => /first\nsecond\x1b\[201~$/.test(w.data))).toBe(true),
       WAIT,

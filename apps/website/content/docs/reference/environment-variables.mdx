@@ -20,6 +20,7 @@ Styx sets these in every agent's environment when a task starts. The `styx` CLI,
 | ----------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `STYX_SESSION_ID` | CLI, broker client, MCP config | The task's id.                                                                                                                           |
 | `STYX_TOKEN`      | CLI, broker client, MCP config | The task's broker token. Styx keeps only its hash.                                                                                       |
+| `STYX_GIT_OPERATION` | Git shim, credential helper | Operation hint for HTTPS GitHub credentials. The shim sets `fetch` for recognized reads and `push` otherwise; missing context requires write scope. This is not an isolation boundary. |
 | `STYX_BROKER`     | CLI, broker client, MCP config | Where the local broker listens: a Unix socket in a private `styx-<uid>` folder in the system temp directory, or a named pipe on Windows. |
 | `STYX_SHIM_DIR`   | CLI (`styx wrap`)              | The folder with the `styx` and provider shims. It is first on the task's `PATH`; `styx wrap` skips it when it looks for the real tool.   |
 | `STYX_CLI`        | Shim scripts                   | Path of the bundled `styx.js`.                                                                                                           |

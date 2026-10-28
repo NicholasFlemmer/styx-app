@@ -1,6 +1,9 @@
 import { timingSafeEqual } from 'node:crypto';
 import {
   BrokerError,
+  GIT_CREDENTIAL_TOOL,
+  gitCredentialRequest,
+  githubRepository,
   BrokerServer,
   ErrorCode,
   type ConnectionContext,
@@ -278,7 +281,10 @@ export class BrokerHost {
       const scopes = adapter.scopeOfCommand(p.argv, p.tool) as Scope[];
       // Persisted as grants.reason / grant_uses.command / audit triggered_by: never the raw argv (M1).
       const command = redact(`$ ${[p.tool, ...redactArgv(p.argv, p.tool)].join(' ')}`);
-      const picked = this.pickTarget(ctx, adapter, p.argv, p.tool, scopes);
+      const picked =
+        p.tool === GIT_CREDENTIAL_TOOL
+          ? this.gitTarget(ctx, p.argv)
+          : this.pickTarget(ctx, adapter, p.argv, p.tool, scopes);
       if (!picked)
         throw new BrokerError(
           ErrorCode.targetNotFound,
@@ -562,6 +568,21 @@ export class BrokerHost {
       sessionId: ctx.session.sessionId,
     });
     return { grantId: grant.id, useId, env: cred?.env ?? {} };
+  }
+
+  private gitTarget(ctx: ConnectionContext, argv: string[]): Target | null {
+    const request = gitCredentialRequest(argv);
+    if (request === null) throw new BrokerError(ErrorCode.notAllowed, 'invalid GitHub credential request');
+    const candidates = this.deps.repos.targets.byProject(ctx.session.projectId).filter((target) => {
+      if (target.provider !== 'github') return false;
+      const { owner, repo } = target.config;
+      return (
+        typeof owner === 'string' &&
+        typeof repo === 'string' &&
+        githubRepository(`${owner}/${repo}`) === request.repository
+      );
+    });
+    return candidates.length === 1 ? (candidates[0] ?? null) : null;
   }
 
   /**

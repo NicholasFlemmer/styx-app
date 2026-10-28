@@ -1,11 +1,12 @@
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rename, rmdir, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildAgentLaunch } from './index';
 import type { AgentLaunchContext } from './types';
 import { ExecaGitRunner } from '../services/git';
+import { writeShims } from '../services/shim-service';
 
 const context = async (): Promise<AgentLaunchContext> => {
   const root = await mkdtemp(join(tmpdir(), 'styx-amp-'));
@@ -34,6 +35,23 @@ const context = async (): Promise<AgentLaunchContext> => {
 };
 
 describe('Amp terminal launch', () => {
+  it('launches when its Git inspection uses the session shim', async () => {
+    const ctx = await context();
+    const shims = writeShims(ctx.projectPath, process.platform);
+    const cli = join(ctx.projectPath, 'session-cli.cjs');
+    await writeFile(cli, "if (process.env.STYX_SESSION_ID !== 's') process.exit(73);\n");
+    ctx.env = {
+      ...ctx.env,
+      PATH: `${shims.dir}${delimiter}${process.env['PATH'] ?? ''}`,
+      STYX_SHIM_DIR: shims.dir,
+      STYX_EXE: process.execPath,
+      STYX_CLI: cli,
+    };
+    const launch = await buildAgentLaunch(ctx);
+    expect(launch.command).toBe(ctx.binary);
+    expect(existsSync(join(ctx.worktreePath, '.amp', 'settings.json'))).toBe(true);
+    await launch.cleanup();
+  });
   it.each([
     ['default', 'ask'],
     ['acceptEdits', 'ask'],

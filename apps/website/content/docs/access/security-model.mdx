@@ -28,9 +28,15 @@ Styx is a guardrail, not a sandbox. Agents run as you, on your machine, with you
 - the real CLI called by its full path. If you connected that provider through its CLI, the CLI is still signed in as you and works without a grant. Styx tells agents not to do this, and when Claude Code or Codex does it anyway, Styx posts a warning in the chat saying no grant was asked and nothing was audited. It warns; it doesn't block;
 - other tools from the same providers: `scp`, `rsync`, `sftp`, `gsutil`, `bq`, `sam` and `cdk` aren't wrapped today;
 - a `staging` or `preview` target you point at the same project as a `prod` target. It is production without the OS check: Styx warns when you connect it, shows the same line on its access requests and marks its grants in the audit log, but it doesn't stop it;
-- `git push` with your usual git credentials, or a provider's SDK or API called with a token the agent found on disk.
+- Git over SSH, Git hosts other than github.com, or a provider's SDK or API called with a token the agent found on disk. Existing Git `http.extraHeader` settings or credentials embedded in a remote URL can authenticate before a credential helper runs. An agent can also override Git's configuration or supply its own credential to bypass Styx.
 
 The connect dialog says the same about CLI logins: "Anything running as you can also use" the CLI, "so prefer scoped roles for prod".
+
+**GitHub credentials in agent sessions go through grants.** When Git requests credentials for an HTTPS github.com remote, a session-only credential helper asks Styx for a grant on the exact repository target in that session's project. Configure the target with both its owner and repository. Missing, ambiguous, or account-only targets are refused. Denial stops Git from falling back to your saved credential helpers or a login prompt. Your Git configuration on disk and credentials for other hosts are unchanged.
+
+The Git shim supplies read context for `git fetch`, `git pull`, `git clone`, and `git ls-remote` when the command is the first argument. It supplies write context for other invocations, including commands with leading global options. Missing context defaults to write. This context is a hint, not isolation: an absolute-path Git subprocess can inherit a fetch hint, and GitHub tokens are not narrowed to read-only by Styx. Public operations that need no credential do not call the helper or open a grant.
+
+Each helper request rechecks the grant and records credential delivery in the audit log. The helper does not know the final Git exit status. It does not cache or save tokens, and revocation stops future delivery. GitHub tokens already delivered remain valid upstream as described below.
 
 **Un-narrowed tokens are your whole token.** For Vercel, Supabase, Render and GitHub, a granted command receives the token you stored, whatever scope you granted. A command could copy it during the grant, and revoking the grant stops Styx delivering it but doesn't cancel it at the provider. Use dedicated tokens with the least access that works, and rotate them if you suspect one was copied.
 

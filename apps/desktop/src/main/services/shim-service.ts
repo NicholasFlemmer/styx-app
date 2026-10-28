@@ -1,8 +1,9 @@
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** Provider CLIs that route through `styx wrap <name>` (plan §6). `styx` itself is the session CLI. */
+/** CLIs routed through `styx wrap <name>`. Git supplies operation context to its credential helper. */
 export const SHIM_TOOLS = [
+  'git',
   'vercel',
   'gh',
   'aws',
@@ -21,7 +22,6 @@ export interface ShimPaths {
 }
 
 const posixWrap = (tool: string) => `#!/bin/sh
-# Styx shim: authorises the command through the grant broker, then execs the real ${tool} with injected credentials.
 exec env ELECTRON_RUN_AS_NODE=1 "$STYX_EXE" "$STYX_CLI" wrap ${tool} "$@"
 `;
 
@@ -34,7 +34,7 @@ const winWrap = (tool: string) =>
 const winStyx = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"%STYX_EXE%" "%STYX_CLI%" %*\r\n`;
 
 /**
- * Writes `<userData>/bin/{styx,vercel,gh,aws,gcloud,supabase,ssh,fly,flyctl,railway,render}` on startup. The scripts
+ * Writes the session CLI and tool shims into `<userData>/bin` on startup. The scripts
  * read STYX_EXE / STYX_CLI from the session env, so the same dir serves dev and packaged builds.
  */
 export function writeShims(userData: string, platform: NodeJS.Platform): ShimPaths {

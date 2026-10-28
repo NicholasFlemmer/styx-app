@@ -49,6 +49,18 @@ const grant = {
 };
 
 describe('GitHubAdapter', () => {
+  it('classifies Git credential requests conservatively', () => {
+    const gh = new GitHubAdapter(deps({}), undefined);
+    expect(
+      gh.scopeOfCommand(['get', 'fetch', 'https://github.com/acme/shop.git'], 'git-credential-styx'),
+    ).toEqual(['read']);
+    expect(
+      gh.scopeOfCommand(['get', 'push', 'https://github.com/acme/shop.git'], 'git-credential-styx'),
+    ).toEqual(['write']);
+    expect(
+      gh.scopeOfCommand(['get', 'fetch', 'https://evil.example/acme/shop'], 'git-credential-styx'),
+    ).toEqual(['write']);
+  });
   it('connects with a token, tests, issues env, maps gh commands', async () => {
     const d = deps({ 'https://api.github.com/user': () => jsonResponse({ login: 'nic' }) });
     const gh = new GitHubAdapter(d, undefined);

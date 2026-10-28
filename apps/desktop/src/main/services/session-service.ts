@@ -58,6 +58,7 @@ import type { Publisher } from '../store/publisher';
 import { toCliInstall, versionSatisfies, type DetectService } from './detect-service';
 import type { GitService } from './git';
 import { worktreeLocation } from './git';
+import { gitCredentialEnv } from './git-credential-env';
 import { ensureDesignTokens } from './design-service';
 import { isPolicyFile } from './hunk-service';
 import { logger, redact } from './logger';
@@ -659,9 +660,11 @@ export class SessionService {
       session = this.require(session.id);
     }
     const env: Record<string, string> = {
+      ...gitCredentialEnv(process.env),
       STYX_SESSION_ID: session.id,
       STYX_BROKER: runtime.brokerEndpoint,
       STYX_TOKEN: token,
+      STYX_GIT_OPERATION: 'push',
       STYX_PROJECT_ID: project.id,
       STYX_WORKTREE: worktree.path,
       STYX_SHIM_DIR: runtime.shimDir,
