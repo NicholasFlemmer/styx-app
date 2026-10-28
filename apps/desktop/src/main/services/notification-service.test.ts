@@ -225,13 +225,6 @@ describe('bannersToReemit', () => {
     const banners = bannersToReemit(t.app.repos);
     expect(banners.map((b) => [b.bannerKey, b.kind, b.cta, b.action, b.sessionId])).toEqual([
       [
-        `auth-expired:${ids.target.vercelProd}`,
-        'auth-expired',
-        'Reconnect',
-        { kind: 'reconnect', targetId: ids.target.vercelProd },
-        null,
-      ],
-      [
         `conflict:${ids.worktree.fixCheckout}`,
         'conflict',
         'Resolve',

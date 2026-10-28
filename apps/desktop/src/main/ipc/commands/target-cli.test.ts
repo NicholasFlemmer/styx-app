@@ -294,7 +294,7 @@ describe('target.connect.cli* (connect with the provider CLI)', () => {
     expect(cli.calls.filter((c) => c.args[1] === 'print-access-token').length).toBeGreaterThanOrEqual(2); // save-time test + issue
     app.grants.revoke(out.grant.id);
 
-    // gcloud loses its login: the health refresh flips the target to expired with the auth-expired banner.
+    // gcloud loses its login: the health refresh flips the target to expired, quietly (row 170: no banner).
     cli.on('gcloud', ['auth', 'print-access-token'], GCLOUD_REAUTH);
     clock.advance(31 * 60_000);
     expect(await app.bus.dispatch(sender, 'target.refresh', { targetId })).toEqual({
@@ -302,12 +302,7 @@ describe('target.connect.cli* (connect with the provider CLI)', () => {
       value: { ok: false },
     });
     expect(app.repos.targets.get(targetId)).toMatchObject({ health: 'expired', expiredAt: clock.now() });
-    const banner = win.events('banner.set').at(-1) as { kind: string; action: unknown; text: string };
-    expect(banner).toMatchObject({
-      kind: 'auth-expired',
-      action: { kind: 'reconnect', targetId },
-      text: expect.stringContaining('GCP: credentials expired'),
-    });
+    expect(win.events('banner.set')).toEqual([]);
     expect(
       app.repos.audit.all().filter((e) => e.targetId === targetId && e.action === 'tested'),
     ).toHaveLength(1); // the ok → expired transition only (a healthy save adds no tested row)
@@ -317,19 +312,17 @@ describe('target.connect.cli* (connect with the provider CLI)', () => {
       app.repos.audit.all().filter((e) => e.targetId === targetId && e.action === 'tested'),
     ).toHaveLength(1);
 
-    // A request while expired fails at issue time and keeps the target expired (no fresh banner spam either).
-    const bannersBefore = win.events('banner.set').length;
-    await expect(
-      app.grants.request({
-        sessionId: ids.session.gemini,
-        targetId: targetId as never,
-        scope: ['read'],
-        reason: 'x',
-        triggeredBy: 'mcp:request_access',
-      }),
-    ).rejects.toMatchObject({ code: 'provider-error' });
+    // A request while expired asks instead of auto-issuing on the dead login: the sheet offers Reconnect.
+    const asked = await app.grants.request({
+      sessionId: ids.session.gemini,
+      targetId: targetId as never,
+      scope: ['read'],
+      reason: 'x',
+      triggeredBy: 'mcp:request_access',
+    });
+    expect(asked.kind).toBe('pending');
     expect(app.repos.targets.get(targetId)?.health).toBe('expired');
-    expect(win.events('banner.set').length).toBe(bannersBefore + 1); // markExpired re-sends the banner (idempotent key)
+    expect(win.events('banner.set')).toEqual([]);
 
     // Reconnect on a cli target reruns the CLI login in a terminal; flowId is the terminal id.
     const re = await app.bus.dispatch(sender, 'target.reconnect', { targetId });
@@ -348,14 +341,18 @@ describe('target.connect.cli* (connect with the provider CLI)', () => {
       provider: 'gcp',
     });
 
-    // gcloud works again → refresh clears health and the banner.
+    // gcloud works again: approving the open ask mints, and the mint alone heals the target (row 170).
     cli.on('gcloud', ['auth', 'print-access-token'], GCLOUD_OK);
+    if (asked.kind !== 'pending') throw new Error('expected an open ask');
+    await app.grants.approve(asked.grant.id, '1h');
+    expect(app.repos.targets.get(targetId)).toMatchObject({ health: 'ok', expiredAt: null });
+    app.grants.revoke(asked.grant.id);
+    // A refresh agrees.
     expect(await app.bus.dispatch(sender, 'target.refresh', { targetId })).toEqual({
       ok: true,
       value: { ok: true },
     });
     expect(app.repos.targets.get(targetId)).toMatchObject({ health: 'ok', expiredAt: null });
-    expect(win.events('banner.clear').at(-1)).toEqual({ bannerKey: `auth-expired:${targetId}` });
 
     // A transient failure (timeout) leaves health alone.
     cli.on('gcloud', ['auth', 'print-access-token'], { exitCode: 124, timedOut: true });

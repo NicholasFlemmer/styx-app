@@ -31,6 +31,8 @@ database or touch anything live, it has to ask you first.
 
 Styx includes [Ponytail](https://github.com/DietrichGebert/ponytail) coding guidance for every supported agent: understand the change, reuse what exists, and finish the task with the least necessary code. It is built in, with no plugin setup required. This embeds the core rules; Ponytail’s plugin commands and dashboard are not included.
 
+The same goes for design and architecture. Agents also get condensed guidance from [Impeccable](https://github.com/pbakaus/impeccable) for building interfaces, Anthropic’s [design-critique](https://github.com/anthropics/knowledge-work-plugins/tree/main/design/skills/design-critique) skill for reviewing a design, and [architecture-designer](https://github.com/Jeffallan/claude-skills/tree/main/skills/architecture-designer) for system design and decision records. Each applies only to that kind of work, and your project’s own design system and rules come first. The skills’ commands, scripts and reference files are not included.
+
 ## Get started
 
 1. **[Download Styx](https://heystyx.com)** for Mac (Apple Silicon), Windows or Linux (both beta). It's free.

@@ -64,6 +64,8 @@ export interface GrantServiceDeps {
   sweepMs?: number;
   /** Adapter could not mint for a target (TargetService.noteIssueFailure: a CLI auth failure expires it). */
   onIssueFailure?: (targetId: string, error: Error) => void;
+  /** A mint went through: an expired target's login works again (row 170). */
+  onIssueSuccess?: (targetId: string) => void;
 }
 
 export interface GrantRequest {
@@ -198,6 +200,7 @@ export class GrantService {
         // real resource, and leaking one per re-mint would outlive the grant it belonged to.
         if (cached) await this.release(target.provider, cached);
         this.issued.set(grant.id, cred);
+        this.deps.onIssueSuccess?.(target.id);
         return cred;
       })
       .catch((e: Error) => {
@@ -317,6 +320,9 @@ export class GrantService {
     const session = req.sessionId ? repos.sessions.get(req.sessionId) : null;
     const now = clock.now();
     let decision = this.decide(target, session, req.scope);
+    // An expired login cannot mint: the person reconnects from the grant sheet, then grants (row 170).
+    if (decision.decision === 'auto' && target.health === 'expired')
+      decision = { ...decision, decision: 'ask', grantId: null };
 
     if (decision.decision === 'auto' && decision.grantId !== null) {
       const existing = repos.grants.get(decision.grantId);
@@ -659,6 +665,7 @@ export class GrantService {
       fail('provider-error', (e as Error).message);
     }
     this.issued.set(grant.id, cred);
+    this.deps.onIssueSuccess?.(target.id);
     // Row 164 (owner decision): sharing a production target's project is allowed, but the grant row says so.
     const siblings = this.deps.repos.targets.byProject(target.projectId);
     // One rule with the sheet's warning (core prodReachOf): shared project, or none picked while prod exists.

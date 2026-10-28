@@ -2,6 +2,7 @@ import { copy, fill } from '@styx/core';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { ARCHITECTURE_PROMPT, BUILT_IN_GUIDANCE, DESIGN_CRITIQUE_PROMPT, IMPECCABLE_PROMPT } from './guidance';
 import { PONYTAIL_PROMPT } from './ponytail';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
@@ -145,7 +146,7 @@ describe('claude launch flags (verified against claude 2.1.263)', () => {
       // Shim discipline plus the standing framing for peer messages.
       expect(prompt >= 0 && (args[prompt + 1] ?? '').startsWith(copy.agentPrompt.shims)).toBe(true);
       expect(args[prompt + 1]).toContain(copy.agentPrompt.peers);
-      expect(args[prompt + 1]).toContain(PONYTAIL_PROMPT);
+      expect(args[prompt + 1]?.endsWith(BUILT_IN_GUIDANCE)).toBe(true);
       const display = args.indexOf('--thinking-display');
       expect(display >= 0 && args[display + 1] === 'summarized').toBe(present);
       expect(args.includes('-p')).toBe(runner === 'stream');
@@ -172,7 +173,7 @@ describe('claude launch flags (verified against claude 2.1.263)', () => {
 });
 
 describe('agentPreamble (ADR-0025): CLIs without a system-prompt flag get the same lines ahead of their first turn', () => {
-  it('keeps Styx instructions first and includes Ponytail with or without a lane', () => {
+  it('keeps Styx instructions first and includes the built-in guidance with or without a lane', () => {
     const full = agentPreamble({
       branch: 'fix/checkout',
       base: 'main',
@@ -185,15 +186,25 @@ describe('agentPreamble (ADR-0025): CLIs without a system-prompt flag get the sa
         copy.agentPrompt.peers,
         fill(copy.agentPrompt.lane, { branch: 'fix/checkout', base: 'main' }),
         'Other lanes in this project right now:\n- Codex on test/flaky',
-        PONYTAIL_PROMPT,
+        BUILT_IN_GUIDANCE,
       ].join('\n\n'),
     );
     expect(agentPreamble(undefined)).toBe(
-      [copy.agentPrompt.preamble, copy.agentPrompt.shims, copy.agentPrompt.peers, PONYTAIL_PROMPT].join(
+      [copy.agentPrompt.preamble, copy.agentPrompt.shims, copy.agentPrompt.peers, BUILT_IN_GUIDANCE].join(
         '\n\n',
       ),
     );
     expect(agentPreamble({ branch: 'x', base: 'main', others: '' })).toContain(PONYTAIL_PROMPT);
+    // Ponytail first, then the interface, design review and architecture guidance, each with its source named.
+    expect(BUILT_IN_GUIDANCE).toBe(
+      [PONYTAIL_PROMPT, IMPECCABLE_PROMPT, DESIGN_CRITIQUE_PROMPT, ARCHITECTURE_PROMPT].join('\n\n'),
+    );
+    for (const [prompt, source] of [
+      [IMPECCABLE_PROMPT, 'pbakaus/impeccable, Apache-2.0'],
+      [DESIGN_CRITIQUE_PROMPT, 'anthropics/knowledge-work-plugins, Apache-2.0'],
+      [ARCHITECTURE_PROMPT, 'Jeffallan/claude-skills, MIT'],
+    ] as const)
+      expect(prompt).toContain(source);
     expect(PREAMBLE_AGENTS).toEqual(['codex', 'gemini', 'cursor', 'opencode', 'goose', 'amp']);
   });
 });

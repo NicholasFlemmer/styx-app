@@ -154,6 +154,27 @@ describe('GrantSheet', () => {
     expect(commands[0]?.input).toEqual({ grantId });
   });
 
+  it('row 170: an expired target asks for Reconnect first; it opens the connect modal over the sheet', async () => {
+    const m = fixtures.demoReadModel();
+    const sb = m.targets.byId[fixtures.ids.target.supabaseProd];
+    if (sb === undefined) throw new Error('fixture');
+    const expired = tableFrom([
+      ...rows(m.targets).filter((t) => t.id !== sb.id),
+      { ...sb, health: 'expired' as const },
+    ]);
+    useReadModel.getState().replaceModel({ ...m, targets: expired }, 'connected');
+    open();
+    expect(screen.getByText(fill(copy.grantSheet.expired, { target: sb.name }))).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Grant/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: copy.grantSheet.reconnect }));
+    await flush();
+    expect(commands).toEqual([]);
+    expect(useUiStore.getState().overlays).toMatchObject([
+      { kind: 'sheet', sheet: 'grant' },
+      { kind: 'modal', modal: 'connect', projectId: sb.projectId, provider: sb.provider, targetId: sb.id },
+    ]);
+  });
+
   it('re-opens with an inline error when grant.approve fails', async () => {
     result = { ok: false, error: { code: 'mfa-failed', message: 'Touch ID cancelled' } };
     const first = open();

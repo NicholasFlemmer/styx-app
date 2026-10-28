@@ -2,7 +2,7 @@ import type { ProjectId } from '@styx/core';
 import { command } from '../../state/commands';
 import { Banner, BannerStack as UiBannerStack } from '@styx/ui';
 import { useEffect, useMemo, useRef } from 'react';
-import { useNow, useUi, useUiShallow } from '../../state/hooks';
+import { useUi, useUiShallow } from '../../state/hooks';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
 import { deriveBanners, mergeBanners, type BannerAction } from './derive';
@@ -63,13 +63,12 @@ export const runBannerAction = (action: BannerAction): void => {
 /** Error banners under the titlebar: `banner.set/clear` events merged with rows derived from the model. */
 export function BannerStack() {
   const model = useReadModel((s) => s.model);
-  const now = useNow();
   const events = useUi((s) => s.banners);
   const dismissed = useUiShallow((s) => s.dismissedBanners);
   const dismissBanner = useUi((s) => s.dismissBanner);
   const banners = useMemo(
-    () => mergeBanners(deriveBanners(model, now), events, dismissed),
-    [model, now, events, dismissed],
+    () => mergeBanners(deriveBanners(model), events, dismissed),
+    [model, events, dismissed],
   );
   const root = useRef<HTMLDivElement>(null);
 

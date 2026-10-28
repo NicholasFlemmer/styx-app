@@ -153,9 +153,9 @@ export class NotificationService {
 
 /**
  * Persistent banners still `shown` in `notifications` (keyed by `banner_key`), rebuilt as `banner.set` payloads so a
- * freshly connected window sees them again after a restart. Keys: `auth-expired:<targetId>` · `cli-missing:<agent>` ·
+ * freshly connected window sees them again after a restart. Keys: `cli-missing:<agent>` ·
  * `cli-outdated:<agent>` · `conflict:<worktreeId>` (kind `error-banner`) · `project-policy:<projectId>` (kind `info`);
- * unknown keys are skipped.
+ * unknown keys are skipped, as are `auth-expired:<targetId>` rows from builds that still raised them (row 170).
  */
 export function bannersToReemit(repos: Repos): EventPayload<'banner.set'>[] {
   const out: EventPayload<'banner.set'>[] = [];
@@ -179,17 +179,6 @@ export function bannersToReemit(repos: Repos): EventPayload<'banner.set'>[] {
       });
     } else if (n.kind !== 'error-banner') {
       continue;
-    } else if (kind === 'auth-expired') {
-      if (!repos.targets.get(id)) continue;
-      out.push({
-        bannerKey: n.bannerKey,
-        kind: 'auth-expired',
-        text: n.title,
-        cta: copy.errors.authExpired.cta,
-        action: { kind: 'reconnect', targetId: idFrom<'TargetId'>(id) },
-        sessionId: n.sessionId,
-        reason: 'auth-expired',
-      });
     } else if (kind === 'cli-missing') {
       const agent = agentSchema.safeParse(id);
       if (!agent.success) continue;

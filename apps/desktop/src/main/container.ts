@@ -417,6 +417,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     platform: runtime.platform,
     projectRules: (projectId) => projects.projectRules(projectId),
     onIssueFailure: (targetId, error) => targets.noteIssueFailure(targetId, error),
+    onIssueSuccess: (targetId) => targets.noteIssueSuccess(targetId),
   });
   const hunks = new HunkService({
     repos,

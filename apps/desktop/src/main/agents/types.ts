@@ -1,5 +1,5 @@
 import { copy, fill, type Agent, type Effort, type PermissionMode, type Runner } from '@styx/core';
-import { PONYTAIL_PROMPT } from './ponytail';
+import { BUILT_IN_GUIDANCE } from './guidance';
 
 /** The styx MCP server as an agent protocol takes it in-band (`session/new.mcpServers`, Codex `-c mcp_servers.*`). */
 export interface McpServerEntry {
@@ -88,7 +88,7 @@ export const agentPreamble = (lane: AgentLaunchContext['lane']): string => {
   const parts: string[] = [copy.agentPrompt.preamble, copy.agentPrompt.shims, copy.agentPrompt.peers];
   if (lane) parts.push(fill(copy.agentPrompt.lane, { branch: lane.branch, base: lane.base }));
   if (lane?.others) parts.push(lane.others);
-  parts.push(PONYTAIL_PROMPT);
+  parts.push(BUILT_IN_GUIDANCE);
   return parts.join('\n\n');
 };
 

@@ -925,6 +925,9 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     sharesProdUnchosen:
       "No project is picked, so this uses your account's project, which may be {target}'s: access granted here can change production.",
     title: 'Access request',
+    /** The target's login lapsed (row 170): the sheet's primary button reconnects before it can grant. */
+    expired: '{target} is signed out. Reconnect it, then grant access.',
+    reconnect: 'Reconnect',
     who: '{agent} · {branch}',
     target: '{target} / {env}',
     scopeLabel: 'Scope',
@@ -1105,10 +1108,6 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
   },
 
   errors: {
-    authExpired: {
-      text: '{target}: credentials expired {t} ago. Agents requesting it are paused.',
-      cta: 'Reconnect',
-    },
     cliMissing: {
       text: '{cli} not found on PATH. {n} session(s) cannot start.',
       textOne: '{cli} not found on PATH. 1 session cannot start.',

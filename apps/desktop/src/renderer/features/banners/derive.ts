@@ -1,4 +1,4 @@
-import { copy, fill, formatAge, inLiveProject, rows, type EventPayload, type ReadModel } from '@styx/core';
+import { copy, fill, inLiveProject, rows, type EventPayload, type ReadModel } from '@styx/core';
 
 export type BannerAction = EventPayload<'banner.set'>['action'];
 
@@ -11,24 +11,11 @@ export interface BannerRow {
 }
 
 /**
- * Error banners derived from the read model (spec §3): expired target credentials, sessions paused because a CLI
- * is missing (one row per CLI), and worktree conflicts. Copy from core `copy.errors`.
+ * Error banners derived from the read model (spec §3): sessions paused because a CLI is missing (one row per CLI)
+ * and worktree conflicts. Expired targets raise none (row 170): the agent's access request asks for the reconnect. Copy from core `copy.errors`.
  */
-export const deriveBanners = (model: ReadModel, now: number): BannerRow[] => {
+export const deriveBanners = (model: ReadModel): BannerRow[] => {
   const out: BannerRow[] = [];
-  for (const t of rows(model.targets)) {
-    if (t.health !== 'expired') continue;
-    out.push({
-      key: `auth-expired:${t.id}`,
-      kind: 'auth-expired',
-      text: fill(copy.errors.authExpired.text, {
-        target: t.name,
-        t: formatAge(t.expiredAt ?? t.healthCheckedAt, now),
-      }),
-      cta: copy.errors.authExpired.cta,
-      action: { kind: 'reconnect', targetId: t.id },
-    });
-  }
   const missing = new Map<string, number>();
   for (const s of rows(model.sessions)) {
     if (s.archivedAt !== null || s.state !== 'paused' || s.pausedReason !== 'cli-missing') continue;

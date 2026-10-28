@@ -169,12 +169,13 @@ export class BrokerHost {
     return this.usable(t);
   }
 
-  /** A target an agent may open a request on: connected and not expired (both `request_access` and `exec_authorize`, L-c). */
+  /**
+   * A target an agent may open a request on: connected (both `request_access` and `exec_authorize`, L-c). An expired
+   * one is allowed: the request always asks, and its sheet offers Reconnect (row 170).
+   */
   private usable(t: Target): Target {
     if (t.credentialRef === null)
       throw new BrokerError(ErrorCode.notAllowed, `${t.name} is not connected; connect it in Styx`);
-    if (t.health === 'expired')
-      throw new BrokerError(ErrorCode.notAllowed, `${t.name} credentials expired; reconnect it in Styx`);
     return t;
   }
 
@@ -284,7 +285,9 @@ export class BrokerHost {
           `no ${adapter.provider} target in ${ctx.session.projectName}`,
         );
       const target = this.usable(picked);
-      const covering = deps.grants.covering(target, ctx.session.sessionId, scopes);
+      // An expired login cannot mint: ask again (with Reconnect) rather than fail on the grant already held.
+      const covering =
+        target.health === 'expired' ? null : deps.grants.covering(target, ctx.session.sessionId, scopes);
       if (covering) {
         // Through credentialFor so a persistent grant issued before a restart is re-issued (project-bound, M3).
         const cred = await deps.grants.credentialFor(covering.id, {

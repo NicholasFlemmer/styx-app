@@ -1,7 +1,6 @@
 import {
   copy,
   fill,
-  formatAge,
   newId,
   type AuthMethod,
   type Env,
@@ -30,7 +29,7 @@ import type { AuditService } from './audit-service';
 import type { CredentialVault } from './credential-vault';
 import type { GrantService } from './grant-service';
 import { auditContext } from './labels';
-import { commandCarriesSecret, logger, redact } from './logger';
+import { commandCarriesSecret, logger } from './logger';
 import type { PtyService } from './pty-service';
 import type { RefreshReason } from './refresh-scheduler';
 import type { TerminalService } from './terminal-service';
@@ -521,7 +520,7 @@ export class TargetService {
 
   /**
    * Health probe (RefreshScheduler + `target.refresh`). Only a real mint failure (`expired: true`) flips the row to
-   * `expired` and raises the auth-expired banner; a transient failure (CLI missing, timeout, network) keeps the
+   * `expired`; a transient failure (CLI missing, timeout, network) keeps the
    * current health. Audit rows only on transitions so a 30-minute cadence does not flood the log.
    */
   async checkHealth(target: Target, reason: RefreshReason): Promise<void> {
@@ -573,7 +572,7 @@ export class TargetService {
     this.authStrikes.delete(target.id);
     if (target.health !== 'expired')
       this.audit('tested', target, `refresh (${reason})`, { ok: false, error: r.error });
-    this.markExpired(target, r.error);
+    this.markExpired(target);
   }
 
   /**
@@ -589,7 +588,19 @@ export class TargetService {
     if (!target || !(error instanceof CliAuthError) || !error.expired) return;
     if (target.health !== 'expired')
       this.audit('tested', target, 'grant issue', { ok: false, error: error.message });
-    this.markExpired(target, error.message);
+    this.markExpired(target);
+  }
+
+  /**
+   * A grant minted through the adapter: the login works, so an expired target is healthy again without waiting for
+   * the next probe (row 170). Otherwise a shim would keep skipping its covering grant and re-asking.
+   */
+  noteIssueSuccess(targetId: string): void {
+    const target = this.deps.repos.targets.get(targetId);
+    if (!target || target.health !== 'expired') return;
+    this.upsertRow({ ...target, health: 'ok', healthCheckedAt: this.deps.clock.now(), expiredAt: null });
+    this.clearExpiredBanner(target);
+    this.audit('tested', target, 'grant issue', { ok: true });
   }
 
   async test(targetId: string): Promise<{ ok: boolean; message: string | null }> {
@@ -604,7 +615,7 @@ export class TargetService {
       // The login works; the target just does not say which project. Not an expiry: no Reconnect banner.
       this.upsertRow({ ...target, healthCheckedAt: now });
     } else {
-      this.markExpired(target, r.error);
+      this.markExpired(target);
     }
     this.audit('tested', target, 'settings', {
       ok: r.ok,
@@ -613,42 +624,22 @@ export class TargetService {
     return r.ok ? { ok: true, message: r.identity } : { ok: false, message: r.error };
   }
 
-  /** Credentials rejected by the provider: health → expired, persistent banner (spec §10 errors.authExpired). */
-  markExpired(target: Target, message: string | null): void {
+  /**
+   * Credentials rejected by the provider: health → expired, quietly. No banner (row 170): one Google login lapsing
+   * overnight used to raise a banner per target bound to it. The agent that next asks for it gets the reconnect in
+   * its access request instead, and Settings › Targets shows the state.
+   */
+  markExpired(target: Target): void {
     const now = this.deps.clock.now();
-    const expiredAt = target.expiredAt ?? now;
-    this.upsertRow({ ...target, health: 'expired', healthCheckedAt: now, expiredAt });
-    const bannerKey = `auth-expired:${target.id}`;
-    const text = fill(copy.errors.authExpired.text, { target: target.name, t: formatAge(expiredAt, now) });
-    const existing = this.deps.repos.notifications.byBannerKey(bannerKey);
-    const id = existing?.id ?? `banner-${bannerKey}`;
-    this.deps.repos.notifications.upsert({
-      id,
-      kind: 'error-banner',
-      sessionId: null,
-      askId: null,
-      projectId: target.projectId,
-      title: text,
-      body: redact(message ?? ''),
-      meta: null,
-      osDelivered: false,
-      state: 'shown',
-      bannerKey,
-      createdAt: existing?.createdAt ?? now,
-      resolvedAt: null,
-    });
-    this.deps.publisher.upsert('notifications', [id]);
-    this.deps.publisher.sendEvent('banner.set', {
-      bannerKey,
-      kind: 'auth-expired',
-      text,
-      cta: copy.errors.authExpired.cta,
-      action: { kind: 'reconnect', targetId: target.id },
-      sessionId: null,
-      reason: 'auth-expired',
+    this.upsertRow({
+      ...target,
+      health: 'expired',
+      healthCheckedAt: now,
+      expiredAt: target.expiredAt ?? now,
     });
   }
 
+  /** Resolves an auth-expired banner left by a build that still raised them. */
   private clearExpiredBanner(target: Target): void {
     const key = `auth-expired:${target.id}`;
     const n = this.deps.repos.notifications.byBannerKey(key);

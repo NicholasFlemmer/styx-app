@@ -123,6 +123,24 @@ describe('shell bindings', () => {
     expect(Array.isArray(call?.[1]?.scope)).toBe(true);
   });
 
+  it('row 170: Mod+Enter on an expired target opens Reconnect instead of approving', () => {
+    const m = useReadModel.getState().model;
+    const target = m.targets.byId[fixtures.ids.target.supabaseProd];
+    if (target === undefined) throw new Error('fixture');
+    useReadModel
+      .getState()
+      .replaceModel(
+        { ...m, targets: upsertRows(m.targets, [{ ...target, health: 'expired' }]) },
+        'connected',
+      );
+    useUiStore.getState().openSession(fixtures.ids.project.acmeShop as ProjectId, fixtures.ids.session.codex);
+    press({ key: 'Enter', metaKey: true });
+    expect(commands).toEqual([]);
+    expect(useUiStore.getState().overlays).toMatchObject([
+      { kind: 'modal', modal: 'connect', targetId: target.id },
+    ]);
+  });
+
   it('Mod+Backspace denies; nothing happens without a pending grant ask', () => {
     useUiStore.getState().openSession(fixtures.ids.project.acmeShop as ProjectId, fixtures.ids.session.codex);
     press({ key: 'Backspace', metaKey: true });

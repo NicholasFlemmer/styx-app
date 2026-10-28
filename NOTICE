@@ -9,3 +9,17 @@ Styx includes adapted Ponytail coding guidance by DietrichGebert (MIT).
 Source: https://github.com/DietrichGebert/ponytail
 The copyright notice and full license are in apps/desktop/resources/licenses/ponytail.txt
 (packaged as resources/licenses/ponytail.txt).
+
+Styx includes adapted interface craft guidance from Impeccable by Paul Bakaus (Apache-2.0).
+Source: https://github.com/pbakaus/impeccable
+The license is in apps/desktop/resources/licenses/impeccable.txt (packaged as resources/licenses/impeccable.txt).
+
+Styx includes adapted design review guidance from Anthropic's design-critique skill (Apache-2.0).
+Source: https://github.com/anthropics/knowledge-work-plugins
+The license is in apps/desktop/resources/licenses/knowledge-work-plugins.txt
+(packaged as resources/licenses/knowledge-work-plugins.txt).
+
+Styx includes adapted architecture guidance from architecture-designer by Jeffallan (MIT).
+Source: https://github.com/Jeffallan/claude-skills
+The copyright notice and full license are in apps/desktop/resources/licenses/architecture-designer.txt
+(packaged as resources/licenses/architecture-designer.txt).

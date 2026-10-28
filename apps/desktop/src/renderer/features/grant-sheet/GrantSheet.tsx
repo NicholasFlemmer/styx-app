@@ -28,6 +28,7 @@ import {
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { announce } from '../../app/announcer';
 import { command } from '../../state/commands';
+import { runBannerAction } from '../banners/BannerStack';
 import { useCopyPlatform, useModel, useUi } from '../../state/hooks';
 import { useUiStore } from '../../state/ui-store';
 import {
@@ -135,6 +136,10 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
   const agent = copy.agents[session.agent];
   const targetLabel = `${target.name} ${target.env}`;
 
+  // A lapsed login cannot mint (row 170): the primary move is Reconnect; the sheet stays open under the connect modal.
+  const expired = target.health === 'expired';
+  const reconnect = () => runBannerAction({ kind: 'reconnect', targetId: target.id });
+
   const deny = () => {
     close();
     void command('grant.deny', { grantId: grant.id });
@@ -161,7 +166,8 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
     if (!mod || e.altKey || e.shiftKey) return;
     if (e.key === 'Enter') {
       e.preventDefault();
-      approve();
+      if (expired) reconnect();
+      else approve();
     } else if (e.key === 'Backspace') {
       e.preventDefault();
       deny();
@@ -206,11 +212,13 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
               variant="accent"
               grow={1.4}
               className={s['footerButton']}
-              onClick={approve}
-              disabled={payload.scope.length === 0}
-              data-grant-approve="true"
+              onClick={expired ? reconnect : approve}
+              disabled={!expired && payload.scope.length === 0}
+              {...(expired ? { 'data-grant-reconnect': 'true' } : { 'data-grant-approve': 'true' })}
             >
-              {grantButtonLabel(target.env, payload.scope, duration, copyPlatform)}
+              {expired
+                ? copy.grantSheet.reconnect
+                : grantButtonLabel(target.env, payload.scope, duration, copyPlatform)}
             </Button>
           </SheetFooter>
         }
@@ -224,6 +232,11 @@ function GrantForm({ id, sessionId, askId, grant, target, session, model }: Gran
           </Tag>
         </div>
         <div className={s['reason']}>&quot;{reason}&quot;</div>
+        {expired ? (
+          <div className={s['finePrint']} role="note" data-grant-expired="true">
+            {fill(copy.grantSheet.expired, { target: target.name })}
+          </div>
+        ) : null}
         {reach !== null ? (
           <div className={s['finePrint']} role="note" data-shares-prod="true">
             {fill(reach.kind === 'shared' ? copy.grantSheet.sharesProd : copy.grantSheet.sharesProdUnchosen, {

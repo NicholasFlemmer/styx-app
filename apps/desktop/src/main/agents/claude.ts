@@ -1,7 +1,7 @@
 import { copy, fill } from '@styx/core';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { PONYTAIL_PROMPT } from './ponytail';
+import { BUILT_IN_GUIDANCE } from './guidance';
 import { styxBin, styxMcpServer, type AgentLaunch, type AgentLaunchContext } from './types';
 
 /**
@@ -77,7 +77,7 @@ export async function claudeLaunch(ctx: AgentLaunchContext): Promise<AgentLaunch
   const prompt: string[] = [copy.agentPrompt.shims, copy.agentPrompt.peers];
   if (ctx.lane) prompt.push(fill(copy.agentPrompt.lane, { branch: ctx.lane.branch, base: ctx.lane.base }));
   if (ctx.lane?.others) prompt.push(ctx.lane.others);
-  prompt.push(PONYTAIL_PROMPT);
+  prompt.push(BUILT_IN_GUIDANCE);
   args.push('--append-system-prompt', prompt.join('\n\n'));
   const cleanup = () => rm(ctx.configDir, { recursive: true, force: true });
   if (ctx.runner === 'stream') {

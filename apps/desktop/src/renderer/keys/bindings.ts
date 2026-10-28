@@ -15,6 +15,7 @@ import { escapeTarget, findOverlay } from '../overlays/stack';
 import { command } from '../state/commands';
 import { useReadModel } from '../state/read-model';
 import { selectSessionId, useUiStore } from '../state/ui-store';
+import { runBannerAction } from '../features/banners/BannerStack';
 import { nextPermissionMode, sessionControls } from '../features/chat/session-controls';
 import type { KeyBinding } from './registry';
 
@@ -52,6 +53,11 @@ export const approveGrantAsRequested = (grant: Grant): void => {
   const m = model();
   const target = m.targets.byId[grant.targetId];
   const session = grant.sessionId === null ? undefined : m.sessions.byId[grant.sessionId];
+  // A lapsed login cannot mint (row 170): reconnect first, as the grant sheet's primary button does.
+  if (target?.health === 'expired') {
+    runBannerAction({ kind: 'reconnect', targetId: target.id });
+    return;
+  }
   const duration = '1h';
   void command('grant.approve', { grantId: grant.id, duration, scope: [...grant.scope] }).then((r) => {
     if (!r.ok || target === undefined) return;

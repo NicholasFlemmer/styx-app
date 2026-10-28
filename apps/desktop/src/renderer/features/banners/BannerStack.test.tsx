@@ -11,7 +11,13 @@ const acme = fixtures.ids.project.acmeShop;
 describe('<BannerStack /> project-policy banner (security H-1)', () => {
   beforeEach(() => {
     useReadModel.getState().replaceModel(fixtures.demoReadModel(), 'fixture');
-    useUiStore.setState({ projectId: null, screen: 'home', settingsSection: 'app:general', banners: {}, dismissedBanners: [] });
+    useUiStore.setState({
+      projectId: null,
+      screen: 'home',
+      settingsSection: 'app:general',
+      banners: {},
+      dismissedBanners: [],
+    });
     useUiStore.getState().setBanner({
       bannerKey: `project-policy:${acme}`,
       kind: 'project-policy',
@@ -36,7 +42,7 @@ describe('<BannerStack /> project-policy banner (security H-1)', () => {
   });
 });
 
-describe('<BannerStack /> auth-expired banner', () => {
+describe('<BannerStack /> expired target (row 170)', () => {
   beforeEach(() => {
     useReadModel.getState().replaceModel(fixtures.errorReadModel(), 'fixture');
     useUiStore.setState({
@@ -50,21 +56,10 @@ describe('<BannerStack /> auth-expired banner', () => {
   });
   afterEach(cleanup);
 
-  it('Reconnect opens the connect modal on the expired target (provider + targetId), not Settings', () => {
+  it('raises no banner: the agent that next asks for the target gets Reconnect in its grant sheet', () => {
     render(<BannerStack />);
     const texts = screen.getAllByRole('alert').map((a) => a.textContent);
-    expect(texts.some((x) => x?.includes('AWS acme-prod: credentials expired'))).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: copy.errors.authExpired.cta }));
-    const ui = useUiStore.getState();
-    expect(ui.overlays).toMatchObject([
-      {
-        kind: 'modal',
-        modal: 'connect',
-        projectId: acme,
-        provider: 'aws',
-        targetId: fixtures.ids.target.awsProd,
-      },
-    ]);
-    expect(ui.screen).toBe('workspace');
+    expect(texts.some((x) => x?.includes('credentials expired'))).toBe(false);
+    expect(texts.some((x) => x?.includes('conflicts with main'))).toBe(true);
   });
 });

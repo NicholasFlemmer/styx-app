@@ -324,23 +324,11 @@ describe('BrokerHost security regressions', () => {
     client.close();
   });
 
-  it('L-c: exec_authorize refuses expired or unconnected targets before opening a request, like request_access', async () => {
+  it('L-c: exec_authorize and request_access refuse unconnected targets before opening a request', async () => {
     const { t: app, client } = await connectedClient(ids.session.gemini);
     const prod = app.app.repos.targets.get(ids.target.supabaseProd);
     if (!prod?.credentialRef) throw new Error('fixture');
     const before = app.app.repos.grants.all().length;
-    app.app.repos.targets.upsert({ ...prod, health: 'expired', expiredAt: app.clock.now() });
-    await expect(
-      client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' }),
-    ).rejects.toMatchObject({
-      code: ErrorCode.notAllowed,
-      message: expect.stringContaining('expired'),
-    });
-    await expect(
-      client.call('request_access', { target: 'supabase-prod', scope: ['read'], reason: 'r', waitMs: 0 }),
-    ).rejects.toMatchObject({
-      code: ErrorCode.notAllowed,
-    });
     app.app.repos.targets.upsert({ ...prod, credentialRef: null, health: 'unconnected' });
     await expect(
       client.call('exec_authorize', { tool: 'supabase', argv: ['db', 'push'], cwd: '/tmp' }),
@@ -354,6 +342,28 @@ describe('BrokerHost security regressions', () => {
       code: ErrorCode.notAllowed,
     });
     expect(app.app.repos.grants.all().length).toBe(before); // no grant row was opened
+    client.close();
+  });
+
+  it('row 170: an expired target opens an ask (the sheet offers Reconnect), never an auto-issue', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const prod = app.app.repos.targets.get(ids.target.supabaseProd);
+    if (!prod?.credentialRef) throw new Error('fixture');
+    app.app.repos.targets.upsert({ ...prod, health: 'expired', expiredAt: app.clock.now() });
+    const reply = client.call('request_access', {
+      target: 'supabase-prod',
+      scope: ['read'],
+      reason: 'r',
+      waitMs: 0,
+    });
+    await new Promise((res) => setTimeout(res, 50));
+    const grant = app.app.repos.grants
+      .bySession(ids.session.gemini)
+      .find((g) => g.targetId === prod.id && g.state === 'requested');
+    if (!grant) throw new Error('no ask was opened');
+    expect(app.app.repos.pendingAsks.byGrant(grant.id)?.state).toBe('open');
+    app.app.grants.deny(grant.id);
+    expect(await reply).toMatchObject({ status: 'denied', grantId: grant.id });
     client.close();
   });
 
@@ -545,7 +555,6 @@ describe('BrokerHost agent-to-agent messaging', () => {
     const { client } = await connectedClient(ids.session.gemini);
     let refused = 0;
     for (let i = 0; i < 25; i += 1) {
-       
       await client.call('send_message', { to: ids.session.claude, body: `m${i}` }).catch(() => {
         refused += 1;
       });
