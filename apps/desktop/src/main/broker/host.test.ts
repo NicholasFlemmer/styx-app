@@ -424,22 +424,24 @@ describe('BrokerHost SSH targets (ADR-0031)', () => {
     expect(r.env['SSH_AUTH_SOCK']).toBeUndefined();
 
     // A password target: listed with its host; its password is nowhere an agent or the read model can see.
-    const pw = await app.app.bus.dispatch(app.sender, 'target.connect.saveSsh', {
-      projectId: ids.project.acmeShop,
-      name: 'web',
-      env: 'preview',
-      host: 'www.example.co.za',
-      user: 'cpuser',
-      port: 2222,
-      auth: 'password',
-      password: 'hunter2!',
-    });
-    if (!pw.ok) throw new Error(pw.error.message);
-    const listed = (await client.call('list_targets', {})).find((t) => t.id === pw.value.targetId);
-    expect(listed).toMatchObject({ provider: 'ssh', host: 'www.example.co.za' });
-    expect(JSON.stringify(listed)).not.toContain('hunter2');
-    expect(JSON.stringify(app.app.repos.targets.get(pw.value.targetId ?? ''))).not.toContain('hunter2');
-
+    // (Windows refuses password targets: its ssh has no ControlMaster.)
+    if (process.platform !== 'win32') {
+      const pw = await app.app.bus.dispatch(app.sender, 'target.connect.saveSsh', {
+        projectId: ids.project.acmeShop,
+        name: 'web',
+        env: 'preview',
+        host: 'www.example.co.za',
+        user: 'cpuser',
+        port: 2222,
+        auth: 'password',
+        password: 'hunter2!',
+      });
+      if (!pw.ok) throw new Error(pw.error.message);
+      const listed = (await client.call('list_targets', {})).find((t) => t.id === pw.value.targetId);
+      expect(listed).toMatchObject({ provider: 'ssh', host: 'www.example.co.za' });
+      expect(JSON.stringify(listed)).not.toContain('hunter2');
+      expect(JSON.stringify(app.app.repos.targets.get(pw.value.targetId ?? ''))).not.toContain('hunter2');
+    }
     client.close();
   });
 });
