@@ -395,6 +395,55 @@ describe('BrokerHost security regressions', () => {
   });
 });
 
+describe('BrokerHost SSH targets (ADR-0031)', () => {
+  it("lists an SSH target's host, never its password, and hands each shim command the grant's ssh_config", async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    // My SSH setup: nothing to sign in with, so a grant is only the gate and the config.
+    const own = await app.app.bus.dispatch(app.sender, 'target.connect.saveSsh', {
+      projectId: ids.project.acmeShop,
+      name: 'box',
+      env: 'staging',
+      host: 'box.example',
+      user: 'me',
+      auth: 'agent',
+    });
+    if (!own.ok) throw new Error(own.error.message);
+    const pending = client.call(
+      'exec_authorize',
+      { tool: 'ssh', argv: ['box.example', 'uptime'], cwd: '/tmp' },
+      { timeoutMs: 5_000 },
+    );
+    await new Promise((res) => setTimeout(res, 50));
+    const grant = app.app.repos.grants
+      .bySession(ids.session.gemini)
+      .find((g) => g.state === 'requested' && g.targetId === own.value.targetId);
+    if (!grant) throw new Error('expected a requested grant');
+    await app.app.grants.approve(grant.id, '1h');
+    const r = await pending;
+    expect(r.sshConfig).toMatch(/ssh-config-/);
+    expect(r.env['SSH_AUTH_SOCK']).toBeUndefined();
+
+    // A password target: listed with its host; its password is nowhere an agent or the read model can see.
+    const pw = await app.app.bus.dispatch(app.sender, 'target.connect.saveSsh', {
+      projectId: ids.project.acmeShop,
+      name: 'web',
+      env: 'preview',
+      host: 'www.example.co.za',
+      user: 'cpuser',
+      port: 2222,
+      auth: 'password',
+      password: 'hunter2!',
+    });
+    if (!pw.ok) throw new Error(pw.error.message);
+    const listed = (await client.call('list_targets', {})).find((t) => t.id === pw.value.targetId);
+    expect(listed).toMatchObject({ provider: 'ssh', host: 'www.example.co.za' });
+    expect(JSON.stringify(listed)).not.toContain('hunter2');
+    expect(JSON.stringify(app.app.repos.targets.get(pw.value.targetId ?? ''))).not.toContain('hunter2');
+
+    client.close();
+  });
+});
+
 describe('BrokerHost agent-to-agent messaging', () => {
   it("lists only this project's sessions, flagging the caller", async () => {
     const { t: app, client } = await connectedClient(ids.session.gemini);

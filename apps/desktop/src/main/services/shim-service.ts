@@ -9,6 +9,10 @@ export const SHIM_TOOLS = [
   'gcloud',
   'supabase',
   'ssh',
+  // The SSH adapter's other tools: without shims of their own they bypassed the grant and the target's user/port.
+  'scp',
+  'sftp',
+  'rsync',
   'fly',
   'flyctl',
   'railway',
@@ -34,7 +38,7 @@ const winWrap = (tool: string) =>
 const winStyx = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"%STYX_EXE%" "%STYX_CLI%" %*\r\n`;
 
 /**
- * Writes `<userData>/bin/{styx,vercel,gh,aws,gcloud,supabase,ssh,fly,flyctl,railway,render}` on startup. The scripts
+ * Writes `<userData>/bin/{styx,vercel,gh,aws,gcloud,supabase,ssh,scp,sftp,rsync,fly,flyctl,railway,render}` on startup. The scripts
  * read STYX_EXE / STYX_CLI from the session env, so the same dir serves dev and packaged builds.
  */
 export function writeShims(userData: string, platform: NodeJS.Platform): ShimPaths {

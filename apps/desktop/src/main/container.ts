@@ -369,7 +369,11 @@ export function buildContainer(opts: ContainerOptions): Container {
     opts.cli ?? new ExecaCliRunner({ loginPath: () => pty.resolveLoginPath(), platform: runtime.platform });
   const providers = new ProviderRegistry(
     { vault: opts.vault, fetch: opts.fetch ?? fetch, now, cli },
-    { platform: runtime.platform },
+    // Windows has no private /tmp: SSH grant files live under Styx's own per-user data folder there.
+    {
+      platform: runtime.platform,
+      ...(runtime.platform === 'win32' ? { socketDir: join(runtime.userData, 'ssh') } : {}),
+    },
   );
   const mfa = new MfaService(opts.mfaProvider);
   const transcript = new TranscriptService(repos, publisher, clock);

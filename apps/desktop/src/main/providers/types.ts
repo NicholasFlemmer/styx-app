@@ -44,13 +44,27 @@ export type ConnectInput =
       name?: string;
     }
   | { method: 'service-account'; json: string; projectId?: string }
-  | { method: 'ssh'; host: string; user: string; keyPath: string; port?: number; passphrase?: string };
+  | {
+      method: 'ssh';
+      host: string;
+      user: string;
+      port?: number;
+      /** ADR-0031; absent = key (rows and callers from before it). */
+      auth?: 'key' | 'password' | 'agent';
+      keyPath?: string;
+      passphrase?: string;
+      password?: string;
+      proxyJump?: string;
+    };
 
 export type IssuedCredential =
   | { kind: 'env'; env: Record<string, string>; expiresAt: number | null; scoped: boolean; handle?: string }
   | {
       kind: 'ssh-agent';
-      socketPath: string;
+      /** The grant's in-process agent; null for a password target (Styx's own master connection) or the person's own setup. */
+      socketPath: string | null;
+      /** The grant's ssh_config (target user, port and agent); the shim passes it to ssh, scp and sftp as `-F`. */
+      configPath: string;
       env: Record<string, string>;
       expiresAt: number | null;
       scoped: boolean;

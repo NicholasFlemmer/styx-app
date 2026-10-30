@@ -68,6 +68,42 @@ describe.skipIf(process.platform === 'win32')('wrap', () => {
     await server.close();
   });
 
+  it('hands SSH grants their ssh_config: `-F` ahead of the agent argv for ssh, never for rsync', async () => {
+    const shim = mkdtempSync(join(tmpdir(), 'styx-shim-'));
+    const real = mkdtempSync(join(tmpdir(), 'styx-real-'));
+    const out = join(real, 'args');
+    fakeBin(real, 'ssh', `printf '%s\\n' "$@" > ${out}`);
+    fakeBin(real, 'rsync', `printf '%s\\n' "$@" > ${out}`);
+    const sock = join(mkdtempSync(join(tmpdir(), 'styx-brk-')), 'b.sock');
+    const server = new BrokerServer({
+      authenticate: async () => ({
+        sessionId: 's1',
+        projectId: 'p',
+        projectName: 'acme',
+        worktreePath: null,
+        branch: null,
+        agent: 'shell',
+      }),
+    });
+    server.on('exec_authorize', async () => ({ grantId: 'g', useId: '', env: {}, sshConfig: '/tmp/cfg' }));
+    await server.listen(sock);
+    const env = {
+      PATH: `${shim}:${real}`,
+      STYX_SHIM_DIR: shim,
+      STYX_BROKER: sock,
+      STYX_SESSION_ID: 's1',
+      STYX_TOKEN: 'x'.repeat(32),
+    };
+    const { readFileSync } = await import('node:fs');
+    expect(await wrap('ssh', ['example.com', 'uptime'], { env, stderr: () => undefined, spawn })).toBe(0);
+    expect(readFileSync(out, 'utf8').trim().split('\n')).toEqual(['-F', '/tmp/cfg', 'example.com', 'uptime']);
+    expect(
+      await wrap('rsync', ['-a', 'dist/', 'example.com:app/'], { env, stderr: () => undefined, spawn }),
+    ).toBe(0);
+    expect(readFileSync(out, 'utf8').trim().split('\n')).toEqual(['-a', 'dist/', 'example.com:app/']);
+    await server.close();
+  });
+
   it('fails closed when the broker denies', async () => {
     const real = mkdtempSync(join(tmpdir(), 'styx-real-'));
     fakeBin(real, 'gh', 'exit 0');

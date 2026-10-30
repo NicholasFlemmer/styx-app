@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { connect as netConnect } from 'node:net';
 import { OpenSSHAgent, utils } from 'ssh2';
-import { PROJECT_KEY_OF } from '@styx/core';
+import { PROJECT_KEY_OF, copy } from '@styx/core';
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryVault } from '../services/credential-vault';
 import { AwsAdapter, sessionPolicy, type StsLike } from './aws';
@@ -11,7 +11,16 @@ import { FakeCliRunner } from './cli-runner';
 import { GcpAdapter } from './gcp';
 import { GitHubAdapter } from './github';
 import { ProviderRegistry } from './index';
-import { SshAdapter, expandHome } from './ssh';
+import {
+  SshAdapter,
+  expandHome,
+  isTargetPasswordPrompt,
+  passwordOnly,
+  sshAddressOf,
+  sshConfigFor,
+  sshDestinationIndex,
+  sshHostOk,
+} from './ssh';
 import { StyxSshAgent } from './ssh-agent';
 import { SupabaseAdapter } from './supabase';
 import type { AdapterDeps, ProviderAdapter, TargetInfo } from './types';
@@ -461,6 +470,432 @@ describe('SshAdapter', () => {
     await expect(
       bad.issue(grant, target({ provider: 'ssh', credentialRef: c2.credentialRef, config: c2.config })),
     ).rejects.toThrow();
+  });
+
+  it("applies the target's user and port: an ssh_config per grant, passed to git and rsync, removed on revoke", async () => {
+    const keys = testKey();
+    const dir = mkdtempSync(join(tmpdir(), 'styx-ssh-'));
+    const keyPath = join(dir, 'id_ed25519');
+    writeFileSync(keyPath, keys.private, { mode: 0o600 });
+    const ssh = new SshAdapter(deps({}), { socketDir: dir, platform: 'darwin' });
+    const c = await ssh.connect(
+      { method: 'ssh', host: 'www.example.co.za', user: 'homeuser', keyPath, port: 2222 },
+      't-port',
+    );
+    const issued = await ssh.issue(
+      grant,
+      target({ provider: 'ssh', credentialRef: c.credentialRef, config: c.config }),
+    );
+    if (issued.kind !== 'ssh-agent') throw new Error('expected an agent credential');
+    const config = readFileSync(issued.configPath, 'utf8');
+    expect(config).toContain(
+      'Host www.example.co.za\n  User homeuser\n  Port 2222\n  StrictHostKeyChecking accept-new\n',
+    );
+    expect(config).toContain(`IdentityAgent "${issued.socketPath}"`);
+    expect(issued.env['GIT_SSH_COMMAND']).toBe(`ssh -F "${issued.configPath}" -o IdentitiesOnly=no`);
+    expect(issued.env['RSYNC_RSH']).toBe(`ssh -F "${issued.configPath}"`);
+    // A re-mint (the last minute of a timed grant) gets its own files; releasing the old copy leaves them alone.
+    const again = await ssh.issue(
+      grant,
+      target({ provider: 'ssh', credentialRef: c.credentialRef, config: c.config }),
+    );
+    if (again.kind !== 'ssh-agent') throw new Error('expected an agent credential');
+    expect(again.configPath).not.toBe(issued.configPath);
+    await ssh.revoke(issued);
+    expect(existsSync(issued.configPath)).toBe(false);
+    expect(existsSync(again.configPath)).toBe(true);
+    await ssh.revoke(again);
+    expect(existsSync(again.configPath)).toBe(false);
+  });
+
+  /**
+   * A stand-in for ssh in its own terminal: prints `prompts` in turn, records what Styx types, and opens the control
+   * socket once the expected password arrives (as ssh does after signing in).
+   */
+  const fakeSsh = (prompts: string[], password: string) => {
+    const typed: string[] = [];
+    let killed = false;
+    const spawnTerminal = async (_file: string, args: string[]) => {
+      const controlPath = (args.find((a) => a.startsWith('ControlPath=')) ?? '').slice('ControlPath='.length);
+      let data: (d: string) => void = () => undefined;
+      let exit: (e: { exitCode: number }) => void = () => undefined;
+      const queue = [...prompts];
+      setTimeout(() => data(queue.shift() ?? ''), 5);
+      return {
+        onData: (cb: (d: string) => void) => (data = cb),
+        onExit: (cb: (e: { exitCode: number }) => void) => (exit = cb),
+        write: (d: string) => {
+          typed.push(d);
+          const next = queue.shift();
+          if (next !== undefined) setTimeout(() => data(next), 5);
+          else if (d === `${password}\r`) writeFileSync(controlPath, '');
+          else setTimeout(() => exit({ exitCode: 255 }), 5);
+        },
+        kill: () => {
+          killed = true;
+        },
+      };
+    };
+    const controlled: string[][] = [];
+    const controlSsh = async (args: string[]) => {
+      controlled.push(args);
+      return 0;
+    };
+    return { spawnTerminal, controlSsh, controlled, typed, killed: () => killed };
+  };
+
+  it('password targets: Styx signs in on its own master connection; agents ride it and never get the password', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'styx-ssh-'));
+    const fake = fakeSsh(["cpuser@h.example's password: "], 's3cret');
+    const ssh = new SshAdapter(deps({}), {
+      socketDir: dir,
+      platform: 'darwin',
+      spawnTerminal: fake.spawnTerminal,
+      controlSsh: fake.controlSsh,
+      sshPath: '/usr/bin/ssh',
+    });
+    const pw = await ssh.connect(
+      { method: 'ssh', auth: 'password', host: 'h.example', user: 'cpuser', port: 2222, password: 's3cret' },
+      't-pw',
+    );
+    expect(pw.config).toEqual({
+      host: 'h.example',
+      user: 'cpuser',
+      port: 2222,
+      auth: 'password',
+      proxyJump: '',
+    });
+    const p = await ssh.issue(
+      grant,
+      target({ provider: 'ssh', credentialRef: pw.credentialRef, config: pw.config }),
+    );
+    if (p.kind !== 'ssh-agent') throw new Error('expected an ssh credential');
+    expect(fake.typed).toEqual(['s3cret\r']); // typed once, at ssh's own prompt
+    expect(p.socketPath).toBeNull();
+    expect(JSON.stringify(p)).not.toContain('s3cret');
+    const cfg = readFileSync(p.configPath, 'utf8');
+    expect(cfg).toMatch(
+      / {2}ControlPath ".*c-[0-9a-f]{12}"\n {2}ControlMaster no\n {2}PasswordAuthentication no\n/,
+    );
+    expect(cfg).not.toContain('s3cret');
+    await ssh.revoke(p);
+    expect(fake.killed()).toBe(true);
+    await expect(
+      ssh.connect({ method: 'ssh', auth: 'password', host: 'h', user: 'u' }, 't-pw-none'),
+    ).rejects.toThrow('password');
+    // Windows' ssh has no ControlMaster: refused rather than handed to the agent's own ssh.
+    await expect(
+      new SshAdapter(deps({}), { socketDir: dir, platform: 'win32' }).connect(
+        { method: 'ssh', auth: 'password', host: 'h', user: 'u', password: 'p' },
+        't-win',
+      ),
+    ).rejects.toThrow(copy.connect.ssh.passwordWindows);
+  });
+
+  it("password targets: a jump host's prompt, a code prompt or a wrong password never get (another) password", async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'styx-ssh-'));
+    const cases: [string[], boolean, string][] = [
+      // Through a jump host only a prompt naming the target is answered.
+      [["me@bastion.example's password: "], true, 'bastion'],
+      [['Verification code: '], false, 'Verification code'],
+      // Wrong password: ssh asks again; Styx never types it twice.
+      [["u@h's password: ", "u@h's password: "], false, 'password'],
+    ];
+    for (const [prompts, jump, said] of cases) {
+      const fake = fakeSsh(prompts, 'nope');
+      const ssh = new SshAdapter(deps({}), {
+        socketDir: dir,
+        platform: 'darwin',
+        spawnTerminal: fake.spawnTerminal,
+        controlSsh: fake.controlSsh,
+        sshPath: '/usr/bin/ssh',
+      });
+      const c = await ssh.connect(
+        {
+          method: 'ssh',
+          auth: 'password',
+          host: 'h',
+          user: 'u',
+          password: 'pw',
+          ...(jump ? { proxyJump: 'me@bastion.example' } : {}),
+        },
+        't-x',
+      );
+      await expect(
+        ssh.issue(grant, target({ provider: 'ssh', credentialRef: c.credentialRef, config: c.config })),
+      ).rejects.toThrow(said);
+      expect(fake.typed.length).toBeLessThanOrEqual(1);
+      if (jump) expect(fake.typed).toEqual([]);
+      expect(fake.killed()).toBe(true);
+    }
+  });
+
+  it("answers only the target's exact password prompt, never one a jump host or banner could word like it", () => {
+    const ok: [string, boolean][] = [
+      ["cpuser@h.example's password:", false],
+      ["cpuser@H.Example's password: ", false],
+      ['(cpuser@h.example) Password:', true],
+      ['Password for cpuser@h.example:', true],
+      ['Password:', false],
+    ];
+    for (const [line, jump] of ok)
+      expect(isTargetPasswordPrompt(line.trimEnd(), 'cpuser', 'h.example', jump)).toBe(true);
+    const no: [string, boolean][] = [
+      ['Password:', true], // through a jump host a bare prompt may be the jump's
+      ["me@bastion's password:", true],
+      ["(me@bastion) cpuser@h.example's password:", true], // a jump host wording its prompt like the target's
+      ["xcpuser@h.example's password:", false],
+      ["cpuser@h.example.evil's password:", false],
+      ['Verification code:', false],
+      ['Enter passphrase for key:', false],
+    ];
+    for (const [line, jump] of no)
+      expect(isTargetPasswordPrompt(line, 'cpuser', 'h.example', jump)).toBe(false);
+  });
+
+  it('password targets: pin the address and host key; a moved target needs a reconnect, and revoke ends the master', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'styx-ssh-'));
+    const vault = new MemoryVault();
+    const spawned: string[][] = [];
+    const controlled: string[][] = [];
+    const ssh = new SshAdapter(
+      { ...deps({}), vault },
+      {
+        socketDir: dir,
+        platform: 'darwin',
+        sshPath: '/usr/bin/ssh',
+        controlSsh: async (args) => {
+          controlled.push(args);
+          return 0;
+        },
+        spawnTerminal: async (file, args) => {
+          spawned.push([file, ...args]);
+          const opt = (k: string) => (args.find((a) => a.startsWith(`${k}=`)) ?? '').slice(k.length + 1);
+          let data: (d: string) => void = () => undefined;
+          setTimeout(() => data("cp@h.example's password: "), 5);
+          return {
+            onData: (cb) => (data = cb),
+            onExit: () => undefined,
+            write: () => {
+              writeFileSync(opt('UserKnownHostsFile'), '[h.example]:2222 ssh-ed25519 AAAAPINNED\n');
+              writeFileSync(opt('ControlPath'), '');
+            },
+            kill: () => undefined,
+          };
+        },
+      },
+    );
+    const c = await ssh.connect(
+      { method: 'ssh', auth: 'password', host: 'h.example', user: 'cp', port: 2222, password: 'pw' },
+      't-pin',
+    );
+    const t = target({ provider: 'ssh', credentialRef: c.credentialRef, config: c.config });
+    const first = await ssh.issue(grant, t);
+    // Styx's own sign-in: system ssh by path, no config files, no keys, first key accepted then pinned.
+    const [file, ...args] = spawned[0] ?? [];
+    expect(file).toMatch(/ssh$/);
+    expect(args.slice(0, 2)).toEqual(['-F', 'none']);
+    expect(args).toContain('StrictHostKeyChecking=accept-new');
+    expect(args).toContain('ProxyCommand=none');
+    expect(args).toContain('LogLevel=ERROR');
+    expect(JSON.parse((await vault.get(c.credentialRef)) ?? '{}')).toMatchObject({
+      knownHosts: '[h.example]:2222 ssh-ed25519 AAAAPINNED\n',
+    });
+    await ssh.revoke(first);
+    expect(controlled.at(-1)).toContain('exit');
+    // Every later sign-in requires the pinned key.
+    const second = await ssh.issue(grant, t);
+    expect(spawned[1]).toContain('StrictHostKeyChecking=yes');
+    await ssh.revoke(second);
+    // Pointed somewhere else (an accepted project.json, an edited database): no sign-in until reconnected.
+    const moved = { ...t, config: { ...t.config, host: 'attacker.example' } };
+    await expect(ssh.issue(grant, moved)).rejects.toThrow(sshAddressOf(moved.config));
+    expect(spawned).toHaveLength(2);
+  });
+
+  it('password targets: Styx reaches a jump host in batch mode (no prompts, no banners, pinned key); one hop only', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'styx-ssh-'));
+    const vault = new MemoryVault();
+    const spawned: string[][] = [];
+    const opts = {
+      socketDir: dir,
+      platform: 'darwin' as const,
+      sshPath: '/usr/bin/ssh',
+      controlSsh: async () => 0,
+      spawnTerminal: async (_file: string, args: string[]) => {
+        spawned.push(args);
+        const control = (args.find((a) => a.startsWith('ControlPath=')) ?? '').slice('ControlPath='.length);
+        let data: (d: string) => void = () => undefined;
+        setTimeout(() => data('(cp@h.example) Password: '), 5);
+        return {
+          onData: (cb: (d: string) => void) => (data = cb),
+          onExit: () => undefined,
+          write: () => writeFileSync(control, ''),
+          kill: () => undefined,
+        };
+      },
+    };
+    const ssh = new SshAdapter({ ...deps({}), vault }, opts);
+    const c = await ssh.connect(
+      {
+        method: 'ssh',
+        auth: 'password',
+        host: 'h.example',
+        user: 'cp',
+        password: 'pw',
+        proxyJump: 'me@bastion.example:2200',
+      },
+      't-jump',
+    );
+    const issued = await ssh.issue(
+      grant,
+      target({ provider: 'ssh', credentialRef: c.credentialRef, config: c.config }),
+    );
+    const proxy = (spawned[0] ?? []).find((a) => a.startsWith('ProxyCommand=')) ?? '';
+    expect(proxy).toContain('-F none -o BatchMode=yes -o LogLevel=ERROR');
+    expect(proxy).toMatch(/-l me -p 2200 -W \[%h\]:%p bastion\.example$/);
+    expect(spawned[0]).toContain('ProxyJump=none');
+    await ssh.revoke(issued);
+    const two = await ssh.connect(
+      {
+        method: 'ssh',
+        auth: 'password',
+        host: 'h.example',
+        user: 'cp',
+        password: 'pw',
+        proxyJump: 'a@b,c@d',
+      },
+      't-two',
+    );
+    await expect(
+      ssh.issue(grant, target({ provider: 'ssh', credentialRef: two.credentialRef, config: two.config })),
+    ).rejects.toThrow(copy.connect.ssh.oneJump);
+  });
+
+  it('a host key learnt on the first sign-in is saved only onto the entry that sign-in used', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'styx-ssh-'));
+    const vault = new MemoryVault();
+    let ref = '';
+    const ssh = new SshAdapter(
+      { ...deps({}), vault },
+      {
+        socketDir: dir,
+        platform: 'darwin',
+        sshPath: '/usr/bin/ssh',
+        controlSsh: async () => 0,
+        spawnTerminal: async (_file, args) => {
+          const opt = (k: string) => (args.find((a) => a.startsWith(`${k}=`)) ?? '').slice(k.length + 1);
+          let data: (d: string) => void = () => undefined;
+          setTimeout(() => data("cp@h.example's password: "), 5);
+          return {
+            onData: (cb) => (data = cb),
+            onExit: () => undefined,
+            write: () => {
+              writeFileSync(opt('UserKnownHostsFile'), 'h.example ssh-ed25519 AAAA\n');
+              // The person reconnects with a new password while this sign-in is still running.
+              void vault.set(
+                ref,
+                JSON.stringify({ auth: 'password', password: 'new', address: 'cp@h.example:22' }),
+              );
+              writeFileSync(opt('ControlPath'), '');
+            },
+            kill: () => undefined,
+          };
+        },
+      },
+    );
+    const c = await ssh.connect(
+      { method: 'ssh', auth: 'password', host: 'h.example', user: 'cp', password: 'old' },
+      't-race',
+    );
+    ref = c.credentialRef;
+    const issued = await ssh.issue(
+      grant,
+      target({ provider: 'ssh', credentialRef: c.credentialRef, config: c.config }),
+    );
+    expect(JSON.parse((await vault.get(ref)) ?? '{}')).toEqual({
+      auth: 'password',
+      password: 'new',
+      address: 'cp@h.example:22',
+    });
+    await ssh.revoke(issued);
+  });
+
+  it("own-setup targets use the person's agent and config; a jump host goes in the grant's config", async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'styx-ssh-'));
+    const ssh = new SshAdapter(deps({}), { socketDir: dir, platform: 'darwin' });
+    const own = await ssh.connect(
+      { method: 'ssh', auth: 'agent', host: 'h.example', user: 'me', proxyJump: 'jump@bastion.example:2200' },
+      't-own',
+    );
+    const o = await ssh.issue(
+      grant,
+      target({ provider: 'ssh', credentialRef: own.credentialRef, config: own.config }),
+    );
+    if (o.kind !== 'ssh-agent') throw new Error('expected an ssh credential');
+    expect(o.env['SSH_AUTH_SOCK']).toBeUndefined(); // the person's own agent, untouched
+    const cfg = readFileSync(o.configPath, 'utf8');
+    expect(cfg).toContain('  ProxyJump jump@bastion.example:2200\n');
+    expect(cfg).not.toContain('IdentityAgent');
+    await ssh.revoke(o);
+    expect(sshHostOk('www.example.co.za')).toBe(true);
+  });
+
+  it('tells a password-only server apart from a refused key', () => {
+    expect(passwordOnly('u@h: Permission denied (password).')).toBe(true);
+    expect(passwordOnly('u@h: Permission denied (keyboard-interactive,password).')).toBe(true);
+    expect(passwordOnly('u@h: Permission denied (publickey,password).')).toBe(false);
+    expect(passwordOnly('ssh: connect to host h port 22: Connection refused')).toBe(false);
+  });
+
+  it('writes ssh_config only from plain host and user names (a repo-authored target cannot add directives)', () => {
+    const key = { auth: 'key' as const, socketPath: '/s/agent.sock' };
+    expect(sshConfigFor({ host: '10.0.0.5', user: 'deploy', port: 22 }, key, 'linux', '/home/me')).toBe(
+      [
+        '# Written by Styx for one grant; removed when the grant ends.',
+        'Host 10.0.0.5',
+        '  User deploy',
+        '  Port 22',
+        '  StrictHostKeyChecking accept-new',
+        '  IdentityAgent "/s/agent.sock"',
+        'Match all',
+        '  Include "/home/me/.ssh/config"',
+        '  Include /etc/ssh/ssh_config',
+        '',
+      ].join('\n'),
+    );
+    // Windows: the grant's pipe is named too, and there is no /etc/ssh.
+    const win = sshConfigFor(
+      { host: 'h', user: 'u', port: 22 },
+      { auth: 'key', socketPath: '\\\\.\\pipe\\x' },
+      'win32',
+      'C:\\Users\\me',
+    );
+    expect(win).toContain('IdentityAgent "\\\\.\\pipe\\x"');
+    expect(win).not.toContain('/etc/ssh');
+    for (const [host, user, port, proxyJump] of [
+      ['evil\n  ProxyCommand sh -c id', 'u', 22, ''],
+      ['ssh://u@h', 'u', 22, ''],
+      ['-oProxyCommand=x', 'u', 22, ''],
+      ['h', '-Jx', 22, ''],
+      ['h', 'u x', 22, ''],
+      ['h', '', 22, ''],
+      ['h', 'u', 70000, ''],
+      ['h', 'u', 22, 'a@b\n  LocalCommand id'],
+      ['h', 'u', 22, '-oProxyCommand=x'],
+    ] as const)
+      expect(() => sshConfigFor({ host, user, port, proxyJump }, key, 'linux', '/home/me')).toThrow();
+    expect(sshHostOk('-oProxyCommand=x')).toBe(false);
+  });
+
+  it('finds the ssh destination past option values, so the scope reads the remote command', () => {
+    expect(sshDestinationIndex(['host', 'uptime'])).toBe(0);
+    expect(sshDestinationIndex(['-p', '2222', 'host', 'uptime'])).toBe(2);
+    expect(sshDestinationIndex(['-oHostname=h', '-E', 'x@y', 'uptime', 'reboot'])).toBe(3);
+    expect(sshDestinationIndex(['-tt', '--', 'host'])).toBe(2);
+    const ssh = new SshAdapter(deps({}));
+    expect(ssh.scopeOfCommand(['-oHostname=h', '-E', 'x@y', 'uptime', 'reboot'])).toEqual(['write']);
+    expect(ssh.scopeOfCommand(['-p', '2222', 'host', 'uptime'])).toEqual(['read']);
   });
 
   it('answers session-bind@openssh.com so identities still come back (OpenSSH >= 8.9)', async () => {

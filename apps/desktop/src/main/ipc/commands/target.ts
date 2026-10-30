@@ -29,9 +29,17 @@ export function registerTargetCommands(bus: CommandBus, app: Container): void {
     return {};
   });
 
-  bus.register('target.connect.saveSsh', async ({ passphrase, ...rest }) => ({
-    // exactOptionalPropertyTypes: an absent passphrase must be absent, not `undefined`.
-    targetId: (await targets.saveSsh({ ...rest, ...(passphrase !== undefined ? { passphrase } : {}) })).id,
+  bus.register('target.connect.saveSsh', async ({ passphrase, keyPath, password, proxyJump, ...rest }) => ({
+    // exactOptionalPropertyTypes: absent optional fields must be absent, not `undefined`.
+    targetId: (
+      await targets.saveSsh({
+        ...rest,
+        ...(keyPath !== undefined ? { keyPath } : {}),
+        ...(passphrase !== undefined ? { passphrase } : {}),
+        ...(password !== undefined ? { password } : {}),
+        ...(proxyJump !== undefined ? { proxyJump } : {}),
+      })
+    ).id,
   }));
 
   bus.register('target.connect.cliStatus', ({ provider }) => targets.cliStatus(provider));
