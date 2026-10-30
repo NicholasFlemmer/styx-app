@@ -353,6 +353,17 @@ export class TargetService {
    * audited and ends the grants approved for the old one, like the Settings picker.
    */
   fileConfigChanged(before: Target, after: Target): void {
+    // An SSH target has no project: where it signs in is its address. A new one from the file is a re-point (row 171):
+    // the grants approved for the old server must not carry on against a host, user or jump host nobody approved.
+    if (before.credentialRef !== null && after.provider === 'ssh') {
+      const address = (t: Target) =>
+        `${String(t.config['user'] ?? '')}@${String(t.config['host'] ?? '')}:${String(t.config['port'] ?? 22)}` +
+        (t.config['proxyJump'] ? ` via ${String(t.config['proxyJump'])}` : '');
+      if (address(before) === address(after)) return;
+      this.audit('connected', after, 'project.json', { address: address(after), from: address(before) });
+      this.deps.grants.cancelTargetGrants(after.id, 'address changed in project.json');
+      return;
+    }
     const moved = this.projectMove(before, after);
     if (before.credentialRef === null || Object.keys(moved).length === 0) return;
     this.audit('connected', after, 'project.json', moved);
@@ -402,9 +413,12 @@ export class TargetService {
     env: Env;
     host: string;
     user: string;
-    keyPath: string;
+    auth?: 'key' | 'password' | 'agent';
+    keyPath?: string;
     port?: number;
     passphrase?: string;
+    password?: string;
+    proxyJump?: string;
   }): Promise<Target> {
     const target = this.placeholder(input.projectId, 'ssh', input.env, input.name);
     const r = await this.deps.providers
@@ -412,11 +426,14 @@ export class TargetService {
       .connect(
         {
           method: 'ssh',
-          host: input.host,
-          user: input.user,
-          keyPath: input.keyPath,
+          host: input.host.trim(),
+          user: input.user.trim(),
+          auth: input.auth ?? 'key',
+          ...(input.keyPath ? { keyPath: input.keyPath } : {}),
           ...(input.port !== undefined ? { port: input.port } : {}),
           ...(input.passphrase ? { passphrase: input.passphrase } : {}),
+          ...(input.password ? { password: input.password } : {}),
+          ...(input.proxyJump?.trim() ? { proxyJump: input.proxyJump.trim() } : {}),
         },
         target.id,
       )

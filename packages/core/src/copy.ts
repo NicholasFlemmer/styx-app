@@ -1291,7 +1291,34 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       portHint: 'Default 22',
       passphrase: 'Passphrase',
       passphraseHint: 'Only for an encrypted key',
+      /** ADR-0031: how the target signs in. */
+      signIn: 'Sign in with',
+      auths: { key: 'Key file', password: 'Password', agent: 'My SSH setup' },
+      password: 'Password',
+      passwordHint: 'Kept in your keychain',
+      jump: 'Jump host',
+      jumpHint: 'Optional, like user@bastion:22',
+      hostHint: 'Just the name, like example.com',
+      passwordWindows:
+        "Password sign-in isn't available on Windows yet: its ssh can't keep one signed-in connection open for agents to share. Use a key file or your own SSH setup.",
+      unexpectedPrompt: 'The server asked for something Styx cannot answer for you: "{prompt}"',
+      oneJump:
+        'A password target can go through one jump host. Use a key file or your own SSH setup for more.',
+      hostKeyChanged:
+        "The server's host key is not the one Styx pinned when it first signed in. If you expected that (a rebuilt server), reconnect the target; if not, someone may be in the way.",
+      addressChanged:
+        'This target now points at {address}, not where its password was saved for. Reconnect it to use the password there.',
       body: "Agents get a forwarded agent socket for the grant's duration, never the key file.",
+      bodies: {
+        key: "Agents get a forwarded agent socket for the grant's duration, never the key file.",
+        password:
+          'Styx signs in with the password itself when you grant access; agents use that connection and never see the password. A key is safer where the server allows one.',
+        agent:
+          'Uses your own ssh agent and ~/.ssh/config: 1Password, hardware keys, certificates, keys you already use. Nothing is stored; each command still needs your grant.',
+      },
+      /** The server refused the key and offered no key sign-in at all: Styx signs in with keys only. */
+      passwordOnly:
+        "{host} only accepts passwords for {user}, and this target signs in with a key. Choose Password instead, or add this key's public half to the server (most hosting panels have an SSH keys page; or run ssh-copy-id -p {port} {user}@{host} in Terminal), then test again.",
       test: 'Test connection',
       save: 'Save',
     },

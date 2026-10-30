@@ -83,7 +83,13 @@ export const methods = {
   get_credential: { params: z.object({ grantId: z.string() }), result: Credential },
   exec_authorize: {
     params: z.object({ tool: z.string(), argv: z.array(z.string()), cwd: z.string() }),
-    result: z.object({ grantId: z.string(), useId: z.string(), env: z.record(z.string(), z.string()) }),
+    result: z.object({
+      grantId: z.string(),
+      useId: z.string(),
+      env: z.record(z.string(), z.string()),
+      /** SSH grants: the grant's ssh_config, passed as `-F` to ssh, scp and sftp so the target's user and port apply. */
+      sshConfig: z.string().optional(),
+    }),
   },
   exec_report: {
     params: z.object({ useId: z.string(), exitCode: z.number().int() }),
@@ -223,6 +229,8 @@ export const methods = {
         env: z.string(),
         lockState: z.enum(['unconnected', 'locked', 'open', 'persistent', 'expired']),
         scopes: z.array(Scope),
+        /** SSH targets: the host to pass to ssh. Its saved user and port are applied by the shim. */
+        host: z.string().optional(),
       }),
     ),
   },

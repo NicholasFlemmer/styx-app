@@ -417,7 +417,7 @@ describe('ConnectModal', () => {
       title: copy.connect.ssh.key,
       defaultPath: '~/.ssh',
     });
-    expect(screen.getByText(copy.connect.ssh.body)).toBeTruthy();
+    expect(screen.getByText(copy.connect.ssh.bodies.key)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Advanced/ })).toBeNull();
     const save = screen.getByRole('button', { name: copy.connect.ssh.save });
     expect(save.hasAttribute('disabled')).toBe(true);
@@ -434,6 +434,7 @@ describe('ConnectModal', () => {
       env: 'prod',
       host: 'prod-1.acme.internal',
       user: 'deploy',
+      auth: 'key',
       keyPath: '~/.ssh/id_ed25519',
       port: 22,
     });
@@ -465,6 +466,36 @@ describe('ConnectModal', () => {
       port: 2222,
       passphrase: 'hunter2',
     });
+  });
+
+  it('ssh step (ADR-0031): Password and My SSH setup swap the key fields; the password and jump host reach saveSsh', async () => {
+    render(<ConnectModal id="modal-1" projectId={acme} provider="ssh" />);
+    fireEvent.change(screen.getByLabelText(copy.connect.ssh.host), {
+      target: { value: 'www.example.co.za' },
+    });
+    fireEvent.change(screen.getByLabelText(copy.connect.ssh.user), { target: { value: 'cpuser' } });
+    fireEvent.change(screen.getByLabelText(copy.connect.ssh.port), { target: { value: '2222' } });
+    fireEvent.click(screen.getByRole('radio', { name: copy.connect.ssh.auths.password }));
+    expect(screen.queryByLabelText(copy.connect.ssh.key)).toBeNull();
+    expect(screen.getByText(copy.connect.ssh.bodies.password)).toBeTruthy();
+    const save = screen.getByRole('button', { name: copy.connect.ssh.save });
+    expect(save.hasAttribute('disabled')).toBe(true); // no password yet
+    fireEvent.change(screen.getByLabelText(copy.connect.ssh.password), { target: { value: 'pw!' } });
+    fireEvent.change(screen.getByLabelText(copy.connect.ssh.jump), { target: { value: 'me@bastion:22' } });
+    fireEvent.click(save);
+    await waitFor(() => expect(calls('target.connect.saveSsh')).toHaveLength(1));
+    const sent = calls('target.connect.saveSsh')[0]?.[1];
+    expect(sent).toMatchObject({ auth: 'password', password: 'pw!', port: 2222, proxyJump: 'me@bastion:22' });
+    expect(sent).not.toHaveProperty('keyPath');
+  });
+
+  it('ssh step: My SSH setup needs only host and user', () => {
+    render(<ConnectModal id="modal-1" projectId={acme} provider="ssh" />);
+    fireEvent.change(screen.getByLabelText(copy.connect.ssh.host), { target: { value: 'box.example' } });
+    fireEvent.change(screen.getByLabelText(copy.connect.ssh.user), { target: { value: 'me' } });
+    fireEvent.click(screen.getByRole('radio', { name: copy.connect.ssh.auths.agent }));
+    expect(screen.queryByLabelText(copy.connect.ssh.password)).toBeNull();
+    expect(screen.getByRole('button', { name: copy.connect.ssh.save }).hasAttribute('disabled')).toBe(false);
   });
 
   it('oauth (Advanced): Open browser starts the flow with the shared env', async () => {

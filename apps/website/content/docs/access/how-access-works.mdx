@@ -26,7 +26,7 @@ The environment matters most. Production is treated differently everywhere: writ
 
 There are two ways, and both end at the same place.
 
-**It runs the provider's CLI.** Every agent Styx starts has small wrappers ("shims") first on its `PATH` for `vercel`, `gh`, `aws`, `gcloud`, `supabase`, `ssh`, `fly` (and `flyctl`), `railway` and `render`. When the agent runs, say, `vercel deploy --prod`, the shim asks Styx before the real `vercel` runs. Styx works out what the command needs from its verbs: `ls` or `view` is a read, `deploy` is a deploy, `delete` or `drop` is a delete. Anything it doesn't recognise counts as a write, so a misread command is treated as more dangerous, never less. If you approve, the real command runs with the grant's credentials in its environment. If you deny, it fails with `styx: access to vercel was not granted`. The shim waits up to 10 minutes for your answer.
+**It runs the provider's CLI.** Every agent Styx starts has small wrappers ("shims") first on its `PATH` for `vercel`, `gh`, `aws`, `gcloud`, `supabase`, `ssh` (and `scp`, `sftp`, `rsync`), `fly` (and `flyctl`), `railway` and `render`. When the agent runs, say, `vercel deploy --prod`, the shim asks Styx before the real `vercel` runs. Styx works out what the command needs from its verbs: `ls` or `view` is a read, `deploy` is a deploy, `delete` or `drop` is a delete. Anything it doesn't recognise counts as a write, so a misread command is treated as more dangerous, never less. If you approve, the real command runs with the grant's credentials in its environment. If you deny, it fails with `styx: access to vercel was not granted`. The shim waits up to 10 minutes for your answer.
 
 **It asks directly.** Styx also gives each agent an MCP server with a `request_access` tool. The agent names a target, the scopes it wants and a one-line reason, and waits for your decision. See [MCP tools](/docs/reference/mcp-tools).
 
@@ -99,6 +99,8 @@ Revoking a grant stops Styx handing out the credential and shuts any SSH socket.
 ## SSH
 
 For an SSH host, Styx keeps the path to your key (and its passphrase, if it has one) in the keychain. When a grant is issued, Styx starts its own SSH agent holding that key on a private socket and points the command's `SSH_AUTH_SOCK` at it. The agent can log in through that socket while the grant lasts. It never receives the key file. When the grant ends, the socket closes.
+
+Every SSH grant also writes a small ssh config with the target's user, port and jump host, so `ssh <host>` reaches the server as you saved it. A host that signs in with a **password** is signed in by Styx itself when the grant is issued: Styx opens one SSH connection, types the password at ssh's prompt where no agent can see it, and the agent's `ssh`, `scp`, `sftp`, `rsync` and git commands all run over that connection. The agent never gets the password in any form, and the connection closes when the grant ends. A host set to **My SSH setup** uses your own agent and config; Styx still asks for every command and logs it.
 
 ## Next
 

@@ -31,7 +31,7 @@ Terminals you open in Styx get `STYX_SHIM_DIR`, `STYX_CLI`, `STYX_EXE` and `STYX
 
 Styx also sets:
 
-- `STYX_SSH_HOST` (as `user@host`) in the credentials of an SSH grant, next to `SSH_AUTH_SOCK`.
+- `STYX_SSH_HOST` (as `user@host`) in the credentials of an SSH grant, next to `SSH_AUTH_SOCK`. The grant also writes a small ssh config with the target's user and port: `ssh`, `scp` and `sftp` get it as `-F`, and `rsync` and git through `RSYNC_RSH` and `GIT_SSH_COMMAND`, so `ssh <host>` reaches the target as saved. A user or port you pass yourself still wins.
 - `STYX_OPEN_IN=1` in your Windows user environment when it installs the "Open in Styx" launcher. It only exists to tell Windows the environment changed.
 
 ## For development and testing

@@ -3,6 +3,9 @@ import crossSpawn from 'cross-spawn';
 import { BrokerClient } from '@styx/broker';
 import { resolveRealBinary } from './path-resolve';
 
+/** Tools that take an ssh_config as `-F` (rsync's `-F` is a filter rule: it reads RSYNC_RSH instead). */
+const SSH_CONFIG_TOOLS = new Set(['ssh', 'scp', 'sftp']);
+
 export interface WrapIo {
   env: NodeJS.ProcessEnv;
   stderr: (s: string) => void;
@@ -20,6 +23,7 @@ export async function wrap(tool: string, argv: string[], io: WrapIo): Promise<nu
     return 127;
   }
   let extraEnv: Record<string, string> = {};
+  let extraArgs: string[] = [];
   let useId: string | null = null;
   let client: BrokerClient | null = null;
   if (io.env['STYX_BROKER'] && io.env['STYX_SESSION_ID'] && io.env['STYX_TOKEN']) {
@@ -33,6 +37,8 @@ export async function wrap(tool: string, argv: string[], io: WrapIo): Promise<nu
       );
       extraEnv = auth.env;
       useId = auth.useId;
+      // The target's user and port (rsync and git get the same file through their env instead).
+      if (auth.sshConfig !== undefined && SSH_CONFIG_TOOLS.has(tool)) extraArgs = ['-F', auth.sshConfig];
     } catch (e) {
       io.stderr(`styx: access to ${tool} was not granted: ${(e as Error).message}\n`);
       client?.close();
@@ -43,7 +49,7 @@ export async function wrap(tool: string, argv: string[], io: WrapIo): Promise<nu
   // cross-spawn does that with every argument escaped.
   const start = io.spawn ?? (process.platform === 'win32' ? (crossSpawn as unknown as typeof spawn) : spawn);
   const code = await new Promise<number>((resolve) => {
-    const child = start(real, argv, { stdio: 'inherit', env: { ...io.env, ...extraEnv } });
+    const child = start(real, [...extraArgs, ...argv], { stdio: 'inherit', env: { ...io.env, ...extraEnv } });
     child.on('exit', (c, sig) => resolve(c ?? (sig ? 128 : 1)));
     child.on('error', (err) => {
       io.stderr(`styx: failed to start ${real}: ${err.message}\n`);

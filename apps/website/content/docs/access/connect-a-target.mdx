@@ -42,9 +42,15 @@ Styx checks a pasted credential against the provider before it stores it, and ne
 
 ## SSH hosts
 
-SSH has its own form: **Host**, **User**, **Port** (default 22), **Key** (with **Browse**, starting in `~/.ssh`), and **Passphrase** if the key is encrypted. Pick the environment, then **Test connection** and **Save**.
+SSH has its own form: **Host** (just the name, like `example.com`), **User**, **Port** (default 22) and an optional **Jump host** (`user@bastion:22`, comma-separated for several). Then choose how it signs in:
 
-Styx stores the key's path and passphrase in the keychain, not the key itself, and reads the key from disk each time a grant is issued. Agents never get the key file. They get a forwarded SSH agent socket that works for the grant's lifetime, as the form says.
+- **Key file**: the key (with **Browse**, starting in `~/.ssh`), and **Passphrase** if the key is encrypted. Styx stores the key's path and passphrase in the keychain, not the key itself, and reads the key from disk each time a grant is issued. Agents never get the key file: they get a forwarded SSH agent socket that works for the grant's lifetime.
+- **Password**: kept in the keychain. When you grant access, Styx signs in to the server itself and agents use that connection, so they never see the password. Not available on Windows, whose ssh can't share a signed-in connection: use a key file or your own setup there.
+- **My SSH setup**: nothing is stored. ssh uses your own agent and `~/.ssh/config`, so 1Password, hardware keys, certificates and keys you already use all work.
+
+Pick the environment, then **Test connection** and **Save**. Test connection signs in exactly the way an agent will. If a server only accepts passwords and you chose a key, it says so, and how to add your key to the server.
+
+Agents run plain `ssh <host>`, `scp`, `sftp` or `rsync`: Styx applies the target's user, port and jump host for them, and a user or port the agent gives itself still wins.
 
 ## Where credentials go
 

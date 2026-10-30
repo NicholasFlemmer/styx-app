@@ -850,13 +850,20 @@ export const commands = {
       projectId: projectIdSchema,
       name: targetNameSchema,
       env: envSchema,
-      host: z.string().min(1),
-      user: z.string().min(1),
-      keyPath: z.string().min(1),
+      host: z.string().min(1).max(253),
+      user: z.string().min(1).max(64),
       /** Non-standard SSH ports are common on jump/bastion hosts; 22 when omitted. */
       port: z.number().int().min(1).max(65535).default(22),
+      /** ADR-0031: a key file Styx serves, a password from the keychain, or the person's own ssh setup. */
+      auth: z.enum(['key', 'password', 'agent']).default('key'),
+      /** key only. */
+      keyPath: z.string().min(1).optional(),
       /** Passphrase for an encrypted key. The vault and the agent already support it; the form did not collect it. */
       passphrase: z.string().optional(),
+      /** password only: kept in the keychain; Styx signs in with it itself, agents never get it (ADR-0031). */
+      password: z.string().min(1).max(1024).optional(),
+      /** `user@host:port` of one or more jump hosts (ProxyJump), comma-separated. */
+      proxyJump: z.string().max(500).optional(),
     }),
     output: idOut('targetId', targetIdSchema),
   },

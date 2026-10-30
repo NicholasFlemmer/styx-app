@@ -22,6 +22,7 @@ import {
 import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
 import type { IssuedCredential, ProviderRegistry } from '../providers';
+import { sshHostOk } from '../providers/ssh';
 import type { GrantOutcome, GrantService } from '../services/grant-service';
 import type { HunkService } from '../services/hunk-service';
 import type { LaneLedgerService } from '../services/lane-ledger-service';
@@ -266,7 +267,7 @@ export class BrokerHost {
       return {
         kind: cred.kind,
         env: cred.env,
-        ...(cred.kind === 'ssh-agent' ? { socketPath: cred.socketPath } : {}),
+        ...(cred.kind === 'ssh-agent' && cred.socketPath !== null ? { socketPath: cred.socketPath } : {}),
         expiresAt: cred.expiresAt,
         scoped: cred.scoped,
       };
@@ -504,7 +505,19 @@ export class BrokerHost {
                   ? 'open'
                   : 'locked';
         const scopes = [...new Set(live.flatMap((g) => g.scope))] as Scope[];
-        return { id: t.id, name: t.name, provider: t.provider, env: t.env, lockState, scopes };
+        const host =
+          t.provider === 'ssh' && typeof t.config['host'] === 'string' && sshHostOk(t.config['host'])
+            ? t.config['host']
+            : null;
+        return {
+          id: t.id,
+          name: t.name,
+          provider: t.provider,
+          env: t.env,
+          lockState,
+          scopes,
+          ...(host !== null ? { host } : {}),
+        };
       });
     });
   }
@@ -561,7 +574,12 @@ export class BrokerHost {
       via: 'shim',
       sessionId: ctx.session.sessionId,
     });
-    return { grantId: grant.id, useId, env: cred?.env ?? {} };
+    return {
+      grantId: grant.id,
+      useId,
+      env: cred?.env ?? {},
+      ...(cred?.kind === 'ssh-agent' ? { sshConfig: cred.configPath } : {}),
+    };
   }
 
   /**
