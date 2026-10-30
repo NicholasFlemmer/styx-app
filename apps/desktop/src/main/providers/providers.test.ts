@@ -477,7 +477,7 @@ describe('SshAdapter', () => {
     const dir = mkdtempSync(join(tmpdir(), 'styx-ssh-'));
     const keyPath = join(dir, 'id_ed25519');
     writeFileSync(keyPath, keys.private, { mode: 0o600 });
-    const ssh = new SshAdapter(deps({}), { socketDir: dir, platform: 'darwin' });
+    const ssh = new SshAdapter(deps({}), { socketDir: dir, platform: process.platform });
     const c = await ssh.connect(
       { method: 'ssh', host: 'www.example.co.za', user: 'homeuser', keyPath, port: 2222 },
       't-port',
@@ -859,7 +859,7 @@ describe('SshAdapter', () => {
         '  StrictHostKeyChecking accept-new',
         '  IdentityAgent "/s/agent.sock"',
         'Match all',
-        '  Include "/home/me/.ssh/config"',
+        `  Include "${join('/home/me', '.ssh', 'config')}"`,
         '  Include /etc/ssh/ssh_config',
         '',
       ].join('\n'),
