@@ -85,7 +85,13 @@ describe.skipIf(process.platform === 'win32')('wrap', () => {
         agent: 'shell',
       }),
     });
-    server.on('exec_authorize', async () => ({ grantId: 'g', useId: '', env: {}, sshConfig: '/tmp/cfg' }));
+    server.on('exec_authorize', async () => ({
+      grantId: 'g',
+      useId: '',
+      env: {},
+      sshConfig: '/tmp/cfg',
+      notice: 'web → me@example.com:2222',
+    }));
     await server.listen(sock);
     const env = {
       PATH: `${shim}:${real}`,
@@ -95,7 +101,9 @@ describe.skipIf(process.platform === 'win32')('wrap', () => {
       STYX_TOKEN: 'x'.repeat(32),
     };
     const { readFileSync } = await import('node:fs');
-    expect(await wrap('ssh', ['example.com', 'uptime'], { env, stderr: () => undefined, spawn })).toBe(0);
+    const said: string[] = [];
+    expect(await wrap('ssh', ['example.com', 'uptime'], { env, stderr: (m) => said.push(m), spawn })).toBe(0);
+    expect(said).toEqual(['styx: web → me@example.com:2222\n']);
     expect(readFileSync(out, 'utf8').trim().split('\n')).toEqual(['-F', '/tmp/cfg', 'example.com', 'uptime']);
     expect(
       await wrap('rsync', ['-a', 'dist/', 'example.com:app/'], { env, stderr: () => undefined, spawn }),

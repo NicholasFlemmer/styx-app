@@ -170,6 +170,8 @@ export interface ProviderAdapter {
    * account-wide credentials (Render), where naming a project proves nothing.
    */
   projectOfCommand?(argv: string[]): string | null;
+  /** SSH: the host a shim command connects to (`ssh [opts] [user@]host`, `scp … host:path`), lowercased; null if none. */
+  hostOfCommand?(argv: string[], tool?: string): string | null;
   listProjects?(source: ProjectSource): Promise<ProviderProject[]>;
 }
 
