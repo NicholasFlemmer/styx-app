@@ -888,6 +888,32 @@ describe('SshAdapter', () => {
     expect(sshHostOk('-oProxyCommand=x')).toBe(false);
   });
 
+  it('reads the host a command connects to, for picking the target saved with it', () => {
+    const ssh = new SshAdapter(deps({}));
+    expect(ssh.hostOfCommand(['-v', 'WWW.Example.co.za', 'uptime'])).toBe('www.example.co.za');
+    expect(ssh.hostOfCommand(['-p', '2222', 'cp@web.example'])).toBe('web.example');
+    expect(ssh.hostOfCommand(['ssh://cp@web.example:2222'])).toBe('web.example');
+    expect(ssh.hostOfCommand(['-r', 'dist', 'cp@web.example:/srv/app'], 'scp')).toBe('web.example');
+    expect(ssh.hostOfCommand(['-az', 'dist/', 'web.example:app/'], 'rsync')).toBe('web.example');
+    expect(ssh.hostOfCommand(['cp@web.example'], 'sftp')).toBe('web.example');
+    expect(ssh.hostOfCommand(['-V'])).toBeNull();
+    expect(ssh.hostOfCommand(['root@[2001:db8::1]', 'uptime'])).toBe('2001:db8::1');
+    // Anything that lets a command go somewhere other than the host it names never picks a target by host.
+    for (const argv of [
+      ['-o', 'HostName=prod.example', 'staging.example', 'rm -rf /srv'],
+      ['-oProxyJump=staging.example', 'prod.example'],
+      ['-J', 'staging.example', 'prod.example'],
+      ['-F', '/tmp/other', 'staging.example'],
+      ['-S', '/tmp/sock', 'staging.example'],
+    ])
+      expect(ssh.hostOfCommand(argv)).toBeNull();
+    expect(ssh.hostOfCommand(['-3', 'staging.example:/a', 'prod.example:/b'], 'scp')).toBeNull();
+    expect(ssh.hostOfCommand(['staging.example:/dev/null', 'prod.example:/tmp/'], 'scp')).toBeNull();
+    expect(ssh.hostOfCommand(['-e', 'ssh -p 22', 'dist/', 'web.example:app/'], 'rsync')).toBeNull();
+    // sftp's own value flags are skipped, so `-s subsystem` is not read as the host.
+    expect(ssh.hostOfCommand(['-s', 'staging.example', 'prod.example'], 'sftp')).toBe('prod.example');
+  });
+
   it('finds the ssh destination past option values, so the scope reads the remote command', () => {
     expect(sshDestinationIndex(['host', 'uptime'])).toBe(0);
     expect(sshDestinationIndex(['-p', '2222', 'host', 'uptime'])).toBe(2);

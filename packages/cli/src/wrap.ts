@@ -39,6 +39,7 @@ export async function wrap(tool: string, argv: string[], io: WrapIo): Promise<nu
       useId = auth.useId;
       // The target's user and port (rsync and git get the same file through their env instead).
       if (auth.sshConfig !== undefined && SSH_CONFIG_TOOLS.has(tool)) extraArgs = ['-F', auth.sshConfig];
+      if (auth.notice !== undefined) io.stderr(`styx: ${auth.notice}\n`);
     } catch (e) {
       io.stderr(`styx: access to ${tool} was not granted: ${(e as Error).message}\n`);
       client?.close();

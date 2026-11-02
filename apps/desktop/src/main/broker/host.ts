@@ -22,7 +22,7 @@ import {
 import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
 import type { IssuedCredential, ProviderRegistry } from '../providers';
-import { sshHostOk } from '../providers/ssh';
+import { normalHost, sshHostOk } from '../providers/ssh';
 import type { GrantOutcome, GrantService } from '../services/grant-service';
 import type { HunkService } from '../services/hunk-service';
 import type { LaneLedgerService } from '../services/lane-ledger-service';
@@ -111,11 +111,37 @@ const toBrokerResolution = (ask: PendingAsk, r: AskResolution): Result<'ask_user
  * Main-process side of the broker (plan §6): authenticates sessions by token hash, resolves targets within the
  * session's project, and holds `request_access` / `exec_authorize` / `ask_user` replies until the user decides.
  */
+/**
+ * The one line the ssh shim prints, so the agent and the person see what Styx applied (or why it did not): the
+ * target's saved address, and a warning when the command names another host, which the grant's config leaves alone.
+ */
+const sshNotice = (target: Target, dest: string | null): string => {
+  const host = String(target.config['host'] ?? '');
+  const jump = typeof target.config['proxyJump'] === 'string' && target.config['proxyJump'] !== '';
+  const address = `${String(target.config['user'] ?? '')}@${host}:${String(target.config['port'] ?? 22)}${
+    jump ? ` via ${String(target.config['proxyJump'])}` : ''
+  }`;
+  const line =
+    dest !== null && dest === normalHost(host)
+      ? `${target.name} → ${address}`
+      : `${target.name} is ${address}; its saved user and port apply only to ssh ${host}`;
+  return clean(line, 400);
+};
+
+/** Text from elsewhere (a provider's error, ssh's output) as one safe line for an agent's terminal. */
+const clean = (s: string, max: number): string =>
+  redact(s)
+    .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
+    .replace(/[\x00-\x1f\x7f-\x9f]/g, ' ')
+    .slice(0, max);
+
 export class BrokerHost {
   readonly server: BrokerServer;
   private readonly waits = new Map<string, NodeJS.Timeout>();
   /** Session that opened each held `exec:` request; `always` grants detach from their session on issue. */
   private readonly holdSessions = new Map<string, string>();
+  /** SSH: the host each held command names, for the notice once it is granted. */
+  private readonly holdHosts = new Map<string, string | null>();
 
   constructor(private readonly deps: BrokerHostDeps) {
     this.server = new BrokerServer({
@@ -136,6 +162,7 @@ export class BrokerHost {
     for (const t of this.waits.values()) clearTimeout(t);
     this.waits.clear();
     this.holdSessions.clear();
+    this.holdHosts.clear();
     await this.server.close();
   }
 
@@ -286,35 +313,41 @@ export class BrokerHost {
           `no ${adapter.provider} target in ${ctx.session.projectName}`,
         );
       const target = this.usable(picked);
+      const dest = adapter.hostOfCommand?.(p.argv, p.tool) ?? null;
       // An expired login cannot mint: ask again (with Reconnect) rather than fail on the grant already held.
       const covering =
         target.health === 'expired' ? null : deps.grants.covering(target, ctx.session.sessionId, scopes);
       if (covering) {
         // Through credentialFor so a persistent grant issued before a restart is re-issued (project-bound, M3).
-        const cred = await deps.grants.credentialFor(covering.id, {
-          sessionId: ctx.session.sessionId,
-          projectId: ctx.session.projectId,
-        });
-        return this.authorizeUse(covering, command, scopes, ctx, cred);
+        // authorizeUse mints it, and fails the command closed with the reason when it cannot.
+        return this.authorizeUse(covering, command, scopes, ctx, dest);
       }
       // Only the path that inserts a grant request consumes the session's request bucket (L1); covered shim
       // execs stay unmetered.
       if (!server.allow(ctx.session.sessionId))
         throw new BrokerError(ErrorCode.rateLimited, 'too many access requests; try again in a minute');
-      const outcome = await deps.grants.request({
-        sessionId: ctx.session.sessionId as Grant['sessionId'],
-        targetId: target.id,
-        scope: scopes,
-        reason: command,
-        triggeredBy: command,
-      });
-      if (outcome.kind === 'active') return await this.authorizeUse(outcome.grant, command, scopes, ctx);
+      // An auto-approved request mints on the spot: its failure reaches the agent as the reason, not "internal error".
+      const outcome = await deps.grants
+        .request({
+          sessionId: ctx.session.sessionId as Grant['sessionId'],
+          targetId: target.id,
+          scope: scopes,
+          reason: command,
+          triggeredBy: command,
+        })
+        .catch((e: Error) => {
+          throw new BrokerError(ErrorCode.notAllowed, clean(`${target.name}: ${e.message}`, 300));
+        });
+      if (outcome.kind === 'active')
+        return await this.authorizeUse(outcome.grant, command, scopes, ctx, dest);
       if (outcome.kind === 'denied') throw new BrokerError(ErrorCode.notAllowed, 'access denied');
       const key = this.holdKey('exec', outcome.grant.id, req, ctx);
       req.hold(key);
       this.holdSessions.set(key, ctx.session.sessionId);
+      this.holdHosts.set(key, dest);
       this.armWait(key, 600_000, () => {
         this.holdSessions.delete(key);
+        this.holdHosts.delete(key);
         server.rejectHeld(key, { code: ErrorCode.notAllowed, message: 'timed out waiting for a decision' });
       });
       // resolved in onGrantDecision with { grantId, useId, env }
@@ -557,17 +590,25 @@ export class BrokerHost {
     command: string,
     scopes: Scope[],
     ctx: ConnectionContext,
-    issued?: IssuedCredential,
+    dest: string | null = null,
   ): Promise<Result<'exec_authorize'>> {
     const target = this.deps.repos.targets.get(grant.targetId) ?? null;
-    const cred =
-      issued ??
-      (await this.deps.grants
-        .credentialFor(grant.id, {
-          sessionId: ctx.session.sessionId,
-          projectId: target?.projectId ?? ctx.session.projectId,
-        })
-        .catch(() => this.deps.grants.issuedCredential(grant.id)));
+    let cred: IssuedCredential;
+    try {
+      // Through credentialFor so a persistent grant issued before a restart is re-issued (project-bound, M3).
+      cred = await this.deps.grants.credentialFor(grant.id, {
+        sessionId: ctx.session.sessionId,
+        projectId: target?.projectId ?? ctx.session.projectId,
+      });
+    } catch (e) {
+      // A credential that could not be set up (an SSH sign-in that failed, a lapsed login) fails the command closed
+      // with the reason. Running it with nothing injected ran the plain tool with its defaults: an SSH command then
+      // went out as the local user on port 22, which looked like Styx ignoring the target.
+      throw new BrokerError(
+        ErrorCode.notAllowed,
+        clean(`${target?.name ?? 'the target'}: ${(e as Error).message}`, 300),
+      );
+    }
     const { useId } = this.deps.grants.use(grant.id, {
       command,
       scopeUsed: scopes[0] ?? 'read',
@@ -577,8 +618,10 @@ export class BrokerHost {
     return {
       grantId: grant.id,
       useId,
-      env: cred?.env ?? {},
-      ...(cred?.kind === 'ssh-agent' ? { sshConfig: cred.configPath } : {}),
+      env: cred.env,
+      ...(cred.kind === 'ssh-agent' && target !== null
+        ? { sshConfig: cred.configPath, notice: sshNotice(target, dest) }
+        : {}),
     };
   }
 
@@ -598,15 +641,22 @@ export class BrokerHost {
       envOfCommand?: (argv: string[], tool?: string) => 'prod' | 'non-prod' | null;
       projectKey?: string;
       projectOfCommand?: (argv: string[]) => string | null;
+      hostOfCommand?: (argv: string[], tool?: string) => string | null;
     },
     argv: string[],
     tool: string,
     scopes: Scope[],
   ): Target | null {
-    const candidates = this.deps.repos.targets
+    const all = this.deps.repos.targets
       .byProject(ctx.session.projectId)
       .filter((t) => t.provider === adapter.provider);
-    if (candidates.length === 0) return null;
+    if (all.length === 0) return null;
+    // SSH: the target whose saved host is the one the command names. A project with several servers (or an old
+    // target next to a re-created one) must not send `ssh web` through the rules and credentials of another.
+    const host = adapter.hostOfCommand?.(argv, tool) ?? null;
+    const sameHost =
+      host === null ? [] : all.filter((t) => normalHost(String(t.config['host'] ?? '')) === host);
+    const candidates = sameHost.length > 0 ? sameHost : all;
     // A write credential bound to one project (Fly.io deploy token on one app): a non-read command whose own app
     // flag names a target's project goes to that target, since its token works nowhere else. Reads get wider
     // tokens (Fly.io: org-wide read-only), so they keep the environment rules below, as does anything unnamed.
@@ -658,6 +708,7 @@ export class BrokerHost {
       // `always` grants detach from the session on issue (grant.sessionId === null): attribute the use to the
       // session that held the request, never to ''.
       const heldSession = this.holdSessions.get(key) ?? grant.sessionId ?? '';
+      const dest = this.holdHosts.get(key) ?? null;
       this.clearWait(key);
       if (outcome !== 'granted') {
         this.server.rejectHeld(key, {
@@ -674,9 +725,13 @@ export class BrokerHost {
       } as ConnectionContext;
       const command = grant.reason;
       const scopes = [...grant.scope];
-      void this.authorizeUse(grant, command, scopes, ctx).then(
+      void this.authorizeUse(grant, command, scopes, ctx, dest).then(
         (result) => this.server.resolveHeld(key, result),
-        (e: Error) => this.server.rejectHeld(key, { code: ErrorCode.internal, message: e.message }),
+        (e: Error) =>
+          this.server.rejectHeld(key, {
+            code: e instanceof BrokerError ? e.code : ErrorCode.internal,
+            message: e.message,
+          }),
       );
     }
   }
@@ -707,6 +762,7 @@ export class BrokerHost {
     if (t) clearTimeout(t);
     this.waits.delete(key);
     this.holdSessions.delete(key);
+    this.holdHosts.delete(key);
   }
 
   notifyStopping(sessionId: string): void {

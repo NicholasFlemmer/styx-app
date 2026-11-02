@@ -193,17 +193,30 @@ export const sshConfigFor = (
 /** ssh's flags that take a value (`-p 22`, `-o X=y`): their values are never the destination or the command. */
 const SSH_VALUE_FLAGS = new Set('BbcDEeFIiJLlmOoPpQRSWw'.split(''));
 
+/** sftp's own flags that take a value (`-s subsystem`, `-X option` are not ssh's). */
+const SFTP_VALUE_FLAGS = new Set('BbcDFiJlPRSsoX'.split(''));
+
 /** Where the destination sits in an ssh argv: the first word that is neither an option nor an option's value. */
-export const sshDestinationIndex = (argv: string[]): number => {
+export const sshDestinationIndex = (argv: string[], flags: ReadonlySet<string> = SSH_VALUE_FLAGS): number => {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i] ?? '';
     if (a === '--') return i + 1;
     if (!a.startsWith('-') || a === '-') return i;
     // `-p 22` takes the next word; `-p22` and grouped flags like `-tt` do not.
-    if (a.length === 2 && SSH_VALUE_FLAGS.has(a.charAt(1))) i++;
+    if (a.length === 2 && flags.has(a.charAt(1))) i++;
   }
   return argv.length;
 };
+
+/**
+ * Options that let a command connect somewhere other than the host it names (`-o HostName=…`, a jump, another
+ * config or control socket, `scp -3`, `rsync -e`). With any of them the named host proves nothing about where it
+ * goes, so it never picks a target by host.
+ */
+const REDIRECTS = /^-(?:[JWFSA]|o|3|e|-rsh)(?:$|=|.)/;
+
+/** A host as compared between a command and a saved target: lowercased, IPv6 brackets off. */
+export const normalHost = (h: string): string => h.toLowerCase().replace(/^\[|\]$/g, '');
 
 export class SshAdapter implements ProviderAdapter {
   readonly provider = 'ssh' as const;
@@ -592,6 +605,24 @@ export class SshAdapter implements ProviderAdapter {
     const path = this.configs.get(grantId);
     this.configs.delete(grantId);
     if (path !== undefined) await rm(path, { force: true });
+  }
+
+  hostOfCommand(argv: string[], tool = 'ssh'): string | null {
+    if (argv.some((a) => REDIRECTS.test(a))) return null;
+    const bare = (dest: string): string | null => {
+      const m = /^(?:ssh:\/\/)?(?:[^@/]*@)?(\[[^\]]+\]|[^:/@]+)/.exec(dest);
+      return m?.[1] ? normalHost(m[1]) : null;
+    };
+    if (tool === 'ssh' || tool === 'sftp') {
+      const dest = argv[sshDestinationIndex(argv, tool === 'sftp' ? SFTP_VALUE_FLAGS : SSH_VALUE_FLAGS)];
+      return dest === undefined ? null : bare(dest);
+    }
+    // scp and rsync name remote sides as `[user@]host:path`: only a command whose remotes all name one host.
+    const hosts = new Set(
+      argv.filter((a) => !a.startsWith('-') && /^(?:[^@/]*@)?(?:\[[^\]]+\]|[^:/@]+):/.test(a)).map(bare),
+    );
+    const [only] = [...hosts];
+    return hosts.size === 1 && only !== undefined ? only : null;
   }
 
   issuesScoped(): boolean {

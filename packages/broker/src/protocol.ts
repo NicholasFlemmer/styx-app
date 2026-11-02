@@ -89,6 +89,8 @@ export const methods = {
       env: z.record(z.string(), z.string()),
       /** SSH grants: the grant's ssh_config, passed as `-F` to ssh, scp and sftp so the target's user and port apply. */
       sshConfig: z.string().optional(),
+      /** One line for the shim to print: what Styx applied to this command (SSH: the target's address). */
+      notice: z.string().max(400).optional(),
     }),
   },
   exec_report: {
