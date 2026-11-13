@@ -64,6 +64,7 @@ describe('styx MCP server', () => {
       'hub_post',
       'hub_read',
       'hub_remember',
+      'hub_share',
       'land',
       'list_sessions',
       'list_targets',

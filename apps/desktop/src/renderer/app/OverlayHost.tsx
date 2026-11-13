@@ -2,6 +2,7 @@ import { TaskDialog } from '../features/tasks/TaskDialog';
 import { useEffect } from 'react';
 import { AuditDrawer } from '../features/audit-drawer/AuditDrawer';
 import { GrantSheet } from '../features/grant-sheet/GrantSheet';
+import { ShareSheet } from '../features/hub/ShareSheet';
 import { AddExistingModal } from '../features/modals/AddExistingModal';
 import { ConnectAgentModal } from '../features/modals/ConnectAgentModal';
 import { ConnectModal } from '../features/modals/ConnectModal';
@@ -100,7 +101,11 @@ const render = (o: Overlay) => {
       }
       return null;
     case 'sheet':
-      return <GrantSheet key={o.id} id={o.id} sessionId={o.sessionId} askId={o.askId} />;
+      return o.sheet === 'hub-share' ? (
+        <ShareSheet key={o.id} id={o.id} sessionId={o.sessionId} projectId={o.projectId} />
+      ) : (
+        <GrantSheet key={o.id} id={o.id} sessionId={o.sessionId} askId={o.askId} />
+      );
     case 'drawer':
       switch (o.drawer) {
         case 'audit':

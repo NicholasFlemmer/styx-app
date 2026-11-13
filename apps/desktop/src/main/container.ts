@@ -151,6 +151,8 @@ export interface DialogsPort {
     defaultPath?: string | undefined;
     filters?: { name: string; extensions: string[] }[] | undefined;
   }): Promise<string | null>;
+  /** Several files at once (the team hub's Share). Empty when dismissed. */
+  pickFiles?(opts: { title?: string | undefined }): Promise<string[]>;
 }
 
 /** Headless default (tests, fixtures without a window): every picker is dismissed. */
@@ -679,6 +681,11 @@ export function buildContainer(opts: ContainerOptions): Container {
         branch: repos.worktrees.get(session.worktreeId)?.branch ?? null,
       };
     },
+    projectIds: () =>
+      repos.projects
+        .all()
+        .filter((p) => p.removedAt === null)
+        .map((p) => p.id),
     project: (projectId) => {
       const p = repos.projects.get(projectId);
       return p === null ? null : { name: p.name, path: p.path };
@@ -688,6 +695,12 @@ export function buildContainer(opts: ContainerOptions): Container {
       return (remotes.find((r) => r.name === 'origin') ?? remotes[0])?.url ?? null;
     },
     deliver: (sessionId, meta, body) => sessions.deliverHubMessage(sessionId, meta, body),
+    dialogs: opts.dialogs ?? NO_DIALOGS,
+    worktreeOf: (sessionId) => {
+      const session = repos.sessions.get(sessionId);
+      return session ? (repos.worktrees.get(session.worktreeId)?.path ?? null) : null;
+    },
+    progress: (pickId, sent, total) => publisher.sendEvent('hub.share.progress', { pickId, sent, total }),
     audit: (input) => void audit.append(input),
   });
   hub.load();

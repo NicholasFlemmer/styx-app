@@ -247,6 +247,29 @@ export function createStyxMcpServer(client: BrokerClient): McpServer {
   );
 
   server.registerTool(
+    'hub_share',
+    {
+      description:
+        "Share files from this lane's worktree with your team hub's space, as one item the team can open, comment on and review: a build folder (with index.html) opens as a live site; images, video, PDFs, data and code get previews. Returns a link for the team. Only works when the user has shared this lane. Paths are relative to the worktree; never share secrets.",
+      inputSchema: {
+        paths: z
+          .array(z.string().min(1).max(400))
+          .min(1)
+          .max(100)
+          .describe('Files or folders, relative to the worktree'),
+        title: z.string().min(1).max(200).optional().describe('What it is, e.g. "Landing page build"'),
+      },
+    },
+    async ({ paths, title }) => {
+      try {
+        return text(await client.call('hub_share', { paths, ...(title !== undefined ? { title } : {}) }));
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
     'hub_remember',
     {
       description:

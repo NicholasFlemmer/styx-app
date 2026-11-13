@@ -18,6 +18,8 @@ import { fail } from '../ipc/bus';
 import type { AuditInput } from './audit-service';
 import type { CredentialVault } from './credential-vault';
 import { logger, redact } from './logger';
+import { ShareError, collect, insideWorktree, summarise, upload, type ShareFile } from './hub-share';
+import type { DialogsPort } from '../container';
 
 /**
  * The team hub (ADR-0032), from the pilot seat. Sign-in is a device flow against the hub (Google, the team's
@@ -55,6 +57,8 @@ const storedSchema = z.object({
   shares: z.array(z.object({ sessionId: z.string(), spaceId: z.string() })).default([]),
   /** Threads each lane posted in: where a reply is delivered back to the lane. */
   threads: z.record(z.string(), z.array(z.string())).default({}),
+  /** Items a lane here shared, and the time of the last comment or verdict it was told about. */
+  items: z.record(z.string(), z.object({ sessionId: z.string(), seen: z.number() })).default({}),
   /** Last event seq read per space, so a restart does not replay history into chats. */
   cursors: z.record(z.string(), z.number()).default({}),
 });
@@ -82,11 +86,19 @@ export interface HubServiceDeps {
   machine: string;
   lane: (sessionId: string) => HubLane | null;
   project: (projectId: string) => { name: string; path: string } | null;
+  /** Every local project, for linking the ones the team already has (auto-link). */
+  projectIds: () => string[];
   /** The project's `origin` (or first) remote URL, or null when it has none. */
   remoteOf: (path: string) => Promise<string | null>;
   /** Puts a hub message into a lane's chat (framed to the agent as information). */
   deliver: (sessionId: string, meta: HubDelivery, body: string) => void;
   audit: (input: AuditInput) => void;
+  /** The OS pickers, for the Share sheet. */
+  dialogs: Pick<DialogsPort, 'pickFolder' | 'pickFiles'>;
+  /** A lane's worktree, which an agent's `hub_share` may not leave. */
+  worktreeOf: (sessionId: string) => string | null;
+  /** Upload progress for the Share sheet. */
+  progress: (pickId: string, sent: number, total: number) => void;
 }
 
 export interface HubDelivery {
@@ -279,6 +291,7 @@ export class HubService {
       shares: [],
       threads: {},
       cursors: {},
+      items: {},
     };
     await this.refresh();
     if (this.connection.kind === 'signed-in') {
@@ -405,6 +418,7 @@ export class HubService {
         links: this.stored.links.filter((l) => ids.has(l.spaceId)),
         shares: this.stored.shares.filter((s) => ids.has(s.spaceId)),
       });
+      await this.autoLink();
     } catch (e) {
       if (this.connection.kind !== 'signed-in') {
         this.stored = null;
@@ -514,6 +528,60 @@ export class HubService {
       detail: { spaceId },
     });
     this.followAll();
+  }
+
+  /**
+   * Links every local project the team already has in exactly one of the person's spaces (matched by git remote).
+   * Linking only sets where shares go: nothing is shared by it. A project in several spaces is left for the person.
+   */
+  async autoLink(): Promise<void> {
+    if (this.stored === null || this.connection.kind !== 'signed-in') return;
+    const writable = new Set(this.connection.spaces.filter((s) => s.role !== 'viewer').map((s) => s.id));
+    for (const projectId of this.deps.projectIds()) {
+      if (this.linkFor(projectId) !== null) continue;
+      const project = this.deps.project(projectId);
+      const remote = project === null ? null : await this.deps.remoteOf(project.path);
+      if (remote === null) continue;
+      try {
+        const found = (await this.api('GET', `/v1/projects?remote=${encodeURIComponent(remote)}`, null)) as {
+          projects: { id: string; spaceId: string }[];
+        };
+        const candidates = found.projects.filter((p) => writable.has(p.spaceId));
+        const only = candidates.length === 1 ? candidates[0] : undefined;
+        if (only === undefined) continue;
+        this.save({
+          links: [...(this.stored?.links ?? []), { projectId, spaceId: only.spaceId, hubProjectId: only.id }],
+        });
+        this.deps.audit({
+          actorKind: 'system',
+          actorLabel: 'system',
+          action: 'connected',
+          projectId,
+          targetLabel: 'team hub',
+          triggeredBy: 'hub auto-link',
+          detail: { spaceId: only.spaceId },
+        });
+      } catch {
+        // Unreachable or refused: the person can still link it by hand.
+      }
+    }
+    this.followAll();
+  }
+
+  /** Makes a space on the person's (first) team and returns its id; the lane header's "New space". */
+  async createSpace(name: string): Promise<string> {
+    const stored = this.requireSignedIn();
+    const team = stored.teams[0];
+    if (team === undefined) fail('invalid-transition', copy.hub.notOnTeam);
+    let id: string;
+    try {
+      id = ((await this.api('POST', '/v1/spaces', { teamId: team.id, name })) as { space: { id: string } })
+        .space.id;
+    } catch (e) {
+      fail('provider-error', (e as Error).message);
+    }
+    await this.refresh();
+    return id;
   }
 
   private linkFor(projectId: string): HubLink | null {
@@ -837,7 +905,11 @@ export class HubService {
         )) as {
           events: { seq: number; type: string; ref: string }[];
         };
-        for (const e of page.events) if (e.type === 'message.created') await this.inbound(spaceId, e.ref);
+        for (const e of page.events) {
+          if (e.type === 'message.created') await this.inbound(spaceId, e.ref);
+          else if (e.type === 'item.comment' || e.type === 'item.verdict')
+            await this.itemActivity(spaceId, e.ref);
+        }
         const last = page.events.at(-1)?.seq;
         if (last !== undefined) this.save({ cursors: { ...(this.stored?.cursors ?? {}), [spaceId]: last } });
       } catch (e) {
@@ -883,6 +955,243 @@ export class HubService {
         },
         m.body,
       );
+    }
+  }
+
+  // --- sharing files (phase 2) ------------------------------------------------------------
+
+  /** Picks waiting to be shared, by one-time id: the renderer never names a path. Forgotten after an hour. */
+  private readonly picks = new Map<string, { sessionId: string; paths: string[]; at: number }>();
+
+  /** The OS picker for the Share sheet. Null when dismissed. */
+  async pickShare(
+    sessionId: string,
+    mode: 'files' | 'folder',
+  ): Promise<{ id: string; items: { name: string; files: number; bytes: number }[] } | null> {
+    const paths =
+      mode === 'folder'
+        ? [await this.deps.dialogs.pickFolder({ title: copy.hub.share.pickFolder })].filter(
+            (p): p is string => p !== null,
+          )
+        : ((await this.deps.dialogs.pickFiles?.({ title: copy.hub.share.pickFiles })) ?? []);
+    if (paths.length === 0) return null;
+    let files: ShareFile[];
+    try {
+      files = await collect(paths);
+    } catch (e) {
+      fail('invalid-input', e instanceof ShareError ? e.message : (e as Error).message);
+    }
+    const id = `pick_${this.deps.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+    for (const [k, v] of this.picks) if (v.at < this.deps.now() - 3_600_000) this.picks.delete(k);
+    this.picks.set(id, { sessionId, paths, at: this.deps.now() });
+    return { id, items: summarise(paths, files) };
+  }
+
+  /** The Share sheet's Share: uploads the pick as a person and returns the link to copy. */
+  async share(input: {
+    sessionId: string;
+    pickId: string;
+    access: 'team' | 'anyone';
+    expiresIn: '1d' | '7d' | '30d' | 'never';
+    review: boolean;
+    title?: string | undefined;
+  }): Promise<{ url: string; itemId: string }> {
+    this.requireSignedIn();
+    const pick = this.picks.get(input.pickId);
+    if (pick === undefined || pick.sessionId !== input.sessionId) fail('not-found', copy.hub.share.pickGone);
+    const lane = this.deps.lane(input.sessionId);
+    if (lane === null) fail('not-found', 'no such session');
+    const link = this.linkFor(lane.projectId);
+    if (link === null) fail('invalid-transition', copy.hub.errors.notLinked);
+    try {
+      const out = await this.upload(
+        link,
+        await collect(pick.paths),
+        input,
+        undefined,
+        input.pickId,
+        input.sessionId,
+      );
+      this.picks.delete(input.pickId);
+      this.deps.audit({
+        actorKind: 'you',
+        actorLabel: 'you',
+        action: 'used',
+        projectId: lane.projectId,
+        sessionId: input.sessionId,
+        targetLabel: 'team hub',
+        triggeredBy: 'hub share',
+        detail: { itemId: out.itemId, access: input.access, expiresIn: input.expiresIn },
+      });
+      return out;
+    } catch (e) {
+      fail('provider-error', (e as Error).message);
+    }
+  }
+
+  /** `hub_share`: files from the lane's worktree, as the lane, to the team (never a public link). Needs the lane shared. */
+  async agentShare(
+    sessionId: string,
+    paths: readonly string[],
+    title: string | null,
+  ): Promise<{ url: string; itemId: string }> {
+    const { lane, link } = this.agentLane(sessionId, true);
+    const worktree = this.deps.worktreeOf(sessionId);
+    if (worktree === null) throw new HubError(400, 'This lane has no worktree to share from.');
+    let files: ShareFile[];
+    try {
+      files = await collect(await insideWorktree(worktree, paths));
+    } catch (e) {
+      throw new HubError(400, (e as Error).message);
+    }
+    const out = await this.upload(
+      link,
+      files,
+      {
+        access: 'team',
+        expiresIn: 'never',
+        review: false,
+        ...(title === null ? {} : { title: redact(title) }),
+      },
+      lane,
+      null,
+      sessionId,
+    );
+    this.used(lane, 'hub_share', { itemId: out.itemId, files: files.length });
+    return out;
+  }
+
+  /** Create the item, PUT every file to its signed URL, complete it, and make the link. */
+  private async upload(
+    link: HubLink,
+    files: ShareFile[],
+    opts: { access: 'team' | 'anyone'; expiresIn: string; review: boolean; title?: string | undefined },
+    lane: HubLane | undefined,
+    pickId: string | null,
+    laneSession: string | null,
+  ): Promise<{ url: string; itemId: string }> {
+    const created = (await this.api(
+      'POST',
+      `/v1/spaces/${link.spaceId}/items`,
+      {
+        files: files.map((f) => ({ path: f.path, size: f.size, contentType: f.contentType })),
+        projectId: link.hubProjectId,
+        review: opts.review,
+        ...(opts.title === undefined ? {} : { title: opts.title }),
+      },
+      lane,
+    )) as {
+      item: { id: string };
+      version: number | { version: number };
+      uploads: { path: string; url: string; headers?: Record<string, string> }[];
+    };
+    const version = typeof created.version === 'number' ? created.version : created.version.version;
+    const total = files.reduce((n, f) => n + f.size, 0);
+    let sent = 0;
+    const tick = (n: number) => {
+      sent += n;
+      if (pickId !== null) this.deps.progress(pickId, sent, total);
+    };
+    const byPath = new Map(created.uploads.map((u) => [u.path, u]));
+    // A few at a time: fast for a site of many small files, gentle on a slow connection.
+    const queue = [...files];
+    const worker = async () => {
+      for (let f = queue.shift(); f !== undefined; f = queue.shift()) {
+        const target = byPath.get(f.path);
+        if (target === undefined) throw new ShareError(`The hub gave no upload address for ${f.path}.`);
+        await upload(this.deps.fetch, f, target, tick);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, files.length) }, worker));
+    await this.api('POST', `/v1/items/${created.item.id}/versions/${version}/complete`, {}, lane);
+    const made = (await this.api(
+      'POST',
+      `/v1/items/${created.item.id}/links`,
+      { access: opts.access, expiresIn: opts.expiresIn },
+      lane,
+    )) as { link: { url: string } };
+    // Comments and the verdict on it come back to the lane that shared it.
+    if (laneSession !== null)
+      this.save({
+        items: {
+          ...(this.stored?.items ?? {}),
+          [created.item.id]: { sessionId: laneSession, seen: this.deps.now() },
+        },
+      });
+    return { url: made.link.url, itemId: created.item.id };
+  }
+
+  /**
+   * Someone commented on, or gave a verdict on, an item a lane here shared: the lane hears about each new one once,
+   * as a hub message (never a turn of its own).
+   */
+  async itemActivity(spaceId: string, itemId: string): Promise<void> {
+    const mine = this.stored?.items[itemId];
+    if (mine === undefined) return;
+    const lane = this.deps.lane(mine.sessionId);
+    if (lane === null || lane.session.archivedAt !== null) return;
+    const out = (await this.api('GET', `/v1/items/${encodeURIComponent(itemId)}`, null)) as {
+      item: { title: string };
+      comments?: {
+        userId: string;
+        lane: { agent: string; branch: string } | null;
+        body: string;
+        version: number;
+        at: number;
+      }[];
+      verdicts?: { userId: string; verdict: 'approved' | 'changes'; version: number; at: number }[];
+    };
+    const me = this.connection.kind === 'signed-in' ? this.connection.account.id : '';
+    const fresh = [
+      ...(out.comments ?? []).map((c) => ({
+        at: c.at,
+        userId: c.userId,
+        lane: c.lane,
+        text: `On ${out.item.title} v${c.version}: ${c.body}`,
+      })),
+      ...(out.verdicts ?? []).map((v) => ({
+        at: v.at,
+        userId: v.userId,
+        lane: null,
+        text: `${v.verdict === 'approved' ? 'Approved' : 'Changes requested on'} ${out.item.title} v${v.version}.`,
+      })),
+    ]
+      .filter((e) => e.at > mine.seen && !(e.userId === me && e.lane === null))
+      .sort((a, b) => a.at - b.at);
+    if (fresh.length === 0) return;
+    const names = await this.memberNames(spaceId);
+    const space =
+      this.connection.kind === 'signed-in'
+        ? (this.connection.spaces.find((s) => s.id === spaceId)?.name ?? '')
+        : '';
+    for (const e of fresh)
+      this.deps.deliver(
+        mine.sessionId,
+        {
+          from: names.get(e.userId) ?? 'A teammate',
+          agent: e.lane?.agent ?? null,
+          branch: e.lane?.branch ?? null,
+          space,
+          threadId: itemId,
+        },
+        e.text,
+      );
+    this.save({
+      items: {
+        ...(this.stored?.items ?? {}),
+        [itemId]: { ...mine, seen: Math.max(...fresh.map((e) => e.at)) },
+      },
+    });
+  }
+
+  private async memberNames(spaceId: string): Promise<Map<string, string>> {
+    try {
+      const out = (await this.api('GET', `/v1/spaces/${spaceId}/members`, null)) as {
+        members: { userId: string; name: string | null; email: string | null }[];
+      };
+      return new Map(out.members.map((m) => [m.userId, m.name ?? m.email ?? 'A teammate']));
+    } catch {
+      return new Map();
     }
   }
 

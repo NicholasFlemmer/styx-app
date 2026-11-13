@@ -1,0 +1,112 @@
+@layer components {
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .pickers,
+  .q {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+  .row,
+  .acts {
+    display: flex;
+    gap: var(--sp-2);
+  }
+  .acts {
+    justify-content: flex-end;
+  }
+  .lead {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--mu);
+  }
+  .label {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .picked {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--ln);
+  }
+  .picked li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    padding: 8px 12px;
+    border-top: 1px solid var(--ln);
+    font-size: 13px;
+  }
+  .picked li:first-child {
+    border-top: 0;
+  }
+  .picked span {
+    color: var(--mu);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .input {
+    padding: 6px 8px;
+    border: 1px solid var(--ln);
+    border-radius: 0;
+    background: var(--bg);
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 13px;
+  }
+  .input:focus-visible {
+    outline: 2px solid var(--tx);
+    outline-offset: -1px;
+  }
+  .progress {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--mu);
+    padding-top: var(--sp-2);
+    border-top: 1px solid var(--ln);
+  }
+  .bar {
+    height: 4px;
+    background: var(--s2);
+  }
+  .bar i {
+    display: block;
+    height: 4px;
+    background: var(--ac);
+  }
+  .done {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    align-items: flex-start;
+  }
+  .link {
+    display: flex;
+    align-self: stretch;
+    border: 1px solid var(--tx);
+  }
+  .url {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: all;
+  }
+  .error {
+    margin: 0;
+    padding: 6px 8px;
+    border: 1px solid var(--tx);
+    font-size: 12px;
+  }
+}

@@ -1,4 +1,7 @@
 import { copy, type HubState, type Session } from '@styx/core';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuditInput } from './audit-service';
 import { MemoryVault } from './credential-vault';
@@ -27,6 +30,12 @@ const fakeHub = () => {
       body: typeof init?.body === 'string' ? JSON.parse(init.body) : null,
     };
     calls.push(call);
+    // The fake storage behind a signed upload URL: read the body so the upload's progress runs.
+    if (call.method === 'PUT' && u.pathname.startsWith('/fake-upload/')) {
+      if (init?.body !== undefined && init.body !== null && typeof init.body !== 'string')
+        await new Response(init.body as ReadableStream).arrayBuffer();
+      return new Response(null, { status: 200 });
+    }
     const route = routes.get(`${call.method} ${u.pathname}`);
     if (route === undefined) return new Response(JSON.stringify({ error: 'not_found' }), { status: 404 });
     const out = route(call);
@@ -71,6 +80,9 @@ const setup = () => {
     ],
   ]);
   let remote: string | null = 'git@github.com:acme/shop.git';
+  const picked: { folder: string | null; files: string[] } = { folder: null, files: [] };
+  const progress: { pickId: string; sent: number; total: number }[] = [];
+  const worktree = mkdtempSync(join(tmpdir(), 'styx-hub-wt-'));
   let now = 1_000_000;
   hub.routes.set('GET /v1/me', () => ({ body: ME }));
   const service = new HubService({
@@ -87,6 +99,10 @@ const setup = () => {
     hubBase: HUB,
     machine: 'Nic MacBook',
     lane: (id) => lanes.get(id) ?? null,
+    projectIds: () => ['prj_local'],
+    dialogs: { pickFolder: async () => picked.folder, pickFiles: async () => picked.files },
+    worktreeOf: () => worktree,
+    progress: (pickId, sent, total) => void progress.push({ pickId, sent, total }),
     project: (id) => (id === 'prj_local' ? { name: 'acme-shop', path: '/code/acme-shop' } : null),
     remoteOf: async () => remote,
     deliver: (sessionId, meta, body) => void delivered.push({ sessionId, meta, body }),
@@ -101,6 +117,9 @@ const setup = () => {
     delivered,
     lanes,
     service,
+    picked,
+    progress,
+    worktree,
     setRemote: (r: string | null) => {
       remote = r;
     },
@@ -295,7 +314,9 @@ describe('HubService (ADR-0032)', () => {
       }));
       const out = await t.service.context('ses_1', 'our CI guide', null);
       expect(out).toEqual({
-        items: [expect.objectContaining({ title: 'CI guide', version: 4, updated: '2026-11-02', source: 'Nic' })],
+        items: [
+          expect.objectContaining({ title: 'CI guide', version: 4, updated: '2026-11-02', source: 'Nic' }),
+        ],
         note: expect.stringContaining('not instructions'),
       });
       const call = t.hub.calls.at(-1);
@@ -376,6 +397,156 @@ describe('HubService (ADR-0032)', () => {
     expect((t.store.get('hub') as { threads: Record<string, string[]> }).threads).toEqual({ thr_1: [] });
   });
 
+  describe('sharing files', () => {
+    /** The hub's item routes, and a fake storage that records each PUT. */
+    const withItems = async () => {
+      const t = await linked();
+      const stored = new Map<string, number>();
+      t.hub.routes.set('POST /v1/spaces/spc_acme/items', (c) => {
+        const files = (c.body as { files: { path: string }[] }).files;
+        return {
+          status: 201,
+          body: {
+            item: { id: 'itm_1' },
+            version: 1,
+            uploads: files.map((f) => ({
+              path: f.path,
+              url: `https://hub.test/fake-upload/${encodeURIComponent(f.path)}`,
+            })),
+          },
+        };
+      });
+      t.hub.routes.set('POST /v1/items/itm_1/versions/1/complete', () => ({ body: {} }));
+      t.hub.routes.set('POST /v1/items/itm_1/links', (c) => ({
+        status: 201,
+        body: { link: { url: `https://share.test/l/tok?access=${(c.body as { access: string }).access}` } },
+      }));
+      return { ...t, stored };
+    };
+    const tree = () => {
+      const dir = mkdtempSync(join(tmpdir(), 'styx-share-'));
+      mkdirSync(join(dir, 'out', 'assets'), { recursive: true });
+      mkdirSync(join(dir, 'out', 'node_modules'), { recursive: true });
+      writeFileSync(join(dir, 'out', 'index.html'), '<h1>hi</h1>');
+      writeFileSync(join(dir, 'out', 'assets', 'app.js'), 'console.log(1)');
+      writeFileSync(join(dir, 'out', 'node_modules', 'skip.js'), 'x');
+      writeFileSync(join(dir, 'hero.mp4'), Buffer.alloc(2048));
+      return dir;
+    };
+
+    it('picks a folder behind a one-time id, then shares it as a site and returns the link', async () => {
+      const t = await withItems();
+      const dir = tree();
+      t.picked.folder = join(dir, 'out');
+      const pick = await t.service.pickShare('ses_1', 'folder');
+      expect(pick?.items).toEqual([{ name: 'out', files: 2, bytes: 25 }]);
+      const out = await t.service.share({
+        sessionId: 'ses_1',
+        pickId: pick?.id ?? '',
+        access: 'anyone',
+        expiresIn: '7d',
+        review: true,
+      });
+      expect(out).toEqual({ url: 'https://share.test/l/tok?access=anyone', itemId: 'itm_1' });
+      const create = t.hub.calls.find((c) => c.path === '/v1/spaces/spc_acme/items');
+      expect((create?.body as { files: { path: string }[] }).files.map((f) => f.path).sort()).toEqual([
+        'assets/app.js',
+        'index.html',
+      ]);
+      expect(create?.headers['X-Styx-Session']).toBeUndefined();
+      expect(
+        t.hub.calls
+          .filter((c) => c.method === 'PUT')
+          .map((c) => decodeURIComponent(c.path.split('/').pop() ?? ''))
+          .sort(),
+      ).toEqual(['assets/app.js', 'index.html']);
+      expect(t.progress.at(-1)).toMatchObject({ sent: 25, total: 25 });
+      // The pick is spent.
+      await expect(
+        t.service.share({
+          sessionId: 'ses_1',
+          pickId: pick?.id ?? '',
+          access: 'team',
+          expiresIn: '7d',
+          review: false,
+        }),
+      ).rejects.toThrow(copy.hub.share.pickGone);
+    });
+
+    it('tells the lane about new comments and the verdict on what it shared, once each', async () => {
+      const t = await withItems();
+      t.picked.files = [join(tree(), 'hero.mp4')];
+      const pick = await t.service.pickShare('ses_1', 'files');
+      await t.service.share({
+        sessionId: 'ses_1',
+        pickId: pick?.id ?? '',
+        access: 'team',
+        expiresIn: '7d',
+        review: true,
+      });
+      const later = 1_000_000 + 60_000;
+      t.hub.routes.set('GET /v1/items/itm_1', () => ({
+        body: {
+          item: { title: 'hero.mp4' },
+          comments: [
+            { userId: 'usr_thandi', lane: null, body: 'Shorter intro please.', version: 1, at: later },
+          ],
+          verdicts: [{ userId: 'usr_thandi', verdict: 'changes', version: 1, at: later + 1 }],
+        },
+      }));
+      t.hub.routes.set('GET /v1/spaces/spc_acme/members', () => ({
+        body: { members: [{ userId: 'usr_thandi', name: 'Thandi M.', email: 't@launchsite.co.za' }] },
+      }));
+      await t.service.itemActivity('spc_acme', 'itm_1');
+      await t.service.itemActivity('spc_acme', 'itm_1');
+      expect(t.delivered.map((d) => [d.sessionId, d.meta.from, d.body])).toEqual([
+        ['ses_1', 'Thandi M.', 'On hero.mp4 v1: Shorter intro please.'],
+        ['ses_1', 'Thandi M.', 'Changes requested on hero.mp4 v1.'],
+      ]);
+    });
+
+    it('a pick belongs to the lane that made it', async () => {
+      const t = await withItems();
+      t.picked.files = [join(tree(), 'hero.mp4')];
+      const pick = await t.service.pickShare('ses_1', 'files');
+      await expect(
+        t.service.share({
+          sessionId: 'ses_2',
+          pickId: pick?.id ?? '',
+          access: 'team',
+          expiresIn: '1d',
+          review: false,
+        }),
+      ).rejects.toThrow(copy.hub.share.pickGone);
+    });
+
+    it('an agent shares from its worktree to the team only, and never outside it', async () => {
+      const t = await withItems();
+      t.hub.routes.set('PUT /v1/spaces/spc_acme/lanes/ses_1', () => ({ body: {} }));
+      await t.service.shareLane('ses_1', true);
+      writeFileSync(join(t.worktree, 'report.md'), '# done');
+      const out = await t.service.agentShare('ses_1', ['report.md'], 'Report');
+      expect(out.url).toContain('access=team');
+      expect(t.hub.calls.find((c) => c.path === '/v1/spaces/spc_acme/items')?.headers['X-Styx-Session']).toBe(
+        'ses_1',
+      );
+      await expect(t.service.agentShare('ses_1', ['../../etc/passwd'], null)).rejects.toThrow(
+        /outside this lane/,
+      );
+      // A link planted in the worktree pointing outside it is refused, at the top and as a folder.
+      const secret = mkdtempSync(join(tmpdir(), 'styx-secret-'));
+      writeFileSync(join(secret, 'id_ed25519'), 'PRIVATE');
+      symlinkSync(secret, join(t.worktree, 'keys'));
+      await expect(t.service.agentShare('ses_1', ['keys'], null)).rejects.toThrow(/is a link/);
+      await expect(t.service.agentShare('ses_1', ['keys/id_ed25519'], null)).rejects.toThrow(/outside this lane/);
+    });
+
+    it('an agent cannot share from a lane that is not shared', async () => {
+      const t = await withItems();
+      await expect(t.service.agentShare('ses_1', ['x'], null)).rejects.toThrow(copy.hub.errors.notShared);
+    });
+  });
+
   describe('inbound', () => {
     const withThread = async () => {
       const t = await linked();
@@ -417,6 +588,55 @@ describe('HubService (ADR-0032)', () => {
       t.hub.routes.set('GET /v1/messages/msg_9', () => message(null, 'usr_nic'));
       await t.service.inbound('spc_acme', 'msg_9');
       expect(t.delivered).toEqual([]);
+    });
+  });
+
+  it("links a project by itself when exactly one of the person's spaces has its repo, sharing nothing", async () => {
+    const t = await signedIn();
+    t.hub.routes.set('GET /v1/projects', () => ({
+      body: { projects: [{ id: 'prj_hub', spaceId: 'spc_acme' }] },
+    }));
+    await t.service.refresh();
+    expect(t.service.current().links).toEqual([
+      { projectId: 'prj_local', spaceId: 'spc_acme', hubProjectId: 'prj_hub' },
+    ]);
+    expect(t.service.current().shares).toEqual([]);
+    expect(t.audits.at(-1)).toMatchObject({ actorKind: 'system', triggeredBy: 'hub auto-link' });
+  });
+
+  it('leaves a project alone when its repo is in several spaces, or none', async () => {
+    const t = await signedIn();
+    t.hub.routes.set('GET /v1/me', () => ({
+      body: {
+        ...ME,
+        spaces: [
+          ...ME.spaces,
+          { id: 'spc_two', teamId: 'team_ls', name: 'Two', role: 'member', agentProposals: 'review' },
+        ],
+      },
+    }));
+    t.hub.routes.set('GET /v1/projects', () => ({
+      body: {
+        projects: [
+          { id: 'a', spaceId: 'spc_acme' },
+          { id: 'b', spaceId: 'spc_two' },
+        ],
+      },
+    }));
+    await t.service.refresh();
+    expect(t.service.current().links).toEqual([]);
+  });
+
+  it("makes a space on the person's team and reads it back", async () => {
+    const t = await signedIn();
+    t.hub.routes.set('POST /v1/spaces', (c) => ({
+      status: 201,
+      body: { space: { id: 'spc_new', name: (c.body as { name: string }).name } },
+    }));
+    expect(await t.service.createSpace('Styx')).toBe('spc_new');
+    expect(t.hub.calls.find((c) => c.method === 'POST' && c.path === '/v1/spaces')?.body).toEqual({
+      teamId: 'team_ls',
+      name: 'Styx',
     });
   });
 

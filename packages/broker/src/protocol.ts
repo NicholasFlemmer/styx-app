@@ -246,6 +246,14 @@ export const methods = {
     }),
     result: z.object({ posted: z.literal(true), threadId: z.string() }),
   },
+  /** Share files from the worktree with the space as one item; returns a team link. Needs the lane shared. */
+  hub_share: {
+    params: z.object({
+      paths: z.array(z.string().min(1).max(400)).min(1).max(100),
+      title: z.string().min(1).max(200).optional(),
+    }),
+    result: z.object({ url: z.string(), itemId: z.string() }),
+  },
   /** Propose a doc or decision for the space's context; the space decides whether a person accepts it. */
   hub_remember: {
     params: z.object({

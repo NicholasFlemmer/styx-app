@@ -202,4 +202,15 @@ Proposes a doc or a decision for the space's context. Each space chooses whether
 
 Returns `{ "state", "note" }`: `pending` while it waits for a teammate, `accepted` when it landed.
 
+### hub_share
+
+Shares files from the task's worktree with the project's space on the team hub, as one item your team can open, comment on and review. A folder with an `index.html` opens as a live site; images, video, PDFs, data and code get previews. Only works from a task you have shared, and only with your team: a link anyone can open is made by a person, from the **Share** button.
+
+| Parameter | Type             | Required | Notes                                                           |
+| --------- | ---------------- | -------- | --------------------------------------------------------------- |
+| `paths`   | array of strings | yes      | 1–100 files or folders, relative to the worktree.               |
+| `title`   | string           | no       | What it is, such as `Landing page build`. Up to 200 characters. |
+
+Returns `{ "url", "itemId" }`. A path outside the worktree is refused. Folders like `.git` and `node_modules` are left out. Up to 2 GB a file and 4 GB in one share.
+
 Next: [CLI](/docs/reference/cli) for the shims that use these grants, and [How access works](/docs/access/how-access-works).

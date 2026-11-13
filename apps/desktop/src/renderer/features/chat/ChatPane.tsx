@@ -1,8 +1,6 @@
 import {
   activeLaneOf,
   AGENT_LABEL,
-  hubSpaceOf,
-  isLaneShared,
   composerPlaceholder,
   copy,
   deliveryWhileWorking,
@@ -83,6 +81,7 @@ import { thinkingLabel, elapsedLabel, workingLine } from './stream-state';
 import { inlineSegments, transcriptItems, type TranscriptItem } from './transcript-items';
 import { laneItems, type LaneItem } from './lane-turns';
 import { LandButton } from '../workspace/LandButton';
+import { HubLaneControl } from '../hub/HubLaneControl';
 import { screenUrl } from '../../screens/Diff/CheckpointDiff';
 import { ArcadeHeldStrip, ArcadePanel, openArcade, quitArcade } from '../arcade/ArcadePanel';
 import { AgentProblemRow } from './AgentProblemRow';
@@ -328,9 +327,6 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const arcadeButton = !compact && activeId !== null && env().e2e !== true;
   const placeholder = activeId === null ? '' : composerPlaceholder(model, activeId);
   const session = activeId === null ? null : (model.sessions.byId[activeId] ?? null);
-  // The team hub (ADR-0032): the lane's share control shows only when its project is linked to a space.
-  const hubSpace = hubSpaceOf(model.hub, projectId);
-  const laneShared = session !== null && isLaneShared(model.hub, session.id);
   const agent = session?.agent ?? null;
   const transcripts = activeId === null ? undefined : model.transcripts[activeId];
   const checkpoints = activeId === null ? undefined : model.checkpoints[activeId];
@@ -847,23 +843,11 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           action={<LandButton projectId={projectId} placement="lane" />}
           tools={
             <>
-              {hubSpace !== null && (
-                <button
-                  type="button"
-                  className={s['arcadeButton']}
-                  aria-pressed={laneShared}
-                  data-inv={laneShared ? 'true' : undefined}
-                  title={fill(laneShared ? copy.hub.lane.unshareTitle : copy.hub.lane.shareTitle, {
-                    space: hubSpace.name,
-                  })}
-                  onClick={() =>
-                    void command('hub.shareLane', { sessionId: session.id, shared: !laneShared })
-                  }
-                  data-hub-share={laneShared ? 'shared' : 'only-you'}
-                >
-                  {laneShared ? fill(copy.hub.lane.shared, { space: hubSpace.name }) : copy.hub.lane.onlyYou}
-                </button>
-              )}
+              <HubLaneControl
+                projectId={projectId}
+                projectName={model.projects.byId[projectId]?.name ?? ''}
+                sessionId={session.id}
+              />
               {arcadeButton && (
                 <button
                   type="button"

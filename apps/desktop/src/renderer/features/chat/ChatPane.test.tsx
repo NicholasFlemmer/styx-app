@@ -305,9 +305,10 @@ describe('ChatPane', () => {
     expect(commands.at(-1)).toEqual({ name: 'hub.shareLane', input: { sessionId: claude, shared: false } });
   });
 
-  it('team hub: no share control for a project that is not linked', () => {
+  it('team hub: a project that is not connected offers Connect to team hub in the lane header', () => {
     render(<ChatPane projectId={acme} />);
     expect(document.querySelector('[data-hub-share]')).toBeNull();
+    expect(screen.getByRole('button', { name: copy.hub.connect.button })).toBeTruthy();
   });
 
   it('team hub: a hub message is attributed, never a user bubble, and Go ahead is the person speaking', () => {
@@ -422,7 +423,7 @@ describe('ChatPane', () => {
     expect(document.querySelector('[data-lane-meta]')?.textContent).toBe('waiting on you');
     fireEvent.click(screen.getByRole('button', { name: 'Review request' }));
     const sheet = useUiStore.getState().overlays.find((o) => o.kind === 'sheet');
-    expect(sheet?.kind === 'sheet' && sheet.askId).toBe(fixtures.ids.ask.codexGrant);
+    expect(sheet?.kind === 'sheet' && sheet.sheet === 'grant' && sheet.askId).toBe(fixtures.ids.ask.codexGrant);
     expect(sheet?.kind === 'sheet' && sheet.sessionId).toBe(codex);
     fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
     await flush();
