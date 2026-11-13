@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { accountStateSchema } from './model/account';
 import { updateStateSchema } from './model/update';
+import { hubStateSchema } from './model/hub';
 import { agentSetupSchema } from './model/agent-setup';
 import { activityRowSchema } from './model/activity';
 import { auditEntrySchema } from './model/audit';
@@ -116,6 +117,8 @@ export const deltaSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('account.set'), account: accountStateSchema }),
   /** The whole update state; main owns it (UpdateService) and re-sends it on every change (#119). */
   z.object({ op: z.literal('update.set'), update: updateStateSchema }),
+  /** The whole team-hub state (ADR-0032); main owns it (HubService) and re-sends it on every change. */
+  z.object({ op: z.literal('hub.set'), hub: hubStateSchema }),
   /** One agent's setup run, whole; main re-sends it on every change (AgentSetupService). */
   z.object({ op: z.literal('agentSetup.set'), setup: agentSetupSchema }),
   z.object({
@@ -221,6 +224,8 @@ export const applyDelta = (model: ReadModel, delta: Delta): ReadModel => {
       return { ...model, account: delta.account };
     case 'update.set':
       return { ...model, update: delta.update };
+    case 'hub.set':
+      return { ...model, hub: delta.hub };
     case 'agentSetup.set':
       return { ...model, agentSetup: { ...model.agentSetup, [delta.setup.agent]: delta.setup } };
     case 'deploys.set':

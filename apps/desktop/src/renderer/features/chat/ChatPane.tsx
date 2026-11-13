@@ -1,6 +1,8 @@
 import {
   activeLaneOf,
   AGENT_LABEL,
+  hubSpaceOf,
+  isLaneShared,
   composerPlaceholder,
   copy,
   deliveryWhileWorking,
@@ -326,6 +328,9 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
   const arcadeButton = !compact && activeId !== null && env().e2e !== true;
   const placeholder = activeId === null ? '' : composerPlaceholder(model, activeId);
   const session = activeId === null ? null : (model.sessions.byId[activeId] ?? null);
+  // The team hub (ADR-0032): the lane's share control shows only when its project is linked to a space.
+  const hubSpace = hubSpaceOf(model.hub, projectId);
+  const laneShared = session !== null && isLaneShared(model.hub, session.id);
   const agent = session?.agent ?? null;
   const transcripts = activeId === null ? undefined : model.transcripts[activeId];
   const checkpoints = activeId === null ? undefined : model.checkpoints[activeId];
@@ -584,6 +589,40 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
             compact={compact}
           />
         );
+      case 'hub':
+        // A teammate's words through the hub: bordered and attributed like a peer, never a user bubble, and the
+        // agent waits for the person (ADR-0032 section 8, mockup frame 3).
+        return (
+          <div key={item.id} className={s['peer']} data-hub-message="true">
+            <span className={['t-label', s['peerHead']].join(' ')}>
+              {item.agent === null
+                ? fill(copy.hub.message.from, { from: item.from, space: item.space })
+                : fill(copy.hub.message.fromAgent, {
+                    agent: item.agent,
+                    from: item.from,
+                    branch: item.branch ?? copy.chat.peer.noBranch,
+                    space: item.space,
+                  })}
+            </span>
+            <Body text={item.text} />
+            <span className={['t-meta', s['peerHead']].join(' ')}>{copy.hub.message.read}</span>
+            {session !== null && (
+              <div>
+                <Button
+                  onClick={() =>
+                    void command('session.sendMessage', {
+                      sessionId: session.id,
+                      body: fill(copy.hub.message.goAheadText, { from: item.from, space: item.space }),
+                    })
+                  }
+                  data-hub-go-ahead="true"
+                >
+                  {copy.hub.message.goAhead}
+                </Button>
+              </div>
+            )}
+          </div>
+        );
       case 'peer':
         // Deliberately not a user bubble: a peer's words must never read as the operator's.
         return (
@@ -808,6 +847,23 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           action={<LandButton projectId={projectId} placement="lane" />}
           tools={
             <>
+              {hubSpace !== null && (
+                <button
+                  type="button"
+                  className={s['arcadeButton']}
+                  aria-pressed={laneShared}
+                  data-inv={laneShared ? 'true' : undefined}
+                  title={fill(laneShared ? copy.hub.lane.unshareTitle : copy.hub.lane.shareTitle, {
+                    space: hubSpace.name,
+                  })}
+                  onClick={() =>
+                    void command('hub.shareLane', { sessionId: session.id, shared: !laneShared })
+                  }
+                  data-hub-share={laneShared ? 'shared' : 'only-you'}
+                >
+                  {laneShared ? fill(copy.hub.lane.shared, { space: hubSpace.name }) : copy.hub.lane.onlyYou}
+                </button>
+              )}
               {arcadeButton && (
                 <button
                   type="button"

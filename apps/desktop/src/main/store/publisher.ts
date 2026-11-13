@@ -3,6 +3,7 @@ import {
   SIGNED_OUT,
   type AccountState,
   type UpdateState,
+  type HubState,
   type AgentSetup,
   type ActivityRow,
   type AgentChange,
@@ -52,6 +53,8 @@ export interface SnapshotExtras {
   /** Updates in place (#119), owned by UpdateService in memory. */
   update?: () => UpdateState;
   agentSetup?: () => AgentSetup[];
+  /** The team hub (ADR-0032), owned by HubService. */
+  hub?: () => HubState;
 }
 
 /** The single `styx:evt` channel carries every main → renderer event as `{ name, payload }`. */
@@ -248,6 +251,10 @@ export class Publisher {
     this.emit({ op: 'account.set', account });
   }
 
+  hubSet(hub: HubState): void {
+    this.emit({ op: 'hub.set', hub });
+  }
+
   updateSet(update: UpdateState): void {
     this.emit({ op: 'update.set', update });
   }
@@ -272,6 +279,7 @@ export class Publisher {
         account: this.extras.account,
         ...(this.extras.update !== undefined ? { update: this.extras.update } : {}),
         ...(this.extras.agentSetup !== undefined ? { agentSetup: this.extras.agentSetup } : {}),
+        ...(this.extras.hub !== undefined ? { hub: this.extras.hub } : {}),
       },
       this.seqNo,
     );

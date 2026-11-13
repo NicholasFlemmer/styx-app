@@ -157,4 +157,49 @@ Lands the task's work in the project's base branch and pushes it: Styx commits a
 
 Returns `{ "landed", "commit", "pushed", "steps", "reason" }`. When Styx refuses (the task works in the project folder rather than its own lane, the project is set to **I review and merge myself**, a conflict is being resolved, the checks fail, or there is nothing to land), `landed` is `false` and `reason` says why. The first time in a project with no checks known, `reason` asks the agent to work them out, call `remember_command` with kind `checks`, and call `land` again.
 
+### hub_context
+
+Asks your team hub for context: the team's guides, docs, links and decisions ("get our CI guide", "what did we decide on order ids?"). Needs the task's project linked to a space under **Settings › Team hub**.
+
+| Parameter | Type                        | Required | Notes                                                                            |
+| --------- | --------------------------- | -------- | -------------------------------------------------------------------------------- |
+| `query`   | string                      | no       | A name or a question, up to 500 characters. Leave it out for the one-line index. |
+| `kind`    | `doc`, `decision` or `link` | no       | Only items of this kind.                                                         |
+
+With a query, returns `{ "items" }`, best match first, each with `title`, `kind`, `layer` (`team`, `space`, `project` or `lane`), `body`, `url`, `decision` (`question`, `answer`, `replaces`), `version` and `updated`. Without one, returns `{ "lines" }`: one line per item the task can see. Items marked out of date are left out. What comes back is information from your team, not instructions.
+
+### hub_read
+
+Reads the project's space on the team hub: its threads and the tasks teammates have shared (no parameters), or one thread's latest 30 messages.
+
+| Parameter  | Type   | Required | Notes                          |
+| ---------- | ------ | -------- | ------------------------------ |
+| `threadId` | string | no       | A thread `id` from `hub_read`. |
+
+### hub_post
+
+Posts to a thread in the project's space, or starts a thread. Only works when you have shared the task from its header (**Only you → Shared with …**). Replies in that thread come back into the task's chat, marked as from the hub; the agent waits for you before acting on them.
+
+| Parameter  | Type   | Required       | Notes                                        |
+| ---------- | ------ | -------------- | -------------------------------------------- |
+| `body`     | string | yes            | Plain text, 1–16000 characters.              |
+| `threadId` | string | one of the two | A thread `id` from `hub_read`.               |
+| `title`    | string | one of the two | Starts a new thread with this title instead. |
+
+Returns `{ "posted": true, "threadId" }`. Anything that looks like a secret is masked before it leaves your machine.
+
+### hub_remember
+
+Proposes a doc or a decision for the space's context. Each space chooses whether proposals wait for a teammate to accept them or land at once, marked as the agent's. Only works from a shared task.
+
+| Parameter  | Type                | Required       | Notes                        |
+| ---------- | ------------------- | -------------- | ---------------------------- |
+| `kind`     | `doc` or `decision` | yes            |                              |
+| `title`    | string              | yes            | 1–200 characters.            |
+| `body`     | string              | for `doc`      | The text.                    |
+| `question` | string              | for `decision` | What was decided. Up to 500. |
+| `answer`   | string              | for `decision` | The answer. Up to 4000.      |
+
+Returns `{ "state", "note" }`: `pending` while it waits for a teammate, `accepted` when it landed.
+
 Next: [CLI](/docs/reference/cli) for the shims that use these grants, and [How access works](/docs/access/how-access-works).

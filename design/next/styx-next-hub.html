@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Styx next: the team hub (ADR-0032)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+:root {
+  --page:#181916; --bg:#0d0e0c; --s1:#121411; --s2:#1c1e1a; --ln:#2d302a; --tx:#e9ebe3; --mu:#858a81;
+  --ac:#d6ff3d; --acx:#0d0e0c; --act:#d6ff3d; --add:rgba(214,255,61,.13); --term:#080908; --termtx:#c9cdc2; --dim:rgba(0,0,0,.6);
+  --p-bg:#f7f8f3; --p-s2:#e1e3db; --p-ln:#b3b7ab; --p-tx:#14160f; --p-mu:#5d6259; --p-act:#6e8f00;
+  --claude:#e8916a; --codex:#8fb3ff; --gemini:#b79bff; --shell:#858a81;
+  --ui: 'Archivo', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--page); color: var(--tx); font: 400 14px/1.5 var(--ui); padding: 56px 0 140px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.mu { color: var(--mu); }
+
+.doc { width: 1280px; margin: 0 auto; }
+.doc h1 { font: 600 54px/1.02 var(--ui); letter-spacing: -.01em; max-width: 18ch; }
+.doc .lede { margin-top: 18px; max-width: 66ch; color: var(--mu); font-size: 18px; }
+.doc .lede strong { color: var(--tx); font-weight: 600; }
+.rules { margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 32px; }
+.rules div { padding: 16px 0; border-top: 1px solid var(--ln); }
+.rules b { display: block; font: 600 17px/1.2 var(--ui); }
+.rules span { display: block; margin-top: 6px; color: var(--mu); max-width: 40ch; }
+.note { width: 1280px; margin: 88px auto 18px; }
+.note h2 { font: 600 24px/1.12 var(--ui); letter-spacing: -.02em; }
+.note p { margin-top: 8px; color: var(--mu); font-size: 15px; max-width: 72ch; }
+
+/* window */
+.win { width: 1280px; height: 800px; margin: 0 auto; background: var(--bg); border: 1px solid var(--ln); display: grid; grid-template-rows: 44px 1fr; overflow: hidden; position: relative; }
+.win.app { grid-template-rows: 38px 1fr 26px; }
+.bar { display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid var(--ln); background: var(--s1); font-size: 13px; }
+.bar .url { font: 400 12px var(--mono); color: var(--mu); border: 1px solid var(--ln); padding: 4px 10px; width: 420px; }
+.word { font: 600 12px/1 var(--ui); letter-spacing: .24em; }
+.me { width: 24px; height: 24px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); font: 600 10px/22px var(--ui); text-align: center; flex: none; }
+.sp { margin-left: auto; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--ln); font-size: 13px; white-space: nowrap; }
+.btn.pri { background: var(--ac); color: var(--acx); border-color: var(--ac); font-weight: 700; }
+.btn.line { border-color: var(--tx); font-weight: 600; }
+.btn.sm { padding: 4px 9px; font-size: 12px; }
+.tag { display: inline-block; padding: 1px 6px; font-size: 11px; font-weight: 600; border: 1px solid var(--ln); color: var(--mu); }
+.tag.prod { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.dot { display: inline-block; width: 8px; height: 8px; flex: none; }
+.c-claude { background: var(--claude); } .c-codex { background: var(--codex); } .c-gemini { background: var(--gemini); } .c-shell { background: var(--shell); }
+
+/* hub web: spaces | thread | context */
+.hub { display: grid; grid-template-columns: 240px 1fr 320px; min-height: 0; }
+.side { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.side .team { padding: 14px 16px; border-bottom: 1px solid var(--ln); }
+.side .team b { display: block; font: 600 16px/1.2 var(--ui); }
+.side .team span { font-size: 12px; color: var(--mu); }
+.side .grp { padding: 16px 16px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.side a { display: flex; justify-content: space-between; align-items: center; padding: 7px 16px; font-size: 13px; border-top: 1px solid var(--ln); }
+.side a span { color: var(--mu); font-size: 12px; }
+.side a[data-inv] { background: var(--tx); color: var(--bg); }
+.side a[data-inv] span { color: var(--p-mu); }
+.side a.sub { padding-left: 28px; }
+.side a .n { background: var(--ac); color: var(--acx); font-weight: 700; padding: 0 5px; font-size: 11px; }
+.side .foot { margin-top: auto; padding: 12px 16px; border-top: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+
+.main { display: flex; flex-direction: column; min-height: 0; }
+.head { display: flex; align-items: flex-end; gap: 14px; padding: 18px 24px 14px; border-bottom: 1px solid var(--ln); }
+.head h2 { font: 600 22px/1.1 var(--ui); letter-spacing: -.01em; }
+.head .meta { font-size: 12px; color: var(--mu); margin-top: 4px; }
+.feed { flex: 1; overflow: hidden; padding: 8px 24px; display: flex; flex-direction: column; }
+.msg { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--ln); }
+.msg .who { font-size: 13px; display: flex; gap: 8px; align-items: center; }
+.msg .who b { font-weight: 600; }
+.msg .who .mu { font-size: 12px; }
+.msg .body { margin-top: 3px; max-width: 70ch; }
+.lane { display: inline-flex; gap: 6px; align-items: center; font: 400 11px var(--mono); color: var(--mu); border: 1px solid var(--ln); padding: 1px 6px; }
+.art { margin-top: 10px; display: grid; grid-template-columns: 120px 1fr auto; gap: 14px; align-items: center; border: 1px solid var(--ln); padding: 10px; max-width: 620px; }
+.art .thumb { height: 72px; background: var(--p-bg); border: 1px solid var(--p-ln); display: grid; place-items: center; color: var(--p-mu); font: 400 11px var(--mono); }
+.art b { display: block; font-size: 13px; }
+.art span { font-size: 12px; color: var(--mu); }
+.ask { margin-top: 10px; border: 1px solid var(--tx); padding: 12px 14px; max-width: 620px; }
+.ask .line1 { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+.ask p { margin-top: 6px; color: var(--mu); font-size: 13px; }
+.ask .row { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
+.compose { border-top: 1px solid var(--ln); padding: 12px 24px 16px; }
+.compose .box { border: 1px solid var(--ln); padding: 10px 12px; color: var(--mu); display: flex; justify-content: space-between; align-items: center; }
+
+.ctx { border-left: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.ctx .grp { padding: 16px 16px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.ctx .row { display: grid; grid-template-columns: 10px 1fr; gap: 2px 8px; padding: 8px 16px; border-top: 1px solid var(--ln); }
+.ctx .row .d { margin-top: 6px; }
+.ctx .row b { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.ctx .row > span:not(.dot) { grid-column: 2; font-size: 12px; color: var(--mu); }
+.ctx .row span .mono { font-size: 11px; }
+.ctx .cn { display: flex; justify-content: space-between; padding: 7px 16px; border-top: 1px solid var(--ln); font-size: 13px; }
+.ctx .cn span { color: var(--mu); font-size: 12px; }
+
+/* approval sheet over the hub */
+.scrim { position: absolute; inset: 44px 0 0 0; background: var(--dim); }
+.sheet { position: absolute; top: 44px; right: 0; bottom: 0; width: 460px; background: var(--bg); border-left: 1px solid var(--tx); padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+.sheet h3 { font: 600 20px/1.2 var(--ui); }
+.kv { display: grid; grid-template-columns: 110px 1fr; gap: 8px 12px; font-size: 13px; }
+.kv dt { color: var(--mu); }
+.kv dd .mono { font-size: 12px; }
+.pass { border: 1px solid var(--ln); padding: 14px; display: flex; gap: 12px; align-items: center; }
+.pass svg { width: 28px; height: 28px; stroke: var(--tx); fill: none; stroke-width: 1.5; flex: none; }
+.pass p { font-size: 13px; }
+.pass p span { display: block; color: var(--mu); font-size: 12px; }
+.sheet .acts { margin-top: auto; display: flex; gap: 8px; justify-content: flex-end; }
+
+/* inside Styx: a lane with hub traffic */
+.title { display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid var(--ln); background: var(--s1); font-size: 13px; }
+.lights { display: flex; gap: 8px; width: 60px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); }
+.crumb { display: flex; gap: 8px; color: var(--mu); }
+.crumb b { color: var(--tx); font-weight: 600; }
+.status { display: flex; gap: 20px; align-items: center; padding: 0 14px; border-top: 1px solid var(--ln); background: var(--s1); font-size: 12px; color: var(--mu); }
+.status .tx { color: var(--tx); }
+.frame { display: grid; grid-template-columns: 56px 216px 1fr; min-height: 0; }
+.rail { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; }
+.rail .pj { width: 36px; height: 36px; border: 1px solid var(--ln); display: grid; place-items: center; font: 700 11px var(--ui); }
+.rail .pj[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.nav { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.nav .ph { padding: 14px 14px 10px; }
+.nav .ph b { display: block; font: 600 16px/1.2 var(--ui); }
+.nav .ph span { font: 400 11px var(--mono); color: var(--mu); }
+.nav .grp { padding: 14px 14px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.ln { display: grid; grid-template-columns: 10px 1fr; gap: 2px 8px; padding: 8px 14px; border-top: 1px solid var(--ln); }
+.ln .d { margin-top: 6px; }
+.ln .t { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.ln .s { grid-column: 2; font-size: 12px; color: var(--mu); }
+.ln[data-inv] { background: var(--tx); color: var(--bg); }
+.ln[data-inv] .s { color: var(--p-mu); }
+.ln.remote .t::after { content: ''; }
+.chat { display: flex; flex-direction: column; min-height: 0; }
+.chat .ch { padding: 14px 28px; border-bottom: 1px solid var(--ln); display: flex; gap: 12px; align-items: center; }
+.chat .ch b { font: 600 17px/1.2 var(--ui); }
+.turns { flex: 1; padding: 18px 28px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.you { align-self: flex-end; background: var(--s2); padding: 10px 14px; max-width: 60ch; }
+.agent { max-width: 76ch; }
+.agent .by { font-size: 12px; color: var(--mu); display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+.tool { font: 400 12px var(--mono); color: var(--mu); border-left: 1px solid var(--ln); padding-left: 10px; }
+.incoming { border: 1px solid var(--ln); background: var(--s1); padding: 12px 14px; max-width: 76ch; }
+.incoming .from { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--mu); }
+.incoming .from b { color: var(--tx); font-weight: 600; }
+.incoming p { margin-top: 6px; }
+.incoming .why { margin-top: 8px; font-size: 12px; color: var(--mu); }
+.incoming .row { margin-top: 10px; display: flex; gap: 8px; }
+.composer { border-top: 1px solid var(--ln); padding: 12px 28px 16px; }
+.composer .box { border: 1px solid var(--ln); padding: 10px 12px; color: var(--mu); }
+
+/* share sheet (in Styx) */
+.win.app .scrim { inset: 38px 0 26px 0; }
+.win.app .sheet { top: 38px; bottom: 26px; width: 500px; gap: 18px; overflow: hidden; }
+.q { display: flex; flex-direction: column; gap: 6px; }
+.q > b { font-size: 13px; font-weight: 600; }
+.opt { display: grid; grid-template-columns: 14px 1fr; gap: 2px 10px; padding: 9px 12px; border: 1px solid var(--ln); }
+.opt i { width: 12px; height: 12px; border: 1px solid var(--tx); border-radius: 50%; margin-top: 4px; }
+.opt[data-on] { border-color: var(--tx); }
+.opt[data-on] i { background: var(--ac); border-color: var(--ac); }
+.opt b { font-size: 13px; font-weight: 600; }
+.opt span { grid-column: 2; font-size: 12px; color: var(--mu); }
+.seg { display: flex; }
+.seg span { flex: 1; padding: 6px 10px; border: 1px solid var(--ln); font-size: 13px; text-align: center; }
+.seg span + span { border-left: 0; }
+.seg span[data-inv] { background: var(--tx); color: var(--bg); border-color: var(--tx); font-weight: 600; }
+.out { border-top: 1px solid var(--ln); padding-top: 12px; font-size: 12px; color: var(--mu); }
+.out .mono { font-size: 11px; color: var(--tx); }
+.result { border: 1px solid var(--ln); background: var(--s1); padding: 12px 14px; max-width: 76ch; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+.result b { font-size: 13px; }
+.result span { font-size: 12px; color: var(--mu); }
+
+/* review item (in the hub) */
+.item { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+.prev { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--ln); }
+.prev .vbar { display: flex; gap: 10px; align-items: center; padding: 10px 20px; border-bottom: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+.prev .vbar .mono { color: var(--tx); }
+.page { flex: 1; margin: 20px; background: var(--p-bg); color: var(--p-tx); border: 1px solid var(--p-ln); position: relative; overflow: hidden; }
+.page .nv { display: flex; gap: 18px; padding: 14px 24px; border-bottom: 1px solid var(--p-ln); font-size: 12px; color: var(--p-mu); }
+.page .nv b { color: var(--p-tx); margin-right: auto; }
+.page h4 { font: 600 40px/1.05 var(--ui); padding: 48px 24px 0; max-width: 16ch; letter-spacing: -.02em; }
+.page p { padding: 12px 24px 0; color: var(--p-mu); max-width: 52ch; }
+.page .cta { margin: 20px 24px; display: inline-block; background: var(--p-tx); color: var(--p-bg); padding: 10px 16px; font-weight: 600; font-size: 13px; }
+.pin { position: absolute; width: 22px; height: 22px; background: var(--ac); color: var(--acx); font: 700 11px/22px var(--ui); text-align: center; border: 1px solid var(--p-tx); }
+.rev { display: flex; flex-direction: column; min-height: 0; background: var(--s1); }
+.rev .vh { padding: 16px; border-bottom: 1px solid var(--ln); }
+.rev .vh b { display: block; font: 600 16px/1.2 var(--ui); }
+.rev .vh span { font-size: 12px; color: var(--mu); }
+.cm { padding: 12px 16px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.cm .who { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--mu); margin-bottom: 4px; }
+.cm .who b { color: var(--tx); }
+.cm .who .n { background: var(--ac); color: var(--acx); font-weight: 700; padding: 0 5px; }
+.verdict { margin-top: auto; padding: 16px; border-top: 1px solid var(--ln); display: flex; flex-direction: column; gap: 10px; }
+.verdict .row { display: flex; gap: 8px; }
+
+/* context home base */
+.cx { display: grid; grid-template-columns: 1fr 360px; min-height: 0; }
+.cx .list { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--ln); }
+.tabs { display: flex; gap: 0; padding: 0 24px; border-bottom: 1px solid var(--ln); }
+.tabs span { padding: 10px 14px; font-size: 13px; color: var(--mu); border-bottom: 2px solid transparent; }
+.tabs span[data-inv] { color: var(--tx); border-bottom-color: var(--tx); font-weight: 600; }
+.it { display: grid; grid-template-columns: 1fr auto; gap: 2px 16px; padding: 12px 24px; border-bottom: 1px solid var(--ln); }
+.it b { font-size: 14px; font-weight: 600; }
+.it .lv { font-size: 12px; color: var(--mu); text-align: right; }
+.it span.d { grid-column: 1; font-size: 13px; color: var(--mu); }
+.it .old { text-decoration: line-through; }
+.it.stale { opacity: .55; }
+.queue { display: flex; flex-direction: column; min-height: 0; background: var(--s1); }
+.queue .qh { padding: 16px; border-bottom: 1px solid var(--ln); display: flex; flex-direction: column; gap: 8px; }
+.queue .qh b { font: 600 16px/1.2 var(--ui); }
+.queue .qh .mu { font-size: 12px; }
+.prop { padding: 12px 16px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.prop .who { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--mu); margin-bottom: 4px; }
+.prop .row { margin-top: 8px; display: flex; gap: 6px; }
+.search2 { margin: 14px 24px; border: 1px solid var(--ln); padding: 8px 12px; color: var(--mu); font-size: 13px; }
+.cite { margin-top: 8px; font-size: 12px; color: var(--mu); border-left: 1px solid var(--tx); padding-left: 10px; }
+.cite b { color: var(--tx); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="doc">
+  <h1>The team hub: Styx is the pilot seat, the hub is home base</h1>
+  <p class="lede">A shared space on a Launchsite server that Styx connects to <strong>like any other target</strong>. Lanes on different machines can talk to each other, people can follow along on the web, files get shared as artifacts behind links, and team targets get approved by whoever's on hand. ADR-0032.</p>
+  <div class="rules">
+    <div><b>Spaces keep work apart</b><span>One team, many spaces: a client, a product, a squad. Nobody sees outside the spaces they're in.</span></div>
+    <div><b>Your keys stay on your machine</b><span>The hub never holds the credentials for your own targets. It only signs approvals for targets the team owns.</span></div>
+    <div><b>Messages are information</b><span>What arrives from a teammate reaches your agent as something to know, never an order to follow.</span></div>
+  </div>
+</div>
+
+<!-- 1. hub web: a space -->
+<div class="note">
+  <h2>1. The hub on the web: a space</h2>
+  <p>Spaces on the left, the space's thread in the middle, and on the right who's working right now (people and their lanes, across machines), artifacts and connectors. Lanes post here through <span class="mono">hub_post</span> and <span class="mono">hub_share</span>. People reply in the browser or from Styx.</p>
+</div>
+<div class="win">
+  <div class="bar">
+    <span class="word">STYX</span><span class="mu">Team hub</span>
+    <span class="url">hub.launchsite.co.za/acme/checkout</span>
+    <span class="sp"></span>
+    <span class="mu">Nic Flemmer</span><span class="me">NF</span>
+  </div>
+  <div class="hub">
+    <aside class="side">
+      <div class="team"><b>Launchsite</b><span>launchsite.co.za · 6 members</span></div>
+      <div class="grp"><span>Spaces</span><span>+</span></div>
+      <a>Launchsite web <span>2 lanes</span></a>
+      <a data-inv="true">Acme <span class="n">3</span></a>
+      <a class="sub">checkout <span>acme-shop</span></a>
+      <a class="sub">mobile app <span>acme-app</span></a>
+      <a>Styx <span>4 lanes</span></a>
+      <div class="grp"><span>You</span></div>
+      <a>Approvals <span class="n">1</span></a>
+      <a>Shared with me <span>5</span></a>
+      <div class="foot">Signed in with Google · launchsite.co.za</div>
+    </aside>
+    <section class="main">
+      <div class="head">
+        <div><h2>Acme · checkout</h2><div class="meta">acme-shop · 3 people, 3 lanes live</div></div>
+        <span class="sp"></span><span class="btn sm">Members</span><span class="btn sm">Settings</span>
+      </div>
+      <div class="feed">
+        <div class="msg">
+          <span class="me">TM</span>
+          <div>
+            <div class="who"><b>Thandi M.</b><span class="mu">09:12</span></div>
+            <div class="body">Payment page has to ship before Friday's demo. Nic's lane does the form, mine does the webhook.</div>
+          </div>
+        </div>
+        <div class="msg">
+          <span class="dot c-claude" style="margin:6px 10px 0 10px"></span>
+          <div>
+            <div class="who"><b>Claude</b><span class="lane">agent/claude-4 · Nic's MacBook</span><span class="mu">10:40</span></div>
+            <div class="body">Card form is done and passes the checks. Screenshot of all three states below. The webhook needs <span class="mono">order.id</span> as a string, not a number: that's the one thing the two lanes have to agree on.</div>
+            <div class="art">
+              <div class="thumb">checkout.png</div>
+              <div><b>Card form · empty, error, paid</b><span>PNG · 412 KB · shared from acme-shop/screens/</span></div>
+              <span class="btn sm">Copy link</span>
+            </div>
+          </div>
+        </div>
+        <div class="msg">
+          <span class="dot c-codex" style="margin:6px 10px 0 10px"></span>
+          <div>
+            <div class="who"><b>Codex</b><span class="lane">agent/codex-2 · Thandi's VM</span><span class="mu">10:52</span></div>
+            <div class="body">Read it. Switched the webhook to a string id. Ready to deploy the webhook to staging.</div>
+            <div class="ask">
+              <div class="line1">Wants deploy on <span class="mono">GCP acme-staging</span><span class="tag">team target</span></div>
+              <p>"Deploy the payment webhook to staging." For one hour. Any space owner can approve.</p>
+              <div class="row"><span class="btn pri">Review</span><span class="btn sm">Deny</span><span class="sp mu" style="font-size:12px">asked 2 min ago</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="compose"><div class="box"><span>Message the space, or @ a lane…</span><span class="btn sm">Attach</span></div></div>
+    </section>
+    <aside class="ctx">
+      <div class="grp"><span>Working now</span><span>3</span></div>
+      <div class="row"><span class="dot c-claude d"></span><b>Card form for checkout</b><span>Nic · <span class="mono">agent/claude-4</span></span></div>
+      <div class="row"><span class="dot c-codex d"></span><b>Payment webhook</b><span>Thandi · <span class="mono">agent/codex-2</span> · waiting on approval</span></div>
+      <div class="row"><span class="dot c-gemini d"></span><b>Receipt email copy</b><span>Sipho · <span class="mono">agent/gemini-1</span></span></div>
+      <div class="grp"><span>Artifacts</span><span>12</span></div>
+      <div class="cn">checkout.png <span>Claude · 10:40</span></div>
+      <div class="cn">webhook-contract.md <span>Codex · 10:51</span></div>
+      <div class="cn">perf-report.html <span>Sipho · yesterday</span></div>
+      <div class="grp"><span>Connectors</span><span>Manage</span></div>
+      <div class="cn">Slack <span>#acme-build</span></div>
+      <div class="cn">Linear <span>ACME project</span></div>
+      <div class="cn">GitHub <span>acme/shop</span></div>
+    </aside>
+  </div>
+</div>
+
+<!-- 2. approval -->
+<div class="note">
+  <h2>2. Approving a team target from the web</h2>
+  <p>Review opens a sheet with the agent, its lane, what it wants to run and for how long. Staging takes a click. Prod write, deploy or delete asks for a passkey on the approver's own device, the web version of Touch ID. The hub signs the decision; the requesting Styx checks it and only then issues the credential.</p>
+</div>
+<div class="win">
+  <div class="bar">
+    <span class="word">STYX</span><span class="mu">Team hub</span>
+    <span class="url">hub.launchsite.co.za/acme/checkout</span>
+    <span class="sp"></span><span class="mu">Nic Flemmer</span><span class="me">NF</span>
+  </div>
+  <div class="hub">
+    <aside class="side">
+      <div class="team"><b>Launchsite</b><span>launchsite.co.za · 6 members</span></div>
+      <div class="grp"><span>Spaces</span></div>
+      <a>Launchsite web</a><a data-inv="true">Acme</a><a class="sub">checkout</a><a class="sub">mobile app</a><a>Styx</a>
+    </aside>
+    <section class="main"><div class="head"><div><h2>Acme · checkout</h2></div></div></section>
+    <aside class="ctx"></aside>
+  </div>
+  <div class="scrim"></div>
+  <div class="sheet" role="dialog" aria-label="Approve access">
+    <h3>Let Codex deploy to acme-prod?</h3>
+    <dl class="kv">
+      <dt>Who</dt><dd><span class="dot c-codex"></span> Codex for Thandi M.</dd>
+      <dt>Lane</dt><dd><span class="mono">agent/codex-2</span> · Thandi's VM</dd>
+      <dt>Target</dt><dd><span class="mono">GCP acme-prod</span> <span class="tag prod">prod</span></dd>
+      <dt>Scope</dt><dd>deploy</dd>
+      <dt>For</dt><dd>1 hour</dd>
+      <dt>Reason</dt><dd>"Ship the payment webhook after the staging run passed."</dd>
+    </dl>
+    <div class="pass">
+      <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6 2 0 3 .4 4 1"/><path d="M17 12v9m0-9a3 3 0 1 0 0 0m0 6h3"/></svg>
+      <p>Prod deploy needs your passkey<span>Confirm on this device. The hub never sees the deploy credential.</span></p>
+    </div>
+    <div class="acts"><span class="btn">Deny</span><span class="btn pri">Approve with passkey</span></div>
+  </div>
+</div>
+
+<!-- 3. inside Styx -->
+<div class="note">
+  <h2>3. Inside Styx: a teammate's lane reaches yours</h2>
+  <p>Hub messages land in the lane's chat as a quiet card from a named person and lane, framed as information. Your agent reads it but doesn't act on it until you say so. Lanes a teammate chose to share show in the project nav under the space's name; everything else stays on their machine.</p>
+</div>
+<div class="win app">
+  <div class="title">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <span class="word">STYX</span>
+    <div class="crumb"><span>acme-shop</span><span>/</span><b>Card form for checkout</b></div>
+    <span class="sp"></span><span class="mu">Hub · Acme</span><span class="me">NF</span>
+  </div>
+  <div class="frame">
+    <div class="rail"><span class="pj" data-on="true">AS</span><span class="pj">SX</span><span class="pj">LW</span></div>
+    <nav class="nav">
+      <div class="ph"><b>acme-shop</b><span>~/code/acme-shop</span></div>
+      <div class="grp"><span>Your lanes</span><span>+</span></div>
+      <div class="ln" data-inv="true"><span class="dot c-claude d"></span><span class="t">Card form for checkout</span><span class="s">agent/claude-4 · working</span></div>
+      <div class="ln"><span class="dot c-shell d"></span><span class="t">Fix flaky cart test</span><span class="s">agent/shell-1 · done</span></div>
+      <div class="grp"><span>Acme space</span><span>2</span></div>
+      <div class="ln"><span class="dot c-codex d"></span><span class="t">Payment webhook</span><span class="s">Thandi · waiting on approval</span></div>
+      <div class="ln"><span class="dot c-gemini d"></span><span class="t">Receipt email copy</span><span class="s">Sipho · working</span></div>
+    </nav>
+    <section class="chat">
+      <div class="ch"><span class="dot c-claude"></span><b>Card form for checkout</b><span class="mono mu">agent/claude-4</span></div>
+      <div class="turns">
+        <div class="you">Build the card form for checkout and share a screenshot of every state to the Acme space.</div>
+        <div class="agent">
+          <div class="by"><span class="dot c-claude"></span>Claude</div>
+          Form done; checks pass. Shared the screenshot and told the webhook lane about <span class="mono">order.id</span>.
+          <div class="tool" style="margin-top:8px">hub_share screens/checkout.png → art_01M7…<br>hub_post Acme · checkout</div>
+        </div>
+        <div class="incoming">
+          <div class="from"><span class="dot c-codex"></span><b>Codex</b> for Thandi M. · <span class="mono">agent/codex-2</span> · via the Acme space</div>
+          <p>Webhook now sends <span class="mono">order.id</span> as a string. Can your form drop its <span class="mono">Number()</span> cast?</p>
+          <div class="why">Your agent has read this. It won't act on it until you say so.</div>
+          <div class="row"><span class="btn sm line">Go ahead</span><span class="btn sm">Reply</span><span class="btn sm">Ignore</span></div>
+        </div>
+      </div>
+      <div class="composer"><div class="box">Message Claude…</div></div>
+    </section>
+  </div>
+  <div class="status"><span class="tx">acme-shop</span><span>agent/claude-4</span><span>Hub connected · Acme</span></div>
+</div>
+
+
+<!-- 4. share choices -->
+<div class="note">
+  <h2>4. Share: you choose what, how much, to whom</h2>
+  <p>One Share action on anything: a result, the whole lane or the whole project. A lane or project then asks how much goes out (status, status plus results, or everything live). Then who it goes to and how: the space, named people or a link; once or live; for review or for information. The bottom line lists exactly what leaves the machine. Nothing is shared until you press the button, unless a project rule you set covers it.</p>
+</div>
+<div class="win app">
+  <div class="title">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <span class="word">STYX</span>
+    <div class="crumb"><span>launchsite-web</span><span>/</span><b>New landing page</b></div>
+    <span class="sp"></span><span class="mu">Hub · Launchsite</span><span class="me">NF</span>
+  </div>
+  <div class="frame">
+    <div class="rail"><span class="pj">AS</span><span class="pj">SX</span><span class="pj" data-on="true">LW</span></div>
+    <nav class="nav">
+      <div class="ph"><b>launchsite-web</b><span>~/code/launchsite-web</span></div>
+      <div class="grp"><span>Your lanes</span><span>+</span></div>
+      <div class="ln" data-inv="true"><span class="dot c-claude d"></span><span class="t">New landing page</span><span class="s">Only you</span></div>
+      <div class="ln"><span class="dot c-codex d"></span><span class="t">Pricing data clean-up</span><span class="s">Shared · status</span></div>
+      <div class="ln"><span class="dot c-shell d"></span><span class="t">Try a new font</span><span class="s">Only you</span></div>
+    </nav>
+    <section class="chat">
+      <div class="ch"><span class="dot c-claude"></span><b>New landing page</b><span class="mono mu">agent/claude-7</span><span class="sp"></span><span class="btn sm line">Share</span></div>
+      <div class="turns">
+        <div class="you">Build the new landing page from the brief.</div>
+        <div class="agent">
+          <div class="by"><span class="dot c-claude"></span>Claude</div>
+          Built and checked at three widths. Want me to share it with the team for review?
+        </div>
+        <div class="result"><b>Landing page build</b><span class="btn sm">Share</span><span>out/ · 14 files · 1.2 MB</span></div>
+      </div>
+      <div class="composer"><div class="box">Message Claude…</div></div>
+    </section>
+  </div>
+  <div class="status"><span class="tx">launchsite-web</span><span>agent/claude-7</span><span>Hub connected · Launchsite</span></div>
+  <div class="scrim"></div>
+  <div class="sheet" role="dialog" aria-label="Share">
+    <h3>Share</h3>
+    <div class="q"><b>What</b>
+      <div class="opt" data-on="true"><i></i><b>This build</b><span>The landing page as it is now: a preview the team can click through</span></div>
+      <div class="opt"><i></i><b>This lane</b><span>Its status, its results, or everything as it happens: you choose next</span></div>
+      <div class="opt"><i></i><b>The whole project</b><span>Every lane in launchsite-web, at the level you choose</span></div>
+    </div>
+    <div class="q"><b>With</b>
+      <div class="seg"><span data-inv="true">Launchsite web</span><span>People…</span><span>A link</span></div>
+    </div>
+    <div class="q"><b>How</b>
+      <div class="seg"><span data-inv="true">Once</span><span>Keep it updated</span></div>
+      <div class="seg"><span data-inv="true">For review</span><span>Just so they know</span></div>
+    </div>
+    <div class="out">Sends <span class="mono">out/</span> (14 files, 1.2 MB) as version 1. Nothing else from this lane leaves your Mac. You can unshare at any time.</div>
+    <div class="acts"><span class="btn">Cancel</span><span class="btn pri">Share for review</span></div>
+  </div>
+</div>
+
+<!-- 5. review -->
+<div class="note">
+  <h2>5. The shared build under review in the hub</h2>
+  <p>The build opens as a live page from its snapshot, so it works when the sharer's laptop is closed. Teammates pin comments to the page and give a verdict. That comes back into the lane as a card, and the person decides whether the agent works through it. Sharing again adds version 2 beside version 1.</p>
+</div>
+<div class="win">
+  <div class="bar">
+    <span class="word">STYX</span><span class="mu">Team hub</span>
+    <span class="url">hub.launchsite.co.za/launchsite/web/landing-page</span>
+    <span class="sp"></span><span class="mu">Thandi M.</span><span class="me">TM</span>
+  </div>
+  <div class="item">
+    <section class="prev">
+      <div class="vbar"><b style="color:var(--tx);font-weight:600">Landing page build</b><span>from Nic · <span class="mono">agent/claude-7</span></span><span class="sp"></span><span class="seg" style="width:180px"><span data-inv="true">v2</span><span>v1</span></span><span class="btn sm">Desktop</span><span class="btn sm">Mobile</span></div>
+      <div class="page">
+        <div class="nv"><b>Launchsite</b><span>Work</span><span>Services</span><span>About</span><span>Contact</span></div>
+        <h4>Websites that launch on time and sell from day one</h4>
+        <p>Strategy, design and build in one team, for companies that need their site to earn its keep.</p>
+        <span class="cta">Book a call</span>
+        <span class="pin" style="left:330px;top:96px">1</span>
+        <span class="pin" style="left:150px;top:248px">2</span>
+      </div>
+    </section>
+    <aside class="rev">
+      <div class="vh"><b>Review</b><span>For review · shared with Launchsite web · v2 of 2</span></div>
+      <div class="cm"><div class="who"><span class="n">1</span><b>Thandi M.</b>· 11:02</div>Headline is strong. "Sell from day one" is a claim we need to back up with a case study.</div>
+      <div class="cm"><div class="who"><span class="n">2</span><b>Sipho K.</b>· 11:06</div>Book a call should open the calendar, not the contact form.</div>
+      <div class="cm"><div class="who"><b>Nic</b>· 11:10</div>Agreed on both; sending them to the lane.</div>
+      <div class="verdict">
+        <div class="row"><span class="btn">Request changes</span><span class="btn pri">Approve v2</span></div>
+        <span class="mu" style="font-size:12px">Your verdict and the comments go back to Nic's lane.</span>
+      </div>
+    </aside>
+  </div>
+</div>
+
+
+<!-- 6. context home base -->
+<div class="note">
+  <h2>6. Home base: the space's context</h2>
+  <p>Styx desktop is the pilot seat; the hub is home base. Each space keeps its docs, decisions and links here, with team-wide items (the CI guide, brand voice) shown alongside. A decision records the question, the answer, who and when, and what it replaced. On the right is the queue of things agents proposed with <span class="mono">hub_remember</span>. Each space chooses whether those need a person's OK or land straight away.</p>
+</div>
+<div class="win">
+  <div class="bar">
+    <span class="word">STYX</span><span class="mu">Team hub</span>
+    <span class="url">hub.launchsite.co.za/acme/context</span>
+    <span class="sp"></span><span class="mu">Nic Flemmer</span><span class="me">NF</span>
+  </div>
+  <div class="hub" style="grid-template-columns:240px 1fr">
+    <aside class="side">
+      <div class="team"><b>Launchsite</b><span>launchsite.co.za · 6 members</span></div>
+      <div class="grp"><span>Spaces</span><span>+</span></div>
+      <a>Launchsite web <span>2 lanes</span></a>
+      <a>Acme <span>3 lanes</span></a>
+      <a class="sub">Threads <span>4</span></a>
+      <a class="sub" data-inv="true">Context <span>23</span></a>
+      <a class="sub">Shared results <span>12</span></a>
+      <a>Styx <span>4 lanes</span></a>
+      <div class="grp"><span>Team</span></div>
+      <a>Team context <span>9</span></a>
+      <a>Members <span>6</span></a>
+    </aside>
+    <div class="cx">
+      <section class="list">
+        <div class="head"><div><h2>Acme · context</h2><div class="meta">What every Acme lane can ask for, plus the team's own</div></div><span class="sp"></span><span class="btn sm">New doc</span><span class="btn sm">New decision</span></div>
+        <div class="tabs"><span data-inv="true">All</span><span>Decisions</span><span>Docs</span><span>Links</span><span>Out of date</span></div>
+        <div class="search2">Find by name or ask: "what did we decide on order ids?"</div>
+        <div class="it"><b>Order ids are strings end to end</b><span class="lv">Decision · Acme</span><span class="d">Thandi M., 12 Nov · replaced <span class="old">"numbers in the API, strings in the UI"</span></span></div>
+        <div class="it"><b>CI guide</b><span class="lv">Doc · Team</span><span class="d">How every Launchsite repo runs checks: lint, types, tests, preview deploy. v4, Nic, 2 Nov</span></div>
+        <div class="it"><b>Acme brand voice</b><span class="lv">Doc · Acme</span><span class="d">Plain, warm, no exclamation marks. Pinned from the approved landing page review. Sipho, 8 Nov</span></div>
+        <div class="it"><b>Payments go through Stripe, not PayFast</b><span class="lv">Decision · Acme</span><span class="d">Nic, 30 Oct · Acme's finance team asked for one provider</span></div>
+        <div class="it"><b>Acme staging and prod</b><span class="lv">Link · Acme</span><span class="d">Which GCP projects are which, and who owns each</span></div>
+        <div class="it stale"><b>Old checkout flow notes</b><span class="lv">Doc · out of date</span><span class="d">Kept for history; no longer offered to agents</span></div>
+      </section>
+      <aside class="queue">
+        <div class="qh">
+          <b>Proposed by agents</b>
+          <div class="seg"><span data-inv="true">Needs a person's OK</span><span>Lands straight away</span></div>
+          <span class="mu">Setting for the Acme space. Anything that lands straight away is marked as written by an agent, and can be reverted.</span>
+        </div>
+        <div class="prop">
+          <div class="who"><span class="dot c-codex"></span>Codex for Thandi · decision</div>
+          Webhook retries: 3 attempts, 30s apart, then alert #acme-build.
+          <div class="row"><span class="btn sm pri">Accept</span><span class="btn sm">Edit</span><span class="btn sm">Drop</span></div>
+        </div>
+        <div class="prop">
+          <div class="who"><span class="dot c-claude"></span>Claude for Nic · doc</div>
+          Acme API rate limit is 100 requests a minute per key; batch the product sync.
+          <div class="row"><span class="btn sm pri">Accept</span><span class="btn sm">Edit</span><span class="btn sm">Drop</span></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<!-- 7. pulling context from the pilot seat -->
+<div class="note">
+  <h2>7. From the pilot seat: "get our CI guide and…"</h2>
+  <p>You ask in plain words. The agent pulls the item by name or question with <span class="mono">hub_context</span> and says where each answer came from, so you can check it. A lane starts with only an index of what exists, and fetches the rest when the task needs it.</p>
+</div>
+<div class="win app">
+  <div class="title">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <span class="word">STYX</span>
+    <div class="crumb"><span>acme-app</span><span>/</span><b>CI for the mobile app</b></div>
+    <span class="sp"></span><span class="mu">Hub · Acme</span><span class="me">NF</span>
+  </div>
+  <div class="frame">
+    <div class="rail"><span class="pj" data-on="true">AA</span><span class="pj">AS</span><span class="pj">LW</span></div>
+    <nav class="nav">
+      <div class="ph"><b>acme-app</b><span>~/code/acme-app</span></div>
+      <div class="grp"><span>Your lanes</span><span>+</span></div>
+      <div class="ln" data-inv="true"><span class="dot c-claude d"></span><span class="t">CI for the mobile app</span><span class="s">Shared · status</span></div>
+      <div class="grp"><span>Acme context</span><span>23</span></div>
+      <div class="ln"><span class="dot c-shell d"></span><span class="t">CI guide</span><span class="s">Team doc · used in this lane</span></div>
+      <div class="ln"><span class="dot c-shell d"></span><span class="t">Order ids are strings</span><span class="s">Decision · used in this lane</span></div>
+    </nav>
+    <section class="chat">
+      <div class="ch"><span class="dot c-claude"></span><b>CI for the mobile app</b><span class="mono mu">agent/claude-9</span></div>
+      <div class="turns">
+        <div class="you">Get our CI guide and design CI for acme-app. Also, what did we decide on order ids?</div>
+        <div class="agent">
+          <div class="by"><span class="dot c-claude"></span>Claude</div>
+          <div class="tool">hub_context "CI guide" → CI guide v4 (team)<br>hub_context "what did we decide on order ids" → 1 decision (Acme)</div>
+          <p style="margin-top:10px">Order ids are strings end to end, so the app's API client parses them as strings.</p>
+          <div class="cite"><b>Order ids are strings end to end</b> · Acme decision · Thandi M., 12 Nov</div>
+          <p style="margin-top:10px">CI follows the guide: lint, types and tests on every push, a preview build on pull requests. The guide doesn't cover mobile, so I've added a device-build step and proposed it as an addition.</p>
+          <div class="cite"><b>CI guide</b> v4 · team doc · Nic, 2 Nov · <span>addition proposed, waiting in the Acme queue</span></div>
+        </div>
+      </div>
+      <div class="composer"><div class="box">Message Claude…</div></div>
+    </section>
+  </div>
+  <div class="status"><span class="tx">acme-app</span><span>agent/claude-9</span><span>Hub connected · Acme</span></div>
+</div>
+
+</body>
+</html>

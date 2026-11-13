@@ -3,6 +3,7 @@ import {
   copy,
   fill,
   fixtures,
+  HUB_OFF,
   taskOf,
   upsertRows,
   type AskQuestion,
@@ -263,6 +264,95 @@ describe('ChatPane', () => {
     expect(header.querySelector('[data-lane-summary]')?.textContent).not.toBe('');
     expect(screen.getByPlaceholderText('Message Claude…')).toBeTruthy();
     expect(screen.queryByRole('tab')).toBeNull();
+  });
+
+  it('team hub (ADR-0032): a linked project shows the lane share control; it shares and unshares', () => {
+    const model = fixtures.demoReadModel();
+    const hub = {
+      ...HUB_OFF,
+      connection: {
+        kind: 'signed-in' as const,
+        account: { id: 'usr_nic', email: 'nic@launchsite.co.za', name: 'Nic' },
+        teams: [],
+        spaces: [
+          {
+            id: 'spc_acme',
+            teamId: 't',
+            name: 'Acme',
+            role: 'owner' as const,
+            agentProposals: 'review' as const,
+          },
+        ],
+        staleSince: null,
+      },
+      links: [{ projectId: acme, spaceId: 'spc_acme', hubProjectId: 'prj_hub' }],
+    };
+    useReadModel.getState().replaceModel({ ...model, hub }, 'connected');
+    render(<ChatPane projectId={acme} />);
+    const button = screen.getByRole('button', { name: copy.hub.lane.onlyYou });
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(button);
+    expect(commands.at(-1)).toEqual({ name: 'hub.shareLane', input: { sessionId: claude, shared: true } });
+    cleanup();
+    useReadModel
+      .getState()
+      .replaceModel(
+        { ...model, hub: { ...hub, shares: [{ sessionId: claude, spaceId: 'spc_acme' }] } },
+        'connected',
+      );
+    render(<ChatPane projectId={acme} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Shared with Acme' }));
+    expect(commands.at(-1)).toEqual({ name: 'hub.shareLane', input: { sessionId: claude, shared: false } });
+  });
+
+  it('team hub: no share control for a project that is not linked', () => {
+    render(<ChatPane projectId={acme} />);
+    expect(document.querySelector('[data-hub-share]')).toBeNull();
+  });
+
+  it('team hub: a hub message is attributed, never a user bubble, and Go ahead is the person speaking', () => {
+    const model = fixtures.demoReadModel();
+    const rows = model.transcripts[claude] ?? [];
+    const last = rows.at(-1);
+    if (last === undefined) throw new Error('fixture');
+    useReadModel.getState().replaceModel(
+      {
+        ...model,
+        transcripts: {
+          ...model.transcripts,
+          [claude]: [
+            ...rows,
+            {
+              ...last,
+              id: 'm-hub' as typeof last.id,
+              seq: last.seq + 1,
+              body: 'Can your form drop its Number() cast?',
+              askId: null,
+              payload: {
+                kind: 'system',
+                hub: {
+                  from: 'Thandi M.',
+                  agent: 'Codex',
+                  branch: 'agent/codex-2',
+                  space: 'Acme',
+                  threadId: 'thr_1',
+                },
+              },
+            },
+          ],
+        },
+      },
+      'connected',
+    );
+    render(<ChatPane projectId={acme} />);
+    const card = document.querySelector('[data-hub-message]') as HTMLElement;
+    expect(card.textContent).toContain('Codex for Thandi M. · agent/codex-2 · via Acme');
+    expect(card.textContent).toContain(copy.hub.message.read);
+    fireEvent.click(screen.getByRole('button', { name: copy.hub.message.goAhead }));
+    expect(commands.at(-1)).toEqual({
+      name: 'session.sendMessage',
+      input: { sessionId: claude, body: 'Go ahead with what Thandi M. asked in the Acme space.' },
+    });
   });
 
   it('the chat pane has a resize handle: ← / → step its width and persist it', () => {
