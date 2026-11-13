@@ -43,6 +43,8 @@ const STORE_KEY = 'hub';
 const REFRESH_SKEW_MS = 60_000;
 /** How often shared lanes' status is compared with what the hub last heard. */
 const SYNC_MS = 15_000;
+/** How often teams and spaces are read again. */
+const ME_MS = 3 * 60_000;
 /** A follow loop that failed waits this long before asking again. */
 const RETRY_MS = 15_000;
 
@@ -145,6 +147,7 @@ export class HubService {
   private readonly followers = new Map<string, AbortController>();
   private readonly pushed = new Map<string, string>();
   private syncTimer: NodeJS.Timeout | null = null;
+  private meTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly deps: HubServiceDeps) {}
 
@@ -176,6 +179,11 @@ export class HubService {
     if (this.syncTimer !== null) return;
     this.syncTimer = setInterval(() => void this.syncLanes(), SYNC_MS);
     this.syncTimer.unref?.();
+    // Spaces someone was added to after signing in show up without a restart (owner report: an invited teammate
+    // could not see the space he had just been added to).
+    this.meTimer = setInterval(() => void this.refresh(), ME_MS);
+    this.meTimer.unref?.();
+    void this.refresh();
     this.followAll();
   }
 
@@ -493,21 +501,24 @@ export class HubService {
     if (existing?.spaceId === spaceId) return;
     const project = this.deps.project(projectId);
     if (project === null) fail('not-found', 'no such project');
+    // The remote lets teammates' Styx recognise the same repo (auto-link); a project without one links all the same.
     const remote = await this.deps.remoteOf(project.path);
-    if (remote === null)
-      fail('invalid-input', 'This project has no git remote, so the hub cannot match it. Publish it first.');
     let hubProjectId: string;
     try {
-      const found = (await this.api('GET', `/v1/projects?remote=${encodeURIComponent(remote)}`, null)) as {
-        projects: { id: string; spaceId: string }[];
-      };
+      const found =
+        remote === null
+          ? { projects: [] as { id: string; spaceId: string }[] }
+          : ((await this.api('GET', `/v1/projects?remote=${encodeURIComponent(remote)}`, null)) as {
+              projects: { id: string; spaceId: string }[];
+            });
       const same = found.projects.find((p) => p.spaceId === spaceId);
       hubProjectId =
         same?.id ??
         (
-          (await this.api('POST', `/v1/spaces/${spaceId}/projects`, { name: project.name, remote })) as {
-            project: { id: string };
-          }
+          (await this.api('POST', `/v1/spaces/${spaceId}/projects`, {
+            name: project.name,
+            ...(remote === null ? {} : { remote }),
+          })) as { project: { id: string } }
         ).project.id;
     } catch (e) {
       fail('provider-error', (e as Error).message);
@@ -1200,6 +1211,8 @@ export class HubService {
     for (const f of this.followers.values()) f.abort();
     this.followers.clear();
     if (this.syncTimer !== null) clearInterval(this.syncTimer);
+    if (this.meTimer !== null) clearInterval(this.meTimer);
+    this.meTimer = null;
     this.syncTimer = null;
   }
 }

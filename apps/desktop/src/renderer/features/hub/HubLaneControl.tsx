@@ -43,7 +43,6 @@ export function HubLaneControl({ projectId, projectName, sessionId }: Props) {
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
-
   if (space !== null) {
     const shared = isLaneShared(hub, sessionId);
     return (
@@ -105,7 +104,11 @@ export function HubLaneControl({ projectId, projectName, sessionId }: Props) {
         aria-haspopup="dialog"
         aria-expanded={open}
         title={copy.hub.connect.title}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          // Opening it reads the person's spaces again, so one they were just added to is there to pick.
+          if (!open && hub.connection.kind === 'signed-in') void command('hub.refresh', {});
+          setOpen((o) => !o);
+        }}
         data-hub-connect="true"
       >
         {copy.hub.connect.button}

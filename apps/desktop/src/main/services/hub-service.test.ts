@@ -230,10 +230,19 @@ describe('HubService (ADR-0032)', () => {
     );
   });
 
-  it('refuses to link a project with no remote', async () => {
+  it('links a project that has no git remote, without asking the hub to match one', async () => {
     const t = await signedIn();
     t.setRemote(null);
-    await expect(t.service.linkProject('prj_local', 'spc_acme')).rejects.toThrow(/no git remote/);
+    t.hub.routes.set('POST /v1/spaces/spc_acme/projects', () => ({
+      status: 201,
+      body: { project: { id: 'prj_local_hub' } },
+    }));
+    await t.service.linkProject('prj_local', 'spc_acme');
+    expect(t.service.current().links).toEqual([
+      { projectId: 'prj_local', spaceId: 'spc_acme', hubProjectId: 'prj_local_hub' },
+    ]);
+    expect(t.hub.calls.some((c) => c.path.startsWith('/v1/projects'))).toBe(false);
+    expect(t.hub.calls.find((c) => c.method === 'POST')?.body).toEqual({ name: 'acme-shop' });
   });
 
   it('shares a lane only when linked, and unsharing deletes it on the hub', async () => {
@@ -538,7 +547,9 @@ describe('HubService (ADR-0032)', () => {
       writeFileSync(join(secret, 'id_ed25519'), 'PRIVATE');
       symlinkSync(secret, join(t.worktree, 'keys'));
       await expect(t.service.agentShare('ses_1', ['keys'], null)).rejects.toThrow(/is a link/);
-      await expect(t.service.agentShare('ses_1', ['keys/id_ed25519'], null)).rejects.toThrow(/outside this lane/);
+      await expect(t.service.agentShare('ses_1', ['keys/id_ed25519'], null)).rejects.toThrow(
+        /outside this lane/,
+      );
     });
 
     it('an agent cannot share from a lane that is not shared', async () => {
