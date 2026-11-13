@@ -2537,6 +2537,57 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
    * The Styx account (ADR-0026). Signing in is optional and changes nothing about how the app works; the pane
    * says what it is for rather than pressing anyone to sign in.
    */
+  /** The team hub (ADR-0032): Styx desktop is the pilot seat, the hub on the web is home base. */
+  hub: {
+    title: 'Team hub',
+    lead: 'Share lanes, context and decisions with your team. Sign in with your work email and hub password; a team admin sends you an invite link to set one.',
+    signIn: 'Sign in',
+    codeLabel: 'Type this code on the page that opened, with your work email and hub password',
+    openBrowser: 'Open the browser again',
+    cancel: 'Cancel',
+    signOut: 'Sign out of the hub',
+    refresh: 'Refresh',
+    openWeb: 'Open the hub',
+    signedInAs: 'Signed in as {who}',
+    team: 'Team',
+    stale:
+      'The hub has not answered since {when}. Styx keeps working; shared lanes catch up when it is back.',
+    failed: 'Styx could not reach the hub. Check your connection and try again.',
+    expired: 'That code expired before sign-in finished. Start again.',
+    notOnTeam: 'That account is not on a team on this hub. Ask a team admin for an invite link.',
+    projects: 'Projects',
+    projectsHint:
+      'Linking a project sets where its lanes are shared. Nothing is shared until you share a lane.',
+    noProjects: 'No projects yet.',
+    noSpaces: 'You are not in any spaces yet. Create one on the hub, then refresh.',
+    notLinked: 'Not linked',
+    linkLabel: 'Space for {project}',
+    /** The lane header control. */
+    lane: {
+      onlyYou: 'Only you',
+      shared: 'Shared with {space}',
+      shareTitle:
+        'Share this lane’s status with {space}: its task, branch and progress. Not the chat or the changes.',
+      unshareTitle: 'Stop sharing this lane with {space}',
+    },
+    /** An inbound hub message in the chat. */
+    message: {
+      from: '{from} · via {space}',
+      fromAgent: '{agent} for {from} · {branch} · via {space}',
+      read: 'Your agent has read this. It won’t act on it until you say so.',
+      goAhead: 'Go ahead',
+      goAheadText: 'Go ahead with what {from} asked in the {space} space.',
+    },
+    /** Broker refusals, read by the agent. */
+    errors: {
+      signedOut: 'Styx is not signed in to the team hub. Ask the user to sign in under Settings › Team hub.',
+      notLinked:
+        'This project is not linked to a space on the team hub. Ask the user to link it under Settings › Team hub.',
+      notShared:
+        'This lane is not shared with the space, so it cannot post there. Ask the user to share it from the lane header.',
+      unreachable: 'The team hub did not answer. Try again in a moment.',
+    },
+  },
   account: {
     title: 'Account',
     /** The sign-in dialog (owner request, discrepancy #113): the conventional modal, not a pane. */

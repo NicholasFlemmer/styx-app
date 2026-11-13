@@ -1,6 +1,7 @@
 import {
   SIGNED_OUT,
   UPDATE_OFF,
+  HUB_OFF,
   DEFAULT_PROJECT_SETTINGS,
   mergeSettings,
   type AgentChange,
@@ -36,6 +37,8 @@ export interface ProjectionDeps {
   account?: () => ReadModelSnapshot['account'];
   /** Updates in place (UpdateService, #119); absent in tests. */
   update?: () => ReadModelSnapshot['update'];
+  /** The team hub (HubService, ADR-0032); absent in tests. */
+  hub?: () => ReadModelSnapshot['hub'];
   /** Rows of a session's transcript the renderer holds (grown by "Show earlier messages"); default TRANSCRIPT_WINDOW. */
   transcriptWindow?: (sessionId: string) => number;
 }
@@ -93,6 +96,7 @@ export function buildSnapshot(deps: ProjectionDeps, seq: number): ReadModelSnaps
     limits: deps.limits?.() ?? {},
     account: deps.account?.() ?? SIGNED_OUT,
     update: deps.update?.() ?? UPDATE_OFF,
+    hub: deps.hub?.() ?? HUB_OFF,
     agentSetup: deps.agentSetup?.() ?? [],
     deploys: deps.deploys?.() ?? [],
   };

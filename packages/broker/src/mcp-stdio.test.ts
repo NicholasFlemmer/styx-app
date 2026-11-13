@@ -44,6 +44,7 @@ describe('styx MCP server', () => {
       expiresAt: null,
       decidedBy: 'policy',
     }));
+    server.on('hub_context', async (p) => ({ asked: p.query ?? null }));
     await server.listen(path);
 
     const broker = new BrokerClient({ endpoint: path, sessionId: 's1', token: TOKEN, client: 'mcp', pid: 1 });
@@ -59,6 +60,10 @@ describe('styx MCP server', () => {
       'ask_user',
       'check_grant',
       'get_credential',
+      'hub_context',
+      'hub_post',
+      'hub_read',
+      'hub_remember',
       'land',
       'list_sessions',
       'list_targets',
@@ -68,6 +73,9 @@ describe('styx MCP server', () => {
       'request_access',
       'send_message',
     ]);
+
+    const hc = await client.callTool({ name: 'hub_context', arguments: { query: 'CI guide' } });
+    expect(JSON.parse((hc.content as { text: string }[])[0]?.text ?? '')).toEqual({ asked: 'CI guide' });
 
     const lt = await client.callTool({ name: 'list_targets', arguments: {} });
     expect(JSON.parse((lt.content as { text: string }[])[0]?.text ?? '')).toEqual([

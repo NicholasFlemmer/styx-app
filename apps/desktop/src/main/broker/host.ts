@@ -28,6 +28,7 @@ import type { HunkService } from '../services/hunk-service';
 import type { LaneLedgerService } from '../services/lane-ledger-service';
 import { logger, redact, redactArgv } from '../services/logger';
 import { sha256, type SessionService } from '../services/session-service';
+import { HubError, type HubService } from '../services/hub-service';
 
 export interface BrokerHostDeps {
   repos: Repos;
@@ -55,6 +56,8 @@ export interface BrokerHostDeps {
     /** The checks a resolved merge must pass (ADR-0025 phase B). */
     rememberChecks(sessionId: string, command: string): Promise<string | null>;
   };
+  /** The team hub tools (ADR-0032); the service checks the project link and the lane's share. */
+  hub: Pick<HubService, 'context' | 'read' | 'post' | 'remember'>;
   /** The `land` tool: the container applies the project's integration mode and runs LandService; never throws. */
   landing: {
     land(
@@ -519,6 +522,53 @@ export class BrokerHost {
       deps.sessions.deliverPeerMessage(from, target, p.body);
       return { delivered: true as const };
     });
+
+    /** Hub refusals reach the agent as the hub's own words; anything else is a plain failure. */
+    const viaHub = async <T>(ctx: ConnectionContext, run: () => Promise<T>): Promise<T> => {
+      // A shell lane is a person's terminal, not an agent the hub can frame for: it gets no hub tools.
+      if (ctx.session.agent === 'shell')
+        throw new BrokerError(ErrorCode.notAllowed, 'The team hub tools are for agents, not shell lanes.');
+      try {
+        return await run();
+      } catch (e) {
+        if (e instanceof HubError)
+          throw new BrokerError(
+            e.status === 403 || e.status === 401 ? ErrorCode.notAllowed : ErrorCode.internal,
+            clean(e.message, 400),
+          );
+        throw e;
+      }
+    };
+    server.on('hub_context', async (p, ctx) =>
+      viaHub(ctx, () => deps.hub.context(ctx.session.sessionId, p.query ?? null, p.kind ?? null)),
+    );
+    server.on('hub_read', async (p, ctx) =>
+      viaHub(ctx, () => deps.hub.read(ctx.session.sessionId, p.threadId ?? null)),
+    );
+    /** 10 hub writes a minute per lane: a brake on an agent posting in a loop (the hub has its own per person). */
+    const hubWrites = new Map<string, number[]>();
+    const hubWriteAllowed = (sessionId: string): void => {
+      const now = deps.clock.now();
+      const recent = (hubWrites.get(sessionId) ?? []).filter((t) => t > now - 60_000);
+      if (recent.length >= 10)
+        throw new BrokerError(
+          ErrorCode.rateLimited,
+          'Too many hub posts in a minute. Wait before posting again.',
+        );
+      hubWrites.set(sessionId, [...recent, now]);
+    };
+    server.on('hub_post', async (p, ctx) =>
+      viaHub(ctx, () => {
+        hubWriteAllowed(ctx.session.sessionId);
+        return deps.hub.post(ctx.session.sessionId, p.body, p.threadId ?? null, p.title ?? null);
+      }),
+    );
+    server.on('hub_remember', async (p, ctx) =>
+      viaHub(ctx, () => {
+        hubWriteAllowed(ctx.session.sessionId);
+        return deps.hub.remember(ctx.session.sessionId, p);
+      }),
+    );
 
     server.on('list_targets', async (_p, ctx) => {
       const now = deps.clock.now();

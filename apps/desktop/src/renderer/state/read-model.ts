@@ -58,6 +58,7 @@ export const snapshotToModel = (snapshot: ReadModelSnapshot): ReadModel => ({
   limits: snapshot.limits,
   account: snapshot.account,
   update: snapshot.update,
+  hub: snapshot.hub,
   agentSetup: Object.fromEntries(snapshot.agentSetup.map((s) => [s.agent, s])),
 });
 

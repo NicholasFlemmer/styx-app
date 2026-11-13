@@ -32,6 +32,7 @@ describe('ipc contract', () => {
         'fs',
         'git',
         'grant',
+        'hub',
         'hunk',
         'ide',
         'link',

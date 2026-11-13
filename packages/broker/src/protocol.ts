@@ -221,6 +221,42 @@ export const methods = {
     }),
     result: z.object({ ok: z.literal(true) }),
   },
+  /**
+   * The team hub (ADR-0032). Context by name or question (no query: the one-line index of what exists); needs the
+   * project linked to a space. Results carry their source so the agent can cite it.
+   */
+  hub_context: {
+    params: z.object({
+      query: z.string().max(500).optional(),
+      kind: z.enum(['doc', 'decision', 'link']).optional(),
+    }),
+    result: z.record(z.string(), z.unknown()),
+  },
+  /** The space's threads and shared lanes, or one thread's latest messages. */
+  hub_read: {
+    params: z.object({ threadId: z.string().max(64).optional() }),
+    result: z.record(z.string(), z.unknown()),
+  },
+  /** Post to a thread (or start one with `title`). Needs the lane shared by its person. */
+  hub_post: {
+    params: z.object({
+      body: z.string().min(1).max(16_000),
+      threadId: z.string().max(64).optional(),
+      title: z.string().min(1).max(200).optional(),
+    }),
+    result: z.object({ posted: z.literal(true), threadId: z.string() }),
+  },
+  /** Propose a doc or decision for the space's context; the space decides whether a person accepts it. */
+  hub_remember: {
+    params: z.object({
+      kind: z.enum(['doc', 'decision']),
+      title: z.string().min(1).max(200),
+      body: z.string().max(100_000).optional(),
+      question: z.string().max(500).optional(),
+      answer: z.string().max(4000).optional(),
+    }),
+    result: z.object({ state: z.string(), note: z.string() }),
+  },
   list_targets: {
     params: z.object({}),
     result: z.array(

@@ -73,6 +73,8 @@ import { AccountService, DEFAULT_API } from './services/account-service';
 import { UpdateService, type Updater } from './services/update-service';
 import { installIdFrom, UsageReportService } from './services/usage-report-service';
 import { FeedbackService } from './services/feedback-service';
+import { DEFAULT_HUB, HubService } from './services/hub-service';
+import { hostname } from 'node:os';
 import { version as APP_VERSION } from '../../package.json';
 import { projectSettingsFor } from './store/projection';
 import { Publisher } from './store/publisher';
@@ -284,6 +286,8 @@ export interface Container {
   usage: UsageService;
   /** The Styx account (ADR-0026): device flow, keychain tokens, offline-tolerant session. */
   account: AccountService;
+  /** The team hub (ADR-0032): sign-in, project links, shared lanes, and the agents' hub tools. */
+  hub: HubService;
   /** Updates in place (#119). */
   updates: UpdateService;
   /** Anonymous usage counts (discrepancy row 114): a closed set of event names, nothing else. */
@@ -656,6 +660,37 @@ export function buildContainer(opts: ContainerOptions): Container {
   // Counts go out only while the setting is on, under this install's random id, and tied to the account too
   // while signed in (discrepancy #122). Both are read at flush time, so turning it off stops the next batch
   // rather than the one after.
+  // The team hub (ADR-0032) is additive like the account: built with what is to hand, never in the way.
+  const hub = new HubService({
+    fetch: opts.fetch ?? fetch,
+    vault: opts.vault,
+    store: repos.uiState,
+    publish: (state) => publisher.hubSet(state),
+    openExternal: (url) => void opts.openExternal(url),
+    now: () => clock.now(),
+    hubBase: process.env['STYX_HUB'] ?? DEFAULT_HUB,
+    machine: hostname(),
+    lane: (sessionId) => {
+      const session = repos.sessions.get(sessionId);
+      if (!session) return null;
+      return {
+        session,
+        projectId: session.projectId,
+        branch: repos.worktrees.get(session.worktreeId)?.branch ?? null,
+      };
+    },
+    project: (projectId) => {
+      const p = repos.projects.get(projectId);
+      return p === null ? null : { name: p.name, path: p.path };
+    },
+    remoteOf: async (path) => {
+      const remotes = await git.remotes(path).catch(() => []);
+      return (remotes.find((r) => r.name === 'origin') ?? remotes[0])?.url ?? null;
+    },
+    deliver: (sessionId, meta, body) => sessions.deliverHubMessage(sessionId, meta, body),
+    audit: (input) => void audit.append(input),
+  });
+  hub.load();
   const usageReports = new UsageReportService({
     fetch: opts.fetch ?? fetch,
     apiBase: () => process.env['STYX_API'] ?? DEFAULT_API,
@@ -709,6 +744,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     deploys: () => deploys.all(),
     limits: () => usage.all(),
     account: () => account.current(),
+    hub: () => hub.current(),
     update: () => updates.current(),
     agentSetup: () => agentSetup.all(),
   });
@@ -728,6 +764,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     sessions,
     hunks,
     ledger,
+    hub,
     providers,
     clock,
     endpoint: runtime.brokerEndpoint,
@@ -1071,6 +1108,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     worktrees,
     usage,
     account,
+    hub,
     updates,
     usageReports,
     feedback,
@@ -1093,6 +1131,7 @@ export function buildContainer(opts: ContainerOptions): Container {
       if (opts.disableRefresh) refresh.disable();
       else refresh.start();
       await broker.listen();
+      hub.start();
     },
     async shutdown() {
       for (const s of repos.sessions.live()) broker.notifyStopping(s.id);
@@ -1104,6 +1143,7 @@ export function buildContainer(opts: ContainerOptions): Container {
       sessions.killAll();
       runs.stopAll();
       devices.shutdown();
+      hub.shutdown();
       // After agents and runs are stopped, so a slow network never delays that; capped at 2 s inside.
       await usageReports.shutdown();
       await hunks.closeAll();

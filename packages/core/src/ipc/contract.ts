@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { deltaSchema, effectiveProjectSettingsSchema } from '../deltas';
 import { accountProviderSchema, accountStateSchema } from '../model/account';
+import { HUB_OFF, hubStateSchema } from '../model/hub';
 import { UPDATE_OFF, updateStateSchema } from '../model/update';
 import { agentSetupSchema, setupAgentSchema } from '../model/agent-setup';
 import { RENDERER_USAGE_EVENTS } from '../model/usage-report';
@@ -154,6 +155,8 @@ const readModelSnapshotSchema = z.object({
   account: accountStateSchema,
   /** Updates in place (#119). */
   update: updateStateSchema.default(UPDATE_OFF),
+  /** The team hub (ADR-0032); never carries a token. */
+  hub: hubStateSchema.default(HUB_OFF),
   agentSetup: z.array(agentSetupSchema).default([]),
 });
 export type ReadModelSnapshot = z.infer<typeof readModelSnapshotSchema>;
@@ -751,6 +754,25 @@ export const commands = {
    * session on its own any more — a CLI that exits leaves it idle in its lane.
    */
   'session.markDone': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
+
+  // --- team hub (ADR-0032) -------------------------------------------------
+  /** Device flow against the hub (Google, the team's Workspace domain only); returns once the code is on screen. */
+  'hub.signIn': { input: z.object({}), output: ok },
+  'hub.cancelSignIn': { input: z.object({}), output: ok },
+  'hub.openVerification': { input: z.object({}), output: ok },
+  /** Opens the hub on the web (home base) in the OS browser. */
+  'hub.openWeb': { input: z.object({}), output: ok },
+  /** Clears the hub session and its keychain entries; links and shares are forgotten too. */
+  'hub.signOut': { input: z.object({}), output: ok },
+  /** Re-reads teams and spaces; clears `staleSince` when the hub answers. */
+  'hub.refresh': { input: z.object({}), output: ok },
+  /** Sets where a project's shares go (null unlinks). Shares nothing by itself. */
+  'hub.linkProject': {
+    input: z.object({ projectId: projectIdSchema, spaceId: z.string().min(1).nullable() }),
+    output: ok,
+  },
+  /** Shares a lane's status with its project's space, or stops sharing it. Only a person does this. */
+  'hub.shareLane': { input: z.object({ sessionId: sessionIdSchema, shared: z.boolean() }), output: ok },
 
   // --- account (ADR-0026) --------------------------------------------------
   /**

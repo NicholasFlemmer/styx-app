@@ -20,6 +20,7 @@ import type { Deploy, DevRun } from '../model/run';
 import type { Checkpoint } from '../model/checkpoint';
 import type { AccountState } from '../model/account';
 import { UPDATE_OFF } from '../model/update';
+import { HUB_OFF } from '../model/hub';
 import type { AgentLimits } from '../model/usage';
 import type { Grant } from '../model/grant';
 import type { AgentChange } from '../model/hunk';
@@ -1412,6 +1413,7 @@ export const fixtureReadModel = (f: DemoFixture): ReadModel => ({
   limits: f.limits,
   account: f.account,
   update: UPDATE_OFF,
+  hub: HUB_OFF,
   agentSetup: {},
 });
 

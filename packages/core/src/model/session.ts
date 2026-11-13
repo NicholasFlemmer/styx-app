@@ -299,6 +299,21 @@ export const messagePayloadSchema = z.discriminatedUnion('kind', [
      * A `system` row rather than a kind of its own, so the transcript table's CHECK needs no migration.
      */
     problem: z.object({ agent: agentSchema, kind: z.enum(['signed-out', 'limit']) }).optional(),
+    /**
+     * A message from the team hub (ADR-0032): a teammate, or a teammate's agent, wrote in a thread this lane posted
+     * in. A `system` row for the same reason as `problem`; never a user row, since the words are not the person's.
+     */
+    hub: z
+      .object({
+        /** The person, or the person the agent works for. */
+        from: z.string(),
+        /** The agent's name when an agent wrote it; null for a person. */
+        agent: z.string().nullable(),
+        branch: z.string().nullable(),
+        space: z.string(),
+        threadId: z.string(),
+      })
+      .optional(),
   }),
   /** A thinking block from the stream: streamed live, then collapsed to "Thought for Ns" (body = the thinking text). */
   z.object({

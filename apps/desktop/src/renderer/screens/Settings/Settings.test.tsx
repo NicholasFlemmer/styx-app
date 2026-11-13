@@ -641,6 +641,7 @@ describe('<Settings />', () => {
     expect(items).toEqual([
       'app:general',
       'app:account',
+      'app:hub',
       'app:editor',
       'app:agents',
       'app:skills',
