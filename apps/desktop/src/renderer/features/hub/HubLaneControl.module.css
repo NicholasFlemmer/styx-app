@@ -1,0 +1,128 @@
+@layer components {
+  /* The lane header's tool button recipe (ChatPane .arcadeButton): a text button with a rule on its left. */
+  .wrap {
+    position: relative;
+    display: flex;
+    align-self: stretch;
+  }
+  .tool {
+    flex: none;
+    padding: 0 12px;
+    border: 0;
+    border-left: 1px solid var(--ln);
+    background: transparent;
+    color: var(--mu);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .tool:hover,
+  .tool[aria-expanded='true'] {
+    color: var(--tx);
+  }
+  .tool[data-inv='true'] {
+    background: var(--tx);
+    color: var(--bg);
+  }
+  /* A floating surface: 1px text-colour border, square, no shadow. */
+  .panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 3;
+    width: 300px;
+    padding: var(--sp-3);
+    background: var(--s1);
+    border: 1px solid var(--tx);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+  .head {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .lead,
+  .hint {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--mu);
+  }
+  .error {
+    margin: 0;
+    font-size: 12px;
+    color: var(--tx);
+    border: 1px solid var(--tx);
+    padding: 6px 8px;
+  }
+  .code {
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    font-variant-numeric: tabular-nums;
+  }
+  .list {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--ln);
+  }
+  .item {
+    padding: 8px 10px;
+    border: 0;
+    border-top: 1px solid var(--ln);
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+  .item:first-child {
+    border-top: 0;
+  }
+  .item:hover,
+  .item:focus-visible {
+    background: var(--s2);
+  }
+  .create {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .input {
+    padding: 6px 8px;
+    border: 1px solid var(--ln);
+    border-radius: 0;
+    background: var(--bg);
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 13px;
+  }
+  .input:focus-visible {
+    outline: 2px solid var(--tx);
+    outline-offset: -1px;
+  }
+  .acts {
+    display: flex;
+    gap: var(--sp-2);
+  }
+  .link {
+    align-self: flex-start;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--mu);
+    font: inherit;
+    font-size: 12px;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .link:hover {
+    color: var(--tx);
+  }
+}

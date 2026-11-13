@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Styx next: team hub sharing (ADR-0032 phase 2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+:root {
+  --page:#181916; --bg:#0d0e0c; --s1:#121411; --s2:#1c1e1a; --ln:#2d302a; --tx:#e9ebe3; --mu:#858a81;
+  --ac:#d6ff3d; --acx:#0d0e0c; --act:#d6ff3d; --add:rgba(214,255,61,.13); --term:#080908; --termtx:#c9cdc2; --dim:rgba(0,0,0,.6);
+  --p-bg:#f7f8f3; --p-s2:#e1e3db; --p-ln:#b3b7ab; --p-tx:#14160f; --p-mu:#5d6259; --p-act:#6e8f00;
+  --claude:#e8916a; --codex:#8fb3ff; --gemini:#b79bff; --shell:#858a81;
+  --ui: 'Archivo', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--page); color: var(--tx); font: 400 14px/1.5 var(--ui); padding: 56px 0 140px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.mu { color: var(--mu); }
+
+.doc { width: 1280px; margin: 0 auto; }
+.doc h1 { font: 600 54px/1.02 var(--ui); letter-spacing: -.01em; max-width: 18ch; }
+.doc .lede { margin-top: 18px; max-width: 66ch; color: var(--mu); font-size: 18px; }
+.doc .lede strong { color: var(--tx); font-weight: 600; }
+.rules { margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 32px; }
+.rules div { padding: 16px 0; border-top: 1px solid var(--ln); }
+.rules b { display: block; font: 600 17px/1.2 var(--ui); }
+.rules span { display: block; margin-top: 6px; color: var(--mu); max-width: 40ch; }
+.note { width: 1280px; margin: 88px auto 18px; }
+.note h2 { font: 600 24px/1.12 var(--ui); letter-spacing: -.02em; }
+.note p { margin-top: 8px; color: var(--mu); font-size: 15px; max-width: 72ch; }
+
+/* window */
+.win { width: 1280px; height: 800px; margin: 0 auto; background: var(--bg); border: 1px solid var(--ln); display: grid; grid-template-rows: 44px 1fr; overflow: hidden; position: relative; }
+.win.app { grid-template-rows: 38px 1fr 26px; }
+.bar { display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid var(--ln); background: var(--s1); font-size: 13px; }
+.bar .url { font: 400 12px var(--mono); color: var(--mu); border: 1px solid var(--ln); padding: 4px 10px; width: 420px; }
+.word { font: 600 12px/1 var(--ui); letter-spacing: .24em; }
+.me { width: 24px; height: 24px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); font: 600 10px/22px var(--ui); text-align: center; flex: none; }
+.sp { margin-left: auto; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--ln); font-size: 13px; white-space: nowrap; }
+.btn.pri { background: var(--ac); color: var(--acx); border-color: var(--ac); font-weight: 700; }
+.btn.line { border-color: var(--tx); font-weight: 600; }
+.btn.sm { padding: 4px 9px; font-size: 12px; }
+.tag { display: inline-block; padding: 1px 6px; font-size: 11px; font-weight: 600; border: 1px solid var(--ln); color: var(--mu); }
+.tag.prod { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.dot { display: inline-block; width: 8px; height: 8px; flex: none; }
+.c-claude { background: var(--claude); } .c-codex { background: var(--codex); } .c-gemini { background: var(--gemini); } .c-shell { background: var(--shell); }
+
+/* hub web: spaces | thread | context */
+.hub { display: grid; grid-template-columns: 240px 1fr 320px; min-height: 0; }
+.side { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.side .team { padding: 14px 16px; border-bottom: 1px solid var(--ln); }
+.side .team b { display: block; font: 600 16px/1.2 var(--ui); }
+.side .team span { font-size: 12px; color: var(--mu); }
+.side .grp { padding: 16px 16px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.side a { display: flex; justify-content: space-between; align-items: center; padding: 7px 16px; font-size: 13px; border-top: 1px solid var(--ln); }
+.side a span { color: var(--mu); font-size: 12px; }
+.side a[data-inv] { background: var(--tx); color: var(--bg); }
+.side a[data-inv] span { color: var(--p-mu); }
+.side a.sub { padding-left: 28px; }
+.side a .n { background: var(--ac); color: var(--acx); font-weight: 700; padding: 0 5px; font-size: 11px; }
+.side .foot { margin-top: auto; padding: 12px 16px; border-top: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+
+.main { display: flex; flex-direction: column; min-height: 0; }
+.head { display: flex; align-items: flex-end; gap: 14px; padding: 18px 24px 14px; border-bottom: 1px solid var(--ln); }
+.head h2 { font: 600 22px/1.1 var(--ui); letter-spacing: -.01em; }
+.head .meta { font-size: 12px; color: var(--mu); margin-top: 4px; }
+.feed { flex: 1; overflow: hidden; padding: 8px 24px; display: flex; flex-direction: column; }
+.msg { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--ln); }
+.msg .who { font-size: 13px; display: flex; gap: 8px; align-items: center; }
+.msg .who b { font-weight: 600; }
+.msg .who .mu { font-size: 12px; }
+.msg .body { margin-top: 3px; max-width: 70ch; }
+.lane { display: inline-flex; gap: 6px; align-items: center; font: 400 11px var(--mono); color: var(--mu); border: 1px solid var(--ln); padding: 1px 6px; }
+.art { margin-top: 10px; display: grid; grid-template-columns: 120px 1fr auto; gap: 14px; align-items: center; border: 1px solid var(--ln); padding: 10px; max-width: 620px; }
+.art .thumb { height: 72px; background: var(--p-bg); border: 1px solid var(--p-ln); display: grid; place-items: center; color: var(--p-mu); font: 400 11px var(--mono); }
+.art b { display: block; font-size: 13px; }
+.art span { font-size: 12px; color: var(--mu); }
+.ask { margin-top: 10px; border: 1px solid var(--tx); padding: 12px 14px; max-width: 620px; }
+.ask .line1 { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+.ask p { margin-top: 6px; color: var(--mu); font-size: 13px; }
+.ask .row { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
+.compose { border-top: 1px solid var(--ln); padding: 12px 24px 16px; }
+.compose .box { border: 1px solid var(--ln); padding: 10px 12px; color: var(--mu); display: flex; justify-content: space-between; align-items: center; }
+
+.ctx { border-left: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.ctx .grp { padding: 16px 16px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.ctx .row { display: grid; grid-template-columns: 10px 1fr; gap: 2px 8px; padding: 8px 16px; border-top: 1px solid var(--ln); }
+.ctx .row .d { margin-top: 6px; }
+.ctx .row b { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.ctx .row > span:not(.dot) { grid-column: 2; font-size: 12px; color: var(--mu); }
+.ctx .row span .mono { font-size: 11px; }
+.ctx .cn { display: flex; justify-content: space-between; padding: 7px 16px; border-top: 1px solid var(--ln); font-size: 13px; }
+.ctx .cn span { color: var(--mu); font-size: 12px; }
+
+/* approval sheet over the hub */
+.scrim { position: absolute; inset: 44px 0 0 0; background: var(--dim); }
+.sheet { position: absolute; top: 44px; right: 0; bottom: 0; width: 460px; background: var(--bg); border-left: 1px solid var(--tx); padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+.sheet h3 { font: 600 20px/1.2 var(--ui); }
+.kv { display: grid; grid-template-columns: 110px 1fr; gap: 8px 12px; font-size: 13px; }
+.kv dt { color: var(--mu); }
+.kv dd .mono { font-size: 12px; }
+.pass { border: 1px solid var(--ln); padding: 14px; display: flex; gap: 12px; align-items: center; }
+.pass svg { width: 28px; height: 28px; stroke: var(--tx); fill: none; stroke-width: 1.5; flex: none; }
+.pass p { font-size: 13px; }
+.pass p span { display: block; color: var(--mu); font-size: 12px; }
+.sheet .acts { margin-top: auto; display: flex; gap: 8px; justify-content: flex-end; }
+
+/* inside Styx: a lane with hub traffic */
+.title { display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid var(--ln); background: var(--s1); font-size: 13px; }
+.lights { display: flex; gap: 8px; width: 60px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); }
+.crumb { display: flex; gap: 8px; color: var(--mu); }
+.crumb b { color: var(--tx); font-weight: 600; }
+.status { display: flex; gap: 20px; align-items: center; padding: 0 14px; border-top: 1px solid var(--ln); background: var(--s1); font-size: 12px; color: var(--mu); }
+.status .tx { color: var(--tx); }
+.frame { display: grid; grid-template-columns: 56px 216px 1fr; min-height: 0; }
+.rail { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; }
+.rail .pj { width: 36px; height: 36px; border: 1px solid var(--ln); display: grid; place-items: center; font: 700 11px var(--ui); }
+.rail .pj[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.nav { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.nav .ph { padding: 14px 14px 10px; }
+.nav .ph b { display: block; font: 600 16px/1.2 var(--ui); }
+.nav .ph span { font: 400 11px var(--mono); color: var(--mu); }
+.nav .grp { padding: 14px 14px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.ln { display: grid; grid-template-columns: 10px 1fr; gap: 2px 8px; padding: 8px 14px; border-top: 1px solid var(--ln); }
+.ln .d { margin-top: 6px; }
+.ln .t { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.ln .s { grid-column: 2; font-size: 12px; color: var(--mu); }
+.ln[data-inv] { background: var(--tx); color: var(--bg); }
+.ln[data-inv] .s { color: var(--p-mu); }
+.ln.remote .t::after { content: ''; }
+.chat { display: flex; flex-direction: column; min-height: 0; }
+.chat .ch { padding: 14px 28px; border-bottom: 1px solid var(--ln); display: flex; gap: 12px; align-items: center; }
+.chat .ch b { font: 600 17px/1.2 var(--ui); }
+.turns { flex: 1; padding: 18px 28px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.you { align-self: flex-end; background: var(--s2); padding: 10px 14px; max-width: 60ch; }
+.agent { max-width: 76ch; }
+.agent .by { font-size: 12px; color: var(--mu); display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+.tool { font: 400 12px var(--mono); color: var(--mu); border-left: 1px solid var(--ln); padding-left: 10px; }
+.incoming { border: 1px solid var(--ln); background: var(--s1); padding: 12px 14px; max-width: 76ch; }
+.incoming .from { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--mu); }
+.incoming .from b { color: var(--tx); font-weight: 600; }
+.incoming p { margin-top: 6px; }
+.incoming .why { margin-top: 8px; font-size: 12px; color: var(--mu); }
+.incoming .row { margin-top: 10px; display: flex; gap: 8px; }
+.composer { border-top: 1px solid var(--ln); padding: 12px 28px 16px; }
+.composer .box { border: 1px solid var(--ln); padding: 10px 12px; color: var(--mu); }
+
+/* share sheet (in Styx) */
+.win.app .scrim { inset: 38px 0 26px 0; }
+.win.app .sheet { top: 38px; bottom: 26px; width: 500px; gap: 18px; overflow: hidden; }
+.q { display: flex; flex-direction: column; gap: 6px; }
+.q > b { font-size: 13px; font-weight: 600; }
+.opt { display: grid; grid-template-columns: 14px 1fr; gap: 2px 10px; padding: 9px 12px; border: 1px solid var(--ln); }
+.opt i { width: 12px; height: 12px; border: 1px solid var(--tx); border-radius: 50%; margin-top: 4px; }
+.opt[data-on] { border-color: var(--tx); }
+.opt[data-on] i { background: var(--ac); border-color: var(--ac); }
+.opt b { font-size: 13px; font-weight: 600; }
+.opt span { grid-column: 2; font-size: 12px; color: var(--mu); }
+.seg { display: flex; }
+.seg span { flex: 1; padding: 6px 10px; border: 1px solid var(--ln); font-size: 13px; text-align: center; }
+.seg span + span { border-left: 0; }
+.seg span[data-inv] { background: var(--tx); color: var(--bg); border-color: var(--tx); font-weight: 600; }
+.out { border-top: 1px solid var(--ln); padding-top: 12px; font-size: 12px; color: var(--mu); }
+.out .mono { font-size: 11px; color: var(--tx); }
+.result { border: 1px solid var(--ln); background: var(--s1); padding: 12px 14px; max-width: 76ch; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+.result b { font-size: 13px; }
+.result span { font-size: 12px; color: var(--mu); }
+
+/* review item (in the hub) */
+.item { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+.prev { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--ln); }
+.prev .vbar { display: flex; gap: 10px; align-items: center; padding: 10px 20px; border-bottom: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+.prev .vbar .mono { color: var(--tx); }
+.page { flex: 1; margin: 20px; background: var(--p-bg); color: var(--p-tx); border: 1px solid var(--p-ln); position: relative; overflow: hidden; }
+.page .nv { display: flex; gap: 18px; padding: 14px 24px; border-bottom: 1px solid var(--p-ln); font-size: 12px; color: var(--p-mu); }
+.page .nv b { color: var(--p-tx); margin-right: auto; }
+.page h4 { font: 600 40px/1.05 var(--ui); padding: 48px 24px 0; max-width: 16ch; letter-spacing: -.02em; }
+.page p { padding: 12px 24px 0; color: var(--p-mu); max-width: 52ch; }
+.page .cta { margin: 20px 24px; display: inline-block; background: var(--p-tx); color: var(--p-bg); padding: 10px 16px; font-weight: 600; font-size: 13px; }
+.pin { position: absolute; width: 22px; height: 22px; background: var(--ac); color: var(--acx); font: 700 11px/22px var(--ui); text-align: center; border: 1px solid var(--p-tx); }
+.rev { display: flex; flex-direction: column; min-height: 0; background: var(--s1); }
+.rev .vh { padding: 16px; border-bottom: 1px solid var(--ln); }
+.rev .vh b { display: block; font: 600 16px/1.2 var(--ui); }
+.rev .vh span { font-size: 12px; color: var(--mu); }
+.cm { padding: 12px 16px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.cm .who { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--mu); margin-bottom: 4px; }
+.cm .who b { color: var(--tx); }
+.cm .who .n { background: var(--ac); color: var(--acx); font-weight: 700; padding: 0 5px; }
+.verdict { margin-top: auto; padding: 16px; border-top: 1px solid var(--ln); display: flex; flex-direction: column; gap: 10px; }
+.verdict .row { display: flex; gap: 8px; }
+
+/* context home base */
+.cx { display: grid; grid-template-columns: 1fr 360px; min-height: 0; }
+.cx .list { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--ln); }
+.tabs { display: flex; gap: 0; padding: 0 24px; border-bottom: 1px solid var(--ln); }
+.tabs span { padding: 10px 14px; font-size: 13px; color: var(--mu); border-bottom: 2px solid transparent; }
+.tabs span[data-inv] { color: var(--tx); border-bottom-color: var(--tx); font-weight: 600; }
+.it { display: grid; grid-template-columns: 1fr auto; gap: 2px 16px; padding: 12px 24px; border-bottom: 1px solid var(--ln); }
+.it b { font-size: 14px; font-weight: 600; }
+.it .lv { font-size: 12px; color: var(--mu); text-align: right; }
+.it span.d { grid-column: 1; font-size: 13px; color: var(--mu); }
+.it .old { text-decoration: line-through; }
+.it.stale { opacity: .55; }
+.queue { display: flex; flex-direction: column; min-height: 0; background: var(--s1); }
+.queue .qh { padding: 16px; border-bottom: 1px solid var(--ln); display: flex; flex-direction: column; gap: 8px; }
+.queue .qh b { font: 600 16px/1.2 var(--ui); }
+.queue .qh .mu { font-size: 12px; }
+.prop { padding: 12px 16px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.prop .who { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--mu); margin-bottom: 4px; }
+.prop .row { margin-top: 8px; display: flex; gap: 6px; }
+.search2 { margin: 14px 24px; border: 1px solid var(--ln); padding: 8px 12px; color: var(--mu); font-size: 13px; }
+.cite { margin-top: 8px; font-size: 12px; color: var(--mu); border-left: 1px solid var(--tx); padding-left: 10px; }
+.cite b { color: var(--tx); font-weight: 600; }
+
+/* ===== phase 2: sharing ===== */
+.paperwrap { background: var(--p-bg); color: var(--p-tx); }
+.gallery { padding: 18px 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; overflow: hidden; }
+.card { border: 1px solid var(--ln); display: flex; flex-direction: column; min-width: 0; }
+.card .pv { height: 150px; background: var(--p-bg); border-bottom: 1px solid var(--ln); position: relative; overflow: hidden; color: var(--p-tx); }
+.card .meta { padding: 10px 12px; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; }
+.card .meta b { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .meta span { font-size: 12px; color: var(--mu); }
+.card .meta .k { grid-column: 2; grid-row: 1; font: 500 10px var(--mono); border: 1px solid var(--ln); padding: 1px 5px; color: var(--mu); align-self: start; }
+.badge { position: absolute; left: 8px; bottom: 8px; font: 600 11px var(--ui); background: var(--p-tx); color: var(--p-bg); padding: 2px 6px; }
+.badge.ok { background: var(--ac); color: var(--acx); }
+.drop { margin: 0 24px 16px; border: 1px dashed var(--ln); padding: 14px; color: var(--mu); font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+.drop b { color: var(--tx); font-weight: 600; }
+.prog { height: 4px; background: var(--s2); margin-top: 6px; }
+.prog i { display: block; height: 4px; width: 62%; background: var(--ac); }
+.filters { display: flex; gap: 0; padding: 0 24px; border-bottom: 1px solid var(--ln); }
+.filters span { padding: 10px 12px; font-size: 13px; color: var(--mu); border-bottom: 2px solid transparent; }
+.filters span[data-inv] { color: var(--tx); border-bottom-color: var(--tx); font-weight: 600; }
+/* fake previews */
+.pv .img { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 22px, var(--p-s2) 22px 23px); }
+.pv .site { position: absolute; inset: 14px; border: 1px solid var(--p-ln); background: var(--p-bg); }
+.pv .site i { display: block; height: 8px; margin: 10px; background: var(--p-s2); }
+.pv .site i.h { height: 18px; width: 60%; background: var(--p-tx); }
+.pv .pdf { position: absolute; left: 50%; top: 14px; width: 92px; height: 130px; margin-left: -46px; border: 1px solid var(--p-ln); background: #fff; }
+.pv .pdf i { display: block; height: 4px; margin: 8px 10px 0; background: var(--p-s2); }
+.pv table { border-collapse: collapse; font: 400 11px var(--mono); margin: 12px; width: calc(100% - 24px); }
+.pv td, .pv th { border: 1px solid var(--p-ln); padding: 3px 5px; text-align: left; }
+.pv th { background: var(--p-s2); font-weight: 500; }
+.pv .vid { position: absolute; inset: 0; background: var(--term); display: grid; place-items: center; }
+.pv .vid b { width: 0; height: 0; border-left: 22px solid var(--tx); border-top: 14px solid transparent; border-bottom: 14px solid transparent; }
+.pv .code { margin: 12px; font: 400 11px/1.5 var(--mono); color: var(--p-tx); white-space: pre; }
+.pv .wave { position: absolute; left: 14px; right: 14px; top: 50%; height: 40px; margin-top: -20px; background: repeating-linear-gradient(90deg, var(--p-tx) 0 2px, transparent 2px 6px); opacity: .7; }
+.pv .file { position: absolute; inset: 0; display: grid; place-items: center; font: 600 22px var(--mono); color: var(--p-mu); }
+/* viewer */
+.viewer { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+.stage { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--ln); }
+.stagebar { display: flex; gap: 10px; align-items: center; padding: 10px 20px; border-bottom: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+.stagebar b { color: var(--tx); font-size: 14px; font-weight: 600; }
+.canvas { flex: 1; margin: 16px 20px 20px; background: var(--p-bg); border: 1px solid var(--p-ln); position: relative; overflow: hidden; color: var(--p-tx); }
+.side2 { display: flex; flex-direction: column; min-height: 0; background: var(--s1); }
+.side2 .sec { padding: 14px 16px; border-bottom: 1px solid var(--ln); display: flex; flex-direction: column; gap: 8px; }
+.side2 .sec h4 { font: 600 13px var(--ui); }
+.side2 .row2 { display: flex; justify-content: space-between; font-size: 12px; color: var(--mu); }
+.side2 .row2 b { color: var(--tx); font-weight: 500; }
+.linkbox { display: flex; border: 1px solid var(--tx); }
+.linkbox span { flex: 1; padding: 7px 10px; font: 400 11px var(--mono); color: var(--mu); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.linkbox b { padding: 7px 12px; background: var(--ac); color: var(--acx); font-size: 12px; font-weight: 700; }
+.seg2 { display: flex; }
+.seg2 span { flex: 1; text-align: center; padding: 6px 8px; font-size: 12px; border: 1px solid var(--ln); }
+.seg2 span + span { border-left: 0; }
+.seg2 span[data-inv] { background: var(--tx); color: var(--bg); border-color: var(--tx); font-weight: 600; }
+/* public page */
+.public { display: flex; flex-direction: column; min-height: 0; background: var(--p-bg); color: var(--p-tx); }
+.public .pbar { display: flex; align-items: center; gap: 12px; padding: 14px 28px; border-bottom: 1px solid var(--p-ln); font-size: 13px; }
+.public .pbar .word { color: var(--p-tx); }
+.public .pbar .mu { color: var(--p-mu); }
+.public .pbtn { border: 1px solid var(--p-tx); padding: 6px 12px; font-size: 13px; font-weight: 600; }
+.public .pbtn.pri { background: var(--p-tx); color: var(--p-bg); }
+.public .pcanvas { flex: 1; margin: 24px 28px; border: 1px solid var(--p-ln); background: #fff; position: relative; overflow: hidden; }
+.public .pfoot { padding: 12px 28px; border-top: 1px solid var(--p-ln); font-size: 12px; color: var(--p-mu); display: flex; justify-content: space-between; }
+/* share sheet v2 */
+.dropzone { border: 1px dashed var(--tx); padding: 18px; text-align: center; font-size: 13px; color: var(--mu); }
+.dropzone b { display: block; color: var(--tx); font-size: 14px; margin-bottom: 4px; }
+.picked { display: flex; flex-direction: column; border: 1px solid var(--ln); }
+.picked div { display: grid; grid-template-columns: 1fr auto; padding: 8px 12px; font-size: 13px; border-top: 1px solid var(--ln); }
+.picked div:first-child { border-top: 0; }
+.picked span { color: var(--mu); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="doc">
+  <h1>Sharing: any file, a link anyone can open</h1>
+  <p class="lede">Phase 2 of the team hub (ADR-0032). <strong>Share any file or folder from Styx</strong> and get a link: for the team, or for anyone. Home base shows each kind of file the way it should be seen: images, video, PDFs, data, code, whole websites, and gives every one a review thread and versions.</p>
+  <div class="rules">
+    <div><b>Every file type</b><span>Up to 2 GB each. Proper previews for the common kinds; a clean download card for the rest.</span></div>
+    <div><b>Links you control</b><span>Team or anyone with the link; expires in a day, a week, a month or never; revoke in one click.</span></div>
+    <div><b>Safe to open</b><span>Shared files are served from their own address, so an uploaded page can never touch anyone's hub session.</span></div>
+  </div>
+</div>
+
+<!-- A. share from the desktop -->
+<div class="note">
+  <h2>A. From the pilot seat: Share, then Copy link</h2>
+  <p>A Share button on the lane. Drop any files or a folder, or pick from what the lane made. Choose who can open it and for how long. It uploads with progress and the link is on your clipboard when it lands. Agents do the same with <span class="mono">hub_share</span>.</p>
+</div>
+<div class="win app">
+  <div class="title">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <span class="word">STYX</span>
+    <div class="crumb"><span>launchsite-web</span><span>/</span><b>New landing page</b></div>
+    <span class="sp"></span><span class="mu">Hub · Launchsite web</span><span class="me">NF</span>
+  </div>
+  <div class="frame">
+    <div class="rail"><span class="pj">AS</span><span class="pj">SX</span><span class="pj" data-on="true">LW</span></div>
+    <nav class="nav">
+      <div class="ph"><b>launchsite-web</b><span>~/code/launchsite-web</span></div>
+      <div class="grp"><span>Your lanes</span><span>+</span></div>
+      <div class="ln" data-inv="true"><span class="dot c-claude d"></span><span class="t">New landing page</span><span class="s">Shared · status</span></div>
+      <div class="ln"><span class="dot c-codex d"></span><span class="t">Pricing data clean-up</span><span class="s">Only you</span></div>
+    </nav>
+    <section class="chat">
+      <div class="ch"><span class="dot c-claude"></span><b>New landing page</b><span class="mono mu">agent/claude-7</span><span class="sp"></span><span class="btn sm line">Share</span></div>
+      <div class="turns">
+        <div class="you">Build the landing page and export the hero video.</div>
+        <div class="agent"><div class="by"><span class="dot c-claude"></span>Claude</div>Done. The build is in <span class="mono">out/</span> and the video is <span class="mono">hero.mp4</span>.</div>
+      </div>
+      <div class="composer"><div class="box">Message Claude…</div></div>
+    </section>
+  </div>
+  <div class="status"><span class="tx">launchsite-web</span><span>agent/claude-7</span><span>Hub connected</span></div>
+  <div class="scrim"></div>
+  <div class="sheet" role="dialog" aria-label="Share">
+    <h3>Share</h3>
+    <div class="dropzone"><b>Drop files or a folder here</b>or choose from this lane · any file type, up to 2 GB each</div>
+    <div class="picked">
+      <div><b>out/ · website build</b><span>14 files · 1.2 MB · opens as a live site</span></div>
+      <div><b>hero.mp4</b><span>38 MB · video</span></div>
+    </div>
+    <div class="q"><b>Who can open it</b>
+      <div class="seg"><span>Launchsite web space</span><span data-inv="true">Anyone with the link</span></div>
+    </div>
+    <div class="q"><b>Link works for</b>
+      <div class="seg"><span>1 day</span><span data-inv="true">7 days</span><span>30 days</span><span>Always</span></div>
+    </div>
+    <div class="q"><b>Ask for</b>
+      <div class="seg"><span data-inv="true">Review</span><span>Nothing, just share</span></div>
+    </div>
+    <div class="out">Uploading 2 items · 24 of 39 MB<div class="prog"><i></i></div></div>
+    <div class="acts"><span class="btn">Cancel</span><span class="btn pri">Share and copy link</span></div>
+  </div>
+</div>
+
+<!-- B. shared items gallery on the web -->
+<div class="note">
+  <h2>B. Home base: everything the space has shared</h2>
+  <p>A Shared tab per space: every item as a real preview, filterable by kind, newest first. Drag files anywhere on the page to upload from the web too. Each card says who shared it, from which lane, and where its review stands.</p>
+</div>
+<div class="win">
+  <div class="bar"><span class="word">STYX</span><span class="mu">Team hub</span><span class="url">hub.launchsite.co.za/launchsite-web/shared</span><span class="sp"></span><span class="mu">Nic Flemmer</span><span class="me">NF</span></div>
+  <div class="hub" style="grid-template-columns:240px 1fr">
+    <aside class="side">
+      <div class="team"><b>Launchsite</b><span>launchsite.co.za · 6 members</span></div>
+      <div class="grp"><span>Spaces</span><span>+</span></div>
+      <a>Launchsite web <span>2 lanes</span></a>
+      <a class="sub">Threads <span>4</span></a>
+      <a class="sub" data-inv="true">Shared <span>9</span></a>
+      <a class="sub">Context <span>12</span></a>
+      <a>Acme <span>3 lanes</span></a>
+      <a>Styx <span>1 lane</span></a>
+    </aside>
+    <section class="main">
+      <div class="head"><div><h2>Launchsite web · shared</h2><div class="meta">9 items · 3 waiting for review</div></div><span class="sp"></span><span class="btn sm pri">Upload</span></div>
+      <div class="filters"><span data-inv="true">All</span><span>Sites</span><span>Images</span><span>Video</span><span>Documents</span><span>Data</span><span>Code</span><span>Other</span></div>
+      <div class="drop"><span><b>Drop files anywhere on this page</b> to share them with the space</span><span>any type · up to 2 GB</span></div>
+      <div class="gallery">
+        <div class="card"><div class="pv"><div class="site"><i class="h"></i><i></i><i></i><i style="width:40%"></i></div><span class="badge">Waiting for review</span></div><div class="meta"><b>Landing page build</b><span class="k">SITE</span><span>Claude for Nic · v2 · 11:10</span></div></div>
+        <div class="card"><div class="pv"><div class="vid"><b></b></div></div><div class="meta"><b>hero.mp4</b><span class="k">MP4</span><span>Claude for Nic · 38 MB · 11:10</span></div></div>
+        <div class="card"><div class="pv"><table><tr><th>plan</th><th>price</th><th>seats</th></tr><tr><td>Starter</td><td>R 499</td><td>1</td></tr><tr><td>Team</td><td>R 1 990</td><td>5</td></tr><tr><td>Studio</td><td>R 4 900</td><td>15</td></tr></table></div><div class="meta"><b>pricing-2027.csv</b><span class="k">CSV</span><span>Codex for Thandi · 42 rows · 10:52</span></div></div>
+        <div class="card"><div class="pv"><div class="pdf"><i></i><i></i><i style="width:50%"></i><i></i><i></i></div><span class="badge ok">Approved</span></div><div class="meta"><b>Acme proposal.pdf</b><span class="k">PDF</span><span>Sipho K. · 6 pages · yesterday</span></div></div>
+        <div class="card"><div class="pv"><div class="img"></div></div><div class="meta"><b>moodboard.png</b><span class="k">PNG</span><span>Thandi M. · 2.4 MB · yesterday</span></div></div>
+        <div class="card"><div class="pv"><div class="file">.fig</div></div><div class="meta"><b>brand-system.fig</b><span class="k">FIG</span><span>Nic · 18 MB · download only · 2 Nov</span></div></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- C. the viewer -->
+<div class="note">
+  <h2>C. Opening one: the right preview, the link, the review</h2>
+  <p>The item fills the page in its own preview: a live website here, with desktop and mobile widths. On the right: the link and who it is for, versions, comments pinned to the item, and the verdict. Copying the link and changing who can open it are one click each.</p>
+</div>
+<div class="win">
+  <div class="bar"><span class="word">STYX</span><span class="mu">Team hub</span><span class="url">hub.launchsite.co.za/launchsite-web/shared/landing-page</span><span class="sp"></span><span class="mu">Thandi M.</span><span class="me">TM</span></div>
+  <div class="viewer">
+    <section class="stage">
+      <div class="stagebar"><b>Landing page build</b><span>site · 14 files · from Nic's lane <span class="mono">agent/claude-7</span></span><span class="sp"></span><span class="seg2" style="width:150px"><span data-inv="true">v2</span><span>v1</span></span><span class="btn sm">Desktop</span><span class="btn sm">Mobile</span><span class="btn sm">Download</span></div>
+      <div class="canvas">
+        <div style="display:flex;gap:18px;padding:14px 24px;border-bottom:1px solid var(--p-ln);font-size:12px;color:var(--p-mu)"><b style="color:var(--p-tx);margin-right:auto">Launchsite</b><span>Work</span><span>Services</span><span>About</span><span>Contact</span></div>
+        <div style="font:600 40px/1.05 var(--ui);padding:48px 24px 0;max-width:16ch;letter-spacing:-.02em">Websites that launch on time and sell from day one</div>
+        <div style="padding:12px 24px 0;color:var(--p-mu);max-width:52ch">Strategy, design and build in one team, for companies that need their site to earn its keep.</div>
+        <span style="margin:20px 24px;display:inline-block;background:var(--p-tx);color:var(--p-bg);padding:10px 16px;font-weight:600;font-size:13px">Book a call</span>
+        <span class="pin" style="left:330px;top:96px">1</span>
+      </div>
+    </section>
+    <aside class="side2">
+      <div class="sec"><h4>Link</h4>
+        <div class="linkbox"><span>share.launchsite.co.za/l/7fQx…</span><b>Copy</b></div>
+        <div class="seg2"><span>Team only</span><span data-inv="true">Anyone with the link</span></div>
+        <div class="row2"><span>Works until</span><b>20 Nov · 7 days</b></div>
+        <div class="row2"><span>Opened</span><b>12 times · last 11:40</b></div>
+        <span class="btn sm" style="align-self:flex-start">Turn the link off</span>
+      </div>
+      <div class="sec"><h4>Review · v2</h4>
+        <div class="cm" style="padding:0;border:0"><div class="who"><span class="n">1</span><b>Thandi M.</b>· 11:02</div>"Sell from day one" needs a case study behind it.</div>
+      </div>
+      <div class="sec" style="margin-top:auto;border-top:1px solid var(--ln);border-bottom:0">
+        <div class="row" style="display:flex;gap:8px"><span class="btn">Request changes</span><span class="btn pri">Approve v2</span></div>
+        <span class="mu" style="font-size:12px">The verdict and comments go back to Nic's lane.</span>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- D. public link -->
+<div class="note">
+  <h2>D. What someone outside the team sees</h2>
+  <p>An anyone-with-the-link page: light, quiet, the work first. No hub, no sign-in, no other items. Who shared it, until when, and a download. Served from the separate share address, never the hub's.</p>
+</div>
+<div class="win" style="grid-template-rows:44px 1fr">
+  <div class="bar" style="background:var(--p-s2);border-color:var(--p-ln)"><span class="url" style="border-color:var(--p-ln);color:var(--p-mu)">share.launchsite.co.za/l/7fQxR2…</span></div>
+  <div class="public">
+    <div class="pbar"><span class="word">LAUNCHSITE</span><span class="mu">Shared by Nic Flemmer · Landing page build · v2</span><span class="sp" style="margin-left:auto"></span><span class="pbtn">Download</span><span class="pbtn pri">Open full screen</span></div>
+    <div class="pcanvas">
+      <div style="display:flex;gap:18px;padding:14px 24px;border-bottom:1px solid var(--p-ln);font-size:12px;color:var(--p-mu)"><b style="color:var(--p-tx);margin-right:auto">Launchsite</b><span>Work</span><span>Services</span><span>About</span><span>Contact</span></div>
+      <div style="font:600 44px/1.05 var(--ui);padding:56px 24px 0;max-width:16ch;letter-spacing:-.02em">Websites that launch on time and sell from day one</div>
+      <div style="padding:12px 24px 0;color:var(--p-mu);max-width:52ch">Strategy, design and build in one team, for companies that need their site to earn its keep.</div>
+    </div>
+    <div class="pfoot"><span>This link works until 20 November 2026.</span><span>Shared with Styx</span></div>
+  </div>
+</div>
+
+</body>
+</html>

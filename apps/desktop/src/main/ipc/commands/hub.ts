@@ -35,6 +35,11 @@ export function registerHubCommands(bus: CommandBus, app: Container): void {
     await app.hub.linkProject(projectId, spaceId);
     return {};
   });
+  bus.register('hub.pickShare', async ({ sessionId, mode }) => ({
+    pick: await app.hub.pickShare(sessionId, mode),
+  }));
+  bus.register('hub.share', async (input) => app.hub.share(input));
+  bus.register('hub.createSpace', async ({ name }) => ({ spaceId: await app.hub.createSpace(name) }));
   bus.register('hub.shareLane', async ({ sessionId, shared }) => {
     await app.hub.shareLane(sessionId, shared);
     return {};

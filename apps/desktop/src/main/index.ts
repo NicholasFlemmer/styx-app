@@ -394,6 +394,15 @@ async function boot(): Promise<void> {
   const dialogsPort: DialogsPort = {
     pickFolder: (opts) => openDialog(['openDirectory', 'createDirectory'], opts),
     pickFile: (opts) => openDialog(['openFile', 'showHiddenFiles'], opts),
+    pickFiles: async (opts) => {
+      const win = windowService.mainWindow();
+      const options: Electron.OpenDialogOptions = {
+        properties: ['openFile', 'multiSelections'],
+        ...(opts.title !== undefined ? { title: opts.title } : {}),
+      };
+      const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+      return r.canceled ? [] : r.filePaths;
+    },
   };
 
   const osNotifier = new ElectronOsNotifier(electronSurface(), resolvedTheme);

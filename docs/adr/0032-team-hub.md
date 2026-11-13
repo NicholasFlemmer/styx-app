@@ -228,6 +228,55 @@ The server is closed source and lives in the private repo next to the accounts s
 `hub` provider, the broker tools, the screens) is open source. `STYX_HUB` points a fork or a self-hosted team at
 its own hub, as `STYX_API` does for accounts.
 
+## Phase 2 as designed (2026-11-13): shared files, links, projects up front
+
+Owner: "the web version should be able to accept all file types, we should be able to publish shareable links from
+the desktop version via the web version and the experience should be awesome on the web version"; "make it much
+easier to connect projects, not hidden in the settings"; "the project must be obvious on the web version". Mockup:
+`design/next/styx-next-hub-sharing.html` (A share sheet, B shared gallery, C viewer, D public page).
+
+**Items.** An item is anything shared: one file, several, or a folder (a folder with `index.html` at its root is a
+**site** and opens live). Any file type, up to 2 GB a file, 2,000 files and 4 GB an item. Kinds, from the files:
+`site | image | video | audio | pdf | data (csv, tsv) | markdown | code | text | archive | other`. Sharing the same
+item again adds a version; each version keeps its files, comments and verdict (`approved | changes`).
+
+**Storage.** Files go straight from the browser or Styx to a private Cloud Storage bucket through signed PUT URLs
+the hub issues (one per file, an hour each), so size never passes through the hub's servers. Objects live under
+`<team>/<space>/<item>/<version>/<path>`. Behind a `BlobStore` interface (memory for tests, GCS in production).
+
+**Two origins.** The hub (`styx-hub`) never serves uploaded bytes. A second Cloud Run service from the same image
+(`styx-hub-share`, `HUB_MODE=share`) serves them from its own origin, so an uploaded page or SVG cannot reach a
+hub session: `/v/<signed token>/<path>` for the hub's own viewer (HMAC, item+version scoped, 15 minutes), and
+`/l/<link token>/…` for links (the public page around the preview, `raw/<path>` for the bytes, `download`).
+
+**Links.** `team` (a hub URL; opening it needs sign-in and space membership) or `anyone` (the share origin; no
+sign-in). Expiry `1d | 7d | 30d | never`; revocable; opens counted. Only a person makes an `anyone` link: an agent
+shares with the team, never to the open internet on its own.
+
+**Projects up front.** A space lists its projects (repos) on the web: each with its lanes, threads and shared items,
+and a project filter on every list. Items, threads and lanes carry their project. In Styx, a project whose remote
+the space already has links itself (destination only; nothing is shared), and the lane header's **Connect to team
+hub** links a project (or makes a space) in one step, signing in first when needed.
+
+**API.**
+
+```
+POST  /v1/spaces/:id/items            {title?, files:[{path,size,contentType}], projectId?, threadId?, review,
+                                       itemId? (new version)} → {item, version, uploads:[{path,url,headers}]}
+POST  /v1/items/:id/versions/:v/complete   checks every object landed; sets the kind; announces item.created
+GET   /v1/spaces/:id/items?kind=&project=   newest first, with what a card needs
+GET   /v1/items/:id                    item, versions, comments, verdicts, links
+GET   /v1/items/:id/view?version=      {viewUrl, downloadUrl} on the share origin, 15 minutes
+POST  /v1/items/:id/links              {access, expiresIn} → {link:{id,url,access,expiresAt}}   (anyone: people only)
+PATCH /v1/links/:id                    {revoked:true}
+POST  /v1/items/:id/comments           {version, body, pin?:{x,y}}
+POST  /v1/items/:id/verdict            {version, verdict}                                      (people only)
+GET   /v1/spaces/:id/projects          the space's projects with counts of lanes, threads and items
+```
+
+Agents get `hub_share` (files from the worktree → an item, a team link back). Comments and verdicts on an item a
+lane shared come back into that lane like thread replies (section 8).
+
 ## Phases
 
 1. **Spaces, messages and context.** Teams, spaces, members, threads; context docs and decisions with

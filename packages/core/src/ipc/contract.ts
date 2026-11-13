@@ -771,6 +771,38 @@ export const commands = {
     input: z.object({ projectId: projectIdSchema, spaceId: z.string().min(1).nullable() }),
     output: ok,
   },
+  /** Makes a space on the person's team (the lane header's "New space"); the project is linked to it next. */
+  'hub.createSpace': {
+    input: z.object({ name: z.string().trim().min(1).max(80) }),
+    output: z.object({ spaceId: z.string() }),
+  },
+  /**
+   * Share (ADR-0032 phase 2): the OS picker chooses files or a folder; main keeps the paths behind a one-time id, so the
+   * renderer never names a path. Null when the picker was dismissed.
+   */
+  'hub.pickShare': {
+    input: z.object({ sessionId: sessionIdSchema, mode: z.enum(['files', 'folder']) }),
+    output: z.object({
+      pick: z
+        .object({
+          id: z.string(),
+          items: z.array(z.object({ name: z.string(), files: z.number().int(), bytes: z.number() })),
+        })
+        .nullable(),
+    }),
+  },
+  /** Uploads a pick to the project's space and returns the link to copy. Progress arrives as `hub.share.progress`. */
+  'hub.share': {
+    input: z.object({
+      sessionId: sessionIdSchema,
+      pickId: z.string().min(1),
+      access: z.enum(['team', 'anyone']),
+      expiresIn: z.enum(['1d', '7d', '30d', 'never']),
+      review: z.boolean(),
+      title: z.string().trim().min(1).max(200).optional(),
+    }),
+    output: z.object({ url: z.string(), itemId: z.string() }),
+  },
   /** Shares a lane's status with its project's space, or stops sharing it. Only a person does this. */
   'hub.shareLane': { input: z.object({ sessionId: sessionIdSchema, shared: z.boolean() }), output: ok },
 
@@ -1328,6 +1360,8 @@ export const events = {
   /** Something under a watched worktree changed on disk (debounced): the files pane reads its tree again. */
   'fs.treeChanged': z.object({ worktreeId: worktreeIdSchema }),
   /** Deploy lifecycle; the output itself streams over the pty channel like any other terminal. */
+  /** A share uploading (ADR-0032 phase 2): bytes sent of the pick's total. */
+  'hub.share.progress': z.object({ pickId: z.string(), sent: z.number(), total: z.number() }),
   'deploy.progress': z.object({
     deployId: z.string(),
     targetId: targetIdSchema,
