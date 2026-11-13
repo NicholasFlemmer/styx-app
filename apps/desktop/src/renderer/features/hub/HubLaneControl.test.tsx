@@ -79,7 +79,11 @@ describe('HubLaneControl (ADR-0032: connecting is not hidden in Settings)', () =
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Acme' }));
     });
-    expect(commands).toEqual([{ name: 'hub.linkProject', input: { projectId: acme, spaceId: 'spc_acme' } }]);
+    // Opening the panel reads the spaces again (one the person was just added to shows up), then the click links.
+    expect(commands).toEqual([
+      { name: 'hub.refresh', input: {} },
+      { name: 'hub.linkProject', input: { projectId: acme, spaceId: 'spc_acme' } },
+    ]);
   });
 
   it('can make a space named after the project and connect to it', async () => {
@@ -93,6 +97,7 @@ describe('HubLaneControl (ADR-0032: connecting is not hidden in Settings)', () =
       fireEvent.click(screen.getByRole('button', { name: copy.hub.connect.create }));
     });
     expect(commands).toEqual([
+      { name: 'hub.refresh', input: {} },
       { name: 'hub.createSpace', input: { name: 'acme-shop' } },
       { name: 'hub.linkProject', input: { projectId: acme, spaceId: 'spc_new' } },
     ]);
