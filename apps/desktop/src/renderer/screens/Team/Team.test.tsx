@@ -130,6 +130,48 @@ describe('Team screen (ADR-0032 round 1)', () => {
     expect(commands).toEqual([{ name: 'hub.signIn', input: {} }]);
   });
 
+  it('while signing in: shows the code the browser page asks for, opens the page again or cancels', () => {
+    useReadModel.getState().replaceModel(
+      {
+        ...fixtures.demoReadModel(),
+        hub: {
+          ...HUB_OFF,
+          connection: {
+            kind: 'signing-in',
+            userCode: 'BPGA-B65K',
+            verificationUri: 'https://hub/activate',
+            expiresAt: 1,
+          },
+        },
+      },
+      'connected',
+    );
+    render(<Team />);
+    expect(screen.getByText('BPGA-B65K')).toBeTruthy();
+    expect(screen.getByText(copy.hub.codeLabel)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: copy.hub.signIn })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: copy.hub.openBrowser }));
+    fireEvent.click(screen.getByRole('button', { name: copy.hub.cancel }));
+    expect(commands).toEqual([
+      { name: 'hub.openVerification', input: {} },
+      { name: 'hub.cancelSignIn', input: {} },
+    ]);
+  });
+
+  it('signed out after a failed sign-in: says why', () => {
+    useReadModel
+      .getState()
+      .replaceModel(
+        {
+          ...fixtures.demoReadModel(),
+          hub: { ...HUB_OFF, connection: { kind: 'signed-out', error: 'The code expired.' } },
+        },
+        'connected',
+      );
+    render(<Team />);
+    expect(screen.getByRole('alert').textContent).toBe('The code expired.');
+  });
+
   it('lists what waits, grouped, and answers an ask in one click', async () => {
     useReadModel.getState().replaceModel({ ...fixtures.demoReadModel(), hub: SIGNED_IN }, 'connected');
     await act(async () => {
