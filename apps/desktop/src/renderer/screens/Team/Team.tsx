@@ -215,12 +215,39 @@ export function Team() {
     };
   }, [signedIn, hub.waiting]);
 
+  // Signing in: the browser page asks for this code, so it is the one thing this screen shows.
+  if (hub.connection.kind === 'signing-in')
+    return (
+      <div className={s['screen']} data-screen-ready="true" data-team="signing-in">
+        <div className={s['lone']}>
+          <h1 className={s['h1']}>{copy.hub.teamScreen.title}</h1>
+          <p className={s['muted']}>{copy.hub.codeLabel}</p>
+          <span className={s['userCode']} data-hub-code="true">
+            {hub.connection.userCode}
+          </span>
+          <div className={s['opts']}>
+            <Button variant="accent" onClick={() => void command('hub.openVerification', {})}>
+              {copy.hub.openBrowser}
+            </Button>
+            <Button variant="ghost" onClick={() => void command('hub.cancelSignIn', {})}>
+              {copy.hub.cancel}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+
   if (!signedIn)
     return (
       <div className={s['screen']} data-screen-ready="true" data-team="signed-out">
         <div className={s['lone']}>
           <h1 className={s['h1']}>{copy.hub.teamScreen.title}</h1>
           <p className={s['muted']}>{copy.hub.teamScreen.signedOut}</p>
+          {hub.connection.kind === 'signed-out' && hub.connection.error !== null ? (
+            <p className={s['error']} role="alert">
+              {hub.connection.error}
+            </p>
+          ) : null}
           <Button variant="accent" onClick={() => void command('hub.signIn', {})}>
             {copy.hub.signIn}
           </Button>

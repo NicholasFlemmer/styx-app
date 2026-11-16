@@ -32,6 +32,18 @@
   .lone .muted {
     margin: 0;
   }
+  .lone .error {
+    margin: 0;
+  }
+  .userCode {
+    font-family: var(--font-mono);
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    font-variant-numeric: tabular-nums;
+    color: var(--tx);
+    user-select: all;
+  }
   .inbox {
     border-right: 1px solid var(--ln);
     background: var(--s1);
