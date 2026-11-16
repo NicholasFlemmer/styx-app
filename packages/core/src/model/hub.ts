@@ -130,6 +130,29 @@ export const hubThreadViewSchema = z.object({
 });
 export type HubThreadView = z.infer<typeof hubThreadViewSchema>;
 
+/** A room as the Team screen lists it (ADR-0032 round 2): its goal, how far its board is, and the lanes in it. */
+export const hubRoomSummarySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  goal: z.string(),
+  doneWhen: z.string(),
+  state: z.enum(['active', 'paused', 'closed']),
+  spaceName: z.string(),
+  planApproved: z.boolean(),
+  tasks: z.object({ done: z.number().int(), total: z.number().int() }),
+  lanes: z.array(
+    z.object({
+      laneId: z.string(),
+      agent: z.string(),
+      owner: z.string(),
+      brings: z.string(),
+      mode: z.enum(['wait', 'work']),
+      mine: z.boolean(),
+    }),
+  ),
+});
+export type HubRoomSummary = z.infer<typeof hubRoomSummarySchema>;
+
 export const hubStateSchema = z.object({
   connection: hubConnectionSchema,
   /** The hub's web address, for "Open the hub". */

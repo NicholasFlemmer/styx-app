@@ -911,6 +911,74 @@ describe('HubService (ADR-0032)', () => {
       expect(other.delivered).toEqual([]);
     });
 
+    it('lists open and paused rooms across spaces for the Team screen, and pauses one', async () => {
+      const t = await signedIn();
+      t.hub.routes.set('GET /v1/spaces/spc_acme/rooms', () => ({
+        body: {
+          rooms: [
+            {
+              id: 'rm_1',
+              title: 'Checkout launch',
+              goal: 'Cards by Friday',
+              doneWhen: 'Thandi approves',
+              state: 'active',
+              planApproved: true,
+              tasks: { open: 1, claimed: 1, done: 2, total: 4 },
+              participants: {
+                lanes: [
+                  {
+                    laneId: 'usr_nic:ses_1',
+                    agent: 'Claude',
+                    owner: 'Nic',
+                    brings: 'the form',
+                    mode: 'work',
+                  },
+                  { laneId: 'usr_thandi:ses_t', agent: 'Codex', owner: 'Thandi M.', mode: 'wait' },
+                ],
+              },
+            },
+            { id: 'rm_2', title: 'Old', goal: 'g', doneWhen: 'd', state: 'closed' },
+          ],
+        },
+      }));
+      const rooms = await t.service.teamRooms();
+      expect(rooms).toEqual([
+        {
+          id: 'rm_1',
+          title: 'Checkout launch',
+          goal: 'Cards by Friday',
+          doneWhen: 'Thandi approves',
+          state: 'active',
+          spaceName: 'Acme',
+          planApproved: true,
+          tasks: { done: 2, total: 4 },
+          lanes: [
+            {
+              laneId: 'usr_nic:ses_1',
+              agent: 'Claude',
+              owner: 'you',
+              brings: 'the form',
+              mode: 'work',
+              mine: true,
+            },
+            {
+              laneId: 'usr_thandi:ses_t',
+              agent: 'Codex',
+              owner: 'Thandi M.',
+              brings: '',
+              mode: 'wait',
+              mine: false,
+            },
+          ],
+        },
+      ]);
+      t.hub.routes.set('PATCH /v1/rooms/rm_1', (c) => ({ body: { room: c.body } }));
+      await t.service.setRoomState('rm_1', 'paused');
+      expect(t.hub.calls.find((c) => c.path === '/v1/rooms/rm_1' && c.method === 'PATCH')?.body).toEqual({
+        state: 'paused',
+      });
+    });
+
     it("a paused room wakes nothing, and aims at other people's lanes are ignored", async () => {
       const t = await inRoom('work', 'paused');
       await t.service.roomAimed('spc_acme', 'room.task', 'tsk_9', 'usr_nic:ses_1');

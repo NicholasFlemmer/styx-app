@@ -40,6 +40,11 @@ export function registerHubCommands(bus: CommandBus, app: Container): void {
   }));
   bus.register('hub.share', async (input) => app.hub.share(input));
   bus.register('hub.rooms', async ({ projectId }) => ({ rooms: await app.hub.listRooms(projectId) }));
+  bus.register('hub.teamRooms', async () => ({ rooms: await app.hub.teamRooms() }));
+  bus.register('hub.setRoomState', async ({ roomId, state }) => {
+    await app.hub.setRoomState(roomId, state);
+    return {};
+  });
   bus.register('hub.joinRoom', async ({ sessionId, roomId, brings, mode }) => {
     await app.hub.joinRoom(sessionId, roomId, brings, mode);
     return {};

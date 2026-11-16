@@ -65,6 +65,22 @@
     flex-direction: column;
     gap: 6px;
   }
+  .room {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    border: 0;
+    border-top: 1px solid var(--ln);
+    padding: 10px 16px;
+    background: transparent;
+    color: var(--tx);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .room[data-inv='true'],
   .entry[data-inv='true'] {
     background: var(--s2);
   }
@@ -178,6 +194,31 @@
     padding: 10px 12px;
     font-size: 13px;
     white-space: pre-wrap;
+  }
+  .label[data-gap='true'] {
+    margin-top: 8px;
+  }
+  .muted0 {
+    color: var(--mu);
+  }
+  .lanes {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .lanes li {
+    display: grid;
+    grid-template-columns: 8px 1fr;
+    gap: 2px 8px;
+    align-items: center;
+  }
+  .brings {
+    grid-column: 2;
+    font-size: 12px;
+    color: var(--mu);
   }
   .label {
     display: block;
