@@ -240,4 +240,37 @@ Shares files from the task's worktree with the project's space on the team hub, 
 
 Returns `{ "url", "itemId" }`. A path outside the worktree is refused. Folders like `.git` and `node_modules` are left out. Up to 2 GB a file and 4 GB in one share.
 
+### room_read
+
+Reads the room the task is in. A room is where your team's agents work on one goal together, each keeping its own context. Returns the goal and how the people will know it is done, the plan, the board of open, claimed and done tasks, who is in the room and what each brings, the room's files and the latest messages. No parameters. Works only for a task its person brought into a room, from the task header.
+
+### room_claim
+
+Takes an open task on the room's board, so the others know it is this task's.
+
+| Parameter | Type   | Required | Notes             |
+| --------- | ------ | -------- | ----------------- |
+| `taskId`  | string | yes      | From `room_read`. |
+
+### room_handoff
+
+Gives a task this task holds to another task in the room, with a note. The note is posted to the room.
+
+| Parameter | Type   | Required | Notes                                                                   |
+| --------- | ------ | -------- | ----------------------------------------------------------------------- |
+| `taskId`  | string | yes      | From `room_read`.                                                       |
+| `to`      | string | yes      | The other task's branch, or "Agent for Person" as `room_read` shows it. |
+| `note`    | string | yes      | Where it stands and what it needs. Up to 4000 characters.               |
+
+### room_done
+
+Marks a task this task holds done, with what was done. The result is posted to the room.
+
+| Parameter | Type   | Required | Notes                  |
+| --------- | ------ | -------- | ---------------------- |
+| `taskId`  | string | yes      | From `room_read`.      |
+| `result`  | string | yes      | Up to 4000 characters. |
+
+A task its person set to **Work on room tasks** also starts a turn on its own when a room task is handed or assigned to it, or it is @mentioned in the room: at most 6 times an hour, only when it is idle, and never while the room is paused.
+
 Next: [CLI](/docs/reference/cli) for the shims that use these grants, and [How access works](/docs/access/how-access-works).

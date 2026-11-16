@@ -771,6 +771,36 @@ export const commands = {
     input: z.object({ projectId: projectIdSchema, spaceId: z.string().min(1).nullable() }),
     output: ok,
   },
+  /** Rooms (ADR-0032 round 2) in the space a project is linked to, for the lane header's Join a room. */
+  'hub.rooms': {
+    input: z.object({ projectId: projectIdSchema }),
+    output: z.object({
+      rooms: z.array(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          goal: z.string(),
+          state: z.enum(['active', 'paused', 'closed']),
+        }),
+      ),
+    }),
+  },
+  /** Brings a lane into a room (sharing it with the space first), with what it brings and whether it works on room tasks. */
+  'hub.joinRoom': {
+    input: z.object({
+      sessionId: sessionIdSchema,
+      roomId: z.string().min(1),
+      brings: z.string().trim().max(300),
+      mode: z.enum(['wait', 'work']),
+    }),
+    output: ok,
+  },
+  /** Wait for me / Work on room tasks: only the lane's own person changes it. */
+  'hub.setRoomMode': {
+    input: z.object({ sessionId: sessionIdSchema, mode: z.enum(['wait', 'work']) }),
+    output: ok,
+  },
+  'hub.leaveRoom': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   /** The Team screen (ADR-0032 round 1): what waits on the person, across their spaces. */
   'hub.inbox': { input: z.object({}), output: z.object({ entries: z.array(hubInboxEntrySchema) }) },
   /** One thread as the Team screen shows it. */

@@ -136,6 +136,17 @@ export const hubStateSchema = z.object({
   webUrl: z.string(),
   links: z.array(hubLinkSchema),
   shares: z.array(hubShareSchema),
+  /** Lanes here that are in a room (ADR-0032 round 2), and whether each waits for its person or works on room tasks. */
+  rooms: z
+    .array(
+      z.object({
+        sessionId: z.string(),
+        roomId: z.string(),
+        title: z.string(),
+        mode: z.enum(['wait', 'work']),
+      }),
+    )
+    .default([]),
   /** How many things wait on the person across their spaces (the Team rail tile's count). */
   waiting: z.number().int().nonnegative().default(0),
 });
@@ -146,6 +157,7 @@ export const HUB_OFF: HubState = {
   webUrl: '',
   links: [],
   shares: [],
+  rooms: [],
   waiting: 0,
 };
 

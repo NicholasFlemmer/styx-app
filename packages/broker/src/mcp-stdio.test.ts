@@ -74,6 +74,10 @@ describe('styx MCP server', () => {
       'remember_command',
       'report_status',
       'request_access',
+      'room_claim',
+      'room_done',
+      'room_handoff',
+      'room_read',
       'send_message',
     ]);
 

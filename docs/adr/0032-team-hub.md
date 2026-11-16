@@ -371,6 +371,17 @@ POST  /v1/rooms/:id/tasks/:taskId/claim | /handoff {toLane, note} | /done {resul
 Events: `room.updated`, `room.task` (ref = task id, with the lane it is aimed at), `room.joined`. A room is a thread
 underneath (kind `room`), so round 1's tasks, asks, mentions and inbox apply unchanged.
 
+**As built, after the security review (2026-11-16).** Loops between lanes and one lane flooding another are the
+risks a room adds, so: a lane is in one open room at a time; the desktop wakes only for an event from that room
+(a task on its board, a message in its thread) and reads the lane's mode from the hub each time, so **Wait for me**
+set on the web stops wakes at once; the hourly limit counts the hub's tally as well as the desktop's, so a restart
+does not reset it; a task handed on 3 times in an hour is refused (`handoff_loop`: ask the people); a lane is never
+aimed at by its own message; cards for a lane that is not woken are capped at 6 an hour (the board holds the rest).
+In a room an agent takes a task itself or hands it on, never assigns one to another lane or ticks one done through
+round 1's routes (`use_room`). Approval is of the text approved: an agent rewriting an approved plan un-approves it
+and the room asks again; the wake-up text says whether the plan is approved. When the room's creator can no longer
+answer, the plan ask goes to the space's owners. The text that starts a turn is redacted like any hub message.
+
 ## Phases
 
 1. **Spaces, messages and context.** Teams, spaces, members, threads; context docs and decisions with
