@@ -202,6 +202,33 @@ Proposes a doc or a decision for the space's context. Each space chooses whether
 
 Returns `{ "state", "note" }`: `pending` while it waits for a teammate, `accepted` when it landed.
 
+### hub_ask
+
+Asks your team a question in a hub thread: a go-ahead, a choice between options, or a written answer. Only people answer, and only the people it is addressed to when you name them. With `wait`, the call holds until someone answers (up to 10 minutes; one waiting ask per task at a time); otherwise the answer comes back into the task's chat later. Only works from a task you have shared.
+
+| Parameter  | Type             | Required       | Notes                                                                         |
+| ---------- | ---------------- | -------------- | ----------------------------------------------------------------------------- |
+| `question` | string           | yes            | Up to 1000 characters.                                                        |
+| `options`  | array of strings | no             | 2–6 choices. Leave out for a written answer.                                  |
+| `to`       | array of strings | no             | Names or emails of who should answer. A name that fits two people is refused. |
+| `threadId` | string           | one of the two | A thread `id` from `hub_read`.                                                |
+| `title`    | string           | one of the two | Starts a new thread with this title instead.                                  |
+| `wait`     | number           | no             | Seconds to wait for the answer, 0–600.                                        |
+
+Returns `{ "askId", "threadId", "state", "answer" }`: `state` is `open` or `answered`, and `answer` has `choice`, `text` and `by` once someone answers.
+
+### hub_task
+
+Works a hub thread's tasks: `add` one (to this task with `me`, to a teammate by name or email, or to nobody), mark one `done`, or `list` them. Adding and finishing need a shared task; listing works from any task in the linked project.
+
+| Parameter  | Type                    | Required   | Notes                                   |
+| ---------- | ----------------------- | ---------- | --------------------------------------- |
+| `action`   | `add`, `done` or `list` | yes        |                                         |
+| `threadId` | string                  | yes        | A thread `id` from `hub_read`.          |
+| `text`     | string                  | for `add`  | What needs doing, up to 500 characters. |
+| `taskId`   | string                  | for `done` | From `list`.                            |
+| `assignee` | string                  | no         | `me`, a teammate's name or email.       |
+
 ### hub_share
 
 Shares files from the task's worktree with the project's space on the team hub, as one item your team can open, comment on and review. A folder with an `index.html` opens as a live site; images, video, PDFs, data and code get previews. Only works from a task you have shared, and only with your team: a link anyone can open is made by a person, from the **Share** button.

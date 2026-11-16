@@ -89,6 +89,8 @@ export const copy = {
     approvals: { title: 'Access' },
     tasks: { title: 'Tasks' },
     usage: { title: 'Usage' },
+    team: { title: 'Team' },
+    teamWaiting: '{n} waiting on you',
     /** The one Settings tile at the foot of the rail (ADR-0027 §5). */
     settings: { title: 'Settings' },
     /** The App settings sections, in the order of the Settings nav. */
@@ -2562,6 +2564,40 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     noSpaces: 'You are not in any spaces yet. Create one on the hub, then refresh.',
     notLinked: 'Not linked',
     linkLabel: 'Space for {project}',
+    /** The Team screen (ADR-0032 round 1, mockup design/next/styx-next-hub-team.html). */
+    teamScreen: {
+      title: 'Team',
+      waiting: 'Waiting on you',
+      markAllRead: 'Mark all read',
+      groups: { ask: 'Asks', mention: 'Mentions', task: 'Your tasks', review: 'Reviews' },
+      empty: {
+        ask: 'Nobody is waiting on an answer from you.',
+        mention: 'No new mentions.',
+        task: 'No open tasks for you.',
+        review: 'Nothing shared for your review.',
+      },
+      signedOut:
+        'Sign in to your team hub to see what is waiting on you and work through threads with your team.',
+      pick: 'Pick something on the left to open its thread.',
+      noThread: 'This one has no thread. Open it on the web.',
+      answer: 'Answer…',
+      answerLabel: 'Your answer',
+      send: 'Send',
+      replyLabel: 'Reply as {name} (@ to mention someone or a lane)',
+      stands: 'Where it stands',
+      nothingYet: 'Nothing written yet.',
+      tasks: 'Tasks',
+      owner: 'owner {name}',
+      noOwner: 'no owner',
+      progress: '{done} of {total} tasks',
+      markDone: 'Mark done',
+      reopen: 'Reopen',
+      openWeb: 'Open on the web',
+      asks: '{name} asks',
+      answered: 'Answered: {answer}',
+      you: 'you',
+      notify: { ask: '{who} asks you', mention: '{who} mentioned you' },
+    },
     /** The Share sheet (ADR-0032 phase 2, mockup styx-next-hub-sharing.html frame A). */
     share: {
       button: 'Share',

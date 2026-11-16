@@ -17,6 +17,7 @@ import s from './Shell.module.css';
  */
 const Workspace = lazy(async () => ({ default: (await import('../screens/Workspace/Workspace')).Workspace }));
 const Diff = lazy(async () => ({ default: (await import('../screens/Diff/Diff')).Diff }));
+const Team = lazy(async () => ({ default: (await import('../screens/Team/Team')).Team }));
 
 const SCREENS: Record<Screen, ComponentType> = {
   home: Home,
@@ -26,6 +27,7 @@ const SCREENS: Record<Screen, ComponentType> = {
   approvals: Approvals,
   settings: Settings,
   usage: Usage,
+  team: Team,
   diff: Diff,
   onboarding: Onboarding,
 };

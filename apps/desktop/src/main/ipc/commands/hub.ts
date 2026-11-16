@@ -39,6 +39,28 @@ export function registerHubCommands(bus: CommandBus, app: Container): void {
     pick: await app.hub.pickShare(sessionId, mode),
   }));
   bus.register('hub.share', async (input) => app.hub.share(input));
+  bus.register('hub.inbox', async () => ({ entries: await app.hub.inbox() }));
+  bus.register('hub.thread', async ({ threadId }) => app.hub.thread(threadId));
+  bus.register('hub.answer', async ({ askId, choice, text }) => {
+    await app.hub.answer(askId, choice, text);
+    return {};
+  });
+  bus.register('hub.reply', async ({ threadId, body }) => {
+    await app.hub.reply(threadId, body);
+    return {};
+  });
+  bus.register('hub.setTask', async ({ taskId, done }) => {
+    await app.hub.setTask(taskId, done);
+    return {};
+  });
+  bus.register('hub.setThreadStatus', async ({ threadId, status }) => {
+    await app.hub.setThreadStatus(threadId, status);
+    return {};
+  });
+  bus.register('hub.markRead', async ({ ids }) => {
+    await app.hub.markRead(ids);
+    return {};
+  });
   bus.register('hub.createSpace', async ({ name }) => ({ spaceId: await app.hub.createSpace(name) }));
   bus.register('hub.shareLane', async ({ sessionId, shared }) => {
     await app.hub.shareLane(sessionId, shared);

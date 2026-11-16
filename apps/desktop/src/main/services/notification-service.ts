@@ -50,6 +50,8 @@ export class NotificationService {
       review: (ask: AskSummary) => void;
       later: (ask: AskSummary) => void;
       openBoard: () => void;
+      /** The team hub (ADR-0032): focus the main window on the Team screen. */
+      openTeam?: () => void;
     },
     /**
      * Settings › Notify when an agent needs me (issue #4): `badge-sound` adds the toast's sound, `badge` is silent,
@@ -116,6 +118,22 @@ export class NotificationService {
         onReview: () => this.actions.review(ask),
         onLater: () => this.actions.later(ask),
       });
+  }
+
+  /**
+   * A teammate asked the person something, or mentioned them, on the team hub (ADR-0032 round 1): an OS
+   * notification under the same rules as an agent's ask (DND, the Notify setting, sound). Opens the Team screen.
+   */
+  onTeam(n: { id: string; title: string; body: string }): void {
+    if (!this.delivers) return;
+    this.os.toast({
+      id: `hub:${n.id}`,
+      title: n.title,
+      body: n.body,
+      sound: this.sound,
+      onReview: () => this.actions.openTeam?.(),
+      onLater: () => undefined,
+    });
   }
 
   onAskResolved(askId: string, openCount: number): void {

@@ -70,12 +70,74 @@ export const hubShareSchema = z.object({
 });
 export type HubShare = z.infer<typeof hubShareSchema>;
 
+/** One thing waiting on the person (ADR-0032 round 1): an ask, a mention, a task, an item to review. */
+export const hubInboxEntrySchema = z.object({
+  id: z.string(),
+  kind: z.enum(['ask', 'mention', 'task', 'review']),
+  spaceId: z.string(),
+  spaceName: z.string(),
+  threadId: z.string().nullable(),
+  itemId: z.string().nullable(),
+  title: z.string(),
+  snippet: z.string(),
+  who: z.object({ name: z.string().nullable(), agent: z.string().nullable() }),
+  at: z.number(),
+  read: z.boolean(),
+  ask: z.object({ id: z.string(), options: z.array(z.string()).nullable() }).nullable(),
+});
+export type HubInboxEntry = z.infer<typeof hubInboxEntrySchema>;
+
+/** A thread as the Team screen shows it: where it stands, its tasks, open asks and the conversation. */
+export const hubThreadViewSchema = z.object({
+  thread: z.object({
+    id: z.string(),
+    title: z.string(),
+    status: z.enum(['open', 'done']),
+    owner: z.string().nullable(),
+    summary: z.string(),
+    spaceName: z.string(),
+  }),
+  tasks: z.array(
+    z.object({
+      id: z.string(),
+      text: z.string(),
+      done: z.boolean(),
+      assignee: z.string().nullable(),
+      mine: z.boolean(),
+    }),
+  ),
+  asks: z.array(
+    z.object({
+      id: z.string(),
+      question: z.string(),
+      options: z.array(z.string()).nullable(),
+      asker: z.string(),
+      open: z.boolean(),
+      canAnswer: z.boolean(),
+      answer: z.string().nullable(),
+    }),
+  ),
+  messages: z.array(
+    z.object({
+      id: z.string(),
+      who: z.string(),
+      agent: z.string().nullable(),
+      branch: z.string().nullable(),
+      body: z.string(),
+      at: z.number(),
+    }),
+  ),
+});
+export type HubThreadView = z.infer<typeof hubThreadViewSchema>;
+
 export const hubStateSchema = z.object({
   connection: hubConnectionSchema,
   /** The hub's web address, for "Open the hub". */
   webUrl: z.string(),
   links: z.array(hubLinkSchema),
   shares: z.array(hubShareSchema),
+  /** How many things wait on the person across their spaces (the Team rail tile's count). */
+  waiting: z.number().int().nonnegative().default(0),
 });
 export type HubState = z.infer<typeof hubStateSchema>;
 
@@ -84,6 +146,7 @@ export const HUB_OFF: HubState = {
   webUrl: '',
   links: [],
   shares: [],
+  waiting: 0,
 };
 
 /** The space a project is linked to, when the person is still in it. */

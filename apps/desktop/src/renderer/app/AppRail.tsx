@@ -24,6 +24,8 @@ export function AppRail() {
     useCallback((m) => backgroundTasks(m).filter((t) => t.state === 'needs-you').length, []),
   );
   const taskOpen = useUi((u) => findOverlay(u.overlays, 'task') !== null);
+  // The team hub (ADR-0032 round 1): what waits on the person across their spaces.
+  const waiting = useModel(useCallback((m) => m.hub.waiting, []));
   return (
     <nav className={s['appRail']} aria-label={copy.appRail.label} data-app-rail="true">
       <RailTile
@@ -64,6 +66,16 @@ export function AppRail() {
         aria-expanded={taskOpen}
         onClick={() => openTask(null)}
         data-app-rail-item="tasks"
+      />
+      <RailTile
+        icon="team"
+        title={copy.appRail.team.title}
+        active={screen === 'team'}
+        current="page"
+        needs={waiting > 0}
+        needsLabel={fill(copy.appRail.teamWaiting, { n: waiting })}
+        onClick={() => setScreen('team')}
+        data-app-rail-item="team"
       />
       <RailTile
         icon="usage"

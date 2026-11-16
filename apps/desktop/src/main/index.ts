@@ -123,6 +123,12 @@ async function handleUrl(url: string): Promise<void> {
   const { repos, publisher, projects } = container;
   if (u.host === 'ask') {
     const [, askId, action] = u.pathname.split('/');
+    // A team hub notification (ADR-0032 round 1) clicked on Windows arrives here too: open the Team screen.
+    if (decodeURIComponent(askId ?? '').startsWith('hub:')) {
+      container.windows.focusMain();
+      publisher.sendEvent('nav.go', { screen: 'team' });
+      return;
+    }
     const ask = askId ? repos.pendingAsks.get(askId) : null;
     if (!ask) return;
     if (action === 'later') {
@@ -418,6 +424,10 @@ async function boot(): Promise<void> {
       openBoard: () => {
         windowsPort.focusMain();
         container?.publisher.sendEvent('nav.go', { screen: 'agents' });
+      },
+      openTeam: () => {
+        windowsPort.focusMain();
+        container?.publisher.sendEvent('nav.go', { screen: 'team' });
       },
     },
     () => repos.settings.app().notify,

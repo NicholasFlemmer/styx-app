@@ -243,8 +243,42 @@ export const methods = {
       body: z.string().min(1).max(16_000),
       threadId: z.string().max(64).optional(),
       title: z.string().min(1).max(200).optional(),
+      summary: z.string().min(1).max(4000).optional(),
     }),
     result: z.object({ posted: z.literal(true), threadId: z.string() }),
+  },
+  /**
+   * Ask the team (ADR-0032 round 1): a question with options or for a written answer, optionally to named people,
+   * in a thread (or a new one). People answer; with `wait` the call holds until someone does (≤ 10 minutes).
+   */
+  hub_ask: {
+    params: z.object({
+      question: z.string().min(1).max(1000),
+      options: z.array(z.string().min(1).max(200)).min(2).max(6).optional(),
+      to: z.array(z.string().min(1).max(200)).max(20).optional(),
+      threadId: z.string().max(64).optional(),
+      title: z.string().min(1).max(200).optional(),
+      wait: z.number().int().min(0).max(600).optional(),
+    }),
+    result: z.object({
+      askId: z.string(),
+      threadId: z.string(),
+      state: z.enum(['open', 'answered']),
+      answer: z
+        .object({ choice: z.string().nullable(), text: z.string().nullable(), by: z.string() })
+        .nullable(),
+    }),
+  },
+  /** A thread's tasks: add one (to this lane, a person, or nobody), mark one done, or list them. */
+  hub_task: {
+    params: z.object({
+      action: z.enum(['add', 'done', 'list']),
+      threadId: z.string().min(1).max(64),
+      text: z.string().min(1).max(500).optional(),
+      taskId: z.string().max(64).optional(),
+      assignee: z.string().max(200).optional(),
+    }),
+    result: z.record(z.string(), z.unknown()),
   },
   /** Share files from the worktree with the space as one item; returns a team link. Needs the lane shared. */
   hub_share: {

@@ -48,6 +48,7 @@ describe('rail + project nav (ADR-0027 §1, §5)', () => {
       copy.appRail.agents.title,
       copy.appRail.approvals.title,
       copy.appRail.tasks.title,
+      copy.appRail.team.title,
       copy.appRail.usage.title,
     ]);
     for (const b of rail.querySelectorAll('button')) expect(b.querySelector('svg')).not.toBeNull();

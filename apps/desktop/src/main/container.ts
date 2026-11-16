@@ -701,6 +701,7 @@ export function buildContainer(opts: ContainerOptions): Container {
       return session ? (repos.worktrees.get(session.worktreeId)?.path ?? null) : null;
     },
     progress: (pickId, sent, total) => publisher.sendEvent('hub.share.progress', { pickId, sent, total }),
+    notify: (n) => opts.notifications?.onTeam(n),
     audit: (input) => void audit.append(input),
   });
   hub.load();
@@ -1042,6 +1043,7 @@ export function buildContainer(opts: ContainerOptions): Container {
   sessions.bind({
     revokeSessionGrants: (id) => grants.cancelSessionGrants(id),
     cancelHeldAsk: (ask) => broker.cancelAsk(ask),
+    hubContext: (session) => hub.preamble(session.projectId),
     watchWorktree: (s, w) => void hunks.watch(s, w),
     unwatchWorktree: (id) => void hunks.unwatch(id),
     rescanHunks: (id) => void hunks.rescan(id).catch(() => undefined),
