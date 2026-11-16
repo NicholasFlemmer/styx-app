@@ -277,6 +277,100 @@ GET   /v1/spaces/:id/projects          the space's projects with counts of lanes
 Agents get `hub_share` (files from the worktree → an item, a team link back). Comments and verdicts on an item a
 lane shared come back into that lane like thread replies (section 8).
 
+## Working together, round 1 (2026-11-16)
+
+Owner: "The whole goal here is for teams to be able to work together, share context, share threads, be able to work
+through threads together, get approvals". Gaps found: a thread had no owner, state or tasks; nobody was told when
+they were needed; an agent could not ask the team anything and wait; context was offered to a lane only if it
+thought to ask; Styx had nowhere to read threads.
+
+**Threads you can work through.** A thread has an `owner` (a person), a `status` (`open | done`), and a `summary`
+("where it stands", kept current by people and by agents from shared lanes). It has **tasks**: a line of text, an
+optional assignee (a person, or a shared lane), done or not. **@mentions** in any message: `@Thandi` (a member's
+first name or email name) or `@agent/claude-4` (a shared lane's branch) are resolved by the hub when the message is
+posted; whoever is named hears about it.
+
+**Asks (approvals).** Anyone in a thread, a person or an agent from a shared lane, can ask the team a question with
+2–6 options or for a written answer, optionally to named people. It waits until someone it is addressed to answers
+(people only; an agent never answers an ask). The answer goes back to whoever asked; an agent's lane gets it as a
+hub card and, if the agent is waiting on it (`hub_ask` with `wait`), as the tool's result. Asks are how an agent
+gets a go-ahead from the team, not only from its own person.
+
+**Inbox.** Each person has one list of what is waiting on them across their spaces: asks addressed to them (or to
+anyone), mentions, tasks assigned to them, items shared for their review. Read on the web (`/inbox`) and in Styx;
+Styx also raises an OS notification for an ask or a mention.
+
+**Context comes to the lane.** A lane in a linked project starts knowing the space's context index (one line per
+item, ≤ 40 lines); `hub_context` fetches the rest. A message can be turned into a decision or doc in one step on
+the web, keeping a link to where it was decided.
+
+**People.** Space owners remove members and change roles; team admins make other admins.
+
+**API.**
+
+```
+PATCH /v1/threads/:id                  {title?, status?, ownerId?, summary?}   agents: summary only
+GET   /v1/threads/:id                  thread, tasks, open asks
+POST  /v1/threads/:id/tasks            {text, assignee?: {person: userId} | {lane: laneId}}
+PATCH /v1/tasks/:id                    {text?, done?, assignee?}
+POST  /v1/threads/:id/asks             {question, options?: string[2..6], to?: userId[]}
+POST  /v1/asks/:id/answer              {choice? | text?}                       people only, one answer closes it
+GET   /v1/asks/:id                     the ask and its answer
+GET   /v1/inbox                        what waits on the caller; POST /v1/inbox/read {ids}
+POST  /v1/messages/:id/promote         {kind: decision|doc, title, question?, answer?, body?}
+DELETE /v1/spaces/:id/members/:userId  owner;  PUT /v1/teams/:id/members/:userId {role}  admin
+```
+
+Messages carry `mentions` (resolved). Events: `thread.updated`, `task.changed`, `ask.created`, `ask.answered`,
+`mention` (ref = message id). Agent tools: `hub_ask` (question, options, to, wait ≤ 10 min), `hub_task`
+(add / done / list), and `hub_post` gains the thread's summary (`summary`) for agents keeping "where it stands".
+
+## Rooms: agents working together, round 2 (2026-11-16)
+
+Owner: "a sandbox on the hub that allows our agents to work together with their own particular contexts". Choices
+(owner-approved recommendations): agents run on their people's machines, the hub coordinates and holds no
+credentials; a room shares a git branch, its files and a thread; people set the goal and approve, agents divide
+the work.
+
+**A room** lives in a space and is for one goal: `goal`, `doneWhen` (how the people will know it is finished), an
+optional project and **branch** (`room/<slug>`, when the project has a remote; otherwise the room shares files
+only), a **plan** (the room thread's summary, kept by the agents), a **board** (the room thread's tasks: open,
+claimed by a lane, done), the room's **files** (items shared into it), and its **participants**: people, and lanes
+their people brought in. Each lane keeps its own context (its worktree, its notes, what its person told it); the
+room shows what each one brings in a line its person writes ("knows the checkout code", "has the brand assets").
+
+**How agents work together.** A lane in a room gets the room's state on every turn it takes there (goal, done-when,
+plan, board, who is in it, the last messages) and the tools `room_read`, `room_claim` (take an open task),
+`room_handoff` (give a task to another lane, with a note), `room_done` (finish a task with a result and optional
+files), plus `hub_post`, `hub_ask` and `hub_share` into the room. Work on code goes to the room's branch as normal
+commits that people review and land as usual.
+
+**Waking agents is the one new power, so it is bounded.** Elsewhere a hub message never starts a turn (section 8).
+In a room, a person may set their lane to **Work on room tasks**; then, and only then, the lane takes a turn when
+something is aimed at it: a task assigned or handed to it, or an @mention of its branch in the room. The wake-up
+text names the room, the task and who set it, framed as a room task under the goal its people set, never as
+instructions from another agent. Limits: at most 6 wake-ups an hour per lane (`room.wakesPerHour`), never while the
+room is **paused**, and never for a lane whose person set it back to **Wait for me**. Everything the agent does
+still goes through its own person's grants: a room grants no access.
+
+**People steer.** People create rooms, set the goal and done-when, bring their lanes in, approve the plan (an ask
+the room raises when the agents first write one), pause and resume, and close the room. Agents cannot create rooms,
+change the goal, add participants or close a room.
+
+**API.**
+
+```
+POST  /v1/spaces/:id/rooms          {title, goal, doneWhen, projectId?, branch?}            people
+GET   /v1/spaces/:id/rooms · GET /v1/rooms/:id   room, participants, board, plan, files, last messages
+PATCH /v1/rooms/:id                 {goal?, doneWhen?, state?: active|paused|closed}         people
+PUT   /v1/rooms/:id/lanes/:laneId   {brings, mode: wait|work}                                the lane's person
+DELETE /v1/rooms/:id/lanes/:laneId                                                            the lane's person, owners
+POST  /v1/rooms/:id/tasks/:taskId/claim | /handoff {toLane, note} | /done {result}            lanes in the room
+```
+
+Events: `room.updated`, `room.task` (ref = task id, with the lane it is aimed at), `room.joined`. A room is a thread
+underneath (kind `room`), so round 1's tasks, asks, mentions and inbox apply unchanged.
+
 ## Phases
 
 1. **Spaces, messages and context.** Teams, spaces, members, threads; context docs and decisions with

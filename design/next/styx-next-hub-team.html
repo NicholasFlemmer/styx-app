@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Styx next: Team screen (ADR-0032 round 1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+:root {
+  --page:#181916; --bg:#0d0e0c; --s1:#121411; --s2:#1c1e1a; --ln:#2d302a; --tx:#e9ebe3; --mu:#858a81;
+  --ac:#d6ff3d; --acx:#0d0e0c; --act:#d6ff3d; --add:rgba(214,255,61,.13); --term:#080908; --termtx:#c9cdc2; --dim:rgba(0,0,0,.6);
+  --p-bg:#f7f8f3; --p-s2:#e1e3db; --p-ln:#b3b7ab; --p-tx:#14160f; --p-mu:#5d6259; --p-act:#6e8f00;
+  --claude:#e8916a; --codex:#8fb3ff; --gemini:#b79bff; --shell:#858a81;
+  --ui: 'Archivo', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--page); color: var(--tx); font: 400 14px/1.5 var(--ui); padding: 56px 0 140px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.mu { color: var(--mu); }
+
+.doc { width: 1280px; margin: 0 auto; }
+.doc h1 { font: 600 54px/1.02 var(--ui); letter-spacing: -.01em; max-width: 18ch; }
+.doc .lede { margin-top: 18px; max-width: 66ch; color: var(--mu); font-size: 18px; }
+.doc .lede strong { color: var(--tx); font-weight: 600; }
+.rules { margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 32px; }
+.rules div { padding: 16px 0; border-top: 1px solid var(--ln); }
+.rules b { display: block; font: 600 17px/1.2 var(--ui); }
+.rules span { display: block; margin-top: 6px; color: var(--mu); max-width: 40ch; }
+.note { width: 1280px; margin: 88px auto 18px; }
+.note h2 { font: 600 24px/1.12 var(--ui); letter-spacing: -.02em; }
+.note p { margin-top: 8px; color: var(--mu); font-size: 15px; max-width: 72ch; }
+
+/* window */
+.win { width: 1280px; height: 800px; margin: 0 auto; background: var(--bg); border: 1px solid var(--ln); display: grid; grid-template-rows: 44px 1fr; overflow: hidden; position: relative; }
+.win.app { grid-template-rows: 38px 1fr 26px; }
+.bar { display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid var(--ln); background: var(--s1); font-size: 13px; }
+.bar .url { font: 400 12px var(--mono); color: var(--mu); border: 1px solid var(--ln); padding: 4px 10px; width: 420px; }
+.word { font: 600 12px/1 var(--ui); letter-spacing: .24em; }
+.me { width: 24px; height: 24px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); font: 600 10px/22px var(--ui); text-align: center; flex: none; }
+.sp { margin-left: auto; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--ln); font-size: 13px; white-space: nowrap; }
+.btn.pri { background: var(--ac); color: var(--acx); border-color: var(--ac); font-weight: 700; }
+.btn.line { border-color: var(--tx); font-weight: 600; }
+.btn.sm { padding: 4px 9px; font-size: 12px; }
+.tag { display: inline-block; padding: 1px 6px; font-size: 11px; font-weight: 600; border: 1px solid var(--ln); color: var(--mu); }
+.tag.prod { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.dot { display: inline-block; width: 8px; height: 8px; flex: none; }
+.c-claude { background: var(--claude); } .c-codex { background: var(--codex); } .c-gemini { background: var(--gemini); } .c-shell { background: var(--shell); }
+
+/* hub web: spaces | thread | context */
+.hub { display: grid; grid-template-columns: 240px 1fr 320px; min-height: 0; }
+.side { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.side .team { padding: 14px 16px; border-bottom: 1px solid var(--ln); }
+.side .team b { display: block; font: 600 16px/1.2 var(--ui); }
+.side .team span { font-size: 12px; color: var(--mu); }
+.side .grp { padding: 16px 16px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.side a { display: flex; justify-content: space-between; align-items: center; padding: 7px 16px; font-size: 13px; border-top: 1px solid var(--ln); }
+.side a span { color: var(--mu); font-size: 12px; }
+.side a[data-inv] { background: var(--tx); color: var(--bg); }
+.side a[data-inv] span { color: var(--p-mu); }
+.side a.sub { padding-left: 28px; }
+.side a .n { background: var(--ac); color: var(--acx); font-weight: 700; padding: 0 5px; font-size: 11px; }
+.side .foot { margin-top: auto; padding: 12px 16px; border-top: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+
+.main { display: flex; flex-direction: column; min-height: 0; }
+.head { display: flex; align-items: flex-end; gap: 14px; padding: 18px 24px 14px; border-bottom: 1px solid var(--ln); }
+.head h2 { font: 600 22px/1.1 var(--ui); letter-spacing: -.01em; }
+.head .meta { font-size: 12px; color: var(--mu); margin-top: 4px; }
+.feed { flex: 1; overflow: hidden; padding: 8px 24px; display: flex; flex-direction: column; }
+.msg { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--ln); }
+.msg .who { font-size: 13px; display: flex; gap: 8px; align-items: center; }
+.msg .who b { font-weight: 600; }
+.msg .who .mu { font-size: 12px; }
+.msg .body { margin-top: 3px; max-width: 70ch; }
+.lane { display: inline-flex; gap: 6px; align-items: center; font: 400 11px var(--mono); color: var(--mu); border: 1px solid var(--ln); padding: 1px 6px; }
+.art { margin-top: 10px; display: grid; grid-template-columns: 120px 1fr auto; gap: 14px; align-items: center; border: 1px solid var(--ln); padding: 10px; max-width: 620px; }
+.art .thumb { height: 72px; background: var(--p-bg); border: 1px solid var(--p-ln); display: grid; place-items: center; color: var(--p-mu); font: 400 11px var(--mono); }
+.art b { display: block; font-size: 13px; }
+.art span { font-size: 12px; color: var(--mu); }
+.ask { margin-top: 10px; border: 1px solid var(--tx); padding: 12px 14px; max-width: 620px; }
+.ask .line1 { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+.ask p { margin-top: 6px; color: var(--mu); font-size: 13px; }
+.ask .row { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
+.compose { border-top: 1px solid var(--ln); padding: 12px 24px 16px; }
+.compose .box { border: 1px solid var(--ln); padding: 10px 12px; color: var(--mu); display: flex; justify-content: space-between; align-items: center; }
+
+.ctx { border-left: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.ctx .grp { padding: 16px 16px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.ctx .row { display: grid; grid-template-columns: 10px 1fr; gap: 2px 8px; padding: 8px 16px; border-top: 1px solid var(--ln); }
+.ctx .row .d { margin-top: 6px; }
+.ctx .row b { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.ctx .row > span:not(.dot) { grid-column: 2; font-size: 12px; color: var(--mu); }
+.ctx .row span .mono { font-size: 11px; }
+.ctx .cn { display: flex; justify-content: space-between; padding: 7px 16px; border-top: 1px solid var(--ln); font-size: 13px; }
+.ctx .cn span { color: var(--mu); font-size: 12px; }
+
+/* approval sheet over the hub */
+.scrim { position: absolute; inset: 44px 0 0 0; background: var(--dim); }
+.sheet { position: absolute; top: 44px; right: 0; bottom: 0; width: 460px; background: var(--bg); border-left: 1px solid var(--tx); padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+.sheet h3 { font: 600 20px/1.2 var(--ui); }
+.kv { display: grid; grid-template-columns: 110px 1fr; gap: 8px 12px; font-size: 13px; }
+.kv dt { color: var(--mu); }
+.kv dd .mono { font-size: 12px; }
+.pass { border: 1px solid var(--ln); padding: 14px; display: flex; gap: 12px; align-items: center; }
+.pass svg { width: 28px; height: 28px; stroke: var(--tx); fill: none; stroke-width: 1.5; flex: none; }
+.pass p { font-size: 13px; }
+.pass p span { display: block; color: var(--mu); font-size: 12px; }
+.sheet .acts { margin-top: auto; display: flex; gap: 8px; justify-content: flex-end; }
+
+/* inside Styx: a lane with hub traffic */
+.title { display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid var(--ln); background: var(--s1); font-size: 13px; }
+.lights { display: flex; gap: 8px; width: 60px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); }
+.crumb { display: flex; gap: 8px; color: var(--mu); }
+.crumb b { color: var(--tx); font-weight: 600; }
+.status { display: flex; gap: 20px; align-items: center; padding: 0 14px; border-top: 1px solid var(--ln); background: var(--s1); font-size: 12px; color: var(--mu); }
+.status .tx { color: var(--tx); }
+.frame { display: grid; grid-template-columns: 56px 216px 1fr; min-height: 0; }
+.rail { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; }
+.rail .pj { width: 36px; height: 36px; border: 1px solid var(--ln); display: grid; place-items: center; font: 700 11px var(--ui); }
+.rail .pj[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.nav { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.nav .ph { padding: 14px 14px 10px; }
+.nav .ph b { display: block; font: 600 16px/1.2 var(--ui); }
+.nav .ph span { font: 400 11px var(--mono); color: var(--mu); }
+.nav .grp { padding: 14px 14px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.ln { display: grid; grid-template-columns: 10px 1fr; gap: 2px 8px; padding: 8px 14px; border-top: 1px solid var(--ln); }
+.ln .d { margin-top: 6px; }
+.ln .t { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.ln .s { grid-column: 2; font-size: 12px; color: var(--mu); }
+.ln[data-inv] { background: var(--tx); color: var(--bg); }
+.ln[data-inv] .s { color: var(--p-mu); }
+.ln.remote .t::after { content: ''; }
+.chat { display: flex; flex-direction: column; min-height: 0; }
+.chat .ch { padding: 14px 28px; border-bottom: 1px solid var(--ln); display: flex; gap: 12px; align-items: center; }
+.chat .ch b { font: 600 17px/1.2 var(--ui); }
+.turns { flex: 1; padding: 18px 28px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.you { align-self: flex-end; background: var(--s2); padding: 10px 14px; max-width: 60ch; }
+.agent { max-width: 76ch; }
+.agent .by { font-size: 12px; color: var(--mu); display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+.tool { font: 400 12px var(--mono); color: var(--mu); border-left: 1px solid var(--ln); padding-left: 10px; }
+.incoming { border: 1px solid var(--ln); background: var(--s1); padding: 12px 14px; max-width: 76ch; }
+.incoming .from { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--mu); }
+.incoming .from b { color: var(--tx); font-weight: 600; }
+.incoming p { margin-top: 6px; }
+.incoming .why { margin-top: 8px; font-size: 12px; color: var(--mu); }
+.incoming .row { margin-top: 10px; display: flex; gap: 8px; }
+.composer { border-top: 1px solid var(--ln); padding: 12px 28px 16px; }
+.composer .box { border: 1px solid var(--ln); padding: 10px 12px; color: var(--mu); }
+
+/* share sheet (in Styx) */
+.win.app .scrim { inset: 38px 0 26px 0; }
+.win.app .sheet { top: 38px; bottom: 26px; width: 500px; gap: 18px; overflow: hidden; }
+.q { display: flex; flex-direction: column; gap: 6px; }
+.q > b { font-size: 13px; font-weight: 600; }
+.opt { display: grid; grid-template-columns: 14px 1fr; gap: 2px 10px; padding: 9px 12px; border: 1px solid var(--ln); }
+.opt i { width: 12px; height: 12px; border: 1px solid var(--tx); border-radius: 50%; margin-top: 4px; }
+.opt[data-on] { border-color: var(--tx); }
+.opt[data-on] i { background: var(--ac); border-color: var(--ac); }
+.opt b { font-size: 13px; font-weight: 600; }
+.opt span { grid-column: 2; font-size: 12px; color: var(--mu); }
+.seg { display: flex; }
+.seg span { flex: 1; padding: 6px 10px; border: 1px solid var(--ln); font-size: 13px; text-align: center; }
+.seg span + span { border-left: 0; }
+.seg span[data-inv] { background: var(--tx); color: var(--bg); border-color: var(--tx); font-weight: 600; }
+.out { border-top: 1px solid var(--ln); padding-top: 12px; font-size: 12px; color: var(--mu); }
+.out .mono { font-size: 11px; color: var(--tx); }
+.result { border: 1px solid var(--ln); background: var(--s1); padding: 12px 14px; max-width: 76ch; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+.result b { font-size: 13px; }
+.result span { font-size: 12px; color: var(--mu); }
+
+/* review item (in the hub) */
+.item { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+.prev { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--ln); }
+.prev .vbar { display: flex; gap: 10px; align-items: center; padding: 10px 20px; border-bottom: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+.prev .vbar .mono { color: var(--tx); }
+.page { flex: 1; margin: 20px; background: var(--p-bg); color: var(--p-tx); border: 1px solid var(--p-ln); position: relative; overflow: hidden; }
+.page .nv { display: flex; gap: 18px; padding: 14px 24px; border-bottom: 1px solid var(--p-ln); font-size: 12px; color: var(--p-mu); }
+.page .nv b { color: var(--p-tx); margin-right: auto; }
+.page h4 { font: 600 40px/1.05 var(--ui); padding: 48px 24px 0; max-width: 16ch; letter-spacing: -.02em; }
+.page p { padding: 12px 24px 0; color: var(--p-mu); max-width: 52ch; }
+.page .cta { margin: 20px 24px; display: inline-block; background: var(--p-tx); color: var(--p-bg); padding: 10px 16px; font-weight: 600; font-size: 13px; }
+.pin { position: absolute; width: 22px; height: 22px; background: var(--ac); color: var(--acx); font: 700 11px/22px var(--ui); text-align: center; border: 1px solid var(--p-tx); }
+.rev { display: flex; flex-direction: column; min-height: 0; background: var(--s1); }
+.rev .vh { padding: 16px; border-bottom: 1px solid var(--ln); }
+.rev .vh b { display: block; font: 600 16px/1.2 var(--ui); }
+.rev .vh span { font-size: 12px; color: var(--mu); }
+.cm { padding: 12px 16px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.cm .who { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--mu); margin-bottom: 4px; }
+.cm .who b { color: var(--tx); }
+.cm .who .n { background: var(--ac); color: var(--acx); font-weight: 700; padding: 0 5px; }
+.verdict { margin-top: auto; padding: 16px; border-top: 1px solid var(--ln); display: flex; flex-direction: column; gap: 10px; }
+.verdict .row { display: flex; gap: 8px; }
+
+/* context home base */
+.cx { display: grid; grid-template-columns: 1fr 360px; min-height: 0; }
+.cx .list { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--ln); }
+.tabs { display: flex; gap: 0; padding: 0 24px; border-bottom: 1px solid var(--ln); }
+.tabs span { padding: 10px 14px; font-size: 13px; color: var(--mu); border-bottom: 2px solid transparent; }
+.tabs span[data-inv] { color: var(--tx); border-bottom-color: var(--tx); font-weight: 600; }
+.it { display: grid; grid-template-columns: 1fr auto; gap: 2px 16px; padding: 12px 24px; border-bottom: 1px solid var(--ln); }
+.it b { font-size: 14px; font-weight: 600; }
+.it .lv { font-size: 12px; color: var(--mu); text-align: right; }
+.it span.d { grid-column: 1; font-size: 13px; color: var(--mu); }
+.it .old { text-decoration: line-through; }
+.it.stale { opacity: .55; }
+.queue { display: flex; flex-direction: column; min-height: 0; background: var(--s1); }
+.queue .qh { padding: 16px; border-bottom: 1px solid var(--ln); display: flex; flex-direction: column; gap: 8px; }
+.queue .qh b { font: 600 16px/1.2 var(--ui); }
+.queue .qh .mu { font-size: 12px; }
+.prop { padding: 12px 16px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.prop .who { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--mu); margin-bottom: 4px; }
+.prop .row { margin-top: 8px; display: flex; gap: 6px; }
+.search2 { margin: 14px 24px; border: 1px solid var(--ln); padding: 8px 12px; color: var(--mu); font-size: 13px; }
+.cite { margin-top: 8px; font-size: 12px; color: var(--mu); border-left: 1px solid var(--tx); padding-left: 10px; }
+.cite b { color: var(--tx); font-weight: 600; }
+
+/* ===== round 1: the Team screen in Styx ===== */
+.team { display: grid; grid-template-columns: 56px 380px 1fr; min-height: 0; }
+.inbox { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.inbox .ih { padding: 14px 16px 10px; display: flex; justify-content: space-between; align-items: baseline; }
+.inbox .ih b { font: 600 16px/1.2 var(--ui); }
+.inbox .ih span { font-size: 12px; color: var(--mu); }
+.inbox .g { padding: 12px 16px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.entry { padding: 10px 16px; border-top: 1px solid var(--ln); display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.entry .who { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--mu); }
+.entry .who b { color: var(--tx); font-weight: 600; }
+.entry .opts { display: flex; gap: 6px; margin-top: 4px; }
+.entry[data-inv] { background: var(--tx); color: var(--bg); }
+.entry[data-inv] .who, .entry[data-inv] .who b { color: var(--bg); }
+.entry .sp2 { font-size: 11px; color: var(--mu); }
+.unread { width: 6px; height: 6px; background: var(--ac); display: inline-block; }
+.thread { display: flex; flex-direction: column; min-height: 0; }
+.th { padding: 14px 24px; border-bottom: 1px solid var(--ln); display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
+.th b { font: 600 18px/1.2 var(--ui); }
+.th .meta { font-size: 12px; color: var(--mu); grid-column: 1; }
+.th .acts { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 6px; align-self: center; }
+.stand { margin: 12px 24px 0; border: 1px solid var(--ln); padding: 10px 12px; font-size: 13px; }
+.stand span { display: block; font-size: 12px; color: var(--mu); margin-bottom: 2px; }
+.tasks { margin: 10px 24px 0; border: 1px solid var(--ln); }
+.tasks div { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; padding: 7px 12px; border-top: 1px solid var(--ln); font-size: 13px; align-items: center; }
+.tasks div:first-child { border-top: 0; }
+.tasks i { width: 12px; height: 12px; border: 1px solid var(--tx); display: inline-block; }
+.tasks i.on { background: var(--tx); }
+.tasks .done { color: var(--mu); text-decoration: line-through; }
+.tasks .who2 { font-size: 12px; color: var(--mu); }
+.msgs { flex: 1; overflow: hidden; padding: 12px 24px; display: flex; flex-direction: column; gap: 12px; }
+.m2 { font-size: 13px; }
+.m2 .who { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--mu); margin-bottom: 2px; }
+.m2 .who b { color: var(--tx); font-weight: 600; }
+.mention { background: var(--add); padding: 0 3px; }
+.askc { border: 1px solid var(--tx); padding: 10px 12px; font-size: 13px; }
+.askc b { display: block; margin-bottom: 6px; }
+.askc .opts { display: flex; gap: 6px; }
+.reply { border-top: 1px solid var(--ln); padding: 12px 24px; display: flex; gap: 8px; }
+.reply .box { flex: 1; border: 1px solid var(--ln); padding: 9px 12px; color: var(--mu); font-size: 13px; }
+.rail .ic.teamic { font: 700 10px var(--ui); color: var(--tx); border: 1px solid var(--ln); position: relative; }
+.rail .ic.teamic[data-inv] { background: var(--tx); color: var(--bg); }
+.rail .ic.teamic b { position: absolute; top: -4px; right: -4px; min-width: 14px; height: 14px; padding: 0 3px; background: var(--ac); color: var(--acx); font: 700 10px/14px var(--ui); text-align: center; }
+.notif { position: absolute; right: 16px; top: 46px; width: 330px; background: var(--s2); border: 1px solid var(--tx); padding: 10px 12px; font-size: 12px; }
+.notif b { display: block; font-size: 13px; margin-bottom: 2px; }
+</style>
+</head>
+<body>
+
+<div class="doc">
+  <h1>Team, in Styx: what is waiting on you, and the threads you work through</h1>
+  <p class="lede">Round 1 of working together (ADR-0032). A <strong>Team</strong> place on the rail with a count of what waits on you: asks you can answer in one click, mentions, your tasks, reviews. Open any to read the thread, see where it stands and its tasks, and reply as yourself. An ask or a mention also raises a system notification.</p>
+</div>
+<div class="note">
+  <h2>The Team screen</h2>
+  <p>Left: the inbox across your spaces, newest first, unread marked. An ask carries its options as buttons, so answering is one click. Right: the thread it came from: owner and status, "where it stands", tasks (yours checkable), the conversation with mentions marked and asks inline, and a reply box that posts as you.</p>
+</div>
+<div class="win app">
+  <div class="title"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><div class="crumb"><b>Team</b><span>·</span><span>4 waiting on you</span></div><span class="sp"></span><span class="mu">Hub · Launchsite</span><span class="me">NF</span></div>
+  <div class="team">
+    <div class="rail"><span class="ic teamic" data-inv="true">TM<b>4</b></span><hr><span class="pj">AS</span><span class="pj">SX</span><span class="pj">LW</span></div>
+    <aside class="inbox">
+      <div class="ih"><b>Waiting on you</b><span>Mark all read</span></div>
+      <div class="g"><span>Asks</span><span>2</span></div>
+      <div class="entry" data-inv="true"><div class="who"><span class="unread"></span><span class="dot c-codex"></span><b>Codex for Thandi</b> · Acme · Launch the brand site</div>Ship pricing with annual plans?<div class="opts"><span class="btn sm pri">Yes</span><span class="btn sm">Not yet</span></div></div>
+      <div class="entry"><div class="who"><span class="unread"></span><b>Sipho K.</b> · Launchsite web · Homepage copy</div>Can we drop the testimonials block for launch?<div class="opts"><span class="btn sm">Answer…</span></div></div>
+      <div class="g"><span>Mentions</span><span>1</span></div>
+      <div class="entry"><div class="who"><span class="unread"></span><b>Thandi M.</b> · Acme · Launch the brand site</div><span><span class="mention">@Nic</span> logo in the footer still the old one?</span></div>
+      <div class="g"><span>Your tasks</span><span>1</span></div>
+      <div class="entry"><div class="who"><b>Acme</b> · Launch the brand site</div>Approve the final pricing copy</div>
+      <div class="g"><span>Reviews</span><span>0</span></div>
+      <div class="entry"><span class="sp2">Nothing shared for your review.</span></div>
+    </aside>
+    <section class="thread">
+      <div class="th"><b>Launch the brand site</b><span class="meta">Acme · brand-site · owner Nic · open · 3 of 5 tasks</span><div class="acts"><span class="btn sm">Open on the web</span><span class="btn sm line">Mark done</span></div></div>
+      <div class="stand"><span>Where it stands · Claude for Nic, 10 min ago</span>Home and about pages done and reviewed. Pricing waits on the annual-plans answer; footer logo to swap.</div>
+      <div class="tasks">
+        <div><i class="on"></i><span class="done">Home page</span><span class="who2">Claude for Nic</span></div>
+        <div><i class="on"></i><span class="done">About page</span><span class="who2">Claude for Nic</span></div>
+        <div><i></i><span>Pricing page</span><span class="who2">Codex for Thandi</span></div>
+        <div><i></i><span>Approve the final pricing copy</span><span class="who2">you</span></div>
+      </div>
+      <div class="msgs">
+        <div class="m2"><div class="who"><span class="dot c-claude"></span><b>Claude for Nic</b> · agent/claude-1 · 10:40</div>Home and about are live on the preview. <span class="mention">@Thandi</span> can your lane own pricing?</div>
+        <div class="m2"><div class="who"><b>Thandi M.</b> · 10:52</div>Yes, my Codex has it.</div>
+        <div class="askc"><b>Codex for Thandi asks: Ship pricing with annual plans?</b><div class="opts"><span class="btn sm pri">Yes</span><span class="btn sm">Not yet</span></div></div>
+      </div>
+      <div class="reply"><div class="box">Reply as Nic… (@ to mention someone or a lane)</div><span class="btn pri">Send</span></div>
+    </section>
+  </div>
+  <div class="status"><span class="tx">Team</span><span>3 spaces</span><span>Hub connected</span></div>
+  <div class="notif"><b>Codex for Thandi asks you</b>Ship pricing with annual plans? · Acme</div>
+</div>
+
+</body>
+</html>

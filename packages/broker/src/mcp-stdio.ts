@@ -229,15 +229,97 @@ export function createStyxMcpServer(client: BrokerClient): McpServer {
         body: z.string().min(1).max(16_000).describe('The message. Plain text.'),
         threadId: z.string().max(64).optional(),
         title: z.string().min(1).max(200).optional().describe('Start a new thread with this title instead'),
+        summary: z
+          .string()
+          .min(1)
+          .max(4000)
+          .optional()
+          .describe("Update the thread's 'where it stands' summary at the same time"),
       },
     },
-    async ({ body, threadId, title }) => {
+    async ({ body, threadId, title, summary }) => {
       try {
         return text(
           await client.call('hub_post', {
             body,
             ...(threadId !== undefined ? { threadId } : {}),
             ...(title !== undefined ? { title } : {}),
+            ...(summary !== undefined ? { summary } : {}),
+          }),
+        );
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'hub_ask',
+    {
+      description:
+        'Ask your team a question in a hub thread and, if you set wait, wait for the answer (up to 10 minutes): a go-ahead, a choice between options, or a written answer. Use it when the team (not only your user) has to decide or approve something. Give options for a quick choice; name people in `to` (names or emails) when it is theirs to answer. Only people answer. Needs this lane shared. If it is still open when the wait ends, the answer comes back to this chat later.',
+      inputSchema: {
+        question: z.string().min(1).max(1000),
+        options: z
+          .array(z.string().min(1).max(200))
+          .min(2)
+          .max(6)
+          .optional()
+          .describe('2-6 choices; omit for a written answer'),
+        to: z
+          .array(z.string().min(1).max(200))
+          .max(20)
+          .optional()
+          .describe('Names or emails of who should answer; omit for anyone'),
+        threadId: z.string().max(64).optional().describe('A thread id from hub_read'),
+        title: z.string().min(1).max(200).optional().describe('Start a new thread with this title instead'),
+        wait: z.number().int().min(0).max(600).optional().describe('Seconds to wait for the answer (0-600)'),
+      },
+    },
+    async ({ question, options, to, threadId, title, wait }) => {
+      try {
+        return text(
+          await client.call(
+            'hub_ask',
+            {
+              question,
+              ...(options !== undefined ? { options } : {}),
+              ...(to !== undefined ? { to } : {}),
+              ...(threadId !== undefined ? { threadId } : {}),
+              ...(title !== undefined ? { title } : {}),
+              ...(wait !== undefined ? { wait } : {}),
+            },
+            { timeoutMs: ((wait ?? 0) + 30) * 1000 },
+          ),
+        );
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'hub_task',
+    {
+      description:
+        "Work a hub thread's tasks: add one (assignee 'me' for this lane, a teammate's name, or omit for nobody), mark one done (taskId from list), or list them. Keep tasks honest: mark yours done when they are.",
+      inputSchema: {
+        action: z.enum(['add', 'done', 'list']),
+        threadId: z.string().min(1).max(64),
+        text: z.string().min(1).max(500).optional().describe('add: what needs doing'),
+        taskId: z.string().max(64).optional().describe('done: the task id'),
+        assignee: z.string().max(200).optional().describe("add: 'me', a teammate's name or email"),
+      },
+    },
+    async ({ action, threadId, text: line, taskId, assignee }) => {
+      try {
+        return text(
+          await client.call('hub_task', {
+            action,
+            threadId,
+            ...(line !== undefined ? { text: line } : {}),
+            ...(taskId !== undefined ? { taskId } : {}),
+            ...(assignee !== undefined ? { assignee } : {}),
           }),
         );
       } catch (e) {

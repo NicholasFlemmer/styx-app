@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { deltaSchema, effectiveProjectSettingsSchema } from '../deltas';
 import { accountProviderSchema, accountStateSchema } from '../model/account';
-import { HUB_OFF, hubStateSchema } from '../model/hub';
+import { HUB_OFF, hubInboxEntrySchema, hubStateSchema, hubThreadViewSchema } from '../model/hub';
 import { UPDATE_OFF, updateStateSchema } from '../model/update';
 import { agentSetupSchema, setupAgentSchema } from '../model/agent-setup';
 import { RENDERER_USAGE_EVENTS } from '../model/usage-report';
@@ -771,6 +771,30 @@ export const commands = {
     input: z.object({ projectId: projectIdSchema, spaceId: z.string().min(1).nullable() }),
     output: ok,
   },
+  /** The Team screen (ADR-0032 round 1): what waits on the person, across their spaces. */
+  'hub.inbox': { input: z.object({}), output: z.object({ entries: z.array(hubInboxEntrySchema) }) },
+  /** One thread as the Team screen shows it. */
+  'hub.thread': { input: z.object({ threadId: z.string().min(1) }), output: hubThreadViewSchema },
+  /** Answers an ask as the person: a choice among its options, or written text when it has none. */
+  'hub.answer': {
+    input: z.object({
+      askId: z.string().min(1),
+      choice: z.string().optional(),
+      text: z.string().max(4000).optional(),
+    }),
+    output: ok,
+  },
+  /** Replies in a thread as the person (`@Name` / `@branch` mention). */
+  'hub.reply': {
+    input: z.object({ threadId: z.string().min(1), body: z.string().trim().min(1).max(16_000) }),
+    output: ok,
+  },
+  'hub.setTask': { input: z.object({ taskId: z.string().min(1), done: z.boolean() }), output: ok },
+  'hub.setThreadStatus': {
+    input: z.object({ threadId: z.string().min(1), status: z.enum(['open', 'done']) }),
+    output: ok,
+  },
+  'hub.markRead': { input: z.object({ ids: z.array(z.string()).max(500) }), output: ok },
   /** Makes a space on the person's team (the lane header's "New space"); the project is linked to it next. */
   'hub.createSpace': {
     input: z.object({ name: z.string().trim().min(1).max(80) }),
@@ -1461,7 +1485,9 @@ export const events = {
   }),
   'theme.resolved': z.object({ theme: z.enum(['dark', 'light']) }),
   /** OS-side navigation (tray left-click / dock menu → Agents board, spec §4.14). The renderer switches screen. */
-  'nav.go': z.object({ screen: z.enum(['home', 'workspace', 'agents', 'repo', 'approvals', 'settings']) }),
+  'nav.go': z.object({
+    screen: z.enum(['home', 'workspace', 'agents', 'repo', 'approvals', 'settings', 'team']),
+  }),
 } as const;
 
 export type Events = typeof events;

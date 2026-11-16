@@ -130,6 +130,11 @@ export interface SessionHooks {
   turnSettled?: (sessionId: SessionId) => void;
   /** A CLI reported its account rate limits (UsageService keeps the latest per agent). */
   limitsReported?: (limits: AgentLimits) => void;
+  /**
+   * The team hub's context index for a lane starting in a linked project (ADR-0032 round 1): what the team has
+   * written down, one line each, so the agent knows it is there. Null when the project is not linked.
+   */
+  hubContext?: (session: Session) => Promise<string | null>;
   /** The session reached `done` (ADR-0025 phase C: a lane may land on its own). */
   sessionFinished?: (sessionId: SessionId) => void;
   /**
@@ -705,6 +710,13 @@ export class SessionService {
     // A design task learns where screens go and how they are drawn (#140), once, ahead of its first turn.
     if (session.kind === 'design' && session.lastActivityAt === null) {
       this.notes.set(session.id, [copy.agentPrompt.design, ...(this.notes.get(session.id) ?? [])]);
+    }
+    // The team hub's context (ADR-0032 round 1), once, ahead of the first turn: the agent learns what the team has
+    // decided and documented without having to think to ask. Information, framed as such; never instructions.
+    if (session.lastActivityAt === null) {
+      const hub = await this.hooks?.hubContext?.(session).catch(() => null);
+      if (hub !== null && hub !== undefined)
+        this.notes.set(session.id, [...(this.notes.get(session.id) ?? []), hub]);
     }
     const outgoing = firstMessage === null ? null : this.withNotes(session.id, firstMessage);
     const ctx: AgentLaunchContext = {

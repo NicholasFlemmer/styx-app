@@ -1,7 +1,11 @@
 import type { Socket } from 'node:net';
 
 /** Splits a socket stream into newline-delimited JSON messages. */
-export function onNdjson(socket: Socket, handler: (msg: unknown, raw: string) => void, onBad?: (raw: string) => void): void {
+export function onNdjson(
+  socket: Socket,
+  handler: (msg: unknown, raw: string) => void,
+  onBad?: (raw: string) => void,
+): void {
   let buf = '';
   socket.setEncoding('utf8');
   socket.on('data', (chunk: string) => {

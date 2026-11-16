@@ -29,6 +29,7 @@ export type IconName =
   | 'policies'
   | 'shortcuts'
   | 'usage'
+  | 'team'
   // project nav
   | 'workspace'
   | 'repo'
@@ -74,6 +75,15 @@ const GLYPHS: Record<IconName, Glyph> = {
   approvals: { box: 16, parts: [stroke('M8 1.5 L14.5 8 L8 14.5 L1.5 8 Z M5.5 8 L7.5 10 L10.5 6.5')] },
   /** Tasks: a window with a play marker. */
   tasks: { box: 16, parts: [stroke('M1.5 2.5 H14.5 V13.5 H1.5 Z'), solid('M6 5.5 L11 8 L6 10.5 Z')] },
+  /** Team (ADR-0032): two people, the account glyph twice, the second behind. */
+  team: {
+    box: 16,
+    parts: [
+      stroke(
+        'M6 3 A2.25 2.25 0 1 1 6 7.5 A2.25 2.25 0 1 1 6 3 M1.5 13.5 V12 A2.5 2.5 0 0 1 4 9.5 H8 A2.5 2.5 0 0 1 10.5 12 V13.5 M10.5 3.3 A2.25 2.25 0 1 1 11 7.5 M12 9.5 A2.5 2.5 0 0 1 14.5 12 V13.5',
+      ),
+    ],
+  },
   /** Account: a head and shoulders, squared off like the rest of the set. */
   account: {
     box: 16,

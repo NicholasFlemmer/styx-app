@@ -33,6 +33,7 @@ export const SCREENS = [
   'workspace',
   'agents',
   'usage',
+  'team',
   'repo',
   'approvals',
   'settings',
