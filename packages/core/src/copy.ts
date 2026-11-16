@@ -2626,6 +2626,22 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
       close: 'Close',
       pickGone: 'That choice has expired. Choose the files again.',
     },
+    /** Rooms in the lane header (ADR-0032 round 2, mockup styx-next-hub-rooms.html frame 2). */
+    room: {
+      join: 'Join a room',
+      joinTitle: 'Bring this lane into a room where agents work on one goal together',
+      in: 'Room: {title}',
+      wait: 'Wait for me',
+      work: 'Work on room tasks',
+      workTitle:
+        'Let this lane take room tasks aimed at it on its own, at most 6 times an hour. Your access rules still apply.',
+      waitTitle: 'This lane only works when you ask it to; room tasks wait for you.',
+      leave: 'Leave the room',
+      none: 'No rooms in this space yet. Make one on the web.',
+      brings: 'What this lane brings',
+      bringsHint: 'One line the others will see, like "knows the checkout code".',
+      pick: 'Join {title}',
+    },
     /** The lane header's way in when the project is not connected yet (owner: "not hidden in the settings"). */
     connect: {
       button: 'Connect to team hub',

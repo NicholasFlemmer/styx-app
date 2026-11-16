@@ -702,6 +702,20 @@ export function buildContainer(opts: ContainerOptions): Container {
     },
     progress: (pickId, sent, total) => publisher.sendEvent('hub.share.progress', { pickId, sent, total }),
     notify: (n) => opts.notifications?.onTeam(n),
+    // A room task wakes an idle lane with a Styx-authored turn (never the person's words); a busy one is left alone.
+    wake: async (sessionId, text) => {
+      const s = repos.sessions.get(sessionId);
+      if (
+        !s ||
+        s.archivedAt !== null ||
+        s.state === 'done' ||
+        s.state === 'working' ||
+        s.state === 'needs-you'
+      )
+        return false;
+      await sessions.sendMessage(sessionId, text, [], { from: 'styx' });
+      return true;
+    },
     audit: (input) => void audit.append(input),
   });
   hub.load();

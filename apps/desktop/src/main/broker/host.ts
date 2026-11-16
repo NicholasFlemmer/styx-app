@@ -57,7 +57,10 @@ export interface BrokerHostDeps {
     rememberChecks(sessionId: string, command: string): Promise<string | null>;
   };
   /** The team hub tools (ADR-0032); the service checks the project link and the lane's share. */
-  hub: Pick<HubService, 'context' | 'read' | 'post' | 'remember' | 'agentShare' | 'ask' | 'task'>;
+  hub: Pick<
+    HubService,
+    'context' | 'read' | 'post' | 'remember' | 'agentShare' | 'ask' | 'task' | 'roomRead' | 'roomTask'
+  >;
   /** The `land` tool: the container applies the project's integration mode and runs LandService; never throws. */
   landing: {
     land(
@@ -579,6 +582,25 @@ export class BrokerHost {
       viaHub(ctx, () => {
         if (p.action !== 'list') hubWriteAllowed(ctx.session.sessionId);
         return deps.hub.task(ctx.session.sessionId, p);
+      }),
+    );
+    server.on('room_read', async (_p, ctx) => viaHub(ctx, () => deps.hub.roomRead(ctx.session.sessionId)));
+    server.on('room_claim', async (p, ctx) =>
+      viaHub(ctx, () => {
+        hubWriteAllowed(ctx.session.sessionId);
+        return deps.hub.roomTask(ctx.session.sessionId, 'claim', p.taskId, {});
+      }),
+    );
+    server.on('room_handoff', async (p, ctx) =>
+      viaHub(ctx, () => {
+        hubWriteAllowed(ctx.session.sessionId);
+        return deps.hub.roomTask(ctx.session.sessionId, 'handoff', p.taskId, { to: p.to, note: p.note });
+      }),
+    );
+    server.on('room_done', async (p, ctx) =>
+      viaHub(ctx, () => {
+        hubWriteAllowed(ctx.session.sessionId);
+        return deps.hub.roomTask(ctx.session.sessionId, 'done', p.taskId, { result: p.result });
       }),
     );
     server.on('hub_share', async (p, ctx) =>

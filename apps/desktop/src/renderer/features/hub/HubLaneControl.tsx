@@ -12,6 +12,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { command } from '../../state/commands';
 import { useModel, useUi } from '../../state/hooks';
 import s from './HubLaneControl.module.css';
+import { RoomControl } from './RoomControl';
 
 const selectHub = (m: ReadModel) => m.hub;
 
@@ -47,6 +48,7 @@ export function HubLaneControl({ projectId, projectName, sessionId }: Props) {
     const shared = isLaneShared(hub, sessionId);
     return (
       <>
+        <RoomControl projectId={projectId} sessionId={sessionId} />
         <button
           type="button"
           className={s['tool']}

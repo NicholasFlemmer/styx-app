@@ -39,6 +39,19 @@ export function registerHubCommands(bus: CommandBus, app: Container): void {
     pick: await app.hub.pickShare(sessionId, mode),
   }));
   bus.register('hub.share', async (input) => app.hub.share(input));
+  bus.register('hub.rooms', async ({ projectId }) => ({ rooms: await app.hub.listRooms(projectId) }));
+  bus.register('hub.joinRoom', async ({ sessionId, roomId, brings, mode }) => {
+    await app.hub.joinRoom(sessionId, roomId, brings, mode);
+    return {};
+  });
+  bus.register('hub.setRoomMode', async ({ sessionId, mode }) => {
+    await app.hub.setRoomMode(sessionId, mode);
+    return {};
+  });
+  bus.register('hub.leaveRoom', async ({ sessionId }) => {
+    await app.hub.leaveRoom(sessionId);
+    return {};
+  });
   bus.register('hub.inbox', async () => ({ entries: await app.hub.inbox() }));
   bus.register('hub.thread', async ({ threadId }) => app.hub.thread(threadId));
   bus.register('hub.answer', async ({ askId, choice, text }) => {

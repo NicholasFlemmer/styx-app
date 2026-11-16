@@ -269,6 +269,27 @@ export const methods = {
         .nullable(),
     }),
   },
+  /** Rooms (ADR-0032 round 2): the room this lane is in: goal, plan, board, who is in it, latest messages. */
+  room_read: { params: z.object({}), result: z.record(z.string(), z.unknown()) },
+  /** Take an open task on the room's board. */
+  room_claim: {
+    params: z.object({ taskId: z.string().min(1).max(64) }),
+    result: z.record(z.string(), z.unknown()),
+  },
+  /** Give a task this lane holds to another lane in the room, with a note. */
+  room_handoff: {
+    params: z.object({
+      taskId: z.string().min(1).max(64),
+      to: z.string().min(1).max(200),
+      note: z.string().max(4000),
+    }),
+    result: z.record(z.string(), z.unknown()),
+  },
+  /** Finish a task this lane holds, with what was done. */
+  room_done: {
+    params: z.object({ taskId: z.string().min(1).max(64), result: z.string().min(1).max(4000) }),
+    result: z.record(z.string(), z.unknown()),
+  },
   /** A thread's tasks: add one (to this lane, a person, or nobody), mark one done, or list them. */
   hub_task: {
     params: z.object({
