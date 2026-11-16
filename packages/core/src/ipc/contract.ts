@@ -1,7 +1,13 @@
 import { z } from 'zod';
 import { deltaSchema, effectiveProjectSettingsSchema } from '../deltas';
 import { accountProviderSchema, accountStateSchema } from '../model/account';
-import { HUB_OFF, hubInboxEntrySchema, hubStateSchema, hubThreadViewSchema } from '../model/hub';
+import {
+  HUB_OFF,
+  hubInboxEntrySchema,
+  hubRoomSummarySchema,
+  hubStateSchema,
+  hubThreadViewSchema,
+} from '../model/hub';
 import { UPDATE_OFF, updateStateSchema } from '../model/update';
 import { agentSetupSchema, setupAgentSchema } from '../model/agent-setup';
 import { RENDERER_USAGE_EVENTS } from '../model/usage-report';
@@ -801,6 +807,13 @@ export const commands = {
     output: ok,
   },
   'hub.leaveRoom': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
+  /** The Team screen's rooms: open and paused rooms across the person's spaces. */
+  'hub.teamRooms': { input: z.object({}), output: z.object({ rooms: z.array(hubRoomSummarySchema) }) },
+  /** People pause, resume or close a room. */
+  'hub.setRoomState': {
+    input: z.object({ roomId: z.string().min(1), state: z.enum(['active', 'paused', 'closed']) }),
+    output: ok,
+  },
   /** The Team screen (ADR-0032 round 1): what waits on the person, across their spaces. */
   'hub.inbox': { input: z.object({}), output: z.object({ entries: z.array(hubInboxEntrySchema) }) },
   /** One thread as the Team screen shows it. */

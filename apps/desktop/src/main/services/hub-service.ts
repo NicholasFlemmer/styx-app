@@ -13,6 +13,7 @@ import {
   type HubShare,
   type HubState,
   type HubInboxEntry,
+  type HubRoomSummary,
   type HubThreadView,
   type Session,
 } from '@styx/core';
@@ -1823,6 +1824,70 @@ export class HubService {
         rooms: { id: string; title: string; goal: string; state: 'active' | 'paused' | 'closed' }[];
       };
       return out.rooms.map((r) => ({ id: r.id, title: r.title, goal: r.goal, state: r.state }));
+    } catch (e) {
+      fail('provider-error', (e as Error).message);
+    }
+  }
+
+  /** Open and paused rooms across the person's spaces, for the Team screen. A space that fails to answer is skipped. */
+  async teamRooms(): Promise<HubRoomSummary[]> {
+    this.requireSignedIn();
+    const me = this.connection.kind === 'signed-in' ? this.connection.account.id : '';
+    const spaces = this.connection.kind === 'signed-in' ? this.connection.spaces : [];
+    const lists = await Promise.all(
+      spaces.map(async (sp) => {
+        const out = (await this.api('GET', `/v1/spaces/${encodeURIComponent(sp.id)}/rooms`, null).catch(
+          () => ({ rooms: [] }),
+        )) as {
+          rooms: {
+            id: string;
+            title: string;
+            goal: string;
+            doneWhen: string;
+            state: HubRoomSummary['state'];
+            planApproved?: boolean;
+            tasks?: { done: number; total: number };
+            participants?: {
+              lanes?: {
+                laneId: string;
+                agent: string;
+                owner: string | null;
+                brings?: string;
+                mode?: string;
+              }[];
+            };
+          }[];
+        };
+        return out.rooms
+          .filter((r) => r.state !== 'closed')
+          .map((r): HubRoomSummary => ({
+            id: r.id,
+            title: r.title,
+            goal: r.goal,
+            doneWhen: r.doneWhen,
+            state: r.state,
+            spaceName: sp.name,
+            planApproved: r.planApproved === true,
+            tasks: { done: r.tasks?.done ?? 0, total: r.tasks?.total ?? 0 },
+            lanes: (r.participants?.lanes ?? []).map((l) => ({
+              laneId: l.laneId,
+              agent: l.agent,
+              owner: l.laneId.startsWith(`${me}:`) ? copy.hub.teamScreen.you : (l.owner ?? 'a teammate'),
+              brings: l.brings ?? '',
+              mode: l.mode === 'work' ? 'work' : 'wait',
+              mine: l.laneId.startsWith(`${me}:`),
+            })),
+          }));
+      }),
+    );
+    return lists.flat();
+  }
+
+  /** People pause, resume or close a room (the hub refuses agents and viewers). */
+  async setRoomState(roomId: string, state: HubRoomSummary['state']): Promise<void> {
+    this.requireSignedIn();
+    try {
+      await this.api('PATCH', `/v1/rooms/${encodeURIComponent(roomId)}`, { state });
     } catch (e) {
       fail('provider-error', (e as Error).message);
     }

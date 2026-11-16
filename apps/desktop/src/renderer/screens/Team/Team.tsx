@@ -1,5 +1,12 @@
-import { copy, fill, type HubInboxEntry, type HubThreadView, type ReadModel } from '@styx/core';
-import { Button } from '@styx/ui';
+import {
+  copy,
+  fill,
+  type HubInboxEntry,
+  type HubRoomSummary,
+  type HubThreadView,
+  type ReadModel,
+} from '@styx/core';
+import { AgentDot, type AgentKind, Button } from '@styx/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { command } from '../../state/commands';
 import { useModel } from '../../state/hooks';
@@ -26,6 +33,79 @@ function Body({ text }: { text: string }) {
         ),
       )}
     </span>
+  );
+}
+
+const t = copy.hub.teamScreen;
+const KINDS: readonly AgentKind[] = [
+  'claude',
+  'codex',
+  'gemini',
+  'cursor',
+  'opencode',
+  'goose',
+  'amp',
+  'shell',
+];
+const kindOf = (agent: string): AgentKind => KINDS.find((k) => k === agent.toLowerCase()) ?? 'shell';
+const laneLabel = (l: HubRoomSummary['lanes'][number]) => fill(t.laneFor, { agent: l.agent, owner: l.owner });
+
+/** A room's row in the list: its goal, its lanes' agent colours, and how far the board is. */
+function RoomRow({ room, on, onPick }: { room: HubRoomSummary; on: boolean; onPick: () => void }) {
+  return (
+    <button
+      type="button"
+      className={s['room']}
+      data-inv={on ? 'true' : undefined}
+      onClick={onPick}
+      data-team-room={room.id}
+    >
+      <span className={s['who']}>
+        <b>{room.title}</b> · {room.spaceName} · {t.states[room.state]}
+      </span>
+      <span className={s['body']}>{room.goal}</span>
+      <span className={s['who']}>
+        {room.lanes.map((l) => (
+          <AgentDot key={l.laneId} agent={kindOf(l.agent)} />
+        ))}
+        {room.lanes.length === 1 ? t.roomLane : fill(t.roomLanes, { n: String(room.lanes.length) })} ·{' '}
+        {fill(t.roomTasks, { done: String(room.tasks.done), total: String(room.tasks.total) })}
+      </span>
+    </button>
+  );
+}
+
+/** Above a room's thread: the goal people set, the done-when, and the lanes in it with what each brings. */
+function RoomHead({ room }: { room: HubRoomSummary }) {
+  return (
+    <>
+      <div className={s['stand']}>
+        <span className={s['label']}>{t.goal}</span>
+        {room.goal}
+        <span className={s['label']} data-gap="true">
+          {t.doneWhen}
+        </span>
+        {room.doneWhen}
+      </div>
+      <div className={s['stand']}>
+        <span className={s['label']}>{t.inRoom}</span>
+        {room.lanes.length === 0 ? (
+          <span className={s['muted0']}>{t.nobodyIn}</span>
+        ) : (
+          <ul className={s['lanes']}>
+            {room.lanes.map((l) => (
+              <li key={l.laneId}>
+                <AgentDot agent={kindOf(l.agent)} />
+                <span>
+                  {laneLabel(l)} · {l.mode === 'work' ? t.works : fill(t.waitsFor, { owner: l.owner })}
+                </span>
+                {l.brings === '' ? null : <span className={s['brings']}>{l.brings}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -93,6 +173,8 @@ export function Team() {
   const hub = useModel(selectHub);
   const [entries, setEntries] = useState<HubInboxEntry[] | null>(null);
   const [current, setCurrent] = useState<HubInboxEntry | null>(null);
+  const [rooms, setRooms] = useState<HubRoomSummary[]>([]);
+  const [roomId, setRoomId] = useState<string | null>(null);
   const [view, setView] = useState<HubThreadView | null>(null);
   const [reply, setReply] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -101,9 +183,10 @@ export function Team() {
     hub.connection.kind === 'signed-in' ? (hub.connection.account.name ?? hub.connection.account.email) : '';
 
   const load = useCallback(async () => {
-    const r = await command('hub.inbox', {});
+    const [r, rs] = await Promise.all([command('hub.inbox', {}), command('hub.teamRooms', {})]);
     if (r.ok) setEntries(r.value.entries);
     else setError(r.error.message);
+    if (rs.ok) setRooms(rs.value.rooms);
   }, []);
   const open = useCallback(async (threadId: string | null) => {
     if (threadId === null) {
@@ -123,6 +206,9 @@ export function Team() {
       if (!live) return;
       if (r.ok) setEntries(r.value.entries);
       else setError(r.error.message);
+    });
+    void command('hub.teamRooms', {}).then((r) => {
+      if (live && r.ok) setRooms(r.value.rooms);
     });
     return () => {
       live = false;
@@ -144,6 +230,7 @@ export function Team() {
 
   const pick = (e: HubInboxEntry) => {
     setCurrent(e);
+    setRoomId(e.threadId !== null && rooms.some((r) => r.id === e.threadId) ? e.threadId : null);
     setError(null);
     void open(e.threadId);
     if (!e.read) void command('hub.markRead', { ids: [e.id] });
@@ -153,10 +240,39 @@ export function Team() {
     if (view !== null) void open(view.thread.id);
   };
   const list = entries ?? [];
+  const room = rooms.find((r) => r.id === roomId) ?? null;
+  const pickRoom = (r: HubRoomSummary) => {
+    setCurrent(null);
+    setRoomId(r.id);
+    setError(null);
+    void open(r.id);
+  };
+  const setState = (state: HubRoomSummary['state']) => {
+    if (room === null) return;
+    void command('hub.setRoomState', { roomId: room.id, state }).then((r) => {
+      if (!r.ok) setError(r.error.message);
+      else if (state === 'closed') {
+        setRoomId(null);
+        setView(null);
+      }
+      void load();
+    });
+  };
 
   return (
     <div className={s['screen']} data-screen-ready="true" data-team="signed-in">
       <aside className={s['inbox']} aria-label={copy.hub.teamScreen.waiting}>
+        <section aria-label={t.rooms}>
+          <div className={s['group']}>
+            <span>{t.rooms}</span>
+            <span>{rooms.length}</span>
+          </div>
+          {rooms.length === 0 ? (
+            <p className={s['empty']}>{t.noRooms}</p>
+          ) : (
+            rooms.map((r) => <RoomRow key={r.id} room={r} on={roomId === r.id} onPick={() => pickRoom(r)} />)
+          )}
+        </section>
         <div className={s['ih']}>
           <h1 className={s['h2']}>{copy.hub.teamScreen.waiting}</h1>
           <button
@@ -216,36 +332,66 @@ export function Team() {
           </p>
         ) : (
           <>
-            <div className={s['th']}>
-              <h2 className={s['h2']}>{view.thread.title}</h2>
-              <span className={s['meta']}>
-                {view.thread.spaceName} ·{' '}
-                {view.thread.owner === null
-                  ? copy.hub.teamScreen.noOwner
-                  : fill(copy.hub.teamScreen.owner, { name: view.thread.owner })}{' '}
-                · {view.thread.status} ·{' '}
-                {fill(copy.hub.teamScreen.progress, {
-                  done: String(view.tasks.filter((t) => t.done).length),
-                  total: String(view.tasks.length),
-                })}
-              </span>
-              <div className={s['acts']}>
-                <Button onClick={() => void command('hub.openWeb', {})}>{copy.hub.teamScreen.openWeb}</Button>
-                <Button
-                  onClick={() =>
-                    void command('hub.setThreadStatus', {
-                      threadId: view.thread.id,
-                      status: view.thread.status === 'open' ? 'done' : 'open',
-                    }).then(refreshBoth)
-                  }
-                >
-                  {view.thread.status === 'open' ? copy.hub.teamScreen.markDone : copy.hub.teamScreen.reopen}
-                </Button>
+            {room !== null && room.id === view.thread.id ? (
+              <div className={s['th']}>
+                <h2 className={s['h2']}>{room.title}</h2>
+                <span className={s['meta']}>
+                  {t.room} · {room.spaceName} · {t.states[room.state]} ·{' '}
+                  {room.planApproved ? t.planApproved : t.planNotApproved} ·{' '}
+                  {fill(t.roomTasks, { done: String(room.tasks.done), total: String(room.tasks.total) })}
+                </span>
+                <div className={s['acts']}>
+                  <Button onClick={() => void command('hub.openWeb', {})}>{t.openWeb}</Button>
+                  <Button
+                    onClick={() => setState(room.state === 'active' ? 'paused' : 'active')}
+                    data-team-room-state={room.state === 'active' ? 'paused' : 'active'}
+                  >
+                    {room.state === 'active' ? t.pause : t.resume}
+                  </Button>
+                  <Button onClick={() => setState('closed')} data-team-room-state="closed">
+                    {t.close}
+                  </Button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className={s['th']}>
+                <h2 className={s['h2']}>{view.thread.title}</h2>
+                <span className={s['meta']}>
+                  {view.thread.spaceName} ·{' '}
+                  {view.thread.owner === null
+                    ? copy.hub.teamScreen.noOwner
+                    : fill(copy.hub.teamScreen.owner, { name: view.thread.owner })}{' '}
+                  · {view.thread.status} ·{' '}
+                  {fill(copy.hub.teamScreen.progress, {
+                    done: String(view.tasks.filter((t) => t.done).length),
+                    total: String(view.tasks.length),
+                  })}
+                </span>
+                <div className={s['acts']}>
+                  <Button onClick={() => void command('hub.openWeb', {})}>
+                    {copy.hub.teamScreen.openWeb}
+                  </Button>
+                  <Button
+                    onClick={() =>
+                      void command('hub.setThreadStatus', {
+                        threadId: view.thread.id,
+                        status: view.thread.status === 'open' ? 'done' : 'open',
+                      }).then(refreshBoth)
+                    }
+                  >
+                    {view.thread.status === 'open'
+                      ? copy.hub.teamScreen.markDone
+                      : copy.hub.teamScreen.reopen}
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className={s['scroll']}>
+              {room !== null && room.id === view.thread.id ? <RoomHead room={room} /> : null}
               <div className={s['stand']}>
-                <span className={s['label']}>{copy.hub.teamScreen.stands}</span>
+                <span className={s['label']}>
+                  {room !== null && room.id === view.thread.id ? t.plan : copy.hub.teamScreen.stands}
+                </span>
                 {view.thread.summary === '' ? copy.hub.teamScreen.nothingYet : view.thread.summary}
               </div>
               {view.tasks.length > 0 ? (

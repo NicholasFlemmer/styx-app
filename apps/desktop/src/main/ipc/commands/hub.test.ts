@@ -43,6 +43,17 @@ describe('hub commands', () => {
     expect(last).toMatchObject({ hub: { connection: { kind: 'signed-out', error: copy.hub.failed } } });
   });
 
+  it("the Team screen's rooms and room state are refused, in words, while signed out", async () => {
+    const { app, sender } = makeTestApp();
+    expect(await app.bus.dispatch(sender, 'hub.teamRooms', {})).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-transition', message: copy.hub.errors.signedOut },
+    });
+    expect(
+      await app.bus.dispatch(sender, 'hub.setRoomState', { roomId: 'rm_1', state: 'paused' }),
+    ).toMatchObject({ ok: false, error: { code: 'invalid-transition' } });
+  });
+
   it('cancel, open-verification, refresh, sign-out and open-web are safe when there is nothing to do', async () => {
     const { app, sender } = makeTestApp();
     for (const name of [

@@ -254,6 +254,31 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .inroom { display: flex; gap: 0; }
 .inroom span { padding: 0 12px; border-left: 1px solid var(--ln); font-size: 12px; font-weight: 600; display: flex; align-items: center; }
 .inroom span.on { background: var(--tx); color: var(--bg); }
+
+/* frame 3: rooms on the Team screen */
+.team3 { display: grid; grid-template-columns: 56px 380px 1fr; min-height: 0; }
+.ib { border-right: 1px solid var(--ln); background: var(--s1); overflow: hidden; }
+.ib .ih { padding: 14px 16px 10px; font: 600 16px/1.2 var(--ui); }
+.ib .g { display: flex; justify-content: space-between; padding: 12px 16px 6px; font-size: 12px; color: var(--mu); }
+.ib .rm { border-top: 1px solid var(--ln); padding: 10px 16px; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
+.ib .rm[data-inv] { background: var(--s2); }
+.ib .rm .w { font-size: 12px; color: var(--mu); }
+.ib .rm .w b { color: var(--tx); font-weight: 600; }
+.ib .rm .lanes { display: flex; gap: 4px; align-items: center; font-size: 12px; color: var(--mu); }
+.ib .en { border-top: 1px solid var(--ln); padding: 10px 16px; font-size: 13px; }
+.rv { display: flex; flex-direction: column; min-height: 0; }
+.rv .th { padding: 14px 24px; border-bottom: 1px solid var(--ln); display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
+.rv .th b { font: 600 16px/1.2 var(--ui); }
+.rv .th .m { font-size: 12px; color: var(--mu); }
+.rv .th .a { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 6px; align-self: center; }
+.rv .sc { padding: 12px 24px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.rv .box { border: 1px solid var(--ln); padding: 10px 12px; font-size: 13px; }
+.rv .box .l { display: block; font-size: 12px; color: var(--mu); margin-bottom: 2px; }
+.rv .who { display: grid; grid-template-columns: 12px 1fr auto; gap: 4px 8px; align-items: center; font-size: 13px; }
+.rv .who .br { font-size: 12px; color: var(--mu); grid-column: 2 / span 2; }
+.rv .tasks div { display: grid; grid-template-columns: 1fr auto; padding: 7px 12px; border-top: 1px solid var(--ln); font-size: 13px; }
+.rv .tasks div:first-child { border-top: 0; }
+.rv .ask { border: 1px solid var(--tx); padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
 </style>
 </head>
 <body>
@@ -317,6 +342,38 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
     </section>
   </div>
   <div class="status"><span class="tx">acme-shop</span><span>room/checkout-launch</span><span>Room · Checkout launch</span></div>
+</div>
+
+<div class="note"><h2>3. Rooms on the Team screen, in Styx</h2><p>The rooms in your spaces sit above what waits on you: each with its goal, how far the board is, and the lanes in it. Opening one shows the room as Team shows a thread, with the goal, the done-when and who is in it on top, and Pause, Resume and Close in place of Mark done. Approving the plan is the ask in the room, answered in place.</p></div>
+<div class="win app">
+  <div class="title"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><div class="crumb"><b>Team</b></div><span class="sp"></span><span class="mu">Hub · Acme</span><span class="me">NF</span></div>
+  <div class="team3">
+    <div class="rail"><span class="pj">AS</span><span class="pj">SX</span><span class="pj" data-on="true">T</span></div>
+    <aside class="ib">
+      <div class="g"><span>Rooms</span><span>2</span></div>
+      <div class="rm" data-inv="true"><span class="w"><b>Checkout launch</b> · Acme · active</span><span>Card payments live on acme-shop by Friday.</span><span class="lanes"><span class="dot c-claude"></span><span class="dot c-codex"></span><span class="dot c-gemini"></span>3 lanes · 2 of 5 tasks done</span></div>
+      <div class="rm"><span class="w"><b>Refund emails</b> · Acme · paused</span><span>Refund receipts in the brand voice.</span><span class="lanes"><span class="dot c-gemini"></span>1 lane · 0 of 2 tasks done</span></div>
+      <div class="ih" style="padding-top:18px">Waiting on you</div>
+      <div class="g"><span>Asks</span><span>1</span></div>
+      <div class="en"><span class="mu" style="font-size:12px"><b style="color:var(--tx)">Codex for Thandi M.</b> · Acme · Checkout launch</span><br>Approve the plan?</div>
+      <div class="g"><span>Mentions</span><span>0</span></div>
+    </aside>
+    <section class="rv">
+      <div class="th"><b>Checkout launch</b><span class="m">Room · Acme · active · plan not approved yet · 2 of 5 tasks done</span><div class="a"><span class="btn">Open the hub</span><span class="btn">Pause</span><span class="btn">Close</span></div></div>
+      <div class="sc">
+        <div class="box"><span class="l">Goal</span>Card payments live on acme-shop by Friday.<span class="l" style="margin-top:8px">Done when</span>A test card goes through on staging and Thandi approves.</div>
+        <div class="box"><span class="l">In the room</span>
+          <div class="who"><span class="dot c-claude"></span><span>Claude for you · works on room tasks</span><span></span><span class="br">The checkout code and the card form.</span></div>
+          <div class="who" style="margin-top:6px"><span class="dot c-codex"></span><span>Codex for Thandi M. · works on room tasks</span><span></span><span class="br">The webhook and access to acme-staging.</span></div>
+          <div class="who" style="margin-top:6px"><span class="dot c-gemini"></span><span>Gemini for Sipho K. · waits for Sipho K.</span><span></span><span class="br">The brand voice and the email templates.</span></div>
+        </div>
+        <div class="box"><span class="l">Plan</span>Claude builds the form, Codex the webhook, Gemini the receipt email.</div>
+        <div class="ask"><b>Codex for Thandi M. asks: Approve the plan?</b><div style="display:flex;gap:6px"><span class="btn pri sm">Approve</span><span class="btn sm">Change it</span></div></div>
+        <div class="box tasks" style="padding:0"><div><span>Card form: empty, error, paid</span><span class="mu">Claude for you</span></div><div><span>Webhook for declines</span><span class="mu">Codex for Thandi M.</span></div><div><span style="text-decoration:line-through;color:var(--mu)">Branch room/checkout-launch</span><span class="mu">done</span></div></div>
+      </div>
+    </section>
+  </div>
+  <div class="status"><span class="tx">Team</span><span>Hub · Acme</span></div>
 </div>
 
 </body>
