@@ -41,6 +41,33 @@ export function registerHubCommands(bus: CommandBus, app: Container): void {
   bus.register('hub.share', async (input) => app.hub.share(input));
   bus.register('hub.rooms', async ({ projectId }) => ({ rooms: await app.hub.listRooms(projectId) }));
   bus.register('hub.teamRooms', async () => ({ rooms: await app.hub.teamRooms() }));
+  bus.register('hub.shareConversation', async (input) => app.hub.shareConversation(input));
+  bus.register('hub.conversationLinks', async ({ sessionId }) => ({
+    links: await app.hub.conversationLinks(sessionId),
+  }));
+  bus.register('hub.turnOffLink', async ({ linkId }) => {
+    await app.hub.turnOffLink(linkId);
+    return {};
+  });
+  bus.register('hub.teamContext', async ({ q, stale }) => ({
+    items: await app.hub.teamContext(q ?? null, stale === true),
+  }));
+  bus.register('hub.addContext', async (input) => ({ id: await app.hub.addContext(input) }));
+  bus.register('hub.updateContext', async (input) => {
+    await app.hub.updateContext({
+      id: input.id,
+      ...(input.title === undefined ? {} : { title: input.title }),
+      ...(input.body === undefined ? {} : { body: input.body }),
+      ...(input.stale === undefined ? {} : { stale: input.stale }),
+    });
+    return {};
+  });
+  bus.register('hub.teamMembers', async () => app.hub.teamMembers());
+  bus.register('hub.invite', async ({ email, name }) => ({ link: await app.hub.invite(email, name ?? null) }));
+  bus.register('hub.removeMember', async ({ userId }) => {
+    await app.hub.removeMember(userId);
+    return {};
+  });
   bus.register('hub.setRoomState', async ({ roomId, state }) => {
     await app.hub.setRoomState(roomId, state);
     return {};

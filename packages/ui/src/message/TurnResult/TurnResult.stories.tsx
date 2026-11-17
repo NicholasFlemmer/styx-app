@@ -49,6 +49,16 @@ export const WithScreenshots: Story = { args: { before: shot('#ffffff'), after: 
 export const AgentBusy: Story = { args: { busy: true } };
 export const Undone: Story = { args: { undone: true } };
 export const Compact: Story = { args: { compact: true } };
+export const WithShare: Story = {
+  args: {
+    extra: (
+      <>
+        <button type="button">Share</button>
+        <button type="button">Add to team context</button>
+      </>
+    ),
+  },
+};
 export const Matrix: Story = {
   render: (args) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

@@ -81,7 +81,8 @@ import { thinkingLabel, elapsedLabel, workingLine } from './stream-state';
 import { inlineSegments, transcriptItems, type TranscriptItem } from './transcript-items';
 import { laneItems, type LaneItem } from './lane-turns';
 import { LandButton } from '../workspace/LandButton';
-import { HubLaneControl } from '../hub/HubLaneControl';
+import { AddToContext } from '../hub/AddToContext';
+import { ShareConversation } from '../hub/ShareConversation';
 import { screenUrl } from '../../screens/Diff/CheckpointDiff';
 import { ArcadeHeldStrip, ArcadePanel, openArcade, quitArcade } from '../arcade/ArcadePanel';
 import { AgentProblemRow } from './AgentProblemRow';
@@ -797,6 +798,14 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
             onShowChanges={() => reviewCheckpoint(item.checkpointId)}
             onUndo={() => revertCheckpoint(item.checkpointId)}
             compact={compact}
+            extra={
+              session !== null && item.replyId !== null && item.text !== null ? (
+                <>
+                  <ShareConversation sessionId={session.id} messageId={item.replyId} variant="answer" />
+                  <AddToContext text={item.text} />
+                </>
+              ) : undefined
+            }
           >
             {item.text === null ? undefined : <AgentBody text={item.text} />}
           </TurnResult>
@@ -843,11 +852,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           action={<LandButton projectId={projectId} placement="lane" />}
           tools={
             <>
-              <HubLaneControl
-                projectId={projectId}
-                projectName={model.projects.byId[projectId]?.name ?? ''}
-                sessionId={session.id}
-              />
+              <ShareConversation sessionId={session.id} messageId={null} />
               {arcadeButton && (
                 <button
                   type="button"

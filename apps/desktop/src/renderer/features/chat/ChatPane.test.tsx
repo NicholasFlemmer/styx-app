@@ -234,6 +234,9 @@ describe('ChatPane', () => {
         env: { now: fixtures.DEMO_NOW },
         command: vi.fn(async (name: string, input: unknown) => {
           commands.push({ name, input });
+          if (name === 'hub.conversationLinks') return { ok: true, value: { links: [] } };
+          if (name === 'hub.shareConversation')
+            return { ok: true, value: { url: 'https://share.test/l/abc', linkId: 'lnk_1' } };
           return { ok: true, value: {} };
         }),
       },
@@ -266,49 +269,38 @@ describe('ChatPane', () => {
     expect(screen.queryByRole('tab')).toBeNull();
   });
 
-  it('team hub (ADR-0032): a linked project shows the lane share control; it shares and unshares', () => {
+  it('the lean hub: the lane header shares the conversation as a link, in any project', async () => {
     const model = fixtures.demoReadModel();
     const hub = {
       ...HUB_OFF,
       connection: {
         kind: 'signed-in' as const,
         account: { id: 'usr_nic', email: 'nic@launchsite.co.za', name: 'Nic' },
-        teams: [],
-        spaces: [
-          {
-            id: 'spc_acme',
-            teamId: 't',
-            name: 'Acme',
-            role: 'owner' as const,
-            agentProposals: 'review' as const,
-          },
-        ],
+        teams: [{ id: 'team_ls', name: 'Launchsite', domain: 'launchsite.co.za', role: 'admin' as const }],
+        spaces: [],
         staleSince: null,
       },
-      links: [{ projectId: acme, spaceId: 'spc_acme', hubProjectId: 'prj_hub' }],
     };
     useReadModel.getState().replaceModel({ ...model, hub }, 'connected');
     render(<ChatPane projectId={acme} />);
-    const button = screen.getByRole('button', { name: copy.hub.lane.onlyYou });
-    expect(button.getAttribute('aria-pressed')).toBe('false');
-    fireEvent.click(button);
-    expect(commands.at(-1)).toEqual({ name: 'hub.shareLane', input: { sessionId: claude, shared: true } });
-    cleanup();
-    useReadModel
-      .getState()
-      .replaceModel(
-        { ...model, hub: { ...hub, shares: [{ sessionId: claude, spaceId: 'spc_acme' }] } },
-        'connected',
-      );
-    render(<ChatPane projectId={acme} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Shared with Acme' }));
-    expect(commands.at(-1)).toEqual({ name: 'hub.shareLane', input: { sessionId: claude, shared: false } });
+    fireEvent.click(document.querySelector('[data-share-conversation="lane"]') as HTMLElement);
+    expect(screen.getByRole('dialog', { name: copy.hub.lean.shareTitle })).toBeTruthy();
+    expect(commands.at(-1)).toEqual({ name: 'hub.conversationLinks', input: { sessionId: claude } });
+    fireEvent.click(screen.getByRole('button', { name: copy.hub.lean.keepUpdating }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: copy.hub.lean.makeLink }));
+    });
+    expect(commands).toContainEqual({
+      name: 'hub.shareConversation',
+      input: { sessionId: claude, messageId: null, live: true, expiresIn: '7d' },
+    });
   });
 
-  it('team hub: a project that is not connected offers Connect to team hub in the lane header', () => {
+  it('the lean hub: signed out, Share asks to sign in first; the old hub controls are gone', () => {
     render(<ChatPane projectId={acme} />);
-    expect(document.querySelector('[data-hub-share]')).toBeNull();
-    expect(screen.getByRole('button', { name: copy.hub.connect.button })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: copy.hub.connect.button })).toBeNull();
+    fireEvent.click(document.querySelector('[data-share-conversation="lane"]') as HTMLElement);
+    expect(screen.getByText(copy.hub.lean.signInToShare)).toBeTruthy();
   });
 
   it('team hub: a hub message is attributed, never a user bubble, and Go ahead is the person speaking', () => {
@@ -423,7 +415,9 @@ describe('ChatPane', () => {
     expect(document.querySelector('[data-lane-meta]')?.textContent).toBe('waiting on you');
     fireEvent.click(screen.getByRole('button', { name: 'Review request' }));
     const sheet = useUiStore.getState().overlays.find((o) => o.kind === 'sheet');
-    expect(sheet?.kind === 'sheet' && sheet.sheet === 'grant' && sheet.askId).toBe(fixtures.ids.ask.codexGrant);
+    expect(sheet?.kind === 'sheet' && sheet.sheet === 'grant' && sheet.askId).toBe(
+      fixtures.ids.ask.codexGrant,
+    );
     expect(sheet?.kind === 'sheet' && sheet.sessionId).toBe(codex);
     fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
     await flush();
@@ -973,6 +967,9 @@ describe('ChatPane queue (messages sent mid-turn)', () => {
         env: { now: fixtures.DEMO_NOW },
         command: vi.fn(async (name: string, input: unknown) => {
           commands.push({ name, input });
+          if (name === 'hub.conversationLinks') return { ok: true, value: { links: [] } };
+          if (name === 'hub.shareConversation')
+            return { ok: true, value: { url: 'https://share.test/l/abc', linkId: 'lnk_1' } };
           return { ok: true, value: {} };
         }),
       },

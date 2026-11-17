@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { copy, fixtures, HUB_OFF, type HubState, type ReadModel } from '@styx/core';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { HubPane } from './HubPane';
@@ -33,6 +33,19 @@ describe('HubPane (ADR-0032)', () => {
         env: { now: fixtures.DEMO_NOW },
         command: vi.fn(async (name: string, input: unknown) => {
           commands.push({ name, input });
+          if (name === 'hub.teamMembers')
+            return {
+              ok: true,
+              value: {
+                team: 'Launchsite',
+                admin: true,
+                members: [
+                  { userId: 'usr_nic', name: 'Nic', email: 'nic@launchsite.co.za', role: 'admin' },
+                  { userId: 'usr_d', name: 'Dane', email: 'dane@launchsite.co.za', role: 'member' },
+                ],
+              },
+            };
+          if (name === 'hub.invite') return { ok: true, value: { link: 'https://hub/setup?token=x' } };
           return { ok: true, value: {} };
         }),
       },
@@ -81,27 +94,37 @@ describe('HubPane (ADR-0032)', () => {
     expect(commands.at(-1)?.name).toBe('hub.cancelSignIn');
   });
 
-  it('signed in: links a project to a space it can write in, and unlinks it', () => {
+  it('signed in: shows the people on the team; an admin invites and removes', async () => {
     useReadModel.getState().replaceModel(withHub(SIGNED_IN), 'connected');
-    render(<HubPane />);
-    const project = fixtures.demoReadModel().projects.byId[fixtures.ids.project.acmeShop];
-    const select = screen.getByLabelText(`Space for ${project?.name}`) as HTMLSelectElement;
-    // A viewer cannot share into a space, so it is not offered.
-    expect([...select.options].map((o) => o.textContent)).toEqual([copy.hub.notLinked, 'Acme']);
-    fireEvent.change(select, { target: { value: 'spc_acme' } });
-    expect(commands.at(-1)).toEqual({
-      name: 'hub.linkProject',
-      input: { projectId: fixtures.ids.project.acmeShop, spaceId: 'spc_acme' },
+    await act(async () => {
+      render(<HubPane />);
     });
-    fireEvent.change(select, { target: { value: '' } });
-    expect(commands.at(-1)?.input).toMatchObject({ spaceId: null });
+    expect(screen.getByText('Dane')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(copy.hub.lean.inviteEmail), {
+      target: { value: 'sam@launchsite.co.za' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: copy.hub.lean.makeInvite }));
+    });
+    expect(commands).toContainEqual({ name: 'hub.invite', input: { email: 'sam@launchsite.co.za' } });
+    expect((screen.getByLabelText(copy.hub.lean.inviteLink) as HTMLInputElement).value).toBe(
+      'https://hub/setup?token=x',
+    );
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: `${copy.hub.lean.remove}: Dane` }));
+    });
+    expect(commands).toContainEqual({ name: 'hub.removeMember', input: { userId: 'usr_d' } });
   });
 
-  it('signed in: opens the hub and signs out', () => {
+  it('signed in: no project linking and no web app any more; signs out', async () => {
     useReadModel.getState().replaceModel(withHub(SIGNED_IN), 'connected');
-    render(<HubPane />);
-    fireEvent.click(screen.getByRole('button', { name: copy.hub.openWeb }));
+    await act(async () => {
+      render(<HubPane />);
+    });
+    expect(screen.queryByRole('button', { name: copy.hub.openWeb })).toBeNull();
+    expect(document.querySelector('[data-hub-project]')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: copy.hub.signOut }));
-    expect(commands.map((c) => c.name)).toEqual(['hub.openWeb', 'hub.signOut']);
+    expect(commands.at(-1)).toEqual({ name: 'hub.signOut', input: {} });
   });
 });

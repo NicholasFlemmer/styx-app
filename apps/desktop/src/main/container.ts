@@ -664,6 +664,8 @@ export function buildContainer(opts: ContainerOptions): Container {
   // rather than the one after.
   // The team hub (ADR-0032) is additive like the account: built with what is to hand, never in the way.
   const hub = new HubService({
+    // Oldest first, as a page reads; the newest 1,000 is plenty for one shared conversation.
+    transcript: (sessionId) => repos.transcripts.last(sessionId, 1000),
     fetch: opts.fetch ?? fetch,
     vault: opts.vault,
     store: repos.uiState,
@@ -1064,6 +1066,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     turnStarted: (id, messageId) => checkpoints.onTurnStarted(id, messageId),
     turnSettled: (id) => {
       checkpoints.onTurnSettled(id);
+      // A conversation shared to keep updating gets the turn that just ended (the lean hub).
+      void hub.conversationTurnSettled(id);
       // A design task that drew or changed screens tells the build tasks built from it (#140).
       design.onTurnSettled(id);
       // The lane ledger (overlaps between lanes) refreshed only on Fetch when Track agent edits is off: a turn

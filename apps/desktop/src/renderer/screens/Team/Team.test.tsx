@@ -1,117 +1,59 @@
 // @vitest-environment jsdom
-import {
-  copy,
-  fill,
-  fixtures,
-  HUB_OFF,
-  type HubInboxEntry,
-  type HubRoomSummary,
-  type HubState,
-  type HubThreadView,
-} from '@styx/core';
+import { copy, fixtures, HUB_OFF, type HubContextEntry, type HubState } from '@styx/core';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { Team } from './Team';
 
+const t = copy.hub.lean;
 const commands: { name: string; input: unknown }[] = [];
 
 const SIGNED_IN: HubState = {
   ...HUB_OFF,
-  waiting: 2,
   connection: {
     kind: 'signed-in',
     account: { id: 'usr_nic', email: 'nic@launchsite.co.za', name: 'Nic' },
-    teams: [],
+    teams: [{ id: 'team_ls', name: 'Launchsite', domain: 'launchsite.co.za', role: 'admin' }],
     spaces: [],
     staleSince: null,
   },
 };
 
-const ASK: HubInboxEntry = {
-  id: 'ask:ask_1',
-  kind: 'ask',
-  spaceId: 'spc_acme',
-  spaceName: 'Acme',
-  threadId: 'thr_1',
-  itemId: null,
-  title: 'Launch the brand site',
-  snippet: 'Ship pricing with annual plans?',
-  who: { name: 'Thandi M.', agent: 'Codex' },
-  at: 1,
-  read: false,
-  ask: { id: 'ask_1', options: ['Yes', 'Not yet'] },
+const VOICE: HubContextEntry = {
+  id: 'ctx_voice',
+  kind: 'doc',
+  title: 'Acme brand voice',
+  body: 'Plain, warm, no exclamation marks.\n\nPrices in rand.',
+  stale: false,
+  by: 'Thandi M.',
+  updatedAt: 1,
 };
-const MENTION: HubInboxEntry = {
-  ...ASK,
-  id: 'mention:msg_1',
-  kind: 'mention',
-  snippet: '@Nic logo in the footer?',
-  who: { name: 'Thandi M.', agent: null },
-  ask: null,
+const STRIPE: HubContextEntry = {
+  ...VOICE,
+  id: 'ctx_stripe',
+  kind: 'decision',
+  title: 'Payments go through Stripe',
+  body: 'Not PayFast.',
 };
-const VIEW: HubThreadView = {
-  thread: {
-    id: 'thr_1',
-    title: 'Launch the brand site',
-    status: 'open',
-    owner: 'Nic',
-    summary: 'Pricing next.',
-    spaceName: 'Acme',
-  },
-  tasks: [
-    { id: 'tsk_1', text: 'Home page', done: true, assignee: 'Claude for Nic', mine: true },
-    { id: 'tsk_2', text: 'Approve pricing copy', done: false, assignee: 'you', mine: true },
-  ],
-  asks: [],
-  messages: [
-    {
-      id: 'm1',
-      who: 'Nic',
-      agent: 'Claude',
-      branch: 'agent/claude-1',
-      body: '@Thandi can you own pricing?',
-      at: 1,
-    },
-  ],
-};
+let items: HubContextEntry[] = [];
 
-const ROOM: HubRoomSummary = {
-  id: 'thr_1',
-  title: 'Checkout launch',
-  goal: 'Card payments live by Friday.',
-  doneWhen: 'A test card goes through on staging.',
-  state: 'active',
-  spaceName: 'Acme',
-  planApproved: false,
-  tasks: { done: 2, total: 5 },
-  lanes: [
-    {
-      laneId: 'usr_nic:ses_1',
-      agent: 'Claude',
-      owner: 'you',
-      brings: 'The card form.',
-      mode: 'work',
-      mine: true,
-    },
-    { laneId: 'usr_sipho:ses_3', agent: 'Gemini', owner: 'Sipho K.', brings: '', mode: 'wait', mine: false },
-  ],
-};
-let rooms: HubRoomSummary[] = [];
+const show = (hub: HubState) =>
+  useReadModel.getState().replaceModel({ ...fixtures.demoReadModel(), hub }, 'connected');
+const settle = () => act(async () => vi.advanceTimersByTimeAsync(250));
 
-describe('Team screen (ADR-0032 round 1)', () => {
+describe('Team context (the lean hub)', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     commands.length = 0;
-    rooms = [];
+    items = [VOICE, STRIPE];
     Object.assign(window, {
       styx: {
         platform: 'darwin',
         env: { now: fixtures.DEMO_NOW },
         command: vi.fn(async (name: string, input: unknown) => {
           commands.push({ name, input });
-          if (name === 'hub.inbox') return { ok: true, value: { entries: [ASK, MENTION] } };
-          if (name === 'hub.thread') return { ok: true, value: VIEW };
-          if (name === 'hub.teamRooms') return { ok: true, value: { rooms } };
+          if (name === 'hub.teamContext') return { ok: true, value: { items } };
+          if (name === 'hub.addContext') return { ok: true, value: { id: 'ctx_new' } };
           return { ok: true, value: {} };
         }),
       },
@@ -119,11 +61,12 @@ describe('Team screen (ADR-0032 round 1)', () => {
   });
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     Object.assign(window, { styx: undefined });
   });
 
   it('signed out: says what it is for and signs in', () => {
-    useReadModel.getState().replaceModel({ ...fixtures.demoReadModel(), hub: HUB_OFF }, 'connected');
+    show(HUB_OFF);
     render(<Team />);
     expect(screen.getByText(copy.hub.teamScreen.signedOut)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: copy.hub.signIn }));
@@ -131,25 +74,17 @@ describe('Team screen (ADR-0032 round 1)', () => {
   });
 
   it('while signing in: shows the code the browser page asks for, opens the page again or cancels', () => {
-    useReadModel.getState().replaceModel(
-      {
-        ...fixtures.demoReadModel(),
-        hub: {
-          ...HUB_OFF,
-          connection: {
-            kind: 'signing-in',
-            userCode: 'BPGA-B65K',
-            verificationUri: 'https://hub/activate',
-            expiresAt: 1,
-          },
-        },
+    show({
+      ...HUB_OFF,
+      connection: {
+        kind: 'signing-in',
+        userCode: 'BPGA-B65K',
+        verificationUri: 'https://hub/activate',
+        expiresAt: 1,
       },
-      'connected',
-    );
+    });
     render(<Team />);
     expect(screen.getByText('BPGA-B65K')).toBeTruthy();
-    expect(screen.getByText(copy.hub.codeLabel)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: copy.hub.signIn })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: copy.hub.openBrowser }));
     fireEvent.click(screen.getByRole('button', { name: copy.hub.cancel }));
     expect(commands).toEqual([
@@ -159,109 +94,71 @@ describe('Team screen (ADR-0032 round 1)', () => {
   });
 
   it('signed out after a failed sign-in: says why', () => {
-    useReadModel
-      .getState()
-      .replaceModel(
-        {
-          ...fixtures.demoReadModel(),
-          hub: { ...HUB_OFF, connection: { kind: 'signed-out', error: 'The code expired.' } },
-        },
-        'connected',
-      );
+    show({ ...HUB_OFF, connection: { kind: 'signed-out', error: 'The code expired.' } });
     render(<Team />);
     expect(screen.getByRole('alert').textContent).toBe('The code expired.');
   });
 
-  it('lists what waits, grouped, and answers an ask in one click', async () => {
-    useReadModel.getState().replaceModel({ ...fixtures.demoReadModel(), hub: SIGNED_IN }, 'connected');
-    await act(async () => {
-      render(<Team />);
+  it('lists the team context, opens an entry, and searches by a question', async () => {
+    show(SIGNED_IN);
+    render(<Team />);
+    await settle();
+    expect(screen.getByText('Acme brand voice')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Acme brand voice/ }));
+    expect(screen.getByText('Prices in rand.')).toBeTruthy();
+    fireEvent.change(screen.getByRole('searchbox', { name: t.find }), {
+      target: { value: 'what is our voice?' },
     });
-    expect(screen.getByRole('region', { name: copy.hub.teamScreen.groups.ask }).textContent).toContain(
-      'Ship pricing with annual plans?',
-    );
-    expect(screen.getByText(copy.hub.teamScreen.empty.task)).toBeTruthy();
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
-    });
-    expect(commands).toContainEqual({ name: 'hub.answer', input: { askId: 'ask_1', choice: 'Yes' } });
+    await settle();
+    expect(commands.at(-1)).toEqual({ name: 'hub.teamContext', input: { q: 'what is our voice?' } });
   });
 
-  it('opens the thread: where it stands, tasks, the conversation; ticks a task and replies', async () => {
-    useReadModel.getState().replaceModel({ ...fixtures.demoReadModel(), hub: SIGNED_IN }, 'connected');
+  it('adds an entry for the whole team', async () => {
+    show(SIGNED_IN);
+    render(<Team />);
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: t.addToContext }));
+    fireEvent.change(screen.getByLabelText(t.title), { target: { value: 'How we price retainers' } });
+    fireEvent.click(screen.getByRole('button', { name: t.decision }));
+    fireEvent.change(screen.getByLabelText(t.body), { target: { value: 'Monthly, three months minimum.' } });
     await act(async () => {
-      render(<Team />);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /logo in the footer/ }));
-    });
-    expect(commands).toContainEqual({ name: 'hub.markRead', input: { ids: ['mention:msg_1'] } });
-    expect(screen.getByText('Pricing next.')).toBeTruthy();
-    expect(screen.getByText('@Thandi').className).toContain('mention');
-    await act(async () => {
-      fireEvent.click(screen.getByRole('checkbox', { name: 'Approve pricing copy' }));
-    });
-    expect(commands).toContainEqual({ name: 'hub.setTask', input: { taskId: 'tsk_2', done: true } });
-    fireEvent.change(screen.getByRole('textbox', { name: /Reply as Nic/ }), {
-      target: { value: 'Done, approved.' },
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: copy.hub.teamScreen.send }));
+      fireEvent.click(screen.getByRole('button', { name: t.add }));
     });
     expect(commands).toContainEqual({
-      name: 'hub.reply',
-      input: { threadId: 'thr_1', body: 'Done, approved.' },
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: copy.hub.teamScreen.markDone }));
-    });
-    expect(commands).toContainEqual({
-      name: 'hub.setThreadStatus',
-      input: { threadId: 'thr_1', status: 'done' },
+      name: 'hub.addContext',
+      input: { title: 'How we price retainers', body: 'Monthly, three months minimum.', kind: 'decision' },
     });
   });
 
-  it('lists rooms; opening one shows its goal, who is in it and its plan, and pauses or closes it', async () => {
-    rooms = [ROOM];
-    useReadModel.getState().replaceModel({ ...fixtures.demoReadModel(), hub: SIGNED_IN }, 'connected');
+  it('edits an entry and marks it out of date', async () => {
+    show(SIGNED_IN);
+    render(<Team />);
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: /Payments go through Stripe/ }));
     await act(async () => {
-      render(<Team />);
+      fireEvent.click(screen.getByRole('button', { name: t.outOfDate }));
     });
-    const list = screen.getByRole('region', { name: copy.hub.teamScreen.rooms });
-    expect(list.textContent).toContain(fill(copy.hub.teamScreen.roomTasks, { done: '2', total: '5' }));
+    expect(commands).toContainEqual({ name: 'hub.updateContext', input: { id: 'ctx_stripe', stale: true } });
+    fireEvent.click(screen.getByRole('button', { name: t.edit }));
+    fireEvent.change(screen.getByLabelText(t.body), { target: { value: 'Not PayFast. Card fees agreed.' } });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Checkout launch/ }));
-    });
-    expect(commands).toContainEqual({ name: 'hub.thread', input: { threadId: 'thr_1' } });
-    expect(screen.getByText(copy.hub.teamScreen.doneWhen).parentElement?.textContent).toContain(
-      'Card payments live by Friday.',
-    );
-    expect(screen.getByText(/Claude for you · works on room tasks/)).toBeTruthy();
-    expect(screen.getByText(/Gemini for Sipho K\. · waits for Sipho K\./)).toBeTruthy();
-    expect(screen.getByText(copy.hub.teamScreen.plan)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: copy.hub.teamScreen.markDone })).toBeNull();
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: copy.hub.teamScreen.pause }));
+      fireEvent.click(screen.getByRole('button', { name: t.save }));
     });
     expect(commands).toContainEqual({
-      name: 'hub.setRoomState',
-      input: { roomId: 'thr_1', state: 'paused' },
+      name: 'hub.updateContext',
+      input: {
+        id: 'ctx_stripe',
+        title: 'Payments go through Stripe',
+        body: 'Not PayFast. Card fees agreed.',
+      },
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: copy.hub.teamScreen.close }));
-    });
-    expect(commands).toContainEqual({
-      name: 'hub.setRoomState',
-      input: { roomId: 'thr_1', state: 'closed' },
-    });
-    expect(screen.getByText(copy.hub.teamScreen.pick)).toBeTruthy();
   });
 
-  it('says so when there are no open rooms', async () => {
-    useReadModel.getState().replaceModel({ ...fixtures.demoReadModel(), hub: SIGNED_IN }, 'connected');
-    await act(async () => {
-      render(<Team />);
-    });
-    expect(screen.getByText(copy.hub.teamScreen.noRooms)).toBeTruthy();
+  it('says what to add when there is nothing yet', async () => {
+    items = [];
+    show(SIGNED_IN);
+    render(<Team />);
+    await settle();
+    expect(screen.getByText(t.empty)).toBeTruthy();
   });
 });

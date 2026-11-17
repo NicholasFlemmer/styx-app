@@ -1,226 +1,163 @@
-import {
-  copy,
-  fill,
-  type HubInboxEntry,
-  type HubRoomSummary,
-  type HubThreadView,
-  type ReadModel,
-} from '@styx/core';
-import { AgentDot, type AgentKind, Button } from '@styx/ui';
+import { copy, fill, type HubContextEntry, type ReadModel } from '@styx/core';
+import { Button } from '@styx/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { command } from '../../state/commands';
 import { useModel } from '../../state/hooks';
 import s from './Team.module.css';
 
 const selectHub = (m: ReadModel) => m.hub;
-const GROUPS = ['ask', 'mention', 'task', 'review'] as const;
+const t = copy.hub.lean;
 
-const whoOf = (e: HubInboxEntry): string =>
-  e.who.agent === null ? (e.who.name ?? '') : `${e.who.agent} for ${e.who.name ?? ''}`;
+const when = (at: number): string =>
+  new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
-/** Text with `@mentions` marked (React escapes the rest). */
+/** Paragraphs as the person wrote them; React escapes the text. */
 function Body({ text }: { text: string }) {
-  const parts = text.split(/(@[\w./-]+)/g);
   return (
-    <span className={s['body']}>
-      {parts.map((p, i) =>
-        /^@[\w./-]+$/.test(p) ? (
-          <span key={i} className={s['mention']}>
-            {p}
-          </span>
-        ) : (
-          p
-        ),
-      )}
-    </span>
-  );
-}
-
-const t = copy.hub.teamScreen;
-const KINDS: readonly AgentKind[] = [
-  'claude',
-  'codex',
-  'gemini',
-  'cursor',
-  'opencode',
-  'goose',
-  'amp',
-  'shell',
-];
-const kindOf = (agent: string): AgentKind => KINDS.find((k) => k === agent.toLowerCase()) ?? 'shell';
-const laneLabel = (l: HubRoomSummary['lanes'][number]) => fill(t.laneFor, { agent: l.agent, owner: l.owner });
-
-/** A room's row in the list: its goal, its lanes' agent colours, and how far the board is. */
-function RoomRow({ room, on, onPick }: { room: HubRoomSummary; on: boolean; onPick: () => void }) {
-  return (
-    <button
-      type="button"
-      className={s['room']}
-      data-inv={on ? 'true' : undefined}
-      onClick={onPick}
-      data-team-room={room.id}
-    >
-      <span className={s['who']}>
-        <b>{room.title}</b> · {room.spaceName} · {t.states[room.state]}
-      </span>
-      <span className={s['body']}>{room.goal}</span>
-      <span className={s['who']}>
-        {room.lanes.map((l) => (
-          <AgentDot key={l.laneId} agent={kindOf(l.agent)} />
+    <div className={s['doc']}>
+      {text
+        .split(/\n{2,}/)
+        .filter((p) => p.trim() !== '')
+        .map((p, i) => (
+          <p key={i}>{p}</p>
         ))}
-        {room.lanes.length === 1 ? t.roomLane : fill(t.roomLanes, { n: String(room.lanes.length) })} ·{' '}
-        {fill(t.roomTasks, { done: String(room.tasks.done), total: String(room.tasks.total) })}
-      </span>
-    </button>
+    </div>
   );
 }
 
-/** Above a room's thread: the goal people set, the done-when, and the lanes in it with what each brings. */
-function RoomHead({ room }: { room: HubRoomSummary }) {
-  return (
-    <>
-      <div className={s['stand']}>
-        <span className={s['label']}>{t.goal}</span>
-        {room.goal}
-        <span className={s['label']} data-gap="true">
-          {t.doneWhen}
-        </span>
-        {room.doneWhen}
-      </div>
-      <div className={s['stand']}>
-        <span className={s['label']}>{t.inRoom}</span>
-        {room.lanes.length === 0 ? (
-          <span className={s['muted0']}>{t.nobodyIn}</span>
-        ) : (
-          <ul className={s['lanes']}>
-            {room.lanes.map((l) => (
-              <li key={l.laneId}>
-                <AgentDot agent={kindOf(l.agent)} />
-                <span>
-                  {laneLabel(l)} · {l.mode === 'work' ? t.works : fill(t.waitsFor, { owner: l.owner })}
-                </span>
-                {l.brings === '' ? null : <span className={s['brings']}>{l.brings}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </>
-  );
-}
-
-/** An ask's answer controls: one button per option, or a text box for a written answer. */
-function AnswerAsk({
-  askId,
-  options,
-  onDone,
+/** Add or edit one entry: a title, decision or note, the words. */
+function EntryForm({
+  initial,
+  onSave,
+  onCancel,
 }: {
-  askId: string;
-  options: string[] | null;
-  onDone: () => void;
+  initial: { title: string; body: string; kind: 'decision' | 'doc' } | null;
+  onSave: (v: { title: string; body: string; kind: 'decision' | 'doc' }) => Promise<string | null>;
+  onCancel: () => void;
 }) {
-  const [text, setText] = useState('');
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [body, setBody] = useState(initial?.body ?? '');
+  const [kind, setKind] = useState<'decision' | 'doc'>(initial?.kind ?? 'doc');
   const [busy, setBusy] = useState(false);
-  const send = async (input: { choice?: string; text?: string }) => {
-    setBusy(true);
-    await command('hub.answer', { askId, ...input });
-    setBusy(false);
-    onDone();
-  };
-  if (options !== null)
-    return (
-      <div className={s['opts']}>
-        {options.map((o, i) => (
-          <Button
-            key={o}
-            variant={i === 0 ? 'accent' : 'secondary'}
-            disabled={busy}
-            onClick={() => void send({ choice: o })}
-          >
-            {o}
-          </Button>
-        ))}
-      </div>
-    );
+  const [error, setError] = useState<string | null>(null);
   return (
     <form
-      className={s['opts']}
+      className={s['form']}
       onSubmit={(e) => {
         e.preventDefault();
-        if (text.trim() !== '') void send({ text: text.trim() });
+        setBusy(true);
+        void onSave({ title: title.trim(), body, kind }).then((err) => {
+          setBusy(false);
+          setError(err);
+        });
       }}
+      data-team-form={initial === null ? 'add' : 'edit'}
     >
+      <label className={s['label']} htmlFor="ctx-title">
+        {t.title}
+      </label>
       <input
+        id="ctx-title"
         className={s['input']}
-        aria-label={copy.hub.teamScreen.answerLabel}
-        placeholder={copy.hub.teamScreen.answer}
-        value={text}
-        onChange={(e) => setText(e.currentTarget.value)}
+        value={title}
+        maxLength={200}
+        required
+        onChange={(e) => setTitle(e.currentTarget.value)}
       />
-      <Button type="submit" disabled={busy || text.trim() === ''}>
-        {copy.hub.teamScreen.send}
-      </Button>
+      {initial === null ? (
+        <div className={s['seg']} role="group" aria-label={t.kindLabel}>
+          {(['decision', 'doc'] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              aria-pressed={kind === k}
+              data-inv={kind === k ? 'true' : undefined}
+              onClick={() => setKind(k)}
+            >
+              {k === 'decision' ? t.decision : t.note}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <label className={s['label']} htmlFor="ctx-body">
+        {t.body}
+      </label>
+      <textarea
+        id="ctx-body"
+        className={`${s['input']} ${s['area']}`}
+        value={body}
+        maxLength={20000}
+        onChange={(e) => setBody(e.currentTarget.value)}
+      />
+      {error !== null ? (
+        <p className={s['error']} role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className={s['opts']}>
+        <Button type="submit" variant="accent" disabled={busy || title.trim() === ''}>
+          {initial === null ? t.add : t.save}
+        </Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>
+          {t.cancel}
+        </Button>
+      </div>
     </form>
   );
 }
 
 /**
- * Team (ADR-0032 round 1, mockup design/next/styx-next-hub-team.html): what waits on the person across their
- * spaces, answerable in place, and the thread each came from: where it stands, its tasks, its asks and the
- * conversation, with a reply box that posts as the person. Reads the hub through main's commands.
+ * Team context (the lean hub, mockup design/next/styx-next-share-links.html frame 3): what the business knows, in
+ * one place. Anyone on the team adds to it, edits it or marks an entry out of date; every agent can use it, in any
+ * project. Read through main's commands; nothing here is stored in the renderer beyond the view.
  */
 export function Team() {
   const hub = useModel(selectHub);
-  const [entries, setEntries] = useState<HubInboxEntry[] | null>(null);
-  const [current, setCurrent] = useState<HubInboxEntry | null>(null);
-  const [rooms, setRooms] = useState<HubRoomSummary[]>([]);
-  const [roomId, setRoomId] = useState<string | null>(null);
-  const [view, setView] = useState<HubThreadView | null>(null);
-  const [reply, setReply] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const signedIn = hub.connection.kind === 'signed-in';
-  const me =
-    hub.connection.kind === 'signed-in' ? (hub.connection.account.name ?? hub.connection.account.email) : '';
+  const team = hub.connection.kind === 'signed-in' ? (hub.connection.teams[0]?.name ?? '') : '';
+  const [items, setItems] = useState<HubContextEntry[] | null>(null);
+  const [q, setQ] = useState('');
+  const [stale, setStale] = useState(false);
+  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [mode, setMode] = useState<'read' | 'add' | 'edit'>('read');
+  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const [r, rs] = await Promise.all([command('hub.inbox', {}), command('hub.teamRooms', {})]);
-    if (r.ok) setEntries(r.value.entries);
-    else setError(r.error.message);
-    if (rs.ok) setRooms(rs.value.rooms);
-  }, []);
-  const open = useCallback(async (threadId: string | null) => {
-    if (threadId === null) {
-      setView(null);
-      return;
-    }
-    const r = await command('hub.thread', { threadId });
-    if (r.ok) setView(r.value);
-    else setError(r.error.message);
+  const load = useCallback(async (query: string, withStale: boolean) => {
+    const r = await command('hub.teamContext', {
+      ...(query.trim() === '' ? {} : { q: query.trim() }),
+      ...(withStale ? { stale: true } : {}),
+    });
+    if (r.ok) {
+      setItems(r.value.items);
+      setError(null);
+    } else setError(r.error.message);
   }, []);
 
-  // Read again whenever the waiting count moves (main follows the hub), and on arrival.
   useEffect(() => {
     if (!signedIn) return;
     let live = true;
-    void command('hub.inbox', {}).then((r) => {
-      if (!live) return;
-      if (r.ok) setEntries(r.value.entries);
-      else setError(r.error.message);
-    });
-    void command('hub.teamRooms', {}).then((r) => {
-      if (live && r.ok) setRooms(r.value.rooms);
-    });
+    const timer = setTimeout(() => {
+      void command('hub.teamContext', {
+        ...(q.trim() === '' ? {} : { q: q.trim() }),
+        ...(stale ? { stale: true } : {}),
+      }).then((r) => {
+        if (!live) return;
+        if (r.ok) setItems(r.value.items);
+        else setError(r.error.message);
+      });
+    }, 200);
     return () => {
       live = false;
+      clearTimeout(timer);
     };
-  }, [signedIn, hub.waiting]);
+  }, [signedIn, q, stale]);
 
   // Signing in: the browser page asks for this code, so it is the one thing this screen shows.
   if (hub.connection.kind === 'signing-in')
     return (
       <div className={s['screen']} data-screen-ready="true" data-team="signing-in">
         <div className={s['lone']}>
-          <h1 className={s['h1']}>{copy.hub.teamScreen.title}</h1>
+          <h1 className={s['h1']}>{t.context}</h1>
           <p className={s['muted']}>{copy.hub.codeLabel}</p>
           <span className={s['userCode']} data-hub-code="true">
             {hub.connection.userCode}
@@ -241,7 +178,7 @@ export function Team() {
     return (
       <div className={s['screen']} data-screen-ready="true" data-team="signed-out">
         <div className={s['lone']}>
-          <h1 className={s['h1']}>{copy.hub.teamScreen.title}</h1>
+          <h1 className={s['h1']}>{t.context}</h1>
           <p className={s['muted']}>{copy.hub.teamScreen.signedOut}</p>
           {hub.connection.kind === 'signed-out' && hub.connection.error !== null ? (
             <p className={s['error']} role="alert">
@@ -255,95 +192,73 @@ export function Team() {
       </div>
     );
 
-  const pick = (e: HubInboxEntry) => {
-    setCurrent(e);
-    setRoomId(e.threadId !== null && rooms.some((r) => r.id === e.threadId) ? e.threadId : null);
-    setError(null);
-    void open(e.threadId);
-    if (!e.read) void command('hub.markRead', { ids: [e.id] });
-  };
-  const refreshBoth = () => {
-    void load();
-    if (view !== null) void open(view.thread.id);
-  };
-  const list = entries ?? [];
-  const room = rooms.find((r) => r.id === roomId) ?? null;
-  const pickRoom = (r: HubRoomSummary) => {
-    setCurrent(null);
-    setRoomId(r.id);
-    setError(null);
-    void open(r.id);
-  };
-  const setState = (state: HubRoomSummary['state']) => {
-    if (room === null) return;
-    void command('hub.setRoomState', { roomId: room.id, state }).then((r) => {
-      if (!r.ok) setError(r.error.message);
-      else if (state === 'closed') {
-        setRoomId(null);
-        setView(null);
-      }
-      void load();
-    });
-  };
+  const list = items ?? [];
+  const current = list.find((i) => i.id === currentId) ?? null;
+  const refresh = () => void load(q, stale);
 
   return (
     <div className={s['screen']} data-screen-ready="true" data-team="signed-in">
-      <aside className={s['inbox']} aria-label={copy.hub.teamScreen.waiting}>
-        <section aria-label={t.rooms}>
-          <div className={s['group']}>
-            <span>{t.rooms}</span>
-            <span>{rooms.length}</span>
-          </div>
-          {rooms.length === 0 ? (
-            <p className={s['empty']}>{t.noRooms}</p>
-          ) : (
-            rooms.map((r) => <RoomRow key={r.id} room={r} on={roomId === r.id} onPick={() => pickRoom(r)} />)
-          )}
-        </section>
+      <aside className={s['inbox']} aria-label={t.context}>
         <div className={s['ih']}>
-          <h1 className={s['h2']}>{copy.hub.teamScreen.waiting}</h1>
-          <button
-            type="button"
-            className={s['link']}
-            onClick={() => void command('hub.markRead', { ids: list.map((e) => e.id) }).then(() => load())}
-          >
-            {copy.hub.teamScreen.markAllRead}
-          </button>
+          <h1 className={s['h2']}>{t.context}</h1>
         </div>
-        {GROUPS.map((g) => {
-          const rows = list.filter((e) => e.kind === g);
-          return (
-            <section key={g} aria-label={copy.hub.teamScreen.groups[g]}>
-              <div className={s['group']}>
-                <span>{copy.hub.teamScreen.groups[g]}</span>
-                <span>{rows.length}</span>
-              </div>
-              {rows.length === 0 ? (
-                <p className={s['empty']}>{copy.hub.teamScreen.empty[g]}</p>
-              ) : (
-                rows.map((e) => (
-                  <div
-                    key={e.id}
-                    className={s['entry']}
-                    data-inv={current?.id === e.id ? 'true' : undefined}
-                    data-team-entry={e.kind}
-                  >
-                    <button type="button" className={s['entryOpen']} onClick={() => pick(e)}>
-                      <span className={s['who']}>
-                        {e.read ? null : <span className={s['unread']} aria-label="unread" />}
-                        <b>{whoOf(e)}</b> · {e.spaceName} · {e.title}
-                      </span>
-                      <Body text={e.snippet} />
-                    </button>
-                    {e.kind === 'ask' && e.ask !== null ? (
-                      <AnswerAsk askId={e.ask.id} options={e.ask.options} onDone={refreshBoth} />
-                    ) : null}
-                  </div>
-                ))
-              )}
-            </section>
-          );
-        })}
+        <p className={s['sub']}>
+          {list.length === 1
+            ? fill(t.contextLeadOne, { team })
+            : fill(t.contextLead, { team, n: String(list.length) })}
+        </p>
+        <div className={s['find']}>
+          <input
+            className={s['input']}
+            type="search"
+            aria-label={t.find}
+            placeholder={t.find}
+            value={q}
+            onChange={(e) => setQ(e.currentTarget.value)}
+          />
+          <label className={s['check']}>
+            <input type="checkbox" checked={stale} onChange={(e) => setStale(e.currentTarget.checked)} />{' '}
+            {t.showStale}
+          </label>
+        </div>
+        {items !== null && list.length === 0 ? (
+          <p className={s['empty']}>{q.trim() === '' ? t.empty : t.nothingFound}</p>
+        ) : null}
+        <ul className={s['entries']}>
+          {list.map((i) => (
+            <li key={i.id}>
+              <button
+                type="button"
+                className={s['entryOpen']}
+                data-inv={currentId === i.id && mode === 'read' ? 'true' : undefined}
+                data-stale={i.stale ? 'true' : undefined}
+                onClick={() => {
+                  setCurrentId(i.id);
+                  setMode('read');
+                }}
+                data-team-entry={i.id}
+              >
+                <b>{i.title}</b>
+                <span className={s['who']}>
+                  {fill(t.byLine, { kind: t.kinds[i.kind], by: i.by, when: when(i.updatedAt) })}
+                  {i.stale ? ` · ${t.staleTag}` : ''}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className={s['addRow']}>
+          <Button
+            variant="accent"
+            onClick={() => {
+              setMode('add');
+              setCurrentId(null);
+            }}
+            data-team-add="true"
+          >
+            {t.addToContext}
+          </Button>
+        </div>
       </aside>
       <section className={s['thread']} aria-live="polite">
         {error !== null ? (
@@ -351,148 +266,73 @@ export function Team() {
             {error}
           </p>
         ) : null}
-        {view === null ? (
-          <p className={s['muted']}>
-            {current !== null && current.threadId === null
-              ? copy.hub.teamScreen.noThread
-              : copy.hub.teamScreen.pick}
-          </p>
+        {mode === 'add' ? (
+          <div className={s['scroll']}>
+            <h2 className={s['h2']}>{t.addTitle}</h2>
+            <p className={s['muted0']}>{fill(t.reachesEveryone, { team })}</p>
+            <EntryForm
+              initial={null}
+              onCancel={() => setMode('read')}
+              onSave={async (v) => {
+                const r = await command('hub.addContext', v);
+                if (!r.ok) return r.error.message;
+                setCurrentId(r.value.id);
+                setMode('read');
+                await load(q, stale);
+                return null;
+              }}
+            />
+          </div>
+        ) : current === null ? (
+          <p className={s['muted']}>{t.pick}</p>
+        ) : mode === 'edit' ? (
+          <div className={s['scroll']}>
+            <EntryForm
+              initial={{
+                title: current.title,
+                body: current.body,
+                kind: current.kind === 'decision' ? 'decision' : 'doc',
+              }}
+              onCancel={() => setMode('read')}
+              onSave={async (v) => {
+                const r = await command('hub.updateContext', {
+                  id: current.id,
+                  title: v.title,
+                  body: v.body,
+                });
+                if (!r.ok) return r.error.message;
+                setMode('read');
+                await load(q, stale);
+                return null;
+              }}
+            />
+          </div>
         ) : (
           <>
-            {room !== null && room.id === view.thread.id ? (
-              <div className={s['th']}>
-                <h2 className={s['h2']}>{room.title}</h2>
-                <span className={s['meta']}>
-                  {t.room} · {room.spaceName} · {t.states[room.state]} ·{' '}
-                  {room.planApproved ? t.planApproved : t.planNotApproved} ·{' '}
-                  {fill(t.roomTasks, { done: String(room.tasks.done), total: String(room.tasks.total) })}
-                </span>
-                <div className={s['acts']}>
-                  <Button onClick={() => void command('hub.openWeb', {})}>{t.openWeb}</Button>
-                  <Button
-                    onClick={() => setState(room.state === 'active' ? 'paused' : 'active')}
-                    data-team-room-state={room.state === 'active' ? 'paused' : 'active'}
-                  >
-                    {room.state === 'active' ? t.pause : t.resume}
-                  </Button>
-                  <Button onClick={() => setState('closed')} data-team-room-state="closed">
-                    {t.close}
-                  </Button>
-                </div>
+            <div className={s['th']}>
+              <h2 className={s['h2']}>{current.title}</h2>
+              <span className={s['meta']}>
+                {fill(t.byLine, {
+                  kind: t.kinds[current.kind],
+                  by: current.by,
+                  when: when(current.updatedAt),
+                })}
+                {current.stale ? ` · ${t.staleTag}` : ''}
+              </span>
+              <div className={s['acts']}>
+                <Button onClick={() => setMode('edit')}>{t.edit}</Button>
+                <Button
+                  onClick={() =>
+                    void command('hub.updateContext', { id: current.id, stale: !current.stale }).then(refresh)
+                  }
+                >
+                  {current.stale ? t.backInDate : t.outOfDate}
+                </Button>
               </div>
-            ) : (
-              <div className={s['th']}>
-                <h2 className={s['h2']}>{view.thread.title}</h2>
-                <span className={s['meta']}>
-                  {view.thread.spaceName} ·{' '}
-                  {view.thread.owner === null
-                    ? copy.hub.teamScreen.noOwner
-                    : fill(copy.hub.teamScreen.owner, { name: view.thread.owner })}{' '}
-                  · {view.thread.status} ·{' '}
-                  {fill(copy.hub.teamScreen.progress, {
-                    done: String(view.tasks.filter((t) => t.done).length),
-                    total: String(view.tasks.length),
-                  })}
-                </span>
-                <div className={s['acts']}>
-                  <Button onClick={() => void command('hub.openWeb', {})}>
-                    {copy.hub.teamScreen.openWeb}
-                  </Button>
-                  <Button
-                    onClick={() =>
-                      void command('hub.setThreadStatus', {
-                        threadId: view.thread.id,
-                        status: view.thread.status === 'open' ? 'done' : 'open',
-                      }).then(refreshBoth)
-                    }
-                  >
-                    {view.thread.status === 'open'
-                      ? copy.hub.teamScreen.markDone
-                      : copy.hub.teamScreen.reopen}
-                  </Button>
-                </div>
-              </div>
-            )}
-            <div className={s['scroll']}>
-              {room !== null && room.id === view.thread.id ? <RoomHead room={room} /> : null}
-              <div className={s['stand']}>
-                <span className={s['label']}>
-                  {room !== null && room.id === view.thread.id ? t.plan : copy.hub.teamScreen.stands}
-                </span>
-                {view.thread.summary === '' ? copy.hub.teamScreen.nothingYet : view.thread.summary}
-              </div>
-              {view.tasks.length > 0 ? (
-                <ul className={s['tasks']} aria-label={copy.hub.teamScreen.tasks}>
-                  {view.tasks.map((t) => (
-                    <li key={t.id}>
-                      <input
-                        type="checkbox"
-                        checked={t.done}
-                        aria-label={t.text}
-                        onChange={(e) =>
-                          void command('hub.setTask', { taskId: t.id, done: e.currentTarget.checked }).then(
-                            refreshBoth,
-                          )
-                        }
-                      />
-                      <span className={t.done ? s['done'] : undefined}>{t.text}</span>
-                      <span className={s['assignee']}>{t.assignee ?? ''}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              <ol className={s['msgs']}>
-                {view.messages.map((m) => (
-                  <li key={m.id} className={s['msg']}>
-                    <span className={s['who']}>
-                      <b>{m.agent === null ? m.who : `${m.agent} for ${m.who}`}</b>
-                      {m.branch === null ? null : <span className={s['mono']}>{m.branch}</span>}
-                    </span>
-                    <Body text={m.body} />
-                  </li>
-                ))}
-              </ol>
-              {view.asks.map((a) => (
-                <div key={a.id} className={s['ask']} data-team-ask={a.open ? 'open' : 'answered'}>
-                  <b>
-                    {fill(copy.hub.teamScreen.asks, { name: a.asker })}: {a.question}
-                  </b>
-                  {a.open && a.canAnswer ? (
-                    <AnswerAsk askId={a.id} options={a.options} onDone={refreshBoth} />
-                  ) : a.answer !== null ? (
-                    <span className={s['muted']}>
-                      {fill(copy.hub.teamScreen.answered, { answer: a.answer })}
-                    </span>
-                  ) : null}
-                </div>
-              ))}
             </div>
-            <form
-              className={s['reply']}
-              onSubmit={(e) => {
-                e.preventDefault();
-                const body = reply.trim();
-                if (body === '') return;
-                void command('hub.reply', { threadId: view.thread.id, body }).then((r) => {
-                  if (r.ok) {
-                    setReply('');
-                    refreshBoth();
-                  } else setError(r.error.message);
-                });
-              }}
-            >
-              <textarea
-                className={s['input']}
-                rows={2}
-                aria-label={fill(copy.hub.teamScreen.replyLabel, { name: me })}
-                placeholder={fill(copy.hub.teamScreen.replyLabel, { name: me })}
-                value={reply}
-                onChange={(e) => setReply(e.currentTarget.value)}
-              />
-              <Button type="submit" variant="accent" disabled={reply.trim() === ''}>
-                {copy.hub.teamScreen.send}
-              </Button>
-            </form>
+            <div className={s['scroll']}>
+              <Body text={current.body} />
+            </div>
           </>
         )}
       </section>

@@ -36,11 +36,14 @@ const sourceFiles = (dir: string): string[] => {
 const uniq = (xs: Iterable<string>): string[] => [...new Set(xs)].sort();
 
 describe('reference: MCP tools', () => {
-  // `server.registerTool('name', …)` in the stdio server is the list agents actually see.
+  // `server.registerTool('name', …)` in the stdio server is the list agents actually see, less the ones the lean hub
+  // switches off (`offInLeanHub(() => server.registerTool(…))`, ADR-0032 "The lean hub").
+  const source = read('packages/broker/src/mcp-stdio.ts');
+  const off = new Set(
+    [...source.matchAll(/offInLeanHub\(\(\) =>\s*server\.registerTool\(\s*'([a-z_]+)'/g)].map((m) => m[1] ?? ''),
+  );
   const tools = uniq(
-    [...read('packages/broker/src/mcp-stdio.ts').matchAll(/registerTool\(\s*'([a-z_]+)'/g)].map(
-      (m) => m[1] ?? '',
-    ),
+    [...source.matchAll(/registerTool\(\s*'([a-z_]+)'/g)].map((m) => m[1] ?? '').filter((n) => !off.has(n)),
   );
   // One `### name` heading per tool.
   const headings = uniq([...page('mcp-tools').matchAll(/^###\s+`?([a-z_]+)`?\s*$/gm)].map((m) => m[1] ?? ''));

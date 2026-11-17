@@ -4,6 +4,9 @@ import { accountProviderSchema, accountStateSchema } from '../model/account';
 import {
   HUB_OFF,
   hubInboxEntrySchema,
+  hubConversationLinkSchema,
+  hubContextEntrySchema,
+  hubMemberSchema,
   hubRoomSummarySchema,
   hubStateSchema,
   hubThreadViewSchema,
@@ -809,6 +812,56 @@ export const commands = {
   'hub.leaveRoom': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   /** The Team screen's rooms: open and paused rooms across the person's spaces. */
   'hub.teamRooms': { input: z.object({}), output: z.object({ rooms: z.array(hubRoomSummarySchema) }) },
+  /** Shares a lane's conversation, or one answer from it, as a link anyone can read (the lean hub). */
+  'hub.shareConversation': {
+    input: z.object({
+      sessionId: sessionIdSchema,
+      /** One answer (its transcript message id), or null for the whole conversation. */
+      messageId: z.string().min(1).nullable(),
+      /** Keep the link updating as the lane goes on, or share it as it is now. */
+      live: z.boolean(),
+      expiresIn: z.enum(['1d', '7d', '30d', 'never']),
+    }),
+    output: z.object({ url: z.string(), linkId: z.string() }),
+  },
+  /** The links this lane's conversation was shared at. */
+  'hub.conversationLinks': {
+    input: z.object({ sessionId: sessionIdSchema }),
+    output: z.object({ links: z.array(hubConversationLinkSchema) }),
+  },
+  'hub.turnOffLink': { input: z.object({ linkId: z.string().min(1) }), output: ok },
+  /** Team context: everything, or what matches a name or question. */
+  'hub.teamContext': {
+    input: z.object({ q: z.string().max(500).optional(), stale: z.boolean().optional() }),
+    output: z.object({ items: z.array(hubContextEntrySchema) }),
+  },
+  'hub.addContext': {
+    input: z.object({
+      kind: z.enum(['decision', 'doc']),
+      title: z.string().trim().min(1).max(200),
+      body: z.string().max(20000),
+    }),
+    output: z.object({ id: z.string() }),
+  },
+  'hub.updateContext': {
+    input: z.object({
+      id: z.string().min(1),
+      title: z.string().trim().min(1).max(200).optional(),
+      body: z.string().max(20000).optional(),
+      stale: z.boolean().optional(),
+    }),
+    output: ok,
+  },
+  /** The team, for an admin to invite or remove people from Styx (the web app is off). */
+  'hub.teamMembers': {
+    input: z.object({}),
+    output: z.object({ members: z.array(hubMemberSchema), admin: z.boolean(), team: z.string() }),
+  },
+  'hub.invite': {
+    input: z.object({ email: z.string().trim().min(3).max(200), name: z.string().trim().max(80).optional() }),
+    output: z.object({ link: z.string() }),
+  },
+  'hub.removeMember': { input: z.object({ userId: z.string().min(1) }), output: ok },
   /** People pause, resume or close a room. */
   'hub.setRoomState': {
     input: z.object({ roomId: z.string().min(1), state: z.enum(['active', 'paused', 'closed']) }),
