@@ -44,6 +44,8 @@ describe('a conversation shared as a page', () => {
       ['The webhook reads `order.id` as a number.', true, 'Claude'],
     ]);
     expect(turnsOf(LANE, 'Nic', 'Claude', 'nope')).toEqual([]);
+    // Any message: one of the person's on its own, or one the agent sent mid-turn.
+    expect(turnsOf(LANE, 'Nic', 'Claude', 'm5').map((x) => [x.text, x.highlight])).toEqual([['Fix it', true]]);
   });
 
   it('takes secrets out before anything is shared', () => {

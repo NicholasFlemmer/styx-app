@@ -321,4 +321,36 @@
     padding: 12px 16px;
     border-bottom: 1px solid var(--ln);
   }
+  /* A message's own actions (Share, Add to team context): there on hover or keyboard focus, never animated. */
+  .msg {
+    display: flex;
+    flex-direction: column;
+  }
+  .msg[data-msg='user'] {
+    align-items: flex-end;
+  }
+  .msgActs {
+    display: flex;
+    gap: 4px;
+    min-height: 20px;
+    opacity: 0;
+  }
+  .msg:hover .msgActs,
+  .msg:focus-within .msgActs {
+    opacity: 1;
+  }
+  /* The popover belongs to the message: as wide as the message (never past the column), just above its actions. */
+  .msg {
+    position: relative;
+  }
+  .msgActs > div {
+    position: static;
+  }
+  .msgActs [role='dialog'] {
+    left: 0;
+    right: 0;
+    bottom: 24px;
+    width: auto;
+    max-width: 100%;
+  }
 }

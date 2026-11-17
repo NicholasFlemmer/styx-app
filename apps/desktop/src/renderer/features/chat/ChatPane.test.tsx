@@ -296,6 +296,39 @@ describe('ChatPane', () => {
     });
   });
 
+  it("the lean hub: every finished message, yours or the agent's, can be shared on its own", async () => {
+    const model = fixtures.demoReadModel();
+    const hub = {
+      ...HUB_OFF,
+      connection: {
+        kind: 'signed-in' as const,
+        account: { id: 'usr_nic', email: 'nic@launchsite.co.za', name: 'Nic' },
+        teams: [{ id: 'team_ls', name: 'Launchsite', domain: 'launchsite.co.za', role: 'admin' as const }],
+        spaces: [],
+        staleSince: null,
+      },
+    };
+    useReadModel.getState().replaceModel({ ...model, hub }, 'connected');
+    render(<ChatPane projectId={acme} />);
+    const userMsg = document.querySelector('[data-msg="user"]');
+    expect(userMsg).not.toBeNull();
+    const share = userMsg?.querySelector('[data-share-conversation="answer"]') as HTMLElement;
+    expect(share).toBeTruthy();
+    expect(userMsg?.querySelector('[data-add-context="true"]')).toBeTruthy();
+    fireEvent.click(share);
+    expect(screen.getByRole('dialog', { name: copy.hub.lean.shareMessageTitle })).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: copy.hub.lean.makeLink }));
+    });
+    const shared = commands.find((c) => c.name === 'hub.shareConversation')?.input as {
+      messageId: string | null;
+    };
+    const firstUser = (fixtures.demoReadModel().transcripts[claude] ?? []).find(
+      (m) => m.payload.kind === 'user',
+    );
+    expect(shared.messageId).toBe(firstUser?.id);
+  });
+
   it('the lean hub: signed out, Share asks to sign in first; the old hub controls are gone', () => {
     render(<ChatPane projectId={acme} />);
     expect(screen.queryByRole('button', { name: copy.hub.connect.button })).toBeNull();

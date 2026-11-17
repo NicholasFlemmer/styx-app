@@ -526,24 +526,38 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
     }
   };
 
+  /** Share or Add to team context on any finished message, the person's or the agent's (the lean hub). */
+  const messageActs = (id: string, text: string, end: boolean) =>
+    session === null || text.trim() === '' ? null : (
+      <div className={s['msgActs']} data-end={end ? 'true' : undefined}>
+        <ShareConversation sessionId={session.id} messageId={id} variant="answer" />
+        <AddToContext text={text} />
+      </div>
+    );
+
   const renderItem = (item: TranscriptItem) => {
     switch (item.kind) {
       case 'user':
         return (
-          <Message
-            key={item.id}
-            kind="user"
-            text={item.text}
-            attachments={messageChips(item.attachments)}
-            {...(item.pointer !== undefined ? { pointer: item.pointer } : {})}
-            compact={compact}
-          />
+          <div key={item.id} className={s['msg']} data-msg="user">
+            <Message
+              kind="user"
+              text={item.text}
+              attachments={messageChips(item.attachments)}
+              {...(item.pointer !== undefined ? { pointer: item.pointer } : {})}
+              compact={compact}
+            />
+            {messageActs(item.id, item.text, true)}
+          </div>
         );
       case 'agent':
         return (
-          <Message key={item.id} kind="agent" streaming={item.streaming} compact={compact}>
-            <AgentBody text={item.text} />
-          </Message>
+          <div key={item.id} className={s['msg']} data-msg="agent">
+            <Message kind="agent" streaming={item.streaming} compact={compact}>
+              <AgentBody text={item.text} />
+            </Message>
+            {item.streaming ? null : messageActs(item.id, item.text, false)}
+          </div>
         );
       case 'thinking':
         return (
