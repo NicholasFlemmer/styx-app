@@ -36,6 +36,8 @@ export interface TurnResultProps {
   onShowChanges: () => void;
   onUndo: () => void;
   compact?: boolean;
+  /** More actions on the answer (Share, Add to team context), after Undo; rendered by the caller. */
+  extra?: ReactNode;
 }
 
 /**
@@ -56,6 +58,7 @@ export function TurnResult({
   onShowChanges,
   onUndo,
   compact = false,
+  extra,
 }: TurnResultProps) {
   const [asked, setAsked] = useState(false);
   const confirming = asked && !undone;
@@ -106,6 +109,7 @@ export function TurnResult({
       {undone ? (
         <footer className={s['acts']}>
           <span className={s['undone']}>{labels.undone}</span>
+          {extra}
         </footer>
       ) : confirming ? (
         <div
@@ -145,6 +149,7 @@ export function TurnResult({
           >
             {labels.undo}
           </Button>
+          {extra}
           <span className={s['kept']}>{labels.kept}</span>
         </footer>
       )}

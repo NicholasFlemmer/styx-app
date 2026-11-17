@@ -1,12 +1,11 @@
-import { copy, fill, formatAge, type ProjectId, type ReadModel } from '@styx/core';
-import { Button, LabelValueRow, Select, StatusDot } from '@styx/ui';
+import { copy, fill, formatAge, type ReadModel } from '@styx/core';
+import { Button, LabelValueRow, StatusDot } from '@styx/ui';
 import { command } from '../../state/commands';
+import { TeamPeople } from '../../features/hub/TeamPeople';
 import { useModel, useNow } from '../../state/hooks';
 import s from './AccountPane.module.css';
-import h from './HubPane.module.css';
 
 const selectHub = (m: ReadModel) => m.hub;
-const selectProjects = (m: ReadModel) => m.projects;
 
 /**
  * Settings › App › Team hub (ADR-0032). The pilot seat's view of home base: sign in with the work Google account,
@@ -15,7 +14,6 @@ const selectProjects = (m: ReadModel) => m.projects;
  */
 export function HubPane() {
   const hub = useModel(selectHub);
-  const projects = useModel(selectProjects);
   const now = useNow(30_000);
   const c = hub.connection;
 
@@ -54,10 +52,6 @@ export function HubPane() {
       </div>
     );
 
-  const options = [
-    { value: '', label: copy.hub.notLinked },
-    ...c.spaces.filter((sp) => sp.role !== 'viewer').map((sp) => ({ value: sp.id, label: sp.name })),
-  ];
   return (
     <div className={s['pane']} data-hub="signed-in">
       <LabelValueRow
@@ -80,46 +74,9 @@ export function HubPane() {
           <span className="t-meta">{fill(copy.hub.stale, { when: formatAge(c.staleSince, now) })}</span>
         </div>
       )}
-      <section className={h['projects']} aria-labelledby="hub-projects">
-        <h3 id="hub-projects" className="t-label-strong">
-          {copy.hub.projects}
-        </h3>
-        <p className={s['note']}>{c.spaces.length === 0 ? copy.hub.noSpaces : copy.hub.projectsHint}</p>
-        {projects.ids.length === 0 ? (
-          <p className={s['note']}>{copy.hub.noProjects}</p>
-        ) : (
-          <ul className={h['list']}>
-            {projects.ids.map((id) => {
-              const p = projects.byId[id];
-              if (p === undefined || p.removedAt !== null) return null;
-              const link = hub.links.find((l) => l.projectId === id);
-              return (
-                <li key={id} className={h['item']} data-hub-project={id}>
-                  <span className={h['name']}>{p.name}</span>
-                  <Select
-                    aria-label={fill(copy.hub.linkLabel, { project: p.name })}
-                    options={options}
-                    value={link?.spaceId ?? ''}
-                    width={200}
-                    disabled={c.spaces.length === 0}
-                    onChange={(e) =>
-                      void command('hub.linkProject', {
-                        projectId: id as ProjectId,
-                        spaceId: e.currentTarget.value === '' ? null : e.currentTarget.value,
-                      })
-                    }
-                  />
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+      <TeamPeople />
       <div className={s['actions']}>
         <Button onClick={() => void command('hub.refresh', {})}>{copy.hub.refresh}</Button>
-        {hub.webUrl !== '' && (
-          <Button onClick={() => void command('hub.openWeb', {})}>{copy.hub.openWeb}</Button>
-        )}
         <Button variant="ghost" onClick={() => void command('hub.signOut', {})} data-hub-signout="true">
           {copy.hub.signOut}
         </Button>

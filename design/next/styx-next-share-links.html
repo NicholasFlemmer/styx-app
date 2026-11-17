@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Styx next: share by link</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+:root {
+  --page:#181916; --bg:#0d0e0c; --s1:#121411; --s2:#1c1e1a; --ln:#2d302a; --tx:#e9ebe3; --mu:#858a81;
+  --ac:#d6ff3d; --acx:#0d0e0c; --act:#d6ff3d; --add:rgba(214,255,61,.13); --term:#080908; --termtx:#c9cdc2; --dim:rgba(0,0,0,.6);
+  --p-bg:#f7f8f3; --p-s2:#e1e3db; --p-ln:#b3b7ab; --p-tx:#14160f; --p-mu:#5d6259; --p-act:#6e8f00;
+  --claude:#e8916a; --codex:#8fb3ff; --gemini:#b79bff; --shell:#858a81;
+  --ui: 'Archivo', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--page); color: var(--tx); font: 400 14px/1.5 var(--ui); padding: 56px 0 140px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.mu { color: var(--mu); }
+
+.doc { width: 1280px; margin: 0 auto; }
+.doc h1 { font: 600 54px/1.02 var(--ui); letter-spacing: -.01em; max-width: 18ch; }
+.doc .lede { margin-top: 18px; max-width: 66ch; color: var(--mu); font-size: 18px; }
+.doc .lede strong { color: var(--tx); font-weight: 600; }
+.rules { margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 32px; }
+.rules div { padding: 16px 0; border-top: 1px solid var(--ln); }
+.rules b { display: block; font: 600 17px/1.2 var(--ui); }
+.rules span { display: block; margin-top: 6px; color: var(--mu); max-width: 40ch; }
+.note { width: 1280px; margin: 88px auto 18px; }
+.note h2 { font: 600 24px/1.12 var(--ui); letter-spacing: -.02em; }
+.note p { margin-top: 8px; color: var(--mu); font-size: 15px; max-width: 72ch; }
+
+/* window */
+.win { width: 1280px; height: 800px; margin: 0 auto; background: var(--bg); border: 1px solid var(--ln); display: grid; grid-template-rows: 44px 1fr; overflow: hidden; position: relative; }
+.win.app { grid-template-rows: 38px 1fr 26px; }
+.bar { display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid var(--ln); background: var(--s1); font-size: 13px; }
+.bar .url { font: 400 12px var(--mono); color: var(--mu); border: 1px solid var(--ln); padding: 4px 10px; width: 420px; }
+.word { font: 600 12px/1 var(--ui); letter-spacing: .24em; }
+.me { width: 24px; height: 24px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); font: 600 10px/22px var(--ui); text-align: center; flex: none; }
+.sp { margin-left: auto; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--ln); font-size: 13px; white-space: nowrap; }
+.btn.pri { background: var(--ac); color: var(--acx); border-color: var(--ac); font-weight: 700; }
+.btn.line { border-color: var(--tx); font-weight: 600; }
+.btn.sm { padding: 4px 9px; font-size: 12px; }
+.tag { display: inline-block; padding: 1px 6px; font-size: 11px; font-weight: 600; border: 1px solid var(--ln); color: var(--mu); }
+.tag.prod { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.dot { display: inline-block; width: 8px; height: 8px; flex: none; }
+.c-claude { background: var(--claude); } .c-codex { background: var(--codex); } .c-gemini { background: var(--gemini); } .c-shell { background: var(--shell); }
+
+/* hub web: spaces | thread | context */
+.hub { display: grid; grid-template-columns: 240px 1fr 320px; min-height: 0; }
+.side { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.side .team { padding: 14px 16px; border-bottom: 1px solid var(--ln); }
+.side .team b { display: block; font: 600 16px/1.2 var(--ui); }
+.side .team span { font-size: 12px; color: var(--mu); }
+.side .grp { padding: 16px 16px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.side a { display: flex; justify-content: space-between; align-items: center; padding: 7px 16px; font-size: 13px; border-top: 1px solid var(--ln); }
+.side a span { color: var(--mu); font-size: 12px; }
+.side a[data-inv] { background: var(--tx); color: var(--bg); }
+.side a[data-inv] span { color: var(--p-mu); }
+.side a.sub { padding-left: 28px; }
+.side a .n { background: var(--ac); color: var(--acx); font-weight: 700; padding: 0 5px; font-size: 11px; }
+.side .foot { margin-top: auto; padding: 12px 16px; border-top: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+
+.main { display: flex; flex-direction: column; min-height: 0; }
+.head { display: flex; align-items: flex-end; gap: 14px; padding: 18px 24px 14px; border-bottom: 1px solid var(--ln); }
+.head h2 { font: 600 22px/1.1 var(--ui); letter-spacing: -.01em; }
+.head .meta { font-size: 12px; color: var(--mu); margin-top: 4px; }
+.feed { flex: 1; overflow: hidden; padding: 8px 24px; display: flex; flex-direction: column; }
+.msg { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--ln); }
+.msg .who { font-size: 13px; display: flex; gap: 8px; align-items: center; }
+.msg .who b { font-weight: 600; }
+.msg .who .mu { font-size: 12px; }
+.msg .body { margin-top: 3px; max-width: 70ch; }
+.lane { display: inline-flex; gap: 6px; align-items: center; font: 400 11px var(--mono); color: var(--mu); border: 1px solid var(--ln); padding: 1px 6px; }
+.art { margin-top: 10px; display: grid; grid-template-columns: 120px 1fr auto; gap: 14px; align-items: center; border: 1px solid var(--ln); padding: 10px; max-width: 620px; }
+.art .thumb { height: 72px; background: var(--p-bg); border: 1px solid var(--p-ln); display: grid; place-items: center; color: var(--p-mu); font: 400 11px var(--mono); }
+.art b { display: block; font-size: 13px; }
+.art span { font-size: 12px; color: var(--mu); }
+.ask { margin-top: 10px; border: 1px solid var(--tx); padding: 12px 14px; max-width: 620px; }
+.ask .line1 { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+.ask p { margin-top: 6px; color: var(--mu); font-size: 13px; }
+.ask .row { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
+.compose { border-top: 1px solid var(--ln); padding: 12px 24px 16px; }
+.compose .box { border: 1px solid var(--ln); padding: 10px 12px; color: var(--mu); display: flex; justify-content: space-between; align-items: center; }
+
+.ctx { border-left: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.ctx .grp { padding: 16px 16px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.ctx .row { display: grid; grid-template-columns: 10px 1fr; gap: 2px 8px; padding: 8px 16px; border-top: 1px solid var(--ln); }
+.ctx .row .d { margin-top: 6px; }
+.ctx .row b { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.ctx .row > span:not(.dot) { grid-column: 2; font-size: 12px; color: var(--mu); }
+.ctx .row span .mono { font-size: 11px; }
+.ctx .cn { display: flex; justify-content: space-between; padding: 7px 16px; border-top: 1px solid var(--ln); font-size: 13px; }
+.ctx .cn span { color: var(--mu); font-size: 12px; }
+
+/* approval sheet over the hub */
+.scrim { position: absolute; inset: 44px 0 0 0; background: var(--dim); }
+.sheet { position: absolute; top: 44px; right: 0; bottom: 0; width: 460px; background: var(--bg); border-left: 1px solid var(--tx); padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+.sheet h3 { font: 600 20px/1.2 var(--ui); }
+.kv { display: grid; grid-template-columns: 110px 1fr; gap: 8px 12px; font-size: 13px; }
+.kv dt { color: var(--mu); }
+.kv dd .mono { font-size: 12px; }
+.pass { border: 1px solid var(--ln); padding: 14px; display: flex; gap: 12px; align-items: center; }
+.pass svg { width: 28px; height: 28px; stroke: var(--tx); fill: none; stroke-width: 1.5; flex: none; }
+.pass p { font-size: 13px; }
+.pass p span { display: block; color: var(--mu); font-size: 12px; }
+.sheet .acts { margin-top: auto; display: flex; gap: 8px; justify-content: flex-end; }
+
+/* inside Styx: a lane with hub traffic */
+.title { display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid var(--ln); background: var(--s1); font-size: 13px; }
+.lights { display: flex; gap: 8px; width: 60px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); }
+.crumb { display: flex; gap: 8px; color: var(--mu); }
+.crumb b { color: var(--tx); font-weight: 600; }
+.status { display: flex; gap: 20px; align-items: center; padding: 0 14px; border-top: 1px solid var(--ln); background: var(--s1); font-size: 12px; color: var(--mu); }
+.status .tx { color: var(--tx); }
+.frame { display: grid; grid-template-columns: 56px 216px 1fr; min-height: 0; }
+.rail { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; }
+.rail .pj { width: 36px; height: 36px; border: 1px solid var(--ln); display: grid; place-items: center; font: 700 11px var(--ui); }
+.rail .pj[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.nav { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.nav .ph { padding: 14px 14px 10px; }
+.nav .ph b { display: block; font: 600 16px/1.2 var(--ui); }
+.nav .ph span { font: 400 11px var(--mono); color: var(--mu); }
+.nav .grp { padding: 14px 14px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.ln { display: grid; grid-template-columns: 10px 1fr; gap: 2px 8px; padding: 8px 14px; border-top: 1px solid var(--ln); }
+.ln .d { margin-top: 6px; }
+.ln .t { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.ln .s { grid-column: 2; font-size: 12px; color: var(--mu); }
+.ln[data-inv] { background: var(--tx); color: var(--bg); }
+.ln[data-inv] .s { color: var(--p-mu); }
+.ln.remote .t::after { content: ''; }
+.chat { display: flex; flex-direction: column; min-height: 0; }
+.chat .ch { padding: 14px 28px; border-bottom: 1px solid var(--ln); display: flex; gap: 12px; align-items: center; }
+.chat .ch b { font: 600 17px/1.2 var(--ui); }
+.turns { flex: 1; padding: 18px 28px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.you { align-self: flex-end; background: var(--s2); padding: 10px 14px; max-width: 60ch; }
+.agent { max-width: 76ch; }
+.agent .by { font-size: 12px; color: var(--mu); display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+.tool { font: 400 12px var(--mono); color: var(--mu); border-left: 1px solid var(--ln); padding-left: 10px; }
+.incoming { border: 1px solid var(--ln); background: var(--s1); padding: 12px 14px; max-width: 76ch; }
+.incoming .from { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--mu); }
+.incoming .from b { color: var(--tx); font-weight: 600; }
+.incoming p { margin-top: 6px; }
+.incoming .why { margin-top: 8px; font-size: 12px; color: var(--mu); }
+.incoming .row { margin-top: 10px; display: flex; gap: 8px; }
+.composer { border-top: 1px solid var(--ln); padding: 12px 28px 16px; }
+.composer .box { border: 1px solid var(--ln); padding: 10px 12px; color: var(--mu); }
+
+/* share sheet (in Styx) */
+.win.app .scrim { inset: 38px 0 26px 0; }
+.win.app .sheet { top: 38px; bottom: 26px; width: 500px; gap: 18px; overflow: hidden; }
+.q { display: flex; flex-direction: column; gap: 6px; }
+.q > b { font-size: 13px; font-weight: 600; }
+.opt { display: grid; grid-template-columns: 14px 1fr; gap: 2px 10px; padding: 9px 12px; border: 1px solid var(--ln); }
+.opt i { width: 12px; height: 12px; border: 1px solid var(--tx); border-radius: 50%; margin-top: 4px; }
+.opt[data-on] { border-color: var(--tx); }
+.opt[data-on] i { background: var(--ac); border-color: var(--ac); }
+.opt b { font-size: 13px; font-weight: 600; }
+.opt span { grid-column: 2; font-size: 12px; color: var(--mu); }
+.seg { display: flex; }
+.seg span { flex: 1; padding: 6px 10px; border: 1px solid var(--ln); font-size: 13px; text-align: center; }
+.seg span + span { border-left: 0; }
+.seg span[data-inv] { background: var(--tx); color: var(--bg); border-color: var(--tx); font-weight: 600; }
+.out { border-top: 1px solid var(--ln); padding-top: 12px; font-size: 12px; color: var(--mu); }
+.out .mono { font-size: 11px; color: var(--tx); }
+.result { border: 1px solid var(--ln); background: var(--s1); padding: 12px 14px; max-width: 76ch; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+.result b { font-size: 13px; }
+.result span { font-size: 12px; color: var(--mu); }
+
+/* review item (in the hub) */
+.item { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+.prev { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--ln); }
+.prev .vbar { display: flex; gap: 10px; align-items: center; padding: 10px 20px; border-bottom: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+.prev .vbar .mono { color: var(--tx); }
+.page { flex: 1; margin: 20px; background: var(--p-bg); color: var(--p-tx); border: 1px solid var(--p-ln); position: relative; overflow: hidden; }
+.page .nv { display: flex; gap: 18px; padding: 14px 24px; border-bottom: 1px solid var(--p-ln); font-size: 12px; color: var(--p-mu); }
+.page .nv b { color: var(--p-tx); margin-right: auto; }
+.page h4 { font: 600 40px/1.05 var(--ui); padding: 48px 24px 0; max-width: 16ch; letter-spacing: -.02em; }
+.page p { padding: 12px 24px 0; color: var(--p-mu); max-width: 52ch; }
+.page .cta { margin: 20px 24px; display: inline-block; background: var(--p-tx); color: var(--p-bg); padding: 10px 16px; font-weight: 600; font-size: 13px; }
+.pin { position: absolute; width: 22px; height: 22px; background: var(--ac); color: var(--acx); font: 700 11px/22px var(--ui); text-align: center; border: 1px solid var(--p-tx); }
+.rev { display: flex; flex-direction: column; min-height: 0; background: var(--s1); }
+.rev .vh { padding: 16px; border-bottom: 1px solid var(--ln); }
+.rev .vh b { display: block; font: 600 16px/1.2 var(--ui); }
+.rev .vh span { font-size: 12px; color: var(--mu); }
+.cm { padding: 12px 16px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.cm .who { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--mu); margin-bottom: 4px; }
+.cm .who b { color: var(--tx); }
+.cm .who .n { background: var(--ac); color: var(--acx); font-weight: 700; padding: 0 5px; }
+.verdict { margin-top: auto; padding: 16px; border-top: 1px solid var(--ln); display: flex; flex-direction: column; gap: 10px; }
+.verdict .row { display: flex; gap: 8px; }
+
+/* context home base */
+.cx { display: grid; grid-template-columns: 1fr 360px; min-height: 0; }
+.cx .list { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--ln); }
+.tabs { display: flex; gap: 0; padding: 0 24px; border-bottom: 1px solid var(--ln); }
+.tabs span { padding: 10px 14px; font-size: 13px; color: var(--mu); border-bottom: 2px solid transparent; }
+.tabs span[data-inv] { color: var(--tx); border-bottom-color: var(--tx); font-weight: 600; }
+.it { display: grid; grid-template-columns: 1fr auto; gap: 2px 16px; padding: 12px 24px; border-bottom: 1px solid var(--ln); }
+.it b { font-size: 14px; font-weight: 600; }
+.it .lv { font-size: 12px; color: var(--mu); text-align: right; }
+.it span.d { grid-column: 1; font-size: 13px; color: var(--mu); }
+.it .old { text-decoration: line-through; }
+.it.stale { opacity: .55; }
+.queue { display: flex; flex-direction: column; min-height: 0; background: var(--s1); }
+.queue .qh { padding: 16px; border-bottom: 1px solid var(--ln); display: flex; flex-direction: column; gap: 8px; }
+.queue .qh b { font: 600 16px/1.2 var(--ui); }
+.queue .qh .mu { font-size: 12px; }
+.prop { padding: 12px 16px; border-bottom: 1px solid var(--ln); font-size: 13px; }
+.prop .who { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--mu); margin-bottom: 4px; }
+.prop .row { margin-top: 8px; display: flex; gap: 6px; }
+.search2 { margin: 14px 24px; border: 1px solid var(--ln); padding: 8px 12px; color: var(--mu); font-size: 13px; }
+.cite { margin-top: 8px; font-size: 12px; color: var(--mu); border-left: 1px solid var(--tx); padding-left: 10px; }
+.cite b { color: var(--tx); font-weight: 600; }
+
+/* ===== round 2: rooms ===== */
+.room { display: grid; grid-template-columns: 240px 1fr 340px; min-height: 0; }
+.rmain { display: flex; flex-direction: column; min-height: 0; }
+.rhead { padding: 16px 24px 12px; border-bottom: 1px solid var(--ln); display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; }
+.rhead h2 { font: 600 22px/1.15 var(--ui); }
+.rhead .goal { grid-column: 1; font-size: 13px; }
+.rhead .goal span { color: var(--mu); }
+.rhead .acts { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 6px; align-self: start; }
+.state { display: inline-block; font: 600 11px var(--ui); padding: 1px 6px; background: var(--ac); color: var(--acx); }
+.plan { margin: 12px 24px 0; border: 1px solid var(--ln); padding: 10px 12px; font-size: 13px; }
+.plan span { display: block; font-size: 12px; color: var(--mu); margin-bottom: 2px; }
+.board { margin: 12px 24px 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.col { border: 1px solid var(--ln); min-height: 120px; }
+.col h4 { font: 600 12px var(--ui); color: var(--mu); padding: 8px 10px; border-bottom: 1px solid var(--ln); display: flex; justify-content: space-between; }
+.card2 { margin: 8px; border: 1px solid var(--ln); padding: 8px 10px; font-size: 12.5px; display: flex; flex-direction: column; gap: 4px; }
+.card2 .by { font-size: 11px; color: var(--mu); display: flex; gap: 6px; align-items: center; }
+.card2.mine { border-color: var(--tx); }
+.feed2 { flex: 1; overflow: hidden; padding: 10px 24px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.feed2 .who { font-size: 12px; color: var(--mu); display: flex; gap: 6px; align-items: center; }
+.feed2 .who b { color: var(--tx); font-weight: 600; }
+.handoff { border-left: 2px solid var(--tx); padding-left: 10px; }
+.side3 { border-left: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+.side3 .sec { padding: 12px 16px; border-bottom: 1px solid var(--ln); display: flex; flex-direction: column; gap: 8px; }
+.side3 h4 { font: 600 13px var(--ui); display: flex; justify-content: space-between; }
+.side3 h4 span { color: var(--mu); font-weight: 400; font-size: 12px; }
+.pp { display: grid; grid-template-columns: 10px 1fr auto; gap: 2px 8px; font-size: 13px; }
+.pp b { font-weight: 600; }
+.pp .brings { grid-column: 2 / -1; font-size: 12px; color: var(--mu); }
+.pp .mode { font-size: 11px; border: 1px solid var(--ln); padding: 0 5px; color: var(--mu); }
+.pp .mode.work { background: var(--tx); color: var(--bg); border-color: var(--tx); }
+.files2 div { display: flex; justify-content: space-between; font-size: 13px; }
+.files2 span { color: var(--mu); font-size: 12px; }
+.inroom { display: flex; gap: 0; }
+.inroom span { padding: 0 12px; border-left: 1px solid var(--ln); font-size: 12px; font-weight: 600; display: flex; align-items: center; }
+.inroom span.on { background: var(--tx); color: var(--bg); }
+
+/* frame 3: rooms on the Team screen */
+.team3 { display: grid; grid-template-columns: 56px 380px 1fr; min-height: 0; }
+.ib { border-right: 1px solid var(--ln); background: var(--s1); overflow: hidden; }
+.ib .ih { padding: 14px 16px 10px; font: 600 16px/1.2 var(--ui); }
+.ib .g { display: flex; justify-content: space-between; padding: 12px 16px 6px; font-size: 12px; color: var(--mu); }
+.ib .rm { border-top: 1px solid var(--ln); padding: 10px 16px; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
+.ib .rm[data-inv] { background: var(--s2); }
+.ib .rm .w { font-size: 12px; color: var(--mu); }
+.ib .rm .w b { color: var(--tx); font-weight: 600; }
+.ib .rm .lanes { display: flex; gap: 4px; align-items: center; font-size: 12px; color: var(--mu); }
+.ib .en { border-top: 1px solid var(--ln); padding: 10px 16px; font-size: 13px; }
+.rv { display: flex; flex-direction: column; min-height: 0; }
+.rv .th { padding: 14px 24px; border-bottom: 1px solid var(--ln); display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
+.rv .th b { font: 600 16px/1.2 var(--ui); }
+.rv .th .m { font-size: 12px; color: var(--mu); }
+.rv .th .a { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 6px; align-self: center; }
+.rv .sc { padding: 12px 24px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.rv .box { border: 1px solid var(--ln); padding: 10px 12px; font-size: 13px; }
+.rv .box .l { display: block; font-size: 12px; color: var(--mu); margin-bottom: 2px; }
+.rv .who { display: grid; grid-template-columns: 12px 1fr auto; gap: 4px 8px; align-items: center; font-size: 13px; }
+.rv .who .br { font-size: 12px; color: var(--mu); grid-column: 2 / span 2; }
+.rv .tasks div { display: grid; grid-template-columns: 1fr auto; padding: 7px 12px; border-top: 1px solid var(--ln); font-size: 13px; }
+.rv .tasks div:first-child { border-top: 0; }
+.rv .ask { border: 1px solid var(--tx); padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+
+.frame { display: grid; grid-template-columns: 56px 232px 1fr; min-height: 0; }
+.rail { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; }
+.rail .pj { width: 36px; height: 36px; border: 1px solid var(--ln); display: grid; place-items: center; font: 700 11px var(--ui); }
+.rail .pj[data-on] { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+.chat { display: flex; flex-direction: column; min-height: 0; position: relative; }
+.chat .ch { padding: 14px 28px; border-bottom: 1px solid var(--ln); display: flex; gap: 12px; align-items: center; }
+.chat .ch b { font: 600 17px/1.2 var(--ui); }
+.you { align-self: flex-end; background: var(--s2); padding: 10px 14px; max-width: 60ch; }
+.agent p + p { margin-top: 8px; }
+.agent pre { margin-top: 8px; background: var(--term); color: var(--termtx); padding: 10px 12px; font: 400 12px/1.5 var(--mono); }
+.msg { position: relative; }
+.msg[data-hover] { outline: 1px solid var(--ln); outline-offset: 6px; }
+.hov { position: absolute; right: -6px; top: -16px; display: flex; border: 1px solid var(--tx); background: var(--bg); }
+.hov span { padding: 4px 10px; font-size: 12px; border-left: 1px solid var(--ln); }
+.hov span:first-child { border-left: 0; }
+.pop { position: absolute; background: var(--bg); border: 1px solid var(--tx); padding: 16px; width: 360px; display: flex; flex-direction: column; gap: 12px; z-index: 2; }
+.pop h3 { font: 600 15px/1.2 var(--ui); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--ln); }
+.seg span { padding: 7px 10px; font-size: 13px; text-align: center; }
+.seg span[data-inv] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.lbl { font-size: 12px; color: var(--mu); }
+.sel { border: 1px solid var(--ln); padding: 7px 10px; font-size: 13px; display: flex; justify-content: space-between; }
+.linkbox { display: flex; border: 1px solid var(--ln); }
+.linkbox span { flex: 1; padding: 8px 10px; font: 400 12px var(--mono); color: var(--mu); overflow: hidden; white-space: nowrap; }
+.linkbox b { background: var(--ac); color: var(--acx); padding: 8px 14px; font-size: 13px; }
+.small { font-size: 12px; color: var(--mu); }
+.shared { border-top: 1px solid var(--ln); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.shared div { display: flex; justify-content: space-between; gap: 8px; }
+.shared u { color: var(--tx); text-decoration: underline; }
+/* the link page: paper, no app */
+.paperwin { width: 1280px; margin: 0 auto; display: grid; grid-template-columns: 1fr 360px; gap: 40px; align-items: start; }
+.browser { background: var(--p-bg); color: var(--p-tx); border: 1px solid var(--ln); }
+.browser .url { background: #e9ebe3; border-bottom: 1px solid var(--p-ln); padding: 8px 14px; font: 400 12px var(--mono); color: var(--p-mu); }
+.page { padding: 40px 64px 32px; max-width: 820px; }
+.page .meta { font-size: 13px; color: var(--p-mu); display: flex; gap: 8px; flex-wrap: wrap; }
+.page h1 { font: 600 30px/1.15 var(--ui); margin-top: 10px; }
+.page .acts { margin-top: 16px; display: flex; gap: 8px; }
+.page .acts span { border: 1px solid var(--p-tx); padding: 7px 12px; font-size: 13px; }
+.page .acts span.dark { background: var(--p-tx); color: var(--p-bg); }
+.convo { margin-top: 28px; border-top: 1px solid var(--p-ln); }
+.turn { padding: 18px 0; border-bottom: 1px solid var(--p-s2); }
+.turn .who { font-size: 12px; color: var(--p-mu); display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.turn .who b { color: var(--p-tx); }
+.turn pre { margin-top: 8px; background: #14160f; color: #e9ebe3; padding: 10px 12px; font: 400 12px/1.5 var(--mono); }
+.turn.hl { background: #eef3d6; margin: 0 -16px; padding: 18px 16px; }
+.foot { padding: 18px 64px; border-top: 1px solid var(--p-ln); font-size: 12px; color: var(--p-mu); display: flex; justify-content: space-between; }
+.phone { width: 360px; border: 1px solid var(--ln); background: var(--p-bg); color: var(--p-tx); }
+.phone .page { padding: 22px 20px; }
+.phone .page h1 { font-size: 22px; }
+.ctxfile { margin-top: 6px; font: 400 12px var(--mono); color: var(--mu); }
+.navctx { border-top: 1px solid var(--ln); padding: 8px 14px; font-size: 13px; display: flex; justify-content: space-between; }
+.gone { margin-top: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.gone div { border-top: 1px solid var(--ln); padding-top: 12px; }
+.gone b { display: block; font: 600 15px var(--ui); margin-bottom: 6px; }
+.gone li { color: var(--mu); margin-left: 18px; }
+.chat .agent { display: block; max-width: 76ch; }
+.chat .agent .by { display: flex; }
+.chat .you { display: block; align-self: flex-end; background: var(--s2); color: var(--tx); padding: 10px 14px; max-width: 60ch; }
+.chat .turns { padding-top: 28px; }
+.nav .ph .sel span { font: 400 13px var(--ui); }
+</style></head><body>
+<div class="doc">
+  <h1>Share a conversation like a doc.</h1>
+  <p class="lede"><strong>No web app, no logins, no spaces.</strong> Share a lane or one message from Styx and you get a link anyone can read in a browser, like a Google Doc link. <strong>Team context</strong> is the business's own knowledge: brand voice, clients, pricing, how you work. Anyone on the team adds to it from Styx, everyone sees it there, and every agent can use it, in any project.</p>
+  <div class="gone">
+    <div><b>What stays</b><ul><li>Share a lane, or one message, as a link: copy, change how long it lasts, turn it off</li><li>Teammates with Styx open a link in Styx and keep going from it</li><li>Team context: add to it from any message or write it yourself; everyone on the team reads it in Styx, and every agent in every project can use it</li></ul></div>
+    <div><b>What goes</b><ul><li>The signed-in web app: spaces, members and roles, the inbox</li><li>Rooms, waking agents, plans and boards</li><li>Asks, tasks, owners, lane status sharing, agent proposals</li></ul></div>
+  </div>
+</div>
+
+<div class="note"><h2>1. Share from a lane</h2><p>Share sits in the lane header for the whole conversation, and on any message for just that answer. Copy link is the person's move; the rest has sensible defaults: a snapshot of how it reads now, working for a week. Links already made are listed underneath, each with Turn off.</p></div>
+<div class="win app">
+  <div class="title"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><div class="crumb"><span>acme-shop</span><span>/</span><b>Card form for checkout</b></div></div>
+  <div class="frame">
+    <div class="rail"><span class="pj" data-on="true">AS</span><span class="pj">SX</span></div>
+    <nav class="nav"><div class="ph"><b>acme-shop</b><span>~/code/acme-shop</span></div><div class="grp"><span>Your lanes</span></div>
+      <div class="ln" data-inv="true"><span class="dot c-claude d"></span><span class="t">Card form for checkout</span><span class="s">Working</span></div>
+      <div class="ln"><span class="dot c-codex d"></span><span class="t">Payment webhook</span><span class="s">Done</span></div>
+      <div class="grp"><span>Team</span></div>
+      <div class="navctx"><span>Team context</span><span class="mu">12</span></div>
+      <div class="navctx"><span>Shared links</span><span class="mu">4</span></div>
+    </nav>
+    <section class="chat">
+      <div class="ch"><span class="dot c-claude"></span><b>Card form for checkout</b><span class="mono mu">agent/claude-4</span><span class="sp"></span><span class="btn line">Share</span></div>
+      <div class="turns">
+        <div class="you">Why are card payments failing on staging?</div>
+        <div class="agent msg" data-hover="true"><div class="by"><span class="dot c-claude"></span>Claude</div>
+          <p>The webhook reads <span class="mono">order.id</span> as a number, but checkout sends it as a string, so every lookup misses and the order stays unpaid.</p>
+          <pre>const orderId = String(event.data.object.metadata.orderId)</pre>
+          <p>Fixed in the webhook and covered by a test. A test card now goes through on staging.</p>
+          <div class="hov"><span>Share</span><span>Add to team context</span><span>Copy</span></div>
+        </div>
+      </div>
+      <div class="composer"><div class="box">Message Claude…</div></div>
+      <div class="pop" style="right:24px; top:56px">
+        <h3>Share this conversation</h3>
+        <div class="seg"><span data-inv="true">Whole conversation</span><span>This message</span></div>
+        <div class="seg"><span data-inv="true">As it is now</span><span>Keep it updating</span></div>
+        <span class="lbl">Works for</span><div class="sel"><span>7 days</span><span>▾</span></div>
+        <div class="linkbox"><span>styx.link/s/q6cp-tJeN-V6bL</span><b>Copy link</b></div>
+        <span class="small">Anyone with the link can read it, without signing in. Files and code in it come along; secrets are never included.</span>
+        <div class="shared"><span class="lbl">Links to this lane</span><div><span>Whole conversation · 14:02 · 3 opens</span><u>Turn off</u></div><div><span>One message · yesterday · 0 opens</span><u>Turn off</u></div></div>
+      </div>
+    </section>
+  </div>
+  <div class="status"><span class="tx">acme-shop</span><span>agent/claude-4</span></div>
+</div>
+
+<div class="note"><h2>2. What the link opens</h2><p>A page, not an app: the conversation as it reads in Styx, in the browser, on any phone. No sign-in, no sidebar. Someone with Styx gets Open in Styx, which brings the conversation into a lane of their own to continue from. A shared single message opens with that message highlighted.</p></div>
+<div class="paperwin">
+  <div class="browser"><div class="url">styx.link/s/q6cp-tJeN-V6bL</div>
+    <div class="page">
+      <div class="meta"><b>Launchsite</b><span>· shared by Nic from Styx</span><span>· acme-shop</span><span>· as it was on 16 Nov, 14:02</span></div>
+      <h1>Card form for checkout</h1>
+      <div class="acts"><span class="dark">Open in Styx</span><span>Copy text</span></div>
+      <div class="convo">
+        <div class="turn"><div class="who"><b>Nic</b></div>Why are card payments failing on staging?</div>
+        <div class="turn hl"><div class="who"><span class="dot c-claude"></span><b>Claude</b> for Nic</div>The webhook reads order.id as a number, but checkout sends it as a string, so every lookup misses and the order stays unpaid.<pre>const orderId = String(event.data.object.metadata.orderId)</pre><div style="margin-top:8px">Fixed in the webhook and covered by a test. A test card now goes through on staging.</div></div>
+      </div>
+    </div>
+    <div class="foot"><span>Read only. This link works until 23 Nov.</span><span>Shared with Styx</span></div>
+  </div>
+  <div class="phone"><div class="page"><div class="meta"><b>Launchsite</b><span>· shared by Nic</span></div><h1>Card form for checkout</h1><div class="acts"><span>Copy text</span></div><div class="convo"><div class="turn"><div class="who"><b>Nic</b></div>Why are card payments failing on staging?</div><div class="turn hl"><div class="who"><b>Claude</b> for Nic</div>The webhook reads order.id as a number, but checkout sends it as a string…</div></div></div></div>
+</div>
+
+<div class="note"><h2>3. Team context</h2><p>One place in Styx for what the business knows. Add to it from any message (Add to team context) or write an entry; edit it, mark it out of date. It belongs to the team, not to a project, so the brand voice or a client's rules reach every agent in every repo. An agent pulls what it needs by asking ("what's Acme's brand voice?"); a person reads it right here. Any entry can also be shared as a link.</p></div>
+<div class="win app" style="height:620px">
+  <div class="title"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><div class="crumb"><b>Team context</b><span>· Launchsite</span></div></div>
+  <div class="frame" style="grid-template-columns:56px 380px 1fr">
+    <div class="rail"><span class="pj">AS</span><span class="pj">SX</span><span class="pj" data-on="true">T</span></div>
+    <nav class="nav"><div class="ph"><b>Team context</b><span style="font-family:var(--ui)">Launchsite · 12 entries · used by every agent</span></div>
+      <div class="ph" style="padding-top:0"><div class="sel"><span class="mu">Find, or ask: what's Acme's brand voice?</span></div></div>
+      <div class="ln" data-inv="true"><span></span><span class="t">Acme brand voice</span><span class="s">Plain, warm, no exclamation marks · Thandi · 8 Nov</span></div>
+      <div class="ln"><span></span><span class="t">Payments go through Stripe, not PayFast</span><span class="s">Decision · Nic · 30 Oct</span></div>
+      <div class="ln"><span></span><span class="t">How we price retainers</span><span class="s">Doc · Nic · 2 Nov</span></div>
+      <div class="ln"><span></span><span class="t">Order ids are strings end to end</span><span class="s">Decision · from Claude in acme-shop · today</span></div>
+      <div class="ln"><span></span><span class="t">TPG: who signs off</span><span class="s">Doc · Dane · 12 Nov</span></div>
+      <div style="padding:12px 14px"><span class="btn pri">Add to team context</span></div>
+    </nav>
+    <section class="chat">
+      <div class="ch"><b>Acme brand voice</b><span class="sp"></span><span class="btn">Edit</span><span class="btn">Share</span><span class="btn">Out of date</span></div>
+      <div class="turns"><div class="agent" style="max-width:68ch"><p>Plain, warm, no exclamation marks. Short sentences; say what it does before what it is.</p><p>Say "your order", never "the order". Prices in rand with no decimals.</p><p class="small" style="margin-top:14px">Added by Thandi M. on 8 Nov, from the approved landing page review. Agents in acme-shop and acme-site read it 23 times this week.</p></div></div>
+    </section>
+  </div>
+  <div class="status"><span class="tx">Launchsite</span><span>Team context · 12 entries</span></div>
+</div>
+
+<div class="note"><h2>3b. Adding from a message</h2><p>The message's hover gets Add to team context. A title, a kind (decision or note), and it's in, for the whole team, straight away.</p></div>
+<div class="win app" style="height:460px">
+  <div class="title"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><div class="crumb"><span>acme-shop</span><span>/</span><b>Card form for checkout</b></div></div>
+  <div class="frame">
+    <div class="rail"><span class="pj" data-on="true">AS</span></div>
+    <nav class="nav"><div class="ph"><b>acme-shop</b><span>~/code/acme-shop</span></div></nav>
+    <section class="chat">
+      <div class="ch"><span class="dot c-claude"></span><b>Card form for checkout</b></div>
+      <div class="turns"><div class="agent msg" data-hover="true"><div class="by"><span class="dot c-claude"></span>Claude</div><p>The webhook reads order.id as a number, but checkout sends it as a string…</p><div class="hov"><span>Share</span><span>Add to team context</span><span>Copy</span></div></div></div>
+      <div class="pop" style="left:28px; top:150px">
+        <h3>Add to team context</h3>
+        <span class="lbl">Title</span><div class="sel"><span>Order ids are strings end to end</span></div>
+        <div class="seg"><span data-inv="true">Decision</span><span>Note</span></div>
+        <span class="small">Everyone on Launchsite sees it, and every agent can use it, in any project.</span>
+        <div class="linkbox"><span></span><b>Add</b></div>
+      </div>
+    </section>
+  </div>
+  <div class="status"><span class="tx">acme-shop</span></div>
+</div>
+</body></html>

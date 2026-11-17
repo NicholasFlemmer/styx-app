@@ -153,6 +153,42 @@ export const hubRoomSummarySchema = z.object({
 });
 export type HubRoomSummary = z.infer<typeof hubRoomSummarySchema>;
 
+/**
+ * The lean hub (ADR-0032, 2026-11-17): a conversation shared as a link anyone can read, and team context, the
+ * business's own knowledge that everyone on the team adds to and every agent can use.
+ */
+export const hubContextEntrySchema = z.object({
+  id: z.string(),
+  kind: z.enum(['decision', 'doc', 'link']),
+  title: z.string(),
+  body: z.string(),
+  stale: z.boolean(),
+  /** Who added it, or the agent and its person. */
+  by: z.string(),
+  updatedAt: z.number(),
+});
+export type HubContextEntry = z.infer<typeof hubContextEntrySchema>;
+
+export const hubConversationLinkSchema = z.object({
+  id: z.string(),
+  url: z.string().nullable(),
+  /** The whole conversation, or one answer from it. */
+  scope: z.enum(['conversation', 'message']),
+  live: z.boolean(),
+  opens: z.number().int().nonnegative(),
+  createdAt: z.number(),
+  expiresAt: z.number().nullable(),
+});
+export type HubConversationLink = z.infer<typeof hubConversationLinkSchema>;
+
+export const hubMemberSchema = z.object({
+  userId: z.string(),
+  name: z.string().nullable(),
+  email: z.string().nullable(),
+  role: z.enum(['admin', 'member']),
+});
+export type HubMember = z.infer<typeof hubMemberSchema>;
+
 export const hubStateSchema = z.object({
   connection: hubConnectionSchema,
   /** The hub's web address, for "Open the hub". */

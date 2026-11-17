@@ -1,0 +1,90 @@
+@layer components {
+  /* The lean hub's popovers (mockup design/next/styx-next-share-links.html): one choice per row, square, no shadow. */
+  .seg {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--ln);
+  }
+  .seg button {
+    padding: 6px 8px;
+    border: 0;
+    background: transparent;
+    color: var(--tx);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .seg button[data-inv='true'] {
+    background: var(--tx);
+    color: var(--bg);
+    font-weight: 600;
+  }
+  .seg button:focus-visible {
+    outline: 2px solid var(--tx);
+    outline-offset: -2px;
+  }
+  .label {
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .linkbox {
+    display: flex;
+    border: 1px solid var(--ln);
+    min-width: 0;
+  }
+  .url {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 0;
+    background: var(--bg);
+    color: var(--tx);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .links {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: var(--sp-2);
+    border-top: 1px solid var(--ln);
+    font-size: 12px;
+  }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    color: var(--mu);
+  }
+  .area {
+    min-height: 110px;
+    resize: vertical;
+  }
+  .answerAct {
+    border: 0;
+    padding: 0 4px;
+    background: transparent;
+    color: var(--mu);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .answerAct:hover,
+  .answerAct[aria-expanded='true'] {
+    color: var(--tx);
+  }
+  .answerWrap {
+    position: relative;
+    display: inline-flex;
+  }
+  .answerWrap > [role='dialog'] {
+    top: auto;
+    bottom: 100%;
+    left: 0;
+    right: auto;
+  }
+  .wide {
+    width: 360px;
+  }
+}

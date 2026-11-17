@@ -382,6 +382,33 @@ round 1's routes (`use_room`). Approval is of the text approved: an agent rewrit
 and the room asks again; the wake-up text says whether the plan is approved. When the room's creator can no longer
 answer, the plan ask goes to the space's owners. The text that starts a turn is redacted like any hub message.
 
+## The lean hub (2026-11-17): share by link, team context
+
+Owner: "I think we have over-engineered this… all I wanted was the ability to share threads, or even messages, and
+create shared context within teams"; "it should be like sharing a Google Doc or link… I don't want a web app people
+have to log into"; "spaces, rooms, all of this is too complex". Who is on a team stays as it is (email domain,
+invites, hub password, Styx signs in with a code).
+
+**What there is now.**
+
+- **Share a conversation as a link.** Share in the lane header (the whole conversation) or on an answer (that answer
+  and the question before it). Styx renders the person's and the agent's words, redacted and escaped, as a page with
+  no script (`hub-conversation.ts`), and publishes it through the existing items and public links: an `anyone` link
+  on the share origin, read without signing in, with an expiry and Turn off. "Keep it updating" uploads a new
+  version after each turn; the link shows the latest. It is stored in the person's own `Shared from Styx` space,
+  made on first use, which nobody else sees.
+- **Team context.** The team layer of context, read and written through `GET/POST /v1/teams/:id/context` and
+  `PATCH /v1/context/:id`, no space needed. Anyone on the team adds to it (not only admins), from an answer (Add to
+  team context) or on the Team context screen; edits it; marks it out of date. Every agent, in any project, reads it
+  through `hub_context`, and a lane starts with its index.
+- **People.** The web app's Members page moves into Settings › Team hub: who is on the team; an admin invites and
+  removes.
+
+**What is switched off, not deleted.** The signed-in web app (`HUB_WEB_APP=on` brings it back), spaces in the UI,
+threads, asks, tasks, the inbox, lane status sharing, project linking, rooms, and the agent tools `hub_read`,
+`hub_post`, `hub_ask`, `hub_task`, `hub_share`, `hub_remember` and `room_*` (`LEAN` in `hub-service.ts`, `LEAN_HUB`
+in the broker). Once this has settled, the code goes.
+
 ## Phases
 
 1. **Spaces, messages and context.** Teams, spaces, members, threads; context docs and decisions with

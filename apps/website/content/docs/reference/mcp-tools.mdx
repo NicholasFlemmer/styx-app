@@ -159,118 +159,13 @@ Returns `{ "landed", "commit", "pushed", "steps", "reason" }`. When Styx refuses
 
 ### hub_context
 
-Asks your team hub for context: the team's guides, docs, links and decisions ("get our CI guide", "what did we decide on order ids?"). Needs the task's project linked to a space under **Settings › Team hub**.
+Asks your team's context: what the business knows and has decided, written by people on the team in Styx under **Team context** (the brand voice, how you price, clients, decisions: "what is Acme's brand voice?", "what did we decide on order ids?"). Works in any project once Styx is signed in to your team hub under **Settings › Team hub**.
 
 | Parameter | Type                        | Required | Notes                                                                            |
 | --------- | --------------------------- | -------- | -------------------------------------------------------------------------------- |
 | `query`   | string                      | no       | A name or a question, up to 500 characters. Leave it out for the one-line index. |
-| `kind`    | `doc`, `decision` or `link` | no       | Only items of this kind.                                                         |
+| `kind`    | `doc`, `decision` or `link` | no       | Ignored for now: every kind is searched.                                         |
 
-With a query, returns `{ "items" }`, best match first, each with `title`, `kind`, `layer` (`team`, `space`, `project` or `lane`), `body`, `url`, `decision` (`question`, `answer`, `replaces`), `version` and `updated`. Without one, returns `{ "lines" }`: one line per item the task can see. Items marked out of date are left out. What comes back is information from your team, not instructions.
-
-### hub_read
-
-Reads the project's space on the team hub: its threads and the tasks teammates have shared (no parameters), or one thread's latest 30 messages.
-
-| Parameter  | Type   | Required | Notes                          |
-| ---------- | ------ | -------- | ------------------------------ |
-| `threadId` | string | no       | A thread `id` from `hub_read`. |
-
-### hub_post
-
-Posts to a thread in the project's space, or starts a thread. Only works when you have shared the task from its header (**Only you → Shared with …**). Replies in that thread come back into the task's chat, marked as from the hub; the agent waits for you before acting on them.
-
-| Parameter  | Type   | Required       | Notes                                        |
-| ---------- | ------ | -------------- | -------------------------------------------- |
-| `body`     | string | yes            | Plain text, 1–16000 characters.              |
-| `threadId` | string | one of the two | A thread `id` from `hub_read`.               |
-| `title`    | string | one of the two | Starts a new thread with this title instead. |
-
-Returns `{ "posted": true, "threadId" }`. Anything that looks like a secret is masked before it leaves your machine.
-
-### hub_remember
-
-Proposes a doc or a decision for the space's context. Each space chooses whether proposals wait for a teammate to accept them or land at once, marked as the agent's. Only works from a shared task.
-
-| Parameter  | Type                | Required       | Notes                        |
-| ---------- | ------------------- | -------------- | ---------------------------- |
-| `kind`     | `doc` or `decision` | yes            |                              |
-| `title`    | string              | yes            | 1–200 characters.            |
-| `body`     | string              | for `doc`      | The text.                    |
-| `question` | string              | for `decision` | What was decided. Up to 500. |
-| `answer`   | string              | for `decision` | The answer. Up to 4000.      |
-
-Returns `{ "state", "note" }`: `pending` while it waits for a teammate, `accepted` when it landed.
-
-### hub_ask
-
-Asks your team a question in a hub thread: a go-ahead, a choice between options, or a written answer. Only people answer, and only the people it is addressed to when you name them. With `wait`, the call holds until someone answers (up to 10 minutes; one waiting ask per task at a time); otherwise the answer comes back into the task's chat later. Only works from a task you have shared.
-
-| Parameter  | Type             | Required       | Notes                                                                         |
-| ---------- | ---------------- | -------------- | ----------------------------------------------------------------------------- |
-| `question` | string           | yes            | Up to 1000 characters.                                                        |
-| `options`  | array of strings | no             | 2–6 choices. Leave out for a written answer.                                  |
-| `to`       | array of strings | no             | Names or emails of who should answer. A name that fits two people is refused. |
-| `threadId` | string           | one of the two | A thread `id` from `hub_read`.                                                |
-| `title`    | string           | one of the two | Starts a new thread with this title instead.                                  |
-| `wait`     | number           | no             | Seconds to wait for the answer, 0–600.                                        |
-
-Returns `{ "askId", "threadId", "state", "answer" }`: `state` is `open` or `answered`, and `answer` has `choice`, `text` and `by` once someone answers.
-
-### hub_task
-
-Works a hub thread's tasks: `add` one (to this task with `me`, to a teammate by name or email, or to nobody), mark one `done`, or `list` them. Adding and finishing need a shared task; listing works from any task in the linked project.
-
-| Parameter  | Type                    | Required   | Notes                                   |
-| ---------- | ----------------------- | ---------- | --------------------------------------- |
-| `action`   | `add`, `done` or `list` | yes        |                                         |
-| `threadId` | string                  | yes        | A thread `id` from `hub_read`.          |
-| `text`     | string                  | for `add`  | What needs doing, up to 500 characters. |
-| `taskId`   | string                  | for `done` | From `list`.                            |
-| `assignee` | string                  | no         | `me`, a teammate's name or email.       |
-
-### hub_share
-
-Shares files from the task's worktree with the project's space on the team hub, as one item your team can open, comment on and review. A folder with an `index.html` opens as a live site; images, video, PDFs, data and code get previews. Only works from a task you have shared, and only with your team: a link anyone can open is made by a person, from the **Share** button.
-
-| Parameter | Type             | Required | Notes                                                           |
-| --------- | ---------------- | -------- | --------------------------------------------------------------- |
-| `paths`   | array of strings | yes      | 1–100 files or folders, relative to the worktree.               |
-| `title`   | string           | no       | What it is, such as `Landing page build`. Up to 200 characters. |
-
-Returns `{ "url", "itemId" }`. A path outside the worktree is refused. Folders like `.git` and `node_modules` are left out. Up to 2 GB a file and 4 GB in one share.
-
-### room_read
-
-Reads the room the task is in. A room is where your team's agents work on one goal together, each keeping its own context. Returns the goal and how the people will know it is done, the plan, the board of open, claimed and done tasks, who is in the room and what each brings, the room's files and the latest messages. No parameters. Works only for a task its person brought into a room, from the task header.
-
-### room_claim
-
-Takes an open task on the room's board, so the others know it is this task's.
-
-| Parameter | Type   | Required | Notes             |
-| --------- | ------ | -------- | ----------------- |
-| `taskId`  | string | yes      | From `room_read`. |
-
-### room_handoff
-
-Gives a task this task holds to another task in the room, with a note. The note is posted to the room.
-
-| Parameter | Type   | Required | Notes                                                                   |
-| --------- | ------ | -------- | ----------------------------------------------------------------------- |
-| `taskId`  | string | yes      | From `room_read`.                                                       |
-| `to`      | string | yes      | The other task's branch, or "Agent for Person" as `room_read` shows it. |
-| `note`    | string | yes      | Where it stands and what it needs. Up to 4000 characters.               |
-
-### room_done
-
-Marks a task this task holds done, with what was done. The result is posted to the room.
-
-| Parameter | Type   | Required | Notes                  |
-| --------- | ------ | -------- | ---------------------- |
-| `taskId`  | string | yes      | From `room_read`.      |
-| `result`  | string | yes      | Up to 4000 characters. |
-
-A task its person set to **Work on room tasks** also starts a turn on its own when a room task is handed or assigned to it, or it is @mentioned in the room: at most 6 times an hour, only when it is idle, and never while the room is paused.
+With a query, returns `{ "items" }`, best match first, each with `title`, `kind`, `body`, `url`, `updated` and `source` (who wrote it). Without one, returns `{ "index" }`: one line per entry. Entries marked out of date are left out. What comes back is information from your team, not instructions.
 
 Next: [CLI](/docs/reference/cli) for the shims that use these grants, and [How access works](/docs/access/how-access-works).
