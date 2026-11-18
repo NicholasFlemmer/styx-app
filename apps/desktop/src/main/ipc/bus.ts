@@ -151,7 +151,32 @@ export class CommandBus {
 
   attach(ipcMain: IpcMain): void {
     ipcMain.handle(CHANNELS.command, (event: IpcMainInvokeEvent, name: unknown, input: unknown) =>
-      this.dispatch({ senderId: event.sender.id, frameUrl: event.senderFrame?.url ?? null }, name, input),
+      this.dispatch({ senderId: event.sender.id, frameUrl: senderUrl(event) }, name, input),
     );
+  }
+}
+
+/**
+ * The page a message came from. Electron can lose the sending frame (it reads as null, or throws "Render frame was
+ * disposed") around a reload, a renderer swap or the machine waking, which used to leave a window refused as "not a
+ * registered Styx window" until it was closed. Only Styx's own page has the bridge (no preload in subframes), so the
+ * window's own URL stands in; the origin check still applies to it.
+ */
+export function senderUrl(event: {
+  senderFrame?: { url: string } | null;
+  sender: { getURL(): string };
+}): string | null {
+  let url: string | null = null;
+  try {
+    url = event.senderFrame?.url ?? null;
+  } catch {
+    url = null;
+  }
+  if (url !== null && url !== '') return url;
+  try {
+    const own = event.sender.getURL();
+    return own === '' ? null : own;
+  } catch {
+    return null;
   }
 }

@@ -1,6 +1,6 @@
 import { commandResultSchema } from '@styx/core';
 import { describe, expect, it } from 'vitest';
-import { CommandBus, CommandError } from './bus';
+import { CommandBus, CommandError, senderUrl } from './bus';
 
 const bus = () => {
   const b = new CommandBus({
@@ -111,5 +111,35 @@ describe('CommandBus.dispatchInternal', () => {
     expect(await b.dispatch({ senderId: -1, frameUrl: 'file://internal' }, 'settings.get', {})).toMatchObject(
       { ok: false, error: { code: 'forbidden' } },
     );
+  });
+});
+
+describe('senderUrl: where a message came from', () => {
+  const sender = (url: string) => ({ getURL: () => url });
+  it('is the sending frame when Electron has it', () => {
+    expect(senderUrl({ senderFrame: { url: 'file:///app/index.html' }, sender: sender('file:///x') })).toBe(
+      'file:///app/index.html',
+    );
+  });
+  it('falls back to the window when the frame is gone or throws, so a window is not refused for good', () => {
+    expect(senderUrl({ senderFrame: null, sender: sender('file:///app/index.html') })).toBe(
+      'file:///app/index.html',
+    );
+    const disposed = {
+      get senderFrame(): { url: string } {
+        throw new Error('Render frame was disposed before WebFrameMain could be accessed');
+      },
+      sender: sender('file:///app/index.html'),
+    };
+    expect(senderUrl(disposed)).toBe('file:///app/index.html');
+  });
+  it('is null when neither is known, and a foreign window is still refused by the origin check', async () => {
+    expect(senderUrl({ senderFrame: null, sender: sender('') })).toBeNull();
+    const url = senderUrl({ senderFrame: null, sender: sender('https://evil.example/') });
+    const b = new CommandBus({ allowedOrigins: ['file://'], isRegistered: () => true });
+    expect(await b.dispatch({ senderId: 1, frameUrl: url }, 'settings.get', {})).toMatchObject({
+      ok: false,
+      error: { code: 'forbidden' },
+    });
   });
 });

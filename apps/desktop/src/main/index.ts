@@ -509,6 +509,9 @@ async function boot(): Promise<void> {
     onAppSettings: applyAppSettings,
     updater: realUpdater(fixtureName),
   });
+  // A window opened before the container existed (a second launch while this one was starting) was never registered:
+  // every command from it would be refused as "not a registered Styx window". Register whatever is already open.
+  for (const w of BrowserWindow.getAllWindows()) container.publisher.register(w.webContents);
   applyAppSettings(repos.settings.app());
 
   container.bus.attach(ipcMain);
