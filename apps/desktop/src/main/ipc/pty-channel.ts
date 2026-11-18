@@ -1,3 +1,4 @@
+import { senderUrl } from './bus';
 import { CHANNELS } from '@styx/core';
 import type { IpcMain, IpcMainEvent } from 'electron';
 import { z } from 'zod';
@@ -12,11 +13,7 @@ const ptyInputSchema = z.object({
 /** Renderer → main bytes on the same `styx:pty` channel (`ipcMain.on`, not `handle`): `{ id, data }` or `{ id, resize }`. */
 export function attachPtyChannel(ipcMain: IpcMain, app: Container): void {
   ipcMain.on(CHANNELS.pty, (event: IpcMainEvent, raw: unknown) => {
-    if (
-      !app.publisher.isRegistered(event.sender.id) ||
-      !app.bus.originAllowed(event.senderFrame?.url ?? null)
-    )
-      return;
+    if (!app.publisher.isRegistered(event.sender.id) || !app.bus.originAllowed(senderUrl(event))) return;
     const parsed = ptyInputSchema.safeParse(raw);
     if (!parsed.success) return;
     const { id, data, resize } = parsed.data;
