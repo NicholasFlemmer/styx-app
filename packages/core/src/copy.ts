@@ -2687,6 +2687,7 @@ Reply in chat. Don't write a file, open a PR, or produce a plan document. Use ex
     },
     showDetails: 'Show the details',
     hideDetails: 'Hide the details',
+    taskGone: 'That task is not here any more.',
     seeAll: 'See all',
     noProject: 'Add a project first: a client or product, with its code folder if it has one.',
   },

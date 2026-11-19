@@ -47,7 +47,7 @@ describe('One place for the work (ADR-0033)', () => {
     expect(card?.textContent).toContain(first.line);
     if (card === null) throw new Error('card');
     fireEvent.click(card);
-    expect(useUiStore.getState().screen).toBe('workspace');
+    expect(useUiStore.getState().screen).toBe('one-task');
     expect(screen.getByRole('textbox', { name: copy.one.ask })).toBeTruthy();
   });
 

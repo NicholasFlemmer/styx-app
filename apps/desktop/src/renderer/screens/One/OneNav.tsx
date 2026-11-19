@@ -28,7 +28,7 @@ export function OneNav() {
   const projects = oneProjects(model, now);
   const n = copy.one.nav;
   // A task's details (the workspace) belong to Tasks; the project page to its project below.
-  const current = screen === 'workspace' || screen === 'diff' ? 'one-tasks' : screen;
+  const current = screen === 'workspace' || screen === 'diff' || screen === 'one-task' ? 'one-tasks' : screen;
   return (
     <nav className={s['side']} aria-label={copy.one.modeLabel} data-one-nav="true">
       {PLACES.map(([to, key]) => (
