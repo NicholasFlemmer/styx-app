@@ -39,6 +39,14 @@ export const SCREENS = [
   'settings',
   'diff',
   'onboarding',
+  // "One place for the work" (ADR-0033): the plain-words shell's own pages.
+  'one-home',
+  'one-needs',
+  'one-tasks',
+  'one-projects',
+  'one-project',
+  'one-apps',
+  'one-record',
 ] as const;
 export type Screen = (typeof SCREENS)[number];
 export const isScreen = (v: string): v is Screen => (SCREENS as readonly string[]).includes(v);

@@ -2,6 +2,12 @@ import { Suspense, lazy, useEffect, useRef, type ComponentType, type RefObject }
 import { Agents } from '../screens/Agents/Agents';
 import { Approvals } from '../screens/Approvals/Approvals';
 import { Home } from '../screens/Home/Home';
+import { OneApps } from '../screens/One/OneApps';
+import { OneHome } from '../screens/One/OneHome';
+import { OneNeeds } from '../screens/One/OneNeeds';
+import { OneProject, OneProjects } from '../screens/One/OneProjects';
+import { OneRecord } from '../screens/One/OneRecord';
+import { OneTasks } from '../screens/One/OneTasks';
 import { Onboarding } from '../screens/Onboarding/Onboarding';
 import { Repo } from '../screens/Repo/Repo';
 import { Settings } from '../screens/Settings/Settings';
@@ -30,6 +36,13 @@ const SCREENS: Record<Screen, ComponentType> = {
   team: Team,
   diff: Diff,
   onboarding: Onboarding,
+  'one-home': OneHome,
+  'one-needs': OneNeeds,
+  'one-tasks': OneTasks,
+  'one-projects': OneProjects,
+  'one-project': OneProject,
+  'one-apps': OneApps,
+  'one-record': OneRecord,
 };
 
 /** Key scope carried by the content region for the current screen. */

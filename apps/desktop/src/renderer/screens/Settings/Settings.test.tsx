@@ -391,6 +391,8 @@ describe('sectionRows', () => {
       sectionRows(model, section, ctx).map((r) => r.options.find((o) => o.value === r.value)?.label);
     expect(values('app:general')).toEqual([
       'System',
+      // One place for the work (ADR-0033), off by default.
+      'Off',
       'Badge + sound',
       // Do not disturb (#8), off in the demo.
       'Off',

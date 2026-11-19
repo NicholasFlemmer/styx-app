@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Styx: one place for the work (unified paradigm mockups)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..800&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: 'JetBrains Mono'; src: url('../../packages/tokens/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+:root {
+  --page:#e4e6de; --bg:#f7f8f3; --s1:#ffffff; --s2:#eef0e8; --s3:#e1e3db; --ln:#d6d9cf; --tx:#14160f; --mu:#5d6259;
+  --ac:#d6ff3d; --acx:#0d0e0c; --act:#5b7700; --soft:#f2f8d6; --warn:#a33a1f; --warnbg:#fbeae4;
+  --term:#14160f; --termtx:#d9dccf; --add:#e6f2c4; --del:#f6dcd6;
+  --meta:#1877f2; --google:#ea4335; --ga:#f9ab00; --shop:#5e8e3e; --mail:#ffe01b; --hub:#ff7a59; --canva:#00c4cc;
+  --gh:#24292f; --vercel:#000; --supa:#3ecf8e; --aws:#ff9900; --gcp:#4285f4;
+  --code:#e8916a; --mkt:#8fb3ff; --rep:#b79bff;
+  --ui: 'Archivo', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--page); color: var(--tx); font: 400 14px/1.5 var(--ui); padding: 56px 0 160px; }
+.mu { color: var(--mu); } .mono { font-family: var(--mono); font-size: 12px; } .sp { margin-left: auto; }
+b { font-weight: 600; }
+
+/* document */
+.doc { width: 1320px; margin: 0 auto; }
+.doc h1 { font: 700 54px/1.02 var(--ui); letter-spacing: -.02em; max-width: 20ch; }
+.doc .lede { margin-top: 16px; max-width: 70ch; color: var(--mu); font-size: 18px; }
+.vocab { margin-top: 32px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0 28px; }
+.vocab div { border-top: 1px solid var(--tx); padding: 12px 0; }
+.vocab b { display: block; font: 700 17px var(--ui); }
+.vocab span { font-size: 13px; color: var(--mu); }
+.toc { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 6px; }
+.toc a { border: 1px solid var(--ln); background: var(--s1); padding: 4px 10px; font-size: 13px; color: var(--tx); text-decoration: none; }
+.note { width: 1320px; margin: 96px auto 16px; display: grid; grid-template-columns: 1fr 380px; gap: 32px; }
+.note h2 { font: 700 26px/1.15 var(--ui); grid-column: 1 / -1; }
+.note p { color: var(--mu); font-size: 15px; max-width: 76ch; }
+.note ul { font-size: 13px; color: var(--mu); padding-left: 18px; }
+.note ul b { color: var(--tx); }
+
+/* window */
+.win { width: 1320px; height: 820px; margin: 0 auto; background: var(--bg); border: 1px solid var(--ln); display: grid; grid-template-rows: 44px 1fr; overflow: hidden; position: relative; }
+.win.tall { height: 900px; }
+.top { display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid var(--ln); background: var(--s1); }
+.lights { display: flex; gap: 8px; width: 60px; } .lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); }
+.word { font: 700 12px/1 var(--ui); letter-spacing: .24em; }
+.crumb { display: flex; gap: 8px; color: var(--mu); font-size: 13px; } .crumb b { color: var(--tx); }
+.find { border: 1px solid var(--ln); background: var(--bg); padding: 5px 10px; width: 320px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.me { width: 26px; height: 26px; background: var(--tx); color: var(--bg); display: grid; place-items: center; font: 700 10px var(--ui); }
+.app { display: grid; grid-template-columns: 232px 1fr; min-height: 0; }
+.app.three { grid-template-columns: 232px 1fr 360px; }
+.side { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; padding: 12px 0; min-height: 0; }
+.side a { display: flex; justify-content: space-between; align-items: center; padding: 8px 18px; font-size: 14px; color: var(--tx); text-decoration: none; }
+.side a[data-on] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.side a .n { background: var(--ac); color: var(--acx); font: 700 11px var(--ui); padding: 1px 6px; }
+.side a .c { color: var(--mu); font-size: 12px; }
+.side a[data-on] .c { color: var(--s3); }
+.side .grp { padding: 18px 18px 6px; font-size: 12px; color: var(--mu); display: flex; justify-content: space-between; }
+.side .place { padding: 6px 18px; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+.side .place .k { margin-left: auto; font-size: 11px; color: var(--mu); }
+.side .foot { margin-top: auto; padding: 12px 18px; border-top: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+.sq { width: 8px; height: 8px; display: inline-block; flex: none; }
+.main { padding: 26px 34px; overflow: hidden; display: flex; flex-direction: column; gap: 18px; min-height: 0; }
+.main h2 { font: 700 26px/1.15 var(--ui); }
+.main h3 { font: 600 16px var(--ui); }
+.right { border-left: 1px solid var(--ln); background: var(--s1); padding: 20px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.right h3 { font: 600 15px var(--ui); display: flex; justify-content: space-between; }
+
+/* parts */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 15px; border: 1px solid var(--tx); font-size: 14px; font-weight: 600; background: var(--s1); white-space: nowrap; }
+.btn.go { background: var(--ac); border-color: var(--ac); color: var(--acx); font-weight: 700; }
+.btn.sm { padding: 5px 10px; font-size: 12px; }
+.btn.ghost { border-color: var(--ln); font-weight: 500; }
+.chip { border: 1px solid var(--ln); padding: 4px 10px; font-size: 12px; background: var(--bg); white-space: nowrap; }
+.chip[data-on] { background: var(--tx); color: var(--bg); border-color: var(--tx); }
+.tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 1px 7px; border: 1px solid var(--ln); background: var(--s1); }
+.ask { background: var(--s1); border: 1px solid var(--tx); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.ask .q { font-size: 17px; color: var(--mu); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tasks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.task { background: var(--s1); border: 1px solid var(--ln); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.task .h { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--mu); }
+.task b { font: 600 15px/1.3 var(--ui); }
+.st { font-size: 12px; display: flex; gap: 6px; align-items: center; color: var(--mu); }
+.st i { width: 7px; height: 7px; display: inline-block; background: var(--mu); }
+.st.work i { background: var(--act); } .st.wait i { background: var(--ac); outline: 1px solid var(--tx); } .st.done i { background: var(--tx); }
+.logos { display: flex; gap: 5px; flex-wrap: wrap; }
+.logo { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; border: 1px solid var(--ln); padding: 2px 7px 2px 3px; background: var(--s1); }
+.logo i, .ic { width: 15px; height: 15px; display: inline-grid; place-items: center; font: 700 8px var(--ui); color: #fff; font-style: normal; flex: none; }
+.okay { border: 1px solid var(--tx); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; background: var(--bg); }
+.okay .what { font-weight: 600; font-size: 15px; }
+.okay .big { font: 700 21px var(--ui); }
+.okay .acts { display: flex; gap: 8px; margin-top: 2px; }
+.okay.risk { border-color: var(--warn); }
+.okay.risk .why { color: var(--warn); }
+.line { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 8px 0; border-top: 1px solid var(--ln); }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.kpi { background: var(--s1); border: 1px solid var(--ln); padding: 11px 13px; }
+.kpi span { font-size: 12px; color: var(--mu); } .kpi b { display: block; font: 700 21px var(--ui); margin-top: 2px; }
+.kpi em { font-style: normal; font-size: 12px; } .up { color: var(--act); } .down { color: var(--warn); }
+
+/* task view */
+.thread { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden; }
+.taskhead { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; padding-bottom: 14px; border-bottom: 1px solid var(--ln); }
+.taskhead h2 { font-size: 22px; }
+.taskhead .meta { font-size: 13px; color: var(--mu); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.taskhead .acts { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 8px; align-self: center; }
+.you { align-self: flex-end; background: var(--tx); color: var(--bg); padding: 10px 14px; max-width: 62ch; }
+.ai { background: var(--s1); border: 1px solid var(--ln); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.ai .by { font-size: 12px; color: var(--mu); display: flex; gap: 6px; align-items: center; }
+.steps { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--mu); }
+.steps span::before { content: '✓  '; color: var(--act); font-weight: 700; }
+.steps span.now::before { content: '●  '; color: var(--act); }
+.result { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.panel { border: 1px solid var(--ln); background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
+.panel .ph { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--ln); font-size: 12px; color: var(--mu); }
+.panel .ph b { color: var(--tx); font-size: 13px; }
+.changes { padding: 6px 12px; font-size: 13px; }
+.changes div { display: flex; justify-content: space-between; padding: 5px 0; border-top: 1px solid var(--s3); }
+.changes div:first-child { border-top: 0; }
+.changes .n { font-family: var(--mono); font-size: 12px; } .plus { color: var(--act); } .minus { color: var(--warn); }
+.preview { padding: 12px; }
+.site { border: 1px solid var(--ln); background: #fff; }
+.site .bar { padding: 6px 10px; border-bottom: 1px solid var(--ln); font: 400 11px var(--mono); color: var(--mu); }
+.site .body { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.field { border: 1px solid var(--ln); padding: 7px 9px; font-size: 13px; color: var(--mu); }
+.field.err { border-color: var(--warn); color: var(--tx); }
+.errmsg { font-size: 12px; color: var(--warn); }
+.checks { display: flex; gap: 14px; font-size: 13px; }
+.checks span::before { content: '✓ '; color: var(--act); font-weight: 700; }
+.live { border: 2px solid var(--tx); background: var(--soft); padding: 14px 16px; display: grid; grid-template-columns: 1fr auto; gap: 4px 20px; align-items: center; }
+.live .what { font: 700 17px var(--ui); }
+.live .acts { grid-column: 2; grid-row: 1 / span 3; display: flex; gap: 8px; }
+.composer { margin-top: auto; border: 1px solid var(--ln); background: var(--s1); padding: 11px 14px; color: var(--mu); display: flex; justify-content: space-between; }
+.details-toggle { align-self: flex-start; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+
+/* details (developer depth) */
+.dev { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 0; }
+.diff { font: 400 12px/1.6 var(--mono); padding: 8px 0; background: var(--s1); }
+.diff div { padding: 0 12px; white-space: pre; }
+.diff .a { background: var(--add); } .diff .d { background: var(--del); } .diff .h { color: var(--mu); }
+.term { background: var(--term); color: var(--termtx); font: 400 12px/1.65 var(--mono); padding: 10px 12px; }
+.term .ok { color: #c6f05a; }
+.kv { display: grid; grid-template-columns: 120px 1fr; font-size: 13px; }
+.kv span { padding: 6px 12px; border-top: 1px solid var(--s3); } .kv span:nth-child(odd) { color: var(--mu); }
+
+/* marketing */
+.ads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ad { border: 1px solid var(--ln); background: var(--bg); }
+.ad .img { height: 70px; display: grid; place-items: center; font: 700 18px var(--ui); }
+.ad .tx { padding: 7px 10px; font-size: 12px; } .ad .tx b { display: block; font-size: 13px; }
+.ad .pick { padding: 5px 10px; border-top: 1px solid var(--ln); font-size: 12px; display: flex; justify-content: space-between; color: var(--mu); }
+.ad[data-on] { outline: 2px solid var(--tx); outline-offset: -2px; } .ad[data-on] .pick span:first-child { color: var(--tx); font-weight: 600; }
+
+/* report */
+.report { background: var(--s1); border: 1px solid var(--ln); padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
+.report h3 { font: 700 19px var(--ui); }
+.bars { display: grid; grid-template-columns: 110px 1fr 70px; gap: 6px 10px; align-items: center; font-size: 12px; }
+.bars .b { height: 14px; background: var(--tx); } .bars .b.mute { background: var(--s3); }
+table { border-collapse: collapse; font-size: 13px; width: 100%; }
+th, td { border-bottom: 1px solid var(--ln); padding: 7px 8px; text-align: left; } th { color: var(--mu); font-weight: 600; font-size: 12px; } td.r, th.r { text-align: right; }
+
+/* approvals & rules */
+.rules { display: flex; flex-direction: column; border: 1px solid var(--ln); background: var(--s1); }
+.rule { display: grid; grid-template-columns: 1fr auto; gap: 2px 14px; padding: 12px 14px; border-top: 1px solid var(--ln); align-items: center; }
+.rule:first-child { border-top: 0; }
+.rule b { font-size: 14px; } .rule span { font-size: 12px; color: var(--mu); }
+.rule .tog { grid-column: 2; grid-row: 1 / span 2; display: flex; border: 1px solid var(--ln); }
+.rule .tog i { font-style: normal; font-size: 12px; padding: 4px 10px; } .rule .tog i[data-on] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.touch { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: var(--mu); }
+
+/* apps */
+.apps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.appc { background: var(--s1); border: 1px solid var(--ln); padding: 13px; display: grid; grid-template-columns: 32px 1fr; gap: 2px 10px; }
+.appc .ic { width: 32px; height: 32px; grid-row: span 3; font-size: 12px; }
+.appc b { font: 600 14px var(--ui); } .appc .s { font-size: 12px; color: var(--mu); }
+.appc .on { font-size: 12px; color: var(--act); font-weight: 600; margin-top: 4px; }
+.appc .btn { justify-self: start; margin-top: 6px; }
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--ln); }
+.tabs span { padding: 8px 14px; font-size: 14px; color: var(--mu); }
+.tabs span[data-on] { color: var(--tx); font-weight: 600; border-bottom: 2px solid var(--tx); margin-bottom: -1px; }
+
+/* know-how */
+.kh { display: grid; grid-template-columns: 340px 1fr; gap: 0; border: 1px solid var(--ln); background: var(--s1); min-height: 0; flex: 1; }
+.kh .list { border-right: 1px solid var(--ln); overflow: hidden; }
+.kh .it { padding: 10px 14px; border-top: 1px solid var(--ln); } .kh .it:first-child { border-top: 0; }
+.kh .it b { display: block; font-size: 14px; } .kh .it span { font-size: 12px; color: var(--mu); }
+.kh .it[data-on] { background: var(--s2); }
+.kh .doc2 { padding: 18px 22px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.kh .doc2 h3 { font: 700 20px var(--ui); }
+.used { background: var(--bg); border: 1px solid var(--ln); padding: 10px 12px; font-size: 12px; color: var(--mu); }
+
+/* record */
+.rec { border: 1px solid var(--ln); background: var(--s1); }
+.rec .r { display: grid; grid-template-columns: 70px 26px 1fr 190px; gap: 10px; padding: 9px 14px; border-top: 1px solid var(--ln); font-size: 13px; align-items: center; }
+.rec .r:first-child { border-top: 0; }
+.rec .who { font-size: 12px; color: var(--mu); }
+
+/* new task */
+.scrim { position: absolute; inset: 44px 0 0 0; background: rgba(20,22,15,.35); display: grid; place-items: center; }
+.modal { width: 680px; background: var(--s1); border: 1px solid var(--tx); padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; }
+.modal h2 { font: 700 22px var(--ui); }
+.bigask { border: 1px solid var(--tx); padding: 12px 14px; font-size: 16px; min-height: 76px; }
+.pickrow { display: grid; grid-template-columns: 120px 1fr; gap: 8px; align-items: center; font-size: 13px; }
+.pickrow > span:first-child { color: var(--mu); }
+.guess { background: var(--soft); border: 1px solid var(--ln); padding: 10px 12px; font-size: 13px; }
+
+/* client page */
+.paper { width: 1320px; margin: 0 auto; display: grid; grid-template-columns: 1fr 380px; gap: 32px; align-items: start; }
+.browser { background: var(--s1); border: 1px solid var(--ln); }
+.browser .url { background: var(--s2); border-bottom: 1px solid var(--ln); padding: 8px 14px; font: 400 12px var(--mono); color: var(--mu); }
+.cpage { padding: 36px 64px 40px; display: flex; flex-direction: column; gap: 16px; }
+.cpage .meta { font-size: 13px; color: var(--mu); }
+.cpage h1 { font: 700 30px/1.15 var(--ui); }
+.phone { width: 380px; border: 1px solid var(--ln); background: var(--s1); }
+.phone .cpage { padding: 22px 20px; gap: 12px; } .phone h1 { font-size: 22px; }
+
+/* project page */
+.proj-h { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 14px; align-items: center; }
+.proj-h .big-sq { width: 40px; height: 40px; grid-row: span 2; }
+.proj-h h2 { font-size: 26px; }
+.proj-h .meta { font-size: 13px; color: var(--mu); display: flex; gap: 10px; flex-wrap: wrap; }
+.proj-h .acts { grid-column: 3; grid-row: 1 / span 2; display: flex; gap: 8px; }
+.pgrid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 14px; min-height: 0; }
+.box { background: var(--s1); border: 1px solid var(--ln); display: flex; flex-direction: column; }
+.box .bh { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--ln); }
+.box .bh b { font-size: 14px; } .box .bh span { font-size: 12px; color: var(--mu); }
+.trow { display: grid; grid-template-columns: 10px 1fr auto; gap: 2px 10px; padding: 9px 14px; border-top: 1px solid var(--s3); align-items: center; font-size: 13px; }
+.trow:first-of-type { border-top: 0; }
+.trow .s { grid-column: 2; font-size: 12px; color: var(--mu); }
+.trow .r { grid-column: 3; grid-row: 1 / span 2; }
+.codekv { display: grid; grid-template-columns: 130px 1fr; font-size: 13px; }
+.codekv > span { padding: 6px 14px; border-top: 1px solid var(--s3); } .codekv > span:nth-child(odd) { color: var(--mu); }
+.codekv > span:nth-child(-n+2) { border-top: 0; }
+.applist { display: flex; flex-direction: column; }
+.applist div { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; padding: 7px 14px; border-top: 1px solid var(--s3); font-size: 13px; }
+.applist div:first-child { border-top: 0; }
+.applist .ic { width: 20px; height: 20px; }
+.people { display: flex; gap: 6px; padding: 10px 14px; flex-wrap: wrap; }
+.people span { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; border: 1px solid var(--ln); padding: 3px 8px 3px 3px; }
+.people i { width: 20px; height: 20px; background: var(--tx); color: var(--bg); display: grid; place-items: center; font: 700 9px var(--ui); font-style: normal; }
+</style>
+</head>
+<body>
+
+<div class="doc">
+  <h1>One place for the work: code, campaigns and everything between.</h1>
+  <p class="lede">Every job is a <strong>task</strong>. AI does it across the apps you connect, shows you the <strong>result</strong>, and waits for <strong>your OK</strong> before anything goes live, spends money or reaches a customer. Developers open the details; everyone else never has to.</p>
+  <div class="vocab">
+    <div><b>Project</b><span>A client or product: its code, its apps, its tasks, rules and know-how. (Today: a project, kept.)</span></div>
+    <div><b>Task</b><span>One job, one AI working on it. Runs alongside the others. (Today: a lane.)</span></div>
+    <div><b>Result</b><span>What you look at: changes and a live preview, ad drafts, a report. (Today: the turn result.)</span></div>
+    <div><b>Needs your OK</b><span>Deploys, spend, sends and publishing wait for you, by rules you set. (Today: grants and policies.)</span></div>
+    <div><b>Make it live</b><span>Merge and deploy, launch, send, publish: one button, after your OK. (Today: land and publish.)</span></div>
+    <div><b>Connected apps</b><span>GitHub and Meta Ads alike: sign in once, access only for the task. (Today: targets.)</span></div>
+    <div><b>Know-how</b><span>What the team knows: brand voice, pricing, CI guide. Every AI reads it. (Today: team context.)</span></div>
+    <div><b>Share</b><span>A link anyone can open, no sign-in: a report, a conversation, a build.</span></div>
+    <div><b>Record</b><span>Every change to every app: who asked, what was done, who approved. (Today: the audit log.)</span></div>
+  </div>
+  <div class="toc"><a href="#f1">1 Home</a><a href="#f2">2 Start a task</a><a href="#f3">3 Code task</a><a href="#f4">4 The details</a><a href="#f5">5 Campaign task</a><a href="#f6">6 Report</a><a href="#f7">7 Approvals</a><a href="#f8">8 Connected apps</a><a href="#f9">9 Know-how</a><a href="#f10">10 Record</a><a href="#f11">11 What a client sees</a><a href="#f12">12 A project</a></div>
+</div>
+
+<!-- 1 HOME -->
+<div class="note" id="f1"><h2>1. Home: everything in one view</h2><p>One question at the top, tasks of every kind below it in plain words, and on the right only what needs you. A code fix, an ad campaign and a client report sit side by side; the coloured square says which project the work is for, the app badges say what it touches.</p><ul><li><b>Projects</b> stay at the heart: a client or product, holding its code, its apps (ad accounts, store, hosting), its tasks, its rules and its know-how. Frame 12 opens one.</li><li><b>Needs your OK</b> leads with the consequence: the money, the audience, production.</li><li><b>Done today</b> is the trust builder: small things it handled within your rules.</li></ul></div>
+<div class="win">
+  <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><span class="crumb"><b>Home</b></span><span class="sp"></span><span class="find"><span>Find a task, a project, an answer…</span><span>⌘K</span></span><span class="me">NF</span></div>
+  <div class="app three">
+    <nav class="side">
+      <a data-on>Home</a>
+      <a>Needs your OK <span class="n">3</span></a>
+      <a>Tasks <span class="c">9</span></a><a>Projects <span class="c">3</span></a>
+      <a>Reports</a>
+      <a>Know-how</a>
+      <a>Connected apps</a>
+      <a>Record</a>
+      <div class="grp"><span>Projects</span><span>+</span></div>
+      <div class="place"><span class="sq" style="background:#e8916a"></span>Acme Shop<span class="k">code · ads · store</span></div>
+      <div class="place"><span class="sq" style="background:#8fb3ff"></span>The Promo Group<span class="k">ads · email</span></div>
+      <div class="place"><span class="sq" style="background:#b79bff"></span>Styx<span class="k">code</span></div>
+      <div class="foot">Launchsite · 4 people · 2 working now</div>
+    </nav>
+    <section class="main">
+      <h2>Good morning, Nic</h2>
+      <div class="ask"><span class="q">What do you want done?</span>
+        <div class="row"><span class="chip">Fix the flaky checkout test</span><span class="chip">Weekly report for The Promo Group</span><span class="chip">10 Black Friday ads for Acme</span><span class="chip">Why is the site slow on phones?</span><span class="sp"></span><span class="btn go">Start</span></div></div>
+      <div class="kpis">
+        <div class="kpi"><span>Working now</span><b>4 tasks</b><em class="mu">2 code · 2 marketing</em></div>
+        <div class="kpi"><span>Ad spend this week</span><b>R48 200</b><em class="up">on budget</em></div>
+        <div class="kpi"><span>Acme site</span><b>All checks pass</b><em class="up">live 2 hours ago</em></div>
+        <div class="kpi"><span>Cost per sale</span><b>R86</b><em class="down">▲ R11 · being looked into</em></div>
+      </div>
+      <div class="tasks">
+        <div class="task"><div class="h"><span class="sq" style="background:#e8916a"></span>Acme Shop · code</div><b>Card payments fail on staging</b><span class="st wait"><i></i>Fixed and tested · ready to go live</span><div class="logos"><span class="logo"><i style="background:var(--gh)">G</i>GitHub</span><span class="logo"><i style="background:var(--supa)">S</i>Supabase</span><span class="logo"><i style="background:var(--vercel)">▲</i>Vercel</span></div></div>
+        <div class="task"><div class="h"><span class="sq" style="background:#e8916a"></span>Acme Shop · campaign</div><b>Black Friday retargeting</b><span class="st wait"><i></i>3 ads picked · R5 000 a day waits for you</span><div class="logos"><span class="logo"><i style="background:var(--meta)">f</i>Meta Ads</span><span class="logo"><i style="background:var(--shop)">S</i>Shopify</span></div></div>
+        <div class="task"><div class="h"><span class="sq" style="background:#8fb3ff"></span>The Promo Group · report</div><b>Weekly report</b><span class="st done"><i></i>Ready · shared with the client</span><div class="logos"><span class="logo"><i style="background:var(--google)">G</i>Google Ads</span><span class="logo"><i style="background:var(--ga)">G</i>Analytics</span></div></div>
+        <div class="task"><div class="h"><span class="sq" style="background:#b79bff"></span>Styx · code</div><b>Sign-in code on the Team screen</b><span class="st work"><i></i>Writing the tests · 3 of 5 done</span><div class="logos"><span class="logo"><i style="background:var(--gh)">G</i>GitHub</span></div></div>
+        <div class="task"><div class="h"><span class="sq" style="background:#8fb3ff"></span>The Promo Group · email</div><b>November newsletter</b><span class="st work"><i></i>Writing in their brand voice · 2 of 4 sections</span><div class="logos"><span class="logo"><i style="background:var(--mail);color:#000">M</i>Mailchimp</span></div></div>
+        <div class="task"><div class="h"><span class="sq" style="background:#e8916a"></span>Acme Shop · question</div><b>Why is the site slow on phones?</b><span class="st done"><i></i>Answered: the hero image is 4 MB · fix ready</span><div class="logos"><span class="logo"><i style="background:var(--vercel)">▲</i>Vercel</span><span class="logo"><i style="background:var(--ga)">G</i>Analytics</span></div></div>
+      </div>
+    </section>
+    <aside class="right">
+      <h3>Needs your OK <span class="mu">3</span></h3>
+      <div class="okay risk"><span class="mu" style="font-size:12px">Acme Shop · Vercel · production</span><span class="what">Put the card payment fix live</span><span class="big">acme-shop.co.za</span><span class="why" style="font-size:12px">Production: asks for Touch ID</span><div class="acts"><span class="btn go sm">Approve &amp; go live</span><span class="btn sm ghost">See it first</span></div></div>
+      <div class="okay"><span class="mu" style="font-size:12px">Acme Shop · Meta Ads</span><span class="what">Launch Black Friday retargeting</span><span class="big">R5 000 a day · 7 days</span><div class="acts"><span class="btn go sm">Approve &amp; launch</span><span class="btn sm ghost">Change</span></div></div>
+      <div class="okay"><span class="mu" style="font-size:12px">The Promo Group · Mailchimp</span><span class="what">Send the November newsletter</span><span class="big">12 480 people</span><div class="acts"><span class="btn go sm">Approve &amp; send</span><span class="btn sm ghost">See it first</span></div></div>
+      <h3 style="margin-top:6px">Done today, within your rules</h3>
+      <div><div class="line"><span>Paused 2 ads over budget</span><span class="mu">09:12</span></div><div class="line"><span>Shared the Promo Group report</span><span class="mu">08:40</span></div><div class="line"><span>Merged a test fix into Styx</span><span class="mu">08:05</span></div></div>
+    </aside>
+  </div>
+</div>
+
+<!-- 2 START A TASK -->
+<div class="note" id="f2"><h2>2. Starting a task: say it, Styx works out the rest</h2><p>One sentence is enough. Styx guesses the project, the apps it will need and what will need your OK, and shows its guess before it starts so you can correct it. Developers can still pick the branch and the AI; nobody else has to see those choices.</p><ul><li>The guess is the plan in plain words: it will read, it will draft, it will ask before spending.</li><li><b>More options</b> holds the developer controls: which AI, which branch, design first or straight to code.</li></ul></div>
+<div class="win">
+  <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><span class="crumb"><b>Home</b></span><span class="sp"></span><span class="me">NF</span></div>
+  <div class="app"><nav class="side"><a data-on>Home</a><a>Needs your OK <span class="n">3</span></a><a>Tasks</a><a>Projects <span class="c">3</span></a><a>Reports</a><a>Know-how</a><a>Connected apps</a><a>Record</a></nav><section class="main"><h2>Good morning, Nic</h2></section></div>
+  <div class="scrim"><div class="modal">
+    <h2>New task</h2>
+    <div class="bigask">The Acme site feels slow on phones. Find out why and fix it, then tell the client what changed.</div>
+    <div class="guess"><b>Here's the plan.</b> Check Acme's phone speed in Analytics and Vercel, find the cause, fix it in the Acme site code and test it, then draft a short note for the client. <b>Going live and sending the note wait for your OK.</b></div>
+    <div class="pickrow"><span>Project</span><span><span class="chip" data-on>Acme Shop</span> <span class="chip">The Promo Group</span> <span class="chip">Styx</span></span></div>
+    <div class="pickrow"><span>Uses</span><span class="logos"><span class="logo"><i style="background:var(--ga)">G</i>Analytics</span><span class="logo"><i style="background:var(--vercel)">▲</i>Vercel</span><span class="logo"><i style="background:var(--gh)">G</i>GitHub · acme/shop</span><span class="logo"><i style="background:#0f9d58">G</i>Gmail (draft only)</span></span></div>
+    <div class="pickrow"><span>Needs your OK</span><span>Going live on production · sending anything to the client</span></div>
+    <div class="row"><span class="details-toggle">More options (AI, branch, design first)</span><span class="sp"></span><span class="btn ghost">Cancel</span><span class="btn go">Start the task</span></div>
+  </div></div>
+</div>
+
+<!-- 3 CODE TASK, PLAIN -->
+<div class="note" id="f3"><h2>3. A code task, in plain view</h2><p>What a non-developer (or a busy developer) sees: what it did in a few lines, what changed in words, the live preview of the fix, and that the checks pass. One button makes it live after your OK. Nothing here needs you to know what a branch or a merge is.</p><ul><li><b>Changes</b> are named by what they do; the file names are there, small, for those who want them.</li><li><b>The preview</b> is the real running site from this task's own copy, before anything goes live.</li><li><b>Show the details</b> opens frame 4: same task, developer depth.</li></ul></div>
+<div class="win tall">
+  <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><span class="crumb"><span>Acme Shop</span><span>/</span><b>Card payments fail on staging</b></span><span class="sp"></span><span class="me">NF</span></div>
+  <div class="app"><nav class="side"><a>Home</a><a>Needs your OK <span class="n">3</span></a><a data-on>Tasks <span class="c">9</span></a><a>Projects <span class="c">3</span></a><a>Reports</a><a>Know-how</a><a>Connected apps</a><a>Record</a></nav>
+    <section class="main thread">
+      <div class="taskhead"><h2>Card payments fail on staging</h2><span class="meta"><span class="sq" style="background:#e8916a"></span>Acme Shop · code · started by Nic · 14 min</span><div class="acts"><span class="btn sm ghost">Share</span><span class="btn sm ghost">Show the details</span></div></div>
+      <div class="you">Card payments are failing on staging. Find out why and fix it.</div>
+      <div class="ai"><span class="by"><span class="sq" style="background:var(--code)"></span>Styx</span>
+        <div class="steps"><span>Read the payment code and the last 50 failed payments in Supabase</span><span>Found it: checkout sends the order number as text, the payment check expected a number</span><span>Fixed both sides and added 4 tests</span><span>Ran all 42 checks: they pass</span></div>
+        <div>Every card payment since Tuesday's release failed to match its order, so orders stayed unpaid. It's fixed, and a test card now goes through on the preview below.</div>
+        <div class="result">
+          <div class="panel"><div class="ph"><b>What changed</b><span>3 files</span></div><div class="changes">
+            <div><span>Payment check reads the order number as text <span class="mono mu">webhook.ts</span></span><span class="n"><span class="plus">+12</span> <span class="minus">−3</span></span></div>
+            <div><span>Checkout checks the card form before paying <span class="mono mu">checkout.ts</span></span><span class="n"><span class="plus">+31</span></span></div>
+            <div><span>4 new tests for paid, failed and empty cards <span class="mono mu">checkout.test.ts</span></span><span class="n"><span class="plus">+44</span></span></div>
+          </div><div class="ph" style="border-top:1px solid var(--ln);border-bottom:0"><span class="checks"><span>42 checks pass</span><span>Preview works</span></span></div></div>
+          <div class="panel"><div class="ph"><b>Preview</b><span>this task's copy of the site</span></div><div class="preview"><div class="site"><div class="bar">preview · acme-shop / checkout</div><div class="body"><b>Pay for your order</b><div class="field">4242 4242 4242 4242</div><div class="row"><div class="field" style="flex:1">12 / 28</div><div class="field" style="flex:1">123</div></div><span class="btn go sm" style="align-self:flex-start">Pay R1 299</span><span class="mu" style="font-size:12px">✓ Test payment matched order #10482</span></div></div></div></div>
+        </div>
+      </div>
+      <div class="live"><span class="what">Put this fix live on acme-shop.co.za</span><span class="mu">Merges into the main code, deploys to production, and keeps the old version one click away.</span><span class="mu" style="font-size:12px">Production needs your Touch ID.</span><div class="acts"><span class="btn go">Approve &amp; go live</span><span class="btn">Not yet</span></div></div>
+      <div class="composer"><span>Ask for a change: "also show the decline reason on the form"…</span><span>↵</span></div>
+    </section></div>
+</div>
+
+<!-- 4 DETAILS -->
+<div class="note" id="f4"><h2>4. The same task, with the details open</h2><p>Everything Styx does for developers today, one click away and never lost: the branch, the diff line by line, the terminal and the agent's own steps, which AI is working, its access and what it costs. The plain view stays on the left, so a developer and a marketer can look at the same task together.</p><ul><li><b>Nothing removed</b>: diff, terminal, checks, branch, agent choice, the live access it holds and when it expires.</li><li>The details are a panel, not another mode: you can keep them open by default in Settings.</li></ul></div>
+<div class="win tall">
+  <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><span class="crumb"><span>Acme Shop</span><span>/</span><b>Card payments fail on staging</b></span><span class="sp"></span><span class="me">NF</span></div>
+  <div class="app" style="grid-template-columns:232px 1fr 560px"><nav class="side"><a>Home</a><a>Needs your OK <span class="n">3</span></a><a data-on>Tasks <span class="c">9</span></a><a>Projects <span class="c">3</span></a><a>Reports</a><a>Know-how</a><a>Connected apps</a><a>Record</a></nav>
+    <section class="main thread">
+      <div class="taskhead"><h2>Card payments fail on staging</h2><span class="meta">Acme Shop · code</span><div class="acts"><span class="btn sm" style="background:var(--tx);color:var(--bg)">Hide the details</span></div></div>
+      <div class="ai"><span class="by">Styx</span><div class="steps"><span>Read the payment code and 50 failed payments</span><span>Fixed both sides, added 4 tests</span><span>42 checks pass</span></div><div>Every card payment since Tuesday failed to match its order. Fixed.</div></div>
+      <div class="live"><span class="what">Put this fix live</span><span class="mu" style="font-size:12px">Production needs your Touch ID.</span><div class="acts"><span class="btn go">Approve &amp; go live</span></div></div>
+    </section>
+    <aside class="right" style="padding:0;gap:0">
+      <div class="tabs" style="padding:0 12px"><span data-on>Changes</span><span>Terminal</span><span>Steps</span><span>Access</span></div>
+      <div class="kv"><span>AI</span><span><span class="sq" style="background:var(--code)"></span> Claude Code · Opus</span><span>Branch</span><span class="mono">agent/claude-4 → main</span><span>Behind main</span><span>0 commits · up to date</span><span>Cost so far</span><span>R14.20 · 182k tokens</span></div>
+      <div class="ph" style="display:flex;justify-content:space-between;padding:8px 12px;border-top:1px solid var(--ln);border-bottom:1px solid var(--ln);font-size:12px;color:var(--mu)"><b style="color:var(--tx)">webhook.ts</b><span>+12 −3</span></div>
+      <div class="diff"><div class="h">@@ -18,9 +18,12 @@ export async function onPaymentSucceeded(</div><div>  const event = await verify(req);</div><div class="d">- const orderId = Number(event.data.object.metadata.orderId)</div><div class="a">+ const orderId = String(event.data.object.metadata.orderId)</div><div class="a">+ if (orderId === '') return badRequest('no order')</div><div>  await orders.markPaid(orderId, event.data.id);</div></div>
+      <div style="padding:10px 12px;font-size:12px;color:var(--mu);border-top:1px solid var(--ln)">Terminal</div>
+      <div class="term">$ pnpm test checkout<br><span class="ok">✓</span> pays with a test card (182 ms)<br><span class="ok">✓</span> refuses an empty card (12 ms)<br><span class="ok">✓</span> shows the decline reason (31 ms)<br><span class="ok">Tests  42 passed (42)</span><br>$ █</div>
+      <div style="padding:10px 12px;font-size:12px;color:var(--mu);border-top:1px solid var(--ln)">Access this task holds</div>
+      <div class="kv"><span>Supabase</span><span>staging · read · ends in 41 min</span><span>Vercel</span><span>preview deploys · ends with the task</span><span>Production</span><span>none until you approve</span></div>
+    </aside></div>
+</div>
+
+<!-- 5 CAMPAIGN -->
+<div class="note" id="f5"><h2>5. A campaign task: drafts, picks, then launch</h2><p>The same task frame, a different result. It shows what it looked at in your apps, then six ads in your brand voice with an honest estimate each. You pick; the launch card states exactly what will be spent, on whom, and when it stops.</p><ul><li>Uses <b>know-how</b> (brand voice) and <b>connected apps</b> (Shopify sales, the Meta audience) without being asked.</li><li>The cap ("R35 000 at most") is part of what you approve: it cannot spend past it.</li></ul></div>
+<div class="win tall">
+  <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><span class="crumb"><span>Acme Shop</span><span>/</span><b>Black Friday retargeting</b></span><span class="sp"></span><span class="me">NF</span></div>
+  <div class="app"><nav class="side"><a>Home</a><a>Needs your OK <span class="n">3</span></a><a data-on>Tasks <span class="c">9</span></a><a>Projects <span class="c">3</span></a><a>Reports</a><a>Know-how</a><a>Connected apps</a><a>Record</a></nav>
+    <section class="main thread">
+      <div class="taskhead"><h2>Black Friday retargeting</h2><span class="meta"><span class="sq" style="background:#e8916a"></span>Acme Shop · campaign · started by Thandi · 22 min</span><div class="acts"><span class="btn sm ghost">Share</span><span class="btn sm ghost">Show the details</span></div></div>
+      <div class="you">Set up Black Friday retargeting. Around R5k a day for a week. Use our best sellers.</div>
+      <div class="ai"><span class="by"><span class="sq" style="background:var(--mkt)"></span>Styx</span>
+        <div class="steps"><span>Read 30 days of sales in Shopify: the hoodie, the tote and the cap sell most</span><span>Checked Meta Ads: 41 200 people viewed a product and did not buy</span><span>Used Acme's brand voice from know-how: plain, warm, no exclamation marks</span></div>
+        <div>Six ads, two per product. Last year the hoodie ads did best, so I'd lead with those.</div>
+        <div class="ads">
+          <div class="ad" data-on><div class="img" style="background:#f2e3d8">Hoodie</div><div class="tx"><b>Still thinking about it?</b>The Acme hoodie, 30% off until Monday.</div><div class="pick"><span>Picked</span><span>about R71 a sale</span></div></div>
+          <div class="ad" data-on><div class="img" style="background:#e3ecf7">Tote</div><div class="tx"><b>Your tote is waiting</b>Free delivery on everything this weekend.</div><div class="pick"><span>Picked</span><span>about R88 a sale</span></div></div>
+          <div class="ad" data-on><div class="img" style="background:#ece6f7">Cap</div><div class="tx"><b>Back in stock</b>The cap you looked at. Gone by Monday.</div><div class="pick"><span>Picked</span><span>about R93 a sale</span></div></div>
+          <div class="ad"><div class="img" style="background:#f2e3d8">Hoodie</div><div class="tx"><b>Made to last</b>The one hoodie you'll keep for years.</div><div class="pick"><span>Pick</span><span>about R79 a sale</span></div></div>
+          <div class="ad"><div class="img" style="background:#e3ecf7">Tote</div><div class="tx"><b>Carry more</b>The tote, now with free delivery.</div><div class="pick"><span>Pick</span><span>about R95 a sale</span></div></div>
+          <div class="ad"><div class="img" style="background:#ece6f7">Cap</div><div class="tx"><b>Last chance</b>30% off the cap until Monday.</div><div class="pick"><span>Pick</span><span>about R101 a sale</span></div></div>
+        </div>
+      </div>
+      <div class="live"><span class="what">Launch 3 ads on Meta: R5 000 a day for 7 days, R35 000 at most</span><span class="mu">People who viewed a product in the last 30 days · starts Friday 00:00 · stops Thursday 23:59</span><span class="mu" style="font-size:12px">Styx can only spend this once you approve, and only on this campaign.</span><div class="acts"><span class="btn go">Approve &amp; launch</span><span class="btn">Change</span></div></div>
+      <div class="composer"><span>Ask for a change: "make the cap ad funnier", "drop it to R3k a day"…</span><span>↵</span></div>
+    </section></div>
+</div>
+
+<!-- 6 REPORT -->
+<div class="note" id="f6"><h2>6. A report task: the answer, ready to share</h2><p>Reports are a result like any other: the numbers pulled from the client's own accounts, said in plain words first, the evidence under it. Share makes a link the client opens in any browser (frame 11), and "Keep it updating" turns it into a weekly report that refreshes itself.</p><ul><li>Every number says where it came from (Google Ads, Analytics) so nobody has to trust a black box.</li><li>Follow-ups become tasks in one click: "Do this" on a recommendation starts it.</li></ul></div>
+<div class="win tall">
+  <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><span class="crumb"><span>The Promo Group</span><span>/</span><b>Weekly report, 10 to 16 Nov</b></span><span class="sp"></span><span class="me">NF</span></div>
+  <div class="app three" style="grid-template-columns:232px 1fr 340px"><nav class="side"><a>Home</a><a>Needs your OK <span class="n">3</span></a><a>Tasks</a><a>Projects <span class="c">3</span></a><a data-on>Reports</a><a>Know-how</a><a>Connected apps</a><a>Record</a></nav>
+    <section class="main">
+      <div class="report">
+        <span class="mu" style="font-size:12px">The Promo Group · 10 to 16 November · from Google Ads and Analytics</span>
+        <h3>A good week: sales up 18%, at a lower cost per sale.</h3>
+        <div>Search ads did most of the work. One display campaign spent R6 100 and sold nothing; pausing it is the main recommendation.</div>
+        <div class="kpis"><div class="kpi"><span>Spend</span><b>R31 400</b><em class="mu">budget R33 000</em></div><div class="kpi"><span>Sales</span><b>R212 700</b><em class="up">▲ 18%</em></div><div class="kpi"><span>Cost per sale</span><b>R74</b><em class="up">▼ R9</em></div><div class="kpi"><span>Return on spend</span><b>6.8×</b><em class="up">▲ 0.9</em></div></div>
+        <span class="mu" style="font-size:12px;margin-bottom:-8px">Sales by campaign</span><div class="bars"><span>Search, brand</span><span class="b" style="width:92%"></span><span>R96 400</span><span>Search, products</span><span class="b" style="width:70%"></span><span>R73 100</span><span>Shopping</span><span class="b" style="width:38%"></span><span>R43 200</span><span>Display</span><span class="b mute" style="width:2%"></span><span class="down">R0</span></div>
+        <table><thead><tr><th>Campaign</th><th class="r">Spend</th><th class="r">Sales</th><th class="r">Cost per sale</th></tr></thead><tbody><tr><td>Search, brand</td><td class="r">R9 800</td><td class="r">R96 400</td><td class="r">R41</td></tr><tr><td>Search, products</td><td class="r">R8 900</td><td class="r">R73 100</td><td class="r">R68</td></tr><tr><td>Shopping</td><td class="r">R6 600</td><td class="r">R43 200</td><td class="r">R97</td></tr><tr><td>Display, retargeting</td><td class="r">R6 100</td><td class="r down">R0</td><td class="r down">none</td></tr></tbody></table>
+      </div>
+    </section>
+    <aside class="right">
+      <h3>Share with the client</h3>
+      <div class="okay"><span class="what">Anyone with the link can read it</span><div class="row"><span class="chip" data-on>Keep it updating weekly</span><span class="chip">As it is now</span></div><div class="row" style="flex-wrap:nowrap"><span class="field" style="flex:1;font-family:var(--mono);font-size:11px">styx.link/r/promo-weekly</span><span class="btn go sm">Copy link</span></div><span class="mu" style="font-size:12px">Opened 3 times · works until you turn it off</span></div>
+      <h3>Recommendations</h3>
+      <div class="okay"><span class="what">Pause the display campaign</span><span class="mu" style="font-size:13px">R6 100 spent, no sales in 3 weeks.</span><div class="acts"><span class="btn sm">Do this</span></div></div>
+      <div class="okay"><span class="what">Move R3 000 a week to brand search</span><span class="mu" style="font-size:13px">Cheapest sales, still room to grow.</span><div class="acts"><span class="btn sm">Do this</span></div></div>
+      <span class="mu" style="font-size:12px">"Do this" starts a task; anything that changes spend still asks for your OK.</span>
+    </aside></div>
+</div>
+
+<!-- 7 APPROVALS -->
+<div class="note" id="f7"><h2>7. Needs your OK, and the rules behind it</h2><p>One queue for everything risky, code and marketing alike, each with its consequence in big type. Below it, the rules in plain sentences: what always asks, what can just happen, and what needs Touch ID. These are today's policy engine and grants, said the way a person would say them.</p><ul><li>Rules are per project: Acme's production always asks; a test site never does.</li><li><b>Touch ID</b> for production and for spend over a limit, as production deploys need today.</li></ul></div>
+<div class="win tall">
+  <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><span class="crumb"><b>Needs your OK</b></span><span class="sp"></span><span class="me">NF</span></div>
+  <div class="app"><nav class="side"><a>Home</a><a data-on>Needs your OK <span class="n">3</span></a><a>Tasks</a><a>Projects <span class="c">3</span></a><a>Reports</a><a>Know-how</a><a>Connected apps</a><a>Record</a></nav>
+    <section class="main" style="display:grid;grid-template-columns:1fr 1fr;gap:28px;align-content:start">
+      <div style="display:flex;flex-direction:column;gap:10px"><h2>Waiting for you</h2>
+        <div class="okay risk"><span class="mu" style="font-size:12px">Acme Shop · code · production</span><span class="what">Put the card payment fix live</span><span class="big">acme-shop.co.za</span><span class="mu" style="font-size:13px">3 files changed · 42 checks pass · the old version stays one click away</span><span class="why" style="font-size:12px">Production: asks for Touch ID</span><div class="acts"><span class="btn go sm">Approve &amp; go live</span><span class="btn sm ghost">See the task</span></div></div>
+        <div class="okay"><span class="mu" style="font-size:12px">Acme Shop · Meta Ads</span><span class="what">Launch Black Friday retargeting</span><span class="big">R5 000 a day · R35 000 at most</span><div class="acts"><span class="btn go sm">Approve &amp; launch</span><span class="btn sm ghost">See the task</span></div></div>
+        <div class="okay"><span class="mu" style="font-size:12px">The Promo Group · Mailchimp</span><span class="what">Send the November newsletter</span><span class="big">12 480 people</span><div class="acts"><span class="btn go sm">Approve &amp; send</span><span class="btn sm ghost">See it first</span></div></div>
+        <h3 style="margin-top:10px">Earlier</h3>
+        <div><div class="line"><span>Thandi approved: refund email live</span><span class="mu">yesterday</span></div><div class="line"><span>You declined: R12 000 a day on Google</span><span class="mu">Mon</span></div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px"><h2>Your rules</h2><span class="mu" style="font-size:13px">For Acme Shop. Each project has its own.</span>
+        <div class="rules">
+          <div class="rule"><b>Going live on production</b><span>Merging and deploying the live site</span><div class="tog"><i data-on>Ask + Touch ID</i><i>Ask</i><i>Just do it</i></div></div>
+          <div class="rule"><b>Preview and test sites</b><span>Anything that is not live</span><div class="tog"><i>Ask</i><i data-on>Just do it</i></div></div>
+          <div class="rule"><b>Spending money</b><span>New budgets, raised budgets, new campaigns</span><div class="tog"><i data-on>Ask</i><i>Under R1 000 a day, just do it</i></div></div>
+          <div class="rule"><b>Pausing what overspends</b><span>Ads past their budget or with no sales</span><div class="tog"><i>Ask</i><i data-on>Just do it</i></div></div>
+          <div class="rule"><b>Sending to customers</b><span>Emails, SMS, posts</span><div class="tog"><i data-on>Ask</i><i>Just do it</i></div></div>
+          <div class="rule"><b>Deleting anything</b><span>Data, campaigns, files, customers</span><div class="tog"><i data-on>Never</i><i>Ask + Touch ID</i></div></div>
+          <div class="rule"><b>Reading data</b><span>Sales, analytics, code, logs</span><div class="tog"><i>Ask</i><i data-on>Just do it</i></div></div>
+        </div>
+        <span class="touch">Touch ID is asked on this Mac; on Windows, Windows Hello.</span>
+      </div>
+    </section></div>
+</div>
+
+<!-- 8 APPS -->
+<div class="note" id="f8"><h2>8. Connected apps: developer and marketing tools together</h2><p>GitHub next to Meta Ads, Vercel next to Shopify, each connected the way you already sign in. Each card says which projects use it. Access is only ever for one task and ends with it; the sign-in itself stays in your computer's keychain, never in Styx's servers.</p><ul><li>Tabs filter by kind; there is one list underneath, one way to connect, one set of rules.</li><li><b>Today's targets</b> (Vercel, Supabase, AWS, GCP, Fly, Railway, Render, GitHub, SSH) are already real; the marketing ones would be built.</li></ul></div>
+<div class="win tall">
+  <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><span class="crumb"><b>Connected apps</b></span><span class="sp"></span><span class="me">NF</span></div>
+  <div class="app"><nav class="side"><a>Home</a><a>Needs your OK <span class="n">3</span></a><a>Tasks</a><a>Projects <span class="c">3</span></a><a>Reports</a><a>Know-how</a><a data-on>Connected apps</a><a>Record</a></nav>
+    <section class="main">
+      <div class="row"><h2>Connected apps</h2><span class="sp"></span><span class="btn go">Connect an app</span></div>
+      <div class="tabs"><span data-on>All 16</span><span>Code &amp; hosting</span><span>Ads</span><span>Sales &amp; customers</span><span>Email</span><span>Docs &amp; design</span></div>
+      <div class="apps">
+        <div class="appc"><i class="ic" style="background:var(--gh)">GH</i><b>GitHub</b><span class="s">Code for Acme, Styx</span><span class="on">Connected</span></div>
+        <div class="appc"><i class="ic" style="background:var(--vercel)">▲</i><b>Vercel</b><span class="s">Acme site hosting</span><span class="on">Connected · production asks</span></div>
+        <div class="appc"><i class="ic" style="background:var(--supa)">S</i><b>Supabase</b><span class="s">Acme database</span><span class="on">Connected</span></div>
+        <div class="appc"><i class="ic" style="background:var(--gcp)">G</i><b>Google Cloud</b><span class="s">Styx team hub</span><span class="on">Connected</span></div>
+        <div class="appc"><i class="ic" style="background:var(--meta)">f</i><b>Meta Ads</b><span class="s">Acme, Promo Group</span><span class="on">Connected · 3 ad accounts</span></div>
+        <div class="appc"><i class="ic" style="background:var(--google)">G</i><b>Google Ads</b><span class="s">Promo Group</span><span class="on">Connected · 2 accounts</span></div>
+        <div class="appc"><i class="ic" style="background:var(--ga)">GA</i><b>Google Analytics</b><span class="s">4 sites</span><span class="on">Connected</span></div>
+        <div class="appc"><i class="ic" style="background:var(--shop)">S</i><b>Shopify</b><span class="s">Acme Shop orders</span><span class="on">Connected</span></div>
+        <div class="appc"><i class="ic" style="background:var(--mail);color:#000">M</i><b>Mailchimp</b><span class="s">Promo Group lists</span><span class="on">Connected</span></div>
+        <div class="appc"><i class="ic" style="background:#0f9d58">G</i><b>Gmail &amp; Drive</b><span class="s">Drafts, briefs, sheets</span><span class="on">Connected · drafts only</span></div>
+        <div class="appc"><i class="ic" style="background:var(--aws)">A</i><b>AWS</b><span class="s">Not used yet</span><span class="btn sm">Connect</span></div>
+        <div class="appc"><i class="ic" style="background:var(--hub)">H</i><b>HubSpot</b><span class="s">Contacts and deals</span><span class="btn sm">Sign in with HubSpot</span></div>
+        <div class="appc"><i class="ic" style="background:var(--canva)">C</i><b>Canva</b><span class="s">Designs, brand kit</span><span class="btn sm">Sign in with Canva</span></div>
+        <div class="appc"><i class="ic" style="background:#000">N</i><b>Notion</b><span class="s">Plans and notes</span><span class="btn sm">Sign in with Notion</span></div>
+        <div class="appc"><i class="ic" style="background:#4a154b">S</i><b>Slack</b><span class="s">Tell the team when done</span><span class="btn sm">Sign in with Slack</span></div>
+        <div class="appc"><i class="ic" style="background:#555">⌘</i><b>A server (SSH)</b><span class="s">Your own machines</span><span class="btn sm">Connect</span></div>
+      </div>
+      <div class="row" style="border-top:1px solid var(--ln);padding-top:12px;gap:28px;font-size:13px"><span><b>Only for the task.</b> <span class="mu">Access ends when the task ends.</span></span><span><b>Your sign-ins stay on your computer.</b> <span class="mu">In the keychain, never sent to Styx.</span></span><span><b>Everything on record.</b> <span class="mu">See frame 10.</span></span></div>
+    </section></div>
+</div>
+
+<!-- 9 KNOW-HOW -->
+<div class="note" id="f9"><h2>9. Know-how: what the team knows, used by every task</h2><p>One place for the brand voice, how you price, client rules, the CI guide, decisions made. Anyone adds to it (or saves a message to it in one click); every AI in every task reads it before it starts. "Used by" shows it is actually being used, which keeps people writing it.</p><ul><li>Filed by project, with team-wide entries for everything.</li><li>This is today's team context, made the centre of the marketing side.</li></ul></div>
+<div class="win">
+  <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><span class="crumb"><b>Know-how</b></span><span class="sp"></span><span class="me">NF</span></div>
+  <div class="app"><nav class="side"><a>Home</a><a>Needs your OK <span class="n">3</span></a><a>Tasks</a><a>Projects <span class="c">3</span></a><a>Reports</a><a data-on>Know-how</a><a>Connected apps</a><a>Record</a></nav>
+    <section class="main">
+      <div class="row"><h2>Know-how</h2><span class="sp"></span><span class="field" style="width:360px">Find, or ask: what is Acme's brand voice?</span><span class="btn go">Add</span></div>
+      <div class="row"><span class="chip" data-on>Everything 24</span><span class="chip">Team-wide</span><span class="chip">Acme Shop</span><span class="chip">The Promo Group</span><span class="chip">Styx</span><span class="chip">Out of date</span></div>
+      <div class="kh">
+        <div class="list">
+          <div class="it" data-on><b>Acme brand voice</b><span>Acme Shop · note · Thandi · 8 Nov</span></div>
+          <div class="it"><b>How we price retainers</b><span>Team-wide · note · Nic · 2 Nov</span></div>
+          <div class="it"><b>Payments go through Stripe, not PayFast</b><span>Acme Shop · decision · Nic · 30 Oct</span></div>
+          <div class="it"><b>CI guide</b><span>Team-wide · note · Nic · 2 Nov</span></div>
+          <div class="it"><b>Promo Group: who signs off</b><span>The Promo Group · note · Dane · 12 Nov</span></div>
+          <div class="it"><b>Order numbers are text, end to end</b><span>Acme Shop · decision · saved from a task · today</span></div>
+          <div class="it"><b>Never discount the cap below 20%</b><span>Acme Shop · decision · Thandi · 1 Nov</span></div>
+        </div>
+        <div class="doc2"><span class="mu" style="font-size:12px">Acme Shop · note · added by Thandi M. on 8 Nov</span><h3>Acme brand voice</h3><p>Plain, warm, no exclamation marks. Short sentences; say what it does before what it is.</p><p>Say "your order", never "the order". Prices in rand, no decimals. Free delivery is "free delivery", never "FREE SHIPPING".</p><div class="row" style="margin-top:4px"><span class="btn sm">Edit</span><span class="btn sm ghost">Out of date</span><span class="btn sm ghost">Share</span></div><div class="used">Used by 23 tasks this week, including <b>Black Friday retargeting</b> and <b>November newsletter</b>.</div></div>
+      </div>
+    </section></div>
+</div>
+
+<!-- 10 RECORD -->
+<div class="note" id="f10"><h2>10. The record: everything that happened, in sentences</h2><p>Every action on every app, code and marketing alike: who asked, what was done, which app, who approved. It cannot be edited or deleted, the same append-only log Styx keeps today, written so a client or an auditor can read it.</p><ul><li>Filters by project, person, app and kind (spend, live, sends, access).</li><li>Each line opens the task it came from.</li></ul></div>
+<div class="win">
+  <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><span class="crumb"><b>Record</b></span><span class="sp"></span><span class="me">NF</span></div>
+  <div class="app"><nav class="side"><a>Home</a><a>Needs your OK <span class="n">3</span></a><a>Tasks</a><a>Projects <span class="c">3</span></a><a>Reports</a><a>Know-how</a><a>Connected apps</a><a data-on>Record</a></nav>
+    <section class="main">
+      <div class="row"><h2>Record</h2><span class="sp"></span><span class="chip" data-on>All</span><span class="chip">Money</span><span class="chip">Going live</span><span class="chip">Sends</span><span class="chip">Access</span><span class="chip">Acme Shop</span><span class="btn sm ghost">Export</span></div>
+      <div class="rec">
+        <div class="r"><span class="mu">09:41</span><i class="ic" style="background:var(--vercel)">▲</i><span><b>Card payment fix went live</b> on acme-shop.co.za</span><span class="who">Nic approved with Touch ID</span></div>
+        <div class="r"><span class="mu">09:12</span><i class="ic" style="background:var(--meta)">f</i><span><b>Paused 2 ads</b> that passed their daily budget</span><span class="who">Styx, within your rules</span></div>
+        <div class="r"><span class="mu">09:03</span><i class="ic" style="background:var(--supa)">S</i><span><b>Read 50 failed payments</b> for the payment fix</span><span class="who">Styx for Nic · access ended 09:44</span></div>
+        <div class="r"><span class="mu">08:40</span><i class="ic" style="background:var(--ga)">GA</i><span><b>Shared the weekly report</b> with The Promo Group</span><span class="who">Dane · link opened 3 times</span></div>
+        <div class="r"><span class="mu">08:22</span><i class="ic" style="background:var(--meta)">f</i><span><b>Asked to launch</b> Black Friday retargeting, R5 000 a day</span><span class="who">Styx for Thandi · waiting</span></div>
+        <div class="r"><span class="mu">08:05</span><i class="ic" style="background:var(--gh)">GH</i><span><b>Merged a test fix</b> into Styx</span><span class="who">Nic approved</span></div>
+        <div class="r"><span class="mu">Mon</span><i class="ic" style="background:var(--google)">G</i><span><b>Declined:</b> R12 000 a day on Google Ads</span><span class="who">Nic declined</span></div>
+        <div class="r"><span class="mu">Mon</span><i class="ic" style="background:var(--mail);color:#000">M</i><span><b>Sent the refund email</b> to 3 104 people</span><span class="who">Thandi approved</span></div>
+      </div>
+    </section></div>
+</div>
+
+<!-- 11 CLIENT -->
+<div class="note" id="f11"><h2>11. What a client sees: a link, nothing to install</h2><p>A shared report (or a conversation, or a build) opens in any browser, on any phone, with no sign-in. It says who shared it and from where; it updates itself if you chose that; you can turn it off from Styx at any time.</p><ul><li>This is today's shared link, with the report as its content.</li></ul></div>
+<div class="paper">
+  <div class="browser"><div class="url">styx.link/r/promo-weekly</div><div class="cpage">
+    <span class="meta">Launchsite · shared by Dane · The Promo Group · updated every Monday</span>
+    <h1>Weekly report: 10 to 16 November</h1>
+    <div>A good week: sales up 18%, at a lower cost per sale. One display campaign spent R6 100 with no sales; we recommend pausing it.</div>
+    <div class="kpis"><div class="kpi"><span>Spend</span><b>R31 400</b></div><div class="kpi"><span>Sales</span><b>R212 700</b><em class="up">▲ 18%</em></div><div class="kpi"><span>Cost per sale</span><b>R74</b><em class="up">▼ R9</em></div><div class="kpi"><span>Return</span><b>6.8×</b></div></div>
+    <table><thead><tr><th>Campaign</th><th class="r">Spend</th><th class="r">Sales</th></tr></thead><tbody><tr><td>Search, brand</td><td class="r">R9 800</td><td class="r">R96 400</td></tr><tr><td>Search, products</td><td class="r">R8 900</td><td class="r">R73 100</td></tr><tr><td>Shopping</td><td class="r">R6 600</td><td class="r">R43 200</td></tr><tr><td>Display, retargeting</td><td class="r">R6 100</td><td class="r">R0</td></tr></tbody></table>
+    <span class="mu" style="font-size:12px">Numbers from Google Ads and Google Analytics · read only · shared with Styx</span>
+  </div></div>
+  <div class="phone"><div class="url" style="background:var(--s2);border-bottom:1px solid var(--ln);padding:8px 14px;font:400 12px var(--mono);color:var(--mu)">styx.link/r/promo-weekly</div><div class="cpage"><span class="meta">Launchsite · shared by Dane</span><h1>Weekly report: 10 to 16 Nov</h1><div>Sales up 18%, at a lower cost per sale. Pause the display campaign.</div><div class="kpis" style="grid-template-columns:1fr 1fr"><div class="kpi"><span>Sales</span><b>R212 700</b></div><div class="kpi"><span>Cost per sale</span><b>R74</b></div></div></div></div>
+</div>
+
+<!-- 12 PROJECT -->
+<div class="note" id="f12"><h2>12. A project: everything for one client or product</h2><p>Projects stay the backbone of Styx. A project holds its code (the repo, its branches, the live site and preview), the apps it uses, its tasks of every kind, its own rules and know-how, and its people. Home shows everything; a project shows one client's or product's world, and every new task started here belongs to it.</p><ul><li><b>Code</b> keeps today's project essentials: repo and folder, main branch, open branches per task, checks, run locally, open in your editor.</li><li>A project without code works too (The Promo Group: ads and email only); the Code box simply is not there.</li><li>Tabs reach the full lists; the overview is what a person needs at a glance.</li></ul></div>
+<div class="win tall">
+  <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><span class="crumb"><span>Projects</span><span>/</span><b>Acme Shop</b></span><span class="sp"></span><span class="find"><span>Find in Acme Shop…</span><span>⌘K</span></span><span class="me">NF</span></div>
+  <div class="app"><nav class="side"><a>Home</a><a>Needs your OK <span class="n">3</span></a><a>Tasks <span class="c">9</span></a><a data-on>Projects <span class="c">3</span></a><a>Reports</a><a>Know-how</a><a>Connected apps</a><a>Record</a>
+      <div class="grp"><span>Projects</span><span>+</span></div>
+      <div class="place" style="background:var(--s2);font-weight:600"><span class="sq" style="background:#e8916a"></span>Acme Shop<span class="k">code · ads · store</span></div>
+      <div class="place"><span class="sq" style="background:#8fb3ff"></span>The Promo Group<span class="k">ads · email</span></div>
+      <div class="place"><span class="sq" style="background:#b79bff"></span>Styx<span class="k">code</span></div>
+    </nav>
+    <section class="main">
+      <div class="proj-h"><span class="big-sq" style="background:#e8916a"></span><h2>Acme Shop</h2><span class="meta"><span>Online store for Acme</span><span>· acme-shop.co.za</span><span>· 3 people</span><span>· 5 apps</span></span><div class="acts"><span class="btn ghost sm">Settings</span><span class="btn go">New task here</span></div></div>
+      <div class="tabs"><span data-on>Overview</span><span>Tasks 6</span><span>Code</span><span>Apps 5</span><span>Rules</span><span>Know-how 9</span><span>Reports</span><span>Record</span></div>
+      <div class="pgrid">
+        <div style="display:flex;flex-direction:column;gap:14px;min-height:0">
+          <div class="box"><div class="bh"><b>Tasks</b><span>6 open · 2 need your OK</span></div>
+            <div class="trow"><span class="sq" style="background:var(--code)"></span><span><b>Card payments fail on staging</b></span><span class="r tag">code</span><span class="s">Fixed and tested · ready to go live · Nic</span></div>
+            <div class="trow"><span class="sq" style="background:var(--mkt)"></span><span><b>Black Friday retargeting</b></span><span class="r tag">campaign</span><span class="s">R5 000 a day waits for you · Thandi</span></div>
+            <div class="trow"><span class="sq" style="background:var(--code)"></span><span><b>Why is the site slow on phones?</b></span><span class="r tag">question</span><span class="s">Answered: the hero image is 4 MB · fix ready · Nic</span></div>
+            <div class="trow"><span class="sq" style="background:var(--code)"></span><span><b>Add Apple Pay to checkout</b></span><span class="r tag">code</span><span class="s">Designing the screens first · 2 of 3 · Dane</span></div>
+            <div class="trow"><span class="sq" style="background:var(--rep)"></span><span><b>Monthly report for Acme</b></span><span class="r tag">report</span><span class="s">Updates on the 1st · shared with the client</span></div>
+            <div class="trow"><span class="sq" style="background:var(--mkt)"></span><span><b>Product photos for the new caps</b></span><span class="r tag">design</span><span class="s">Waiting for you to pick 3 of 12 · Thandi</span></div>
+          </div>
+          <div class="box"><div class="bh"><b>Code</b><span class="row" style="gap:6px"><span class="btn sm ghost">Run it here</span><span class="btn sm ghost">Open in editor</span></span></div>
+            <div class="codekv"><span>Repo</span><span class="mono">github.com/acme/shop</span><span>On this Mac</span><span class="mono">~/code/acme-shop</span><span>Main</span><span><span class="mono">main</span> · all 42 checks pass · live 2 hours ago</span><span>Work in progress</span><span>3 tasks on their own branches · none behind main</span><span>Ready to go live</span><span>1 · card payment fix</span><span>Sites</span><span><span class="mono">acme-shop.co.za</span> · preview at <span class="mono">preview.acme-shop.co.za</span></span></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;min-height:0">
+          <div class="box"><div class="bh"><b>Apps for this project</b><span>access only per task</span></div><div class="applist">
+            <div><i class="ic" style="background:var(--gh)">GH</i><span>GitHub · acme/shop</span><span class="mu" style="font-size:12px">code</span></div>
+            <div><i class="ic" style="background:var(--vercel)">▲</i><span>Vercel · acme-shop</span><span class="mu" style="font-size:12px">production asks</span></div>
+            <div><i class="ic" style="background:var(--supa)">S</i><span>Supabase · acme-prod, acme-staging</span><span class="mu" style="font-size:12px">prod asks</span></div>
+            <div><i class="ic" style="background:var(--meta)">f</i><span>Meta Ads · Acme ad account</span><span class="mu" style="font-size:12px">spend asks</span></div>
+            <div><i class="ic" style="background:var(--shop)">S</i><span>Shopify · Acme Shop</span><span class="mu" style="font-size:12px">refunds ask</span></div>
+            <div><i class="ic" style="background:var(--ga)">GA</i><span>Google Analytics · acme-shop.co.za</span><span class="mu" style="font-size:12px">read</span></div>
+          </div></div>
+          <div class="box"><div class="bh"><b>Know-how for Acme</b><span>9 entries</span></div><div class="applist">
+            <div><span class="sq" style="background:var(--tx)"></span><span>Acme brand voice</span><span class="mu" style="font-size:12px">23 uses</span></div>
+            <div><span class="sq" style="background:var(--tx)"></span><span>Payments go through Stripe, not PayFast</span><span class="mu" style="font-size:12px">decision</span></div>
+            <div><span class="sq" style="background:var(--tx)"></span><span>Never discount the cap below 20%</span><span class="mu" style="font-size:12px">decision</span></div>
+          </div></div>
+          <div class="box"><div class="bh"><b>People</b><span>who can start tasks here</span></div><div class="people"><span><i>NF</i>Nic · owner</span><span><i>TM</i>Thandi · marketing</span><span><i>DS</i>Dane · code</span><span style="color:var(--mu)">+ Invite</span></div></div>
+        </div>
+      </div>
+    </section></div>
+</div>
+
+</body>
+</html>

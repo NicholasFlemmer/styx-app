@@ -24,6 +24,7 @@ const bus = () => {
       tourDone: true,
       tourVersion: 2,
       instrumentOrder: [],
+      oneMode: false,
     },
   }));
   b.register('project.select', ({ projectId }) => {

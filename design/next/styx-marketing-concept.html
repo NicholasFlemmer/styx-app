@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Styx for marketing: concept</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --page:#e9ebe3; --bg:#f7f8f3; --s1:#ffffff; --s2:#eef0e8; --ln:#d6d9cf; --tx:#14160f; --mu:#5d6259;
+  --ac:#d6ff3d; --acx:#0d0e0c; --act:#6e8f00; --soft:#f2f8d6;
+  --meta:#1877f2; --google:#ea4335; --ga:#f9ab00; --shop:#5e8e3e; --mail:#ffe01b; --hub:#ff7a59; --canva:#00c4cc;
+  --ui: 'Archivo', system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--page); color: var(--tx); font: 400 14px/1.5 var(--ui); padding: 56px 0 140px; }
+.mu { color: var(--mu); }
+.doc { width: 1280px; margin: 0 auto; }
+.doc h1 { font: 700 52px/1.02 var(--ui); letter-spacing: -.02em; max-width: 20ch; }
+.doc .lede { margin-top: 16px; max-width: 62ch; color: var(--mu); font-size: 18px; }
+.note { width: 1280px; margin: 80px auto 16px; }
+.note h2 { font: 600 24px/1.15 var(--ui); }
+.note p { margin-top: 6px; color: var(--mu); font-size: 15px; max-width: 74ch; }
+
+.win { width: 1280px; height: 800px; margin: 0 auto; background: var(--bg); border: 1px solid var(--ln); display: grid; grid-template-rows: 44px 1fr; overflow: hidden; }
+.top { display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid var(--ln); background: var(--s1); }
+.lights { display: flex; gap: 8px; width: 60px; } .lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--s2); border: 1px solid var(--ln); }
+.word { font: 700 12px/1 var(--ui); letter-spacing: .24em; }
+.sp { margin-left: auto; }
+.me { width: 26px; height: 26px; background: var(--tx); color: var(--bg); display: grid; place-items: center; font: 700 10px var(--ui); }
+.app { display: grid; grid-template-columns: 220px 1fr 340px; min-height: 0; }
+.app.two { grid-template-columns: 220px 1fr; }
+.side { border-right: 1px solid var(--ln); background: var(--s1); display: flex; flex-direction: column; padding: 14px 0; }
+.side a { display: flex; justify-content: space-between; padding: 9px 18px; font-size: 14px; color: var(--tx); text-decoration: none; }
+.side a[data-on] { background: var(--tx); color: var(--bg); font-weight: 600; }
+.side a .n { background: var(--ac); color: var(--acx); font: 700 11px var(--ui); padding: 1px 6px; }
+.side .grp { padding: 18px 18px 6px; font-size: 12px; color: var(--mu); }
+.side .client { padding: 6px 18px; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+.side .sq { width: 8px; height: 8px; display: inline-block; }
+.main { padding: 28px 36px; overflow: hidden; display: flex; flex-direction: column; gap: 22px; }
+.main h2 { font: 700 26px/1.15 var(--ui); }
+.ask { background: var(--s1); border: 1px solid var(--tx); padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.ask .q { font-size: 17px; color: var(--mu); }
+.ask .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.chip { border: 1px solid var(--ln); padding: 5px 10px; font-size: 12px; background: var(--bg); }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border: 1px solid var(--tx); font-size: 14px; font-weight: 600; background: var(--s1); white-space: nowrap; }
+.btn.go { background: var(--ac); border-color: var(--ac); color: var(--acx); font-weight: 700; }
+.btn.sm { padding: 6px 11px; font-size: 13px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.card { background: var(--s1); border: 1px solid var(--ln); padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.card b { font: 600 15px/1.3 var(--ui); }
+.card .st { font-size: 12px; display: flex; gap: 6px; align-items: center; color: var(--mu); }
+.card .st i { width: 7px; height: 7px; display: inline-block; background: var(--mu); }
+.card .st.work i { background: var(--act); } .card .st.ready i { background: var(--tx); }
+.logos { display: flex; gap: 6px; flex-wrap: wrap; }
+.logo { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; border: 1px solid var(--ln); padding: 3px 8px 3px 4px; background: var(--s1); }
+.logo i { width: 16px; height: 16px; display: grid; place-items: center; font: 700 9px var(--ui); color: #fff; font-style: normal; }
+.right { border-left: 1px solid var(--ln); background: var(--s1); padding: 22px 20px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.right h3 { font: 600 15px var(--ui); display: flex; justify-content: space-between; }
+.okay { border: 1px solid var(--tx); padding: 14px; display: flex; flex-direction: column; gap: 8px; background: var(--bg); }
+.okay .what { font-weight: 600; font-size: 15px; }
+.okay .money { font: 700 22px var(--ui); }
+.okay .acts { display: flex; gap: 8px; }
+.line { display: flex; justify-content: space-between; font-size: 13px; padding: 8px 0; border-top: 1px solid var(--ln); }
+.line:first-of-type { border-top: 0; }
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.kpi { background: var(--s1); border: 1px solid var(--ln); padding: 12px 14px; }
+.kpi span { font-size: 12px; color: var(--mu); } .kpi b { display: block; font: 700 22px var(--ui); margin-top: 2px; }
+.kpi em { font-style: normal; font-size: 12px; } .up { color: var(--act); } .down { color: #b3261e; }
+
+/* task view */
+.thread { display: flex; flex-direction: column; gap: 12px; overflow: hidden; padding-top: 20px; }
+.you { align-self: flex-end; background: var(--tx); color: var(--bg); padding: 10px 14px; max-width: 58ch; }
+.ai { background: var(--s1); border: 1px solid var(--ln); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; max-width: 900px; }
+.ai .by { font-size: 12px; color: var(--mu); }
+.steps { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--mu); }
+.steps span::before { content: '✓ '; color: var(--act); font-weight: 700; }
+.ads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ad { border: 1px solid var(--ln); background: var(--bg); }
+.ad .img { height: 64px; display: grid; place-items: center; font: 700 20px var(--ui); color: var(--tx); }
+.ad .tx { padding: 8px 10px; font-size: 12px; }
+.ad .tx b { display: block; font-size: 13px; }
+.ad .pick { padding: 6px 10px; border-top: 1px solid var(--ln); font-size: 12px; display: flex; justify-content: space-between; color: var(--mu); }
+.ad[data-on] { outline: 2px solid var(--tx); outline-offset: -2px; }
+.launch { border: 2px solid var(--tx); background: var(--soft); padding: 16px 18px; display: grid; grid-template-columns: 1fr auto; gap: 6px 20px; align-items: center; max-width: 900px; }
+.launch .what { font: 700 17px var(--ui); }
+.launch .acts { grid-column: 2; grid-row: 1 / span 3; display: flex; gap: 8px; }
+.composer { margin-top: auto; border: 1px solid var(--ln); background: var(--s1); padding: 12px 14px; color: var(--mu); }
+
+/* connect */
+.apps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.appc { background: var(--s1); border: 1px solid var(--ln); padding: 16px; display: grid; grid-template-columns: 36px 1fr; gap: 4px 12px; }
+.appc i { width: 36px; height: 36px; grid-row: span 3; display: grid; place-items: center; font: 700 13px var(--ui); color: #fff; font-style: normal; }
+.appc b { font: 600 15px var(--ui); }
+.appc .s { font-size: 12px; color: var(--mu); }
+.appc .btn { justify-self: start; margin-top: 6px; }
+.appc .on { font-size: 12px; color: var(--act); font-weight: 600; margin-top: 6px; }
+.promise { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; border-top: 1px solid var(--ln); padding-top: 16px; }
+.promise b { display: block; font: 600 15px var(--ui); } .promise span { font-size: 13px; color: var(--mu); }
+</style>
+</head>
+<body>
+
+<div class="doc">
+  <h1>Your whole marketing stack, in one place that does the work.</h1>
+  <p class="lede">Connect the apps you already use. Ask for what you need in plain words. AI does the work across all of them, and nothing spends money or goes live until you say so.</p>
+</div>
+
+<div class="note"><h2>1. Home: ask, see what is in progress, approve what needs you</h2><p>One box to ask for anything. Work in progress shows as plain tasks with where each one is. On the right, only what needs your OK: spend, launches and sends, with the money in big type.</p></div>
+<div class="win">
+  <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><span class="mu">Launchsite · Marketing</span><span class="sp"></span><span class="me">NF</span></div>
+  <div class="app">
+    <nav class="side">
+      <a data-on>Home</a>
+      <a>Approvals <span class="n">2</span></a>
+      <a>Campaigns</a>
+      <a>Reports</a>
+      <a>Brand &amp; know-how</a>
+      <a>Connected apps</a>
+      <div class="grp">Clients</div>
+      <div class="client"><span class="sq" style="background:#e8916a"></span>Acme Shop</div>
+      <div class="client"><span class="sq" style="background:#8fb3ff"></span>The Promo Group</div>
+      <div class="client"><span class="sq" style="background:#b79bff"></span>TPG Marketing</div>
+    </nav>
+    <section class="main">
+      <h2>Good morning, Nic</h2>
+      <div class="ask">
+        <span class="q">What do you want done?</span>
+        <div class="row"><span class="chip">Weekly report for Acme</span><span class="chip">Why did cost per sale jump?</span><span class="chip">10 ad ideas for Black Friday</span><span class="chip">Draft this month's newsletter</span><span class="sp"></span><span class="btn go">Go</span></div>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><span>Ad spend this week</span><b>R48 200</b><em class="up">on budget</em></div>
+        <div class="kpi"><span>Sales from ads</span><b>R312 900</b><em class="up">▲ 18% vs last week</em></div>
+        <div class="kpi"><span>Cost per sale</span><b>R86</b><em class="down">▲ R11 · we are looking into it</em></div>
+      </div>
+      <div class="grid">
+        <div class="card"><b>Black Friday retargeting for Acme</b><span class="st work"><i></i>Drafting 6 ads from your best sellers</span><div class="logos"><span class="logo"><i style="background:var(--meta)">f</i>Meta Ads</span><span class="logo"><i style="background:var(--shop)">S</i>Shopify</span></div></div>
+        <div class="card"><b>Why did cost per sale jump?</b><span class="st ready"><i></i>Answered: one ad set lost its audience on Tuesday</span><div class="logos"><span class="logo"><i style="background:var(--meta)">f</i>Meta Ads</span><span class="logo"><i style="background:var(--ga)">G</i>Analytics</span></div></div>
+        <div class="card"><b>November newsletter</b><span class="st work"><i></i>Writing in your brand voice · 2 of 4 sections</span><div class="logos"><span class="logo"><i style="background:var(--mail);color:#000">M</i>Mailchimp</span></div></div>
+        <div class="card"><b>Weekly report for The Promo Group</b><span class="st ready"><i></i>Ready · share it as a link</span><div class="logos"><span class="logo"><i style="background:var(--google)">G</i>Google Ads</span><span class="logo"><i style="background:var(--ga)">G</i>Analytics</span></div></div>
+      </div>
+    </section>
+    <aside class="right">
+      <h3>Needs your OK <span class="mu">2</span></h3>
+      <div class="okay">
+        <span class="mu" style="font-size:12px">Acme · Meta Ads</span>
+        <span class="what">Launch Black Friday retargeting</span>
+        <span class="money">R5 000 a day · 7 days</span>
+        <span class="mu" style="font-size:13px">3 ads you picked, to people who viewed a product in the last 30 days.</span>
+        <div class="acts"><span class="btn go sm">Approve &amp; launch</span><span class="btn sm">Change</span></div>
+      </div>
+      <div class="okay">
+        <span class="mu" style="font-size:12px">The Promo Group · Mailchimp</span>
+        <span class="what">Send the November newsletter</span>
+        <span class="money">12 480 people</span>
+        <div class="acts"><span class="btn go sm">Approve &amp; send</span><span class="btn sm">See it first</span></div>
+      </div>
+      <h3 style="margin-top:8px">Done today</h3>
+      <div><div class="line"><span>Paused 2 ads over budget</span><span class="mu">09:12</span></div><div class="line"><span>Fixed a broken link in 4 ads</span><span class="mu">08:40</span></div><div class="line"><span>Shared Acme report with client</span><span class="mu">08:05</span></div></div>
+    </aside>
+  </div>
+</div>
+
+<div class="note"><h2>2. A task: the work, then the decision</h2><p>Ask in plain words. It shows what it looked at, then the result you can act on: here, six ads drafted from your best sellers in your brand voice, with numbers from your own accounts. Pick the ones you like; nothing goes live until you press the green button.</p></div>
+<div class="win">
+  <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><span class="mu">Acme Shop · Black Friday retargeting</span><span class="sp"></span><span class="me">NF</span></div>
+  <div class="app two">
+    <nav class="side">
+      <a>Home</a><a>Approvals <span class="n">2</span></a><a data-on>Campaigns</a><a>Reports</a><a>Brand &amp; know-how</a><a>Connected apps</a>
+    </nav>
+    <section class="main thread">
+      <div class="you">Set up Black Friday retargeting for Acme. Budget around R5k a day for a week. Use our best sellers.</div>
+      <div class="ai">
+        <span class="by">Styx</span>
+        <div class="steps"><span>Read 30 days of Acme sales in Shopify: top 3 products are the hoodie, the tote and the cap</span><span>Checked Meta Ads: 41 200 people viewed a product and did not buy</span><span>Used your brand voice: plain, warm, no exclamation marks</span></div>
+        <div>Six ads, two per product. The hoodie ads have the strongest numbers from last year, so I'd lead with those.</div>
+        <div class="ads">
+          <div class="ad" data-on><div class="img" style="background:#f2e3d8">Hoodie</div><div class="tx"><b>Still thinking about it?</b>The Acme hoodie, 30% off until Monday.</div><div class="pick"><span>Picked</span><span>est. R71 per sale</span></div></div>
+          <div class="ad" data-on><div class="img" style="background:#e3ecf7">Tote</div><div class="tx"><b>Your tote is waiting</b>Free delivery on everything this weekend.</div><div class="pick"><span>Picked</span><span>est. R88 per sale</span></div></div>
+          <div class="ad" data-on><div class="img" style="background:#ece6f7">Cap</div><div class="tx"><b>Back in stock</b>The cap you looked at. Gone by Monday.</div><div class="pick"><span>Picked</span><span>est. R93 per sale</span></div></div>
+          <div class="ad"><div class="img" style="background:#f2e3d8">Hoodie</div><div class="tx"><b>Made to last</b>The one hoodie you'll keep for years.</div><div class="pick"><span>Pick</span><span>est. R79 per sale</span></div></div>
+          <div class="ad"><div class="img" style="background:#e3ecf7">Tote</div><div class="tx"><b>Carry more</b>The tote, now with free delivery.</div><div class="pick"><span>Pick</span><span>est. R95 per sale</span></div></div>
+          <div class="ad"><div class="img" style="background:#ece6f7">Cap</div><div class="tx"><b>Last chance</b>30% off the cap until Monday.</div><div class="pick"><span>Pick</span><span>est. R101 per sale</span></div></div>
+        </div>
+      </div>
+      <div class="launch">
+        <span class="what">Launch 3 ads on Meta for R5 000 a day, 7 days</span>
+        <span class="mu">People who viewed a product in the last 30 days · starts Friday 00:00 · stops Thursday 23:59 · R35 000 at most</span>
+        <span class="mu" style="font-size:12px">Styx can only spend this once you approve, and only on this campaign.</span>
+        <div class="acts"><span class="btn go">Approve &amp; launch</span><span class="btn">Change</span></div>
+      </div>
+      <div class="composer">Ask for a change: "make the cap ad funnier", "drop the budget to R3k"…</div>
+    </section>
+  </div>
+</div>
+
+<div class="note"><h2>3. Connect your apps once</h2><p>Sign in with the accounts you already have, the way you always do. No keys, no setup. It only ever does what a task needs, and anything that spends, publishes or sends waits for your OK.</p></div>
+<div class="win">
+  <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="word">STYX</span><span class="mu">Connected apps</span><span class="sp"></span><span class="me">NF</span></div>
+  <div class="app two">
+    <nav class="side">
+      <a>Home</a><a>Approvals <span class="n">2</span></a><a>Campaigns</a><a>Reports</a><a>Brand &amp; know-how</a><a data-on>Connected apps</a>
+    </nav>
+    <section class="main">
+      <h2>Your apps</h2>
+      <div class="apps">
+        <div class="appc"><i style="background:var(--meta)">f</i><b>Meta Ads</b><span class="s">Facebook &amp; Instagram ads</span><span class="on">Connected · 3 ad accounts</span></div>
+        <div class="appc"><i style="background:var(--google)">G</i><b>Google Ads</b><span class="s">Search, YouTube, Shopping</span><span class="on">Connected · 2 accounts</span></div>
+        <div class="appc"><i style="background:var(--ga)">G</i><b>Google Analytics</b><span class="s">Traffic and sales on your sites</span><span class="on">Connected · 4 sites</span></div>
+        <div class="appc"><i style="background:var(--shop)">S</i><b>Shopify</b><span class="s">Products, orders and customers</span><span class="on">Connected · Acme Shop</span></div>
+        <div class="appc"><i style="background:var(--mail);color:#000">M</i><b>Mailchimp</b><span class="s">Newsletters and audiences</span><span class="on">Connected</span></div>
+        <div class="appc"><i style="background:var(--hub)">H</i><b>HubSpot</b><span class="s">Contacts, deals and email</span><span class="btn sm">Sign in with HubSpot</span></div>
+        <div class="appc"><i style="background:var(--canva)">C</i><b>Canva</b><span class="s">Designs and brand kit</span><span class="btn sm">Sign in with Canva</span></div>
+        <div class="appc"><i style="background:#0f9d58">G</i><b>Google Drive</b><span class="s">Briefs, decks and sheets</span><span class="btn sm">Sign in with Google</span></div>
+        <div class="appc"><i style="background:#000">N</i><b>Notion</b><span class="s">Plans and notes</span><span class="btn sm">Sign in with Notion</span></div>
+      </div>
+      <div class="promise">
+        <div><b>Asks before it spends</b><span>Launches, budgets, sends and posts wait for your OK, with the amount in front of you.</span></div>
+        <div><b>Only what the task needs</b><span>Access lasts for that one task and closes when it is done.</span></div>
+        <div><b>Everything on record</b><span>Every change to every account, who asked for it and when.</span></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+</body>
+</html>
