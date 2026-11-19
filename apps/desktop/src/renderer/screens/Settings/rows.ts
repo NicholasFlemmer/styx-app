@@ -187,6 +187,15 @@ const generalRows = (model: ReadModel, now: number): SettingsRow[] => {
       change: { kind: 'app', patch: (t) => ({ theme: t as AppSettings['theme'] }) },
       overridden: false,
     },
+    // ADR-0033: the plain-words shell, behind a switch while it is tested.
+    {
+      id: 'oneMode',
+      label: copy.one.modeLabel,
+      value: onOff(app.oneMode),
+      options: ON_OFF,
+      change: { kind: 'app', patch: (b) => ({ oneMode: isOn(b) }) },
+      overridden: false,
+    },
     {
       id: 'notify',
       label: r.notify,
