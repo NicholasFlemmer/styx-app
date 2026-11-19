@@ -2,6 +2,7 @@ import type { Container } from '../../container';
 import type { CommandBus } from '../bus';
 import { registerAccountCommands } from './account';
 import { registerHubCommands } from './hub';
+import { registerConnectedAppsCommands } from './connected-apps';
 import { registerFeedbackCommands } from './feedback';
 import { registerUpdateCommands } from './update';
 import { registerAgentCommands } from './agent';
@@ -28,6 +29,7 @@ import { registerWorktreeCommands } from './worktree';
 /** One registrar per domain; the contract test asserts every `COMMAND_NAMES` entry ends up registered. */
 export function registerAllCommands(bus: CommandBus, app: Container): void {
   registerStoreCommands(bus, app);
+  registerConnectedAppsCommands(bus, app);
   registerProjectCommands(bus, app);
   registerGitCommands(bus, app);
   registerSessionCommands(bus, app);

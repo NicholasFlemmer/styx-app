@@ -482,6 +482,7 @@
   .appRow {
     display: grid;
     grid-template-columns: 1fr auto auto;
+    list-style: none;
     gap: 12px;
     align-items: center;
     padding: 10px 0;
@@ -496,6 +497,45 @@
     font-size: 12px;
     font-weight: 400;
     color: var(--mu);
+  }
+  .appItem {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-bottom: 10px;
+    border-top: 1px solid var(--ln);
+  }
+  .appItem > .appRow {
+    border-top: 0;
+  }
+  .metaBox {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 0;
+  }
+  .formRow {
+    align-items: flex-end;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .grow {
+    flex: 1;
+    min-width: 220px;
+  }
+  .field input {
+    padding: 7px 9px;
+    font-size: 14px;
+  }
+  .field input:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: 0;
   }
   .filters {
     display: flex;

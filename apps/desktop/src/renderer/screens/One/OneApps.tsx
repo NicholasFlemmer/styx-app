@@ -10,6 +10,7 @@ import {
 } from '@styx/core';
 import { Button } from '@styx/ui';
 import { useModel, useUi } from '../../state/hooks';
+import { ConnectedAppsMcp } from './ConnectedAppsMcp';
 import s from './One.module.css';
 
 const identity = (m: ReadModel) => m;
@@ -80,6 +81,7 @@ export function OneApps() {
           })}
         </ul>
       )}
+      <ConnectedAppsMcp />
     </div>
   );
 }

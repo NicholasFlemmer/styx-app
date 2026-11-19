@@ -45,7 +45,9 @@ describe('a conversation shared as a page', () => {
     ]);
     expect(turnsOf(LANE, 'Nic', 'Claude', 'nope')).toEqual([]);
     // Any message: one of the person's on its own, or one the agent sent mid-turn.
-    expect(turnsOf(LANE, 'Nic', 'Claude', 'm5').map((x) => [x.text, x.highlight])).toEqual([['Fix it', true]]);
+    expect(turnsOf(LANE, 'Nic', 'Claude', 'm5').map((x) => [x.text, x.highlight])).toEqual([
+      ['Fix it', true],
+    ]);
   });
 
   it('takes secrets out before anything is shared', () => {

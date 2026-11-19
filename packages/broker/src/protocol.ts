@@ -225,6 +225,27 @@ export const methods = {
    * The team hub (ADR-0032). Context by name or question (no query: the one-line index of what exists); needs the
    * project linked to a space. Results carry their source so the agent can cite it.
    */
+  /** Apps the person connected for AI (ADR-0033 tier 2), with their tools; never an address or a sign-in. */
+  list_apps: {
+    params: z.object({}),
+    result: z.array(
+      z.object({
+        app: z.string(),
+        name: z.string(),
+        tools: z.array(z.object({ name: z.string(), description: z.string(), readOnly: z.boolean() })),
+      }),
+    ),
+  },
+  /** Runs one app tool through Styx: a read-only tool at once, anything else after the person's OK. Audited. */
+  use_app: {
+    params: z.object({
+      app: z.string().min(1).max(80),
+      tool: z.string().min(1).max(200),
+      arguments: z.record(z.string(), z.unknown()).default({}),
+      waitMs,
+    }),
+    result: z.object({ text: z.string(), isError: z.boolean() }),
+  },
   hub_context: {
     params: z.object({
       query: z.string().max(500).optional(),
