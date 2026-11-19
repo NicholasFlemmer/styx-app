@@ -92,17 +92,26 @@ describe('show_result and launch plans (ADR-0033)', () => {
     // A stale view of the plan is refused.
     const stale = await test.app.bus.dispatch(test.sender, 'taskResults.approveLaunch', {
       sessionId: sid,
-      picked: [0],
       seenAt: seenAt - 1,
+      ads: [{ index: 0, headline: 'Still thinking?', body: 'Thirty off.' }],
+      perDay: 500,
+      days: 7,
+      countries: ['ZA'],
     });
     expect(stale.ok).toBe(false);
     const r = await test.app.bus.dispatch(test.sender, 'taskResults.approveLaunch', {
       sessionId: sid,
-      picked: [0],
       seenAt,
+      ads: [{ index: 0, headline: 'Still thinking?', body: 'Thirty off.' }],
+      perDay: 500,
+      days: 7,
+      countries: ['ZA'],
     });
     expect(r).toEqual({ ok: true, value: {} });
-    expect(test.app.repos.taskResults.get(sid)).toMatchObject({ launchPicked: [0] });
+    expect(test.app.repos.taskResults.get(sid)).toMatchObject({
+      launchPicked: [0],
+      approved: { ads: [{ headline: 'Still thinking?' }], plan: { perDay: 500, days: 7, countries: ['ZA'] } },
+    });
     expect(
       test.app.repos.audit.recent(5).some((a) => a.action === 'granted' && a.triggeredBy === 'launch plan'),
     ).toBe(true);
@@ -170,10 +179,103 @@ describe('show_result and launch plans (ADR-0033)', () => {
     });
     const r = await test.app.bus.dispatch(test.sender, 'taskResults.approveLaunch', {
       sessionId: ids.session.gemini,
-      picked: [0],
       seenAt: test.app.repos.taskResults.get(ids.session.gemini)?.updatedAt ?? 0,
+      ads: [{ index: 0, headline: 'Still thinking?', body: 'Thirty off.' }],
+      perDay: 500,
+      days: 7,
+      countries: ['ZA'],
     });
     expect(r.ok).toBe(false);
     client.close();
+  });
+
+  it('approves the person’s edits and numbers, only after OS authentication', async () => {
+    const { t: test, client } = await agent();
+    await client.call('show_result', { result: campaign });
+    const sid = ids.session.gemini;
+    const seenAt = test.app.repos.taskResults.get(sid)?.updatedAt ?? 0;
+    const approve = () =>
+      test.app.bus.dispatch(test.sender, 'taskResults.approveLaunch', {
+        sessionId: sid,
+        seenAt,
+        ads: [{ index: 0, headline: 'Our hoodie', body: 'Edited by the person.' }],
+        perDay: 300,
+        days: 3,
+        countries: null,
+      });
+    expect(await approve()).toEqual({ ok: true, value: {} });
+    const kept = test.app.repos.taskResults.get(sid);
+    expect(kept?.approved?.ads[0]).toMatchObject({ headline: 'Our hoodie', body: 'Edited by the person.' });
+    expect(kept?.approved?.plan).toMatchObject({ perDay: 300, days: 3 });
+    // The plan's money follows what was approved, not what the agent proposed.
+    const meta: ConnectedApp = {
+      id: 'm',
+      kind: 'meta-ads',
+      account: 'act_1',
+      currency: 'ZAR',
+      name: 'Meta',
+      url: 'https://graph.facebook.com',
+      status: 'connected',
+      error: null,
+      tools: [],
+      projects: [],
+      addedAt: 0,
+      checkedAt: null,
+    };
+    const tool = (name: string) => ({ name, title: null, description: '', readOnly: false });
+    expect(
+      test.app.taskResults.planReserve(sid, meta, tool('create_campaign'), { spend_cap: 901 }),
+    ).toBeNull();
+    expect(
+      test.app.taskResults.planReserve(sid, meta, tool('create_campaign'), { spend_cap: 900 }),
+    ).not.toBeNull();
+    // Nothing runs yet, so there is nothing to pause or read.
+    expect((await test.app.bus.dispatch(test.sender, 'taskResults.pauseAll', { sessionId: sid })).ok).toBe(
+      false,
+    );
+    expect(await test.app.bus.dispatch(test.sender, 'taskResults.live', { sessionId: sid })).toEqual({
+      ok: true,
+      value: { live: null },
+    });
+    client.close();
+  });
+
+  it('refuses to launch when OS authentication is cancelled', async () => {
+    t = makeTestApp({ mfa: 'cancelled' });
+    const wt = t.app.repos.worktrees.get(ids.worktree.acmeMain);
+    if (wt === null) throw new Error('fixture');
+    t.app.repos.worktrees.upsert({ ...wt, path: mkdtempSync(join(tmpdir(), 'styx-results-')) });
+    const kept = t.app.taskResults.show(ids.session.gemini, ids.project.acmeShop, campaign);
+    const r = await t.app.bus.dispatch(t.sender, 'taskResults.approveLaunch', {
+      sessionId: ids.session.gemini,
+      seenAt: kept.updatedAt,
+      ads: [{ index: 0, headline: 'x', body: 'y' }],
+      perDay: 500,
+      days: 7,
+      countries: null,
+    });
+    expect(r.ok).toBe(false);
+    expect(t.app.repos.taskResults.get(ids.session.gemini)?.launchApprovedAt).toBeNull();
+  });
+
+  it('fetches an ad picture only from a public https address, and only an image', async () => {
+    const png = Buffer.from('89504e470d0a1a0a', 'hex');
+    t = makeTestApp({
+      fetch: (async (u: string | URL | Request) =>
+        String(u).includes('photo.png')
+          ? new Response(png, { headers: { 'content-type': 'image/png' } })
+          : new Response('<html>', { headers: { 'content-type': 'text/html' } })) as typeof fetch,
+    });
+    const show = (image: string) =>
+      t?.app.taskResults.show(ids.session.gemini, ids.project.acmeShop, {
+        ...campaign,
+        ads: [{ ...campaign.ads[0], image }],
+      });
+    show('https://cdn.example.com/photo.png');
+    expect(await t.app.taskResults.adImage(ids.session.gemini, 0)).toMatch(/^data:image\/png;base64,/);
+    show('https://cdn.example.com/page.html');
+    expect(await t.app.taskResults.adImage(ids.session.gemini, 0)).toBeNull();
+    show('https://169.254.169.254/photo.png');
+    expect(await t.app.taskResults.adImage(ids.session.gemini, 0)).toBeNull();
   });
 });

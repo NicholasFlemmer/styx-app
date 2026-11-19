@@ -1,7 +1,11 @@
 import {
+  campaignAdSchema,
+  type CampaignLive,
   copy,
   fill,
+  formatMoney,
   launchCap,
+  launchPlanSchema,
   taskResultBodySchema,
   type ConnectedApp,
   type ConnectedAppTool,
@@ -9,6 +13,7 @@ import {
 } from '@styx/core';
 import type { Repos } from '../db/repos';
 import type { AuditInput } from './audit-service';
+import { appMayReach } from './connected-apps-service';
 import { redact } from './logger';
 
 /**
@@ -27,6 +32,23 @@ export interface TaskResultsDeps {
   audit(input: AuditInput): void;
   /** Tells the agent, as Styx, what the person decided. */
   tell(sessionId: string, text: string): Promise<void>;
+  /** Fetches an ad's picture (main only: the window never loads addresses an agent chose). */
+  fetch?: typeof fetch;
+  /** OS authentication (Touch ID, Windows Hello, polkit) before money is committed. */
+  verify(reason: string): Promise<'ok' | 'failed' | 'unavailable' | 'cancelled'>;
+  /** The Meta Ads app the plan runs in, connected, for Pause everything and the live numbers. */
+  meta(
+    projectId: string,
+  ): { pause(id: string): Promise<void>; live(campaignId: string): Promise<CampaignLive> } | null;
+}
+
+/** What the person approves: the picked ads as they edited them, and the plan with their numbers. */
+export interface LaunchApproval {
+  seenAt: number;
+  ads: { index: number; headline: string; body: string }[];
+  perDay: number;
+  days: number;
+  countries: string[] | null;
 }
 
 /** What one approved plan has made, and reserved, so far. */
@@ -52,6 +74,8 @@ export type Reservation =
   | { kind: 'none' };
 
 const DAY = 86_400_000;
+const IMAGE_MAX = 4 * 1024 * 1024;
+const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 
 const deepRedact = (v: unknown): unknown =>
   typeof v === 'string'
@@ -68,6 +92,7 @@ export class ResultRefusal extends Error {}
 export class TaskResultsService {
   private readonly plans = new Map<string, PlanState>();
   private seq = 0;
+  private readonly images = new Map<string, string>();
 
   constructor(private readonly deps: TaskResultsDeps) {}
 
@@ -99,26 +124,56 @@ export class TaskResultsService {
   }
 
   /**
-   * The person approves the launch plan they were looking at (`seenAt`), with the ads they picked; the agent is
-   * told to go ahead, within it. A plan swapped since, or approved already, is refused.
+   * The person approves exactly what they see: the result they were looking at (`seenAt`), the ads they picked as
+   * they edited them, and the plan with their numbers. Money is committed, so it asks for OS authentication first.
+   * A plan swapped since, or approved already, is refused. The agent is then told to launch exactly that.
    */
-  async approveLaunch(sessionId: string, picked: number[], seenAt: number): Promise<void> {
+  async approveLaunch(sessionId: string, a: LaunchApproval): Promise<void> {
     const result = this.deps.repos.taskResults.get(sessionId);
     if (result === null || result.body.kind !== 'campaign' || result.body.launch === undefined)
       throw new Error(copy.one.results.noPlan);
-    const ads = result.body.ads;
-    const picks = [...new Set(picked)].filter((i) => i >= 0 && i < ads.length).sort((a, b) => a - b);
+    if (result.updatedAt !== a.seenAt || result.launchApprovedAt !== null)
+      throw new Error(copy.one.results.planChanged);
+    const body = result.body;
+    const picks = [...new Map(a.ads.map((x) => [x.index, x])).values()]
+      .filter((x) => body.ads[x.index] !== undefined)
+      .sort((x, y) => x.index - y.index);
     if (picks.length === 0) throw new Error(copy.one.results.noPicks);
-    const plan = result.body.launch;
+    const ads = picks.flatMap((x) => {
+      const ad = body.ads[x.index];
+      return ad === undefined
+        ? []
+        : [{ ...ad, headline: redact(x.headline).trim(), body: redact(x.body).trim() }];
+    });
+    const plan = launchPlanSchema.parse({
+      ...body.launch,
+      perDay: a.perDay,
+      days: a.days,
+      ...(a.countries !== null && a.countries.length > 0 ? { countries: a.countries } : {}),
+    });
+    const approved = { ads: campaignAdSchema.array().parse(ads), plan };
+    const auth = await this.deps.verify(
+      `Launch ${body.title}: ${formatMoney(plan.perDay, plan.currency)} a day, ${formatMoney(launchCap(plan), plan.currency)} at most`,
+    );
+    if (auth === 'unavailable') throw new Error(copy.one.results.authUnavailable);
+    if (auth !== 'ok') throw new Error(copy.one.results.authCancelled);
     const now = this.deps.now();
-    if (!this.deps.repos.taskResults.approveLaunch(sessionId, now, seenAt, picks))
+    if (
+      !this.deps.repos.taskResults.approveLaunch(
+        sessionId,
+        now,
+        a.seenAt,
+        picks.map((x) => x.index),
+        approved,
+      )
+    )
       throw new Error(copy.one.results.planChanged);
     this.plans.set(sessionId, {
       appId: null,
       campaigns: 0,
       ids: new Set(),
       budgets: new Map(),
-      ads: picks.flatMap((i) => (ads[i] === undefined ? [] : [ads[i]])),
+      ads: approved.ads,
       endBy: now + (plan.days + 1) * DAY,
     });
     this.deps.publish(sessionId, this.deps.repos.taskResults.get(sessionId));
@@ -130,7 +185,7 @@ export class TaskResultsService {
       projectId: result.projectId,
       sessionId,
       worktreeId: session?.worktreeId ?? null,
-      targetLabel: `Meta Ads · ${result.body.title}`,
+      targetLabel: `Meta Ads · ${body.title}`,
       triggeredBy: 'launch plan',
       detail: {
         perDay: plan.perDay,
@@ -138,7 +193,7 @@ export class TaskResultsService {
         cap: launchCap(plan),
         currency: plan.currency,
         countries: plan.countries ?? null,
-        ads: picks.length,
+        ads: approved.ads.length,
       },
     });
     await this.deps.tell(
@@ -151,12 +206,84 @@ export class TaskResultsService {
         audience: plan.audience,
         countries: (plan.countries ?? []).join(', ') || 'as planned',
         endBy: new Date(now + plan.days * DAY).toISOString(),
-        ads: picks
-          .flatMap((i) => (ads[i] === undefined ? [] : [ads[i]]))
-          .map((a) => `- ${a.product}: headline "${a.headline}", message "${a.body}"`)
+        ads: approved.ads
+          .map(
+            (x) =>
+              `- ${x.product}: headline "${x.headline}", message "${x.body}"${x.image ? `, image ${x.image}` : ''}${x.link ? `, link ${x.link}` : ''}`,
+          )
           .join('\n'),
       }),
     );
+  }
+
+  /** Pause everything: the person stops every ad the plan made, at once, without asking the agent. */
+  async pauseAll(sessionId: string): Promise<void> {
+    const result = this.deps.repos.taskResults.get(sessionId);
+    if (result === null || result.campaignId === null) throw new Error(copy.one.results.nothingLive);
+    const meta = this.deps.meta(result.projectId);
+    if (meta === null) throw new Error(copy.one.results.metaGone);
+    await meta.pause(result.campaignId);
+    const now = this.deps.now();
+    this.deps.repos.taskResults.setPaused(sessionId, now);
+    // Nothing more may run under the plan once the person has stopped it.
+    this.plans.delete(sessionId);
+    this.deps.publish(sessionId, this.deps.repos.taskResults.get(sessionId));
+    const session = this.deps.repos.sessions.get(sessionId);
+    this.deps.audit({
+      actorKind: 'you',
+      actorLabel: 'you',
+      action: 'revoked',
+      projectId: result.projectId,
+      sessionId,
+      worktreeId: session?.worktreeId ?? null,
+      targetLabel: `Meta Ads · ${result.body.title}`,
+      triggeredBy: 'pause everything',
+      detail: { campaign: result.campaignId },
+    });
+  }
+
+  /**
+   * An ad's picture as a data URL, fetched here so the window keeps its strict image policy: https only, never a
+   * private address, no redirects, images only, 4 MB at most. Null when it cannot be shown.
+   */
+  async adImage(sessionId: string, index: number): Promise<string | null> {
+    const result = this.deps.repos.taskResults.get(sessionId);
+    const ad =
+      result?.body.kind === 'campaign'
+        ? ((result.approved?.ads ?? result.body.ads)[index] ?? result.body.ads[index])
+        : undefined;
+    if (ad?.image === undefined) return null;
+    const cached = this.images.get(ad.image);
+    if (cached !== undefined) return cached;
+    let url: URL;
+    try {
+      url = new URL(ad.image);
+    } catch {
+      return null;
+    }
+    if (!appMayReach(new URL('https://example.com'), url)) return null;
+    try {
+      const res = await (this.deps.fetch ?? fetch)(url.toString(), { redirect: 'error' });
+      const type = (res.headers.get('content-type') ?? '').split(';')[0]?.trim() ?? '';
+      if (!res.ok || !IMAGE_TYPES.has(type)) return null;
+      const bytes = Buffer.from(await res.arrayBuffer());
+      if (bytes.length > IMAGE_MAX) return null;
+      const data = `data:${type};base64,${bytes.toString('base64')}`;
+      if (this.images.size > 100) this.images.clear();
+      this.images.set(ad.image, data);
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The campaign's numbers from Meta, for the live view. */
+  async live(sessionId: string): Promise<CampaignLive | null> {
+    const result = this.deps.repos.taskResults.get(sessionId);
+    if (result === null || result.campaignId === null) return null;
+    const meta = this.deps.meta(result.projectId);
+    if (meta === null) return null;
+    return meta.live(result.campaignId);
   }
 
   /** The approved plan for a session while it is still running, or null. */
@@ -167,12 +294,13 @@ export class TaskResultsService {
       result === null ||
       state === undefined ||
       result.body.kind !== 'campaign' ||
-      result.body.launch === undefined ||
-      result.launchApprovedAt === null
+      result.approved === null ||
+      result.launchApprovedAt === null ||
+      result.pausedAt !== null
     )
       return null;
     if (this.deps.now() > state.endBy) return null;
-    return { plan: result.body.launch, state };
+    return { plan: result.approved.plan, state };
   }
 
   /**
@@ -267,7 +395,12 @@ export class TaskResultsService {
     switch (r.kind) {
       case 'campaign':
         if (id === null) state.campaigns = ok ? state.campaigns : 0;
-        else state.ids.add(id);
+        else {
+          state.ids.add(id);
+          // Kept: the live view and Pause everything follow this campaign, across restarts.
+          this.deps.repos.taskResults.setCampaign(sessionId, id);
+          this.deps.publish(sessionId, this.deps.repos.taskResults.get(sessionId));
+        }
         return;
       case 'adset': {
         const amount = state.budgets.get(r.key) ?? 0;
@@ -288,3 +421,19 @@ export class TaskResultsService {
     }
   }
 }
+
+/** The `one` fixture's Meta: a live campaign's numbers, and a pause that answers at once. Never the network. */
+export const demoMeta = (now: () => number) => ({
+  pause: async (_id: string): Promise<void> => undefined,
+  live: async (_id: string): Promise<CampaignLive> => ({
+    status: 'active',
+    spent: 8940,
+    sales: 71400,
+    clicks: 2800,
+    ads: [
+      { id: '1', name: 'Still thinking about it? · Hoodie', spent: 5210, clicks: 1840, sales: 48900 },
+      { id: '2', name: 'Your tote is waiting · Tote', spent: 3730, clicks: 960, sales: 22500 },
+    ],
+    readAt: now(),
+  }),
+});

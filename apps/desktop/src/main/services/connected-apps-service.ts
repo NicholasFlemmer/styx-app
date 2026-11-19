@@ -23,6 +23,7 @@ import { z } from 'zod';
 import { redact } from './logger';
 import type { AuditInput } from './audit-service';
 import type { CredentialVault } from './credential-vault';
+import type { CampaignLive } from '@styx/core';
 import { META_GRAPH, META_TOOLS, MetaAdsConnection, metaAccountId } from './meta-ads-app';
 
 /**
@@ -578,6 +579,36 @@ export class ConnectedAppsService {
   async close(): Promise<void> {
     for (const stop of this.signingIn.values()) stop();
     await Promise.all([...this.live.keys()].map((id) => this.drop(id)));
+  }
+
+  /**
+   * The Meta Ads app turned on for a project, for what the person does themselves (Pause everything, the live
+   * view); null when there is none or it is signed out.
+   */
+  metaFor(
+    projectId: string,
+    now: () => number,
+  ): { pause(id: string): Promise<void>; live(campaignId: string): Promise<CampaignLive> } | null {
+    const app = this.apps.find(
+      (a) => a.kind === 'meta-ads' && a.status === 'connected' && a.projects.includes(projectId),
+    );
+    if (app === undefined || app.account === null) return null;
+    const account = app.account;
+    const open = async () => {
+      const raw = await this.deps.vault.get(appSecretRef(app.id));
+      let t: unknown;
+      try {
+        t = (JSON.parse(raw ?? '{}') as { tokens?: { access_token?: unknown } }).tokens?.access_token;
+      } catch {
+        t = undefined;
+      }
+      if (typeof t !== 'string') throw new Error('Meta Ads needs signing in again.');
+      return new MetaAdsConnection(t, account, this.deps.fetch ?? fetch);
+    };
+    return {
+      pause: async (id) => (await open()).pauseCampaign(id),
+      live: async (id) => (await open()).live(id, now()),
+    };
   }
 
   /**

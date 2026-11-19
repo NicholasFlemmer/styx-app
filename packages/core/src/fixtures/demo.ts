@@ -1439,6 +1439,9 @@ export const oneFixture = (): DemoFixture & OneExtras => {
   const base = demoFixture();
   const campaignId = fid<'SessionId'>('sess', 20);
   const reportId = fid<'SessionId'>('sess', 21);
+  const liveId = fid<'SessionId'>('sess', 22);
+  const liveAsk =
+    'Winter sale: push the hoodie and the tote to people who bought before. R5 000 a day for a week.';
   const campaignAsk = 'Set up Black Friday retargeting. Around R5k a day for a week. Use our best sellers.';
   const reportAsk = 'Weekly report for client-x, 10 to 16 November, from Google Ads and Analytics.';
   return {
@@ -1458,6 +1461,20 @@ export const oneFixture = (): DemoFixture & OneExtras => {
           firstMessage: campaignAsk,
           kind: 'campaign',
           startedAt: ago(22 * MIN),
+        },
+      ),
+      session(
+        liveId,
+        ids.project.acmeShop,
+        ids.worktree.acmeMain,
+        'claude',
+        'idle',
+        'Launched',
+        ago(1 * DAY),
+        {
+          firstMessage: liveAsk,
+          kind: 'campaign',
+          startedAt: ago(2 * DAY),
         },
       ),
       session(
@@ -1488,6 +1505,17 @@ export const oneFixture = (): DemoFixture & OneExtras => {
           ago(4 * MIN),
         ),
       ],
+      [liveId]: [
+        msg(905, liveId, 0, liveAsk, { kind: 'user' }, ago(2 * DAY)),
+        msg(
+          906,
+          liveId,
+          1,
+          'Launched within the plan you approved: one campaign, two ad sets, two ads.',
+          { kind: 'agent' },
+          ago(1 * DAY),
+        ),
+      ],
       [reportId]: [
         msg(903, reportId, 0, reportAsk, { kind: 'user' }, ago(1 * HOUR)),
         msg(
@@ -1502,14 +1530,87 @@ export const oneFixture = (): DemoFixture & OneExtras => {
     },
     taskResults: [
       {
+        id: liveId,
+        projectId: ids.project.acmeShop,
+        launchApprovedAt: ago(1 * DAY + 2 * HOUR),
+        launchPicked: [0, 1],
+        approved: {
+          ads: [
+            {
+              product: 'Hoodie',
+              headline: 'Still thinking about it?',
+              body: 'The Acme hoodie, 30% off until Monday.',
+              picked: true,
+              cta: 'Shop now',
+              link: 'https://acmeshop.co.za/hoodie',
+            },
+            {
+              product: 'Tote',
+              headline: 'Your tote is waiting',
+              body: 'Free delivery on everything this weekend.',
+              picked: true,
+              cta: 'Shop now',
+            },
+          ],
+          plan: {
+            platform: 'meta',
+            perDay: 5000,
+            days: 7,
+            currency: 'ZAR',
+            audience: 'People who bought before',
+            countries: ['ZA'],
+          },
+        },
+        campaignId: '120000000000777',
+        pausedAt: null,
+        updatedAt: ago(1 * DAY + 3 * HOUR),
+        body: {
+          kind: 'campaign',
+          title: 'Winter sale',
+          goal: 'Sales',
+          page: 'Acme Shop',
+          lookedAt: ['Read past buyers in Shopify: 3 900 people bought in the last year'],
+          ads: [
+            {
+              product: 'Hoodie',
+              headline: 'Still thinking about it?',
+              body: 'The Acme hoodie, 30% off until Monday.',
+              picked: true,
+              cta: 'Shop now',
+              link: 'https://acmeshop.co.za/hoodie',
+            },
+            {
+              product: 'Tote',
+              headline: 'Your tote is waiting',
+              body: 'Free delivery on everything this weekend.',
+              picked: true,
+              cta: 'Shop now',
+            },
+          ],
+          launch: {
+            platform: 'meta',
+            perDay: 5000,
+            days: 7,
+            currency: 'ZAR',
+            audience: 'People who bought before',
+            countries: ['ZA'],
+          },
+        },
+      },
+      {
         id: campaignId,
         projectId: ids.project.acmeShop,
         launchApprovedAt: null,
         launchPicked: [],
+        approved: null,
+        campaignId: null,
+        pausedAt: null,
         updatedAt: ago(4 * MIN),
         body: {
           kind: 'campaign',
           title: 'Black Friday retargeting',
+          goal: 'Sales',
+          page: 'Acme Shop',
           lookedAt: [
             'Read 30 days of sales in Shopify: the hoodie, the tote and the cap sell most',
             'Checked Meta Ads: 41 200 people viewed a product and did not buy',
@@ -1577,11 +1678,15 @@ export const oneFixture = (): DemoFixture & OneExtras => {
         projectId: ids.project.clientX,
         launchApprovedAt: null,
         launchPicked: [],
+        approved: null,
+        campaignId: null,
+        pausedAt: null,
         updatedAt: ago(35 * MIN),
         body: {
           kind: 'report',
           title: 'Weekly report',
           period: '10 to 16 November',
+          asOf: 'Mon 17 Nov, 07:00',
           sources: ['Google Ads', 'Analytics'],
           headline: 'A good week: sales up 18%, at a lower cost per sale.',
           summary:
@@ -1600,6 +1705,12 @@ export const oneFixture = (): DemoFixture & OneExtras => {
               { label: 'Shopping', value: 43200 },
               { label: 'Display', value: 0 },
             ],
+          },
+          trend: {
+            title: 'Sales by day',
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            current: [24100, 26800, 29400, 27900, 33600, 35200, 35700],
+            previous: [22900, 23800, 23100, 25600, 26300, 28000, 26500],
           },
           table: {
             columns: ['Campaign', 'Spend', 'Sales', 'Cost per sale'],

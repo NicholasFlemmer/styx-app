@@ -13,7 +13,7 @@ import {
 } from '../model/hub';
 import { UPDATE_OFF, updateStateSchema } from '../model/update';
 import { connectedAppSchema } from '../model/connected-app';
-import { taskResultSchema } from '../model/task-result';
+import { campaignLiveSchema, taskResultSchema } from '../model/task-result';
 import { agentSetupSchema, setupAgentSchema } from '../model/agent-setup';
 import { RENDERER_USAGE_EVENTS } from '../model/usage-report';
 import { activityRowSchema } from '../model/activity';
@@ -802,11 +802,39 @@ export const commands = {
   'taskResults.approveLaunch': {
     input: z.object({
       sessionId: sessionIdSchema,
-      picked: z.array(z.number().int().min(0).max(11)).min(1).max(12),
       /** The result the person was looking at (its `updatedAt`): a plan swapped since is refused. */
       seenAt: z.number().int().nonnegative(),
+      /** The picked ads (by position) as the person edited them. */
+      ads: z
+        .array(
+          z.object({
+            index: z.number().int().min(0).max(11),
+            headline: z.string().trim().min(1).max(120),
+            body: z.string().trim().min(1).max(400),
+          }),
+        )
+        .min(1)
+        .max(12),
+      perDay: z.number().positive().max(10_000_000),
+      days: z.number().int().min(1).max(90),
+      countries: z
+        .array(z.string().regex(/^[A-Z]{2}$/))
+        .max(25)
+        .nullable(),
     }),
     output: ok,
+  },
+  /** An ad's picture, fetched by main (the window never loads addresses an agent chose). */
+  'taskResults.adImage': {
+    input: z.object({ sessionId: sessionIdSchema, index: z.number().int().min(0).max(11) }),
+    output: z.object({ dataUrl: z.string().nullable() }),
+  },
+  /** Pause everything: the person stops the campaign the plan made, at once. */
+  'taskResults.pauseAll': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
+  /** The campaign's numbers from Meta, for the live view; null before anything runs. */
+  'taskResults.live': {
+    input: z.object({ sessionId: sessionIdSchema }),
+    output: z.object({ live: campaignLiveSchema.nullable() }),
   },
   'connectedApps.remove': { input: z.object({ appId: z.string().min(1).max(64) }), output: ok },
   'hub.signIn': { input: z.object({}), output: ok },

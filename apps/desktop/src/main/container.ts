@@ -75,7 +75,7 @@ import { installIdFrom, UsageReportService } from './services/usage-report-servi
 import { FeedbackService } from './services/feedback-service';
 import { DEFAULT_HUB, HubService } from './services/hub-service';
 import { ConnectedAppsService, type AppConnector, type Loopback } from './services/connected-apps-service';
-import { TaskResultsService } from './services/task-results-service';
+import { TaskResultsService, demoMeta } from './services/task-results-service';
 import { hostname } from 'node:os';
 import { version as APP_VERSION } from '../../package.json';
 import { projectSettingsFor } from './store/projection';
@@ -196,6 +196,8 @@ export interface ContainerOptions {
   openExternal: (url: string) => Promise<void>;
   /** Connected apps' MCP client and sign-in return page; fakes in tests (never the network). */
   appConnector?: AppConnector;
+  /** The `one` fixture: Meta's live numbers and Pause everything answered from demo data, never the network. */
+  demoMeta?: boolean;
   appLoopback?: () => Promise<Loopback>;
   openInIde: (launcher: string, path: string) => Promise<void>;
   /** Applied after any app-settings change (theme source, launch at login…). */
@@ -758,6 +760,12 @@ export function buildContainer(opts: ContainerOptions): Container {
     tell: async (sessionId, text) => {
       await sessions.sendMessage(sessionId, text, [], { from: 'styx' });
     },
+    verify: (reason) => mfa.verify(reason),
+    fetch: opts.fetch ?? fetch,
+    meta: (projectId) =>
+      opts.demoMeta === true
+        ? demoMeta(() => clock.now())
+        : connectedApps.metaFor(projectId, () => clock.now()),
   });
   const usageReports = new UsageReportService({
     fetch: opts.fetch ?? fetch,
