@@ -399,7 +399,41 @@ async function boot(): Promise<void> {
     const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
     return r.canceled ? null : (r.filePaths[0] ?? null);
   };
+  /** A page printed to PDF in a hidden window that runs no scripts and reaches no network, then saved. */
+  const savePdf = async (html: string, name: string): Promise<string | null> => {
+    const parent = windowService.mainWindow();
+    const options: Electron.SaveDialogOptions = {
+      defaultPath: join(app.getPath('downloads'), name),
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    };
+    const r = parent ? await dialog.showSaveDialog(parent, options) : await dialog.showSaveDialog(options);
+    if (r.canceled || r.filePath === undefined) return null;
+    const win = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        javascript: false,
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        // Its own in-memory session, so blocking the network here touches no other window.
+        partition: 'styx-pdf',
+      },
+    });
+    // Nothing the page names is fetched: it is self-contained (inline CSS, inline SVG).
+    win.webContents.session.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_d, cb) =>
+      cb({ cancel: true }),
+    );
+    try {
+      await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+      const pdf = await win.webContents.printToPDF({ printBackground: true, pageSize: 'A4' });
+      writeFileSync(r.filePath, pdf);
+      return r.filePath;
+    } finally {
+      win.destroy();
+    }
+  };
   const dialogsPort: DialogsPort = {
+    savePdf,
     pickFolder: (opts) => openDialog(['openDirectory', 'createDirectory'], opts),
     pickFile: (opts) => openDialog(['openFile', 'showHiddenFiles'], opts),
     pickFiles: async (opts) => {
@@ -452,7 +486,8 @@ async function boot(): Promise<void> {
     disableRefresh: fixtureName !== null && env['STYX_KEYCHAIN'] === 'memory',
     // Fixture rows are fake binaries; re-detecting would swap them for whatever this machine has.
     redetectClis: fixtureName === null,
-    demoMeta: fixtureName === 'one',
+    // Never in a packaged build: a real Meta app must never meet a demo Pause.
+    demoMeta: fixtureName === 'one' && !app.isPackaged,
     ...(fixtureHome !== null ? { skillsHome: fixtureHome } : {}),
     ...(env['STYX_E2E'] === '1'
       ? { fetch: fixtureSkillsFetch }

@@ -76,6 +76,8 @@ import { FeedbackService } from './services/feedback-service';
 import { DEFAULT_HUB, HubService } from './services/hub-service';
 import { ConnectedAppsService, type AppConnector, type Loopback } from './services/connected-apps-service';
 import { TaskResultsService, demoMeta } from './services/task-results-service';
+import { REPORT_CSS, reportPage } from './services/report-page';
+import { ReportSchedule } from './services/report-schedule';
 import { hostname } from 'node:os';
 import { version as APP_VERSION } from '../../package.json';
 import { projectSettingsFor } from './store/projection';
@@ -155,6 +157,11 @@ export interface DialogsPort {
   }): Promise<string | null>;
   /** Several files at once (the team hub's Share). Empty when dismissed. */
   pickFiles?(opts: { title?: string | undefined }): Promise<string[]>;
+  /**
+   * A page printed to PDF and saved where the person picks (a report's Download PDF). The page runs with no scripts
+   * and no network. Resolves to the saved path, or null when dismissed.
+   */
+  savePdf?(html: string, name: string): Promise<string | null>;
 }
 
 /** Headless default (tests, fixtures without a window): every picker is dismissed. */
@@ -301,6 +308,8 @@ export interface Container {
   connectedApps: ConnectedAppsService;
   /** Campaign and report results, and approved launch plans (ADR-0033). */
   taskResults: TaskResultsService;
+  /** Keep it updating weekly: reports asked again every Monday morning (ADR-0033). */
+  reportSchedule: ReportSchedule;
   /** Updates in place (#119). */
   updates: UpdateService;
   /** Anonymous usage counts (discrepancy row 114): a closed set of event names, nothing else. */
@@ -677,6 +686,27 @@ export function buildContainer(opts: ContainerOptions): Container {
   const hub = new HubService({
     // Oldest first, as a page reads; the newest 1,000 is plenty for one shared conversation.
     transcript: (sessionId) => repos.transcripts.last(sessionId, 1000),
+    reportPage: (sessionId, sharedBy) => {
+      const r = repos.taskResults.get(sessionId);
+      if (r?.body.kind !== 'report') return null;
+      return {
+        title: r.body.title,
+        css: REPORT_CSS,
+        html: reportPage({
+          report: r.body,
+          project: repos.projects.get(r.projectId)?.name ?? '',
+          sharedBy,
+          updated: new Date(r.updatedAt).toLocaleString('en-GB', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          css: 'link',
+        }),
+      };
+    },
     fetch: opts.fetch ?? fetch,
     vault: opts.vault,
     store: repos.uiState,
@@ -752,7 +782,11 @@ export function buildContainer(opts: ContainerOptions): Container {
   const taskResults = new TaskResultsService({
     repos,
     now: () => clock.now(),
-    publish: (id, result) => publisher.taskResultSet(id, result),
+    publish: (id, result) => {
+      publisher.taskResultSet(id, result);
+      // A report shared to keep updating gets the new version at its link.
+      if (result?.body.kind === 'report') void hub.conversationTurnSettled(id);
+    },
     audit: (input) => {
       const row = audit.append(input);
       publisher.upsert('auditEntries', [row.id]);
@@ -766,6 +800,14 @@ export function buildContainer(opts: ContainerOptions): Container {
       opts.demoMeta === true
         ? demoMeta(() => clock.now())
         : connectedApps.metaFor(projectId, () => clock.now()),
+  });
+  const reportSchedule = new ReportSchedule({
+    repos,
+    now: () => clock.now(),
+    tell: async (sessionId, text) => {
+      await sessions.sendMessage(sessionId, text, [], { from: 'styx' });
+    },
+    publish: (id, result) => publisher.taskResultSet(id, result),
   });
   const usageReports = new UsageReportService({
     fetch: opts.fetch ?? fetch,
@@ -1193,6 +1235,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     hub,
     connectedApps,
     taskResults,
+    reportSchedule,
     updates,
     usageReports,
     feedback,
@@ -1216,6 +1259,7 @@ export function buildContainer(opts: ContainerOptions): Container {
       else refresh.start();
       await broker.listen();
       hub.start();
+      reportSchedule.start();
     },
     async shutdown() {
       for (const s of repos.sessions.live()) broker.notifyStopping(s.id);
@@ -1228,6 +1272,7 @@ export function buildContainer(opts: ContainerOptions): Container {
       runs.stopAll();
       devices.shutdown();
       hub.shutdown();
+      reportSchedule.stop();
       await connectedApps.close();
       // After agents and runs are stopped, so a slow network never delays that; capped at 2 s inside.
       await usageReports.shutdown();

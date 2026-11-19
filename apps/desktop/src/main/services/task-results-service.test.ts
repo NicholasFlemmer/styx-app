@@ -278,4 +278,99 @@ describe('show_result and launch plans (ADR-0033)', () => {
     show('https://169.254.169.254/photo.png');
     expect(await t.app.taskResults.adImage(ids.session.gemini, 0)).toBeNull();
   });
+
+  it('binds the approved picture and link, stops in Styx before Meta answers, and runs one campaign at a time', async () => {
+    const { t: test, client } = await agent();
+    const sid = ids.session.gemini;
+    await client.call('show_result', {
+      result: {
+        ...campaign,
+        ads: [
+          { ...campaign.ads[0], image: 'https://cdn.example.com/a.png', link: 'https://shop.example.com/a' },
+        ],
+      },
+    });
+    const seenAt = test.app.repos.taskResults.get(sid)?.updatedAt ?? 0;
+    await test.app.bus.dispatch(test.sender, 'taskResults.approveLaunch', {
+      sessionId: sid,
+      seenAt,
+      ads: [{ index: 0, headline: 'Still thinking?', body: 'Thirty off.' }],
+      perDay: 500,
+      days: 7,
+      countries: null,
+    });
+    const meta: ConnectedApp = {
+      id: 'm',
+      kind: 'meta-ads',
+      account: 'act_1',
+      currency: 'ZAR',
+      name: 'Meta',
+      url: 'https://graph.facebook.com',
+      status: 'connected',
+      error: null,
+      tools: [],
+      projects: [],
+      addedAt: 0,
+      checkedAt: null,
+    };
+    const tool = (name: string) => ({ name, title: null, description: '', readOnly: false });
+    const res = test.app.taskResults;
+    const camp = res.planReserve(sid, meta, tool('create_campaign'), { spend_cap: 3500 });
+    if (camp === null) throw new Error('reserve');
+    res.planSettle(sid, camp, true, '{"id":"120000000000001"}');
+    const adset = res.planReserve(sid, meta, tool('create_ad_set'), {
+      campaign_id: '120000000000001',
+      daily_budget: 100,
+      end_time: new Date(fixtures.DEMO_NOW + 86_400_000).toISOString(),
+    });
+    if (adset === null) throw new Error('reserve');
+    res.planSettle(sid, adset, true, '{"id":"120000000000002"}');
+    const ad = (link: string, image: string) => ({
+      adset_id: '120000000000002',
+      headline: 'Still thinking?',
+      message: 'Thirty off.',
+      link,
+      image_url: image,
+    });
+    expect(
+      res.planReserve(
+        sid,
+        meta,
+        tool('create_ad'),
+        ad('https://attacker.example', 'https://cdn.example.com/a.png'),
+      ),
+    ).toBeNull();
+    expect(
+      res.planReserve(
+        sid,
+        meta,
+        tool('create_ad'),
+        ad('https://shop.example.com/a', 'https://evil.example/x.png'),
+      ),
+    ).toBeNull();
+    expect(
+      res.planReserve(
+        sid,
+        meta,
+        tool('create_ad'),
+        ad('https://shop.example.com/a', 'https://cdn.example.com/a.png'),
+      ),
+    ).not.toBeNull();
+    // A second plan cannot be approved while this campaign runs.
+    await client.call('show_result', { result: campaign });
+    const again = await test.app.bus.dispatch(test.sender, 'taskResults.approveLaunch', {
+      sessionId: sid,
+      seenAt: test.app.repos.taskResults.get(sid)?.updatedAt ?? 0,
+      ads: [{ index: 0, headline: 'x', body: 'y' }],
+      perDay: 100,
+      days: 1,
+      countries: null,
+    });
+    expect(again.ok).toBe(false);
+    // Pause everything stops it in Styx even when Meta cannot be reached (no Meta app here).
+    const paused = await test.app.bus.dispatch(test.sender, 'taskResults.pauseAll', { sessionId: sid });
+    expect(paused.ok).toBe(false);
+    expect(test.app.repos.taskResults.get(sid)?.pausedAt).not.toBeNull();
+    client.close();
+  });
 });

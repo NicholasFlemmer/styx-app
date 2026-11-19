@@ -1,21 +1,46 @@
-import { copy, type ProjectId, type ReadModel, type SessionId, type TaskResult } from '@styx/core';
-import { useModel } from '../../state/hooks';
+import { copy, oneResults, type OneResult, type ProjectId, type ReadModel, type SessionId } from '@styx/core';
+import { Button } from '@styx/ui';
+import { useState } from 'react';
+import { useModel, useNow } from '../../state/hooks';
 import { useOpenTask } from './parts';
 import s from './One.module.css';
 
 const identity = (m: ReadModel) => m;
+type Filter = 'all' | 'campaign' | 'report' | 'live' | 'needs';
+const FILTERS: Filter[] = ['all', 'campaign', 'report', 'live', 'needs'];
 
-/** Results (mockup "Reports"): every campaign and report, newest first; each opens its task. */
+const shows = (f: Filter, x: OneResult): boolean =>
+  f === 'all'
+    ? true
+    : f === 'campaign' || f === 'report'
+      ? x.kind === f
+      : f === 'live'
+        ? x.status === 'live' || x.status === 'launching'
+        : x.status === 'waiting';
+
+/**
+ * Results (mockup styx-one-results.html, frame 7): every campaign and report, where each stands first, what needs
+ * the person at the top. Each opens its task.
+ */
 export function OneResults() {
   const model = useModel(identity);
+  const now = useNow();
   const open = useOpenTask();
+  const [filter, setFilter] = useState<Filter>('all');
   const r = copy.one.results;
-  const list = Object.values(model.taskResults)
-    .filter((x) => model.sessions.byId[x.id] !== undefined)
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+  const list = oneResults(model, now).filter((x) => shows(filter, x));
   return (
     <div className={s['page']} data-one-page="results">
-      <h1 className={s['title']}>{r.title}</h1>
+      <div className={s['head']}>
+        <h1 className={s['title']}>{r.title}</h1>
+        <div className={`${s['filters']} ${s['push']}`} role="group" aria-label={r.title}>
+          {FILTERS.map((f) => (
+            <Button key={f} inv={filter === f} aria-pressed={filter === f} onClick={() => setFilter(f)}>
+              {r.filters[f]}
+            </Button>
+          ))}
+        </div>
+      </div>
       <p className={s['lead']}>{r.lead}</p>
       {list.length === 0 ? (
         <p className={s['empty']}>{r.empty}</p>
@@ -27,17 +52,18 @@ export function OneResults() {
                 type="button"
                 className={s['card']}
                 data-one-result-card={x.id}
+                data-status={x.status}
                 onClick={() => open(x.projectId as ProjectId, x.id as SessionId)}
               >
                 <span className={s['facts']}>
-                  <span>{model.projects.byId[x.projectId]?.name ?? ''}</span>
-                  <span>{copy.one.kinds[x.body.kind]}</span>
-                  {x.body.kind === 'report' && x.body.period !== undefined ? (
-                    <span>{x.body.period}</span>
-                  ) : null}
+                  <span className={s['statusPill']} data-status={x.status}>
+                    {r.status[x.status]}
+                  </span>
+                  <span>{x.project}</span>
+                  <span>{copy.one.kinds[x.kind]}</span>
                 </span>
-                <span className={s['cardTitle']}>{x.body.title}</span>
-                <span className={s['lead']}>{line(x)}</span>
+                <span className={s['cardTitle']}>{x.title}</span>
+                <span className={s['lead']}>{x.line}</span>
               </button>
             </li>
           ))}
@@ -46,11 +72,3 @@ export function OneResults() {
     </div>
   );
 }
-
-/** One line under the title: the report's answer, or where the campaign stands. */
-const line = (x: TaskResult): string => {
-  if (x.body.kind === 'report') return x.body.headline;
-  const r = copy.one.results;
-  if (x.body.launch === undefined) return `${x.body.ads.length} ${r.ads.toLowerCase()}`;
-  return x.launchApprovedAt === null ? r.awaiting : r.launched;
-};

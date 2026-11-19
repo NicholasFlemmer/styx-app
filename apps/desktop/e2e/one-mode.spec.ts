@@ -106,6 +106,9 @@ test('One place for the work: a campaign and a report draw as results', async ()
     await nav.getByRole('button', { name: 'Results' }).click();
     await page.locator('[data-one-result-card]', { hasText: 'Weekly report' }).click();
     await page.waitForSelector('[data-one-result="report"]');
+    await expect(page.getByRole('button', { name: 'Download PDF' })).toBeVisible();
+    await page.getByRole('button', { name: 'Keep it updating every Monday' }).click();
+    await expect(page.locator('[data-one-result="report"]')).toContainText('Updating weekly');
     if (shots) await page.screenshot({ path: `${shots}/one-report.png` });
     await axe('one-report');
   } finally {

@@ -3,7 +3,7 @@ import type { Db } from '../open';
 import { asJson, type Raw } from './mappers';
 
 const COLS =
-  'session_id, project_id, kind, body_json, launch_approved_at, launch_picked_json, approved_json, campaign_id, paused_at, updated_at';
+  'session_id, project_id, kind, body_json, launch_approved_at, launch_picked_json, approved_json, campaign_id, paused_at, weekly, last_run_at, updated_at';
 
 /** A row back to a result; a row that no longer parses (an older shape) is dropped rather than shown wrong. */
 export const taskResultFromRow = (r: Raw): TaskResult | null => {
@@ -16,6 +16,8 @@ export const taskResultFromRow = (r: Raw): TaskResult | null => {
     approved: asJson<unknown>(r['approved_json'], null),
     campaignId: r['campaign_id'] === null || r['campaign_id'] === undefined ? null : String(r['campaign_id']),
     pausedAt: r['paused_at'] === null || r['paused_at'] === undefined ? null : Number(r['paused_at']),
+    weekly: Number(r['weekly'] ?? 0) === 1,
+    lastRunAt: r['last_run_at'] === null || r['last_run_at'] === undefined ? null : Number(r['last_run_at']),
     updatedAt: Number(r['updated_at']),
   });
   return parsed.success ? parsed.data : null;
@@ -29,10 +31,12 @@ export class TaskResultsRepo {
   private readonly approveStmt;
   private readonly campaignStmt;
   private readonly pausedStmt;
+  private readonly weeklyStmt;
+  private readonly ranStmt;
 
   constructor(db: Db) {
     this.upsertStmt = db.prepare(
-      `INSERT INTO task_results (${COLS}) VALUES (?, ?, ?, ?, NULL, '[]', NULL, NULL, NULL, ?)
+      `INSERT INTO task_results (${COLS}) VALUES (?, ?, ?, ?, NULL, '[]', NULL, NULL, NULL, 0, NULL, ?)
        ON CONFLICT(session_id) DO UPDATE SET kind = excluded.kind, body_json = excluded.body_json,
          launch_approved_at = NULL, launch_picked_json = '[]', approved_json = NULL, updated_at = excluded.updated_at`,
     );
@@ -40,9 +44,11 @@ export class TaskResultsRepo {
     this.allStmt = db.prepare(`SELECT ${COLS} FROM task_results ORDER BY updated_at DESC LIMIT 500`);
     this.campaignStmt = db.prepare('UPDATE task_results SET campaign_id = ? WHERE session_id = ?');
     this.pausedStmt = db.prepare('UPDATE task_results SET paused_at = ? WHERE session_id = ?');
+    this.weeklyStmt = db.prepare('UPDATE task_results SET weekly = ? WHERE session_id = ?');
+    this.ranStmt = db.prepare('UPDATE task_results SET last_run_at = ? WHERE session_id = ?');
     // Only the result the person saw, and only once.
     this.approveStmt = db.prepare(
-      'UPDATE task_results SET launch_approved_at = ?, launch_picked_json = ?, approved_json = ? WHERE session_id = ? AND updated_at = ? AND launch_approved_at IS NULL',
+      'UPDATE task_results SET launch_approved_at = ?, launch_picked_json = ?, approved_json = ?, paused_at = NULL WHERE session_id = ? AND updated_at = ? AND launch_approved_at IS NULL',
     );
   }
 
@@ -74,6 +80,15 @@ export class TaskResultsRepo {
   /** The campaign an approved plan made (kept across a new result: it is still spending). */
   setCampaign(sessionId: string, campaignId: string): void {
     this.campaignStmt.run(campaignId, sessionId);
+  }
+
+  /** Keep a report up to date every week (kept when the agent sends a new version). */
+  setWeekly(sessionId: string, weekly: boolean): void {
+    this.weeklyStmt.run(weekly ? 1 : 0, sessionId);
+  }
+
+  setLastRun(sessionId: string, at: number): void {
+    this.ranStmt.run(at, sessionId);
   }
 
   setPaused(sessionId: string, at: number | null): void {

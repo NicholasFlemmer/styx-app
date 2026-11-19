@@ -61,7 +61,7 @@ interface PlanState {
   /** Daily budgets of the plan's ad sets (major units, to the cent), by id or by a pending reservation. */
   budgets: Map<string, number>;
   /** The ads the person picked: the only ones the plan lets the agent make. */
-  ads: { headline: string; body: string }[];
+  ads: { headline: string; body: string; link?: string | undefined; image?: string | undefined }[];
   /** Nothing made under the plan may run past this. */
   endBy: number;
 }
@@ -71,10 +71,12 @@ export type Reservation =
   | { kind: 'campaign' }
   | { kind: 'adset'; key: string }
   | { kind: 'budget'; id: string; prev: number }
+  | { kind: 'activate'; id: string }
   | { kind: 'none' };
 
 const DAY = 86_400_000;
 const IMAGE_MAX = 4 * 1024 * 1024;
+const IMAGE_CACHE_MAX = 32 * 1024 * 1024;
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 
 const deepRedact = (v: unknown): unknown =>
@@ -134,6 +136,9 @@ export class TaskResultsService {
       throw new Error(copy.one.results.noPlan);
     if (result.updatedAt !== a.seenAt || result.launchApprovedAt !== null)
       throw new Error(copy.one.results.planChanged);
+    // One campaign at a time per task, so Pause everything always reaches what is spending.
+    if (result.campaignId !== null && result.pausedAt === null)
+      throw new Error(copy.one.results.stillRunning);
     const body = result.body;
     const picks = [...new Map(a.ads.map((x) => [x.index, x])).values()]
       .filter((x) => body.ads[x.index] !== undefined)
@@ -152,8 +157,12 @@ export class TaskResultsService {
       ...(a.countries !== null && a.countries.length > 0 ? { countries: a.countries } : {}),
     });
     const approved = { ads: campaignAdSchema.array().parse(ads), plan };
+    // The money first, in Styx's words; the agent's title last, short and on one line.
+    const title = body.title
+      .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, ' ')
+      .slice(0, 40);
     const auth = await this.deps.verify(
-      `Launch ${body.title}: ${formatMoney(plan.perDay, plan.currency)} a day, ${formatMoney(launchCap(plan), plan.currency)} at most`,
+      `Spend up to ${formatMoney(launchCap(plan), plan.currency)} on Meta Ads (${formatMoney(plan.perDay, plan.currency)} a day for ${plan.days} days): ${title}`,
     );
     if (auth === 'unavailable') throw new Error(copy.one.results.authUnavailable);
     if (auth !== 'ok') throw new Error(copy.one.results.authCancelled);
@@ -220,14 +229,14 @@ export class TaskResultsService {
   async pauseAll(sessionId: string): Promise<void> {
     const result = this.deps.repos.taskResults.get(sessionId);
     if (result === null || result.campaignId === null) throw new Error(copy.one.results.nothingLive);
+    // Stopped in Styx first: no plan step can start from here on, whatever Meta says next.
+    const now = this.deps.now();
+    this.deps.repos.taskResults.setPaused(sessionId, now);
+    this.plans.delete(sessionId);
+    this.deps.publish(sessionId, this.deps.repos.taskResults.get(sessionId));
     const meta = this.deps.meta(result.projectId);
     if (meta === null) throw new Error(copy.one.results.metaGone);
     await meta.pause(result.campaignId);
-    const now = this.deps.now();
-    this.deps.repos.taskResults.setPaused(sessionId, now);
-    // Nothing more may run under the plan once the person has stopped it.
-    this.plans.delete(sessionId);
-    this.deps.publish(sessionId, this.deps.repos.taskResults.get(sessionId));
     const session = this.deps.repos.sessions.get(sessionId);
     this.deps.audit({
       actorKind: 'you',
@@ -263,17 +272,44 @@ export class TaskResultsService {
     }
     if (!appMayReach(new URL('https://example.com'), url)) return null;
     try {
-      const res = await (this.deps.fetch ?? fetch)(url.toString(), { redirect: 'error' });
+      const res = await (this.deps.fetch ?? fetch)(url.toString(), {
+        redirect: 'error',
+        signal: AbortSignal.timeout(10_000),
+      });
       const type = (res.headers.get('content-type') ?? '').split(';')[0]?.trim() ?? '';
       if (!res.ok || !IMAGE_TYPES.has(type)) return null;
-      const bytes = Buffer.from(await res.arrayBuffer());
-      if (bytes.length > IMAGE_MAX) return null;
-      const data = `data:${type};base64,${bytes.toString('base64')}`;
-      if (this.images.size > 100) this.images.clear();
-      this.images.set(ad.image, data);
+      if (Number(res.headers.get('content-length') ?? 0) > IMAGE_MAX) return null;
+      // Read with a running count: a server that lies about its size is cut off at the limit.
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      const reader = res.body?.getReader();
+      if (reader === undefined) return null;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > IMAGE_MAX) {
+          await reader.cancel();
+          return null;
+        }
+        chunks.push(value);
+      }
+      const data = `data:${type};base64,${Buffer.concat(chunks).toString('base64')}`;
+      this.cacheImage(ad.image, data);
       return data;
     } catch {
       return null;
+    }
+  }
+
+  /** At most 32 MB of pictures kept, oldest dropped first. */
+  private cacheImage(key: string, data: string): void {
+    this.images.set(key, data);
+    let total = [...this.images.values()].reduce((t, v) => t + v.length, 0);
+    for (const k of this.images.keys()) {
+      if (total <= IMAGE_CACHE_MAX) break;
+      total -= this.images.get(k)?.length ?? 0;
+      this.images.delete(k);
     }
   }
 
@@ -355,14 +391,24 @@ export class TaskResultsService {
       case 'create_ad': {
         if (!state.ids.has(str('adset_id'))) return null;
         // Only the ads the person picked, word for word.
-        if (!state.ads.some((a) => a.headline === str('headline') && a.body === str('message'))) return null;
+        // The approved ad as the person saw it: text, picture and where it leads.
+        if (
+          !state.ads.some(
+            (a) =>
+              a.headline === str('headline') &&
+              a.body === str('message') &&
+              (a.link ?? '') === str('link') &&
+              (a.image ?? '') === str('image_url'),
+          )
+        )
+          return null;
         reservation = { kind: 'none' };
         break;
       }
       case 'activate':
       case 'pause':
         if (!state.ids.has(str('id'))) return null;
-        reservation = { kind: 'none' };
+        reservation = tool.name === 'activate' ? { kind: 'activate', id: str('id') } : { kind: 'none' };
         break;
       case 'set_daily_budget': {
         const id = str('id');
@@ -382,6 +428,15 @@ export class TaskResultsService {
 
   /** After a step that ran under a plan: keep what it made, or release what it reserved when it failed. */
   planSettle(sessionId: string, r: Reservation, ok: boolean, text: string): void {
+    // An activation that was already on its way when the person pressed Pause everything is undone.
+    if (r.kind === 'activate' && ok) {
+      const result = this.deps.repos.taskResults.get(sessionId);
+      if (result !== null && result.pausedAt !== null && result.campaignId !== null)
+        void this.deps
+          .meta(result.projectId)
+          ?.pause(result.campaignId)
+          .catch(() => undefined);
+    }
     const state = this.plans.get(sessionId);
     if (state === undefined) return;
     let id: string | null = null;
@@ -414,6 +469,8 @@ export class TaskResultsService {
       }
       case 'budget':
         if (!ok) state.budgets.set(r.id, r.prev);
+        return;
+      case 'activate':
         return;
       case 'none':
         if (id !== null) state.ids.add(id);

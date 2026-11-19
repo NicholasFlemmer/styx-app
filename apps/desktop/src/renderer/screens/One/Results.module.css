@@ -451,3 +451,42 @@
     text-align: left;
   }
 }
+@layer screens {
+  .reportHead {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .pill[data-weekly='true'] {
+    background: var(--tx);
+    color: var(--bg);
+  }
+  .trend {
+    margin: 0;
+  }
+  .trend svg {
+    display: block;
+    width: 100%;
+    height: 150px;
+  }
+  .trendCur {
+    fill: none;
+    stroke: var(--tx);
+    stroke-width: 2.5;
+    vector-effect: non-scaling-stroke;
+  }
+  .trendPrev {
+    fill: none;
+    stroke: var(--mu);
+    stroke-width: 2;
+    stroke-dasharray: 5 5;
+    vector-effect: non-scaling-stroke;
+  }
+  .trendLabels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--mu);
+  }
+}
