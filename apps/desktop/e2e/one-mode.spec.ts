@@ -38,11 +38,19 @@ test('One place for the work: switch on, visit every page, switch back', async (
     await nav.getByRole('button', { name: 'acme-shop' }).click();
     await page.waitForSelector('[data-screen-ready="one-project"]');
     if (shots) await page.screenshot({ path: `${shots}/one-project.png` });
-    // A task opens the workspace inside the same sidebar.
+    // A task opens in plain view; its details are the workspace, inside the same sidebar.
     await page.locator('[data-one-task]').first().click();
+    await page.waitForSelector('[data-screen-ready="one-task"]');
+    if (shots) await page.screenshot({ path: `${shots}/one-task.png` });
+    const axe = await new AxeBuilder({ page })
+      .setLegacyMode(true)
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+    expect(axe.violations.map((v) => `one-task: ${v.id}`)).toEqual([]);
+    await page.getByRole('button', { name: 'Show the details' }).click();
     await page.waitForSelector('[data-screen-ready="workspace"]');
     await expect(nav).toBeVisible();
-    if (shots) await page.screenshot({ path: `${shots}/one-task.png` });
+    if (shots) await page.screenshot({ path: `${shots}/one-details.png` });
     await nav.getByRole('button', { name: 'Back to classic Styx' }).click();
     await expect(page.locator('[data-rails]')).toBeVisible();
     await expect(nav).toHaveCount(0);

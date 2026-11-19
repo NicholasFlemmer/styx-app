@@ -33,8 +33,8 @@ vocabulary.
    nav for one sidebar: Home, Needs your OK, Tasks, Projects, Know-how, Connected apps, Record, the project list, then
    Settings and "Back to classic Styx". Classic-only screens map to their match when the mode turns on (Home → Home,
    Approvals → Needs your OK, Agents → Tasks, Repo → the project page) and back when it turns off.
-3. **Developer depth one click away, never removed.** A task opens the existing workspace (chat, changes, preview,
-   terminal, access). Approving opens the existing grant sheet (Touch ID for production stays). Going live opens the
+3. **Developer depth one click away, never removed.** A task opens in plain view (the conversation, Go live when
+   ready); Show the details opens the existing workspace (chat, changes, preview, terminal, access). Approving opens the existing grant sheet (Touch ID for production stays). Going live opens the
    existing land dialog. Rules are today's policies, said as sentences. Know-how is today's Team context screen.
 4. **Connected apps in tiers** (research: `Composio for Styx connected apps`, 2026-11-18). Tier 1, hand-built: the
    current targets, then the high-value marketing apps (Meta and Google ads, Shopify, Stripe) as provider adapters

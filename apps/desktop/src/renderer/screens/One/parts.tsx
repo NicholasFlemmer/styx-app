@@ -1,4 +1,13 @@
-import { copy, fill, rows, type OneNeed, type OneTask, type ProjectId, type ReadModel } from '@styx/core';
+import {
+  copy,
+  fill,
+  rows,
+  type OneNeed,
+  type OneTask,
+  type ProjectId,
+  type ReadModel,
+  type SessionId,
+} from '@styx/core';
 import { AgentDot, Button } from '@styx/ui';
 import { useState, type KeyboardEvent } from 'react';
 import { useSpawnForm } from '../../features/modals/use-spawn-form';
@@ -7,9 +16,19 @@ import s from './One.module.css';
 
 const liveProjects = (m: ReadModel) => rows(m.projects).filter((p) => p.removedAt == null);
 
+/** Opens a task in plain view (the details are one click on from there). */
+export function useOpenTask(): (projectId: ProjectId, sessionId: SessionId) => void {
+  const openSession = useUi((u) => u.openSession);
+  const setScreen = useUi((u) => u.setScreen);
+  return (projectId, sessionId) => {
+    openSession(projectId, sessionId);
+    setScreen('one-task');
+  };
+}
+
 /** One task as a card: project and AI, the title, one plain line on where it stands. Opens the task. */
 export function TaskCard({ task }: { task: OneTask }) {
-  const openSession = useUi((u) => u.openSession);
+  const openSession = useOpenTask();
   return (
     <button
       type="button"
@@ -47,7 +66,7 @@ export function TaskList({ tasks }: { tasks: OneTask[] }) {
 /** One thing waiting on the person, its consequence in big type, and the move that is theirs. */
 export function NeedCard({ need }: { need: OneNeed }) {
   const pushOverlay = useUi((u) => u.pushOverlay);
-  const openSession = useUi((u) => u.openSession);
+  const openSession = useOpenTask();
   const setProject = useUi((u) => u.setProject);
   const setScreen = useUi((u) => u.setScreen);
   const model = useModel((m) => m);
@@ -163,7 +182,7 @@ function AskForm({
   onPick: (id: ProjectId) => void;
 }) {
   const { valid, busy, spawn, missing } = useSpawnForm(projectId);
-  const openSession = useUi((u) => u.openSession);
+  const openSession = useOpenTask();
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const can = text.trim() !== '' && valid && !busy && !missing;
