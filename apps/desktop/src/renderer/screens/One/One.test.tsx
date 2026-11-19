@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useReadModel } from '../../state/read-model';
 import { useUiStore } from '../../state/ui-store';
+import { OneApps } from './OneApps';
 import { OneHome } from './OneHome';
 import { OneNav } from './OneNav';
 import { OneNeeds } from './OneNeeds';
@@ -57,6 +58,47 @@ describe('One place for the work (ADR-0033)', () => {
     fireEvent.click(review);
     expect(useUiStore.getState().overlays.at(-1)).toMatchObject({ kind: 'sheet', sheet: 'grant' });
     expect(screen.getByRole('region', { name: copy.one.needs.rules })).toBeTruthy();
+  });
+
+  it('Connected apps adds an app by its address and offers Sign in for one that is signed out', () => {
+    useReadModel.getState().replaceModel(
+      {
+        ...model,
+        connectedApps: [
+          {
+            id: 'app1',
+            kind: 'mcp' as const,
+            account: null,
+            name: 'Linear',
+            url: 'https://mcp.linear.app/mcp',
+            status: 'signed-out',
+            error: null,
+            tools: [],
+            projects: [],
+            addedAt: NOW,
+            checkedAt: null,
+          },
+        ],
+      },
+      'connected',
+    );
+    useUiStore.setState({ projectId: fixtures.ids.project.acmeShop });
+    render(<OneApps />);
+    const form = screen.getByRole('form', { name: copy.one.apps.addByUrl });
+    fireEvent.change(within(form).getByLabelText(copy.one.apps.nameLabel), { target: { value: 'Notion' } });
+    fireEvent.change(within(form).getByLabelText(copy.one.apps.urlLabel), {
+      target: { value: 'https://mcp.notion.com/mcp' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: copy.one.apps.add }));
+    expect(commandMock).toHaveBeenCalledWith('connectedApps.add', {
+      name: 'Notion',
+      url: 'https://mcp.notion.com/mcp',
+      projectId: fixtures.ids.project.acmeShop,
+    });
+    fireEvent.click(screen.getByRole('button', { name: copy.one.apps.signIn }));
+    expect(commandMock).toHaveBeenCalledWith('connectedApps.signIn', { appId: 'app1' });
+    fireEvent.click(screen.getByRole('button', { name: `${copy.one.apps.remove} Linear` }));
+    expect(commandMock).toHaveBeenCalledWith('connectedApps.remove', { appId: 'app1' });
   });
 
   it('a project page shows its code and only its tasks', () => {

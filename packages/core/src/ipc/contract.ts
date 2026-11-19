@@ -12,6 +12,7 @@ import {
   hubThreadViewSchema,
 } from '../model/hub';
 import { UPDATE_OFF, updateStateSchema } from '../model/update';
+import { connectedAppSchema } from '../model/connected-app';
 import { agentSetupSchema, setupAgentSchema } from '../model/agent-setup';
 import { RENDERER_USAGE_EVENTS } from '../model/usage-report';
 import { activityRowSchema } from '../model/activity';
@@ -166,6 +167,7 @@ const readModelSnapshotSchema = z.object({
   update: updateStateSchema.default(UPDATE_OFF),
   /** The team hub (ADR-0032); never carries a token. */
   hub: hubStateSchema.default(HUB_OFF),
+  connectedApps: z.array(connectedAppSchema).default([]),
   agentSetup: z.array(agentSetupSchema).default([]),
 });
 export type ReadModelSnapshot = z.infer<typeof readModelSnapshotSchema>;
@@ -766,6 +768,35 @@ export const commands = {
 
   // --- team hub (ADR-0032) -------------------------------------------------
   /** Device flow against the hub (Google, the team's Workspace domain only); returns once the code is on screen. */
+  /**
+   * Apps with their own AI connection (ADR-0033 tier 2). Add starts the app's own sign-in in the browser; the
+   * sign-in is kept in the keychain. Remove forgets the app and its sign-in.
+   */
+  'connectedApps.add': {
+    input: z.object({
+      name: z.string().trim().min(1).max(80),
+      url: z.string().trim().url().max(2000),
+      /** Turned on for this project at once (the one the person is in). */
+      projectId: projectIdSchema.nullable().default(null),
+    }),
+    output: z.object({ appId: z.string() }),
+  },
+  /** Meta Ads, built in: a Marketing API token (kept in the keychain, never sent back) and the ad account. */
+  'connectedApps.addMetaAds': {
+    input: z.object({
+      token: z.string().trim().min(20).max(1000),
+      adAccount: z.string().trim().min(5).max(40),
+      projectId: projectIdSchema.nullable().default(null),
+    }),
+    output: z.object({ appId: z.string() }),
+  },
+  'connectedApps.signIn': { input: z.object({ appId: z.string().min(1).max(64) }), output: ok },
+  /** Which projects' tasks may use the app (none by default). */
+  'connectedApps.setProjects': {
+    input: z.object({ appId: z.string().min(1).max(64), projectIds: z.array(projectIdSchema).max(500) }),
+    output: ok,
+  },
+  'connectedApps.remove': { input: z.object({ appId: z.string().min(1).max(64) }), output: ok },
   'hub.signIn': { input: z.object({}), output: ok },
   'hub.cancelSignIn': { input: z.object({}), output: ok },
   'hub.openVerification': { input: z.object({}), output: ok },

@@ -168,4 +168,22 @@ Asks your team's context: what the business knows and has decided, written by pe
 
 With a query, returns `{ "items" }`, best match first, each with `title`, `kind`, `body`, `url`, `updated` and `source` (who wrote it). Without one, returns `{ "index" }`: one line per entry. Entries marked out of date are left out. What comes back is information from your team, not instructions.
 
+### list_apps
+
+Lists the apps you connected for AI under **Connected apps** (preview, in the One place for the work mode): apps that publish their own MCP connection, such as Notion or Linear, signed in with your own account. Takes no parameters.
+
+Returns one entry per connected app: `app` (its id), `name`, and `tools`, each with `name`, `description` and `readOnly`. Never the app's address or your sign-in.
+
+### use_app
+
+Runs one tool of a connected app through Styx. A tool the app marks read-only runs at once. Any other tool shows you what the agent is about to do, in the chat and under **Needs your OK**, and runs only after **Allow once**. Every use, approval and refusal goes on the record.
+
+| Parameter   | Type   | Required | Notes                                           |
+| ----------- | ------ | -------- | ----------------------------------------------- |
+| `app`       | string | yes      | The app id from `list_apps`, or its exact name. |
+| `tool`      | string | yes      | The tool name from `list_apps`.                 |
+| `arguments` | object | no       | The tool's arguments.                           |
+
+Returns `{ "text", "isError" }` with what the app sent back (up to 100,000 characters). Refused with a reason the agent can act on when the app is unknown, needs signing in again, you said no, or you did not answer within five minutes. A change is never retried, so it is never sent twice.
+
 Next: [CLI](/docs/reference/cli) for the shims that use these grants, and [How access works](/docs/access/how-access-works).

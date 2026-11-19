@@ -39,6 +39,8 @@ export interface ProjectionDeps {
   update?: () => ReadModelSnapshot['update'];
   /** The team hub (HubService, ADR-0032); absent in tests. */
   hub?: () => ReadModelSnapshot['hub'];
+  /** Apps with their own AI connection (ADR-0033); absent in tests. */
+  connectedApps?: () => ReadModelSnapshot['connectedApps'];
   /** Rows of a session's transcript the renderer holds (grown by "Show earlier messages"); default TRANSCRIPT_WINDOW. */
   transcriptWindow?: (sessionId: string) => number;
 }
@@ -97,6 +99,7 @@ export function buildSnapshot(deps: ProjectionDeps, seq: number): ReadModelSnaps
     account: deps.account?.() ?? SIGNED_OUT,
     update: deps.update?.() ?? UPDATE_OFF,
     hub: deps.hub?.() ?? HUB_OFF,
+    connectedApps: deps.connectedApps?.() ?? [],
     agentSetup: deps.agentSetup?.() ?? [],
     deploys: deps.deploys?.() ?? [],
   };

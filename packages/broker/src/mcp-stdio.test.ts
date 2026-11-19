@@ -62,6 +62,7 @@ describe('styx MCP server', () => {
       'get_credential',
       'hub_context',
       'land',
+      'list_apps',
       'list_sessions',
       'list_targets',
       'project_activity',
@@ -69,6 +70,7 @@ describe('styx MCP server', () => {
       'report_status',
       'request_access',
       'send_message',
+      'use_app',
     ]);
 
     const hc = await client.callTool({ name: 'hub_context', arguments: { query: 'CI guide' } });

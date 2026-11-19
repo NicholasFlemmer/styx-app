@@ -40,12 +40,15 @@ describe('TerminalService · Shell (Windows) (issue #4)', () => {
     expect(pty.spawned.at(-1)?.shell).toBe('powershell.exe');
   });
 
-  it.each(['darwin', 'linux'] as const)('%s: the setting is ignored, the login shell runs', async (platform) => {
-    vi.stubEnv('SHELL', '/bin/zsh');
-    const pty = new RecordingPty(platform);
-    const t = makeTestApp({ pty });
-    t.app.repos.projects.setSettings(ids.project.acmeShop, { shellWindows: 'wsl' }, null);
-    await t.app.terminals.spawn(ids.worktree.acmeMain);
-    expect(pty.spawned.at(-1)?.shell).toBe('/bin/zsh');
-  });
+  it.each(['darwin', 'linux'] as const)(
+    '%s: the setting is ignored, the login shell runs',
+    async (platform) => {
+      vi.stubEnv('SHELL', '/bin/zsh');
+      const pty = new RecordingPty(platform);
+      const t = makeTestApp({ pty });
+      t.app.repos.projects.setSettings(ids.project.acmeShop, { shellWindows: 'wsl' }, null);
+      await t.app.terminals.spawn(ids.worktree.acmeMain);
+      expect(pty.spawned.at(-1)?.shell).toBe('/bin/zsh');
+    },
+  );
 });

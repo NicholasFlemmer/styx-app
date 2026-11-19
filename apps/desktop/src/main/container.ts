@@ -74,6 +74,7 @@ import { UpdateService, type Updater } from './services/update-service';
 import { installIdFrom, UsageReportService } from './services/usage-report-service';
 import { FeedbackService } from './services/feedback-service';
 import { DEFAULT_HUB, HubService } from './services/hub-service';
+import { ConnectedAppsService, type AppConnector, type Loopback } from './services/connected-apps-service';
 import { hostname } from 'node:os';
 import { version as APP_VERSION } from '../../package.json';
 import { projectSettingsFor } from './store/projection';
@@ -192,6 +193,9 @@ export interface ContainerOptions {
   dialogs?: DialogsPort;
   notifications: NotificationService | null;
   openExternal: (url: string) => Promise<void>;
+  /** Connected apps' MCP client and sign-in return page; fakes in tests (never the network). */
+  appConnector?: AppConnector;
+  appLoopback?: () => Promise<Loopback>;
   openInIde: (launcher: string, path: string) => Promise<void>;
   /** Applied after any app-settings change (theme source, launch at login…). */
   onAppSettings?: (settings: AppSettings) => void;
@@ -290,6 +294,8 @@ export interface Container {
   account: AccountService;
   /** The team hub (ADR-0032): sign-in, project links, shared lanes, and the agents' hub tools. */
   hub: HubService;
+  /** Apps with their own AI connection (ADR-0033 tier 2): sign-in, tools, and the agents' gated use. */
+  connectedApps: ConnectedAppsService;
   /** Updates in place (#119). */
   updates: UpdateService;
   /** Anonymous usage counts (discrepancy row 114): a closed set of event names, nothing else. */
@@ -721,6 +727,23 @@ export function buildContainer(opts: ContainerOptions): Container {
     audit: (input) => void audit.append(input),
   });
   hub.load();
+  const connectedApps = new ConnectedAppsService({
+    vault: opts.vault,
+    // Under app_settings but outside the settings schema, so `settings.set` from a window can never write it.
+    load: () => repos.settings.kv.get('connectedApps'),
+    save: (apps) => repos.settings.kv.set('connectedApps', apps),
+    publish: (apps) => publisher.connectedAppsSet(apps),
+    audit: (input) => {
+      const row = audit.append(input);
+      publisher.upsert('auditEntries', [row.id]);
+    },
+    openExternal: (url) => opts.openExternal(url),
+    now: () => clock.now(),
+    fetch: opts.fetch ?? fetch,
+    ...(opts.appConnector ? { connector: opts.appConnector } : {}),
+    ...(opts.appLoopback ? { loopback: opts.appLoopback } : {}),
+  });
+  connectedApps.load();
   const usageReports = new UsageReportService({
     fetch: opts.fetch ?? fetch,
     apiBase: () => process.env['STYX_API'] ?? DEFAULT_API,
@@ -775,6 +798,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     limits: () => usage.all(),
     account: () => account.current(),
     hub: () => hub.current(),
+    connectedApps: () => connectedApps.current(),
     update: () => updates.current(),
     agentSetup: () => agentSetup.all(),
   });
@@ -795,6 +819,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     hunks,
     ledger,
     hub,
+    apps: connectedApps,
     providers,
     clock,
     endpoint: runtime.brokerEndpoint,
@@ -1142,6 +1167,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     usage,
     account,
     hub,
+    connectedApps,
     updates,
     usageReports,
     feedback,
@@ -1177,6 +1203,7 @@ export function buildContainer(opts: ContainerOptions): Container {
       runs.stopAll();
       devices.shutdown();
       hub.shutdown();
+      await connectedApps.close();
       // After agents and runs are stopped, so a slow network never delays that; capped at 2 s inside.
       await usageReports.shutdown();
       await hunks.closeAll();

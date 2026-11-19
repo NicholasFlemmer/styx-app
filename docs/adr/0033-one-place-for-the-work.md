@@ -56,7 +56,29 @@ vocabulary.
 
 - Phase 1 (this change): the setting, the shell, Home, Needs your OK with rules, Tasks, Projects and the project page,
   Connected apps (targets), Record. Mockup `design/next/styx-one-place.html`; discrepancy row 182.
-- Phase 2: the MCP client tier, with a security review (it touches the broker, the vault and grants).
-- Phase 3: the ads apps, which need the owner's developer accounts (Meta app review, a Google Ads developer token).
+- Phase 2 (built): the MCP client tier. `ConnectedAppsService` (main) holds the list (app_settings KV key
+  `connectedApps`, outside the settings schema so no window can write it) and signs in with the SDK's OAuth (dynamic
+  registration, PKCE, a one-shot loopback page on 127.0.0.1 that checks `state`); the sign-in is JSON in the keychain
+  under `styx:v1:mcp:<id>:oauth`. Agents get `list_apps` and `use_app` through the broker: a tool the app marks
+  `readOnlyHint` runs at once, anything else opens a decision ask ("Allow once" / "Don't allow") and the broker call
+  waits up to five minutes; uses, OKs and refusals are audited with the args redacted. A change is never retried.
+  After the security review: the full address (it can carry a secret) lives in the keychain and the list keeps
+  only its origin; an app is used only by the projects it is turned on for (the one the person was in when adding
+  it, more by toggle); arguments too long to show in full are refused, never cut; the wait is fixed at five
+  minutes; timeouts and cancellations are audited as the system's, the question is audited when it opens; the
+  sign-in connection is never reused, so an agent's call can never open a browser; the OAuth metadata the server
+  names is fetched only over https and never to a private or link-local address (unless the app itself runs on
+  this machine); the whole sign-in is under the five-minute limit; `list_apps` is cleaned and capped at 32k
+  characters. Known limit: `readOnlyHint` is the app's own claim, so the person trusts the apps they connect to
+  label reads honestly; a changed label is seen at the next sign-in.
+- Phase 3 (Meta built): Meta Ads is a built-in app behind the same gate (`services/meta-ads-app.ts`): the person
+  pastes a Marketing API token and the ad account (checked with Meta before anything is kept; the token goes to the
+  keychain only). Reads (campaigns, ads, results) run; create (always paused), start, pause and budget changes ask,
+  with "starts spending" / "changes spend" in the question; every id is checked to belong to the connected account.
+  Budgets are converted by the account's currency (whole-unit currencies such as JPY are not multiplied; an
+  unknown one is refused) and the currency is in the app's name, so the question shows it. The token reaches main
+  as command input once, as `target.connect.saveToken` does, and is never sent back. OAuth discovery refuses
+  redirects; a public name resolving to a private address is a stated limit.
+  Google Ads waits for a Google Ads developer token (Google's approval); it is the same shape.
 - The plain views read the same rows as classic Styx, so both shells always agree; a selector change is tested in
   core with full coverage like every other selector.

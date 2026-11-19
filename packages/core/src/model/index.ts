@@ -19,4 +19,5 @@ export * from './usage';
 export * from './account';
 export * from './update';
 export * from './hub';
+export * from './connected-app';
 export * from './usage-report';

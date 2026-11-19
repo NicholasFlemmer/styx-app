@@ -1414,6 +1414,7 @@ export const fixtureReadModel = (f: DemoFixture): ReadModel => ({
   account: f.account,
   update: UPDATE_OFF,
   hub: HUB_OFF,
+  connectedApps: [],
   agentSetup: {},
 });
 
