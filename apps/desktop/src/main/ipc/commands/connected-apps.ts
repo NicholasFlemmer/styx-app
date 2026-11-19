@@ -7,9 +7,24 @@ import type { CommandBus } from '../bus';
  * any of it and reach an app only through the broker's `use_app`, which asks before a change.
  */
 export function registerConnectedAppsCommands(bus: CommandBus, app: Container): void {
-  bus.register('connectedApps.add', async ({ name, url, projectId }) => ({
-    appId: await app.connectedApps.add(name, url, projectId),
-  }));
+  bus.register(
+    'connectedApps.add',
+    async ({ name, url, projectId, clientId, clientSecret, issuer, token, header }) => {
+      if (clientId !== '' && token !== '') throw new Error('Use a client ID, or a key: not both.');
+      // Advanced: a key or token; or the person's own OAuth client; else Styx registers itself at sign-in.
+      return {
+        appId:
+          token !== ''
+            ? await app.connectedApps.addWithKey(name, url, header, token, projectId)
+            : await app.connectedApps.add(
+                name,
+                url,
+                projectId,
+                clientId === '' ? null : { id: clientId, secret: clientSecret, issuer },
+              ),
+      };
+    },
+  );
   bus.register('connectedApps.addMetaAds', async ({ token, adAccount, projectId }) => ({
     appId: await app.connectedApps.addMetaAds(token, adAccount, projectId),
   }));

@@ -1,4 +1,12 @@
-import { copy, rows, type ConnectedApp, type ProjectId, type ReadModel } from '@styx/core';
+import {
+  OWN_CLIENT_REDIRECT,
+  copy,
+  fill,
+  rows,
+  type ConnectedApp,
+  type ProjectId,
+  type ReadModel,
+} from '@styx/core';
 import { Button } from '@styx/ui';
 import { useState, type FormEvent } from 'react';
 import { command } from '../../state/commands';
@@ -97,57 +105,154 @@ export function MetaAds() {
   );
 }
 
+/**
+ * Add your own (ADR-0033): a name and the server's URL, which is all most apps need. Advanced holds the person's own
+ * OAuth client (for servers that do not let Styx register itself) or an API key. Secrets go to the keychain.
+ */
 export function AddApp() {
   const a = copy.one.apps;
   // Turned on for the project the person is in; more under each app.
   const projectId = useUi((u) => u.projectId);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
+  const [advanced, setAdvanced] = useState(false);
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [issuer, setIssuer] = useState('');
+  const [token, setToken] = useState('');
+  const [header, setHeader] = useState('Authorization');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const both = clientId.trim() !== '' && token.trim() !== '';
+  const ready = !busy && name.trim() !== '' && url.trim() !== '' && !both;
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (busy || name.trim() === '' || url.trim() === '') return;
+    if (!ready) return;
     setBusy(true);
     setError(null);
-    const r = await command('connectedApps.add', { name: name.trim(), url: url.trim(), projectId });
+    const r = await command('connectedApps.add', {
+      name: name.trim(),
+      url: url.trim(),
+      projectId,
+      clientId: clientId.trim(),
+      clientSecret: clientSecret.trim(),
+      issuer: issuer.trim(),
+      token: token.trim(),
+      header: header.trim() || 'Authorization',
+    });
     setBusy(false);
+    // Secrets leave the form either way: kept in the keychain, or refused.
+    setClientSecret('');
+    setToken('');
     if (!r.ok) {
       setError(r.error.message);
       return;
     }
     setName('');
     setUrl('');
+    setClientId('');
   };
   return (
-    <form
-      className={`${s['askRow']} ${s['formRow']}`}
-      onSubmit={(e) => void submit(e)}
-      aria-label={a.addByUrl}
-    >
-      <label className={s['field']}>
-        <span>{a.nameLabel}</span>
-        <input
-          className={s['askSelect']}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          maxLength={80}
-        />
-      </label>
-      <label className={`${s['field']} ${s['grow']}`}>
-        <span>{a.urlLabel}</span>
-        <input
-          className={s['askSelect']}
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          inputMode="url"
-          placeholder="https://"
-          maxLength={500}
-        />
-      </label>
-      <Button type="submit" size="regular" disabled={busy || name.trim() === '' || url.trim() === ''}>
-        {a.add}
+    <form className={s['ownForm']} onSubmit={(e) => void submit(e)} aria-label={a.addByUrl}>
+      <div className={`${s['askRow']} ${s['formRow']}`}>
+        <label className={s['field']}>
+          <span>{a.nameLabel}</span>
+          <input
+            className={s['askSelect']}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={80}
+          />
+        </label>
+        <label className={`${s['field']} ${s['grow']}`}>
+          <span>{a.urlLabel}</span>
+          <input
+            className={s['askSelect']}
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            inputMode="url"
+            placeholder="https://"
+            maxLength={2000}
+          />
+        </label>
+        <Button type="submit" size="regular" disabled={!ready}>
+          {a.add}
+        </Button>
+      </div>
+      <Button
+        size="compact"
+        aria-expanded={advanced}
+        onClick={() => setAdvanced(!advanced)}
+        className={s['advancedToggle']}
+      >
+        {a.advanced}
       </Button>
+      {advanced ? (
+        <div className={s['advanced']}>
+          <p className={s['lead']}>{a.advancedLead}</p>
+          <div className={`${s['askRow']} ${s['formRow']}`}>
+            <label className={`${s['field']} ${s['grow']}`}>
+              <span>{a.clientId}</span>
+              <input
+                className={s['askSelect']}
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                maxLength={500}
+              />
+            </label>
+            <label className={`${s['field']} ${s['grow']}`}>
+              <span>{a.clientSecret}</span>
+              <input
+                className={s['askSelect']}
+                type="password"
+                autoComplete="off"
+                value={clientSecret}
+                onChange={(e) => setClientSecret(e.target.value)}
+                maxLength={500}
+              />
+            </label>
+          </div>
+          <label className={`${s['field']} ${s['grow']}`}>
+            <span>{a.issuerLabel}</span>
+            <input
+              className={s['askSelect']}
+              value={issuer}
+              onChange={(e) => setIssuer(e.target.value)}
+              inputMode="url"
+              placeholder="https://"
+              maxLength={500}
+            />
+          </label>
+          <p className={s['needWhy']}>{fill(a.redirectNote, { url: OWN_CLIENT_REDIRECT })}</p>
+          <div className={`${s['askRow']} ${s['formRow']}`}>
+            <label className={`${s['field']} ${s['grow']}`}>
+              <span>{a.tokenLabel}</span>
+              <input
+                className={s['askSelect']}
+                type="password"
+                autoComplete="off"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                maxLength={4000}
+              />
+            </label>
+            <label className={s['field']}>
+              <span>{a.headerLabel}</span>
+              <input
+                className={s['askSelect']}
+                value={header}
+                onChange={(e) => setHeader(e.target.value)}
+                maxLength={64}
+              />
+            </label>
+          </div>
+          {both ? (
+            <p className={s['askError']} role="alert">
+              {a.ownHint}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {error === null ? null : (
         <span className={s['askError']} role="alert">
           {error}

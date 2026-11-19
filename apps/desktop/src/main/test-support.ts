@@ -82,7 +82,7 @@ export interface TestAppOptions {
   mergiraf?: (file: string, cwd: string) => Promise<boolean>;
   /** Connected apps' MCP client and sign-in page (default: no app answers, nothing listens). */
   appConnector?: AppConnector;
-  appLoopback?: () => Promise<Loopback>;
+  appLoopback?: (port: number) => Promise<Loopback>;
 }
 
 /** No connected app is ever reached for real from a test. */
@@ -91,6 +91,9 @@ const NO_APPS: AppConnector = {
     throw new Error('no app in tests');
   },
   finishAuth: async () => undefined,
+  connectCustom: async () => {
+    throw new Error('no app in tests');
+  },
 };
 const NO_LOOPBACK = async (): Promise<Loopback> => ({
   redirectUrl: 'http://127.0.0.1:1/callback',

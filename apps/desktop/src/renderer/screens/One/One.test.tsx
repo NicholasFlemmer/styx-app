@@ -104,6 +104,11 @@ describe('One place for the work (ADR-0033)', () => {
       name: 'Ours',
       url: 'https://mcp.example.com/mcp',
       projectId: fixtures.ids.project.acmeShop,
+      clientId: '',
+      clientSecret: '',
+      issuer: '',
+      token: '',
+      header: 'Authorization',
     });
     // A signed-out app: Manage, then Sign in or Disconnect.
     fireEvent.click(screen.getByRole('button', { name: `${copy.one.apps.manage} Linear` }));
