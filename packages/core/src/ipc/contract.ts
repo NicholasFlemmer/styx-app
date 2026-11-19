@@ -780,6 +780,14 @@ export const commands = {
       url: z.string().trim().url().max(2000),
       /** Turned on for this project at once (the one the person is in). */
       projectId: projectIdSchema.nullable().default(null),
+      /** Advanced: the person's own OAuth client, for servers that do not let Styx register itself. */
+      clientId: z.string().trim().max(500).default(''),
+      clientSecret: z.string().trim().max(500).default(''),
+      /** Where that client signs in, when it is not on the server's own site (https). */
+      issuer: z.string().trim().max(500).default(''),
+      /** Advanced: an API key or token, sent in `header` (a bare token in Authorization becomes "Bearer …"). */
+      token: z.string().trim().max(4000).default(''),
+      header: z.string().trim().max(64).default('Authorization'),
     }),
     output: z.object({ appId: z.string() }),
   },

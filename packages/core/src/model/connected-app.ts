@@ -19,7 +19,8 @@ export const connectedAppStatusSchema = z.enum(['signed-out', 'signing-in', 'con
 export type ConnectedAppStatus = z.infer<typeof connectedAppStatusSchema>;
 
 /** `mcp`: the app's own MCP server (tier 2). The rest are built into Styx (tier 1). */
-export const connectedAppKindSchema = z.enum(['mcp', 'meta-ads']);
+/** `custom`: one the person added by hand (an address with a key, or a program on this computer). */
+export const connectedAppKindSchema = z.enum(['mcp', 'meta-ads', 'custom']);
 export type ConnectedAppKind = z.infer<typeof connectedAppKindSchema>;
 
 export const connectedAppSchema = z.object({
@@ -41,6 +42,13 @@ export const connectedAppSchema = z.object({
   checkedAt: z.number().int().nonnegative().nullable(),
 });
 export type ConnectedApp = z.infer<typeof connectedAppSchema>;
+
+/**
+ * The fixed return address when the person brings their own OAuth client (Add your own › Advanced): they enter it
+ * once when creating the client at the vendor. Styx listens on it only while they sign in.
+ */
+export const OWN_CLIENT_PORT = 33418;
+export const OWN_CLIENT_REDIRECT = `http://127.0.0.1:${OWN_CLIENT_PORT}/callback`;
 
 /** Only https, or http on this machine (a local server); never a credential in the address. */
 export const connectedAppUrlOk = (raw: string): boolean => {

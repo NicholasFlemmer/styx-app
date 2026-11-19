@@ -80,6 +80,14 @@ test('One place for the work: a campaign and a report draw as results', async ()
     await page.waitForSelector('[data-one-app-card="notion"]');
     if (shots) await page.screenshot({ path: `${shots}/one-apps-cards.png` });
     await axe('one-apps-cards');
+    // Add your own: a URL, with Advanced for an own OAuth client or a key.
+    await page.locator('[data-one-app-own]').click();
+    await page.getByRole('button', { name: 'Advanced' }).click();
+    await expect(page.getByLabel('OAuth client ID')).toBeVisible();
+    await expect(page.getByText('http://127.0.0.1:33418/callback')).toBeVisible();
+    if (shots) await page.screenshot({ path: `${shots}/one-apps-own.png` });
+    await axe('one-apps-own');
+    await page.locator('[data-one-app-own]').click();
     // Manage opens the app's panel at the top, in view.
     await page.getByRole('button', { name: 'Manage Notion' }).click();
     await expect(page.locator('[data-one-app-detail="demo-notion"]')).toBeInViewport();

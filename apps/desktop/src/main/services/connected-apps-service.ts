@@ -14,6 +14,10 @@ import {
   AGENT_LABEL,
   connectedAppSchema,
   connectedAppUrlOk,
+  copy,
+  fill,
+  OWN_CLIENT_PORT,
+  OWN_CLIENT_REDIRECT,
   type Agent,
   type ConnectedApp,
   type ConnectedAppTool,
@@ -47,7 +51,12 @@ export interface AppConnector {
   connect(url: URL, provider: OAuthClientProvider): Promise<AppConnection>;
   /** Trades the code the app's page sent back for tokens (saved through the provider). */
   finishAuth(url: URL, provider: OAuthClientProvider, code: string): Promise<void>;
+  /** An app the person added by hand with an API key or token. */
+  connectCustom(target: CustomTarget): Promise<AppConnection>;
 }
+
+/** How Styx reaches a custom app; everything here comes from the keychain. */
+export type CustomTarget = { kind: 'http'; url: string; headers: Record<string, string> };
 
 /** The loopback page the app's sign-in returns to (RFC 8252 §7.3). */
 export interface Loopback {
@@ -67,7 +76,7 @@ export interface ConnectedAppsDeps {
   openExternal(url: string): Promise<void>;
   now(): number;
   connector?: AppConnector;
-  loopback?: () => Promise<Loopback>;
+  loopback?: (port: number) => Promise<Loopback>;
   /** Built-in apps' HTTP (Meta's Graph API); a fake in tests. */
   fetch?: typeof fetch;
   /** How long the person has to finish signing in (5 minutes). */
@@ -83,16 +92,36 @@ export interface AppCaller {
 }
 
 const storedSchema = z.array(connectedAppSchema);
+/** What the person typed for a custom app: kept whole in the keychain (a key, a token, environment values). */
+const customSpecSchema = z.object({
+  kind: z.literal('http'),
+  url: z.string(),
+  header: z.string(),
+  value: z.string(),
+});
+
 const secretSchema = z.object({
+  custom: customSpecSchema.optional(),
+  /** The person's own OAuth client (Advanced): kept across sign-ins, never replaced by a registration. */
+  preset: z.boolean().optional(),
+  /** Where that client's sign-in server is, when it is not on the server's own site (an https origin). */
+  issuer: z.string().optional(),
   url: z.string().optional(),
   client: z.record(z.string(), z.unknown()).optional(),
   tokens: z.record(z.string(), z.unknown()).optional(),
 });
-type Secret = { url?: string; client?: OAuthClientInformationMixed; tokens?: OAuthTokens };
+type Secret = {
+  url?: string;
+  issuer?: string;
+  preset?: boolean;
+  client?: OAuthClientInformationMixed;
+  tokens?: OAuthTokens;
+};
 
 /** What a tool sends back, capped so one answer cannot flood an agent's context. */
 const RESULT_MAX = 100_000;
 const SIGN_IN_MS = 5 * 60_000;
+
 /** What `list_apps` may return in all (characters), and the longest arguments a person is shown to approve. */
 const LIST_MAX = 32_000;
 const ARGS_SHOWN_MAX = 1_500;
@@ -110,7 +139,7 @@ export class AppRefusal extends Error {}
  * The SDK's view of one app's sign-in. Interactive only while the person is signing in: a call that finds the
  * sign-in gone never opens a browser on its own, it says the app needs signing in again.
  */
-class VaultAuth implements OAuthClientProvider {
+class VaultAuth implements PinnedProvider {
   private verifier = '';
   readonly stateValue = randomBytes(24).toString('base64url');
   private cache: Secret | null = null;
@@ -120,6 +149,8 @@ class VaultAuth implements OAuthClientProvider {
     private readonly ref: string,
     readonly redirectUrl: string,
     private readonly open: ((url: URL) => Promise<void>) | null,
+    /** Set for the person's own client: where its secret and codes may go (see `pinnedTo`). */
+    readonly allowedOrigins?: readonly string[],
   ) {}
 
   get clientMetadata(): OAuthClientMetadata {
@@ -188,15 +219,23 @@ class VaultAuth implements OAuthClientProvider {
 
   /** A fresh sign-in registers again: the loopback port differs each time. */
   async forgetClient(): Promise<void> {
-    const { url, tokens } = await this.secret();
-    await this.write({ ...(url === undefined ? {} : { url }), ...(tokens === undefined ? {} : { tokens }) });
+    const { url, tokens, preset } = await this.secret();
+    await this.write({
+      ...(url === undefined ? {} : { url }),
+      ...(tokens === undefined ? {} : { tokens }),
+      ...(preset === undefined ? {} : { preset }),
+    });
   }
 
   invalidateCredentials(scope: 'all' | 'client' | 'tokens' | 'verifier' | 'discovery'): void {
     if (scope === 'verifier') this.verifier = '';
     else if (scope === 'all' || scope === 'tokens' || scope === 'client') {
       const cur = this.cache ?? {};
-      const keep: Secret = cur.url === undefined ? {} : { url: cur.url };
+      // The person's own client is theirs to change, never dropped by a failed sign-in.
+      const keep: Secret = {
+        ...(cur.url === undefined ? {} : { url: cur.url }),
+        ...(cur.preset === true && cur.client !== undefined ? { preset: true, client: cur.client } : {}),
+      };
       const next: Secret =
         scope === 'all'
           ? keep
@@ -231,12 +270,66 @@ export const appMayReach = (appUrl: URL, to: URL): boolean => {
  * resolves to a private address still passes; resolve and pin the address if that ever matters.
  */
 const guardedFetch =
-  (appUrl: URL): typeof fetch =>
+  (appUrl: URL, only?: (to: URL) => boolean): typeof fetch =>
   async (input, init) => {
     const to = new URL(input instanceof Request ? input.url : String(input));
-    if (!appMayReach(appUrl, to)) throw new Error(`Styx will not connect to ${to.host} for this app.`);
+    if (!appMayReach(appUrl, to) || (only !== undefined && !only(to)))
+      throw new Error(`Styx will not connect to ${to.host} for this app.`);
     return fetch(input, { ...init, redirect: 'error' });
   };
+
+/** The site a host belongs to, near enough: `mcp.slack.com` → `slack.com`, `x.co.za` → `x.co.za`. */
+export const siteOf = (host: string): string => {
+  const labels = host.toLowerCase().replace(/\.$/, '').split('.');
+  const second = labels[labels.length - 2] ?? '';
+  const tld = labels[labels.length - 1] ?? '';
+  const take = tld.length === 2 && ['co', 'com', 'org', 'net', 'ac', 'gov', 'edu'].includes(second) ? 3 : 2;
+  return labels.slice(-take).join('.');
+};
+
+/** A sign-in that carries the person's own client: where its secret may go. */
+interface PinnedProvider extends OAuthClientProvider {
+  /** Origins the client's secret and codes may be sent to; unset for Styx's own registration. */
+  readonly allowedOrigins?: readonly string[] | undefined;
+}
+
+/** For the person's own client: only the server's own site, and the sign-in server they named. */
+const pinnedTo = (url: URL, provider: OAuthClientProvider): ((to: URL) => boolean) | undefined => {
+  const pins = (provider as PinnedProvider).allowedOrigins;
+  if (pins === undefined) return undefined;
+  return (to) =>
+    to.origin === url.origin || siteOf(to.hostname) === siteOf(url.hostname) || pins.includes(to.origin);
+};
+
+/** A connected MCP client as the app connection Styx uses. */
+const wrap = (client: Client): AppConnection => ({
+  async listTools() {
+    const out: ConnectedAppTool[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await client.listTools(cursor === undefined ? {} : { cursor });
+      for (const t of page.tools)
+        out.push({
+          name: t.name.slice(0, 200),
+          title: (t.title ?? t.annotations?.title ?? null)?.slice(0, 200) ?? null,
+          description: (t.description ?? '').slice(0, 2000),
+          readOnly: t.annotations?.readOnlyHint === true,
+        });
+      cursor = page.nextCursor;
+    } while (cursor !== undefined && out.length < 500);
+    return out.slice(0, 500);
+  },
+  async callTool(name, args) {
+    const r = await client.callTool({ name, arguments: args });
+    const parts = Array.isArray(r.content) ? (r.content as { type: string; text?: string }[]) : [];
+    const text = parts.map((c) => (c.type === 'text' ? (c.text ?? '') : `[${c.type}]`)).join('\n');
+    return {
+      text: text === '' ? JSON.stringify(r.structuredContent ?? {}) : text,
+      isError: r.isError === true,
+    };
+  },
+  close: () => client.close(),
+});
 
 export const sdkConnector: AppConnector = {
   async connect(url, provider) {
@@ -244,40 +337,27 @@ export const sdkConnector: AppConnector = {
     // The SDK's own class misses its own interface under exactOptionalPropertyTypes (`sessionId?: string`).
     const transport: unknown = new StreamableHTTPClientTransport(url, {
       authProvider: provider,
-      fetch: guardedFetch(url),
+      fetch: guardedFetch(url, pinnedTo(url, provider)),
     });
     await client.connect(transport as Transport);
-    return {
-      async listTools() {
-        const out: ConnectedAppTool[] = [];
-        let cursor: string | undefined;
-        do {
-          const page = await client.listTools(cursor === undefined ? {} : { cursor });
-          for (const t of page.tools)
-            out.push({
-              name: t.name.slice(0, 200),
-              title: (t.title ?? t.annotations?.title ?? null)?.slice(0, 200) ?? null,
-              description: (t.description ?? '').slice(0, 2000),
-              readOnly: t.annotations?.readOnlyHint === true,
-            });
-          cursor = page.nextCursor;
-        } while (cursor !== undefined && out.length < 500);
-        return out.slice(0, 500);
-      },
-      async callTool(name, args) {
-        const r = await client.callTool({ name, arguments: args });
-        const parts = Array.isArray(r.content) ? (r.content as { type: string; text?: string }[]) : [];
-        const text = parts.map((c) => (c.type === 'text' ? (c.text ?? '') : `[${c.type}]`)).join('\n');
-        return {
-          text: text === '' ? JSON.stringify(r.structuredContent ?? {}) : text,
-          isError: r.isError === true,
-        };
-      },
-      close: () => client.close(),
-    };
+    return wrap(client);
+  },
+  async connectCustom(target) {
+    const client = new Client({ name: 'styx', version: '1' });
+    const transport: unknown = new StreamableHTTPClientTransport(new URL(target.url), {
+      requestInit: { headers: target.headers },
+      // The key goes to this server's own address and nowhere else.
+      fetch: guardedFetch(new URL(target.url), (to) => to.origin === new URL(target.url).origin),
+    });
+    await client.connect(transport as Transport);
+    return wrap(client);
   },
   async finishAuth(url, provider, code) {
-    const r = await auth(provider, { serverUrl: url, authorizationCode: code, fetchFn: guardedFetch(url) });
+    const r = await auth(provider, {
+      serverUrl: url,
+      authorizationCode: code,
+      fetchFn: guardedFetch(url, pinnedTo(url, provider)),
+    });
     if (r !== 'AUTHORIZED') throw new UnauthorizedError('sign-in did not finish');
   },
 };
@@ -287,7 +367,7 @@ const page = (title: string): string =>
   `<p>${title}</p><p>You can close this tab and go back to Styx.</p></body>`;
 
 /** A one-shot listener on 127.0.0.1 for the sign-in's return, checked against the state Styx sent. */
-export const loopback = async (): Promise<Loopback> => {
+export const loopback = async (listenOn = 0): Promise<Loopback> => {
   let resolveCode: (code: string) => void = () => undefined;
   let rejectCode: (e: Error) => void = () => undefined;
   let expected = '';
@@ -319,7 +399,10 @@ export const loopback = async (): Promise<Loopback> => {
     res.writeHead(200, { 'content-type': 'text/html' }).end(page('Signed in.'));
     resolveCode(code);
   });
-  await new Promise<void>((res) => server.listen(0, '127.0.0.1', res));
+  await new Promise<void>((res, rej) => {
+    server.once('error', rej);
+    server.listen(listenOn, '127.0.0.1', () => res());
+  });
   const port = (server.address() as AddressInfo).port;
   return {
     redirectUrl: `http://127.0.0.1:${port}/callback`,
@@ -374,11 +457,39 @@ export class ConnectedAppsService {
    * Adds the app and starts its sign-in; the list shows its progress. The full address goes to the keychain (many
    * apps put a secret in it); the list keeps only its origin.
    */
-  async add(name: string, url: string, projectId: string | null = null): Promise<string> {
+  async add(
+    name: string,
+    url: string,
+    projectId: string | null = null,
+    client: { id: string; secret: string; issuer: string } | null = null,
+  ): Promise<string> {
+    let issuer: string | null = null;
+    if (client !== null && client.issuer !== '') {
+      if (!connectedAppUrlOk(client.issuer) || new URL(client.issuer).protocol !== 'https:')
+        throw new Error('The sign-in server must be an https address.');
+      issuer = new URL(client.issuer).origin;
+    }
     if (!connectedAppUrlOk(url))
       throw new Error('Use the app’s https address (http only for an app on this computer).');
     const id = ulid();
-    await this.deps.vault.set(appSecretRef(id), JSON.stringify({ url }));
+    // The person's own OAuth client (Advanced) is used as it is; otherwise Styx registers itself at sign-in.
+    await this.deps.vault.set(
+      appSecretRef(id),
+      JSON.stringify(
+        client === null
+          ? { url }
+          : {
+              url,
+              preset: true,
+              ...(issuer === null ? {} : { issuer }),
+              client: {
+                client_id: client.id,
+                ...(client.secret === '' ? {} : { client_secret: client.secret }),
+                redirect_uris: [OWN_CLIENT_REDIRECT],
+              },
+            },
+      ),
+    );
     this.set([
       ...this.apps,
       {
@@ -479,15 +590,115 @@ export class ConnectedAppsService {
     return id;
   }
 
+  /**
+   * Add your own with an API key or token (ADR-0033): the address and the key go to the keychain; the list shows the
+   * name and the address's origin.
+   */
+  async addWithKey(
+    name: string,
+    url: string,
+    header: string,
+    token: string,
+    projectId: string | null,
+  ): Promise<string> {
+    if (!connectedAppUrlOk(url))
+      throw new Error('Use the app’s https address (http only for an app on this computer).');
+    if (!/^[A-Za-z0-9-]{1,64}$/.test(header))
+      throw new Error('The header name can only have letters, numbers and dashes.');
+    if (/^(host|content-length|transfer-encoding|connection|mcp-session-id|cookie)$/i.test(header))
+      throw new Error('That header is set by Styx itself; use another name.');
+    // A header cannot carry these; refusing them here keeps the key out of any error message.
+    if (/[\u0000-\u001f\u007f]|[^\u0000-\u00ff]/.test(token))
+      throw new Error('The key has characters a header cannot carry.');
+    // A bare token in Authorization is meant as a bearer token.
+    const value =
+      header.toLowerCase() === 'authorization' && !/^(bearer|basic|token)\s/i.test(token)
+        ? `Bearer ${token}`
+        : token;
+    const id = ulid();
+    await this.deps.vault.set(
+      appSecretRef(id),
+      JSON.stringify({ custom: { kind: 'http', url, header, value } }),
+    );
+    this.set([
+      ...this.apps,
+      {
+        id,
+        kind: 'custom',
+        account: null,
+        currency: null,
+        name: name.trim().slice(0, 80),
+        url: new URL(url).origin,
+        status: 'signed-out',
+        error: null,
+        tools: [],
+        projects: projectId === null ? [] : [projectId],
+        addedAt: this.deps.now(),
+        checkedAt: null,
+      },
+    ]);
+    void this.signIn(id).catch(() => undefined);
+    return id;
+  }
+
+  /** For the person's own client: where its secret may go (their named sign-in server); undefined otherwise. */
+  private async pins(id: string): Promise<readonly string[] | undefined> {
+    try {
+      const s = secretSchema.parse(JSON.parse((await this.deps.vault.get(appSecretRef(id))) ?? '{}'));
+      return s.preset === true ? (s.issuer === undefined ? [] : [s.issuer]) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** An error about a custom app without its key in it (some libraries echo the header they refused). */
+  private async scrub(app: ConnectedApp, text: string): Promise<string> {
+    if (app.kind !== 'custom') return text;
+    try {
+      const spec = secretSchema.parse(
+        JSON.parse((await this.deps.vault.get(appSecretRef(app.id))) ?? '{}'),
+      ).custom;
+      if (spec === undefined || spec.value === '') return text;
+      const bare = spec.value.replace(/^(bearer|basic|token)\s+/i, '');
+      return text.split(spec.value).join('[redacted]').split(bare).join('[redacted]');
+    } catch {
+      return text;
+    }
+  }
+
+  /** A custom app's keychain entry as something to connect to. */
+  private async customTarget(app: ConnectedApp): Promise<CustomTarget> {
+    const raw = await this.deps.vault.get(appSecretRef(app.id));
+    let spec: z.infer<typeof customSpecSchema> | undefined;
+    try {
+      spec = secretSchema.parse(JSON.parse(raw ?? '{}')).custom;
+    } catch {
+      spec = undefined;
+    }
+    if (spec === undefined) throw new UnauthorizedError('add it again');
+    return { kind: 'http', url: spec.url, headers: { [spec.header]: spec.value } };
+  }
+
   /** Signs in on the app's own page (when it asks for one), then reads what the app can do. */
   async signIn(id: string): Promise<void> {
     const app = this.get(id);
+    // A custom app has no sign-in page: connect with what the person gave and read what it can do.
+    if (app.kind === 'custom') return this.checkCustom(app);
     // A built-in app signs in by pasting a new token (addMetaAds), not through a browser.
     if (app.kind !== 'mcp') return;
     this.signingIn.get(id)?.();
     await this.drop(id);
     this.patch(id, { status: 'signing-in', error: null });
-    const lb = await (this.deps.loopback ?? loopback)();
+    const pins = await this.pins(id);
+    const preset = pins !== undefined;
+    let lb: Loopback;
+    try {
+      lb = await (this.deps.loopback ?? loopback)(preset ? OWN_CLIENT_PORT : 0);
+    } catch {
+      // Nothing was opened, so nothing can be caught by whoever holds the port.
+      this.patch(id, { status: 'error', error: fill(copy.one.apps.portBusy, { port: OWN_CLIENT_PORT }) });
+      return;
+    }
     let cancelled = false;
     this.signingIn.set(id, () => {
       cancelled = true;
@@ -495,12 +706,18 @@ export class ConnectedAppsService {
     });
     const url = await this.fullUrl(app);
     let interactive = true;
-    const provider = new VaultAuth(this.deps.vault, appSecretRef(id), lb.redirectUrl, async (to) => {
-      // Only while the person is signing in, and only to a web page this app may send them to.
-      if (!interactive) throw new UnauthorizedError('sign in again');
-      if (!appMayReach(url, to)) throw new Error('The app sent an unsafe sign-in address.');
-      await this.deps.openExternal(to.toString());
-    });
+    const provider = new VaultAuth(
+      this.deps.vault,
+      appSecretRef(id),
+      lb.redirectUrl,
+      async (to) => {
+        // Only while the person is signing in, and only to a web page this app may send them to.
+        if (!interactive) throw new UnauthorizedError('sign in again');
+        if (!appMayReach(url, to)) throw new Error('The app sent an unsafe sign-in address.');
+        await this.deps.openExternal(to.toString());
+      },
+      pins,
+    );
     let timer: NodeJS.Timeout | undefined;
     const deadline = new Promise<never>((_r, rej) => {
       timer = setTimeout(
@@ -513,7 +730,8 @@ export class ConnectedAppsService {
     try {
       const tools = await Promise.race([
         (async () => {
-          await provider.forgetClient();
+          // Styx registers afresh each time (the return port changes); the person's own client is kept as it is.
+          if (!preset) await provider.forgetClient();
           let conn: AppConnection;
           try {
             conn = await this.connector.connect(url, provider);
@@ -550,6 +768,38 @@ export class ConnectedAppsService {
       clearTimeout(timer);
       lb.close();
       this.signingIn.delete(id);
+    }
+  }
+
+  private async checkCustom(app: ConnectedApp): Promise<void> {
+    await this.drop(app.id);
+    this.patch(app.id, { status: 'signing-in', error: null });
+    try {
+      const conn = await Promise.race([
+        this.connector.connectCustom(await this.customTarget(app)),
+        new Promise<never>((_r, rej) => {
+          const t = setTimeout(() => rej(new Error('The app did not answer in time.')), 60_000);
+          t.unref?.();
+        }),
+      ]);
+      const tools = await conn.listTools().finally(() => void conn.close().catch(() => undefined));
+      this.patch(app.id, { status: 'connected', error: null, tools, checkedAt: this.deps.now() });
+      this.deps.audit({
+        actorKind: 'you',
+        actorLabel: 'you',
+        action: 'connected',
+        targetLabel: app.name,
+        triggeredBy: 'connected apps',
+        detail: { app: app.url, tools: tools.length },
+      });
+    } catch (e) {
+      this.patch(app.id, {
+        status: 'error',
+        error:
+          e instanceof Error
+            ? (await this.scrub(app, redact(e.message))).slice(0, 300)
+            : 'Could not connect.',
+      });
     }
   }
 
@@ -749,6 +999,11 @@ export class ConnectedAppsService {
     const open = async (): Promise<AppConnection> => {
       const existing = this.live.get(app.id);
       if (existing !== undefined) return existing;
+      if (app.kind === 'custom') {
+        const c = await this.connector.connectCustom(await this.customTarget(app));
+        this.live.set(app.id, c);
+        return c;
+      }
       if (app.kind === 'meta-ads') {
         const raw = await this.deps.vault.get(appSecretRef(app.id));
         const token = (() => {
@@ -771,6 +1026,7 @@ export class ConnectedAppsService {
         appSecretRef(app.id),
         'http://127.0.0.1/callback',
         null,
+        await this.pins(app.id),
       );
       const c = await this.connector.connect(await this.fullUrl(app), provider);
       this.live.set(app.id, c);
@@ -788,7 +1044,7 @@ export class ConnectedAppsService {
       }
       if (!retry)
         throw new AppRefusal(
-          `${app.name} did not answer: ${redact(String((e as Error).message ?? e)).slice(0, 200)}`,
+          `${app.name} did not answer: ${(await this.scrub(app, redact(String((e as Error).message ?? e)))).slice(0, 200)}`,
         );
       // One retry on a fresh connection: a server restart or an idle timeout drops the session.
       try {
@@ -796,7 +1052,7 @@ export class ConnectedAppsService {
       } catch (again) {
         await this.drop(app.id);
         throw new AppRefusal(
-          `${app.name} did not answer: ${redact(String((again as Error).message ?? again)).slice(0, 200)}`,
+          `${app.name} did not answer: ${(await this.scrub(app, redact(String((again as Error).message ?? again)))).slice(0, 200)}`,
         );
       }
     }

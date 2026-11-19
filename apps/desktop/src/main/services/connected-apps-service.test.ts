@@ -4,6 +4,7 @@ import { copy, fixtures, type ConnectedAppTool } from '@styx/core';
 import { UnauthorizedError, type OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { makeTestApp, type TestApp } from '../test-support';
+import { OWN_CLIENT_PORT, OWN_CLIENT_REDIRECT } from '@styx/core';
 import { appSecretRef, loopback, type AppConnector, type Loopback } from './connected-apps-service';
 import { sha256 } from './session-service';
 
@@ -33,6 +34,9 @@ function fakeApp() {
         },
         close: async () => undefined,
       };
+    },
+    async connectCustom() {
+      throw new Error('not used here');
     },
     async finishAuth(_url, provider, code) {
       if (code !== 'good') throw new Error('bad code');
@@ -277,6 +281,125 @@ describe('ConnectedAppsService (ADR-0033 tier 2)', () => {
       code: ErrorCode.notAllowed,
     });
     client.close();
+  });
+});
+
+describe('Add your own: own OAuth client or a key', () => {
+  it('keeps the person’s own client across sign-ins and listens on the fixed return address', async () => {
+    const app = fakeApp();
+    const ports: number[] = [];
+    t = makeTestApp({
+      appConnector: app.connector,
+      appLoopback: async (port) => {
+        ports.push(port);
+        return app.loopback();
+      },
+    });
+    const r = await t.app.bus.dispatch(t.sender, 'connectedApps.add', {
+      name: 'Slack',
+      url: 'https://mcp.slack.com/mcp',
+      projectId: ids.project.acmeShop,
+      clientId: 'abc.123',
+      clientSecret: 's3cret-value',
+    });
+    if (!r.ok) throw new Error(r.error.message);
+    await settle();
+    expect(ports).toEqual([OWN_CLIENT_PORT]);
+    const kept = await t.vault.get(appSecretRef(r.value.appId));
+    expect(kept).toContain('abc.123');
+    expect(kept).toContain('s3cret-value');
+    expect(kept).toContain(OWN_CLIENT_REDIRECT);
+    expect(JSON.stringify(t.app.publisher.snapshot())).not.toContain('s3cret-value');
+    expect(t.app.connectedApps.current()[0]?.status).toBe('connected');
+  });
+
+  it('sends a key in the header named, a bare token as a bearer token, and never shows it', async () => {
+    const seen: Record<string, string>[] = [];
+    const app = fakeApp();
+    t = makeTestApp({
+      appConnector: {
+        ...app.connector,
+        async connectCustom(target) {
+          seen.push(target.headers);
+          return {
+            listTools: async () => TOOLS,
+            callTool: async () => ({ text: '', isError: false }),
+            close: async () => undefined,
+          };
+        },
+      },
+    });
+    const r = await t.app.bus.dispatch(t.sender, 'connectedApps.add', {
+      name: 'Ours',
+      url: 'https://mcp.example.com/mcp',
+      projectId: null,
+      token: 'tok-123456',
+    });
+    if (!r.ok) throw new Error(r.error.message);
+    await settle();
+    expect(seen).toEqual([{ Authorization: 'Bearer tok-123456' }]);
+    expect(t.app.connectedApps.current()[0]).toMatchObject({
+      kind: 'custom',
+      status: 'connected',
+      url: 'https://mcp.example.com',
+    });
+    expect(JSON.stringify(t.app.publisher.snapshot())).not.toContain('tok-123456');
+    const bad = await t.app.bus.dispatch(t.sender, 'connectedApps.add', {
+      name: 'X',
+      url: 'https://mcp.example.com/mcp',
+      projectId: null,
+      token: 'k',
+      header: 'Bad Header!',
+    });
+    expect(bad.ok).toBe(false);
+  });
+});
+
+describe('own-client and key safety', () => {
+  it.each([
+    ['mcp.slack.com', 'slack.com'],
+    ['api.hubapi.com', 'hubapi.com'],
+    ['a.b.example.co.za', 'example.co.za'],
+    ['login.example.co.uk', 'example.co.uk'],
+  ])('siteOf(%s) → %s', async (host, site) => {
+    const { siteOf } = await import('./connected-apps-service');
+    expect(siteOf(host)).toBe(site);
+  });
+
+  it('refuses a key a header cannot carry, a reserved header, and a client ID with a key', async () => {
+    t = makeTestApp();
+    const add = (extra: Record<string, string>) =>
+      t?.app.bus.dispatch(t.sender, 'connectedApps.add', {
+        name: 'X',
+        url: 'https://mcp.example.com/mcp',
+        projectId: null,
+        ...extra,
+      });
+    expect((await add({ token: 'abc\u0000def' }))?.ok).toBe(false);
+    expect((await add({ token: 'abc', header: 'Host' }))?.ok).toBe(false);
+    expect((await add({ token: 'abc', clientId: 'id' }))?.ok).toBe(false);
+    expect((await add({ clientId: 'id', issuer: 'http://login.example.com' }))?.ok).toBe(false);
+    expect(t.app.connectedApps.current()).toEqual([]);
+  });
+
+  it('says so when the fixed sign-in port is busy, instead of hanging', async () => {
+    t = makeTestApp({
+      appLoopback: async () => {
+        throw new Error('EADDRINUSE');
+      },
+    });
+    const r = await t.app.bus.dispatch(t.sender, 'connectedApps.add', {
+      name: 'Slack',
+      url: 'https://mcp.slack.com/mcp',
+      projectId: null,
+      clientId: 'abc',
+    });
+    if (!r.ok) throw new Error(r.error.message);
+    await settle();
+    expect(t.app.connectedApps.current()[0]).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining('33418'),
+    });
   });
 });
 

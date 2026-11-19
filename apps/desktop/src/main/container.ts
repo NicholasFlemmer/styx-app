@@ -205,7 +205,7 @@ export interface ContainerOptions {
   appConnector?: AppConnector;
   /** The `one` fixture: Meta's live numbers and Pause everything answered from demo data, never the network. */
   demoMeta?: boolean;
-  appLoopback?: () => Promise<Loopback>;
+  appLoopback?: (port: number) => Promise<Loopback>;
   openInIde: (launcher: string, path: string) => Promise<void>;
   /** Applied after any app-settings change (theme source, launch at login…). */
   onAppSettings?: (settings: AppSettings) => void;
