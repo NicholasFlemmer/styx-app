@@ -77,7 +77,8 @@ export type SessionToggles = z.infer<typeof sessionTogglesSchema>;
  * What a task is for (owner request, discrepancy #140): a Design task draws screens before anything is built; a Build
  * task writes the code. Absent on rows from before the split: those are build tasks.
  */
-export const taskKindSchema = z.enum(['design', 'build']);
+/** design and build (#140); campaign and report (ADR-0033) hand back a structured result (`show_result`). */
+export const taskKindSchema = z.enum(['design', 'build', 'campaign', 'report']);
 export type TaskKind = z.infer<typeof taskKindSchema>;
 
 export const sessionSchema = z

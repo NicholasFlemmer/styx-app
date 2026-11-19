@@ -20,6 +20,7 @@ const modelOf = (snap: ReadModelSnapshot): ReadModel => ({
   runs: Object.fromEntries(snap.runs.map((r) => [r.projectId, r])),
   devices: Object.fromEntries(snap.devices.map((d) => [d.projectId, d])),
   deploys: Object.fromEntries(snap.deploys.map((d) => [d.deployId, d])),
+  taskResults: Object.fromEntries(snap.taskResults.map((r) => [r.id, r])),
   agentSetup: Object.fromEntries(snap.agentSetup.map((s) => [s.agent, s])),
   projects: tableFrom(snap.projects),
   repos: tableFrom(snap.repos),

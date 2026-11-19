@@ -35,7 +35,21 @@ export const META_TOOLS: ConnectedAppTool[] = [
     name: 'create_campaign',
     title: 'Create a paused campaign',
     description:
-      'Creates a campaign, always paused (nothing spends until activate). Args: name, objective (e.g. OUTCOME_TRAFFIC, OUTCOME_LEADS, OUTCOME_SALES, OUTCOME_AWARENESS).',
+      'Creates a campaign, always paused (nothing spends until activate). Args: name, objective (OUTCOME_TRAFFIC, OUTCOME_LEADS, OUTCOME_SALES, OUTCOME_AWARENESS, OUTCOME_ENGAGEMENT), spend_cap (optional, the most it may ever spend, in the account currency; required under an approved launch plan). Returns its id.',
+    readOnly: false,
+  },
+  {
+    name: 'create_ad_set',
+    title: 'Create a paused ad set: sets a daily budget',
+    description:
+      'Creates a paused ad set in a campaign. Args: campaign_id, name, daily_budget (account currency), countries (two-letter codes, e.g. ["ZA"]), age_min (default 18), age_max (default 65), optimization_goal (LINK_CLICKS, LANDING_PAGE_VIEWS, REACH or IMPRESSIONS; default LINK_CLICKS), end_time (optional ISO date). Returns its id.',
+    readOnly: false,
+  },
+  {
+    name: 'create_ad',
+    title: 'Create a paused ad',
+    description:
+      'Creates a paused link ad in an ad set. Args: adset_id, name, page_id (the Facebook Page it runs as), link (https), headline, message, image_url (https). Returns its id.',
     readOnly: false,
   },
   {
@@ -65,6 +79,23 @@ const WHOLE_UNIT = new Set(['CLP', 'COP', 'CRC', 'HUF', 'ISK', 'IDR', 'JPY', 'KR
 /** The amount as Meta counts it (its minor unit), for a currency Styx knows; null otherwise (fail closed). */
 export const metaMinorUnits = (amount: number, currency: string): number | null =>
   /^[A-Z]{3}$/.test(currency) ? Math.round(amount * (WHOLE_UNIT.has(currency) ? 1 : 100)) : null;
+
+const GOALS = new Set(['LINK_CLICKS', 'LANDING_PAGE_VIEWS', 'REACH', 'IMPRESSIONS']);
+
+const text = (v: unknown, name: string, max: number): string => {
+  if (typeof v !== 'string' || v.trim() === '') throw new Error(`${name} is required.`);
+  return v.trim().slice(0, max);
+};
+
+const httpsArg = (v: unknown, name: string): string => {
+  try {
+    const u = new URL(String(v));
+    if (u.protocol === 'https:') return u.toString();
+  } catch {
+    // refused below
+  }
+  throw new Error(`${name} must be an https address.`);
+};
 
 const PERIODS = new Set(['today', 'yesterday', 'last_7d', 'last_30d', 'this_month']);
 const OBJECTIVES = new Set([
@@ -116,6 +147,17 @@ export class MetaAdsConnection implements AppConnection {
       throw new Error(`Meta: ${typeof err?.message === 'string' ? err.message.slice(0, 300) : res.status}`);
     }
     return json;
+  }
+
+  /** An amount in the account currency as Meta counts it; refused when the currency is not one Styx knows. */
+  private async minor(raw: unknown): Promise<number> {
+    const amount = Number(raw);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 10_000_000)
+      throw new Error('Amounts must be positive numbers in the account currency.');
+    if (this.currency === null) await this.check();
+    const minor = metaMinorUnits(amount, this.currency ?? '');
+    if (minor === null) throw new Error('Styx does not know how Meta counts this account’s currency.');
+    return minor;
   }
 
   /** Refuses an id outside the connected ad account. */
@@ -191,6 +233,76 @@ export class MetaAdsConnection implements AppConnection {
             objective,
             status: 'PAUSED',
             special_ad_categories: '[]',
+            ...(args['spend_cap'] === undefined
+              ? {}
+              : { spend_cap: String(await this.minor(args['spend_cap'])) }),
+          }),
+        );
+      }
+      case 'create_ad_set': {
+        const campaign = idArg({ id: args['campaign_id'] });
+        await this.own(campaign);
+        const name = text(args['name'], 'name', 200);
+        const daily = await this.minor(args['daily_budget']);
+        const countries = Array.isArray(args['countries'])
+          ? args['countries'].filter((c): c is string => typeof c === 'string' && /^[A-Z]{2}$/.test(c))
+          : [];
+        if (countries.length === 0)
+          throw new Error('countries must list two-letter country codes, like ["ZA"].');
+        const ageMin = Math.max(13, Math.min(65, Number(args['age_min'] ?? 18) || 18));
+        const ageMax = Math.max(ageMin, Math.min(65, Number(args['age_max'] ?? 65) || 65));
+        const goal =
+          typeof args['optimization_goal'] === 'string' && GOALS.has(args['optimization_goal'])
+            ? args['optimization_goal']
+            : 'LINK_CLICKS';
+        const end =
+          typeof args['end_time'] === 'string' && !Number.isNaN(Date.parse(args['end_time']))
+            ? { end_time: new Date(args['end_time']).toISOString() }
+            : {};
+        return out(
+          await this.graph('POST', `${this.account}/adsets`, {
+            name,
+            campaign_id: campaign,
+            daily_budget: String(daily),
+            billing_event: 'IMPRESSIONS',
+            optimization_goal: goal,
+            bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+            targeting: JSON.stringify({
+              geo_locations: { countries: countries.slice(0, 25) },
+              age_min: ageMin,
+              age_max: ageMax,
+            }),
+            status: 'PAUSED',
+            ...end,
+          }),
+        );
+      }
+      case 'create_ad': {
+        const adset = idArg({ id: args['adset_id'] });
+        await this.own(adset);
+        const page = idArg({ id: args['page_id'] });
+        const link = httpsArg(args['link'], 'link');
+        const picture = httpsArg(args['image_url'], 'image_url');
+        const creative = await this.graph('POST', `${this.account}/adcreatives`, {
+          name: text(args['name'], 'name', 200),
+          object_story_spec: JSON.stringify({
+            page_id: page,
+            link_data: {
+              link,
+              message: text(args['message'], 'message', 1000),
+              name: text(args['headline'], 'headline', 200),
+              picture,
+            },
+          }),
+        });
+        const creativeId = String(creative['id'] ?? '');
+        if (!/^\d{5,25}$/.test(creativeId)) throw new Error('Meta did not make the ad creative.');
+        return out(
+          await this.graph('POST', `${this.account}/ads`, {
+            name: text(args['name'], 'name', 200),
+            adset_id: adset,
+            creative: JSON.stringify({ creative_id: creativeId }),
+            status: 'PAUSED',
           }),
         );
       }
@@ -206,10 +318,7 @@ export class MetaAdsConnection implements AppConnection {
         if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000)
           throw new Error('amount must be a positive number in the account currency.');
         await this.own(id);
-        if (this.currency === null) await this.check();
-        const minor = metaMinorUnits(amount, this.currency ?? '');
-        if (minor === null) throw new Error('Styx does not know how Meta counts this account’s currency.');
-        return out(await this.graph('POST', id, { daily_budget: String(minor) }));
+        return out(await this.graph('POST', id, { daily_budget: String(await this.minor(amount)) }));
       }
       default:
         throw new Error(`Meta Ads has no tool "${name}".`);

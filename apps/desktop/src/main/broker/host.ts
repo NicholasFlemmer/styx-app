@@ -31,6 +31,7 @@ import type { LaneLedgerService } from '../services/lane-ledger-service';
 import { logger, redact, redactArgv } from '../services/logger';
 import { sha256, type SessionService } from '../services/session-service';
 import { HubError, type HubService } from '../services/hub-service';
+import { ResultRefusal, type TaskResultsService } from '../services/task-results-service';
 import { AppRefusal, type AppCaller, type ConnectedAppsService } from '../services/connected-apps-service';
 
 export interface BrokerHostDeps {
@@ -64,6 +65,8 @@ export interface BrokerHostDeps {
     ConnectedAppsService,
     'listForAgents' | 'resolve' | 'askPrompt' | 'call' | 'refused' | 'requested'
   >;
+  /** Campaign and report results (ADR-0033), and the launch plans the person approved. */
+  results: Pick<TaskResultsService, 'show' | 'planReserve' | 'planSettle'>;
   /** The team hub tools (ADR-0032); the service checks the project link and the lane's share. */
   hub: Pick<
     HubService,
@@ -414,11 +417,36 @@ export class BrokerHost {
 
     server.on('list_apps', async (_p, ctx) => deps.apps.listForAgents(ctx.session.projectId));
 
+    server.on('show_result', async (p, ctx) => {
+      try {
+        deps.results.show(ctx.session.sessionId, ctx.session.projectId, p.result);
+      } catch (e) {
+        throw new BrokerError(
+          e instanceof ResultRefusal ? ErrorCode.invalidParams : ErrorCode.internal,
+          e instanceof Error ? e.message : 'result not kept',
+        );
+      }
+      return { shown: true as const, note: 'Shown to the person in Styx.' };
+    });
+
     server.on('use_app', async (p, ctx, req) => {
       const { app, tool } = this.appOrRefuse(() => deps.apps.resolve(ctx.session.projectId, p.app, p.tool));
       const caller = this.callerOf(ctx);
       const args = p.arguments;
       if (tool.readOnly) return this.runApp(() => deps.apps.call(caller, app, tool, args, 'reads only'));
+      // A step the person's approved launch plan already covers runs without asking twice.
+      const reserved = deps.results.planReserve(caller.sessionId, app, tool, args);
+      if (reserved !== null)
+        return this.runApp(async () => {
+          try {
+            const r = await deps.apps.call(caller, app, tool, args, 'launch plan');
+            deps.results.planSettle(caller.sessionId, reserved, !r.isError, r.text);
+            return r;
+          } catch (e) {
+            deps.results.planSettle(caller.sessionId, reserved, false, '');
+            throw e;
+          }
+        });
       // Anything that is not a declared read waits for the person, in the chat and in Needs your OK.
       const prompt = this.appOrRefuse(() => deps.apps.askPrompt(caller, app, tool, args));
       const ask = deps.sessions.openAsk(

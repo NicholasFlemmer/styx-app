@@ -186,6 +186,22 @@ export function createStyxMcpServer(client: BrokerClient): McpServer {
   };
 
   server.registerTool(
+    'show_result',
+    {
+      description:
+        'Hand Styx your task\'s result to show the person as cards: a campaign (ads and a launch plan) or a report (the answer, numbers, sources, recommendations). The shape is in your task brief. Call it again to replace it. Showing a result never spends or changes anything.',
+      inputSchema: { result: z.record(z.string(), z.unknown()).describe('{"kind":"campaign"|"report", …}') },
+    },
+    async ({ result }) => {
+      try {
+        return text(await client.call('show_result', { result }));
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
     'list_apps',
     {
       description:

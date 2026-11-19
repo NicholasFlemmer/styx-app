@@ -23,6 +23,10 @@ export function registerConnectedAppsCommands(bus: CommandBus, app: Container): 
     app.connectedApps.setProjects(appId, projectIds);
     return {};
   });
+  bus.register('taskResults.approveLaunch', async ({ sessionId, picked, seenAt }) => {
+    await app.taskResults.approveLaunch(sessionId, picked, seenAt);
+    return {};
+  });
   bus.register('connectedApps.remove', async ({ appId }) => {
     await app.connectedApps.remove(appId);
     return {};

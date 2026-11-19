@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { copy } from '../copy';
+import * as fixtures from '../fixtures/demo';
 import { DEMO_NOW, demoReadModel, emptyReadModel, ids } from '../fixtures/demo';
 import type { AskPayload, PendingAsk, Session } from '../model/session';
 import { rows, upsertRows, type ReadModel } from '../read-model';
@@ -53,6 +54,18 @@ describe('oneTasks', () => {
     const claude = acme.find((t) => t.sessionId === ids.session.claude);
     expect(claude?.kind).toBe('design');
     expect(claude?.title).toBe('Claude, no task yet');
+  });
+
+  it('names a campaign or report task by its result', () => {
+    const one = fixtures.oneFixture();
+    const m = {
+      ...demoReadModel(),
+      sessions: upsertRows(demoReadModel().sessions, one.sessions),
+      taskResults: Object.fromEntries(one.taskResults.map((r) => [r.id, r])),
+    };
+    const titles = oneTasks(m, NOW).map((t) => [t.title, t.kind]);
+    expect(titles).toContainEqual(['Black Friday retargeting', 'campaign']);
+    expect(titles).toContainEqual(['Weekly report', 'report']);
   });
 
   it('leaves out archived tasks, background tasks and removed projects', () => {

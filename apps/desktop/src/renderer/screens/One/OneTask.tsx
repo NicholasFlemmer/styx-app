@@ -3,6 +3,7 @@ import { Button } from '@styx/ui';
 import { ChatPane } from '../../features/chat/ChatPane';
 import { ShareConversation } from '../../features/hub/ShareConversation';
 import { useModel, useNow, useSessionId, useUi } from '../../state/hooks';
+import { ResultView } from './Results';
 import s from './One.module.css';
 
 const identity = (m: ReadModel) => m;
@@ -30,13 +31,14 @@ export function OneTask() {
       </div>
     );
   const worktreeId = model.sessions.byId[task.sessionId]?.worktreeId;
+  const result = model.taskResults[task.sessionId];
   return (
     <div className={s['taskView']} data-one-page="task">
       <header className={s['taskHead']}>
         <div className={s['taskHeadText']}>
           <h1 className={s['title']}>{task.title}</h1>
           <span className={s['state']} data-state={task.state}>
-            {task.project} · {copy.one.taskKind[task.kind === 'design' ? 'design' : 'build']} · {task.line}
+            {task.project} · {copy.one.taskKind[task.kind]} · {task.line}
           </span>
         </div>
         <div className={s['needActs']}>
@@ -64,9 +66,21 @@ export function OneTask() {
           </Button>
         </div>
       ) : null}
-      <div className={s['taskChat']}>
-        <ChatPane projectId={projectId} sessionId={task.sessionId} compact />
-      </div>
+      {result === undefined ? (
+        <div className={s['taskChat']}>
+          <ChatPane projectId={projectId} sessionId={task.sessionId} compact />
+        </div>
+      ) : (
+        // A campaign or report leads; the conversation sits beside it for changes.
+        <div className={s['taskSplit']}>
+          <div className={s['taskResult']}>
+            <ResultView result={result} />
+          </div>
+          <div className={s['taskSide']}>
+            <ChatPane projectId={projectId} sessionId={task.sessionId} compact />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

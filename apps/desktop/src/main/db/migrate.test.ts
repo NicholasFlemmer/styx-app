@@ -77,6 +77,7 @@ describe('migrations', () => {
       '0023_fly_railway_render',
       '0024_goose_agent',
       '0025_amp_agent',
+      '0026_task_results',
     ]);
     // Seed at 0001: a project, two targets and an active grant that cascades on the target.
     migrate(db, all.slice(0, 2));
@@ -180,8 +181,9 @@ describe('migrations', () => {
         '0023_fly_railway_render',
         '0024_goose_agent',
         '0025_amp_agent',
+        '0026_task_results',
       ],
-      version: 26,
+      version: 27,
     });
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT id, project_id, default_branch, remotes_json FROM repos').all()).toEqual([
@@ -286,7 +288,7 @@ describe('migrations', () => {
     const beforeTranscript = db.prepare('SELECT * FROM transcript_messages').all();
     const insertCli = db.prepare('INSERT INTO cli_installs (agent, checked_at) VALUES (?, 0)');
     expect(() => insertCli.run('amp')).toThrow(/CHECK/);
-    expect(migrate(db)).toEqual({ applied: ['0025_amp_agent'], version: 26 });
+    expect(migrate(db)).toEqual({ applied: ['0025_amp_agent', '0026_task_results'], version: 27 });
     expect(db.prepare('SELECT * FROM sessions').all()).toEqual(beforeSession);
     expect(db.prepare('SELECT * FROM cli_installs').all()).toEqual(beforeCli);
     expect(db.prepare('SELECT * FROM transcript_messages').all()).toEqual(beforeTranscript);
@@ -416,5 +418,25 @@ describe('migrations', () => {
     expect(() => insert('done', null, null)).toThrow(/CHECK/);
     expect(() => insert('paused', 'conflict', null)).not.toThrow();
     expect(() => insert('done', null, 5)).not.toThrow();
+  });
+
+  it('0026 keeps one result per task, only campaigns and reports, gone with its task', () => {
+    const db = new Database(':memory:');
+    migrate(db);
+    db.pragma('foreign_keys = ON');
+    db.exec(`
+      INSERT INTO projects (id, name, path, initials, created_at, last_activity_at) VALUES ('p', 'x', '/x', 'X', 0, 0);
+      INSERT INTO repos (id, project_id, default_branch, remotes_json) VALUES ('r', 'p', 'main', '[]');
+      INSERT INTO worktrees (id, repo_id, branch, path, is_main, created_at) VALUES ('w', 'r', 'main', '/x', 1, 1);
+      INSERT INTO sessions (id, project_id, worktree_id, agent, state, started_at, last_activity_at) VALUES ('s', 'p', 'w', 'claude', 'idle', 0, 0);
+    `);
+    const put = db.prepare(
+      "INSERT INTO task_results (session_id, project_id, kind, body_json, updated_at) VALUES ('s', 'p', ?, '{}', 1)",
+    );
+    expect(() => put.run('poem')).toThrow(/CHECK/);
+    put.run('report');
+    expect(db.prepare('SELECT launch_picked_json FROM task_results').get()).toEqual({ launch_picked_json: '[]' });
+    db.prepare("DELETE FROM sessions WHERE id = 's'").run();
+    expect(db.prepare('SELECT COUNT(*) AS n FROM task_results').get()).toEqual({ n: 0 });
   });
 });

@@ -60,6 +60,7 @@ export const snapshotToModel = (snapshot: ReadModelSnapshot): ReadModel => ({
   update: snapshot.update,
   hub: snapshot.hub,
   connectedApps: snapshot.connectedApps,
+  taskResults: Object.fromEntries(snapshot.taskResults.map((r) => [r.id, r])),
   agentSetup: Object.fromEntries(snapshot.agentSetup.map((s) => [s.agent, s])),
 });
 

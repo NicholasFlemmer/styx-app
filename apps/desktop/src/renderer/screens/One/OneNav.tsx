@@ -11,6 +11,7 @@ const PLACES: [Screen, keyof typeof copy.one.nav][] = [
   ['one-needs', 'needs'],
   ['one-tasks', 'tasks'],
   ['one-projects', 'projects'],
+  ['one-results', 'results'],
   ['team', 'knowHow'],
   ['one-apps', 'apps'],
   ['one-record', 'record'],

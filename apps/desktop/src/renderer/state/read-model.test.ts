@@ -34,6 +34,7 @@ const snapshotOf = (seq: number): ReadModelSnapshot => {
     update: UPDATE_OFF,
     hub: HUB_OFF,
     connectedApps: [],
+    taskResults: [],
     agentSetup: [],
   };
 };

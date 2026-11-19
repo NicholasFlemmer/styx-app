@@ -3,6 +3,7 @@ import { accountStateSchema } from './model/account';
 import { updateStateSchema } from './model/update';
 import { hubStateSchema } from './model/hub';
 import { connectedAppSchema } from './model/connected-app';
+import { taskResultSchema } from './model/task-result';
 import { agentSetupSchema } from './model/agent-setup';
 import { activityRowSchema } from './model/activity';
 import { auditEntrySchema } from './model/audit';
@@ -122,6 +123,8 @@ export const deltaSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('hub.set'), hub: hubStateSchema }),
   /** Every connected app, whole (ADR-0033); main owns them (ConnectedAppsService). */
   z.object({ op: z.literal('connectedApps.set'), apps: z.array(connectedAppSchema) }),
+  /** One task's result, whole; `null` removes it. */
+  z.object({ op: z.literal('taskResults.set'), id: z.string(), result: taskResultSchema.nullable() }),
   /** One agent's setup run, whole; main re-sends it on every change (AgentSetupService). */
   z.object({ op: z.literal('agentSetup.set'), setup: agentSetupSchema }),
   z.object({
@@ -231,6 +234,12 @@ export const applyDelta = (model: ReadModel, delta: Delta): ReadModel => {
       return { ...model, hub: delta.hub };
     case 'connectedApps.set':
       return { ...model, connectedApps: delta.apps };
+    case 'taskResults.set': {
+      const taskResults = { ...model.taskResults };
+      if (delta.result === null) delete taskResults[delta.id];
+      else taskResults[delta.id] = delta.result;
+      return { ...model, taskResults };
+    }
     case 'agentSetup.set':
       return { ...model, agentSetup: { ...model.agentSetup, [delta.setup.agent]: delta.setup } };
     case 'deploys.set':

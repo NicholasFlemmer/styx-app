@@ -13,6 +13,7 @@ import {
 } from '../model/hub';
 import { UPDATE_OFF, updateStateSchema } from '../model/update';
 import { connectedAppSchema } from '../model/connected-app';
+import { taskResultSchema } from '../model/task-result';
 import { agentSetupSchema, setupAgentSchema } from '../model/agent-setup';
 import { RENDERER_USAGE_EVENTS } from '../model/usage-report';
 import { activityRowSchema } from '../model/activity';
@@ -168,6 +169,7 @@ const readModelSnapshotSchema = z.object({
   /** The team hub (ADR-0032); never carries a token. */
   hub: hubStateSchema.default(HUB_OFF),
   connectedApps: z.array(connectedAppSchema).default([]),
+  taskResults: z.array(taskResultSchema).default([]),
   agentSetup: z.array(agentSetupSchema).default([]),
 });
 export type ReadModelSnapshot = z.infer<typeof readModelSnapshotSchema>;
@@ -794,6 +796,16 @@ export const commands = {
   /** Which projects' tasks may use the app (none by default). */
   'connectedApps.setProjects': {
     input: z.object({ appId: z.string().min(1).max(64), projectIds: z.array(projectIdSchema).max(500) }),
+    output: ok,
+  },
+  /** The person approves a campaign's launch plan, with the ads they picked (by position). */
+  'taskResults.approveLaunch': {
+    input: z.object({
+      sessionId: sessionIdSchema,
+      picked: z.array(z.number().int().min(0).max(11)).min(1).max(12),
+      /** The result the person was looking at (its `updatedAt`): a plan swapped since is refused. */
+      seenAt: z.number().int().nonnegative(),
+    }),
     output: ok,
   },
   'connectedApps.remove': { input: z.object({ appId: z.string().min(1).max(64) }), output: ok },

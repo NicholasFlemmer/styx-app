@@ -7,12 +7,23 @@ import {
   type ProjectId,
   type ReadModel,
   type SessionId,
+  type TaskKind,
 } from '@styx/core';
 import { AgentDot, Button } from '@styx/ui';
 import { useState, type KeyboardEvent } from 'react';
 import { useSpawnForm } from '../../features/modals/use-spawn-form';
 import { useModel, useUi } from '../../state/hooks';
 import s from './One.module.css';
+
+type AskKind = 'code' | 'campaign' | 'report' | 'design';
+const ASK_KINDS: AskKind[] = ['code', 'campaign', 'report', 'design'];
+/** What each choice starts: a build lane (no kind), or a design, campaign or report task. */
+const KIND_OF: Record<AskKind, TaskKind | null> = {
+  code: null,
+  campaign: 'campaign',
+  report: 'report',
+  design: 'design',
+};
 
 const liveProjects = (m: ReadModel) => rows(m.projects).filter((p) => p.removedAt == null);
 
@@ -41,7 +52,7 @@ export function TaskCard({ task }: { task: OneTask }) {
         <AgentDot agent={task.agent} />
         <span>{task.project}</span>
         <span aria-hidden="true">·</span>
-        <span>{copy.one.taskKind[task.kind === 'design' ? 'design' : 'build']}</span>
+        <span>{copy.one.taskKind[task.kind]}</span>
       </span>
       <span className={s['taskTitle']}>{task.title}</span>
       <span className={s['state']} data-state={task.state}>
@@ -184,12 +195,13 @@ function AskForm({
   const { valid, busy, spawn, missing } = useSpawnForm(projectId);
   const openSession = useOpenTask();
   const [text, setText] = useState('');
+  const [kind, setKind] = useState<AskKind>('code');
   const [error, setError] = useState<string | null>(null);
   const can = text.trim() !== '' && valid && !busy && !missing;
   const start = async () => {
     if (!can) return;
     setError(null);
-    const id = await spawn(text.trim());
+    const id = await spawn(text.trim(), KIND_OF[kind]);
     if (id === null) {
       setError(copy.one.startFailed);
       return;
@@ -213,6 +225,21 @@ function AskForm({
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKey}
       />
+      <div className={s['askRow']} role="group" aria-label={copy.one.kindLabel}>
+        {ASK_KINDS.map((k) => (
+          <Button
+            key={k}
+            size="compact"
+            inv={kind === k}
+            aria-pressed={kind === k}
+            title={copy.one.kindHint[k]}
+            onClick={() => setKind(k)}
+          >
+            {copy.one.kinds[k]}
+          </Button>
+        ))}
+        <span className={s['needWhy']}>{copy.one.kindHint[kind]}</span>
+      </div>
       <div className={s['askRow']}>
         {projects.length > 1 ? (
           <label>

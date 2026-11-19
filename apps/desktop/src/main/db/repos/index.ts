@@ -16,6 +16,7 @@ import { ProjectsRepo } from './projects';
 import { SessionsRepo } from './sessions';
 import { SettingsRepo } from './settings';
 import { TargetsRepo } from './targets';
+import { TaskResultsRepo } from './task-results';
 import { TranscriptsRepo } from './transcripts';
 import { WorktreesRepo } from './worktrees';
 
@@ -32,6 +33,7 @@ export * from './projects';
 export * from './sessions';
 export * from './settings';
 export * from './targets';
+export * from './task-results';
 export * from './transcripts';
 export * from './worktrees';
 
@@ -55,6 +57,7 @@ export class Repos {
   readonly activity: ActivityRepo;
   readonly discovery: DiscoveryRepo;
   readonly settings: SettingsRepo;
+  readonly taskResults: TaskResultsRepo;
   readonly uiState: KvStore;
   readonly windowState: WindowStateStore;
 
@@ -80,6 +83,7 @@ export class Repos {
     this.activity = new ActivityRepo(db);
     this.discovery = new DiscoveryRepo(db);
     this.settings = new SettingsRepo(db, now);
+    this.taskResults = new TaskResultsRepo(db);
     this.uiState = new KvStore(db, 'ui_state', now);
     this.windowState = new WindowStateStore(db, now);
   }

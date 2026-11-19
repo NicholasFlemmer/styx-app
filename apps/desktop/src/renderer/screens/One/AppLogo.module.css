@@ -1,0 +1,33 @@
+@layer screens {
+  .tile {
+    width: 40px;
+    height: 40px;
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+    color: var(--tx);
+  }
+  .tile[data-size='small'] {
+    width: 22px;
+    height: 22px;
+  }
+  .svg {
+    width: 22px;
+    height: 22px;
+    fill: currentColor;
+  }
+  .tile[data-size='small'] .svg {
+    width: 13px;
+    height: 13px;
+  }
+  .initials {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .tile[data-size='small'] .initials {
+    font-size: 9px;
+  }
+}

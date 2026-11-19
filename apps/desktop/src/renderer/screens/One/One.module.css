@@ -561,6 +561,110 @@
     margin: 0 auto;
     background: var(--bg);
   }
+  .taskSplit {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  }
+  .taskResult {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 18px 24px 32px 34px;
+  }
+  .taskSide {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--ln);
+  }
+  /* Connected apps as cards (mockup frame 8). */
+  .appCards {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 10px;
+  }
+  .appCards > li {
+    display: flex;
+  }
+  .appCard,
+  .appCardOwn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--ln);
+    background: var(--s1);
+    color: var(--tx);
+    min-height: 150px;
+  }
+  .appCard[data-on='true'] {
+    border-color: var(--tx);
+  }
+  .appCardHead {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .appCardName {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .appCardName b {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .appCardStatus {
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .appCardAct {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .appCardOwn {
+    border-style: dashed;
+    align-items: flex-start;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .appCardOwn:hover {
+    border-color: var(--tx);
+  }
+  .appCardOwn:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: 1px;
+  }
+  .ownPlus {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border: 1px dashed var(--ln);
+    font-size: 20px;
+  }
+  .panelSlot {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scroll-margin-top: 16px;
+  }
+  .panelSlot:empty {
+    display: none;
+  }
+  .panelSlot:focus {
+    outline: none;
+  }
   .formRow {
     align-items: flex-end;
   }
