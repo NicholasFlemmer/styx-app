@@ -2,6 +2,7 @@ import { copy, fill } from '../copy';
 import type { AuditId, GrantId, ProjectId, SessionId } from '../ids';
 import { AGENT_LABEL } from '../model/common';
 import type { PendingAsk, Session } from '../model/session';
+import { formatMoney, launchCap, type TaskResult } from '../model/task-result';
 import type { ReadModel } from '../read-model';
 import { rows } from '../read-model';
 import { auditRows } from './audit';
@@ -149,6 +150,18 @@ export type OneNeed =
       at: number;
     }
   | {
+      /** A campaign whose launch plan waits for the person's OK. */
+      kind: 'launch';
+      key: string;
+      sessionId: SessionId;
+      projectId: ProjectId;
+      project: string;
+      title: string;
+      big: string;
+      age: string;
+      at: number;
+    }
+  | {
       kind: 'live';
       key: string;
       sessionId: SessionId;
@@ -207,6 +220,24 @@ export const oneNeeds = (model: ReadModel, now: number): OneNeed[] => {
         age: formatAge(t.at, now),
         at: t.at,
       });
+  }
+  // Campaigns whose launch waits for the person: the money in big type.
+  for (const r of Object.values(model.taskResults)) {
+    const session = model.sessions.byId[r.id];
+    if (session === undefined || r.body.kind !== 'campaign' || r.body.launch === undefined) continue;
+    if (resultStatus(r, now) !== 'waiting') continue;
+    const plan = r.body.launch;
+    out.push({
+      kind: 'launch',
+      key: `launch:${r.id}`,
+      sessionId: session.id,
+      projectId: session.projectId,
+      project: projectNameOf(model, session.projectId),
+      title: fill(copy.one.needs.launch, { title: r.body.title }),
+      big: fill(copy.one.needs.launchBig, { cap: formatMoney(launchCap(plan), plan.currency) }),
+      age: formatAge(r.updatedAt, now),
+      at: r.updatedAt,
+    });
   }
   return out.sort((a, b) => b.at - a.at);
 };
@@ -283,3 +314,70 @@ export const oneProjects = (model: ReadModel, now: number): OneProject[] => {
     })
     .sort((a, b) => b.needs - a.needs || b.at - a.at);
 };
+
+/** Where a campaign or report stands, first thing on its card (mockup styx-one-results.html, frame 7). */
+export type ResultStatus =
+  'draft' | 'waiting' | 'launching' | 'live' | 'paused' | 'ended' | 'ready' | 'weekly';
+
+const RESULT_DAY = 86_400_000;
+
+export const resultStatus = (r: TaskResult, now: number): ResultStatus => {
+  if (r.body.kind === 'report') return r.weekly ? 'weekly' : 'ready';
+  if (r.launchApprovedAt === null || r.approved === null)
+    return r.body.launch === undefined ? 'draft' : 'waiting';
+  if (r.pausedAt !== null) return 'paused';
+  if (now > r.launchApprovedAt + (r.approved.plan.days + 1) * RESULT_DAY) return 'ended';
+  return r.campaignId === null ? 'launching' : 'live';
+};
+
+/** What needs the person sorts first, then what is running, then the rest, newest first within. */
+const STATUS_RANK: Record<ResultStatus, number> = {
+  waiting: 0,
+  live: 1,
+  launching: 2,
+  paused: 3,
+  weekly: 4,
+  ready: 5,
+  draft: 6,
+  ended: 7,
+};
+
+export interface OneResult {
+  id: string;
+  projectId: string;
+  project: string;
+  kind: 'campaign' | 'report';
+  title: string;
+  status: ResultStatus;
+  /** One plain line: the plan's money, or the report's answer. */
+  line: string;
+  at: number;
+}
+
+/** Every campaign and report whose task is still here, by what needs the person. */
+export const oneResults = (model: ReadModel, now: number): OneResult[] =>
+  Object.values(model.taskResults)
+    .filter((r) => model.sessions.byId[r.id] !== undefined)
+    .map((r): OneResult => {
+      const plan = r.approved?.plan ?? (r.body.kind === 'campaign' ? r.body.launch : undefined);
+      return {
+        id: r.id,
+        projectId: r.projectId,
+        project: projectNameOf(model, r.projectId as ProjectId),
+        kind: r.body.kind,
+        title: r.body.title,
+        status: resultStatus(r, now),
+        line:
+          r.body.kind === 'report'
+            ? r.body.headline
+            : plan === undefined
+              ? fill(copy.one.results.adsN, { n: r.body.ads.length })
+              : fill(copy.one.results.planLine, {
+                  perDay: formatMoney(plan.perDay, plan.currency),
+                  days: plan.days,
+                  cap: formatMoney(launchCap(plan), plan.currency),
+                }),
+        at: r.updatedAt,
+      };
+    })
+    .sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status] || b.at - a.at);

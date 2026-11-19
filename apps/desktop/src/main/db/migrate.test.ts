@@ -79,6 +79,7 @@ describe('migrations', () => {
       '0025_amp_agent',
       '0026_task_results',
       '0027_task_result_approval',
+      '0028_task_result_weekly',
     ]);
     // Seed at 0001: a project, two targets and an active grant that cascades on the target.
     migrate(db, all.slice(0, 2));
@@ -184,8 +185,9 @@ describe('migrations', () => {
         '0025_amp_agent',
         '0026_task_results',
         '0027_task_result_approval',
+        '0028_task_result_weekly',
       ],
-      version: 28,
+      version: 29,
     });
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT id, project_id, default_branch, remotes_json FROM repos').all()).toEqual([
@@ -291,8 +293,13 @@ describe('migrations', () => {
     const insertCli = db.prepare('INSERT INTO cli_installs (agent, checked_at) VALUES (?, 0)');
     expect(() => insertCli.run('amp')).toThrow(/CHECK/);
     expect(migrate(db)).toEqual({
-      applied: ['0025_amp_agent', '0026_task_results', '0027_task_result_approval'],
-      version: 28,
+      applied: [
+        '0025_amp_agent',
+        '0026_task_results',
+        '0027_task_result_approval',
+        '0028_task_result_weekly',
+      ],
+      version: 29,
     });
     expect(db.prepare('SELECT * FROM sessions').all()).toEqual(beforeSession);
     expect(db.prepare('SELECT * FROM cli_installs').all()).toEqual(beforeCli);

@@ -1,3 +1,4 @@
+import { reportPage } from '../../services/report-page';
 import type { Container } from '../../container';
 import type { CommandBus } from '../bus';
 
@@ -30,6 +31,27 @@ export function registerConnectedAppsCommands(bus: CommandBus, app: Container): 
   bus.register('taskResults.adImage', async ({ sessionId, index }) => ({
     dataUrl: await app.taskResults.adImage(sessionId, index),
   }));
+  bus.register('taskResults.setWeekly', ({ sessionId, weekly }) => {
+    app.reportSchedule.setWeekly(sessionId, weekly);
+    return {};
+  });
+  bus.register('taskResults.pdf', async ({ sessionId }) => {
+    const r = app.repos.taskResults.get(sessionId);
+    if (r?.body.kind !== 'report') throw new Error('That task has no report.');
+    const save = app.dialogs.savePdf;
+    if (save === undefined) return { path: null };
+    const html = reportPage({
+      report: r.body,
+      project: app.repos.projects.get(r.projectId)?.name ?? '',
+      sharedBy: '',
+      updated: new Date(r.updatedAt).toLocaleString('en-GB'),
+      css: 'inline',
+    });
+    const name = `${r.body.title}${r.body.period === undefined ? '' : ` ${r.body.period}`}`
+      .replace(/[^\w .,-]+/g, '')
+      .slice(0, 80);
+    return { path: await save(html, `${name || 'Report'}.pdf`) };
+  });
   bus.register('taskResults.pauseAll', async ({ sessionId }) => {
     await app.taskResults.pauseAll(sessionId);
     return {};

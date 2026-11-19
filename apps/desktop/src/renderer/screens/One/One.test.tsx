@@ -113,6 +113,20 @@ describe('One place for the work (ADR-0033)', () => {
     expect(commandMock).toHaveBeenCalledWith('connectedApps.remove', { appId: 'app1' });
   });
 
+  it('a starter fills the ask box, and a campaign brief shows its fields', () => {
+    useReadModel
+      .getState()
+      .replaceModel({ ...model, connectedApps: fixtures.oneFixture().connectedApps }, 'connected');
+    render(<OneHome />);
+    fireEvent.click(screen.getByRole('button', { name: /Retarget people who visited/ }));
+    const box = screen.getByRole('textbox', { name: copy.one.ask }) as HTMLTextAreaElement;
+    expect(box.value).toBe('Retarget people who looked at a product and did not buy.');
+    expect(screen.getByRole('group', { name: copy.one.brief.label })).toBeTruthy();
+    expect(screen.getByLabelText(copy.one.brief.budget)).toBeTruthy();
+    // Without Klaviyo connected, its starter is not offered.
+    expect(screen.queryByRole('button', { name: /Write this week/ })).toBeNull();
+  });
+
   it('a project page shows its code and only its tasks', () => {
     const acme = fixtures.ids.project.acmeShop;
     useUiStore.setState({ projectId: acme, screen: 'one-project' });

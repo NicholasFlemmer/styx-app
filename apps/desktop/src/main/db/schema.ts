@@ -485,6 +485,8 @@ export const taskResults = sqliteTable(
     approvedJson: text('approved_json'),
     campaignId: text('campaign_id'),
     pausedAt: integer('paused_at'),
+    weekly: integer('weekly').notNull().default(0),
+    lastRunAt: integer('last_run_at'),
     updatedAt: integer('updated_at').notNull(),
   },
   (t) => [index('task_results_project').on(t.projectId, t.updatedAt)],

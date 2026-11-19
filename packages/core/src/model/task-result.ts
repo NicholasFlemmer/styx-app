@@ -150,6 +150,9 @@ export const taskResultSchema = z.object({
     .regex(/^\d{5,25}$/)
     .nullable()
     .default(null),
+  /** A report the person asked to keep up to date: re-run every Monday morning while Styx is open. */
+  weekly: z.boolean().default(false),
+  lastRunAt: z.number().int().nonnegative().nullable().default(null),
   /** The person pressed Pause everything. */
   pausedAt: z.number().int().nonnegative().nullable().default(null),
   updatedAt: z.number().int().nonnegative(),

@@ -153,6 +153,11 @@ export interface HubServiceDeps {
   notify?: (n: { id: string; title: string; body: string }) => void;
   /** A lane's transcript, oldest first, for sharing its conversation as a link. */
   transcript?: (sessionId: string) => TranscriptMessage[];
+  /**
+   * A task's report as a page (ADR-0033): shared in place of the conversation, so the client opens the report.
+   * Null when the task has no report.
+   */
+  reportPage?: (sessionId: string, sharedBy: string) => { title: string; html: string; css: string } | null;
 }
 
 export interface HubDelivery {
@@ -2183,6 +2188,23 @@ export class HubService {
       this.connection.kind === 'signed-in'
         ? (this.connection.account.name ?? this.connection.account.email)
         : '';
+    // A report task shares its report, not its chat (the share panel's whole-conversation link).
+    const report = messageId === null ? (this.deps.reportPage?.(sessionId, me) ?? null) : null;
+    if (report !== null) {
+      const dir = await mkdtemp(join(tmpdir(), 'styx-share-'));
+      const abs = join(dir, 'index.html');
+      const css = join(dir, 'style.css');
+      await writeFile(abs, report.html, { mode: 0o600 });
+      await writeFile(css, report.css, { mode: 0o600 });
+      return {
+        files: [
+          { path: 'index.html', abs, size: (await stat(abs)).size, contentType: 'text/html' },
+          { path: 'style.css', abs: css, size: (await stat(css)).size, contentType: 'text/css' },
+        ],
+        title: redact(report.title.slice(0, 200)),
+        done: () => rm(dir, { recursive: true, force: true }),
+      };
+    }
     const agent = AGENT_LABEL[lane.session.agent as Agent] ?? lane.session.agent;
     const turns = turnsOf(this.deps.transcript?.(sessionId) ?? [], me, agent, messageId);
     if (turns.length === 0) fail('invalid-transition', 'There is nothing in this conversation to share yet.');

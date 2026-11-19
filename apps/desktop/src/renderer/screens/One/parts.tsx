@@ -15,7 +15,35 @@ import { useSpawnForm } from '../../features/modals/use-spawn-form';
 import { useModel, useUi } from '../../state/hooks';
 import s from './One.module.css';
 
-type AskKind = 'code' | 'campaign' | 'report' | 'design';
+export type AskKind = 'code' | 'campaign' | 'report' | 'design';
+
+/** The four things a campaign always needs, and a report's period: all optional, the agent asks for the rest. */
+interface Brief {
+  goal: string;
+  budget: string;
+  when: string;
+  where: string;
+  period: string;
+}
+const EMPTY_BRIEF: Brief = { goal: '', budget: '', when: '', where: '', period: '' };
+
+/** The person's words, then the brief as plain lines the agent reads. */
+const withBrief = (text: string, kind: AskKind, b: Brief): string => {
+  const c = copy.one.brief;
+  const lines =
+    kind === 'campaign'
+      ? [
+          b.goal && `${c.goal}: ${b.goal}`,
+          b.budget && `${c.budget}: ${b.budget}`,
+          b.when && `${c.when}: ${b.when}`,
+          b.where && `${c.where}: ${b.where}`,
+        ]
+      : kind === 'report'
+        ? [b.period && `${c.period}: ${b.period}`]
+        : [];
+  const filled = lines.filter((x): x is string => typeof x === 'string' && x.trim() !== '');
+  return filled.length === 0 ? text : `${text}\n\n${filled.join('\n')}`;
+};
 const ASK_KINDS: AskKind[] = ['code', 'campaign', 'report', 'design'];
 /** What each choice starts: a build lane (no kind), or a design, campaign or report task. */
 const KIND_OF: Record<AskKind, TaskKind | null> = {
@@ -136,7 +164,7 @@ export function NeedCard({ need }: { need: OneNeed }) {
           </Button>
         ) : (
           <Button variant="accent" size="regular" onClick={() => openSession(need.projectId, need.sessionId)}>
-            {n.answer}
+            {need.kind === 'launch' ? n.reviewLaunch : n.answer}
           </Button>
         )}
         {need.kind === 'live' ? (
@@ -166,7 +194,14 @@ export function NeedList({ needs }: { needs: OneNeed[] }) {
  * "What do you want done?": the person's words become a new task in the chosen project, on its own branch, with
  * the project's default AI (the spawn form's defaults; the details stay in classic Styx's New task).
  */
-export function AskBox({ projectId: fixed }: { projectId?: ProjectId }) {
+/** What a starter puts in the ask box; `n` changes on every click, so the same starter can fill it twice. */
+export interface AskPreset {
+  kind: AskKind;
+  text: string;
+  n: number;
+}
+
+export function AskBox({ projectId: fixed, preset }: { projectId?: ProjectId; preset?: AskPreset | null }) {
   const projects = useModel(liveProjects);
   const current = useUi((u) => u.projectId);
   const [picked, setPicked] = useState<ProjectId | null>(null);
@@ -175,7 +210,8 @@ export function AskBox({ projectId: fixed }: { projectId?: ProjectId }) {
   if (projectId === null) return <p className={s['empty']}>{copy.one.noProject}</p>;
   return (
     <AskForm
-      key={projectId}
+      key={`${projectId}:${preset?.n ?? 0}`}
+      preset={preset ?? null}
       projectId={projectId}
       projects={fixed === undefined ? projects : []}
       onPick={setPicked}
@@ -184,24 +220,28 @@ export function AskBox({ projectId: fixed }: { projectId?: ProjectId }) {
 }
 
 function AskForm({
+  preset,
   projectId,
   projects,
   onPick,
 }: {
+  preset: AskPreset | null;
   projectId: ProjectId;
   projects: { id: ProjectId; name: string }[];
   onPick: (id: ProjectId) => void;
 }) {
   const { valid, busy, spawn, missing } = useSpawnForm(projectId);
   const openSession = useOpenTask();
-  const [text, setText] = useState('');
-  const [kind, setKind] = useState<AskKind>('code');
+  const [text, setText] = useState(preset?.text ?? '');
+  const [kind, setKind] = useState<AskKind>(preset?.kind ?? 'code');
+  const [brief, setBrief] = useState<Brief>(EMPTY_BRIEF);
+  const b = copy.one.brief;
   const [error, setError] = useState<string | null>(null);
   const can = text.trim() !== '' && valid && !busy && !missing;
   const start = async () => {
     if (!can) return;
     setError(null);
-    const id = await spawn(text.trim(), KIND_OF[kind]);
+    const id = await spawn(withBrief(text.trim(), kind, brief), KIND_OF[kind]);
     if (id === null) {
       setError(copy.one.startFailed);
       return;
@@ -240,6 +280,73 @@ function AskForm({
         ))}
         <span className={s['needWhy']}>{copy.one.kindHint[kind]}</span>
       </div>
+      {kind === 'campaign' || kind === 'report' ? (
+        <div className={s['briefFields']} role="group" aria-label={b.label}>
+          {kind === 'campaign' ? (
+            <>
+              <label className={s['field']}>
+                <span>{b.goal}</span>
+                <select
+                  className={s['askSelect']}
+                  value={brief.goal}
+                  onChange={(e) => setBrief({ ...brief, goal: e.target.value })}
+                >
+                  <option value="">{b.any}</option>
+                  {b.goals.map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={s['field']}>
+                <span>{b.budget}</span>
+                <input
+                  className={s['askSelect']}
+                  value={brief.budget}
+                  placeholder={b.budgetHint}
+                  onChange={(e) => setBrief({ ...brief, budget: e.target.value })}
+                />
+              </label>
+              <label className={s['field']}>
+                <span>{b.when}</span>
+                <input
+                  className={s['askSelect']}
+                  value={brief.when}
+                  placeholder={b.whenHint}
+                  onChange={(e) => setBrief({ ...brief, when: e.target.value })}
+                />
+              </label>
+              <label className={s['field']}>
+                <span>{b.where}</span>
+                <input
+                  className={s['askSelect']}
+                  value={brief.where}
+                  placeholder={b.whereHint}
+                  onChange={(e) => setBrief({ ...brief, where: e.target.value })}
+                />
+              </label>
+            </>
+          ) : (
+            <label className={s['field']}>
+              <span>{b.period}</span>
+              <select
+                className={s['askSelect']}
+                value={brief.period}
+                onChange={(e) => setBrief({ ...brief, period: e.target.value })}
+              >
+                <option value="">{b.any}</option>
+                {b.periods.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <span className={s['needWhy']}>{b.optional}</span>
+        </div>
+      ) : null}
       <div className={s['askRow']}>
         {projects.length > 1 ? (
           <label>

@@ -829,6 +829,16 @@ export const commands = {
     input: z.object({ sessionId: sessionIdSchema, index: z.number().int().min(0).max(11) }),
     output: z.object({ dataUrl: z.string().nullable() }),
   },
+  /** Keep a report up to date: re-run every Monday morning while Styx is open. */
+  'taskResults.setWeekly': {
+    input: z.object({ sessionId: sessionIdSchema, weekly: z.boolean() }),
+    output: ok,
+  },
+  /** A report as a PDF, saved where the person picks; null when they dismissed the dialog. */
+  'taskResults.pdf': {
+    input: z.object({ sessionId: sessionIdSchema }),
+    output: z.object({ path: z.string().nullable() }),
+  },
   /** Pause everything: the person stops the campaign the plan made, at once. */
   'taskResults.pauseAll': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
   /** The campaign's numbers from Meta, for the live view; null before anything runs. */

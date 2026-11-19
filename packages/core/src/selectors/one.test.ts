@@ -4,7 +4,7 @@ import * as fixtures from '../fixtures/demo';
 import { DEMO_NOW, demoReadModel, emptyReadModel, ids } from '../fixtures/demo';
 import type { AskPayload, PendingAsk, Session } from '../model/session';
 import { rows, upsertRows, type ReadModel } from '../read-model';
-import { askQuestion, oneNeeds, oneProjects, oneRecord, oneTasks } from './one';
+import { askQuestion, oneNeeds, oneProjects, oneRecord, oneResults, oneTasks, resultStatus } from './one';
 
 const NOW = DEMO_NOW;
 
@@ -198,5 +198,76 @@ describe('oneProjects', () => {
     const removed = { ...m, projects: upsertRows(m.projects, [{ ...p, removedAt: NOW }]) };
     expect(oneProjects(removed, NOW).map((x) => x.name)).not.toContain('client-x');
     expect(oneProjects(emptyReadModel(), NOW)).toEqual([]);
+  });
+});
+
+describe('resultStatus and oneResults', () => {
+  const one = fixtures.oneFixture();
+  const base = one.taskResults.find((r) => r.body.title === 'Winter sale');
+  const draft = one.taskResults.find((r) => r.body.title === 'Black Friday retargeting');
+  const report = one.taskResults.find((r) => r.body.kind === 'report');
+  if (base === undefined || draft === undefined || report === undefined) throw new Error('fixture');
+  const DAYS = 86_400_000;
+
+  it.each<[string, Parameters<typeof resultStatus>[0], number, string]>([
+    ['waiting', draft, NOW, 'waiting'],
+    [
+      'draft without a plan',
+      { ...draft, body: { ...draft.body, launch: undefined } as typeof draft.body },
+      NOW,
+      'draft',
+    ],
+    ['launching', { ...base, campaignId: null }, NOW, 'launching'],
+    ['live', base, NOW, 'live'],
+    ['paused', { ...base, pausedAt: NOW }, NOW, 'paused'],
+    ['ended', base, (base.launchApprovedAt ?? 0) + 9 * DAYS, 'ended'],
+    ['ready', report, NOW, 'ready'],
+    ['weekly', { ...report, weekly: true }, NOW, 'weekly'],
+  ])('%s', (_n, r, now, want) => {
+    expect(resultStatus(r, now)).toBe(want);
+  });
+
+  it('a campaign waiting for its launch OK is in Needs your OK, with the money', () => {
+    const m = {
+      ...demoReadModel(),
+      sessions: upsertRows(demoReadModel().sessions, one.sessions),
+      taskResults: Object.fromEntries([...one.taskResults, { ...draft, id: 'gone' }].map((r) => [r.id, r])),
+    };
+    const launch = oneNeeds(m, NOW).filter((n) => n.kind === 'launch');
+    expect(launch.map((n) => [n.title, n.big])).toEqual([
+      ['Launch “Black Friday retargeting”', expect.stringContaining('35')],
+    ]);
+  });
+
+  it('lists results whose task is here, what needs the person first, with a plain line', () => {
+    const m = {
+      ...demoReadModel(),
+      sessions: upsertRows(demoReadModel().sessions, one.sessions),
+      taskResults: Object.fromEntries([...one.taskResults, { ...report, id: 'gone' }].map((r) => [r.id, r])),
+    };
+    const list = oneResults(m, NOW);
+    expect(list.map((x) => [x.title, x.status])).toEqual([
+      ['Black Friday retargeting', 'waiting'],
+      ['Winter sale', 'live'],
+      ['Weekly report', 'ready'],
+    ]);
+    expect(list[0]?.line).toContain('35');
+    expect(list[2]?.line).toBe('A good week: sales up 18%, at a lower cost per sale.');
+    const noPlan = {
+      ...m,
+      taskResults: {
+        [draft.id]: { ...draft, body: { ...draft.body, launch: undefined } as typeof draft.body },
+      },
+    };
+    expect(oneResults(noPlan, NOW)[0]?.line).toBe('6 ads drafted');
+    // Same status: newest first.
+    const two = {
+      ...m,
+      taskResults: {
+        [report.id]: report,
+        [draft.id]: { ...report, id: draft.id, updatedAt: report.updatedAt + 1 },
+      },
+    };
+    expect(oneResults(two, NOW).map((x) => x.id)).toEqual([draft.id, report.id]);
   });
 });

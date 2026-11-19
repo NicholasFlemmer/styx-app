@@ -1563,6 +1563,8 @@ export const oneFixture = (): DemoFixture & OneExtras => {
         },
         campaignId: '120000000000777',
         pausedAt: null,
+        weekly: false,
+        lastRunAt: null,
         updatedAt: ago(1 * DAY + 3 * HOUR),
         body: {
           kind: 'campaign',
@@ -1605,6 +1607,8 @@ export const oneFixture = (): DemoFixture & OneExtras => {
         approved: null,
         campaignId: null,
         pausedAt: null,
+        weekly: false,
+        lastRunAt: null,
         updatedAt: ago(4 * MIN),
         body: {
           kind: 'campaign',
@@ -1681,6 +1685,8 @@ export const oneFixture = (): DemoFixture & OneExtras => {
         approved: null,
         campaignId: null,
         pausedAt: null,
+        weekly: false,
+        lastRunAt: null,
         updatedAt: ago(35 * MIN),
         body: {
           kind: 'report',

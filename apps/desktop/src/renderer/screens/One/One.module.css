@@ -693,3 +693,61 @@
     flex-wrap: wrap;
   }
 }
+@layer screens {
+  /* Where a result stands: needs you in the accent, running inverted, the rest outlined. */
+  .statusPill {
+    padding: 1px 7px;
+    border: 1px solid var(--tx);
+    color: var(--tx);
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .statusPill[data-status='waiting'] {
+    background: var(--ac);
+    border-color: var(--ac);
+    color: var(--acx);
+  }
+  .statusPill[data-status='live'],
+  .statusPill[data-status='weekly'] {
+    background: var(--tx);
+    color: var(--bg);
+  }
+  .starters {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+  }
+  .starter {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px;
+    border: 1px solid var(--ln);
+    background: var(--s1);
+    color: var(--tx);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .starter:hover {
+    border-color: var(--tx);
+  }
+  .starter:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: 1px;
+  }
+  .starter b {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .briefFields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}
