@@ -711,6 +711,10 @@ export class SessionService {
     if (session.kind === 'design' && session.lastActivityAt === null) {
       this.notes.set(session.id, [copy.agentPrompt.design, ...(this.notes.get(session.id) ?? [])]);
     }
+    // Campaign and report tasks (ADR-0033) learn how to work and how to hand their result over, once.
+    if ((session.kind === 'campaign' || session.kind === 'report') && session.lastActivityAt === null) {
+      this.notes.set(session.id, [copy.agentPrompt[session.kind], ...(this.notes.get(session.id) ?? [])]);
+    }
     // The team hub's context (ADR-0032 round 1), once, ahead of the first turn: the agent learns what the team has
     // decided and documented without having to think to ask. Information, framed as such; never instructions.
     if (session.lastActivityAt === null) {

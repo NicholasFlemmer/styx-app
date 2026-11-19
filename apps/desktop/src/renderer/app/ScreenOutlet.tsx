@@ -8,6 +8,7 @@ import { OneNeeds } from '../screens/One/OneNeeds';
 import { OneProject, OneProjects } from '../screens/One/OneProjects';
 import { OneRecord } from '../screens/One/OneRecord';
 import { OneTask } from '../screens/One/OneTask';
+import { OneResults } from '../screens/One/OneResults';
 import { OneTasks } from '../screens/One/OneTasks';
 import { Onboarding } from '../screens/Onboarding/Onboarding';
 import { Repo } from '../screens/Repo/Repo';
@@ -41,6 +42,7 @@ const SCREENS: Record<Screen, ComponentType> = {
   'one-needs': OneNeeds,
   'one-tasks': OneTasks,
   'one-task': OneTask,
+  'one-results': OneResults,
   'one-projects': OneProjects,
   'one-project': OneProject,
   'one-apps': OneApps,

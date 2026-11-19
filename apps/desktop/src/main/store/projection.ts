@@ -100,6 +100,7 @@ export function buildSnapshot(deps: ProjectionDeps, seq: number): ReadModelSnaps
     update: deps.update?.() ?? UPDATE_OFF,
     hub: deps.hub?.() ?? HUB_OFF,
     connectedApps: deps.connectedApps?.() ?? [],
+    taskResults: repos.taskResults.all(),
     agentSetup: deps.agentSetup?.() ?? [],
     deploys: deps.deploys?.() ?? [],
   };

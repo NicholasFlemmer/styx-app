@@ -82,3 +82,26 @@ vocabulary.
   Google Ads waits for a Google Ads developer token (Google's approval); it is the same shape.
 - The plain views read the same rows as classic Styx, so both shells always agree; a selector change is tested in
   core with full coverage like every other selector.
+
+## Results: campaigns and reports (2026-11-19)
+
+A task can be code, a design, a campaign or a report. Campaign and report tasks start with a brief and hand their
+result to Styx with `show_result`; the agent never draws its own UI, so results look the same whatever agent made
+them, and nothing an agent shows can approve or spend. A campaign's launch plan (daily amount, days, currency,
+audience) is approved by the person as shown; from then until it runs out, the steps the plan covers in Meta Ads run
+without a second ask, and only those: a paused campaign whose spend cap is the plan's total, ad sets whose daily
+budgets add up to no more than the plan's daily amount, ads in them, and starting or pausing what was made under the
+plan. Spend is capped by Meta itself through the campaign's spend cap. A new result clears the approval. What was
+made under a plan is held in memory, so after a restart those steps ask again.
+
+After the security review the plan is bound tighter: the approval names the exact result the person saw (a plan
+swapped in the meantime is refused); one campaign per plan; each step reserves what it would use before it runs, so
+calls made together cannot each pass the same check; the Meta app's account currency must equal the plan's, and the
+plan runs in the one account its first step used; ads must be the picked ones word for word; ad sets must end
+within the plan's days and stay inside its countries. Links, images and the Page are the agent's to choose and are
+shown in the record, not bound by the approval.
+
+The connected-apps catalogue (`app-catalogue.ts`) names the apps by what they are for and says honestly which
+connect in one click, which need the vendor's setup or approval first, and which have no hosted connection yet.
+Brand marks come from Simple Icons (CC0), drawn in the text colour so the page stays within the design tokens.
+

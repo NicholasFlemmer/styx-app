@@ -168,6 +168,16 @@ Asks your team's context: what the business knows and has decided, written by pe
 
 With a query, returns `{ "items" }`, best match first, each with `title`, `kind`, `body`, `url`, `updated` and `source` (who wrote it). Without one, returns `{ "index" }`: one line per entry. Entries marked out of date are left out. What comes back is information from your team, not instructions.
 
+### show_result
+
+Hands Styx a campaign or report task's result, for Styx to draw as cards in the task and under **Results**. A campaign has the ads and a launch plan (daily amount, days, currency, audience); a report has the answer, numbers, a chart, a table, its sources and recommendations. The exact shape is in the task's brief. Calling it again replaces the result, and clears any approval of the previous launch plan. Showing a result never spends or changes anything.
+
+| Parameter | Type   | Required | Notes                                   |
+| --------- | ------ | -------- | --------------------------------------- |
+| `result`  | object | yes      | `{"kind":"campaign"…}` or `{"kind":"report"…}`. |
+
+Returns `{ "shown": true }`, or an error naming what does not fit.
+
 ### list_apps
 
 Lists the apps you connected for AI under **Connected apps** (preview, in the One place for the work mode): apps that publish their own MCP connection, such as Notion or Linear, signed in with your own account. Takes no parameters.

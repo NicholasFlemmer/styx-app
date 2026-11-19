@@ -292,7 +292,9 @@ async function boot(): Promise<void> {
   // answered offline (`skills-fixture.ts`); e2e runs get the offline fetch for everything so nothing leaves the box.
   const fixtureHome = fixtureName !== null ? join(userData, 'fixture-home') : null;
   if (fixtureName !== null && fixtureHome !== null) {
-    const demoRepos = (fixtureName === 'demo' || fixtureName === 'error') && env['STYX_DEMO_REPOS'] !== '0';
+    const demoRepos =
+      (fixtureName === 'demo' || fixtureName === 'error' || fixtureName === 'one') &&
+      env['STYX_DEMO_REPOS'] !== '0';
     const { seeded } = seed(repos, loadFixture(fixtureName), {
       reset: env['STYX_FIXTURE_RESET'] === '1',
       skillsHome: fixtureHome,

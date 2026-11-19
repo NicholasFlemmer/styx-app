@@ -15,6 +15,8 @@ import { taskOf } from './lanes';
  * OK is grant requests + open questions + work ready to go live, the record is the audit log. Pure.
  */
 
+export type OneTaskKind = 'code' | 'design' | 'campaign' | 'report';
+
 export type OneTaskState = 'your-turn' | 'working' | 'idle' | 'paused' | 'ready' | 'landed' | 'finished';
 
 export interface OneTask {
@@ -22,8 +24,8 @@ export interface OneTask {
   projectId: ProjectId;
   project: string;
   title: string;
-  /** 'code' for a build lane, 'design' for a design task. */
-  kind: 'code' | 'design';
+  /** What the task makes: code (a build lane), a design, a campaign or a report. */
+  kind: OneTaskKind;
   state: OneTaskState;
   /** One plain sentence: "Asks you: …", "Working · 2m", "Done · ready to go live". */
   line: string;
@@ -101,13 +103,14 @@ export const oneTasks = (model: ReadModel, now: number, projectId: ProjectId | n
     )
     .map((s): OneTask => {
       const [state, landedAt] = stateOf(model, s);
-      const title = taskOf(s);
+      // A campaign or report names itself; anything else is named by what was asked.
+      const title = model.taskResults[s.id]?.body.title ?? taskOf(s);
       return {
         sessionId: s.id,
         projectId: s.projectId,
         project: projectNameOf(model, s.projectId),
         title: title === '' ? fill(copy.lanes.nav.untitled, { agent: AGENT_LABEL[s.agent] }) : title,
-        kind: s.kind === 'design' ? 'design' : 'code',
+        kind: s.kind === undefined || s.kind === null || s.kind === 'build' ? 'code' : s.kind,
         state,
         line: lineOf(model, s, state, landedAt, now),
         agent: s.agent,

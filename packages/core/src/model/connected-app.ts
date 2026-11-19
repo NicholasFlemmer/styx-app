@@ -27,6 +27,8 @@ export const connectedAppSchema = z.object({
   kind: connectedAppKindSchema.default('mcp'),
   /** A built-in app's account (Meta: `act_<digits>`); never a secret. */
   account: z.string().max(64).nullable().default(null),
+  /** A built-in app's account currency (Meta: `ZAR`), checked against any launch plan. */
+  currency: z.string().regex(/^[A-Z]{3}$/).nullable().default(null),
   name: z.string().min(1).max(80),
   /** Where the app is, for showing: its origin only. The full address can carry a secret, so it lives in the keychain. */
   url: z.string().url().max(500),

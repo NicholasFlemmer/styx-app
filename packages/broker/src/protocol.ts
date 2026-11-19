@@ -225,6 +225,11 @@ export const methods = {
    * The team hub (ADR-0032). Context by name or question (no query: the one-line index of what exists); needs the
    * project linked to a space. Results carry their source so the agent can cite it.
    */
+  /** A campaign or report for Styx to draw (ADR-0033); replaces the task's last one. */
+  show_result: {
+    params: z.object({ result: z.record(z.string(), z.unknown()) }),
+    result: z.object({ shown: z.literal(true), note: z.string() }),
+  },
   /** Apps the person connected for AI (ADR-0033 tier 2), with their tools; never an address or a sign-in. */
   list_apps: {
     params: z.object({}),

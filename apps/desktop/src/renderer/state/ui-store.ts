@@ -44,6 +44,7 @@ export const SCREENS = [
   'one-needs',
   'one-tasks',
   'one-task',
+  'one-results',
   'one-projects',
   'one-project',
   'one-apps',

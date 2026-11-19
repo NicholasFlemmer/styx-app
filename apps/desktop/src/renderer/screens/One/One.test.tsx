@@ -69,8 +69,9 @@ describe('One place for the work (ADR-0033)', () => {
             id: 'app1',
             kind: 'mcp' as const,
             account: null,
+            currency: null,
             name: 'Linear',
-            url: 'https://mcp.linear.app/mcp',
+            url: 'https://mcp.linear.app',
             status: 'signed-out',
             error: null,
             tools: [],
@@ -84,17 +85,28 @@ describe('One place for the work (ADR-0033)', () => {
     );
     useUiStore.setState({ projectId: fixtures.ids.project.acmeShop });
     render(<OneApps />);
-    const form = screen.getByRole('form', { name: copy.one.apps.addByUrl });
-    fireEvent.change(within(form).getByLabelText(copy.one.apps.nameLabel), { target: { value: 'Notion' } });
-    fireEvent.change(within(form).getByLabelText(copy.one.apps.urlLabel), {
-      target: { value: 'https://mcp.notion.com/mcp' },
-    });
-    fireEvent.click(within(form).getByRole('button', { name: copy.one.apps.add }));
+    // One click from the catalogue.
+    fireEvent.click(screen.getByRole('button', { name: `${copy.one.apps.connectOne} Notion` }));
     expect(commandMock).toHaveBeenCalledWith('connectedApps.add', {
       name: 'Notion',
       url: 'https://mcp.notion.com/mcp',
       projectId: fixtures.ids.project.acmeShop,
     });
+    // Add your own opens the address form.
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.one.apps.own) }));
+    const form = screen.getByRole('form', { name: copy.one.apps.addByUrl });
+    fireEvent.change(within(form).getByLabelText(copy.one.apps.nameLabel), { target: { value: 'Ours' } });
+    fireEvent.change(within(form).getByLabelText(copy.one.apps.urlLabel), {
+      target: { value: 'https://mcp.example.com/mcp' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: copy.one.apps.add }));
+    expect(commandMock).toHaveBeenCalledWith('connectedApps.add', {
+      name: 'Ours',
+      url: 'https://mcp.example.com/mcp',
+      projectId: fixtures.ids.project.acmeShop,
+    });
+    // A signed-out app: Manage, then Sign in or Disconnect.
+    fireEvent.click(screen.getByRole('button', { name: `${copy.one.apps.manage} Linear` }));
     fireEvent.click(screen.getByRole('button', { name: copy.one.apps.signIn }));
     expect(commandMock).toHaveBeenCalledWith('connectedApps.signIn', { appId: 'app1' });
     fireEvent.click(screen.getByRole('button', { name: `${copy.one.apps.remove} Linear` }));

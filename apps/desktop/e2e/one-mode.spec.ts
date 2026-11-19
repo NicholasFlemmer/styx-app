@@ -58,3 +58,48 @@ test('One place for the work: switch on, visit every page, switch back', async (
     await app.close();
   }
 });
+
+test('One place for the work: a campaign and a report draw as results', async () => {
+  const { app, page } = await launchStyx({ fixture: 'one' });
+  const shots = process.env['STYX_ONE_SHOTS'];
+  const axe = async (name: string) => {
+    const r = await new AxeBuilder({ page })
+      .setLegacyMode(true)
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+    expect(r.violations.map((v) => `${name}: ${v.id}`)).toEqual([]);
+  };
+  try {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const nav = page.locator('[data-one-nav]');
+    await expect(nav).toBeVisible();
+    await nav.getByRole('button', { name: 'Home' }).click();
+    await page.waitForSelector('[data-screen-ready="one-home"]');
+    if (shots) await page.screenshot({ path: `${shots}/one-home-fixture.png` });
+    await nav.getByRole('button', { name: 'Connected apps' }).click();
+    await page.waitForSelector('[data-one-app-card="notion"]');
+    if (shots) await page.screenshot({ path: `${shots}/one-apps-cards.png` });
+    await axe('one-apps-cards');
+    // Manage opens the app's panel at the top, in view.
+    await page.getByRole('button', { name: 'Manage Notion' }).click();
+    await expect(page.locator('[data-one-app-detail="demo-notion"]')).toBeInViewport();
+    if (shots) await page.screenshot({ path: `${shots}/one-apps-manage.png` });
+    await nav.getByRole('button', { name: 'Results' }).click();
+    await page.waitForSelector('[data-screen-ready="one-results"]');
+    await expect(page.locator('[data-one-result-card]')).toHaveCount(2);
+    if (shots) await page.screenshot({ path: `${shots}/one-results.png` });
+    await axe('one-results');
+    await page.locator('[data-one-result-card]', { hasText: 'Black Friday' }).click();
+    await page.waitForSelector('[data-one-result="campaign"]');
+    await expect(page.locator('[data-one-launch="open"]')).toContainText('at most');
+    if (shots) await page.screenshot({ path: `${shots}/one-campaign.png` });
+    await axe('one-campaign');
+    await nav.getByRole('button', { name: 'Results' }).click();
+    await page.locator('[data-one-result-card]', { hasText: 'Weekly report' }).click();
+    await page.waitForSelector('[data-one-result="report"]');
+    if (shots) await page.screenshot({ path: `${shots}/one-report.png` });
+    await axe('one-report');
+  } finally {
+    await app.close();
+  }
+});

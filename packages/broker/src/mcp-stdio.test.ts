@@ -70,6 +70,7 @@ describe('styx MCP server', () => {
       'report_status',
       'request_access',
       'send_message',
+      'show_result',
       'use_app',
     ]);
 

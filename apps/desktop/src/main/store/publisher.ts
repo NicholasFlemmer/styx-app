@@ -5,6 +5,7 @@ import {
   type UpdateState,
   type HubState,
   type ConnectedApp,
+  type TaskResult,
   type AgentSetup,
   type ActivityRow,
   type AgentChange,
@@ -256,6 +257,10 @@ export class Publisher {
 
   hubSet(hub: HubState): void {
     this.emit({ op: 'hub.set', hub });
+  }
+
+  taskResultSet(id: string, result: TaskResult | null): void {
+    this.emit({ op: 'taskResults.set', id, result });
   }
 
   connectedAppsSet(apps: ConnectedApp[]): void {

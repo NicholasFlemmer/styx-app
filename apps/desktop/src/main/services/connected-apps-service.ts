@@ -384,6 +384,7 @@ export class ConnectedAppsService {
         id,
         kind: 'mcp',
         account: null,
+        currency: null,
         name: name.trim().slice(0, 80),
         url: new URL(url).origin,
         status: 'signed-out',
@@ -451,6 +452,7 @@ export class ConnectedAppsService {
       id,
       kind: 'meta-ads',
       account,
+      currency: /^[A-Z]{3}$/.test(checked.currency) ? checked.currency : null,
       // The currency is in the name, so every question about a budget shows what the amount is in.
       name: `Meta Ads · ${checked.name}${checked.currency === '' ? '' : ` (${checked.currency})`}`.slice(
         0,
@@ -650,7 +652,7 @@ export class ConnectedAppsService {
     app: ConnectedApp,
     tool: ConnectedAppTool,
     args: Record<string, unknown>,
-    approvedBy: 'reads only' | 'you',
+    approvedBy: 'reads only' | 'you' | 'launch plan',
   ): Promise<{ text: string; isError: boolean }> {
     // A change is never sent twice: only a read is retried on a fresh connection.
     const result = await this.withConnection(app, (c) => c.callTool(tool.name, args), tool.readOnly);

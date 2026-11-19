@@ -1,89 +1,14 @@
-import { copy, fill, rows, type ConnectedApp, type ProjectId, type ReadModel } from '@styx/core';
+import { copy, rows, type ConnectedApp, type ProjectId, type ReadModel } from '@styx/core';
 import { Button } from '@styx/ui';
 import { useState, type FormEvent } from 'react';
 import { command } from '../../state/commands';
 import { useModel, useUi } from '../../state/hooks';
 import s from './One.module.css';
 
-const appsOf = (m: ReadModel) => m.connectedApps;
 const projectsOf = (m: ReadModel) => rows(m.projects).filter((p) => p.removedAt == null);
 
-/**
- * Apps with their own connection for AI (ADR-0033 tier 2): add one by its address, sign in on its page, and see
- * what it can do. Styx keeps the sign-in in the keychain; an agent's change in the app waits for your OK.
- */
-export function ConnectedAppsMcp() {
-  const apps = useModel(appsOf);
-  const a = copy.one.apps;
-  return (
-    <section className={s['box']} aria-labelledby="one-mcp-title" data-one-mcp="true">
-      <h2 className={s['h3']}>{a.builtInTitle}</h2>
-      <MetaAds />
-      <p className={s['lead']}>{a.google}</p>
-      <h2 className={s['h3']} id="one-mcp-title">
-        {a.mcpTitle}
-      </h2>
-      <p className={s['lead']}>{a.mcpLead}</p>
-      <AddApp />
-      {apps.length === 0 ? (
-        <p className={s['empty']}>{a.mcpEmpty}</p>
-      ) : (
-        <ul className={s['lines']} aria-label={a.mcpTitle}>
-          {apps.map((app) => (
-            <AppRow key={app.id} app={app} />
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function AppRow({ app }: { app: ConnectedApp }) {
-  const a = copy.one.apps;
-  const reads = app.tools.filter((t) => t.readOnly).length;
-  const busy = app.status === 'signing-in';
-  const builtIn = app.kind !== 'mcp';
-  return (
-    <li className={s['appItem']} data-one-mcp-app={app.id}>
-      <div className={s['appRow']}>
-        <span className={s['appName']}>
-          {app.name}
-          <span className={s['appSub']}>
-            {app.status === 'connected'
-              ? `${fill(a.tools, { n: app.tools.length })} · ${reads} ${a.readOnly} · ${a.asks}`
-              : app.status === 'error' && app.error !== null
-                ? `${a.status.error}: ${app.error}`
-                : a.status[app.status]}
-          </span>
-        </span>
-        {app.status === 'connected' || busy || builtIn ? (
-          <span className={s['needWhy']} role="status">
-            {builtIn && app.status !== 'connected' ? a.meta.replace : a.status[app.status]}
-          </span>
-        ) : (
-          <Button
-            variant="accent"
-            size="regular"
-            onClick={() => void command('connectedApps.signIn', { appId: app.id })}
-          >
-            {a.signIn}
-          </Button>
-        )}
-        <Button
-          size="regular"
-          aria-label={`${a.remove} ${app.name}`}
-          onClick={() => void command('connectedApps.remove', { appId: app.id })}
-        >
-          {a.remove}
-        </Button>
-      </div>
-      <UsedIn app={app} />
-    </li>
-  );
-}
-
 /** Which projects' tasks may use the app: none until turned on (an app's data is the person's, not every task's). */
-function UsedIn({ app }: { app: ConnectedApp }) {
+export function UsedIn({ app }: { app: ConnectedApp }) {
   const projects = useModel(projectsOf);
   const a = copy.one.apps;
   const toggle = (id: ProjectId) => {
@@ -106,7 +31,7 @@ function UsedIn({ app }: { app: ConnectedApp }) {
 }
 
 /** Meta Ads, built in: the ad account and a Marketing API token, checked with Meta before anything is kept. */
-function MetaAds() {
+export function MetaAds() {
   const m = copy.one.apps.meta;
   const projectId = useUi((u) => u.projectId);
   const [account, setAccount] = useState('');
@@ -172,7 +97,7 @@ function MetaAds() {
   );
 }
 
-function AddApp() {
+export function AddApp() {
   const a = copy.one.apps;
   // Turned on for the project the person is in; more under each app.
   const projectId = useUi((u) => u.projectId);

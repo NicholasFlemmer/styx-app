@@ -75,6 +75,7 @@ import { installIdFrom, UsageReportService } from './services/usage-report-servi
 import { FeedbackService } from './services/feedback-service';
 import { DEFAULT_HUB, HubService } from './services/hub-service';
 import { ConnectedAppsService, type AppConnector, type Loopback } from './services/connected-apps-service';
+import { TaskResultsService } from './services/task-results-service';
 import { hostname } from 'node:os';
 import { version as APP_VERSION } from '../../package.json';
 import { projectSettingsFor } from './store/projection';
@@ -296,6 +297,8 @@ export interface Container {
   hub: HubService;
   /** Apps with their own AI connection (ADR-0033 tier 2): sign-in, tools, and the agents' gated use. */
   connectedApps: ConnectedAppsService;
+  /** Campaign and report results, and approved launch plans (ADR-0033). */
+  taskResults: TaskResultsService;
   /** Updates in place (#119). */
   updates: UpdateService;
   /** Anonymous usage counts (discrepancy row 114): a closed set of event names, nothing else. */
@@ -744,6 +747,18 @@ export function buildContainer(opts: ContainerOptions): Container {
     ...(opts.appLoopback ? { loopback: opts.appLoopback } : {}),
   });
   connectedApps.load();
+  const taskResults = new TaskResultsService({
+    repos,
+    now: () => clock.now(),
+    publish: (id, result) => publisher.taskResultSet(id, result),
+    audit: (input) => {
+      const row = audit.append(input);
+      publisher.upsert('auditEntries', [row.id]);
+    },
+    tell: async (sessionId, text) => {
+      await sessions.sendMessage(sessionId, text, [], { from: 'styx' });
+    },
+  });
   const usageReports = new UsageReportService({
     fetch: opts.fetch ?? fetch,
     apiBase: () => process.env['STYX_API'] ?? DEFAULT_API,
@@ -820,6 +835,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     ledger,
     hub,
     apps: connectedApps,
+    results: taskResults,
     providers,
     clock,
     endpoint: runtime.brokerEndpoint,
@@ -1168,6 +1184,7 @@ export function buildContainer(opts: ContainerOptions): Container {
     account,
     hub,
     connectedApps,
+    taskResults,
     updates,
     usageReports,
     feedback,

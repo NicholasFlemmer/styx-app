@@ -1,0 +1,234 @@
+@layer screens {
+  /* A result on paper (ADR-0027 §3): the light surfaces in both themes, tokens re-scoped for what is inside. */
+  .paper {
+    --bg: var(--paper);
+    --s1: var(--paper-s2);
+    --s2: var(--paper-s2);
+    --ln: var(--paper-ln);
+    --tx: var(--paper-tx);
+    --mu: var(--paper-mu);
+    --act: var(--paper-act);
+    --add: var(--paper-add);
+    --del: var(--paper-del);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 24px 28px 28px;
+    background: var(--paper);
+    color: var(--paper-tx);
+    border: 1px solid var(--paper-ln);
+  }
+  .h {
+    margin: 0 0 8px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .mu {
+    color: var(--mu);
+    font-size: 13px;
+  }
+  .lede {
+    margin: 0;
+    max-width: 70ch;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .headline {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    max-width: 30ch;
+  }
+  .steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--mu);
+  }
+  .steps li::before {
+    content: '✓';
+    margin-right: 8px;
+    color: var(--act);
+    font-weight: 700;
+  }
+
+  /* Campaign: the ads, then the launch plan. */
+  .ads {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+  }
+  .ad {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+  }
+  .ad[data-on='true'] {
+    border-color: var(--tx);
+  }
+  .adProduct {
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .adHead {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .adBody {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .adFoot {
+    margin-top: auto;
+    padding-top: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .launch {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    border: 2px solid var(--tx);
+    font-size: 14px;
+  }
+  .launchWhat {
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .acts {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .approved {
+    margin-top: 6px;
+    font-weight: 600;
+    color: var(--act);
+  }
+  .error {
+    font-size: 13px;
+  }
+
+  /* Report: numbers at a glance, a bar chart, the table, sharing, what to do next. */
+  .metrics {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  .metric {
+    padding: 10px 12px;
+    border: 1px solid var(--ln);
+  }
+  .metric dt {
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .metric dd {
+    margin: 2px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .metric b {
+    font-size: 21px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .metric span {
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .metric span[data-good='true'] {
+    color: var(--act);
+  }
+  .metric span[data-good='false'] {
+    color: var(--tx);
+    font-weight: 600;
+  }
+  .bars {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .bar {
+    display: grid;
+    grid-template-columns: minmax(120px, 180px) 1fr 72px;
+    gap: 10px;
+    align-items: center;
+    font-size: 13px;
+  }
+  .track {
+    height: 10px;
+    background: var(--s2);
+  }
+  .fill {
+    display: block;
+    height: 100%;
+    background: var(--tx);
+  }
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--mu);
+  }
+  .tableWrap {
+    overflow-x: auto;
+  }
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .table th,
+  .table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--ln);
+    text-align: left;
+  }
+  .table thead th {
+    font-weight: 600;
+    color: var(--mu);
+  }
+  .table tbody th {
+    font-weight: 500;
+  }
+  .shareRow {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .recs {
+    list-style: none;
+    margin: 0 0 8px;
+    padding: 0;
+  }
+  .rec {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-top: 1px solid var(--ln);
+    font-size: 14px;
+  }
+}

@@ -31,6 +31,8 @@ import type { PendingAsk, Session, SessionState, TranscriptMessage, QueuedMessag
 import { DEFAULT_APP_SETTINGS, DEFAULT_PROJECT_SETTINGS } from '../model/settings';
 import type { AppSettings, EffectiveProjectSettings } from '../model/settings';
 import type { Target } from '../model/target';
+import type { TaskResult } from '../model/task-result';
+import type { ConnectedApp } from '../model/connected-app';
 import { BUILTIN_POLICY_IDS, defaultPolicies } from '../policy/defaults';
 import type { ReadModel } from '../read-model';
 import { tableFrom } from '../read-model';
@@ -1196,6 +1198,12 @@ export const demoActivity = (): ActivityRow[] => [
 
 // --- Fixture -----------------------------------------------------------------
 
+/** One place for the work (ADR-0033): what the `one` fixture adds. */
+export interface OneExtras {
+  taskResults: TaskResult[];
+  connectedApps: ConnectedApp[];
+}
+
 export interface DemoFixture {
   now: number;
   projects: Project[];
@@ -1415,9 +1423,232 @@ export const fixtureReadModel = (f: DemoFixture): ReadModel => ({
   update: UPDATE_OFF,
   hub: HUB_OFF,
   connectedApps: [],
+  taskResults: {},
   agentSetup: {},
 });
 
 export const demoReadModel = (): ReadModel => fixtureReadModel(demoFixture());
 export const emptyReadModel = (): ReadModel => fixtureReadModel(emptyFixture());
 export const errorReadModel = (): ReadModel => fixtureReadModel(errorFixture());
+
+/**
+ * The `one` fixture (ADR-0033): the demo, plus a campaign task and a report task with their results, Meta Ads and
+ * Notion connected, and the mode switched on, so every page of One place for the work has something real to show.
+ */
+export const oneFixture = (): DemoFixture & OneExtras => {
+  const base = demoFixture();
+  const campaignId = fid<'SessionId'>('sess', 20);
+  const reportId = fid<'SessionId'>('sess', 21);
+  const campaignAsk = 'Set up Black Friday retargeting. Around R5k a day for a week. Use our best sellers.';
+  const reportAsk = 'Weekly report for client-x, 10 to 16 November, from Google Ads and Analytics.';
+  return {
+    ...base,
+    appSettings: { ...base.appSettings, oneMode: true },
+    sessions: [
+      ...base.sessions,
+      session(
+        campaignId,
+        ids.project.acmeShop,
+        ids.worktree.acmeMain,
+        'claude',
+        'needs-you',
+        'Six ads ready',
+        ago(4 * MIN),
+        {
+          firstMessage: campaignAsk,
+          kind: 'campaign',
+          startedAt: ago(22 * MIN),
+        },
+      ),
+      session(
+        reportId,
+        ids.project.clientX,
+        ids.worktree.clientMain,
+        'claude',
+        'idle',
+        'Report ready',
+        ago(35 * MIN),
+        {
+          firstMessage: reportAsk,
+          kind: 'report',
+          startedAt: ago(1 * HOUR),
+        },
+      ),
+    ],
+    transcripts: {
+      ...base.transcripts,
+      [campaignId]: [
+        msg(901, campaignId, 0, campaignAsk, { kind: 'user' }, ago(22 * MIN)),
+        msg(
+          902,
+          campaignId,
+          1,
+          'Six ads, two per product. Last year the hoodie ads did best, so I would lead with those. Pick the ones you like and approve the launch when you are happy with the plan.',
+          { kind: 'agent' },
+          ago(4 * MIN),
+        ),
+      ],
+      [reportId]: [
+        msg(903, reportId, 0, reportAsk, { kind: 'user' }, ago(1 * HOUR)),
+        msg(
+          904,
+          reportId,
+          1,
+          'A good week: sales up 18% at a lower cost per sale. The report is ready to share.',
+          { kind: 'agent' },
+          ago(35 * MIN),
+        ),
+      ],
+    },
+    taskResults: [
+      {
+        id: campaignId,
+        projectId: ids.project.acmeShop,
+        launchApprovedAt: null,
+        launchPicked: [],
+        updatedAt: ago(4 * MIN),
+        body: {
+          kind: 'campaign',
+          title: 'Black Friday retargeting',
+          lookedAt: [
+            'Read 30 days of sales in Shopify: the hoodie, the tote and the cap sell most',
+            'Checked Meta Ads: 41 200 people viewed a product and did not buy',
+            'Used the brand voice from know-how: plain, warm, no exclamation marks',
+          ],
+          summary: 'Six ads, two per product. Last year the hoodie ads did best, so I would lead with those.',
+          ads: [
+            {
+              product: 'Hoodie',
+              headline: 'Still thinking about it?',
+              body: 'The Acme hoodie, 30% off until Monday.',
+              estimate: 'about R71 a sale',
+              picked: true,
+            },
+            {
+              product: 'Tote',
+              headline: 'Your tote is waiting',
+              body: 'Free delivery on everything this weekend.',
+              estimate: 'about R88 a sale',
+              picked: true,
+            },
+            {
+              product: 'Cap',
+              headline: 'Back in stock',
+              body: 'The cap you looked at. Gone by Monday.',
+              estimate: 'about R93 a sale',
+              picked: true,
+            },
+            {
+              product: 'Hoodie',
+              headline: 'Made to last',
+              body: 'The one hoodie you will keep for years.',
+              estimate: 'about R79 a sale',
+              picked: false,
+            },
+            {
+              product: 'Tote',
+              headline: 'Carry more',
+              body: 'The tote, now with free delivery.',
+              estimate: 'about R95 a sale',
+              picked: false,
+            },
+            {
+              product: 'Cap',
+              headline: 'Last chance',
+              body: '30% off the cap until Monday.',
+              estimate: 'about R101 a sale',
+              picked: false,
+            },
+          ],
+          launch: {
+            platform: 'meta',
+            perDay: 5000,
+            days: 7,
+            currency: 'ZAR',
+            audience: 'People who viewed a product in the last 30 days',
+            countries: ['ZA'],
+            starts: 'Friday 00:00',
+            stops: 'Thursday 23:59',
+          },
+        },
+      },
+      {
+        id: reportId,
+        projectId: ids.project.clientX,
+        launchApprovedAt: null,
+        launchPicked: [],
+        updatedAt: ago(35 * MIN),
+        body: {
+          kind: 'report',
+          title: 'Weekly report',
+          period: '10 to 16 November',
+          sources: ['Google Ads', 'Analytics'],
+          headline: 'A good week: sales up 18%, at a lower cost per sale.',
+          summary:
+            'Search ads did most of the work. One display campaign spent R6 100 and sold nothing; pausing it is the main recommendation.',
+          metrics: [
+            { label: 'Spend', value: 'R31 400', change: 'budget R33 000' },
+            { label: 'Sales', value: 'R212 700', change: '▲ 18%', good: true },
+            { label: 'Cost per sale', value: 'R74', change: '▼ R9', good: true },
+            { label: 'Return on spend', value: '6.8×', change: '▲ 0.9', good: true },
+          ],
+          bars: {
+            title: 'Sales by campaign',
+            items: [
+              { label: 'Search, brand', value: 96400 },
+              { label: 'Search, products', value: 73100 },
+              { label: 'Shopping', value: 43200 },
+              { label: 'Display', value: 0 },
+            ],
+          },
+          table: {
+            columns: ['Campaign', 'Spend', 'Sales', 'Cost per sale'],
+            rows: [
+              ['Search, brand', 'R9 800', 'R96 400', 'R41'],
+              ['Search, products', 'R8 900', 'R73 100', 'R68'],
+              ['Shopping', 'R6 600', 'R43 200', 'R97'],
+              ['Display, retargeting', 'R6 100', 'R0', 'none'],
+            ],
+          },
+          recommendations: [
+            { title: 'Pause the display campaign', why: 'R6 100 spent, no sales in 3 weeks.' },
+            { title: 'Move R3 000 a week to brand search', why: 'Cheapest sales, still room to grow.' },
+          ],
+        },
+      },
+    ],
+    connectedApps: [
+      {
+        id: 'demo-meta',
+        kind: 'meta-ads',
+        account: 'act_1000000000001',
+        currency: 'ZAR',
+        name: 'Meta Ads · Acme (ZAR)',
+        url: 'https://graph.facebook.com',
+        status: 'connected',
+        error: null,
+        tools: [],
+        projects: [ids.project.acmeShop],
+        addedAt: ago(2 * DAY),
+        checkedAt: ago(2 * DAY),
+      },
+      {
+        id: 'demo-notion',
+        kind: 'mcp',
+        account: null,
+        currency: null,
+        name: 'Notion',
+        url: 'https://mcp.notion.com',
+        status: 'connected',
+        error: null,
+        tools: [
+          { name: 'search', title: 'Search', description: 'Search pages', readOnly: true },
+          { name: 'create-pages', title: 'Create pages', description: 'Add pages', readOnly: false },
+        ],
+        projects: [ids.project.acmeShop, ids.project.clientX],
+        addedAt: ago(3 * DAY),
+        checkedAt: ago(3 * DAY),
+      },
+    ],
+  };
+};
