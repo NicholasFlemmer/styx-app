@@ -452,6 +452,7 @@ async function boot(): Promise<void> {
     disableRefresh: fixtureName !== null && env['STYX_KEYCHAIN'] === 'memory',
     // Fixture rows are fake binaries; re-detecting would swap them for whatever this machine has.
     redetectClis: fixtureName === null,
+    demoMeta: fixtureName === 'one',
     ...(fixtureHome !== null ? { skillsHome: fixtureHome } : {}),
     ...(env['STYX_E2E'] === '1'
       ? { fetch: fixtureSkillsFetch }

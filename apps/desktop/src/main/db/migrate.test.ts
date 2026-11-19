@@ -78,6 +78,7 @@ describe('migrations', () => {
       '0024_goose_agent',
       '0025_amp_agent',
       '0026_task_results',
+      '0027_task_result_approval',
     ]);
     // Seed at 0001: a project, two targets and an active grant that cascades on the target.
     migrate(db, all.slice(0, 2));
@@ -182,8 +183,9 @@ describe('migrations', () => {
         '0024_goose_agent',
         '0025_amp_agent',
         '0026_task_results',
+        '0027_task_result_approval',
       ],
-      version: 27,
+      version: 28,
     });
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT id, project_id, default_branch, remotes_json FROM repos').all()).toEqual([
@@ -288,7 +290,10 @@ describe('migrations', () => {
     const beforeTranscript = db.prepare('SELECT * FROM transcript_messages').all();
     const insertCli = db.prepare('INSERT INTO cli_installs (agent, checked_at) VALUES (?, 0)');
     expect(() => insertCli.run('amp')).toThrow(/CHECK/);
-    expect(migrate(db)).toEqual({ applied: ['0025_amp_agent', '0026_task_results'], version: 27 });
+    expect(migrate(db)).toEqual({
+      applied: ['0025_amp_agent', '0026_task_results', '0027_task_result_approval'],
+      version: 28,
+    });
     expect(db.prepare('SELECT * FROM sessions').all()).toEqual(beforeSession);
     expect(db.prepare('SELECT * FROM cli_installs').all()).toEqual(beforeCli);
     expect(db.prepare('SELECT * FROM transcript_messages').all()).toEqual(beforeTranscript);
@@ -435,7 +440,9 @@ describe('migrations', () => {
     );
     expect(() => put.run('poem')).toThrow(/CHECK/);
     put.run('report');
-    expect(db.prepare('SELECT launch_picked_json FROM task_results').get()).toEqual({ launch_picked_json: '[]' });
+    expect(db.prepare('SELECT launch_picked_json FROM task_results').get()).toEqual({
+      launch_picked_json: '[]',
+    });
     db.prepare("DELETE FROM sessions WHERE id = 's'").run();
     expect(db.prepare('SELECT COUNT(*) AS n FROM task_results').get()).toEqual({ n: 0 });
   });

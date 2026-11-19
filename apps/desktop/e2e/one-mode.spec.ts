@@ -86,7 +86,7 @@ test('One place for the work: a campaign and a report draw as results', async ()
     if (shots) await page.screenshot({ path: `${shots}/one-apps-manage.png` });
     await nav.getByRole('button', { name: 'Results' }).click();
     await page.waitForSelector('[data-screen-ready="one-results"]');
-    await expect(page.locator('[data-one-result-card]')).toHaveCount(2);
+    await expect(page.locator('[data-one-result-card]')).toHaveCount(3);
     if (shots) await page.screenshot({ path: `${shots}/one-results.png` });
     await axe('one-results');
     await page.locator('[data-one-result-card]', { hasText: 'Black Friday' }).click();
@@ -94,6 +94,15 @@ test('One place for the work: a campaign and a report draw as results', async ()
     await expect(page.locator('[data-one-launch="open"]')).toContainText('at most');
     if (shots) await page.screenshot({ path: `${shots}/one-campaign.png` });
     await axe('one-campaign');
+    // A live campaign: its numbers, and Pause everything.
+    await nav.getByRole('button', { name: 'Results' }).click();
+    await page.locator('[data-one-result-card]', { hasText: 'Winter sale' }).click();
+    await expect(page.locator('[data-one-campaign-state="live"]')).toBeVisible();
+    await expect(page.locator('[data-one-campaign-state="live"]')).toContainText('R');
+    if (shots) await page.screenshot({ path: `${shots}/one-campaign-live.png` });
+    await axe('one-campaign-live');
+    await page.getByRole('button', { name: 'Pause everything' }).click();
+    await expect(page.locator('[data-one-campaign-state="paused"]')).toBeVisible();
     await nav.getByRole('button', { name: 'Results' }).click();
     await page.locator('[data-one-result-card]', { hasText: 'Weekly report' }).click();
     await page.waitForSelector('[data-one-result="report"]');

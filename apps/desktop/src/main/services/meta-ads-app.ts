@@ -1,5 +1,6 @@
 import type { ConnectedAppTool } from '@styx/core';
 import type { AppConnection } from './connected-apps-service';
+import type { CampaignLive } from '@styx/core';
 
 /**
  * Meta Ads, built in (ADR-0033 tier 1): the Marketing API behind the same gate as every connected app. Reads run at
@@ -97,6 +98,9 @@ const httpsArg = (v: unknown, name: string): string => {
   throw new Error(`${name} must be an https address.`);
 };
 
+/** How Meta names a purchase's value, across pixel, app and offline. */
+const PURCHASE = new Set(['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase']);
+
 const PERIODS = new Set(['today', 'yesterday', 'last_7d', 'last_30d', 'this_month']);
 const OBJECTIVES = new Set([
   'OUTCOME_AWARENESS',
@@ -165,6 +169,59 @@ export class MetaAdsConnection implements AppConnection {
     const r = await this.graph('GET', id, { fields: 'account_id' });
     if (`act_${String(r['account_id'] ?? '')}` !== this.account)
       throw new Error('That id is not in the connected ad account.');
+  }
+
+  /** Pause everything: the campaign itself, so nothing under it spends (the person's own button; no ask). */
+  async pauseCampaign(id: string): Promise<void> {
+    if (!/^\d{5,25}$/.test(id)) throw new Error('Not a campaign id.');
+    await this.own(id);
+    await this.graph('POST', id, { status: 'PAUSED' });
+  }
+
+  /** A campaign's numbers for the live view: its state, spend, clicks and sales, by ad. */
+  async live(id: string, now: number): Promise<CampaignLive> {
+    if (!/^\d{5,25}$/.test(id)) throw new Error('Not a campaign id.');
+    await this.own(id);
+    const c = await this.graph('GET', id, { fields: 'effective_status,stop_time' });
+    const rows = await this.graph('GET', `${id}/insights`, {
+      level: 'ad',
+      date_preset: 'maximum',
+      fields: 'ad_id,ad_name,spend,clicks,action_values',
+      limit: '50',
+    });
+    const data = Array.isArray(rows['data']) ? (rows['data'] as Record<string, unknown>[]) : [];
+    const salesOf = (r: Record<string, unknown>): number | null => {
+      const values = Array.isArray(r['action_values'])
+        ? (r['action_values'] as { action_type?: unknown; value?: unknown }[])
+        : [];
+      const hit = values.filter((v) => typeof v.action_type === 'string' && PURCHASE.has(v.action_type));
+      return hit.length === 0 ? null : Math.max(...hit.map((v) => Number(v.value) || 0));
+    };
+    const ads = data.map((r) => ({
+      id: String(r['ad_id'] ?? ''),
+      name: String(r['ad_name'] ?? ''),
+      spent: Number(r['spend']) || 0,
+      clicks: Number(r['clicks']) || 0,
+      sales: salesOf(r),
+    }));
+    const effective = String(c['effective_status'] ?? '');
+    const stop = Date.parse(String(c['stop_time'] ?? ''));
+    const sales = ads.some((x) => x.sales !== null) ? ads.reduce((t, x) => t + (x.sales ?? 0), 0) : null;
+    return {
+      status:
+        !Number.isNaN(stop) && stop < now
+          ? 'ended'
+          : effective === 'ACTIVE'
+            ? 'active'
+            : effective.includes('PAUSED')
+              ? 'paused'
+              : 'pending',
+      spent: ads.reduce((t, x) => t + x.spent, 0),
+      sales,
+      clicks: ads.reduce((t, x) => t + x.clicks, 0),
+      ads,
+      readAt: now,
+    };
   }
 
   /** Who the token is and which account it reaches: the sign-in check. */

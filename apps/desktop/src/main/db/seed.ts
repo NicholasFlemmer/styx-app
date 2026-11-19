@@ -192,7 +192,13 @@ export function seed(
   run();
   // One place for the work (ADR-0033): results and connected apps, when the fixture has them.
   if ('taskResults' in fixture) {
-    for (const r of fixture.taskResults) repos.taskResults.put(r);
+    for (const r of fixture.taskResults) {
+      repos.taskResults.put(r);
+      // A fixture campaign that is already approved and running keeps that state.
+      if (r.approved !== null && r.launchApprovedAt !== null)
+        repos.taskResults.approveLaunch(r.id, r.launchApprovedAt, r.updatedAt, r.launchPicked, r.approved);
+      if (r.campaignId !== null) repos.taskResults.setCampaign(r.id, r.campaignId);
+    }
     repos.settings.kv.set('connectedApps', fixture.connectedApps);
   }
   return { seeded: true };

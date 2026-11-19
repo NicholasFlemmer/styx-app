@@ -23,10 +23,20 @@ export function registerConnectedAppsCommands(bus: CommandBus, app: Container): 
     app.connectedApps.setProjects(appId, projectIds);
     return {};
   });
-  bus.register('taskResults.approveLaunch', async ({ sessionId, picked, seenAt }) => {
-    await app.taskResults.approveLaunch(sessionId, picked, seenAt);
+  bus.register('taskResults.approveLaunch', async ({ sessionId, ...approval }) => {
+    await app.taskResults.approveLaunch(sessionId, approval);
     return {};
   });
+  bus.register('taskResults.adImage', async ({ sessionId, index }) => ({
+    dataUrl: await app.taskResults.adImage(sessionId, index),
+  }));
+  bus.register('taskResults.pauseAll', async ({ sessionId }) => {
+    await app.taskResults.pauseAll(sessionId);
+    return {};
+  });
+  bus.register('taskResults.live', async ({ sessionId }) => ({
+    live: await app.taskResults.live(sessionId),
+  }));
   bus.register('connectedApps.remove', async ({ appId }) => {
     await app.connectedApps.remove(appId);
     return {};

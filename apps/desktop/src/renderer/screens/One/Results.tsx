@@ -1,20 +1,16 @@
 import {
   copy,
   fill,
-  formatMoney,
-  launchCap,
-  type CampaignResult,
   type ProjectId,
   type ReportResult,
   type SessionId,
   type TaskResult,
 } from '@styx/core';
 import { Button } from '@styx/ui';
-import { useState } from 'react';
 import { ShareConversation } from '../../features/hub/ShareConversation';
 import { useSpawnForm } from '../../features/modals/use-spawn-form';
-import { command } from '../../state/commands';
 import { useUi } from '../../state/hooks';
+import { CampaignView } from './Campaign';
 import s from './Results.module.css';
 
 /** A task's result drawn as Styx draws it (ADR-0033): a campaign or a report, on paper. */
@@ -24,120 +20,6 @@ export function ResultView({ result }: { result: TaskResult }) {
     <CampaignView key={result.updatedAt} result={result} body={result.body} />
   ) : (
     <ReportView result={result} body={result.body} />
-  );
-}
-
-/** Puts the cursor in the task's message box, for "ask for a change". */
-const focusComposer = () => document.querySelector<HTMLTextAreaElement>('[data-chat-pane] textarea')?.focus();
-
-function CampaignView({ result, body }: { result: TaskResult; body: CampaignResult }) {
-  const r = copy.one.results;
-  const [picked, setPicked] = useState<boolean[]>(() => body.ads.map((a) => a.picked));
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const plan = body.launch;
-  const approved = result.launchApprovedAt !== null;
-  const n = picked.filter(Boolean).length;
-  const approve = async () => {
-    setBusy(true);
-    setError(null);
-    const res = await command('taskResults.approveLaunch', {
-      sessionId: result.id as SessionId,
-      picked: picked.flatMap((p, i) => (p ? [i] : [])),
-      seenAt: result.updatedAt,
-    });
-    setBusy(false);
-    if (!res.ok) setError(res.error.message);
-  };
-  return (
-    <article className={s['paper']} data-one-result="campaign" aria-label={body.title}>
-      {body.lookedAt.length > 0 ? (
-        <section aria-label={r.lookedAt}>
-          <h3 className={s['h']}>{r.lookedAt}</h3>
-          <ul className={s['steps']}>
-            {body.lookedAt.map((l) => (
-              <li key={l}>{l}</li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      {body.summary === undefined ? null : <p className={s['lede']}>{body.summary}</p>}
-      <section aria-label={r.ads}>
-        <h3 className={s['h']}>{r.ads}</h3>
-        <ul className={s['ads']}>
-          {body.ads.map((ad, i) => (
-            <li
-              key={`${ad.product}-${ad.headline}`}
-              className={s['ad']}
-              data-on={picked[i] ? 'true' : undefined}
-            >
-              <span className={s['adProduct']}>{ad.product}</span>
-              <b className={s['adHead']}>{ad.headline}</b>
-              <span className={s['adBody']}>{ad.body}</span>
-              <span className={s['adFoot']}>
-                {ad.estimate === undefined ? <span /> : <span className={s['mu']}>{ad.estimate}</span>}
-                <Button
-                  size="compact"
-                  inv={picked[i] === true}
-                  aria-pressed={picked[i] === true}
-                  disabled={approved}
-                  onClick={() => setPicked((p) => p.map((x, j) => (j === i ? !x : x)))}
-                >
-                  {picked[i] ? r.picked : r.pick}
-                </Button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
-      {plan === undefined ? null : (
-        <section
-          className={s['launch']}
-          aria-label={r.approve}
-          data-one-launch={approved ? 'approved' : 'open'}
-        >
-          <b className={s['launchWhat']}>
-            {fill(r.launchTitle, {
-              n,
-              perDay: formatMoney(plan.perDay, plan.currency),
-              days: plan.days,
-              cap: formatMoney(launchCap(plan), plan.currency),
-            })}
-          </b>
-          <span>
-            {plan.audience}
-            {plan.starts !== undefined && plan.stops !== undefined
-              ? ` · ${fill(r.launchWhen, { starts: plan.starts, stops: plan.stops })}`
-              : ''}
-          </span>
-          <span className={s['mu']}>{r.launchFine}</span>
-          {approved ? (
-            <span className={s['approved']} role="status">
-              {fill(r.approved, { when: new Date(result.launchApprovedAt ?? 0).toLocaleString() })}
-            </span>
-          ) : (
-            <span className={s['acts']}>
-              <Button
-                variant="accent"
-                size="regular"
-                disabled={busy || n === 0}
-                onClick={() => void approve()}
-              >
-                {r.approve}
-              </Button>
-              <Button size="regular" onClick={focusComposer}>
-                {r.change}
-              </Button>
-            </span>
-          )}
-          {error === null ? null : (
-            <span role="alert" className={s['error']}>
-              {error}
-            </span>
-          )}
-        </section>
-      )}
-    </article>
   );
 }
 
