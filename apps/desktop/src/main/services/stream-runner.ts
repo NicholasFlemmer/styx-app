@@ -1,3 +1,4 @@
+import { LineSplitter } from './line-splitter';
 import type { ChildProcess, spawn as spawnChild } from 'node:child_process';
 import { killTree, spawnCli } from './spawn-cli';
 import { EventEmitter } from 'node:events';
@@ -669,7 +670,8 @@ interface Entry {
   opts: StreamSpawnOptions;
   proc: ChildProcess | null;
   parser: StreamParser;
-  buffer: string;
+  /** Its stdout, split into lines in linear time (one huge message must not cost minutes). */
+  lines: LineSplitter;
   /** Pending `can_use_tool` inputs by request id (echoed back as `updatedInput` on allow). */
   permissions: Map<string, Record<string, unknown>>;
   /** argv runner: turns sent while a process was still running, started one by one as each process exits. */
@@ -691,7 +693,7 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
       opts,
       proc: null,
       parser: new StreamParser(opts.worktreePath, opts.session ? { agent: opts.session.agent } : {}),
-      buffer: '',
+      lines: new LineSplitter(),
       permissions: new Map(),
       pending: [],
       killed: false,
@@ -727,7 +729,7 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
       windowsHide: true,
     });
     entry.proc = proc;
-    entry.buffer = '';
+    entry.lines = new LineSplitter();
     proc.stdout?.setEncoding('utf8');
     proc.stderr?.setEncoding('utf8');
     proc.stdout?.on('data', (chunk: string) => this.onStdout(entry, chunk));
@@ -756,14 +758,7 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
   }
 
   private onStdout(entry: Entry, chunk: string): void {
-    entry.buffer += chunk;
-    let nl = entry.buffer.indexOf('\n');
-    while (nl >= 0) {
-      const line = entry.buffer.slice(0, nl);
-      entry.buffer = entry.buffer.slice(nl + 1);
-      this.dispatch(entry, line);
-      nl = entry.buffer.indexOf('\n');
-    }
+    for (const line of entry.lines.push(chunk)) this.dispatch(entry, line);
   }
 
   private dispatch(entry: Entry, line: string): void {
@@ -775,8 +770,8 @@ export class StreamRunner extends EventEmitter<StreamEvents> implements StreamRu
 
   private onClose(entry: Entry, proc: ChildProcess, code: number | null): void {
     if (entry.proc !== proc) return;
-    if (entry.buffer.trim()) this.dispatch(entry, entry.buffer);
-    entry.buffer = '';
+    const rest = entry.lines.rest();
+    if (rest.trim()) this.dispatch(entry, rest);
     entry.proc = null;
     if (entry.opts.input.kind === 'argv' && !entry.killed) {
       // One process per turn: the exit ends the turn, not the session. A turn sent while this one ran (Send now)
