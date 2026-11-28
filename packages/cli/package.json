@@ -8,7 +8,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/styx.js --target=node22"
+    "build": "node scripts/build.mjs"
   },
   "dependencies": {
     "@styx/broker": "workspace:*",

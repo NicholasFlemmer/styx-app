@@ -34,6 +34,112 @@ async function connectedClient(sessionId: string): Promise<{ t: TestApp; client:
 }
 
 describe('BrokerHost', () => {
+  it('binds Git credential requests to the session project and exact repository', async () => {
+    const { t: test, client } = await connectedClient(ids.session.gemini);
+    const original = test.app.repos.targets.get(ids.target.github);
+    if (!original?.credentialRef) throw new Error('fixture');
+    test.app.repos.targets.upsert({
+      ...original,
+      config: { ...original.config, owner: 'Acme', repo: 'Shop' },
+      policy: 'always',
+    });
+    await test.vault.set(original.credentialRef, JSON.stringify({ token: 'synthetic-git-token' }));
+    const request = {
+      tool: 'git-credential-styx',
+      argv: ['get', 'fetch', 'https://github.com/acme/shop.git'],
+      cwd: '/tmp',
+    };
+    const result = await client.call('exec_authorize', request);
+    expect(result.env.GH_TOKEN).toBe('synthetic-git-token');
+    expect(test.app.repos.grants.get(result.grantId)).toMatchObject({
+      targetId: original.id,
+      scope: ['read'],
+    });
+    expect(test.app.repos.grantUses.get(result.useId)?.command).toContain('git-credential-styx get fetch');
+    const pushed = await client.call('exec_authorize', {
+      ...request,
+      argv: ['get', 'push', 'https://github.com/acme/shop.git'],
+    });
+    expect(test.app.repos.grants.get(pushed.grantId)?.scope).toEqual(['write']);
+    expect(JSON.stringify(test.app.repos.audit.all())).not.toContain('synthetic-git-token');
+    await expect(
+      client.call('exec_authorize', {
+        ...request,
+        argv: ['get', 'fetch', 'https://github.com.evil/acme/shop'],
+      }),
+    ).rejects.toThrow(/invalid GitHub/);
+    await expect(
+      client.call('exec_authorize', { ...request, argv: ['get', 'push', 'https://github.com/acme/other'] }),
+    ).rejects.toThrow(/no github target/);
+    test.app.repos.targets.upsert({
+      ...original,
+      id: ids.target.blogGithub,
+      projectId: ids.project.blogV2,
+      config: { owner: 'acme', repo: 'other' },
+    });
+    await expect(
+      client.call('exec_authorize', {
+        ...request,
+        argv: ['get', 'push', 'https://github.com/acme/other.git'],
+      }),
+    ).rejects.toThrow(/no github target/);
+    test.app.repos.targets.upsert({
+      ...original,
+      id: ids.target.blogGithub,
+      name: 'Duplicate repository',
+      config: { owner: 'acme', repo: 'shop' },
+    });
+    await expect(client.call('exec_authorize', request)).rejects.toThrow(/no github target/);
+    test.app.repos.targets.upsert({ ...original, config: { owner: 'acme' }, policy: 'always' });
+    test.app.repos.targets.upsert({
+      ...original,
+      id: ids.target.blogGithub,
+      name: 'Duplicate repository',
+      config: { owner: 'acme' },
+    });
+    await expect(client.call('exec_authorize', request)).rejects.toThrow(/no github target/);
+    client.close();
+  });
+  it('holds Git credentials for approval and stops delivering a revoked grant', async () => {
+    const { t: test, client } = await connectedClient(ids.session.gemini);
+    const original = test.app.repos.targets.get(ids.target.github);
+    if (!original?.credentialRef) throw new Error('fixture');
+    test.app.repos.targets.upsert({ ...original, policy: 'ask' });
+    await test.vault.set(original.credentialRef, JSON.stringify({ token: 'synthetic-git-token' }));
+    const request = {
+      tool: 'git-credential-styx',
+      argv: ['get', 'push', 'https://github.com/acme/shop.git'],
+      cwd: '/tmp',
+    };
+    const pending = client.call('exec_authorize', request);
+    await vi.waitFor(() =>
+      expect(test.app.repos.grants.bySession(ids.session.gemini).some((g) => g.state === 'requested')).toBe(
+        true,
+      ),
+    );
+    const grant = test.app.repos.grants.bySession(ids.session.gemini).find((g) => g.state === 'requested');
+    if (grant === undefined) throw new Error('missing Git request');
+    expect(grant.scope).toEqual(['write']);
+    expect(test.app.repos.grantUses.byGrant(grant.id)).toEqual([]);
+    await test.app.grants.approve(grant.id, '1h');
+    const issued = await pending;
+    expect(issued.env.GH_TOKEN).toBe('synthetic-git-token');
+    test.app.grants.revoke(grant.id);
+    const next = client.call('exec_authorize', request);
+    const denied = expect(next).rejects.toThrow(/access denied/);
+    await vi.waitFor(() =>
+      expect(
+        test.app.repos.grants
+          .bySession(ids.session.gemini)
+          .some((g) => g.state === 'requested' && g.id !== grant.id),
+      ).toBe(true),
+    );
+    const newGrant = test.app.repos.grants.bySession(ids.session.gemini).find((g) => g.state === 'requested');
+    if (newGrant === undefined) throw new Error('missing replacement request');
+    test.app.grants.deny(newGrant.id);
+    await denied;
+    client.close();
+  });
   it('rejects a wrong token', async () => {
     t = makeTestApp();
     t.app.repos.sessions.setBrokerTokenHash(ids.session.gemini, sha256('right'));
