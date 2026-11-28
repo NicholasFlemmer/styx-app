@@ -53,6 +53,14 @@ describe('TurnResult', () => {
     expect(p.onUndo).toHaveBeenCalledOnce();
   });
 
+  it('shows the actions the caller adds, also once undone', () => {
+    const extra = <button type="button">Share</button>;
+    const { rerender } = render(<TurnResult {...props({ extra })}>x</TurnResult>);
+    expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy();
+    rerender(<TurnResult {...props({ extra, undone: true })}>x</TurnResult>);
+    expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy();
+  });
+
   it('cannot undo mid-turn, and once undone shows only that', () => {
     const { rerender } = render(<TurnResult {...props({ busy: true })} />);
     expect(screen.getByRole('button', { name: 'Undo this turn' })).toBeDisabled();

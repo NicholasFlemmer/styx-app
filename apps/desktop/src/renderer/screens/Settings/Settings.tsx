@@ -25,6 +25,7 @@ import { useEffect, useState } from 'react';
 import { PROJECT_POLICY_BANNER } from '../../features/banners/BannerStack';
 import { cliTargetMeta, projectTargetMeta } from '../../features/modals/modals';
 import { AccountPane } from './AccountPane';
+import { HubPane } from './HubPane';
 import { AgentsPane } from './AgentsPane';
 import { SkillsPane } from './SkillsPane';
 import { command } from '../../state/commands';
@@ -104,6 +105,8 @@ export function Settings() {
         </header>
         {section === 'app:account' ? (
           <AccountPane />
+        ) : section === 'app:hub' ? (
+          <HubPane />
         ) : section === 'project:targets' ? (
           <Targets model={model} projectId={projectId} />
         ) : section === 'app:skills' ? (

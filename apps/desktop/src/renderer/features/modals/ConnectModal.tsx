@@ -36,6 +36,9 @@ import {
   methodOf,
   cliMethodLabel,
   primaryStepOf,
+  SSH_AUTHS,
+  emptySshForm,
+  isSshAuth,
   sshFormValid,
   sshTargetName,
   type CliStatus,
@@ -119,13 +122,7 @@ export function ConnectModal({
   const [flow, setFlow] = useState<OAuthFlow | null>(null);
   const [token, setToken] = useState('');
   const [key, setKey] = useState<KeyForm>({ name: '', accessKey: '', secret: '' });
-  const [ssh, setSsh] = useState<SshForm>({
-    host: '',
-    user: '',
-    keyPath: '',
-    port: '',
-    passphrase: '',
-  });
+  const [ssh, setSsh] = useState<SshForm>(emptySshForm);
   const [cliStatus, setCliStatus] = useState<CliStatus | null>(null);
   const [account, setAccount] = useState<string | null>(reconnectAccount);
   const [name, setName] = useState(reconnectCli ? target.name : '');
@@ -180,7 +177,7 @@ export function ConnectModal({
     // What was typed for one provider must not sit in the next one's form (an AWS key in the GCP form).
     setToken('');
     setKey({ name: '', accessKey: '', secret: '' });
-    setSsh({ host: '', user: '', keyPath: '', port: '', passphrase: '' });
+    setSsh(emptySshForm());
   };
 
   // OAuth progress for the running flow: saved closes the modal, failed shows the message inline.
@@ -382,9 +379,12 @@ export function ConnectModal({
         env,
         host: ssh.host.trim(),
         user: ssh.user.trim(),
-        keyPath: ssh.keyPath.trim(),
         port: sshPort(ssh) ?? 22,
-        ...(ssh.passphrase !== '' ? { passphrase: ssh.passphrase } : {}),
+        auth: ssh.auth,
+        ...(ssh.auth === 'key' ? { keyPath: ssh.keyPath.trim() } : {}),
+        ...(ssh.auth === 'key' && ssh.passphrase !== '' ? { passphrase: ssh.passphrase } : {}),
+        ...(ssh.auth === 'password' ? { password: ssh.password } : {}),
+        ...(ssh.proxyJump.trim() !== '' ? { proxyJump: ssh.proxyJump.trim() } : {}),
       });
     } else {
       if (!keyFormValid(key) || (provider !== 'aws' && provider !== 'gcp')) return null;
@@ -839,6 +839,7 @@ export function ConnectModal({
       <div className={s['two']}>
         <TextField
           label={copy.connect.ssh.host}
+          hint={copy.connect.ssh.hostHint}
           value={ssh.host}
           onChange={(v) => setSsh({ ...ssh, host: v })}
         />
@@ -856,30 +857,64 @@ export function ConnectModal({
           onChange={(v) => setSsh({ ...ssh, port: v })}
         />
         <TextField
-          label={copy.connect.ssh.passphrase}
-          hint={copy.connect.ssh.passphraseHint}
-          value={ssh.passphrase}
-          masked
-          onChange={(v) => setSsh({ ...ssh, passphrase: v })}
+          label={copy.connect.ssh.jump}
+          hint={copy.connect.ssh.jumpHint}
+          value={ssh.proxyJump}
+          onChange={(v) => setSsh({ ...ssh, proxyJump: v })}
         />
       </div>
-      <TextField
-        label={copy.connect.ssh.key}
-        value={ssh.keyPath}
-        onChange={(v) => setSsh({ ...ssh, keyPath: v })}
-        trailing={
-          <button
-            type="button"
-            className={s['browse']}
-            title={copy.connect.ssh.browse}
-            onClick={() => void browseKey()}
-          >
-            {copy.connect.ssh.browse}
-          </button>
-        }
-      />
+      <div className={s['envRow']}>
+        <Label>{copy.connect.ssh.signIn}</Label>
+        <ChipGroup
+          layout="inline"
+          size="env"
+          className={s['envChips']}
+          aria-label={copy.connect.ssh.signIn}
+          // Windows' ssh cannot share a signed-in connection, which password sign-in needs (ADR-0031).
+          options={SSH_AUTHS.filter((a) => a !== 'password' || platform !== 'win32').map((a) => ({
+            value: a,
+            label: copy.connect.ssh.auths[a],
+          }))}
+          value={ssh.auth}
+          onChange={(v) => setSsh({ ...ssh, auth: isSshAuth(v) ? v : 'key' })}
+        />
+      </div>
+      {ssh.auth === 'key' ? (
+        <>
+          <TextField
+            label={copy.connect.ssh.key}
+            value={ssh.keyPath}
+            onChange={(v) => setSsh({ ...ssh, keyPath: v })}
+            trailing={
+              <button
+                type="button"
+                className={s['browse']}
+                title={copy.connect.ssh.browse}
+                onClick={() => void browseKey()}
+              >
+                {copy.connect.ssh.browse}
+              </button>
+            }
+          />
+          <TextField
+            label={copy.connect.ssh.passphrase}
+            hint={copy.connect.ssh.passphraseHint}
+            value={ssh.passphrase}
+            masked
+            onChange={(v) => setSsh({ ...ssh, passphrase: v })}
+          />
+        </>
+      ) : ssh.auth === 'password' ? (
+        <TextField
+          label={copy.connect.ssh.password}
+          hint={copy.connect.ssh.passwordHint}
+          value={ssh.password}
+          masked
+          onChange={(v) => setSsh({ ...ssh, password: v })}
+        />
+      ) : null}
       {envRow}
-      <div className={s['body']}>{copy.connect.ssh.body}</div>
+      <div className={s['body']}>{copy.connect.ssh.bodies[ssh.auth]}</div>
       {statusLine}
     </Modal>
   );

@@ -18,4 +18,8 @@ export * from './checkpoint';
 export * from './usage';
 export * from './account';
 export * from './update';
+export * from './hub';
+export * from './connected-app';
+export * from './task-result';
 export * from './usage-report';
+export * from './app-catalogue';

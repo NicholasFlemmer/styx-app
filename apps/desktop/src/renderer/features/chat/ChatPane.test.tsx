@@ -3,6 +3,7 @@ import {
   copy,
   fill,
   fixtures,
+  HUB_OFF,
   taskOf,
   upsertRows,
   type AskQuestion,
@@ -233,6 +234,9 @@ describe('ChatPane', () => {
         env: { now: fixtures.DEMO_NOW },
         command: vi.fn(async (name: string, input: unknown) => {
           commands.push({ name, input });
+          if (name === 'hub.conversationLinks') return { ok: true, value: { links: [] } };
+          if (name === 'hub.shareConversation')
+            return { ok: true, value: { url: 'https://share.test/l/abc', linkId: 'lnk_1' } };
           return { ok: true, value: {} };
         }),
       },
@@ -263,6 +267,118 @@ describe('ChatPane', () => {
     expect(header.querySelector('[data-lane-summary]')?.textContent).not.toBe('');
     expect(screen.getByPlaceholderText('Message Claude…')).toBeTruthy();
     expect(screen.queryByRole('tab')).toBeNull();
+  });
+
+  it('the lean hub: the lane header shares the conversation as a link, in any project', async () => {
+    const model = fixtures.demoReadModel();
+    const hub = {
+      ...HUB_OFF,
+      connection: {
+        kind: 'signed-in' as const,
+        account: { id: 'usr_nic', email: 'nic@launchsite.co.za', name: 'Nic' },
+        teams: [{ id: 'team_ls', name: 'Launchsite', domain: 'launchsite.co.za', role: 'admin' as const }],
+        spaces: [],
+        staleSince: null,
+      },
+    };
+    useReadModel.getState().replaceModel({ ...model, hub }, 'connected');
+    render(<ChatPane projectId={acme} />);
+    fireEvent.click(document.querySelector('[data-share-conversation="lane"]') as HTMLElement);
+    expect(screen.getByRole('dialog', { name: copy.hub.lean.shareTitle })).toBeTruthy();
+    expect(commands.at(-1)).toEqual({ name: 'hub.conversationLinks', input: { sessionId: claude } });
+    fireEvent.click(screen.getByRole('button', { name: copy.hub.lean.keepUpdating }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: copy.hub.lean.makeLink }));
+    });
+    expect(commands).toContainEqual({
+      name: 'hub.shareConversation',
+      input: { sessionId: claude, messageId: null, live: true, expiresIn: '7d' },
+    });
+  });
+
+  it("the lean hub: every finished message, yours or the agent's, can be shared on its own", async () => {
+    const model = fixtures.demoReadModel();
+    const hub = {
+      ...HUB_OFF,
+      connection: {
+        kind: 'signed-in' as const,
+        account: { id: 'usr_nic', email: 'nic@launchsite.co.za', name: 'Nic' },
+        teams: [{ id: 'team_ls', name: 'Launchsite', domain: 'launchsite.co.za', role: 'admin' as const }],
+        spaces: [],
+        staleSince: null,
+      },
+    };
+    useReadModel.getState().replaceModel({ ...model, hub }, 'connected');
+    render(<ChatPane projectId={acme} />);
+    const userMsg = document.querySelector('[data-msg="user"]');
+    expect(userMsg).not.toBeNull();
+    const share = userMsg?.querySelector('[data-share-conversation="answer"]') as HTMLElement;
+    expect(share).toBeTruthy();
+    expect(userMsg?.querySelector('[data-add-context="true"]')).toBeTruthy();
+    fireEvent.click(share);
+    expect(screen.getByRole('dialog', { name: copy.hub.lean.shareMessageTitle })).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: copy.hub.lean.makeLink }));
+    });
+    const shared = commands.find((c) => c.name === 'hub.shareConversation')?.input as {
+      messageId: string | null;
+    };
+    const firstUser = (fixtures.demoReadModel().transcripts[claude] ?? []).find(
+      (m) => m.payload.kind === 'user',
+    );
+    expect(shared.messageId).toBe(firstUser?.id);
+  });
+
+  it('the lean hub: signed out, Share asks to sign in first; the old hub controls are gone', () => {
+    render(<ChatPane projectId={acme} />);
+    expect(screen.queryByRole('button', { name: copy.hub.connect.button })).toBeNull();
+    fireEvent.click(document.querySelector('[data-share-conversation="lane"]') as HTMLElement);
+    expect(screen.getByText(copy.hub.lean.signInToShare)).toBeTruthy();
+  });
+
+  it('team hub: a hub message is attributed, never a user bubble, and Go ahead is the person speaking', () => {
+    const model = fixtures.demoReadModel();
+    const rows = model.transcripts[claude] ?? [];
+    const last = rows.at(-1);
+    if (last === undefined) throw new Error('fixture');
+    useReadModel.getState().replaceModel(
+      {
+        ...model,
+        transcripts: {
+          ...model.transcripts,
+          [claude]: [
+            ...rows,
+            {
+              ...last,
+              id: 'm-hub' as typeof last.id,
+              seq: last.seq + 1,
+              body: 'Can your form drop its Number() cast?',
+              askId: null,
+              payload: {
+                kind: 'system',
+                hub: {
+                  from: 'Thandi M.',
+                  agent: 'Codex',
+                  branch: 'agent/codex-2',
+                  space: 'Acme',
+                  threadId: 'thr_1',
+                },
+              },
+            },
+          ],
+        },
+      },
+      'connected',
+    );
+    render(<ChatPane projectId={acme} />);
+    const card = document.querySelector('[data-hub-message]') as HTMLElement;
+    expect(card.textContent).toContain('Codex for Thandi M. · agent/codex-2 · via Acme');
+    expect(card.textContent).toContain(copy.hub.message.read);
+    fireEvent.click(screen.getByRole('button', { name: copy.hub.message.goAhead }));
+    expect(commands.at(-1)).toEqual({
+      name: 'session.sendMessage',
+      input: { sessionId: claude, body: 'Go ahead with what Thandi M. asked in the Acme space.' },
+    });
   });
 
   it('the chat pane has a resize handle: ← / → step its width and persist it', () => {
@@ -332,7 +448,9 @@ describe('ChatPane', () => {
     expect(document.querySelector('[data-lane-meta]')?.textContent).toBe('waiting on you');
     fireEvent.click(screen.getByRole('button', { name: 'Review request' }));
     const sheet = useUiStore.getState().overlays.find((o) => o.kind === 'sheet');
-    expect(sheet?.kind === 'sheet' && sheet.askId).toBe(fixtures.ids.ask.codexGrant);
+    expect(sheet?.kind === 'sheet' && sheet.sheet === 'grant' && sheet.askId).toBe(
+      fixtures.ids.ask.codexGrant,
+    );
     expect(sheet?.kind === 'sheet' && sheet.sessionId).toBe(codex);
     fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
     await flush();
@@ -882,6 +1000,9 @@ describe('ChatPane queue (messages sent mid-turn)', () => {
         env: { now: fixtures.DEMO_NOW },
         command: vi.fn(async (name: string, input: unknown) => {
           commands.push({ name, input });
+          if (name === 'hub.conversationLinks') return { ok: true, value: { links: [] } };
+          if (name === 'hub.shareConversation')
+            return { ok: true, value: { url: 'https://share.test/l/abc', linkId: 'lnk_1' } };
           return { ok: true, value: {} };
         }),
       },

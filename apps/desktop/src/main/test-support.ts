@@ -1,3 +1,4 @@
+import type { AppConnector, Loopback } from './services/connected-apps-service';
 import Database from 'better-sqlite3';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -79,7 +80,26 @@ export interface TestAppOptions {
   /** The merge resolver's checks runner and Mergiraf hook (ADR-0025 phase B); tests fake both. */
   runChecks?: (cwd: string, command: string) => Promise<{ exitCode: number; output: string }>;
   mergiraf?: (file: string, cwd: string) => Promise<boolean>;
+  /** Connected apps' MCP client and sign-in page (default: no app answers, nothing listens). */
+  appConnector?: AppConnector;
+  appLoopback?: (port: number) => Promise<Loopback>;
 }
+
+/** No connected app is ever reached for real from a test. */
+const NO_APPS: AppConnector = {
+  connect: async () => {
+    throw new Error('no app in tests');
+  },
+  finishAuth: async () => undefined,
+  connectCustom: async () => {
+    throw new Error('no app in tests');
+  },
+};
+const NO_LOOPBACK = async (): Promise<Loopback> => ({
+  redirectUrl: 'http://127.0.0.1:1/callback',
+  code: () => new Promise<string>(() => undefined),
+  close: () => undefined,
+});
 
 /** An in-memory app: SQLite `:memory:`, MemoryVault, FakeMfa, no Electron, one registered fake window. */
 export function makeTestApp(opts: TestAppOptions = {}): TestApp {
@@ -132,6 +152,8 @@ export function makeTestApp(opts: TestAppOptions = {}): TestApp {
     windows,
     notifications: null,
     openExternal: opts.openExternal ?? (async () => undefined),
+    appConnector: opts.appConnector ?? NO_APPS,
+    appLoopback: opts.appLoopback ?? NO_LOOPBACK,
     openInIde: async () => undefined,
     ...(opts.fetch ? { fetch: opts.fetch } : {}),
     ...(opts.tickMs !== undefined ? { tickMs: opts.tickMs } : {}),

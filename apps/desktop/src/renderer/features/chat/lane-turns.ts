@@ -31,6 +31,8 @@ export type LaneItem =
       change: string;
       /** The agent's last reply in the turn, shown on the card; null when the turn ended without one. */
       text: string | null;
+      /** That reply's transcript message id, for sharing it or adding it to team context. */
+      replyId: string | null;
       undone: boolean;
       before: string | undefined;
       after: string | undefined;
@@ -123,6 +125,7 @@ const turnBody = (turn: Turn, ctx: LaneContext, live: boolean, latest: boolean):
     run = [];
   };
   let reply: string | null = null;
+  let replyId: string | null = null;
   for (const [i, item] of turn.rest.entries()) {
     if (item.kind === 'tool') {
       run.push(item);
@@ -132,6 +135,7 @@ const turnBody = (turn: Turn, ctx: LaneContext, live: boolean, latest: boolean):
     if (item.kind === 'checkpoint') continue;
     if (i === lastAgentIndex && item.kind === 'agent' && !item.streaming) {
       reply = item.text;
+      replyId = item.id;
       continue;
     }
     out.push(item);
@@ -147,6 +151,7 @@ const turnBody = (turn: Turn, ctx: LaneContext, live: boolean, latest: boolean):
       done: c === undefined || settled === null ? '' : turnDoneLabel(settled - c.createdAt),
       change: changeLabel(checkpoint),
       text: reply,
+      replyId,
       undone: checkpoint.reverted,
       before:
         c?.screens.includes('before') === true ? ctx.screenUrl(checkpoint.checkpointId, 'before') : undefined,

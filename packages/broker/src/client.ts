@@ -1,10 +1,24 @@
 import { connect, type Socket } from 'node:net';
 import { onNdjson, writeNdjson } from './ndjson';
-import { methods, notifications, RpcResponse, type MethodName, type NotificationName, type ParamsIn, type Result, type SessionBrief, PROTOCOL_VERSION } from './protocol';
+import {
+  methods,
+  notifications,
+  RpcResponse,
+  type MethodName,
+  type NotificationName,
+  type ParamsIn,
+  type Result,
+  type SessionBrief,
+  PROTOCOL_VERSION,
+} from './protocol';
 import type { z } from 'zod';
 
 export class BrokerClientError extends Error {
-  constructor(public readonly code: number, message: string, public readonly data?: unknown) {
+  constructor(
+    public readonly code: number,
+    message: string,
+    public readonly data?: unknown,
+  ) {
     super(message);
   }
 }
@@ -31,7 +45,8 @@ export class BrokerClient {
     const endpoint = env['STYX_BROKER'];
     const sessionId = env['STYX_SESSION_ID'];
     const token = env['STYX_TOKEN'];
-    if (!endpoint || !sessionId || !token) throw new Error('Not inside a Styx session (STYX_BROKER / STYX_SESSION_ID / STYX_TOKEN missing).');
+    if (!endpoint || !sessionId || !token)
+      throw new Error('Not inside a Styx session (STYX_BROKER / STYX_SESSION_ID / STYX_TOKEN missing).');
     return new BrokerClient({ endpoint, sessionId, token, client });
   }
 
@@ -48,12 +63,22 @@ export class BrokerClient {
       this.pending.clear();
     });
     onNdjson(s, (msg) => this.onMessage(msg));
-    const res = await this.call('hello', { v: PROTOCOL_VERSION, sessionId: this.opts.sessionId, token: this.opts.token, client: this.opts.client, pid: this.opts.pid ?? process.pid });
+    const res = await this.call('hello', {
+      v: PROTOCOL_VERSION,
+      sessionId: this.opts.sessionId,
+      token: this.opts.token,
+      client: this.opts.client,
+      pid: this.opts.pid ?? process.pid,
+    });
     this.session = res.session;
     return res.session;
   }
 
-  async call<M extends MethodName>(method: M, params: ParamsIn<M>, opts: { timeoutMs?: number } = {}): Promise<Result<M>> {
+  async call<M extends MethodName>(
+    method: M,
+    params: ParamsIn<M>,
+    opts: { timeoutMs?: number } = {},
+  ): Promise<Result<M>> {
     const s = this.socket;
     if (!s) throw new Error('not connected');
     const id = this.nextId++;
@@ -72,11 +97,18 @@ export class BrokerClient {
     return parsed.data as Result<M>;
   }
 
-  onNotification<N extends NotificationName>(name: N, fn: (params: z.infer<(typeof notifications)[N]>) => void): () => void {
+  onNotification<N extends NotificationName>(
+    name: N,
+    fn: (params: z.infer<(typeof notifications)[N]>) => void,
+  ): () => void {
     const arr = this.listeners.get(name) ?? [];
     arr.push(fn as (p: unknown) => void);
     this.listeners.set(name, arr);
-    return () => this.listeners.set(name, (this.listeners.get(name) ?? []).filter((f) => f !== fn));
+    return () =>
+      this.listeners.set(
+        name,
+        (this.listeners.get(name) ?? []).filter((f) => f !== fn),
+      );
   }
 
   close(): void {
@@ -90,7 +122,8 @@ export class BrokerClient {
       const p = this.pending.get(res.data.id);
       if (!p) return;
       this.pending.delete(res.data.id);
-      if (res.data.error) p.reject(new BrokerClientError(res.data.error.code, res.data.error.message, res.data.error.data));
+      if (res.data.error)
+        p.reject(new BrokerClientError(res.data.error.code, res.data.error.message, res.data.error.data));
       else p.resolve(res.data.result);
       return;
     }
@@ -98,7 +131,8 @@ export class BrokerClient {
     if (n.method && n.method in notifications) {
       const schema = notifications[n.method as NotificationName];
       const parsed = schema.safeParse(n.params ?? {});
-      if (parsed.success) for (const fn of this.listeners.get(n.method as NotificationName) ?? []) fn(parsed.data);
+      if (parsed.success)
+        for (const fn of this.listeners.get(n.method as NotificationName) ?? []) fn(parsed.data);
     }
   }
 }

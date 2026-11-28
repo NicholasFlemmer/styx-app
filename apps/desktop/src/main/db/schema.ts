@@ -467,3 +467,27 @@ export const queuedMessages = sqliteTable(
   },
   (t) => [index('queued_messages_session').on(t.sessionId, t.createdAt)],
 );
+
+/** A task's result (ADR-0033, migration 0026): one campaign or report per task. */
+export const taskResults = sqliteTable(
+  'task_results',
+  {
+    sessionId: text('session_id')
+      .primaryKey()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    bodyJson: text('body_json').notNull(),
+    launchApprovedAt: integer('launch_approved_at'),
+    launchPickedJson: text('launch_picked_json').notNull().default('[]'),
+    approvedJson: text('approved_json'),
+    campaignId: text('campaign_id'),
+    pausedAt: integer('paused_at'),
+    weekly: integer('weekly').notNull().default(0),
+    lastRunAt: integer('last_run_at'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('task_results_project').on(t.projectId, t.updatedAt)],
+);

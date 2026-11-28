@@ -29,6 +29,7 @@ import {
   sessionSettingsFor,
   spawnPayload,
   spawnValid,
+  emptySshForm,
   sshFormValid,
   sshPort,
 } from './modals';
@@ -162,10 +163,16 @@ describe('connect helpers', () => {
     expect(keyFormValid({ name: 'acme-prod', accessKey: ' ', secret: 's' })).toBe(false);
     expect(keyFormValid({ name: 'acme-prod', accessKey: 'AKIA', secret: '' })).toBe(false);
     expect(keyFormValid({ name: 'acme-prod', accessKey: 'AKIA', secret: 's' })).toBe(true);
-    expect(sshFormValid({ host: 'h', user: 'u', keyPath: '', port: '', passphrase: '' })).toBe(false);
-    expect(
-      sshFormValid({ host: 'h', user: 'u', keyPath: '~/.ssh/id_ed25519', port: '', passphrase: '' }),
-    ).toBe(true);
+    const ssh = { ...emptySshForm(), host: 'h', user: 'u' };
+    expect(sshFormValid(ssh)).toBe(false); // a key target needs its key
+    expect(sshFormValid({ ...ssh, keyPath: '~/.ssh/id_ed25519' })).toBe(true);
+    // ADR-0031: a password target needs the password; the person's own setup needs nothing more.
+    expect(sshFormValid({ ...ssh, auth: 'password' })).toBe(false);
+    expect(sshFormValid({ ...ssh, auth: 'password', password: 'pw' })).toBe(true);
+    expect(sshFormValid({ ...ssh, auth: 'agent' })).toBe(true);
+    // Just the host: what people paste from a hosting panel is refused before it can reach ssh.
+    for (const host of ['ssh://h', 'u@h', 'h/app', '-oProxyCommand=x', 'h h'])
+      expect(sshFormValid({ ...ssh, auth: 'agent', host })).toBe(false);
   });
 });
 
@@ -306,7 +313,7 @@ describe('new project helpers', () => {
 });
 
 describe('SSH form port', () => {
-  const form = (port: string) => ({ host: 'h', user: 'u', keyPath: '/k', port, passphrase: '' });
+  const form = (port: string) => ({ ...emptySshForm(), host: 'h', user: 'u', keyPath: '/k', port });
 
   it('blank means the default 22', () => {
     expect(sshPort(form(''))).toBe(22);

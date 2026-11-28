@@ -265,6 +265,34 @@ describe('target.connect.projects / target.setProject (Supabase project per targ
     });
   });
 
+  it('project.json moving a connected SSH target (host, user, port or jump host) is audited and ends its grants', async () => {
+    const { app, sender } = setup();
+    const saved = await app.bus.dispatch(sender, 'target.connect.saveSsh', {
+      projectId: fixtures.ids.project.acmeShop,
+      name: 'box',
+      env: 'staging',
+      host: 'box.example',
+      user: 'me',
+      auth: 'agent',
+    });
+    if (!saved.ok) throw new Error(saved.error.message);
+    const id = saved.value.targetId ?? '';
+    const before = app.repos.targets.get(id);
+    if (!before) throw new Error('target');
+    const n = app.repos.audit.all().length;
+    app.targets.fileConfigChanged(before, { ...before, config: { ...before.config, note: 'x' } });
+    expect(app.repos.audit.all()).toHaveLength(n); // same address: nothing to do
+    const after = { ...before, config: { ...before.config, proxyJump: 'relay.example' } };
+    app.repos.targets.upsert(after);
+    app.targets.fileConfigChanged(before, after);
+    expect(
+      app.repos.audit
+        .all()
+        .filter((e) => e.targetId === id && e.triggeredBy === 'project.json')
+        .at(-1)?.detail,
+    ).toEqual({ address: 'me@box.example:22 via relay.example', from: 'me@box.example:22' });
+  });
+
   // Review M2: what a pasted token may look like, and a network failure never echoes the request.
   it("token inputs are printable ASCII without spaces; a paste's surrounding whitespace is trimmed", async () => {
     const { app, sender } = setup();

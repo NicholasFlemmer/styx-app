@@ -501,6 +501,130 @@ describe('BrokerHost security regressions', () => {
   });
 });
 
+describe('BrokerHost SSH targets (ADR-0031)', () => {
+  it("lists an SSH target's host, never its password, and hands each shim command the grant's ssh_config", async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    // My SSH setup: nothing to sign in with, so a grant is only the gate and the config.
+    const own = await app.app.bus.dispatch(app.sender, 'target.connect.saveSsh', {
+      projectId: ids.project.acmeShop,
+      name: 'box',
+      env: 'staging',
+      host: 'box.example',
+      user: 'me',
+      auth: 'agent',
+    });
+    if (!own.ok) throw new Error(own.error.message);
+    const pending = client.call(
+      'exec_authorize',
+      { tool: 'ssh', argv: ['box.example', 'uptime'], cwd: '/tmp' },
+      { timeoutMs: 5_000 },
+    );
+    await new Promise((res) => setTimeout(res, 50));
+    const grant = app.app.repos.grants
+      .bySession(ids.session.gemini)
+      .find((g) => g.state === 'requested' && g.targetId === own.value.targetId);
+    if (!grant) throw new Error('expected a requested grant');
+    await app.app.grants.approve(grant.id, '1h');
+    const r = await pending;
+    expect(r.sshConfig).toMatch(/ssh-config-/);
+    expect(r.env['SSH_AUTH_SOCK']).toBeUndefined();
+
+    // A password target: listed with its host; its password is nowhere an agent or the read model can see.
+    // (Windows refuses password targets: its ssh has no ControlMaster.)
+    if (process.platform !== 'win32') {
+      const pw = await app.app.bus.dispatch(app.sender, 'target.connect.saveSsh', {
+        projectId: ids.project.acmeShop,
+        name: 'web',
+        env: 'preview',
+        host: 'www.example.co.za',
+        user: 'cpuser',
+        port: 2222,
+        auth: 'password',
+        password: 'hunter2!',
+      });
+      if (!pw.ok) throw new Error(pw.error.message);
+      const listed = (await client.call('list_targets', {})).find((t) => t.id === pw.value.targetId);
+      expect(listed).toMatchObject({ provider: 'ssh', host: 'www.example.co.za' });
+      expect(JSON.stringify(listed)).not.toContain('hunter2');
+      expect(JSON.stringify(app.app.repos.targets.get(pw.value.targetId ?? ''))).not.toContain('hunter2');
+    }
+    client.close();
+  });
+});
+
+describe('BrokerHost SSH commands reach the right target, or nothing (owner report 2026-11-02)', () => {
+  const saveOwn = async (app: TestApp, name: string, host: string) => {
+    const r = await app.app.bus.dispatch(app.sender, 'target.connect.saveSsh', {
+      projectId: ids.project.acmeShop,
+      name,
+      env: 'staging',
+      host,
+      user: 'me',
+      port: 2222,
+      auth: 'agent',
+    });
+    if (!r.ok) throw new Error(r.error.message);
+    return r.value.targetId ?? '';
+  };
+  const approveHeld = async (app: TestApp, targetId: string) => {
+    await new Promise((res) => setTimeout(res, 50));
+    const g = app.app.repos.grants
+      .bySession(ids.session.gemini)
+      .find((x) => x.state === 'requested' && x.targetId === targetId);
+    if (!g) throw new Error(`no request on ${targetId}`);
+    return app.app.grants.approve(g.id, '1h');
+  };
+
+  it('`ssh <host>` goes to the SSH target saved with that host, and the shim is told what applies', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    await saveOwn(app, 'old', 'old.example');
+    const web = await saveOwn(app, 'web', 'web.example');
+    const pending = client.call(
+      'exec_authorize',
+      { tool: 'ssh', argv: ['web.example', 'uptime'], cwd: '/tmp' },
+      { timeoutMs: 5_000 },
+    );
+    await approveHeld(app, web);
+    const r = await pending;
+    expect(r.notice).toBe('web → me@web.example:2222');
+    expect(r.sshConfig).toMatch(/ssh-config-/);
+    client.close();
+  });
+
+  it('a target whose credential cannot be set up refuses the command with the reason, never runs it bare', async () => {
+    const { t: app, client } = await connectedClient(ids.session.gemini);
+    const dir = mkdtempSync(join(tmpdir(), 'styx-key-'));
+    const { utils } = await import('ssh2');
+    const keyPath = join(dir, 'id');
+    const { writeFileSync, rmSync } = await import('node:fs');
+    writeFileSync(keyPath, utils.generateKeyPairSync('ed25519').private, { mode: 0o600 });
+    const saved = await app.app.bus.dispatch(app.sender, 'target.connect.saveSsh', {
+      projectId: ids.project.acmeShop,
+      name: 'web',
+      env: 'staging',
+      host: 'web.example',
+      user: 'me',
+      auth: 'key',
+      keyPath,
+    });
+    if (!saved.ok) throw new Error(saved.error.message);
+    const first = client.call(
+      'exec_authorize',
+      { tool: 'ssh', argv: ['web.example', 'uptime'], cwd: '/tmp' },
+      { timeoutMs: 5_000 },
+    );
+    await approveHeld(app, saved.value.targetId ?? '');
+    expect((await first).sshConfig).toMatch(/ssh-config-/);
+    // The key goes away and the cached credential is dropped (a reconnect): the next command cannot be set up.
+    rmSync(keyPath);
+    app.app.grants.invalidate(saved.value.targetId ?? '');
+    await expect(
+      client.call('exec_authorize', { tool: 'ssh', argv: ['web.example', 'uptime'], cwd: '/tmp' }),
+    ).rejects.toMatchObject({ code: ErrorCode.notAllowed, message: expect.stringMatching(/^web: .*ENOENT/) });
+    client.close();
+  });
+});
+
 describe('BrokerHost agent-to-agent messaging', () => {
   it("lists only this project's sessions, flagging the caller", async () => {
     const { t: app, client } = await connectedClient(ids.session.gemini);

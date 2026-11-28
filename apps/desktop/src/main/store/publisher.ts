@@ -3,6 +3,9 @@ import {
   SIGNED_OUT,
   type AccountState,
   type UpdateState,
+  type HubState,
+  type ConnectedApp,
+  type TaskResult,
   type AgentSetup,
   type ActivityRow,
   type AgentChange,
@@ -52,6 +55,10 @@ export interface SnapshotExtras {
   /** Updates in place (#119), owned by UpdateService in memory. */
   update?: () => UpdateState;
   agentSetup?: () => AgentSetup[];
+  /** The team hub (ADR-0032), owned by HubService. */
+  hub?: () => HubState;
+  /** Apps with their own AI connection (ADR-0033), owned by ConnectedAppsService. */
+  connectedApps?: () => ConnectedApp[];
 }
 
 /** The single `styx:evt` channel carries every main → renderer event as `{ name, payload }`. */
@@ -248,6 +255,18 @@ export class Publisher {
     this.emit({ op: 'account.set', account });
   }
 
+  hubSet(hub: HubState): void {
+    this.emit({ op: 'hub.set', hub });
+  }
+
+  taskResultSet(id: string, result: TaskResult | null): void {
+    this.emit({ op: 'taskResults.set', id, result });
+  }
+
+  connectedAppsSet(apps: ConnectedApp[]): void {
+    this.emit({ op: 'connectedApps.set', apps });
+  }
+
   updateSet(update: UpdateState): void {
     this.emit({ op: 'update.set', update });
   }
@@ -272,6 +291,8 @@ export class Publisher {
         account: this.extras.account,
         ...(this.extras.update !== undefined ? { update: this.extras.update } : {}),
         ...(this.extras.agentSetup !== undefined ? { agentSetup: this.extras.agentSetup } : {}),
+        ...(this.extras.hub !== undefined ? { hub: this.extras.hub } : {}),
+        ...(this.extras.connectedApps !== undefined ? { connectedApps: this.extras.connectedApps } : {}),
       },
       this.seqNo,
     );

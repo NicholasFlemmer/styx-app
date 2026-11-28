@@ -76,6 +76,9 @@ export const RATE_LIMITED_METHODS: Readonly<Partial<Record<MethodName, RateBucke
   remember_command: 'ask',
   // Its own bucket: without one, two agents can fill each other's context windows for free.
   send_message: 'peer',
+  // A change asks the person: metered like a question so an agent cannot flood the inbox with them.
+  use_app: 'ask',
+  show_result: 'ask',
 };
 
 /**

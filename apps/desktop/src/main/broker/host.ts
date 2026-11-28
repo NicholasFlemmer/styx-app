@@ -15,6 +15,8 @@ import {
   isLive,
   openUntil,
   type AskResolution,
+  type ConnectedApp,
+  type ConnectedAppTool,
   type Grant,
   type PendingAsk,
   type Scope,
@@ -25,11 +27,15 @@ import {
 import type { Clock } from '../clock';
 import type { Repos } from '../db/repos';
 import type { IssuedCredential, ProviderRegistry } from '../providers';
+import { normalHost, sshHostOk } from '../providers/ssh';
 import type { GrantOutcome, GrantService } from '../services/grant-service';
 import type { HunkService } from '../services/hunk-service';
 import type { LaneLedgerService } from '../services/lane-ledger-service';
 import { logger, redact, redactArgv } from '../services/logger';
 import { sha256, type SessionService } from '../services/session-service';
+import { HubError, type HubService } from '../services/hub-service';
+import { ResultRefusal, type TaskResultsService } from '../services/task-results-service';
+import { AppRefusal, type AppCaller, type ConnectedAppsService } from '../services/connected-apps-service';
 
 export interface BrokerHostDeps {
   repos: Repos;
@@ -57,6 +63,18 @@ export interface BrokerHostDeps {
     /** The checks a resolved merge must pass (ADR-0025 phase B). */
     rememberChecks(sessionId: string, command: string): Promise<string | null>;
   };
+  /** Connected apps (ADR-0033 tier 2): the tools agents reach only through Styx, gated and audited. */
+  apps: Pick<
+    ConnectedAppsService,
+    'listForAgents' | 'resolve' | 'askPrompt' | 'call' | 'refused' | 'requested'
+  >;
+  /** Campaign and report results (ADR-0033), and the launch plans the person approved. */
+  results: Pick<TaskResultsService, 'show' | 'planReserve' | 'planSettle'>;
+  /** The team hub tools (ADR-0032); the service checks the project link and the lane's share. */
+  hub: Pick<
+    HubService,
+    'context' | 'read' | 'post' | 'remember' | 'agentShare' | 'ask' | 'task' | 'roomRead' | 'roomTask'
+  >;
   /** The `land` tool: the container applies the project's integration mode and runs LandService; never throws. */
   landing: {
     land(
@@ -113,11 +131,47 @@ const toBrokerResolution = (ask: PendingAsk, r: AskResolution): Result<'ask_user
  * Main-process side of the broker (plan §6): authenticates sessions by token hash, resolves targets within the
  * session's project, and holds `request_access` / `exec_authorize` / `ask_user` replies until the user decides.
  */
+/**
+ * The one line the ssh shim prints, so the agent and the person see what Styx applied (or why it did not): the
+ * target's saved address, and a warning when the command names another host, which the grant's config leaves alone.
+ */
+const sshNotice = (target: Target, dest: string | null): string => {
+  const host = String(target.config['host'] ?? '');
+  const jump = typeof target.config['proxyJump'] === 'string' && target.config['proxyJump'] !== '';
+  const address = `${String(target.config['user'] ?? '')}@${host}:${String(target.config['port'] ?? 22)}${
+    jump ? ` via ${String(target.config['proxyJump'])}` : ''
+  }`;
+  const line =
+    dest !== null && dest === normalHost(host)
+      ? `${target.name} → ${address}`
+      : `${target.name} is ${address}; its saved user and port apply only to ssh ${host}`;
+  return clean(line, 400);
+};
+
+/** Text from elsewhere (a provider's error, ssh's output) as one safe line for an agent's terminal. */
+const clean = (s: string, max: number): string =>
+  redact(s)
+    .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
+    .replace(/[\x00-\x1f\x7f-\x9f]/g, ' ')
+    .slice(0, max);
+
+const APP_ALLOW = copy.one.apps.allowOnce;
+const APP_DENY = copy.one.apps.dontAllow;
+/** How long a change in a connected app waits for the person (the MCP tool waits 310 s for the answer). */
+const APP_WAIT_MS = 300_000;
+
 export class BrokerHost {
   readonly server: BrokerServer;
   private readonly waits = new Map<string, NodeJS.Timeout>();
   /** Session that opened each held `exec:` request; `always` grants detach from their session on issue. */
   private readonly holdSessions = new Map<string, string>();
+  /** SSH: the host each held command names, for the notice once it is granted. */
+  private readonly holdHosts = new Map<string, string | null>();
+  /** `use_app` calls waiting for the person's OK, by held key. */
+  private readonly appCalls = new Map<
+    string,
+    { caller: AppCaller; app: ConnectedApp; tool: ConnectedAppTool; args: Record<string, unknown> }
+  >();
 
   constructor(private readonly deps: BrokerHostDeps) {
     this.server = new BrokerServer({
@@ -138,6 +192,8 @@ export class BrokerHost {
     for (const t of this.waits.values()) clearTimeout(t);
     this.waits.clear();
     this.holdSessions.clear();
+    this.holdHosts.clear();
+    this.appCalls.clear();
     await this.server.close();
   }
 
@@ -197,7 +253,7 @@ export class BrokerHost {
   }
 
   private holdKey(
-    kind: 'grant' | 'exec' | 'ask',
+    kind: 'grant' | 'exec' | 'ask' | 'app',
     id: string,
     req: { id: string | number },
     ctx: ConnectionContext,
@@ -269,7 +325,7 @@ export class BrokerHost {
       return {
         kind: cred.kind,
         env: cred.env,
-        ...(cred.kind === 'ssh-agent' ? { socketPath: cred.socketPath } : {}),
+        ...(cred.kind === 'ssh-agent' && cred.socketPath !== null ? { socketPath: cred.socketPath } : {}),
         expiresAt: cred.expiresAt,
         scoped: cred.scoped,
       };
@@ -291,35 +347,41 @@ export class BrokerHost {
           `no ${adapter.provider} target in ${ctx.session.projectName}`,
         );
       const target = this.usable(picked);
+      const dest = adapter.hostOfCommand?.(p.argv, p.tool) ?? null;
       // An expired login cannot mint: ask again (with Reconnect) rather than fail on the grant already held.
       const covering =
         target.health === 'expired' ? null : deps.grants.covering(target, ctx.session.sessionId, scopes);
       if (covering) {
         // Through credentialFor so a persistent grant issued before a restart is re-issued (project-bound, M3).
-        const cred = await deps.grants.credentialFor(covering.id, {
-          sessionId: ctx.session.sessionId,
-          projectId: ctx.session.projectId,
-        });
-        return this.authorizeUse(covering, command, scopes, ctx, cred);
+        // authorizeUse mints it, and fails the command closed with the reason when it cannot.
+        return this.authorizeUse(covering, command, scopes, ctx, dest);
       }
       // Only the path that inserts a grant request consumes the session's request bucket (L1); covered shim
       // execs stay unmetered.
       if (!server.allow(ctx.session.sessionId))
         throw new BrokerError(ErrorCode.rateLimited, 'too many access requests; try again in a minute');
-      const outcome = await deps.grants.request({
-        sessionId: ctx.session.sessionId as Grant['sessionId'],
-        targetId: target.id,
-        scope: scopes,
-        reason: command,
-        triggeredBy: command,
-      });
-      if (outcome.kind === 'active') return await this.authorizeUse(outcome.grant, command, scopes, ctx);
+      // An auto-approved request mints on the spot: its failure reaches the agent as the reason, not "internal error".
+      const outcome = await deps.grants
+        .request({
+          sessionId: ctx.session.sessionId as Grant['sessionId'],
+          targetId: target.id,
+          scope: scopes,
+          reason: command,
+          triggeredBy: command,
+        })
+        .catch((e: Error) => {
+          throw new BrokerError(ErrorCode.notAllowed, clean(`${target.name}: ${e.message}`, 300));
+        });
+      if (outcome.kind === 'active')
+        return await this.authorizeUse(outcome.grant, command, scopes, ctx, dest);
       if (outcome.kind === 'denied') throw new BrokerError(ErrorCode.notAllowed, 'access denied');
       const key = this.holdKey('exec', outcome.grant.id, req, ctx);
       req.hold(key);
       this.holdSessions.set(key, ctx.session.sessionId);
+      this.holdHosts.set(key, dest);
       this.armWait(key, 600_000, () => {
         this.holdSessions.delete(key);
+        this.holdHosts.delete(key);
         server.rejectHeld(key, { code: ErrorCode.notAllowed, message: 'timed out waiting for a decision' });
       });
       // resolved in onGrantDecision with { grantId, useId, env }
@@ -357,6 +419,68 @@ export class BrokerHost {
         server.rejectHeld(key, { code: ErrorCode.internal, message: 'timed out waiting for the user' }),
       );
       return { resolution: { kind: 'question', answer: '' } };
+    });
+
+    server.on('list_apps', async (_p, ctx) => deps.apps.listForAgents(ctx.session.projectId));
+
+    server.on('show_result', async (p, ctx) => {
+      try {
+        deps.results.show(ctx.session.sessionId, ctx.session.projectId, p.result);
+      } catch (e) {
+        throw new BrokerError(
+          e instanceof ResultRefusal ? ErrorCode.invalidParams : ErrorCode.internal,
+          e instanceof Error ? e.message : 'result not kept',
+        );
+      }
+      return { shown: true as const, note: 'Shown to the person in Styx.' };
+    });
+
+    server.on('use_app', async (p, ctx, req) => {
+      const { app, tool } = this.appOrRefuse(() => deps.apps.resolve(ctx.session.projectId, p.app, p.tool));
+      const caller = this.callerOf(ctx);
+      const args = p.arguments;
+      if (tool.readOnly) return this.runApp(() => deps.apps.call(caller, app, tool, args, 'reads only'));
+      // A step the person's approved launch plan already covers runs without asking twice.
+      const reserved = deps.results.planReserve(caller.sessionId, app, tool, args);
+      if (reserved !== null)
+        return this.runApp(async () => {
+          try {
+            const r = await deps.apps.call(caller, app, tool, args, 'launch plan');
+            deps.results.planSettle(caller.sessionId, reserved, !r.isError, r.text);
+            return r;
+          } catch (e) {
+            deps.results.planSettle(caller.sessionId, reserved, false, '');
+            throw e;
+          }
+        });
+      // Anything that is not a declared read waits for the person, in the chat and in Needs your OK.
+      const prompt = this.appOrRefuse(() => deps.apps.askPrompt(caller, app, tool, args));
+      const ask = deps.sessions.openAsk(
+        ctx.session.sessionId,
+        {
+          kind: 'decision',
+          prompt,
+          options: [APP_ALLOW, APP_DENY],
+        },
+        String(req.id),
+      );
+      const key = this.holdKey('app', ask.id, req, ctx);
+      this.appCalls.set(key, { caller, app, tool, args });
+      deps.apps.requested(caller, app, tool, args);
+      req.hold(key);
+      // Fixed, not the agent's: an approval never outlives the call that asked for it.
+      this.armWait(key, APP_WAIT_MS, () => {
+        if (!this.appCalls.delete(key)) return;
+        deps.apps.refused(caller, app, tool, args, 'timeout');
+        server.rejectHeld(key, { code: ErrorCode.notAllowed, message: 'the person did not answer in time' });
+        // Close the question too, so a late click cannot look like it ran something.
+        try {
+          deps.sessions.resolveAsk(ask.id, { kind: 'decision', chosen: APP_DENY });
+        } catch {
+          // already answered or cancelled
+        }
+      });
+      return { text: '', isError: false };
     });
 
     server.on('report_status', async (p, ctx) => {
@@ -492,6 +616,96 @@ export class BrokerHost {
       return { delivered: true as const };
     });
 
+    /** Hub refusals reach the agent as the hub's own words; anything else is a plain failure. */
+    const viaHub = async <T>(ctx: ConnectionContext, run: () => Promise<T>): Promise<T> => {
+      // A shell lane is a person's terminal, not an agent the hub can frame for: it gets no hub tools.
+      if (ctx.session.agent === 'shell')
+        throw new BrokerError(ErrorCode.notAllowed, 'The team hub tools are for agents, not shell lanes.');
+      try {
+        return await run();
+      } catch (e) {
+        if (e instanceof HubError)
+          throw new BrokerError(
+            e.status === 403 || e.status === 401 ? ErrorCode.notAllowed : ErrorCode.internal,
+            clean(e.message, 400),
+          );
+        throw e;
+      }
+    };
+    server.on('hub_context', async (p, ctx) =>
+      viaHub(ctx, () => deps.hub.context(ctx.session.sessionId, p.query ?? null, p.kind ?? null)),
+    );
+    server.on('hub_read', async (p, ctx) =>
+      viaHub(ctx, () => deps.hub.read(ctx.session.sessionId, p.threadId ?? null)),
+    );
+    /** 10 hub writes a minute per lane: a brake on an agent posting in a loop (the hub has its own per person). */
+    const hubWrites = new Map<string, number[]>();
+    const hubWriteAllowed = (sessionId: string): void => {
+      const now = deps.clock.now();
+      const recent = (hubWrites.get(sessionId) ?? []).filter((t) => t > now - 60_000);
+      if (recent.length >= 10)
+        throw new BrokerError(
+          ErrorCode.rateLimited,
+          'Too many hub posts in a minute. Wait before posting again.',
+        );
+      hubWrites.set(sessionId, [...recent, now]);
+    };
+    server.on('hub_post', async (p, ctx) =>
+      viaHub(ctx, () => {
+        hubWriteAllowed(ctx.session.sessionId);
+        return deps.hub.post(
+          ctx.session.sessionId,
+          p.body,
+          p.threadId ?? null,
+          p.title ?? null,
+          p.summary ?? null,
+        );
+      }),
+    );
+    server.on('hub_ask', async (p, ctx) =>
+      viaHub(ctx, () => {
+        hubWriteAllowed(ctx.session.sessionId);
+        return deps.hub.ask(ctx.session.sessionId, p);
+      }),
+    );
+    server.on('hub_task', async (p, ctx) =>
+      viaHub(ctx, () => {
+        if (p.action !== 'list') hubWriteAllowed(ctx.session.sessionId);
+        return deps.hub.task(ctx.session.sessionId, p);
+      }),
+    );
+    server.on('room_read', async (_p, ctx) => viaHub(ctx, () => deps.hub.roomRead(ctx.session.sessionId)));
+    server.on('room_claim', async (p, ctx) =>
+      viaHub(ctx, () => {
+        hubWriteAllowed(ctx.session.sessionId);
+        return deps.hub.roomTask(ctx.session.sessionId, 'claim', p.taskId, {});
+      }),
+    );
+    server.on('room_handoff', async (p, ctx) =>
+      viaHub(ctx, () => {
+        hubWriteAllowed(ctx.session.sessionId);
+        return deps.hub.roomTask(ctx.session.sessionId, 'handoff', p.taskId, { to: p.to, note: p.note });
+      }),
+    );
+    server.on('room_done', async (p, ctx) =>
+      viaHub(ctx, () => {
+        hubWriteAllowed(ctx.session.sessionId);
+        return deps.hub.roomTask(ctx.session.sessionId, 'done', p.taskId, { result: p.result });
+      }),
+    );
+    server.on('hub_share', async (p, ctx) =>
+      viaHub(ctx, () => {
+        hubWriteAllowed(ctx.session.sessionId);
+        return deps.hub.agentShare(ctx.session.sessionId, p.paths, p.title ?? null);
+      }),
+    );
+    server.on('hub_remember', async (p, ctx) =>
+      viaHub(ctx, () => {
+        hubWriteAllowed(ctx.session.sessionId);
+        return deps.hub.remember(ctx.session.sessionId, p);
+      }),
+    );
+
     server.on('list_targets', async (_p, ctx) => {
       const now = deps.clock.now();
       return deps.repos.targets.byProject(ctx.session.projectId).map((t) => {
@@ -510,7 +724,19 @@ export class BrokerHost {
                   ? 'open'
                   : 'locked';
         const scopes = [...new Set(live.flatMap((g) => g.scope))] as Scope[];
-        return { id: t.id, name: t.name, provider: t.provider, env: t.env, lockState, scopes };
+        const host =
+          t.provider === 'ssh' && typeof t.config['host'] === 'string' && sshHostOk(t.config['host'])
+            ? t.config['host']
+            : null;
+        return {
+          id: t.id,
+          name: t.name,
+          provider: t.provider,
+          env: t.env,
+          lockState,
+          scopes,
+          ...(host !== null ? { host } : {}),
+        };
       });
     });
   }
@@ -550,24 +776,39 @@ export class BrokerHost {
     command: string,
     scopes: Scope[],
     ctx: ConnectionContext,
-    issued?: IssuedCredential,
+    dest: string | null = null,
   ): Promise<Result<'exec_authorize'>> {
     const target = this.deps.repos.targets.get(grant.targetId) ?? null;
-    const cred =
-      issued ??
-      (await this.deps.grants
-        .credentialFor(grant.id, {
-          sessionId: ctx.session.sessionId,
-          projectId: target?.projectId ?? ctx.session.projectId,
-        })
-        .catch(() => this.deps.grants.issuedCredential(grant.id)));
+    let cred: IssuedCredential;
+    try {
+      // Through credentialFor so a persistent grant issued before a restart is re-issued (project-bound, M3).
+      cred = await this.deps.grants.credentialFor(grant.id, {
+        sessionId: ctx.session.sessionId,
+        projectId: target?.projectId ?? ctx.session.projectId,
+      });
+    } catch (e) {
+      // A credential that could not be set up (an SSH sign-in that failed, a lapsed login) fails the command closed
+      // with the reason. Running it with nothing injected ran the plain tool with its defaults: an SSH command then
+      // went out as the local user on port 22, which looked like Styx ignoring the target.
+      throw new BrokerError(
+        ErrorCode.notAllowed,
+        clean(`${target?.name ?? 'the target'}: ${(e as Error).message}`, 300),
+      );
+    }
     const { useId } = this.deps.grants.use(grant.id, {
       command,
       scopeUsed: scopes[0] ?? 'read',
       via: 'shim',
       sessionId: ctx.session.sessionId,
     });
-    return { grantId: grant.id, useId, env: cred?.env ?? {} };
+    return {
+      grantId: grant.id,
+      useId,
+      env: cred.env,
+      ...(cred.kind === 'ssh-agent' && target !== null
+        ? { sshConfig: cred.configPath, notice: sshNotice(target, dest) }
+        : {}),
+    };
   }
 
   private gitTarget(ctx: ConnectionContext, argv: string[]): Target | null {
@@ -601,15 +842,22 @@ export class BrokerHost {
       envOfCommand?: (argv: string[], tool?: string) => 'prod' | 'non-prod' | null;
       projectKey?: string;
       projectOfCommand?: (argv: string[]) => string | null;
+      hostOfCommand?: (argv: string[], tool?: string) => string | null;
     },
     argv: string[],
     tool: string,
     scopes: Scope[],
   ): Target | null {
-    const candidates = this.deps.repos.targets
+    const all = this.deps.repos.targets
       .byProject(ctx.session.projectId)
       .filter((t) => t.provider === adapter.provider);
-    if (candidates.length === 0) return null;
+    if (all.length === 0) return null;
+    // SSH: the target whose saved host is the one the command names. A project with several servers (or an old
+    // target next to a re-created one) must not send `ssh web` through the rules and credentials of another.
+    const host = adapter.hostOfCommand?.(argv, tool) ?? null;
+    const sameHost =
+      host === null ? [] : all.filter((t) => normalHost(String(t.config['host'] ?? '')) === host);
+    const candidates = sameHost.length > 0 ? sameHost : all;
     // A write credential bound to one project (Fly.io deploy token on one app): a non-read command whose own app
     // flag names a target's project goes to that target, since its token works nowhere else. Reads get wider
     // tokens (Fly.io: org-wide read-only), so they keep the environment rules below, as does anything unnamed.
@@ -661,6 +909,7 @@ export class BrokerHost {
       // `always` grants detach from the session on issue (grant.sessionId === null): attribute the use to the
       // session that held the request, never to ''.
       const heldSession = this.holdSessions.get(key) ?? grant.sessionId ?? '';
+      const dest = this.holdHosts.get(key) ?? null;
       this.clearWait(key);
       if (outcome !== 'granted') {
         this.server.rejectHeld(key, {
@@ -677,15 +926,72 @@ export class BrokerHost {
       } as ConnectionContext;
       const command = grant.reason;
       const scopes = [...grant.scope];
-      void this.authorizeUse(grant, command, scopes, ctx).then(
+      void this.authorizeUse(grant, command, scopes, ctx, dest).then(
         (result) => this.server.resolveHeld(key, result),
-        (e: Error) => this.server.rejectHeld(key, { code: ErrorCode.internal, message: e.message }),
+        (e: Error) =>
+          this.server.rejectHeld(key, {
+            code: e instanceof BrokerError ? e.code : ErrorCode.internal,
+            message: e.message,
+          }),
+      );
+    }
+  }
+
+  /** Who is calling, for the record. */
+  private callerOf(ctx: ConnectionContext): AppCaller {
+    const s = this.deps.repos.sessions.get(ctx.session.sessionId);
+    return {
+      sessionId: ctx.session.sessionId,
+      projectId: ctx.session.projectId,
+      worktreeId: s?.worktreeId ?? null,
+      agent: s?.agent ?? 'shell',
+    };
+  }
+
+  /** A refusal the agent can read, as a broker error. */
+  private appOrRefuse<T>(f: () => T): T {
+    try {
+      return f();
+    } catch (e) {
+      throw new BrokerError(
+        e instanceof AppRefusal ? ErrorCode.notAllowed : ErrorCode.internal,
+        e instanceof Error ? e.message : 'app call failed',
+      );
+    }
+  }
+
+  private async runApp(f: () => Promise<{ text: string; isError: boolean }>) {
+    try {
+      return await f();
+    } catch (e) {
+      throw new BrokerError(
+        e instanceof AppRefusal ? ErrorCode.notAllowed : ErrorCode.internal,
+        e instanceof Error ? e.message : 'app call failed',
       );
     }
   }
 
   /** Called by `ask.respond` after SessionService resolved the row. */
   resolveAsk(ask: PendingAsk, resolution: AskResolution): void {
+    for (const key of this.heldFor(`app:${ask.id}:`)) {
+      const call = this.appCalls.get(key);
+      this.appCalls.delete(key);
+      this.clearWait(key);
+      if (call === undefined) continue;
+      if (resolution.kind !== 'decision' || resolution.chosen !== APP_ALLOW) {
+        this.deps.apps.refused(call.caller, call.app, call.tool, call.args, 'you');
+        this.server.rejectHeld(key, { code: ErrorCode.notAllowed, message: 'the person said no' });
+        continue;
+      }
+      // Still allowed now? The person may have turned the app off for this project while the question was open.
+      void this.runApp(async () => {
+        const now = this.deps.apps.resolve(call.caller.projectId, call.app.id, call.tool.name);
+        return this.deps.apps.call(call.caller, now.app, now.tool, call.args, 'you');
+      }).then(
+        (r) => this.server.resolveHeld(key, r),
+        (e: BrokerError) => this.server.rejectHeld(key, { code: e.code, message: e.message }),
+      );
+    }
     for (const key of this.heldFor(`ask:${ask.id}:`)) {
       this.clearWait(key);
       this.server.resolveHeld(key, { resolution: toBrokerResolution(ask, resolution) });
@@ -694,7 +1000,14 @@ export class BrokerHost {
 
   /** Session finished / ask cancelled: fail the held request so the agent does not hang. */
   cancelAsk(ask: PendingAsk): void {
+    for (const key of this.heldFor(`app:${ask.id}:`)) {
+      const call = this.appCalls.get(key);
+      this.appCalls.delete(key);
+      if (call !== undefined)
+        this.deps.apps.refused(call.caller, call.app, call.tool, call.args, 'cancelled');
+    }
     for (const key of [
+      ...this.heldFor(`app:${ask.id}:`),
       ...this.heldFor(`ask:${ask.id}:`),
       ...(ask.grantId
         ? [...this.heldFor(`grant:${ask.grantId}:`), ...this.heldFor(`exec:${ask.grantId}:`)]
@@ -710,6 +1023,7 @@ export class BrokerHost {
     if (t) clearTimeout(t);
     this.waits.delete(key);
     this.holdSessions.delete(key);
+    this.holdHosts.delete(key);
   }
 
   notifyStopping(sessionId: string): void {

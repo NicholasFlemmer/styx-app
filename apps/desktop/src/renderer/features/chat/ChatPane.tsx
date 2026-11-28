@@ -81,6 +81,8 @@ import { thinkingLabel, elapsedLabel, workingLine } from './stream-state';
 import { inlineSegments, transcriptItems, type TranscriptItem } from './transcript-items';
 import { laneItems, type LaneItem } from './lane-turns';
 import { LandButton } from '../workspace/LandButton';
+import { AddToContext } from '../hub/AddToContext';
+import { ShareConversation } from '../hub/ShareConversation';
 import { screenUrl } from '../../screens/Diff/CheckpointDiff';
 import { ArcadeHeldStrip, ArcadePanel, openArcade, quitArcade } from '../arcade/ArcadePanel';
 import { AgentProblemRow } from './AgentProblemRow';
@@ -524,24 +526,38 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
     }
   };
 
+  /** Share or Add to team context on any finished message, the person's or the agent's (the lean hub). */
+  const messageActs = (id: string, text: string, end: boolean) =>
+    session === null || text.trim() === '' ? null : (
+      <div className={s['msgActs']} data-end={end ? 'true' : undefined}>
+        <ShareConversation sessionId={session.id} messageId={id} variant="answer" />
+        <AddToContext text={text} />
+      </div>
+    );
+
   const renderItem = (item: TranscriptItem) => {
     switch (item.kind) {
       case 'user':
         return (
-          <Message
-            key={item.id}
-            kind="user"
-            text={item.text}
-            attachments={messageChips(item.attachments)}
-            {...(item.pointer !== undefined ? { pointer: item.pointer } : {})}
-            compact={compact}
-          />
+          <div key={item.id} className={s['msg']} data-msg="user">
+            <Message
+              kind="user"
+              text={item.text}
+              attachments={messageChips(item.attachments)}
+              {...(item.pointer !== undefined ? { pointer: item.pointer } : {})}
+              compact={compact}
+            />
+            {messageActs(item.id, item.text, true)}
+          </div>
         );
       case 'agent':
         return (
-          <Message key={item.id} kind="agent" streaming={item.streaming} compact={compact}>
-            <AgentBody text={item.text} />
-          </Message>
+          <div key={item.id} className={s['msg']} data-msg="agent">
+            <Message kind="agent" streaming={item.streaming} compact={compact}>
+              <AgentBody text={item.text} />
+            </Message>
+            {item.streaming ? null : messageActs(item.id, item.text, false)}
+          </div>
         );
       case 'thinking':
         return (
@@ -583,6 +599,40 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
             onRevert={() => revertCheckpoint(item.checkpointId)}
             compact={compact}
           />
+        );
+      case 'hub':
+        // A teammate's words through the hub: bordered and attributed like a peer, never a user bubble, and the
+        // agent waits for the person (ADR-0032 section 8, mockup frame 3).
+        return (
+          <div key={item.id} className={s['peer']} data-hub-message="true">
+            <span className={['t-label', s['peerHead']].join(' ')}>
+              {item.agent === null
+                ? fill(copy.hub.message.from, { from: item.from, space: item.space })
+                : fill(copy.hub.message.fromAgent, {
+                    agent: item.agent,
+                    from: item.from,
+                    branch: item.branch ?? copy.chat.peer.noBranch,
+                    space: item.space,
+                  })}
+            </span>
+            <Body text={item.text} />
+            <span className={['t-meta', s['peerHead']].join(' ')}>{copy.hub.message.read}</span>
+            {session !== null && (
+              <div>
+                <Button
+                  onClick={() =>
+                    void command('session.sendMessage', {
+                      sessionId: session.id,
+                      body: fill(copy.hub.message.goAheadText, { from: item.from, space: item.space }),
+                    })
+                  }
+                  data-hub-go-ahead="true"
+                >
+                  {copy.hub.message.goAhead}
+                </Button>
+              </div>
+            )}
+          </div>
         );
       case 'peer':
         // Deliberately not a user bubble: a peer's words must never read as the operator's.
@@ -762,6 +812,14 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
             onShowChanges={() => reviewCheckpoint(item.checkpointId)}
             onUndo={() => revertCheckpoint(item.checkpointId)}
             compact={compact}
+            extra={
+              session !== null && item.replyId !== null && item.text !== null ? (
+                <>
+                  <ShareConversation sessionId={session.id} messageId={item.replyId} variant="answer" />
+                  <AddToContext text={item.text} />
+                </>
+              ) : undefined
+            }
           >
             {item.text === null ? undefined : <AgentBody text={item.text} />}
           </TurnResult>
@@ -808,6 +866,7 @@ export function ChatPane({ projectId, compact = false, sessionId: pinnedId }: Ch
           action={<LandButton projectId={projectId} placement="lane" />}
           tools={
             <>
+              <ShareConversation sessionId={session.id} messageId={null} />
               {arcadeButton && (
                 <button
                   type="button"

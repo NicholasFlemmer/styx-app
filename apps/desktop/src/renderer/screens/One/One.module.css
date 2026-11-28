@@ -1,0 +1,771 @@
+@layer screens {
+  /* The plain-words sidebar (ADR-0033, mockup design/next/styx-one-place.html): places, projects, Settings at the foot. */
+  .side {
+    width: 232px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 12px 0;
+    border-right: 1px solid var(--ln);
+    background: var(--s1);
+    overflow-y: auto;
+  }
+  .sideLink {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 18px;
+    border: 0;
+    background: transparent;
+    color: var(--tx);
+    font: inherit;
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .sideLink:hover {
+    background: var(--s2);
+  }
+  .sideLink[data-inv='true'] {
+    background: var(--tx);
+    color: var(--bg);
+    font-weight: 600;
+  }
+  .sideLink:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: -3px;
+  }
+  .count {
+    padding: 1px 6px;
+    background: var(--ac);
+    color: var(--acx);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .sideGroup {
+    display: flex;
+    justify-content: space-between;
+    padding: 18px 18px 6px;
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .place {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 18px;
+    border: 0;
+    background: transparent;
+    color: var(--tx);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .place:hover {
+    background: var(--s2);
+  }
+  .place[data-inv='true'] {
+    background: var(--tx);
+    color: var(--bg);
+  }
+  .place:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: -3px;
+  }
+  .placeName {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .placeCount {
+    margin-left: auto;
+    font-size: 11px;
+    color: inherit;
+    opacity: 0.7;
+  }
+  .sideFoot {
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px solid var(--ln);
+  }
+
+  /* A page: title row, then its content. */
+  .page {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 26px 34px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .split {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr 360px;
+  }
+  .split > .page {
+    border-right: 1px solid var(--ln);
+  }
+  .aside {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--s1);
+  }
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .title {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+  }
+  .h3 {
+    margin: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .lead {
+    margin: 0;
+    max-width: 72ch;
+    color: var(--mu);
+    font-size: 14px;
+  }
+  .push {
+    margin-left: auto;
+  }
+  .empty {
+    margin: 0;
+    padding: 18px 0;
+    color: var(--mu);
+  }
+
+  /* The ask box: one question, the person's words, Start. */
+  .ask {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    border: 1px solid var(--tx);
+    background: var(--s1);
+  }
+  .askInput {
+    width: 100%;
+    min-height: 52px;
+    resize: vertical;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--tx);
+    font: inherit;
+    font-size: 17px;
+    line-height: 1.4;
+  }
+  .askInput::placeholder {
+    color: var(--mu);
+  }
+  .askInput:focus {
+    outline: none;
+  }
+  .ask:focus-within {
+    outline: 1px solid var(--tx);
+  }
+  .askRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--mu);
+  }
+  .askSelect {
+    padding: 4px 8px;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+    color: var(--tx);
+    font: inherit;
+    font-size: 13px;
+  }
+  .askError {
+    color: var(--tx);
+    font-size: 13px;
+  }
+
+  /* Numbers at a glance. */
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .kpi {
+    padding: 11px 13px;
+    border: 1px solid var(--ln);
+    background: var(--s1);
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .kpi b {
+    display: block;
+    margin-top: 2px;
+    color: var(--tx);
+    font-size: 21px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Tasks as cards, two across. */
+  .tasks {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 10px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .task {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border: 1px solid var(--ln);
+    background: var(--s1);
+    color: var(--tx);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .task:hover {
+    border-color: var(--tx);
+  }
+  .task:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: 1px;
+  }
+  .task[data-on='true'] {
+    border-color: var(--tx);
+  }
+  .taskMeta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .taskTitle {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  .state {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .state::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    flex: none;
+    background: var(--mu);
+  }
+  .state[data-state='working']::before {
+    background: var(--act);
+  }
+  .state[data-state='your-turn']::before,
+  .state[data-state='ready']::before {
+    background: var(--ac);
+    outline: 1px solid var(--tx);
+  }
+  .state[data-state='landed']::before {
+    background: var(--tx);
+  }
+
+  /* Needs your OK: the consequence in big type. */
+  .needs {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .need {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border: 1px solid var(--tx);
+    background: var(--bg);
+  }
+  .needWhat {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .needBig {
+    font-size: 21px;
+    font-weight: 700;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+  .needWhy {
+    font-size: 13px;
+    color: var(--mu);
+  }
+  .needActs {
+    display: flex;
+    gap: 8px;
+    margin-top: 2px;
+  }
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+
+  /* Plain lines (Done today, the record, rules). */
+  .lines {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 8px 0;
+    border-top: 1px solid var(--ln);
+    font-size: 13px;
+  }
+  .recordLine {
+    width: 100%;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    background: transparent;
+    color: var(--tx);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .recordLine:hover {
+    background: var(--s2);
+  }
+  .recordLine:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: -2px;
+  }
+  .lineTime {
+    flex: none;
+    color: var(--mu);
+    font-variant-numeric: tabular-nums;
+  }
+  .lineText {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* Projects. */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .card {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px;
+    border: 1px solid var(--ln);
+    background: var(--s1);
+    color: var(--tx);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .card:hover {
+    border-color: var(--tx);
+  }
+  .card:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: 1px;
+  }
+  .cardTitle {
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .box {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    border: 1px solid var(--ln);
+    background: var(--s1);
+  }
+  .kv {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 6px 12px;
+    margin: 0;
+    font-size: 13px;
+  }
+  .kv dt {
+    color: var(--mu);
+  }
+  .kv dd {
+    margin: 0;
+    min-width: 0;
+  }
+  .apps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .app {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+    font-size: 12px;
+  }
+  .appRow {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    list-style: none;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 0;
+    border-top: 1px solid var(--ln);
+    font-size: 14px;
+  }
+  .appName {
+    font-weight: 600;
+  }
+  .appSub {
+    display: block;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--mu);
+  }
+  .appItem {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-bottom: 10px;
+    border-top: 1px solid var(--ln);
+  }
+  .appItem > .appRow {
+    border-top: 0;
+  }
+  .metaBox {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 0;
+  }
+  /* One task, plain: head, the go-live card when ready, then the conversation filling the rest. */
+  .taskView {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .taskHead {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 34px 14px;
+    border-bottom: 1px solid var(--ln);
+  }
+  .taskHeadText {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .live {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 14px 34px 0;
+    padding: 12px 16px;
+    border: 1px solid var(--tx);
+  }
+  .taskChat {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  /* The conversation at a reading width, not the side pane's. */
+  .taskChat > * {
+    width: 100%;
+    max-width: 920px;
+    margin: 0 auto;
+    background: var(--bg);
+  }
+  .taskSplit {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  }
+  .taskResult {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 18px 24px 32px 34px;
+  }
+  .taskSide {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--ln);
+  }
+  /* Connected apps as cards (mockup frame 8). */
+  .appCards {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 10px;
+  }
+  .appCards > li {
+    display: flex;
+  }
+  .appCard,
+  .appCardOwn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--ln);
+    background: var(--s1);
+    color: var(--tx);
+    min-height: 150px;
+  }
+  .appCard[data-on='true'] {
+    border-color: var(--tx);
+  }
+  .appCardHead {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .appCardName {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .appCardName b {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .appCardStatus {
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .appCardAct {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .appCardOwn {
+    border-style: dashed;
+    align-items: flex-start;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .appCardOwn:hover {
+    border-color: var(--tx);
+  }
+  .appCardOwn:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: 1px;
+  }
+  .ownPlus {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border: 1px dashed var(--ln);
+    font-size: 20px;
+  }
+  .panelSlot {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scroll-margin-top: 16px;
+  }
+  .panelSlot:empty {
+    display: none;
+  }
+  .panelSlot:focus {
+    outline: none;
+  }
+  .formRow {
+    align-items: flex-end;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .grow {
+    flex: 1;
+    min-width: 220px;
+  }
+  .field input {
+    padding: 7px 9px;
+    font-size: 14px;
+  }
+  .field input:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: 0;
+  }
+  .filters {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+}
+@layer screens {
+  /* Where a result stands: needs you in the accent, running inverted, the rest outlined. */
+  .statusPill {
+    padding: 1px 7px;
+    border: 1px solid var(--tx);
+    color: var(--tx);
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .statusPill[data-status='waiting'] {
+    background: var(--ac);
+    border-color: var(--ac);
+    color: var(--acx);
+  }
+  .statusPill[data-status='live'],
+  .statusPill[data-status='weekly'] {
+    background: var(--tx);
+    color: var(--bg);
+  }
+  .starters {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+  }
+  .starter {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px;
+    border: 1px solid var(--ln);
+    background: var(--s1);
+    color: var(--tx);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .starter:hover {
+    border-color: var(--tx);
+  }
+  .starter:focus-visible {
+    outline: 1px solid var(--tx);
+    outline-offset: 1px;
+  }
+  .starter b {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .briefFields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}
+
+@layer screens {
+  .ownForm {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .advancedToggle {
+    align-self: flex-start;
+  }
+  .advanced {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border: 1px solid var(--ln);
+  }
+}

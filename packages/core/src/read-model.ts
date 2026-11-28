@@ -14,6 +14,9 @@ import type { AgentLimits } from './model/usage';
 import type { AccountState } from './model/account';
 import { SIGNED_OUT } from './model/account';
 import { UPDATE_OFF, type UpdateState } from './model/update';
+import { HUB_OFF, type HubState } from './model/hub';
+import type { ConnectedApp } from './model/connected-app';
+import type { TaskResult } from './model/task-result';
 import type { AgentSetup, SetupAgent } from './model/agent-setup';
 import type { AppSettings, EffectiveProjectSettings } from './model/settings';
 import type { Target } from './model/target';
@@ -128,6 +131,12 @@ export interface ReadModel extends ReadModelTables {
   account: AccountState;
   /** Updates in place (#119): the running version and whether a newer one is on its way or ready. */
   update: UpdateState;
+  /** The team hub (ADR-0032): connection, project links and shared lanes. Never a token. */
+  hub: HubState;
+  /** Apps with their own AI connection (ADR-0033 tier 2). Never a token. */
+  connectedApps: readonly ConnectedApp[];
+  /** Campaign and report results by session (ADR-0033). */
+  taskResults: Readonly<Record<string, TaskResult>>;
   /** Agent setup runs (prepare → install → sign in → test), by agent; absent until one is started. */
   agentSetup: Readonly<Partial<Record<SetupAgent, AgentSetup>>>;
 }
@@ -170,6 +179,9 @@ export const emptyReadModel = (app: AppSettings): ReadModel => ({
   queues: {},
   account: SIGNED_OUT,
   update: UPDATE_OFF,
+  hub: HUB_OFF,
+  connectedApps: [],
+  taskResults: {},
   agentSetup: {},
   limits: {},
 });

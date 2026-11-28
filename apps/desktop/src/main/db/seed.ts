@@ -6,17 +6,22 @@ import { SKILL_HOST_DIRS } from '../services/skills-service';
 import { defaultPolicies, fixtures, type ProjectSettings, type SkillSummary } from '@styx/core';
 import type { Repos } from './repos';
 
-export type FixtureName = 'demo' | 'empty' | 'error';
+/** `one`: the demo plus One place for the work's campaign, report and connected apps (ADR-0033). */
+export type FixtureName = 'demo' | 'empty' | 'error' | 'one';
 
 export const isFixtureName = (s: string | undefined): s is FixtureName =>
-  s === 'demo' || s === 'empty' || s === 'error';
+  s === 'demo' || s === 'empty' || s === 'error' || s === 'one';
 
-export const loadFixture = (name: FixtureName): fixtures.DemoFixture =>
-  name === 'demo'
-    ? fixtures.demoFixture()
-    : name === 'empty'
-      ? fixtures.emptyFixture()
-      : fixtures.errorFixture();
+export const loadFixture = (
+  name: FixtureName,
+): fixtures.DemoFixture | (fixtures.DemoFixture & fixtures.OneExtras) =>
+  name === 'one'
+    ? fixtures.oneFixture()
+    : name === 'demo'
+      ? fixtures.demoFixture()
+      : name === 'empty'
+        ? fixtures.emptyFixture()
+        : fixtures.errorFixture();
 
 const AUDIT_COLS =
   'id, seq, time, actor_kind, actor_label, action, project_id, target_id, session_id, worktree_id, grant_id, policy_id, target_label, session_label, worktree_label, agent, scope_json, duration, triggered_by, detail_json, prev_hash, hash';
@@ -61,7 +66,7 @@ export function seedSkills(
  */
 export function seed(
   repos: Repos,
-  fixture: fixtures.DemoFixture,
+  fixture: fixtures.DemoFixture | (fixtures.DemoFixture & fixtures.OneExtras),
   opts: SeedOptions = {},
 ): { seeded: boolean } {
   if (opts.skillsHome !== undefined)
@@ -185,6 +190,17 @@ export function seed(
     }
   });
   run();
+  // One place for the work (ADR-0033): results and connected apps, when the fixture has them.
+  if ('taskResults' in fixture) {
+    for (const r of fixture.taskResults) {
+      repos.taskResults.put(r);
+      // A fixture campaign that is already approved and running keeps that state.
+      if (r.approved !== null && r.launchApprovedAt !== null)
+        repos.taskResults.approveLaunch(r.id, r.launchApprovedAt, r.updatedAt, r.launchPicked, r.approved);
+      if (r.campaignId !== null) repos.taskResults.setCampaign(r.id, r.campaignId);
+    }
+    repos.settings.kv.set('connectedApps', fixture.connectedApps);
+  }
   return { seeded: true };
 }
 

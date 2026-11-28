@@ -171,9 +171,9 @@ export class GrantService {
         fail('forbidden', 'grant belongs to the app, not to a session');
       if (target.projectId !== caller.projectId) fail('forbidden', 'grant belongs to another project');
     }
+    if (grant.state !== 'active') fail('invalid-transition', `grant is ${grant.state}`);
     const cached = this.issued.get(grantId);
     if (cached && this.fresh(cached)) return cached;
-    if (grant.state !== 'active') fail('invalid-transition', `grant is ${grant.state}`);
     // A stale bundle is replaced, not reused. Concurrent shim execs are normal, so one re-mint is shared:
     // without this every parallel `styx wrap` would run its own `gcloud`/STS round trip.
     const inFlight = this.minting.get(grantId);
@@ -195,17 +195,25 @@ export class GrantService {
     const mint = this.deps.providers
       .get(target.provider)
       .issue(info, tinfo)
-      .then(async (cred) => {
-        // Hand the superseded bundle back to the adapter before dropping it: an SSH grant's agent socket is a
-        // real resource, and leaking one per re-mint would outlive the grant it belonged to.
-        if (cached) await this.release(target.provider, cached);
-        this.issued.set(grant.id, cred);
-        this.deps.onIssueSuccess?.(target.id);
-        return cred;
-      })
       .catch((e: Error) => {
         this.deps.onIssueFailure?.(target.id, e);
         return fail('provider-error', e.message);
+      })
+      .then(async (cred) => {
+        // Minting can take a while (an SSH password sign-in, up to 30s): a revoke or expiry meanwhile wins, and the
+        // fresh credential is released instead of outliving its grant.
+        const now = this.deps.repos.grants.get(grantId);
+        if (!now || now.state !== 'active') {
+          await this.release(target.provider, cred);
+          return fail('invalid-transition', `grant is ${now?.state ?? 'gone'}`);
+        }
+        // Stored before the old one is handed back, so a revoke during that release finds (and ends) the new one.
+        this.issued.set(grant.id, cred);
+        this.deps.onIssueSuccess?.(target.id);
+        // Hand the superseded bundle back to the adapter: an SSH grant's agent socket is a real resource, and
+        // leaking one per re-mint would outlive the grant it belonged to.
+        if (cached) await this.release(target.provider, cached);
+        return cred;
       })
       .finally(() => {
         this.minting.delete(grantId);
@@ -663,6 +671,11 @@ export class GrantService {
     } catch (e) {
       this.deps.onIssueFailure?.(target.id, e as Error);
       fail('provider-error', (e as Error).message);
+    }
+    // A deny, cancel or session end that landed while the credential was being minted wins over this approval.
+    if (repos.grants.get(grant.id)?.state !== grant.state) {
+      await this.release(target.provider, cred);
+      fail('invalid-transition', 'the request was decided while access was being set up');
     }
     this.issued.set(grant.id, cred);
     this.deps.onIssueSuccess?.(target.id);

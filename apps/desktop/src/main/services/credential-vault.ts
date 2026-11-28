@@ -13,7 +13,7 @@ export interface CredentialVault {
 export function makeCredentialRef(
   provider: string,
   targetId: string,
-  kind: 'oauth' | 'key' | 'ssh-key-path' | 'refresh' | 'passphrase' | 'cli',
+  kind: 'oauth' | 'key' | 'ssh-key-path' | 'ssh-login' | 'refresh' | 'passphrase' | 'cli',
 ): string {
   return `styx:v1:${provider}:${targetId}:${kind}`;
 }

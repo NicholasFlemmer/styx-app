@@ -10,6 +10,10 @@ export const SHIM_TOOLS = [
   'gcloud',
   'supabase',
   'ssh',
+  // The SSH adapter's other tools: without shims of their own they bypassed the grant and the target's user/port.
+  'scp',
+  'sftp',
+  'rsync',
   'fly',
   'flyctl',
   'railway',

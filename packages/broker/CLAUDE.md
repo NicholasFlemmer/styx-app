@@ -3,7 +3,9 @@
 The local broker agents talk to. Two faces: a Unix socket / named pipe NDJSON JSON-RPC protocol (`protocol.ts`,
 `server.ts`, `client.ts`) and a stdio MCP server (`mcp-stdio.ts`, run as `styx mcp`) exposing `request_access`,
 `check_grant`, `get_credential`, `list_targets`, `ask_user`, `report_status`, `list_sessions`, `project_activity`,
-`send_message`, `remember_command` and `land`. Main answers every call in `apps/desktop/src/main/broker/host.ts`.
+`send_message`, `remember_command`, `land`, and the team hub's `hub_context`, `hub_read`, `hub_post`,
+`hub_remember`, `hub_share`, `hub_ask`, `hub_task`, and the rooms tools `room_read`, `room_claim`, `room_handoff`
+and `room_done` (ADR-0032), and connected apps' `list_apps` and `use_app` (ADR-0033: a change waits for the person). Main answers every call in `apps/desktop/src/main/broker/host.ts`.
 
 - Messages are zod-validated and versioned (`v: PROTOCOL_VERSION`). Reject unknown versions.
 - The broker never holds secrets; main mints credentials and hands over only env bundles / socket paths with expiry.

@@ -1,3 +1,4 @@
+import { LineSplitter } from './line-splitter';
 import { killTree, spawnCli } from './spawn-cli';
 import type { Readable, Writable } from 'node:stream';
 import { copy, effortSchema, fill, type AgentLimits, type Effort, type ModelInfo } from '@styx/core';
@@ -50,7 +51,8 @@ interface Pending {
 
 export class AppServerClient {
   private nextId = 1;
-  private buffer = '';
+  /** Codex's stdout as lines, in linear time: resuming a long thread sends it back as one huge line. */
+  private readonly lines = new LineSplitter();
   private readonly pending = new Map<JsonRpcId, Pending>();
   private closed = false;
 
@@ -105,19 +107,11 @@ export class AppServerClient {
   }
 
   private onData(chunk: string): void {
-    this.buffer += chunk;
-    let nl = this.buffer.indexOf('\n');
-    while (nl >= 0) {
-      const line = this.buffer.slice(0, nl);
-      this.buffer = this.buffer.slice(nl + 1);
-      this.onLine(line);
-      nl = this.buffer.indexOf('\n');
-    }
+    for (const line of this.lines.push(chunk)) this.onLine(line);
   }
 
   private flush(): void {
-    const rest = this.buffer;
-    this.buffer = '';
+    const rest = this.lines.rest();
     if (rest.trim()) this.onLine(rest);
   }
 

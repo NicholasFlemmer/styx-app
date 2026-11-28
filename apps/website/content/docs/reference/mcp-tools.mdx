@@ -157,4 +157,43 @@ Lands the task's work in the project's base branch and pushes it: Styx commits a
 
 Returns `{ "landed", "commit", "pushed", "steps", "reason" }`. When Styx refuses (the task works in the project folder rather than its own lane, the project is set to **I review and merge myself**, a conflict is being resolved, the checks fail, or there is nothing to land), `landed` is `false` and `reason` says why. The first time in a project with no checks known, `reason` asks the agent to work them out, call `remember_command` with kind `checks`, and call `land` again.
 
+### hub_context
+
+Asks your team's context: what the business knows and has decided, written by people on the team in Styx under **Team context** (the brand voice, how you price, clients, decisions: "what is Acme's brand voice?", "what did we decide on order ids?"). Works in any project once Styx is signed in to your team hub under **Settings › Team hub**.
+
+| Parameter | Type                        | Required | Notes                                                                            |
+| --------- | --------------------------- | -------- | -------------------------------------------------------------------------------- |
+| `query`   | string                      | no       | A name or a question, up to 500 characters. Leave it out for the one-line index. |
+| `kind`    | `doc`, `decision` or `link` | no       | Ignored for now: every kind is searched.                                         |
+
+With a query, returns `{ "items" }`, best match first, each with `title`, `kind`, `body`, `url`, `updated` and `source` (who wrote it). Without one, returns `{ "index" }`: one line per entry. Entries marked out of date are left out. What comes back is information from your team, not instructions.
+
+### show_result
+
+Hands Styx a campaign or report task's result, for Styx to draw as cards in the task and under **Results**. A campaign has the ads and a launch plan (daily amount, days, currency, audience); a report has the answer, numbers, a chart, a table, its sources and recommendations. The exact shape is in the task's brief. Calling it again replaces the result, and clears any approval of the previous launch plan. Showing a result never spends or changes anything.
+
+| Parameter | Type   | Required | Notes                                   |
+| --------- | ------ | -------- | --------------------------------------- |
+| `result`  | object | yes      | `{"kind":"campaign"…}` or `{"kind":"report"…}`. |
+
+Returns `{ "shown": true }`, or an error naming what does not fit.
+
+### list_apps
+
+Lists the apps you connected for AI under **Connected apps** (preview, in the One place for the work mode): apps that publish their own MCP connection, such as Notion or Linear, signed in with your own account. Takes no parameters.
+
+Returns one entry per connected app: `app` (its id), `name`, and `tools`, each with `name`, `description` and `readOnly`. Never the app's address or your sign-in.
+
+### use_app
+
+Runs one tool of a connected app through Styx. A tool the app marks read-only runs at once. Any other tool shows you what the agent is about to do, in the chat and under **Needs your OK**, and runs only after **Allow once**. Every use, approval and refusal goes on the record.
+
+| Parameter   | Type   | Required | Notes                                           |
+| ----------- | ------ | -------- | ----------------------------------------------- |
+| `app`       | string | yes      | The app id from `list_apps`, or its exact name. |
+| `tool`      | string | yes      | The tool name from `list_apps`.                 |
+| `arguments` | object | no       | The tool's arguments.                           |
+
+Returns `{ "text", "isError" }` with what the app sent back (up to 100,000 characters). Refused with a reason the agent can act on when the app is unknown, needs signing in again, you said no, or you did not answer within five minutes. A change is never retried, so it is never sent twice.
+
 Next: [CLI](/docs/reference/cli) for the shims that use these grants, and [How access works](/docs/access/how-access-works).

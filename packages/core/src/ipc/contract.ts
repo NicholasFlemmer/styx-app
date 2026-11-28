@@ -1,7 +1,19 @@
 import { z } from 'zod';
 import { deltaSchema, effectiveProjectSettingsSchema } from '../deltas';
 import { accountProviderSchema, accountStateSchema } from '../model/account';
+import {
+  HUB_OFF,
+  hubInboxEntrySchema,
+  hubConversationLinkSchema,
+  hubContextEntrySchema,
+  hubMemberSchema,
+  hubRoomSummarySchema,
+  hubStateSchema,
+  hubThreadViewSchema,
+} from '../model/hub';
 import { UPDATE_OFF, updateStateSchema } from '../model/update';
+import { connectedAppSchema } from '../model/connected-app';
+import { campaignLiveSchema, taskResultSchema } from '../model/task-result';
 import { agentSetupSchema, setupAgentSchema } from '../model/agent-setup';
 import { RENDERER_USAGE_EVENTS } from '../model/usage-report';
 import { activityRowSchema } from '../model/activity';
@@ -154,6 +166,10 @@ const readModelSnapshotSchema = z.object({
   account: accountStateSchema,
   /** Updates in place (#119). */
   update: updateStateSchema.default(UPDATE_OFF),
+  /** The team hub (ADR-0032); never carries a token. */
+  hub: hubStateSchema.default(HUB_OFF),
+  connectedApps: z.array(connectedAppSchema).default([]),
+  taskResults: z.array(taskResultSchema).default([]),
   agentSetup: z.array(agentSetupSchema).default([]),
 });
 export type ReadModelSnapshot = z.infer<typeof readModelSnapshotSchema>;
@@ -752,6 +768,253 @@ export const commands = {
    */
   'session.markDone': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
 
+  // --- team hub (ADR-0032) -------------------------------------------------
+  /** Device flow against the hub (Google, the team's Workspace domain only); returns once the code is on screen. */
+  /**
+   * Apps with their own AI connection (ADR-0033 tier 2). Add starts the app's own sign-in in the browser; the
+   * sign-in is kept in the keychain. Remove forgets the app and its sign-in.
+   */
+  'connectedApps.add': {
+    input: z.object({
+      name: z.string().trim().min(1).max(80),
+      url: z.string().trim().url().max(2000),
+      /** Turned on for this project at once (the one the person is in). */
+      projectId: projectIdSchema.nullable().default(null),
+      /** Advanced: the person's own OAuth client, for servers that do not let Styx register itself. */
+      clientId: z.string().trim().max(500).default(''),
+      clientSecret: z.string().trim().max(500).default(''),
+      /** Where that client signs in, when it is not on the server's own site (https). */
+      issuer: z.string().trim().max(500).default(''),
+      /** Advanced: an API key or token, sent in `header` (a bare token in Authorization becomes "Bearer …"). */
+      token: z.string().trim().max(4000).default(''),
+      header: z.string().trim().max(64).default('Authorization'),
+    }),
+    output: z.object({ appId: z.string() }),
+  },
+  /** Meta Ads, built in: a Marketing API token (kept in the keychain, never sent back) and the ad account. */
+  'connectedApps.addMetaAds': {
+    input: z.object({
+      token: z.string().trim().min(20).max(1000),
+      adAccount: z.string().trim().min(5).max(40),
+      projectId: projectIdSchema.nullable().default(null),
+    }),
+    output: z.object({ appId: z.string() }),
+  },
+  'connectedApps.signIn': { input: z.object({ appId: z.string().min(1).max(64) }), output: ok },
+  /** Which projects' tasks may use the app (none by default). */
+  'connectedApps.setProjects': {
+    input: z.object({ appId: z.string().min(1).max(64), projectIds: z.array(projectIdSchema).max(500) }),
+    output: ok,
+  },
+  /** The person approves a campaign's launch plan, with the ads they picked (by position). */
+  'taskResults.approveLaunch': {
+    input: z.object({
+      sessionId: sessionIdSchema,
+      /** The result the person was looking at (its `updatedAt`): a plan swapped since is refused. */
+      seenAt: z.number().int().nonnegative(),
+      /** The picked ads (by position) as the person edited them. */
+      ads: z
+        .array(
+          z.object({
+            index: z.number().int().min(0).max(11),
+            headline: z.string().trim().min(1).max(120),
+            body: z.string().trim().min(1).max(400),
+          }),
+        )
+        .min(1)
+        .max(12),
+      perDay: z.number().positive().max(10_000_000),
+      days: z.number().int().min(1).max(90),
+      countries: z
+        .array(z.string().regex(/^[A-Z]{2}$/))
+        .max(25)
+        .nullable(),
+    }),
+    output: ok,
+  },
+  /** An ad's picture, fetched by main (the window never loads addresses an agent chose). */
+  'taskResults.adImage': {
+    input: z.object({ sessionId: sessionIdSchema, index: z.number().int().min(0).max(11) }),
+    output: z.object({ dataUrl: z.string().nullable() }),
+  },
+  /** Keep a report up to date: re-run every Monday morning while Styx is open. */
+  'taskResults.setWeekly': {
+    input: z.object({ sessionId: sessionIdSchema, weekly: z.boolean() }),
+    output: ok,
+  },
+  /** A report as a PDF, saved where the person picks; null when they dismissed the dialog. */
+  'taskResults.pdf': {
+    input: z.object({ sessionId: sessionIdSchema }),
+    output: z.object({ path: z.string().nullable() }),
+  },
+  /** Pause everything: the person stops the campaign the plan made, at once. */
+  'taskResults.pauseAll': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
+  /** The campaign's numbers from Meta, for the live view; null before anything runs. */
+  'taskResults.live': {
+    input: z.object({ sessionId: sessionIdSchema }),
+    output: z.object({ live: campaignLiveSchema.nullable() }),
+  },
+  'connectedApps.remove': { input: z.object({ appId: z.string().min(1).max(64) }), output: ok },
+  'hub.signIn': { input: z.object({}), output: ok },
+  'hub.cancelSignIn': { input: z.object({}), output: ok },
+  'hub.openVerification': { input: z.object({}), output: ok },
+  /** Opens the hub on the web (home base) in the OS browser. */
+  'hub.openWeb': { input: z.object({}), output: ok },
+  /** Clears the hub session and its keychain entries; links and shares are forgotten too. */
+  'hub.signOut': { input: z.object({}), output: ok },
+  /** Re-reads teams and spaces; clears `staleSince` when the hub answers. */
+  'hub.refresh': { input: z.object({}), output: ok },
+  /** Sets where a project's shares go (null unlinks). Shares nothing by itself. */
+  'hub.linkProject': {
+    input: z.object({ projectId: projectIdSchema, spaceId: z.string().min(1).nullable() }),
+    output: ok,
+  },
+  /** Rooms (ADR-0032 round 2) in the space a project is linked to, for the lane header's Join a room. */
+  'hub.rooms': {
+    input: z.object({ projectId: projectIdSchema }),
+    output: z.object({
+      rooms: z.array(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          goal: z.string(),
+          state: z.enum(['active', 'paused', 'closed']),
+        }),
+      ),
+    }),
+  },
+  /** Brings a lane into a room (sharing it with the space first), with what it brings and whether it works on room tasks. */
+  'hub.joinRoom': {
+    input: z.object({
+      sessionId: sessionIdSchema,
+      roomId: z.string().min(1),
+      brings: z.string().trim().max(300),
+      mode: z.enum(['wait', 'work']),
+    }),
+    output: ok,
+  },
+  /** Wait for me / Work on room tasks: only the lane's own person changes it. */
+  'hub.setRoomMode': {
+    input: z.object({ sessionId: sessionIdSchema, mode: z.enum(['wait', 'work']) }),
+    output: ok,
+  },
+  'hub.leaveRoom': { input: z.object({ sessionId: sessionIdSchema }), output: ok },
+  /** The Team screen's rooms: open and paused rooms across the person's spaces. */
+  'hub.teamRooms': { input: z.object({}), output: z.object({ rooms: z.array(hubRoomSummarySchema) }) },
+  /** Shares a lane's conversation, or one answer from it, as a link anyone can read (the lean hub). */
+  'hub.shareConversation': {
+    input: z.object({
+      sessionId: sessionIdSchema,
+      /** One answer (its transcript message id), or null for the whole conversation. */
+      messageId: z.string().min(1).nullable(),
+      /** Keep the link updating as the lane goes on, or share it as it is now. */
+      live: z.boolean(),
+      expiresIn: z.enum(['1d', '7d', '30d', 'never']),
+    }),
+    output: z.object({ url: z.string(), linkId: z.string() }),
+  },
+  /** The links this lane's conversation was shared at. */
+  'hub.conversationLinks': {
+    input: z.object({ sessionId: sessionIdSchema }),
+    output: z.object({ links: z.array(hubConversationLinkSchema) }),
+  },
+  'hub.turnOffLink': { input: z.object({ linkId: z.string().min(1) }), output: ok },
+  /** Team context: everything, or what matches a name or question. */
+  'hub.teamContext': {
+    input: z.object({ q: z.string().max(500).optional(), stale: z.boolean().optional() }),
+    output: z.object({ items: z.array(hubContextEntrySchema) }),
+  },
+  'hub.addContext': {
+    input: z.object({
+      kind: z.enum(['decision', 'doc']),
+      title: z.string().trim().min(1).max(200),
+      body: z.string().max(20000),
+    }),
+    output: z.object({ id: z.string() }),
+  },
+  'hub.updateContext': {
+    input: z.object({
+      id: z.string().min(1),
+      title: z.string().trim().min(1).max(200).optional(),
+      body: z.string().max(20000).optional(),
+      stale: z.boolean().optional(),
+    }),
+    output: ok,
+  },
+  /** The team, for an admin to invite or remove people from Styx (the web app is off). */
+  'hub.teamMembers': {
+    input: z.object({}),
+    output: z.object({ members: z.array(hubMemberSchema), admin: z.boolean(), team: z.string() }),
+  },
+  'hub.invite': {
+    input: z.object({ email: z.string().trim().min(3).max(200), name: z.string().trim().max(80).optional() }),
+    output: z.object({ link: z.string() }),
+  },
+  'hub.removeMember': { input: z.object({ userId: z.string().min(1) }), output: ok },
+  /** People pause, resume or close a room. */
+  'hub.setRoomState': {
+    input: z.object({ roomId: z.string().min(1), state: z.enum(['active', 'paused', 'closed']) }),
+    output: ok,
+  },
+  /** The Team screen (ADR-0032 round 1): what waits on the person, across their spaces. */
+  'hub.inbox': { input: z.object({}), output: z.object({ entries: z.array(hubInboxEntrySchema) }) },
+  /** One thread as the Team screen shows it. */
+  'hub.thread': { input: z.object({ threadId: z.string().min(1) }), output: hubThreadViewSchema },
+  /** Answers an ask as the person: a choice among its options, or written text when it has none. */
+  'hub.answer': {
+    input: z.object({
+      askId: z.string().min(1),
+      choice: z.string().optional(),
+      text: z.string().max(4000).optional(),
+    }),
+    output: ok,
+  },
+  /** Replies in a thread as the person (`@Name` / `@branch` mention). */
+  'hub.reply': {
+    input: z.object({ threadId: z.string().min(1), body: z.string().trim().min(1).max(16_000) }),
+    output: ok,
+  },
+  'hub.setTask': { input: z.object({ taskId: z.string().min(1), done: z.boolean() }), output: ok },
+  'hub.setThreadStatus': {
+    input: z.object({ threadId: z.string().min(1), status: z.enum(['open', 'done']) }),
+    output: ok,
+  },
+  'hub.markRead': { input: z.object({ ids: z.array(z.string()).max(500) }), output: ok },
+  /** Makes a space on the person's team (the lane header's "New space"); the project is linked to it next. */
+  'hub.createSpace': {
+    input: z.object({ name: z.string().trim().min(1).max(80) }),
+    output: z.object({ spaceId: z.string() }),
+  },
+  /**
+   * Share (ADR-0032 phase 2): the OS picker chooses files or a folder; main keeps the paths behind a one-time id, so the
+   * renderer never names a path. Null when the picker was dismissed.
+   */
+  'hub.pickShare': {
+    input: z.object({ sessionId: sessionIdSchema, mode: z.enum(['files', 'folder']) }),
+    output: z.object({
+      pick: z
+        .object({
+          id: z.string(),
+          items: z.array(z.object({ name: z.string(), files: z.number().int(), bytes: z.number() })),
+        })
+        .nullable(),
+    }),
+  },
+  /** Uploads a pick to the project's space and returns the link to copy. Progress arrives as `hub.share.progress`. */
+  'hub.share': {
+    input: z.object({
+      sessionId: sessionIdSchema,
+      pickId: z.string().min(1),
+      access: z.enum(['team', 'anyone']),
+      expiresIn: z.enum(['1d', '7d', '30d', 'never']),
+      review: z.boolean(),
+      title: z.string().trim().min(1).max(200).optional(),
+    }),
+    output: z.object({ url: z.string(), itemId: z.string() }),
+  },
+  /** Shares a lane's status with its project's space, or stops sharing it. Only a person does this. */
+  'hub.shareLane': { input: z.object({ sessionId: sessionIdSchema, shared: z.boolean() }), output: ok },
+
   // --- account (ADR-0026) --------------------------------------------------
   /**
    * Starts the device flow for a provider: main asks the API for a code, publishes `signing-in` with it and
@@ -850,13 +1113,20 @@ export const commands = {
       projectId: projectIdSchema,
       name: targetNameSchema,
       env: envSchema,
-      host: z.string().min(1),
-      user: z.string().min(1),
-      keyPath: z.string().min(1),
+      host: z.string().min(1).max(253),
+      user: z.string().min(1).max(64),
       /** Non-standard SSH ports are common on jump/bastion hosts; 22 when omitted. */
       port: z.number().int().min(1).max(65535).default(22),
+      /** ADR-0031: a key file Styx serves, a password from the keychain, or the person's own ssh setup. */
+      auth: z.enum(['key', 'password', 'agent']).default('key'),
+      /** key only. */
+      keyPath: z.string().min(1).optional(),
       /** Passphrase for an encrypted key. The vault and the agent already support it; the form did not collect it. */
       passphrase: z.string().optional(),
+      /** password only: kept in the keychain; Styx signs in with it itself, agents never get it (ADR-0031). */
+      password: z.string().min(1).max(1024).optional(),
+      /** `user@host:port` of one or more jump hosts (ProxyJump), comma-separated. */
+      proxyJump: z.string().max(500).optional(),
     }),
     output: idOut('targetId', targetIdSchema),
   },
@@ -1299,6 +1569,8 @@ export const events = {
   /** Something under a watched worktree changed on disk (debounced): the files pane reads its tree again. */
   'fs.treeChanged': z.object({ worktreeId: worktreeIdSchema }),
   /** Deploy lifecycle; the output itself streams over the pty channel like any other terminal. */
+  /** A share uploading (ADR-0032 phase 2): bytes sent of the pick's total. */
+  'hub.share.progress': z.object({ pickId: z.string(), sent: z.number(), total: z.number() }),
   'deploy.progress': z.object({
     deployId: z.string(),
     targetId: targetIdSchema,
@@ -1398,7 +1670,9 @@ export const events = {
   }),
   'theme.resolved': z.object({ theme: z.enum(['dark', 'light']) }),
   /** OS-side navigation (tray left-click / dock menu → Agents board, spec §4.14). The renderer switches screen. */
-  'nav.go': z.object({ screen: z.enum(['home', 'workspace', 'agents', 'repo', 'approvals', 'settings']) }),
+  'nav.go': z.object({
+    screen: z.enum(['home', 'workspace', 'agents', 'repo', 'approvals', 'settings', 'team']),
+  }),
 } as const;
 
 export type Events = typeof events;

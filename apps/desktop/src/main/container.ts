@@ -73,6 +73,12 @@ import { AccountService, DEFAULT_API } from './services/account-service';
 import { UpdateService, type Updater } from './services/update-service';
 import { installIdFrom, UsageReportService } from './services/usage-report-service';
 import { FeedbackService } from './services/feedback-service';
+import { DEFAULT_HUB, HubService } from './services/hub-service';
+import { ConnectedAppsService, type AppConnector, type Loopback } from './services/connected-apps-service';
+import { TaskResultsService, demoMeta } from './services/task-results-service';
+import { REPORT_CSS, reportPage } from './services/report-page';
+import { ReportSchedule } from './services/report-schedule';
+import { hostname } from 'node:os';
 import { version as APP_VERSION } from '../../package.json';
 import { projectSettingsFor } from './store/projection';
 import { Publisher } from './store/publisher';
@@ -149,6 +155,13 @@ export interface DialogsPort {
     defaultPath?: string | undefined;
     filters?: { name: string; extensions: string[] }[] | undefined;
   }): Promise<string | null>;
+  /** Several files at once (the team hub's Share). Empty when dismissed. */
+  pickFiles?(opts: { title?: string | undefined }): Promise<string[]>;
+  /**
+   * A page printed to PDF and saved where the person picks (a report's Download PDF). The page runs with no scripts
+   * and no network. Resolves to the saved path, or null when dismissed.
+   */
+  savePdf?(html: string, name: string): Promise<string | null>;
 }
 
 /** Headless default (tests, fixtures without a window): every picker is dismissed. */
@@ -188,6 +201,11 @@ export interface ContainerOptions {
   dialogs?: DialogsPort;
   notifications: NotificationService | null;
   openExternal: (url: string) => Promise<void>;
+  /** Connected apps' MCP client and sign-in return page; fakes in tests (never the network). */
+  appConnector?: AppConnector;
+  /** The `one` fixture: Meta's live numbers and Pause everything answered from demo data, never the network. */
+  demoMeta?: boolean;
+  appLoopback?: (port: number) => Promise<Loopback>;
   openInIde: (launcher: string, path: string) => Promise<void>;
   /** Applied after any app-settings change (theme source, launch at login…). */
   onAppSettings?: (settings: AppSettings) => void;
@@ -284,6 +302,14 @@ export interface Container {
   usage: UsageService;
   /** The Styx account (ADR-0026): device flow, keychain tokens, offline-tolerant session. */
   account: AccountService;
+  /** The team hub (ADR-0032): sign-in, project links, shared lanes, and the agents' hub tools. */
+  hub: HubService;
+  /** Apps with their own AI connection (ADR-0033 tier 2): sign-in, tools, and the agents' gated use. */
+  connectedApps: ConnectedAppsService;
+  /** Campaign and report results, and approved launch plans (ADR-0033). */
+  taskResults: TaskResultsService;
+  /** Keep it updating weekly: reports asked again every Monday morning (ADR-0033). */
+  reportSchedule: ReportSchedule;
   /** Updates in place (#119). */
   updates: UpdateService;
   /** Anonymous usage counts (discrepancy row 114): a closed set of event names, nothing else. */
@@ -369,7 +395,11 @@ export function buildContainer(opts: ContainerOptions): Container {
     opts.cli ?? new ExecaCliRunner({ loginPath: () => pty.resolveLoginPath(), platform: runtime.platform });
   const providers = new ProviderRegistry(
     { vault: opts.vault, fetch: opts.fetch ?? fetch, now, cli },
-    { platform: runtime.platform },
+    // Windows has no private /tmp: SSH grant files live under Styx's own per-user data folder there.
+    {
+      platform: runtime.platform,
+      ...(runtime.platform === 'win32' ? { socketDir: join(runtime.userData, 'ssh') } : {}),
+    },
   );
   const mfa = new MfaService(opts.mfaProvider);
   const transcript = new TranscriptService(repos, publisher, clock);
@@ -652,6 +682,133 @@ export function buildContainer(opts: ContainerOptions): Container {
   // Counts go out only while the setting is on, under this install's random id, and tied to the account too
   // while signed in (discrepancy #122). Both are read at flush time, so turning it off stops the next batch
   // rather than the one after.
+  // The team hub (ADR-0032) is additive like the account: built with what is to hand, never in the way.
+  const hub = new HubService({
+    // Oldest first, as a page reads; the newest 1,000 is plenty for one shared conversation.
+    transcript: (sessionId) => repos.transcripts.last(sessionId, 1000),
+    reportPage: (sessionId, sharedBy) => {
+      const r = repos.taskResults.get(sessionId);
+      if (r?.body.kind !== 'report') return null;
+      return {
+        title: r.body.title,
+        css: REPORT_CSS,
+        html: reportPage({
+          report: r.body,
+          project: repos.projects.get(r.projectId)?.name ?? '',
+          sharedBy,
+          updated: new Date(r.updatedAt).toLocaleString('en-GB', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          css: 'link',
+        }),
+      };
+    },
+    fetch: opts.fetch ?? fetch,
+    vault: opts.vault,
+    store: repos.uiState,
+    publish: (state) => publisher.hubSet(state),
+    openExternal: (url) => void opts.openExternal(url),
+    now: () => clock.now(),
+    hubBase: process.env['STYX_HUB'] ?? DEFAULT_HUB,
+    machine: hostname(),
+    lane: (sessionId) => {
+      const session = repos.sessions.get(sessionId);
+      if (!session) return null;
+      return {
+        session,
+        projectId: session.projectId,
+        branch: repos.worktrees.get(session.worktreeId)?.branch ?? null,
+      };
+    },
+    projectIds: () =>
+      repos.projects
+        .all()
+        .filter((p) => p.removedAt === null)
+        .map((p) => p.id),
+    project: (projectId) => {
+      const p = repos.projects.get(projectId);
+      return p === null ? null : { name: p.name, path: p.path };
+    },
+    remoteOf: async (path) => {
+      const remotes = await git.remotes(path).catch(() => []);
+      return (remotes.find((r) => r.name === 'origin') ?? remotes[0])?.url ?? null;
+    },
+    deliver: (sessionId, meta, body) => sessions.deliverHubMessage(sessionId, meta, body),
+    dialogs: opts.dialogs ?? NO_DIALOGS,
+    worktreeOf: (sessionId) => {
+      const session = repos.sessions.get(sessionId);
+      return session ? (repos.worktrees.get(session.worktreeId)?.path ?? null) : null;
+    },
+    progress: (pickId, sent, total) => publisher.sendEvent('hub.share.progress', { pickId, sent, total }),
+    notify: (n) => opts.notifications?.onTeam(n),
+    // A room task wakes an idle lane with a Styx-authored turn (never the person's words); a busy one is left alone.
+    wake: async (sessionId, text) => {
+      const s = repos.sessions.get(sessionId);
+      if (
+        !s ||
+        s.archivedAt !== null ||
+        s.state === 'done' ||
+        s.state === 'working' ||
+        s.state === 'needs-you'
+      )
+        return false;
+      await sessions.sendMessage(sessionId, text, [], { from: 'styx' });
+      return true;
+    },
+    audit: (input) => void audit.append(input),
+  });
+  hub.load();
+  const connectedApps = new ConnectedAppsService({
+    vault: opts.vault,
+    // Under app_settings but outside the settings schema, so `settings.set` from a window can never write it.
+    load: () => repos.settings.kv.get('connectedApps'),
+    save: (apps) => repos.settings.kv.set('connectedApps', apps),
+    publish: (apps) => publisher.connectedAppsSet(apps),
+    audit: (input) => {
+      const row = audit.append(input);
+      publisher.upsert('auditEntries', [row.id]);
+    },
+    openExternal: (url) => opts.openExternal(url),
+    now: () => clock.now(),
+    fetch: opts.fetch ?? fetch,
+    ...(opts.appConnector ? { connector: opts.appConnector } : {}),
+    ...(opts.appLoopback ? { loopback: opts.appLoopback } : {}),
+  });
+  connectedApps.load();
+  const taskResults = new TaskResultsService({
+    repos,
+    now: () => clock.now(),
+    publish: (id, result) => {
+      publisher.taskResultSet(id, result);
+      // A report shared to keep updating gets the new version at its link.
+      if (result?.body.kind === 'report') void hub.conversationTurnSettled(id);
+    },
+    audit: (input) => {
+      const row = audit.append(input);
+      publisher.upsert('auditEntries', [row.id]);
+    },
+    tell: async (sessionId, text) => {
+      await sessions.sendMessage(sessionId, text, [], { from: 'styx' });
+    },
+    verify: (reason) => mfa.verify(reason),
+    fetch: opts.fetch ?? fetch,
+    meta: (projectId) =>
+      opts.demoMeta === true
+        ? demoMeta(() => clock.now())
+        : connectedApps.metaFor(projectId, () => clock.now()),
+  });
+  const reportSchedule = new ReportSchedule({
+    repos,
+    now: () => clock.now(),
+    tell: async (sessionId, text) => {
+      await sessions.sendMessage(sessionId, text, [], { from: 'styx' });
+    },
+    publish: (id, result) => publisher.taskResultSet(id, result),
+  });
   const usageReports = new UsageReportService({
     fetch: opts.fetch ?? fetch,
     apiBase: () => process.env['STYX_API'] ?? DEFAULT_API,
@@ -705,6 +862,8 @@ export function buildContainer(opts: ContainerOptions): Container {
     deploys: () => deploys.all(),
     limits: () => usage.all(),
     account: () => account.current(),
+    hub: () => hub.current(),
+    connectedApps: () => connectedApps.current(),
     update: () => updates.current(),
     agentSetup: () => agentSetup.all(),
   });
@@ -724,6 +883,9 @@ export function buildContainer(opts: ContainerOptions): Container {
     sessions,
     hunks,
     ledger,
+    hub,
+    apps: connectedApps,
+    results: taskResults,
     providers,
     clock,
     endpoint: runtime.brokerEndpoint,
@@ -988,12 +1150,15 @@ export function buildContainer(opts: ContainerOptions): Container {
   sessions.bind({
     revokeSessionGrants: (id) => grants.cancelSessionGrants(id),
     cancelHeldAsk: (ask) => broker.cancelAsk(ask),
+    hubContext: (session) => hub.preamble(session.projectId),
     watchWorktree: (s, w) => void hunks.watch(s, w),
     unwatchWorktree: (id) => void hunks.unwatch(id),
     rescanHunks: (id) => void hunks.rescan(id).catch(() => undefined),
     turnStarted: (id, messageId) => checkpoints.onTurnStarted(id, messageId),
     turnSettled: (id) => {
       checkpoints.onTurnSettled(id);
+      // A conversation shared to keep updating gets the turn that just ended (the lean hub).
+      void hub.conversationTurnSettled(id);
       // A design task that drew or changed screens tells the build tasks built from it (#140).
       design.onTurnSettled(id);
       // The lane ledger (overlaps between lanes) refreshed only on Fetch when Track agent edits is off: a turn
@@ -1067,6 +1232,10 @@ export function buildContainer(opts: ContainerOptions): Container {
     worktrees,
     usage,
     account,
+    hub,
+    connectedApps,
+    taskResults,
+    reportSchedule,
     updates,
     usageReports,
     feedback,
@@ -1089,6 +1258,8 @@ export function buildContainer(opts: ContainerOptions): Container {
       if (opts.disableRefresh) refresh.disable();
       else refresh.start();
       await broker.listen();
+      hub.start();
+      reportSchedule.start();
     },
     async shutdown() {
       for (const s of repos.sessions.live()) broker.notifyStopping(s.id);
@@ -1100,6 +1271,9 @@ export function buildContainer(opts: ContainerOptions): Container {
       sessions.killAll();
       runs.stopAll();
       devices.shutdown();
+      hub.shutdown();
+      reportSchedule.stop();
+      await connectedApps.close();
       // After agents and runs are stopped, so a slow network never delays that; capped at 2 s inside.
       await usageReports.shutdown();
       await hunks.closeAll();

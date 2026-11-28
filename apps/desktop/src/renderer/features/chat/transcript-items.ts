@@ -95,6 +95,16 @@ export type TranscriptItem =
       inbound: boolean;
     }
   | { id: string; kind: 'system'; text: string }
+  /** From the team hub (ADR-0032): a teammate or their agent, in a thread this lane posted in. */
+  | {
+      id: string;
+      kind: 'hub';
+      text: string;
+      from: string;
+      agent: string | null;
+      branch: string | null;
+      space: string;
+    }
   /** The agent's account stopped it (signed out, out of usage): a sentence and the fix, not the CLI's error. */
   | { id: string; kind: 'agent-problem'; text: string; agent: Agent; problem: 'signed-out' | 'limit' }
   | {
@@ -197,6 +207,16 @@ export const transcriptItems = (model: ReadModel, sessionId: SessionId): Transcr
             text: m.body,
             agent: p.problem.agent,
             problem: p.problem.kind,
+          });
+        else if (p.hub !== undefined)
+          out.push({
+            id: m.id,
+            kind: 'hub',
+            text: m.body,
+            from: p.hub.from,
+            agent: p.hub.agent,
+            branch: p.hub.branch,
+            space: p.hub.space,
           });
         else out.push({ id: m.id, kind: 'system', text: m.body });
         break;

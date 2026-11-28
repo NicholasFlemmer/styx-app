@@ -90,6 +90,8 @@ export const appSettingsSchema = z.object({
   tourVersion: z.number().int().nonnegative().default(0),
   /** The workspace tabs in the person's order (#140); empty = the default order. Kept for every project. */
   instrumentOrder: z.array(z.string()).max(12).default([]),
+  /** "One place for the work" (ADR-0033): the plain-words shell over the same tasks. Off by default, for testing. */
+  oneMode: z.boolean().default(false),
 });
 export type AppSettings = z.infer<typeof appSettingsSchema>;
 
@@ -109,6 +111,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   tourDone: false,
   tourVersion: 0,
   instrumentOrder: [],
+  oneMode: false,
 };
 
 /**

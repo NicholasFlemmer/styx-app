@@ -1,0 +1,492 @@
+@layer screens {
+  /* A result on paper (ADR-0027 §3): the light surfaces in both themes, tokens re-scoped for what is inside. */
+  .paper {
+    --bg: var(--paper);
+    --s1: var(--paper-s2);
+    --s2: var(--paper-s2);
+    --ln: var(--paper-ln);
+    --tx: var(--paper-tx);
+    --mu: var(--paper-mu);
+    --act: var(--paper-act);
+    --add: var(--paper-add);
+    --del: var(--paper-del);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 24px 28px 28px;
+    background: var(--paper);
+    color: var(--paper-tx);
+    border: 1px solid var(--paper-ln);
+  }
+  .h {
+    margin: 0 0 8px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .mu {
+    color: var(--mu);
+    font-size: 13px;
+  }
+  .lede {
+    margin: 0;
+    max-width: 70ch;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .headline {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    max-width: 30ch;
+  }
+  .steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--mu);
+  }
+  .steps li::before {
+    content: '✓';
+    margin-right: 8px;
+    color: var(--act);
+    font-weight: 700;
+  }
+
+  /* Campaign: the ads, then the launch plan. */
+  .ads {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+  }
+  .ad {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+  }
+  .ad[data-on='true'] {
+    border-color: var(--tx);
+  }
+  .adProduct {
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .adHead {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .adBody {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .adFoot {
+    margin-top: auto;
+    padding-top: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .launch {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    border: 2px solid var(--tx);
+    font-size: 14px;
+  }
+  .launchWhat {
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .acts {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .approved {
+    margin-top: 6px;
+    font-weight: 600;
+    color: var(--act);
+  }
+  .error {
+    font-size: 13px;
+  }
+
+  /* Report: numbers at a glance, a bar chart, the table, sharing, what to do next. */
+  .metrics {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  .metric {
+    padding: 10px 12px;
+    border: 1px solid var(--ln);
+  }
+  .metric dt {
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .metric dd {
+    margin: 2px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .metric b {
+    font-size: 21px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .metric span {
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .metric span[data-good='true'] {
+    color: var(--act);
+  }
+  .metric span[data-good='false'] {
+    color: var(--tx);
+    font-weight: 600;
+  }
+  .bars {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .bar {
+    display: grid;
+    grid-template-columns: minmax(120px, 180px) 1fr 72px;
+    gap: 10px;
+    align-items: center;
+    font-size: 13px;
+  }
+  .track {
+    height: 10px;
+    background: var(--s2);
+  }
+  .fill {
+    display: block;
+    height: 100%;
+    background: var(--tx);
+  }
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--mu);
+  }
+  .tableWrap {
+    overflow-x: auto;
+  }
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .table th,
+  .table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--ln);
+    text-align: left;
+  }
+  .table thead th {
+    font-weight: 600;
+    color: var(--mu);
+  }
+  .table tbody th {
+    font-weight: 500;
+  }
+  .shareRow {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .recs {
+    list-style: none;
+    margin: 0 0 8px;
+    padding: 0;
+  }
+  .rec {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-top: 1px solid var(--ln);
+    font-size: 14px;
+  }
+}
+@layer screens {
+  /* Feed previews (frame 2): how the ad will look, drawn on paper in the design's own tokens. */
+  .adItem {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .adItem[data-picked='true'] .feed {
+    border-color: var(--tx);
+  }
+  .feed {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+    font-size: 13px;
+  }
+  .feedHead {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 9px 10px;
+  }
+  .feedHead > span:last-child {
+    display: flex;
+    flex-direction: column;
+  }
+  .feedAvatar {
+    width: 26px;
+    height: 26px;
+    background: var(--tx);
+  }
+  .feedText {
+    margin: 0;
+    padding: 0 10px 9px;
+    line-height: 1.45;
+  }
+  .feedEdit,
+  .feedEditLine {
+    margin: 0 10px 9px;
+    padding: 6px 8px;
+    border: 1px solid var(--tx);
+    background: var(--s1);
+    color: var(--tx);
+    font: inherit;
+    font-size: 13px;
+  }
+  .feedEdit {
+    min-height: 70px;
+    resize: vertical;
+  }
+  .feedEditLine {
+    margin: 2px 0 0;
+    width: 100%;
+    font-weight: 600;
+  }
+  .feedImage {
+    aspect-ratio: 1.91 / 1;
+    display: grid;
+    place-items: center;
+    background: var(--s2);
+    color: var(--mu);
+    font-size: 12px;
+  }
+  .feedImg {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1.91 / 1;
+    object-fit: cover;
+  }
+  .feedFoot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 10px;
+    background: var(--s2);
+  }
+  .feedFootText {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+  .feedFootText .mu {
+    font-size: 11px;
+  }
+  .feedCta {
+    flex: none;
+    padding: 5px 10px;
+    border: 1px solid var(--ln);
+    background: var(--bg);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* The plan: fields the person can change, the sentence they approve. */
+  .plan {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    border: 2px solid var(--tx);
+  }
+  .planFields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--mu);
+  }
+  .field input {
+    width: 110px;
+    padding: 6px 8px;
+    border: 1px solid var(--tx);
+    background: var(--bg);
+    color: var(--tx);
+    font: inherit;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  .field input:focus-visible,
+  .feedEdit:focus-visible,
+  .feedEditLine:focus-visible {
+    outline: 2px solid var(--tx);
+    outline-offset: 1px;
+  }
+  .wide input {
+    width: 170px;
+  }
+  .fixed {
+    padding: 6px 0;
+    font-size: 14px;
+    color: var(--tx);
+  }
+
+  /* Live (frame 3). */
+  .liveHead {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .push {
+    margin-left: auto;
+  }
+  .pill {
+    padding: 2px 8px;
+    border: 1px solid var(--tx);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .pill[data-on='true'] {
+    background: var(--ac);
+    border-color: var(--ac);
+    color: var(--acx);
+  }
+  .stop {
+    padding: 7px 14px;
+    border: 1px solid var(--tx);
+    background: var(--tx);
+    color: var(--bg);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .stop:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .stop:focus-visible {
+    outline: 2px solid var(--tx);
+    outline-offset: 2px;
+  }
+  .meterRow {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    padding: 12px 14px;
+    border: 1px solid var(--tx);
+  }
+  .metricBig {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .metricBig b {
+    font-size: 22px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .meterWrap {
+    flex: 1;
+    min-width: 160px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .meter {
+    display: block;
+    height: 10px;
+    background: var(--s2);
+  }
+  .meter > span {
+    display: block;
+    height: 100%;
+    background: var(--tx);
+  }
+  .table caption {
+    text-align: left;
+  }
+}
+@layer screens {
+  .reportHead {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .pill[data-weekly='true'] {
+    background: var(--tx);
+    color: var(--bg);
+  }
+  .trend {
+    margin: 0;
+  }
+  .trend svg {
+    display: block;
+    width: 100%;
+    height: 150px;
+  }
+  .trendCur {
+    fill: none;
+    stroke: var(--tx);
+    stroke-width: 2.5;
+    vector-effect: non-scaling-stroke;
+  }
+  .trendPrev {
+    fill: none;
+    stroke: var(--mu);
+    stroke-width: 2;
+    stroke-dasharray: 5 5;
+    vector-effect: non-scaling-stroke;
+  }
+  .trendLabels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--mu);
+  }
+}

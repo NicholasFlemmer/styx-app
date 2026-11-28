@@ -20,6 +20,7 @@ const modelOf = (snap: ReadModelSnapshot): ReadModel => ({
   runs: Object.fromEntries(snap.runs.map((r) => [r.projectId, r])),
   devices: Object.fromEntries(snap.devices.map((d) => [d.projectId, d])),
   deploys: Object.fromEntries(snap.deploys.map((d) => [d.deployId, d])),
+  taskResults: Object.fromEntries(snap.taskResults.map((r) => [r.id, r])),
   agentSetup: Object.fromEntries(snap.agentSetup.map((s) => [s.agent, s])),
   projects: tableFrom(snap.projects),
   repos: tableFrom(snap.repos),
@@ -570,6 +571,48 @@ describe('GrantService project-file trust gate (H-1)', () => {
       t.clock.advance(30 * 24 * 3_600_000);
       await t.app.grants.credentialFor(grant.id);
       expect(stub.mints()).toBe(1);
+    });
+
+    it('a grant revoked or denied while its credential is being minted stays ended; the fresh one is released', async () => {
+      const t = makeTestApp();
+      const adapter = t.app.providers.get('supabase');
+      let release: () => void = () => undefined;
+      vi.spyOn(adapter, 'issue').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            release = () => resolve({ kind: 'env', env: { TOKEN: 'slow' }, expiresAt: null, scoped: true });
+          }),
+      );
+      const revoke = vi.spyOn(adapter, 'revoke').mockResolvedValue(undefined);
+      // Approve: denied while the sign-in runs.
+      const req = (await requestSupabase(t)).grant;
+      const approving = t.app.grants.approve(req.id, '1h');
+      await new Promise((r) => setTimeout(r, 0));
+      t.app.grants.deny(req.id);
+      release();
+      await expect(approving).rejects.toMatchObject({ code: 'invalid-transition' });
+      expect(t.app.repos.grants.get(req.id)?.state).toBe('denied');
+      expect(revoke).toHaveBeenCalledTimes(1);
+      // Re-mint: revoked while the sign-in runs.
+      vi.spyOn(adapter, 'issue').mockResolvedValueOnce({
+        kind: 'env',
+        env: { TOKEN: 'one' },
+        expiresAt: 1,
+        scoped: true,
+      });
+      const grant = await t.app.grants.approve((await requestSupabase(t)).grant.id, '1h');
+      vi.spyOn(adapter, 'issue').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            release = () => resolve({ kind: 'env', env: { TOKEN: 'two' }, expiresAt: null, scoped: true });
+          }),
+      );
+      const minting = t.app.grants.credentialFor(grant.id);
+      await new Promise((r) => setTimeout(r, 0));
+      t.app.grants.revoke(grant.id, 'user');
+      release();
+      await expect(minting).rejects.toMatchObject({ code: 'invalid-transition' });
+      expect(t.app.grants.issuedCredential(grant.id)).toBeNull();
     });
 
     it('concurrent callers share one re-mint', async () => {

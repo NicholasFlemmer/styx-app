@@ -181,17 +181,44 @@ export interface KeyForm {
 export const keyFormValid = (f: KeyForm): boolean =>
   f.name.trim() !== '' && f.accessKey.trim() !== '' && f.secret !== '';
 
+/** How an SSH target signs in (ADR-0031): a key file, a password, or the person's own ssh setup. */
+export type SshAuth = 'key' | 'password' | 'agent';
+export const SSH_AUTHS: readonly SshAuth[] = ['key', 'password', 'agent'];
+export const isSshAuth = (v: string): v is SshAuth => (SSH_AUTHS as readonly string[]).includes(v);
+
 export interface SshForm {
   host: string;
   user: string;
+  auth: SshAuth;
   keyPath: string;
   /** Blank means the default 22; bastions and forwarded hosts routinely sit elsewhere. */
   port: string;
   /** Optional: only encrypted keys need one. */
   passphrase: string;
+  password: string;
+  /** Optional ProxyJump: `user@bastion:22`, comma-separated for several. */
+  proxyJump: string;
 }
+
+export const emptySshForm = (): SshForm => ({
+  host: '',
+  user: '',
+  auth: 'key',
+  keyPath: '',
+  port: '',
+  passphrase: '',
+  password: '',
+  proxyJump: '',
+});
+
+/** A bare host name or address, as ssh's config needs it: no `user@`, `ssh://` or `:port` pasted into the field. */
+export const sshHostValid = (host: string): boolean => /^[A-Za-z0-9_[][A-Za-z0-9._:[\]-]*$/.test(host.trim());
+
 export const sshFormValid = (f: SshForm): boolean =>
-  f.host.trim() !== '' && f.user.trim() !== '' && f.keyPath.trim() !== '' && sshPort(f) !== null;
+  sshHostValid(f.host) &&
+  f.user.trim() !== '' &&
+  sshPort(f) !== null &&
+  (f.auth === 'key' ? f.keyPath.trim() !== '' : f.auth === 'password' ? f.password !== '' : true);
 
 /** The port a form means: blank is 22; anything not a port number is invalid (null blocks save). */
 export const sshPort = (f: SshForm): number | null => {

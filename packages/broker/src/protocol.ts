@@ -83,7 +83,15 @@ export const methods = {
   get_credential: { params: z.object({ grantId: z.string() }), result: Credential },
   exec_authorize: {
     params: z.object({ tool: z.string(), argv: z.array(z.string()), cwd: z.string() }),
-    result: z.object({ grantId: z.string(), useId: z.string(), env: z.record(z.string(), z.string()) }),
+    result: z.object({
+      grantId: z.string(),
+      useId: z.string(),
+      env: z.record(z.string(), z.string()),
+      /** SSH grants: the grant's ssh_config, passed as `-F` to ssh, scp and sftp so the target's user and port apply. */
+      sshConfig: z.string().optional(),
+      /** One line for the shim to print: what Styx applied to this command (SSH: the target's address). */
+      notice: z.string().max(400).optional(),
+    }),
   },
   exec_report: {
     params: z.object({ useId: z.string(), exitCode: z.number().int() }),
@@ -213,6 +221,131 @@ export const methods = {
     }),
     result: z.object({ ok: z.literal(true) }),
   },
+  /**
+   * The team hub (ADR-0032). Context by name or question (no query: the one-line index of what exists); needs the
+   * project linked to a space. Results carry their source so the agent can cite it.
+   */
+  /** A campaign or report for Styx to draw (ADR-0033); replaces the task's last one. */
+  show_result: {
+    params: z.object({ result: z.record(z.string(), z.unknown()) }),
+    result: z.object({ shown: z.literal(true), note: z.string() }),
+  },
+  /** Apps the person connected for AI (ADR-0033 tier 2), with their tools; never an address or a sign-in. */
+  list_apps: {
+    params: z.object({}),
+    result: z.array(
+      z.object({
+        app: z.string(),
+        name: z.string(),
+        tools: z.array(z.object({ name: z.string(), description: z.string(), readOnly: z.boolean() })),
+      }),
+    ),
+  },
+  /** Runs one app tool through Styx: a read-only tool at once, anything else after the person's OK. Audited. */
+  use_app: {
+    params: z.object({
+      app: z.string().min(1).max(80),
+      tool: z.string().min(1).max(200),
+      arguments: z.record(z.string(), z.unknown()).default({}),
+      waitMs,
+    }),
+    result: z.object({ text: z.string(), isError: z.boolean() }),
+  },
+  hub_context: {
+    params: z.object({
+      query: z.string().max(500).optional(),
+      kind: z.enum(['doc', 'decision', 'link']).optional(),
+    }),
+    result: z.record(z.string(), z.unknown()),
+  },
+  /** The space's threads and shared lanes, or one thread's latest messages. */
+  hub_read: {
+    params: z.object({ threadId: z.string().max(64).optional() }),
+    result: z.record(z.string(), z.unknown()),
+  },
+  /** Post to a thread (or start one with `title`). Needs the lane shared by its person. */
+  hub_post: {
+    params: z.object({
+      body: z.string().min(1).max(16_000),
+      threadId: z.string().max(64).optional(),
+      title: z.string().min(1).max(200).optional(),
+      summary: z.string().min(1).max(4000).optional(),
+    }),
+    result: z.object({ posted: z.literal(true), threadId: z.string() }),
+  },
+  /**
+   * Ask the team (ADR-0032 round 1): a question with options or for a written answer, optionally to named people,
+   * in a thread (or a new one). People answer; with `wait` the call holds until someone does (≤ 10 minutes).
+   */
+  hub_ask: {
+    params: z.object({
+      question: z.string().min(1).max(1000),
+      options: z.array(z.string().min(1).max(200)).min(2).max(6).optional(),
+      to: z.array(z.string().min(1).max(200)).max(20).optional(),
+      threadId: z.string().max(64).optional(),
+      title: z.string().min(1).max(200).optional(),
+      wait: z.number().int().min(0).max(600).optional(),
+    }),
+    result: z.object({
+      askId: z.string(),
+      threadId: z.string(),
+      state: z.enum(['open', 'answered']),
+      answer: z
+        .object({ choice: z.string().nullable(), text: z.string().nullable(), by: z.string() })
+        .nullable(),
+    }),
+  },
+  /** Rooms (ADR-0032 round 2): the room this lane is in: goal, plan, board, who is in it, latest messages. */
+  room_read: { params: z.object({}), result: z.record(z.string(), z.unknown()) },
+  /** Take an open task on the room's board. */
+  room_claim: {
+    params: z.object({ taskId: z.string().min(1).max(64) }),
+    result: z.record(z.string(), z.unknown()),
+  },
+  /** Give a task this lane holds to another lane in the room, with a note. */
+  room_handoff: {
+    params: z.object({
+      taskId: z.string().min(1).max(64),
+      to: z.string().min(1).max(200),
+      note: z.string().max(4000),
+    }),
+    result: z.record(z.string(), z.unknown()),
+  },
+  /** Finish a task this lane holds, with what was done. */
+  room_done: {
+    params: z.object({ taskId: z.string().min(1).max(64), result: z.string().min(1).max(4000) }),
+    result: z.record(z.string(), z.unknown()),
+  },
+  /** A thread's tasks: add one (to this lane, a person, or nobody), mark one done, or list them. */
+  hub_task: {
+    params: z.object({
+      action: z.enum(['add', 'done', 'list']),
+      threadId: z.string().min(1).max(64),
+      text: z.string().min(1).max(500).optional(),
+      taskId: z.string().max(64).optional(),
+      assignee: z.string().max(200).optional(),
+    }),
+    result: z.record(z.string(), z.unknown()),
+  },
+  /** Share files from the worktree with the space as one item; returns a team link. Needs the lane shared. */
+  hub_share: {
+    params: z.object({
+      paths: z.array(z.string().min(1).max(400)).min(1).max(100),
+      title: z.string().min(1).max(200).optional(),
+    }),
+    result: z.object({ url: z.string(), itemId: z.string() }),
+  },
+  /** Propose a doc or decision for the space's context; the space decides whether a person accepts it. */
+  hub_remember: {
+    params: z.object({
+      kind: z.enum(['doc', 'decision']),
+      title: z.string().min(1).max(200),
+      body: z.string().max(100_000).optional(),
+      question: z.string().max(500).optional(),
+      answer: z.string().max(4000).optional(),
+    }),
+    result: z.object({ state: z.string(), note: z.string() }),
+  },
   list_targets: {
     params: z.object({}),
     result: z.array(
@@ -223,6 +356,8 @@ export const methods = {
         env: z.string(),
         lockState: z.enum(['unconnected', 'locked', 'open', 'persistent', 'expired']),
         scopes: z.array(Scope),
+        /** SSH targets: the host to pass to ssh. Its saved user and port are applied by the shim. */
+        host: z.string().optional(),
       }),
     ),
   },

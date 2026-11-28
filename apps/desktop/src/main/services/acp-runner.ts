@@ -1,3 +1,4 @@
+import { LineSplitter } from './line-splitter';
 import type { ChildProcess } from 'node:child_process';
 import { killTree, spawnCli } from './spawn-cli';
 import { EventEmitter } from 'node:events';
@@ -374,7 +375,8 @@ type ModelSwitch = { via: 'config'; configId: string } | { via: 'set_model' } | 
 interface Entry {
   opts: StreamSpawnOptions;
   proc: ChildProcess | null;
-  buffer: string;
+  /** Its stdout, split into lines in linear time (one huge message must not cost minutes). */
+  lines: LineSplitter;
   nextId: number;
   pending: Map<number, PendingRequest>;
   // negotiated at initialize / session start
@@ -425,7 +427,7 @@ export class AcpRunner extends EventEmitter<StreamEvents> implements StreamRunne
     const entry: Entry = {
       opts,
       proc: null,
-      buffer: '',
+      lines: new LineSplitter(),
       nextId: 1,
       pending: new Map(),
       imageInput: false,
@@ -1059,14 +1061,7 @@ export class AcpRunner extends EventEmitter<StreamEvents> implements StreamRunne
   // --- transport -----------------------------------------------------------
 
   private onStdout(entry: Entry, chunk: string): void {
-    entry.buffer += chunk;
-    let nl = entry.buffer.indexOf('\n');
-    while (nl >= 0) {
-      const line = entry.buffer.slice(0, nl);
-      entry.buffer = entry.buffer.slice(nl + 1);
-      this.dispatch(entry, line);
-      nl = entry.buffer.indexOf('\n');
-    }
+    for (const line of entry.lines.push(chunk)) this.dispatch(entry, line);
   }
 
   private dispatch(entry: Entry, line: string): void {
@@ -1150,8 +1145,8 @@ export class AcpRunner extends EventEmitter<StreamEvents> implements StreamRunne
 
   private onClose(entry: Entry, proc: ChildProcess, code: number | null): void {
     if (entry.proc !== proc) return;
-    if (entry.buffer.trim()) this.dispatch(entry, entry.buffer);
-    entry.buffer = '';
+    const rest = entry.lines.rest();
+    if (rest.trim()) this.dispatch(entry, rest);
     entry.proc = null;
     for (const p of entry.pending.values())
       p.reject(new Error(`${this.label(entry)} exited during ${p.method}`));

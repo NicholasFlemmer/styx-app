@@ -67,6 +67,8 @@ export type Overlay =
   | { id: string; kind: 'palette' }
   | ({ id: string; kind: 'modal' } & ModalPayload)
   | { id: string; kind: 'sheet'; sheet: 'grant'; sessionId: SessionId; askId: AskId }
+  /** The team hub's Share (ADR-0032 phase 2). */
+  | { id: string; kind: 'sheet'; sheet: 'hub-share'; sessionId: SessionId; projectId: ProjectId }
   | { id: string; kind: 'drawer'; drawer: 'audit'; auditId: AuditId }
   /** Skill reader (Settings › Skills): the catalogue SKILL.md by directory, read before it can be installed. */
   | { id: string; kind: 'drawer'; drawer: 'skill'; directory: string }
